@@ -1,0 +1,15 @@
+{
+  "name": "yunlan-mall-3d",
+  "private": true,
+  "version": "1.0.0",
+  "description": "云澜汇 YUNLAN MALL — 可交互的 3D 购物中心场景",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "node build.mjs",
+    "serve": "python3 -m http.server 5173"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
