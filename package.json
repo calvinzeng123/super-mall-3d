@@ -7,7 +7,7 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "build": "node build.mjs",
-    "serve": "python3 -m http.server 5173"
+    "serve": "python3 serve.py 5174"
   },
   "devDependencies": {
     "esbuild": "^0.28.2"

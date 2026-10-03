@@ -62,7 +62,7 @@ export function fillRoof(lv) {
     { type: 'ip', x: 48, z: 17, scale: 1, name: 'IP「云宝」', en: 'YUNBAO' },
     { type: 'mirror', rect: rect(-16, -37, 8, -28), name: '天空之镜' },
     { type: 'skywalk', rect: rect(-4, 38, 4, 46), name: '玻璃悬挑观景台' },
-    { type: 'letters', x: 47, z: 33, text: '云澜汇', face: 'N', name: '云澜汇立体字' },
+    { type: 'letters', x: 47, z: 35.5, text: '云澜汇', face: 'S', name: '云澜汇立体字' },
     { type: 'arch', x: -41, z: 0, axis: 'z', name: '花艺拱门' },
     { type: 'playground', rect: rect(-56, 8, -42, 20), name: '天台儿童乐园' },
     { type: 'lawn', rect: rect(-56, -22, -40, -8), name: '阳光草坪' },
