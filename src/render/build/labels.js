@@ -98,7 +98,6 @@ export function buildLabels(ctx) {
       put(G, '玻璃观景台', 0, y + 2.4, 43, 'fun', 'star');
       put(G, '云澜汇立体字', 47, y + 5.6, 35.5, 'fun', 'star');
       put(G, '花艺拱门', -41, y + 4.0, 0, 'fun', 'star');
-      put(G, '扶梯 ↓ 3F', -30, y + 5.4, 0, 'facility', 'escalator');
       put(G, '天台儿童乐园', -49, y + 3.0, 14, 'fun', 'star');
       for (const u of lv.units) put(G, u.brand.name, (u.rects[0].x0 + u.rects[0].x1) / 2, y + 5.0, 29, 'food', 'cup', u.brand.en, 0.022);
     }
