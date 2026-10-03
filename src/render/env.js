@@ -106,10 +106,10 @@ export class Environment {
     this.scene.fog.color.copy(mix(DAY.fog, NIGHT.fog));
     this.hemi.color.copy(mix(DAY.hemiSky, NIGHT.hemiSky));
     this.hemi.groundColor.copy(mix(DAY.hemiGround, NIGHT.hemiGround));
-    this.hemi.intensity = 0.62 - 0.44 * t;
+    this.hemi.intensity = 0.62 - 0.5 * t;
     this.sun.color.copy(mix(DAY.sun, NIGHT.sun));
-    this.sun.intensity = 2.1 - 1.86 * t;
-    this.scene.environmentIntensity = 0.45 - 0.22 * t;
+    this.sun.intensity = 2.1 - 1.92 * t;
+    this.scene.environmentIntensity = 0.45 - 0.37 * t;
     this.renderer.toneMappingExposure = 0.92 + 0.2 * t;
     this.stars.material.opacity = Math.max(0, t * 1.2 - 0.2);
     this.bloom.strength = 0.85 * t;
@@ -127,8 +127,17 @@ export class Environment {
   }
 
   render() {
+    const { renderer, scene, camera } = this;
+    camera.layers.set(0);
     if (this.bloomEnabled && this.night > 0.02) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    else renderer.render(scene, camera);
+    // 第二遍：只画第 1 层（文字标注），不参与泛光
+    const auto = renderer.autoClear;
+    renderer.autoClear = false;
+    camera.layers.set(1);
+    renderer.render(scene, camera);
+    camera.layers.set(0);
+    renderer.autoClear = auto;
   }
 
   resize(w, h) {

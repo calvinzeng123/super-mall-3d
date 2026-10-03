@@ -318,7 +318,7 @@ function context(ctx, G) {
   for (let k = 0; k < 4; k++) {
     const tx = windowTextures(100 + k, { tint: tints[k] });
     const m = new THREE.MeshStandardMaterial({ map: tx.map, emissiveMap: tx.emissive, emissive: 0x000000, roughness: 0.55, metalness: 0.2 });
-    ctx.mats.onNight((t) => m.emissive.setScalar(t * 1.1));
+    ctx.mats.onNight((t) => m.emissive.setScalar(t * 0.5));
     mats.push(m);
   }
   const geo = new THREE.BoxGeometry(1, 1, 1);

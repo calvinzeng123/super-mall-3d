@@ -198,7 +198,7 @@ function atriumArt(ctx) {
     anchors.push([x, y, z, rad]);
   }
   for (const [x, y, z, rad] of anchors) {
-    B.get('glow').sphere(x, y, z, rad, rand() < 0.15 ? '#bfe9f5' : '#f6f8fb');
+    B.get('glowSoft').sphere(x, y, z, rad, rand() < 0.15 ? '#bfe9f5' : '#f6f8fb');
     B.get('metal').box(x, (y + rad + 16.4) / 2, z, 0.012, 16.4 - y - rad, 0.012, '#9aa0a6');
   }
 }

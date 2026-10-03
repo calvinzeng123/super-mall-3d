@@ -27,7 +27,7 @@ export function createUI(app, layout) {
     else if (act === 'flows') app.setFlows(!s.flows);
     else if (act === 'labels') app.setLabels(!s.labels);
     else if (act === 'night') app.setNight(!s.night);
-    else if (act === 'tour') (s.touring ? app.stopTour() : app.startTour && app.startTour());
+    else if (act === 'tour') { if (s.touring) app.stopTour(); else app.startTour(); }
     else if (act === 'reset') app.reset();
     else if (act === 'directory') {
       directory.classList.toggle('collapsed');
@@ -143,4 +143,13 @@ export function createUI(app, layout) {
     if (hit && hit.unit) app.focusUnit(hit.unit);
   });
   $('tourStop').addEventListener('click', () => app.stopTour && app.stopTour());
+
+  return {
+    /** 导览字幕：传 null 隐藏 */
+    tour(caption) {
+      $('tourBar').hidden = !caption;
+      if (caption) $('tourStep').textContent = caption;
+      $('hint').hidden = !!caption;
+    },
+  };
 }

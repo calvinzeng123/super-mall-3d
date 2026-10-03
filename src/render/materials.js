@@ -35,6 +35,7 @@ export class MaterialLib {
       extMetal: std({ vertexColors: true, roughness: 0.3, metalness: 0.85 }),
       foliage: std({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true }),
       glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
+      glowSoft: new THREE.MeshBasicMaterial({ vertexColors: true }),
       glass: std({ color: 0xc9e2ea, roughness: 0.05, metalness: 0.15, transparent: true, opacity: 0.24, depthWrite: false, envMapIntensity: 1.6 }),
       glassTint: std({ color: 0x7fa6b8, roughness: 0.04, metalness: 0.55, transparent: true, opacity: 0.62, depthWrite: false, envMapIntensity: 2.0 }),
       water: std({ color: 0x356f8f, roughness: 0.04, metalness: 0.65, transparent: true, opacity: 0.9, envMapIntensity: 2.2 }),
@@ -43,6 +44,8 @@ export class MaterialLib {
     // 灯具类：白天灰白，夜晚明亮（配合泛光）
     const glow = this.base.glow;
     this.onNight((t) => glow.color.setScalar(0.85 + t * 0.9));
+    const soft = this.base.glowSoft;
+    this.onNight((t) => soft.color.setScalar(0.88 - t * 0.18));
     const glass = this.base.glass;
     this.onNight((t) => { glass.opacity = 0.24 + t * 0.1; });
     this.floors = {};

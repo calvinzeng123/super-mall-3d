@@ -105,7 +105,7 @@ export function floorTexture(kind) {
       for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
         const alt = (i + j) % 2 === 0;
         const v = rand() * 8;
-        ctx.fillStyle = alt ? `rgb(${238 - v},${231 - v},${219 - v})` : `rgb(${224 - v},${221 - v},${214 - v})`;
+        ctx.fillStyle = alt ? `rgb(${233 - v},${223 - v},${207 - v})` : `rgb(${219 - v},${214 - v},${205 - v})`;
         ctx.fillRect(i * 256, j * 256, 256, 256);
       }
       ctx.lineCap = 'round';

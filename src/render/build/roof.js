@@ -217,6 +217,8 @@ function ferris(ctx, lv, L) {
   const c = new THREE.Color();
   for (let i = 0; i < N; i++) cabs.setColorAt(i, c.setHSL(hues[i % hues.length], 0.65, 0.58));
   cabs.instanceColor.needsUpdate = true;
+  cabs.frustumCulled = false;
+  leds.frustumCulled = false;
   L.base.add(cabs);
   const pos = new THREE.Vector3();
   const q = new THREE.Quaternion();

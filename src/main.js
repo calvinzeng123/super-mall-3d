@@ -2,6 +2,7 @@
 import { buildLayout } from './layout/layout.js';
 import { createApp } from './render/app.js';
 import { createUI } from './render/ui.js';
+import { attachTour } from './render/tour.js';
 
 window.__mallBooted = true;
 const $ = (id) => document.getElementById(id);
@@ -29,7 +30,8 @@ async function main() {
       bar.style.width = `${Math.round(p * 100)}%`;
     },
   });
-  createUI(app, layout);
+  const ui = createUI(app, layout);
+  attachTour(app, ui);
   bar.style.width = '100%';
   $('loading').classList.add('done');
   setTimeout(() => { $('loading').hidden = true; }, 700);

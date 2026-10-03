@@ -228,8 +228,8 @@ export class BatchSet {
     for (const [key, b] of Object.entries(this.sets)) {
       const mat = this.materials[key];
       if (!mat) throw new Error('missing material ' + key);
-      const noShadow = key === 'glass' || key === 'glow' || key === 'water';
-      const m = b.mesh(mat, { shadow: !noShadow && opts.shadow !== false, receive: key !== 'glow', name: key });
+      const noShadow = key === 'glass' || key === 'glow' || key === 'glowSoft' || key === 'water';
+      const m = b.mesh(mat, { shadow: !noShadow && opts.shadow !== false, receive: key !== 'glow' && key !== 'glowSoft', name: key });
       if (m) {
         if (key === 'glass' || key === 'water') m.renderOrder = 2;
         group.add(m);

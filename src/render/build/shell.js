@@ -1,6 +1,6 @@
 // 建筑主体：楼板（含洞口）、柱、中庭栏杆、外立面、天窗、女儿墙、LED 大屏、商场名。
 import * as THREE from 'three';
-import { pointInRect } from '../../layout/geom.js';
+import { pointInRect, pointInPoly } from '../../layout/geom.js';
 import { THEME, COLORS } from '../theme.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 
@@ -63,6 +63,44 @@ export function buildShell(ctx) {
     sill(ctx, lv);
   }
   ledScreen(ctx);
+  ceilingLights(ctx);
+}
+
+/** 楼板底面的灯具：商业层为筒灯点阵，停车层为沿车道的灯管（随上层楼板显示，从下方可见） */
+function ceilingLights(ctx) {
+  const levels = ctx.layout.levels;
+  for (let i = 1; i < levels.length; i++) {
+    const above = levels[i], below = levels[i - 1];
+    const B = ctx.levels[above.id].batch;
+    const y = above.elev - SLAB_T[above.kind] - 0.04;
+    const inVoid = (x, z) => above.voids.some((v) => pointInPoly([x, z], v.poly));
+    const seen = new Set();
+    if (below.kind === 'parking') {
+      for (const a of below.parking.aisles) {
+        const alongX = a.x1 - a.x0 > a.z1 - a.z0;
+        const len = alongX ? a.x1 - a.x0 : a.z1 - a.z0;
+        for (let t = 3; t < len - 1; t += 6) {
+          const x = alongX ? a.x0 + t : (a.x0 + a.x1) / 2, z = alongX ? (a.z0 + a.z1) / 2 : a.z0 + t;
+          const k = `${Math.round(x / 3)},${Math.round(z / 3)}`;
+          if (seen.has(k) || inVoid(x, z)) continue;
+          seen.add(k);
+          B.get('glow').box(x, y, z, alongX ? 1.4 : 0.14, 0.06, alongX ? 0.14 : 1.4, '#eef6ff');
+        }
+      }
+    } else {
+      for (const w of below.walk) {
+        const r = w.rect;
+        for (let x = r.x0 + 2; x < r.x1 - 0.8; x += 4) {
+          for (let z = r.z0 + 2; z < r.z1 - 0.8; z += 4) {
+            const k = `${Math.round(x / 2)},${Math.round(z / 2)}`;
+            if (seen.has(k) || inVoid(x, z)) continue;
+            seen.add(k);
+            B.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+          }
+        }
+      }
+    }
+  }
 }
 
 /** 店面分隔线上的柱子 */
