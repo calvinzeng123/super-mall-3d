@@ -262,6 +262,48 @@ export const POOLS = {
   rink: [['星湾真冰场', 'XINGWAN ICE ARENA', '#e0f2fe', '#0c4a6e', 'star']],
 };
 
+
+// 二期、三期补充词库（国潮、运动、教育、餐饮、街区小店）
+const MORE = {
+  fashion: [
+    ['东方织造', 'ORIENT LOOM', '#7a1f1a', '#f3dcc0', 'mono'], ['青绣', 'JADE STITCH', '#1f4d45', '#e9f2ec', 'flower'],
+    ['墨韵', 'INKWELL', '#141414', '#e8dcc4', 'wave'], ['朱雀', 'VERMILION', '#b2281e', '#ffe9c7', 'flame'],
+    ['云纹', 'CLOUD PATTERN', '#2a3f6b', '#e6ecf7', 'wave'], ['汉服坊', 'HANFU ATELIER', '#6b2d5c', '#f7e1ef', 'flower'],
+    ['山海志', 'MOUNTAIN & SEA', '#23412f', '#e3efd9', 'peak'], ['锦鲤', 'KOI DRIFT', '#e45c2b', '#fff3e6', 'wave'],
+    ['布衣局', 'COTTON BUREAU', '#efe7d8', '#5a4632', 'mono'], ['长安', 'CHANG AN', '#8f3b2a', '#f6e3c8', 'crown'],
+  ],
+  sports: [
+    ['逐风', 'WINDCHASER', '#0f3d5c', '#e0f2fe', 'bolt'], ['雪线', 'SNOWLINE', '#e8f1f7', '#1e3a5f', 'peak'],
+    ['跃冰', 'ICE LEAP', '#dff3ff', '#0b4f7a', 'star'], ['登山家', 'SUMMITEER', '#3a4a2a', '#f1e8c8', 'peak'],
+    ['跑酷工场', 'PARKOUR WORKS', '#1b1b1b', '#ffcc33', 'bolt'], ['足球公园', 'PITCH PARK', '#14532d', '#ecfccb', 'ring'],
+    ['篮下', 'UNDER THE RIM', '#c2410c', '#fff7ed', 'ring'], ['水上运动', 'AQUA SPORTS', '#0369a1', '#e0f2fe', 'wave'],
+  ],
+  shoes: [['足迹', 'FOOTPRINT', '#2b2b2b', '#f5f5f5', 'mono'], ['跑鞋实验', 'RUN SHOE LAB', '#f97316', '#111111', 'bolt'], ['旅行箱', 'ROAD CASE', '#1f2a44', '#e2e8f0', 'mono']],
+  accessory: [['手表铺', 'WATCH NOOK', '#1b1b1f', '#d9c08c', 'ring'], ['发饰屋', 'HAIR PIN HOUSE', '#fde7ef', '#be185d', 'flower'], ['伞具', 'UMBRELLA CO.', '#334155', '#f1f5f9', 'drop']],
+  edu: [
+    ['机器人学院', 'ROBO ACADEMY', '#0f172a', '#93c5fd', 'game'], ['小小科学家', 'TINY SCIENTIST', '#ecfeff', '#0e7490', 'bolt'],
+    ['书法馆', 'CALLIGRAPHY HALL', '#f5f0e6', '#3b2f2f', 'mono'], ['美术课堂', 'ART CLASS', '#fff7ed', '#c2410c', 'star'],
+    ['钢琴屋', 'PIANO HOUSE', '#111111', '#f5f5f5', 'mono'], ['STEAM 工坊', 'STEAM WORKSHOP', '#1e3a8a', '#dbeafe', 'bolt'],
+  ],
+  kids: [['亲子厨房', 'FAMILY KITCHEN', '#fef3c7', '#b45309', 'heart'], ['童装铺', 'MINI WARDROBE', '#e0f2fe', '#0369a1', 'heart'], ['宝宝游泳', 'BABY SWIM', '#e0f7fa', '#00838f', 'wave']],
+  toys: [['遥控模型', 'RC GARAGE', '#1f2937', '#fbbf24', 'bolt'], ['毛绒乐园', 'PLUSH PARK', '#fdf2f8', '#9d174d', 'heart'], ['积木星', 'BRICK STAR', '#e63946', '#ffffff', 'star']],
+  tech: [['智能穿戴', 'WEARABLE LAB', '#0b0f14', '#a7f3d0', 'bolt'], ['游戏主机', 'CONSOLE ZONE', '#12062b', '#39f3ff', 'game'], ['相机馆', 'CAMERA HALL', '#1f2937', '#f9fafb', 'ring']],
+  books: [['漫画屋', 'MANGA HOUSE', '#111827', '#fde047', 'book'], ['童书馆', 'KIDS BOOKS', '#fef3c7', '#92400e', 'book']],
+  restaurant: [
+    ['湘江鱼', 'XIANGJIANG FISH', '#7f1d1d', '#fde68a', 'wave'], ['京味烤鸭', 'PEKING ROAST', '#991b1b', '#fff1f2', 'flame'],
+    ['海鲜蒸汽', 'STEAM SEAFOOD', '#0c4a6e', '#e0f2fe', 'wave'], ['日式拉面', 'RAMEN DOJO', '#1c1917', '#fca5a5', 'bowl'],
+    ['韩式烤肉', 'KOREAN BBQ', '#111111', '#f97316', 'flame'], ['泰式海鲜', 'SIAM SEAFOOD', '#4c1d95', '#f5d0fe', 'flower'],
+    ['西班牙小馆', 'TAPAS TABLE', '#7c2d12', '#fed7aa', 'sun'], ['云顶景观餐厅', 'SKYLINE DINING', '#0f172a', '#e0e7ff', 'star'],
+    ['新疆大盘鸡', 'XINJIANG PLATE', '#a16207', '#fef9c3', 'flame'], ['顺德私房', 'SHUNDE HOUSE', '#14532d', '#ecfccb', 'bowl'],
+  ],
+  cafe: [['星湾咖啡', 'XINGWAN COFFEE', '#3b2a20', '#f6e3c8', 'cup'], ['冰淇淋船', 'GELATO BOAT', '#e0f2fe', '#0c4a6e', 'star'], ['司康', 'SCONE & CO.', '#fef3c7', '#92400e', 'heart']],
+  tea: [['雪顶茶', 'SNOWCAP TEA', '#f0f9ff', '#0c4a6e', 'cup'], ['桂花乌龙', 'OSMANTHUS OOLONG', '#4a3426', '#f5e6c8', 'flower']],
+  bar: [['精酿车间', 'BREW WORKSHOP', '#1e293b', '#fcd34d', 'cup'], ['爵士酒廊', 'JAZZ LOUNGE', '#0f172a', '#f5d0fe', 'moon'], ['酒馆 99', 'TAVERN 99', '#451a03', '#fde68a', 'cup']],
+  home: [['竹编', 'BAMBOO WEAVE', '#efe7da', '#5c4a32', 'leaf'], ['灯具社', 'LAMP CLUB', '#1f2937', '#fde047', 'sun'], ['香插', 'INCENSE NOOK', '#efe6f5', '#4b2a6b', 'drop']],
+  studio: [['皮具工坊', 'LEATHER LAB', '#5a3b22', '#f1dcc0', 'mono'], ['花艺课', 'FLORAL CLASS', '#f4f7ee', '#5c7a3a', 'flower'], ['纸艺', 'PAPER CRAFT', '#fff7ed', '#c2410c', 'star']],
+};
+for (const [cat, list] of Object.entries(MORE)) POOLS[cat] = [...(POOLS[cat] || []), ...list];
+
 const CN_HEAD = ['青', '岚', '屿', '栖', '禾', '暖', '拾', '朴', '素', '鹿', '麦', '橙', '柚', '溪', '汀', '木', '森', '星', '月', '晴', '雾', '初', '南', '北', '野', '棠', '槐', '桐', '松', '竹'];
 const EN_HEAD = ['NORTH', 'MAPLE', 'CEDAR', 'HARBOR', 'LUMEN', 'OPAL', 'MOSS', 'AMBER', 'CORAL', 'IVORY', 'SAGE', 'DUNE', 'EMBER', 'FROST', 'GROVE', 'HAZEL', 'JADE', 'KITE', 'LINEN', 'MIST', 'NOVA', 'OAK', 'PINE', 'QUILL', 'REED', 'SOL', 'TIDE', 'VALE', 'WREN', 'BIRCH'];
 const TAILS = {
