@@ -53,3 +53,31 @@ export function addPlaza(site, id, poly, building) {
 }
 export const addDriveway = (site, poly) => site.driveways.push(poly);
 export const addTrench = (site, poly) => site.trenches.push(poly);
+
+/** 中央公园：不规则湖面、环湖步道、林地；地铁站出入口（规格第 7 节） */
+export function addPark(site) {
+  const cx = 168, cz = 142;
+  const lake = [];
+  for (let i = 0; i < 40; i++) {
+    const a = (i / 40) * Math.PI * 2;
+    const r = 44 + Math.sin(a * 3 + 0.6) * 9 + Math.cos(a * 5 + 1.3) * 4;
+    lake.push([cx + Math.cos(a) * r * 1.25, cz + Math.sin(a) * r * 0.85]);
+  }
+  const loop = [];
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2;
+    const r = 66 + Math.sin(a * 3 + 0.6) * 8 + Math.cos(a * 5 + 1.3) * 4;
+    loop.push([cx + Math.cos(a) * r * 1.22, cz + Math.sin(a) * r * 0.86]);
+  }
+  // 园路：各入口（落地塔、地铁口、大道、星湾路、东外环、南外环）连到环湖步道最近点
+  const near = (p) => loop.reduce((a, q) => (Math.hypot(q[0] - p[0], q[1] - p[1]) < Math.hypot(a[0] - p[0], a[1] - p[1]) ? q : a));
+  const entries = [[[50, 30], [66, 58]], [[150, 20], [150, 40]], [[16, 150], [40, 150]], [[286, 130], [266, 132]], [[200, 256], [198, 238]]];
+  site.park = {
+    lake, loop, center: [cx, cz],
+    paths: entries.map(([a, b]) => [a, b, near(b)]),
+    metro: { x: 62, z: 48, deg: 0, name: '地铁云澜汇站 · B 口' },
+    plaza: rect(30, 26, 92, 70),
+  };
+  const r = rect(16, 20, 286, 256);
+  site.walk.push({ id: 'park', kind: 'park', poly: rectPoly(r), outdoor: true });
+}

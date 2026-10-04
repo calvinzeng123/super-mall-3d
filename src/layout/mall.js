@@ -40,7 +40,7 @@ function makeWing(w, rots, bid) {
 }
 
 /** 把 [a,b] 按宽度序列切成铺位，余量不足 6m 并入最后一间 */
-function split(a, b, pattern, state) {
+export function split(a, b, pattern, state) {
   const out = [];
   let x = a;
   while (b - x > 1e-6) {
@@ -55,7 +55,7 @@ function split(a, b, pattern, state) {
 
 const walkL = (F, id, kind, r) => ({ id, kind, poly: lrectPoly(F, r), frame: F, rect: r });
 
-function lift(id, bid, type, F, lu, lv, w, d, door, serves) {
+export function lift(id, bid, type, F, lu, lv, w, d, door, serves) {
   const [x, z] = toW(F, lu, lv);
   const [nx, nz] = dirW(F, ...NORMAL[door]);
   const reach = door === 'E' || door === 'W' ? w / 2 : d / 2;
