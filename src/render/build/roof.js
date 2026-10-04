@@ -52,6 +52,8 @@ export function buildRoof(ctx) {
     for (const f of feat('playground')) playground(ctx, B, L, f, y0);
     for (const f of feat('pergola')) B.frame(f.frame, () => pergola(B, f.rect, y0));
     for (const m of lv.rooms.filter((r) => r.type === 'mech')) B.frame(m.frame, () => mech(B, m.rects[0], y0));
+    for (const f of feat('track')) track(ctx, L, f, y0);
+    for (const f of feat('court')) B.frame(f.frame, () => court(B, f.rect, y0));
 
     // 每个翼楼屋面：沿两侧边缘的花境与长椅、庭院灯
     for (const w of b.wings) {
@@ -419,4 +421,86 @@ function mech(B, r, y0) {
   }
   for (let i = 0; i < 3; i++) B.get('metal').box(r.x0 + 13 + i * 1.6, y0 + 1.0, (r.z0 + r.z1) / 2, 1.2, 2.0, 5, '#b8bfc6');
   B.get('metal').box((r.x0 + r.x1) / 2, y0 + 2.4, r.z0 + 1.5, r.x1 - r.x0 - 2, 0.3, 0.3, '#7d848b');
+}
+
+/** 闭合折线的带状网格：法线方向上 [a,b] 的偏移带（斜接角处按折角放大，最多 2.5 倍） */
+function closedRibbon(pts, a, b, y) {
+  const n = pts.length;
+  const pos = [], uv = [], idx = [];
+  let dist = 0;
+  for (let i = 0; i <= n; i++) {
+    const p = pts[i % n], prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
+    if (i > 0) dist += Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+    const e1 = [p[0] - prev[0], p[1] - prev[1]], e2 = [next[0] - p[0], next[1] - p[1]];
+    const l1 = Math.hypot(...e1) || 1, l2 = Math.hypot(...e2) || 1;
+    const n1 = [-e1[1] / l1, e1[0] / l1], n2 = [-e2[1] / l2, e2[0] / l2];
+    let mx = n1[0] + n2[0], mz = n1[1] + n2[1];
+    const ml = Math.hypot(mx, mz) || 1;
+    mx /= ml; mz /= ml;
+    const k = Math.min(2.5, 1 / Math.max(0.4, mx * n1[0] + mz * n1[1]));
+    for (const o of [a, b]) {
+      pos.push(p[0] + mx * k * o, y, p[1] + mz * k * o);
+      uv.push(dist, o);
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const j = i * 2;
+    idx.push(j, j + 2, j + 1, j + 1, j + 2, j + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** 天空跑道：红色塑胶带 + 白色分道线（沿建筑形状的闭合环线） */
+function track(ctx, L, f, y0) {
+  const hw = f.width / 2;
+  const rubber = new THREE.MeshStandardMaterial({ color: 0xc8452c, roughness: 0.9, side: THREE.DoubleSide });
+  ctx.mats.onNight((t) => rubber.emissive.setRGB(t * 0.12, t * 0.04, t * 0.02));
+  const band = new THREE.Mesh(closedRibbon(f.path, -hw, hw, y0 + 0.06), rubber);
+  band.receiveShadow = true;
+  L.base.add(band);
+  const white = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.6, side: THREE.DoubleSide });
+  for (const o of [-hw + 0.05, -hw / 3, hw / 3, hw - 0.05]) L.base.add(new THREE.Mesh(closedRibbon(f.path, o - 0.05, o + 0.05, y0 + 0.07), white));
+  const glow = new THREE.Mesh(closedRibbon(f.path, hw + 0.1, hw + 0.2, y0 + 0.08), ctx.mats.base.glow);
+  L.base.add(glow);
+}
+
+/** 屋顶篮球场：场地、标线、篮架、围网、灯杆（局部坐标，沿 u 为长边） */
+function court(B, r, y0) {
+  const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
+  B.get('satin').box(cx, y0 + 0.03, cz, w + 4, 0.05, d + 4, '#2f6b4f');
+  B.get('satin').box(cx, y0 + 0.06, cz, w, 0.02, d, '#2f6fb0');
+  const line = (x, z, sx, sz) => B.get('matte').box(x, y0 + 0.075, z, sx, 0.01, sz, '#f4f4f0');
+  line(cx, r.z0, w, 0.08); line(cx, r.z1, w, 0.08); line(r.x0, cz, 0.08, d); line(r.x1, cz, 0.08, d); line(cx, cz, 0.08, d);
+  const flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+  B.get('matte').shape('torus', new THREE.Vector3(cx, y0 + 0.08, cz), flat, new THREE.Vector3(3.6, 3.6, 0.6), '#f4f4f0');
+  for (const k of [-1, 1]) {
+    const ex = k < 0 ? r.x0 : r.x1;
+    B.get('satin').box(ex - k * 2.9, y0 + 0.07, cz, 5.8, 0.01, 4.9, '#d9482b');
+    const arc = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, k < 0 ? -Math.PI / 2 : Math.PI / 2));
+    B.get('matte').shape('halfTorus', new THREE.Vector3(ex - k * 1.6, y0 + 0.08, cz), arc, new THREE.Vector3(13.5, 13.5, 0.6), '#f4f4f0');
+    // 篮架
+    B.get('metal').box(ex + k * 0.8, y0 + 1.6, cz, 0.18, 3.2, 0.18, '#2b2f33');
+    B.get('metal').box(ex - k * 0.2, y0 + 3.1, cz, 1.6, 0.1, 0.1, '#2b2f33');
+    B.get('glass').box(ex - k * 1.05, y0 + 3.4, cz, 0.05, 1.05, 1.8, 0xffffff);
+    B.get('satin').box(ex - k * 1.08, y0 + 3.4, cz, 0.03, 1.05, 0.06, '#f4f4f0');
+    B.get('metal').shape('torus', new THREE.Vector3(ex - k * 1.35, y0 + 3.05, cz), flat, new THREE.Vector3(0.9, 0.9, 1.2), '#e8590c');
+  }
+  // 围网与灯杆
+  const fx0 = r.x0 - 2, fx1 = r.x1 + 2, fz0 = r.z0 - 2, fz1 = r.z1 + 2;
+  for (const [x0, z0, x1, z1] of [[fx0, fz0, fx1, fz0], [fx0, fz1, fx1, fz1], [fx0, fz0, fx0, fz1], [fx1, fz0, fx1, fz1]]) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const horiz = Math.abs(z1 - z0) < 0.01;
+    B.get('glass').box((x0 + x1) / 2, y0 + 2.0, (z0 + z1) / 2, horiz ? len : 0.04, 3.6, horiz ? 0.04 : len, 0xffffff);
+    for (let t = 0; t <= len; t += 3) B.get('metal').box(horiz ? x0 + t : x0, y0 + 2.0, horiz ? z0 : z0 + t, 0.08, 4.0, 0.08, '#3b4046');
+    B.get('metal').box((x0 + x1) / 2, y0 + 3.85, (z0 + z1) / 2, horiz ? len : 0.08, 0.08, horiz ? 0.08 : len, '#3b4046');
+  }
+  for (const [x, z] of [[fx0, fz0], [fx1, fz0], [fx0, fz1], [fx1, fz1]]) {
+    B.get('metal').cyl(x, y0, z, 0.12, 7, '#3b4046', 8);
+    B.get('glow').box(x, y0 + 7.0, z, 1.0, 0.25, 0.5, '#ffe9bf');
+  }
 }

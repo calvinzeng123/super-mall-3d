@@ -241,6 +241,13 @@ function retaining(ctx, lv) {
 
 // ---------- 外立面 ----------
 
+/** 各期外立面配色：一期暖米色石材；二期深灰金属板 + 金色竖向百叶 */
+const PALETTE = {
+  P1: { stone: COLORS.stone, stoneDark: COLORS.stoneDark, spandrel: COLORS.spandrel, frame: COLORS.glassFrame, fin: null },
+  P2: { stone: '#4a4f55', stoneDark: '#33373c', spandrel: '#24272b', frame: '#2b2f33', fin: '#b8925a' },
+};
+const paletteOf = (bid) => PALETTE[bid] || PALETTE.P1;
+
 function bayType(ctx, lv, e, center, idx) {
   const first = lv.short === '1F';
   for (const en of ctx.layout.entrances) {
@@ -266,6 +273,7 @@ function facade(ctx, lv) {
   const FB = ctx.levels[lv.id].facadeBatch;
   const y0 = lv.elev;
   const H = lv.height;
+  const pal = paletteOf(lv.building);
   const top = ctx.levels[lv.id].index === ctx.buildings[lv.building].levels.length - 2;
   for (const e of ctx.outlineEdges(lv)) {
     FB.frame(e.F, () => {
@@ -278,33 +286,35 @@ function facade(ctx, lv) {
         const center = toW(e.F, m, 0);
         const type = bayType(ctx, lv, e, center, i);
         if (type === 'stone') {
-          place(a + 0.02, b - 0.02, y0, y0 + H, 0.32, 0.16, 'ext', COLORS.stone);
-          place(a, a + 0.04, y0, y0 + H, 0.34, 0.17, 'ext', COLORS.stoneDark);
+          place(a + 0.02, b - 0.02, y0, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
+          place(a, a + 0.04, y0, y0 + H, 0.34, 0.17, 'ext', pal.stoneDark);
+          if (pal.fin) for (const p of [a + bw * 0.25, a + bw * 0.5, a + bw * 0.75]) place(p - 0.06, p + 0.06, y0, y0 + H, 0.55, 0.42, 'extMetal', pal.fin);
         } else if (type === 'slot') {
           const s = Math.min(1.6, bw * 0.4);
-          place(a, a + s, y0, y0 + H, 0.32, 0.16, 'ext', COLORS.stone);
-          place(b - s, b, y0, y0 + H, 0.32, 0.16, 'ext', COLORS.stone);
+          place(a, a + s, y0, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
+          place(b - s, b, y0, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
           place(a + s, b - s, y0, y0 + H, 0.06, 0.05, 'glassTint', 0xffffff);
-          place(a + s - 0.05, a + s + 0.05, y0, y0 + H, 0.4, 0.2, 'extMetal', COLORS.glassFrame);
-          place(b - s - 0.05, b - s + 0.05, y0, y0 + H, 0.4, 0.2, 'extMetal', COLORS.glassFrame);
+          place(a + s - 0.05, a + s + 0.05, y0, y0 + H, 0.4, 0.2, 'extMetal', pal.fin || pal.frame);
+          place(b - s - 0.05, b - s + 0.05, y0, y0 + H, 0.4, 0.2, 'extMetal', pal.fin || pal.frame);
         } else if (type === 'curtain') {
           place(a, b, y0 + 0.5, y0 + H, 0.06, 0.08, 'glassTint', 0xffffff);
-          for (const p of e.kind === 'arc' ? [a] : [a, m]) place(p - 0.05, p + 0.05, y0, y0 + H, 0.32, 0.22, 'extMetal', COLORS.glassFrame);
-          place(a, b, y0 + H * 0.62 - 0.04, y0 + H * 0.62 + 0.04, 0.2, 0.18, 'extMetal', COLORS.glassFrame);
+          for (const p of e.kind === 'arc' ? [a] : [a, m]) place(p - 0.05, p + 0.05, y0, y0 + H, 0.32, 0.22, 'extMetal', pal.frame);
+          if (pal.fin && e.kind === 'arc') place(a - 0.07, a + 0.07, y0, y0 + H, 0.7, 0.45, 'extMetal', pal.fin);
+          place(a, b, y0 + H * 0.62 - 0.04, y0 + H * 0.62 + 0.04, 0.2, 0.18, 'extMetal', pal.frame);
         } else if (type === 'shopwindow') {
-          place(a, b, y0, y0 + 0.35, 0.36, 0.18, 'ext', COLORS.stoneDark);
+          place(a, b, y0, y0 + 0.35, 0.36, 0.18, 'ext', pal.stoneDark);
           place(a + 0.1, b - 0.1, y0 + 0.35, y0 + 4.4, 0.05, 0.06, 'glassTint', 0xffffff);
-          place(a, b, y0 + 4.4, y0 + H, 0.32, 0.16, 'ext', COLORS.stone);
-          for (const p of [a, m, b]) place(p - 0.05, p + 0.05, y0 + 0.35, y0 + 4.4, 0.22, 0.14, 'extMetal', COLORS.glassFrame);
+          place(a, b, y0 + 4.4, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
+          for (const p of [a, m, b]) place(p - 0.05, p + 0.05, y0 + 0.35, y0 + 4.4, 0.22, 0.14, 'extMetal', pal.frame);
         } else if (type === 'entrance') {
           place(a, b, y0 + 4.6, y0 + H, 0.05, 0.06, 'glassTint', 0xffffff);
-          place(a, b, y0 + 4.55, y0 + 4.65, 0.3, 0.16, 'extMetal', COLORS.glassFrame);
+          place(a, b, y0 + 4.55, y0 + 4.65, 0.3, 0.16, 'extMetal', pal.frame);
         }
       }
       // 楼层分隔带 + 夜间灯带
-      place(-0.3, e.len + 0.3, y0 - 0.32, y0 + 0.3, 0.42, 0.21, 'ext', COLORS.spandrel);
-      place(-0.3, e.len + 0.3, y0 + 0.31, y0 + 0.36, 0.44, 0.22, 'glow', COLORS.led);
-      if (top) place(-0.3, e.len + 0.3, y0 + H - 0.1, y0 + H + 0.35, 0.46, 0.23, 'ext', COLORS.spandrel);
+      place(-0.3, e.len + 0.3, y0 - 0.32, y0 + 0.3, 0.42, 0.21, 'ext', pal.spandrel);
+      place(-0.3, e.len + 0.3, y0 + 0.31, y0 + 0.36, 0.44, 0.22, 'glow', pal.fin ? '#ffd38a' : COLORS.led);
+      if (top) place(-0.3, e.len + 0.3, y0 + H - 0.1, y0 + H + 0.35, 0.46, 0.23, 'ext', pal.spandrel);
     });
   }
   facadeSigns(ctx, lv);
@@ -435,7 +445,24 @@ function ridge(B, v, y) {
 // ---------- 楼名与 LED 屏 ----------
 
 const SIGNAGE = {
-  P1: { title: '云澜汇', en: 'YUNLAN MALL', name: { rot: 'C', deg: 105, level: '3F' }, led: { wing: 'SE', level: '3F' } },
+  P1: {
+    title: '云澜汇', en: 'YUNLAN MALL', name: { rot: 'C', deg: 105, level: '3F' }, led: { wing: 'SE', level: '3F' },
+    slides: [
+      { t: '云澜汇 · 欢迎光临', s: 'YUNLAN MALL', a: '#0f6f86', b: '#43b6cd' },
+      { t: '天台「云澜之眼」摩天轮', s: 'SKY EYE · 每晚 19:00 灯光秀', a: '#3b1d6e', b: '#e0567a' },
+      { t: 'B1M 美食广场 · 云澜老街', s: 'FOOD COURT · 60+ 美味', a: '#8a2c10', b: '#f59e0b' },
+      { t: '经云环天桥 · 直达二期星湾', s: 'SKY RING BRIDGE', a: '#111827', b: '#2f86b0' },
+    ],
+  },
+  P2: {
+    title: '星湾', en: 'XINGWAN', name: { rot: 'A', deg: 67.5, level: '4F', w: 14 }, led: { wing: 'W', level: '3F' },
+    slides: [
+      { t: '星湾 · 欢迎光临', s: 'XINGWAN · 冰场 · IMAX · 天空跑道', a: '#1a1f2b', b: '#b8925a' },
+      { t: '1F 星湾真冰场', s: 'ICE ARENA · 全年开放', a: '#0c4a6e', b: '#7dd3fc' },
+      { t: '4F IMAX 影城 · 餐饮', s: 'IMAX · DINING', a: '#111827', b: '#f5c518' },
+      { t: '天台天空跑道 · 篮球场', s: 'SKY TRACK · ROOFTOP COURT', a: '#7c2d12', b: '#d9482b' },
+    ],
+  },
 };
 
 function signage(ctx, b) {
@@ -454,11 +481,13 @@ function signage(ctx, b) {
     g.textBaseline = 'middle';
     g.font = `800 300px ${FONT_CN}`;
     g.fillText(cfg.title, 40, 260);
+    const tw = g.measureText(cfg.title).width;
     g.font = `700 150px ${FONT_EN}`;
-    g.fillText(cfg.en, 1020, 270);
+    g.fillText(cfg.en, Math.max(1020, tw + 120), 270);
     const mat = new THREE.MeshBasicMaterial({ map: canvasTexture(c, { clamp: true }), transparent: true, depthWrite: false, toneMapped: true });
     ctx.mats.onNight((t) => mat.color.setRGB(0.95 + t * 0.9, 0.97 + t * 0.9, 1.0 + t * 0.9));
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(20, 5), mat);
+    const nw = cfg.name.w || 20;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(nw, nw / 4), mat);
     mesh.position.set(r.x + Math.cos(a) * (r.R + 0.9), L.lv.elev + 2.9, r.z + Math.sin(a) * (r.R + 0.9));
     mesh.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
     mesh.renderOrder = 3;
@@ -479,12 +508,7 @@ function signage(ctx, b) {
     mesh.rotation.y = -w.F.a + Math.PI / 2;
     L.facade.add(mesh);
     L.facadeBatch.frame(w.F, () => L.facadeBatch.get('extMetal').box(w.uEnd + 0.42, L.lv.elev + 2.7, 0, 0.2, H + 0.6, W + 0.6, COLORS.black));
-    const slides = [
-      { t: '云澜汇 · 欢迎光临', s: 'YUNLAN MALL', a: '#0f6f86', b: '#43b6cd' },
-      { t: '天台「云澜之眼」摩天轮', s: 'SKY EYE · 每晚 19:00 灯光秀', a: '#3b1d6e', b: '#e0567a' },
-      { t: 'B1M 美食广场 · 云澜老街', s: 'FOOD COURT · 60+ 美味', a: '#8a2c10', b: '#f59e0b' },
-      { t: '经云环天桥 · 直达二期星湾', s: 'SKY RING BRIDGE', a: '#111827', b: '#2f86b0' },
-    ];
+    const slides = cfg.slides;
     let last = -1;
     ctx.dynamic.push({
       update(dt, time) {

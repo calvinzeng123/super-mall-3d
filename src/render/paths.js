@@ -101,6 +101,27 @@ function parkingPaths(layout, b, lv, P) {
       fromAng = w.F.deg - delta;
     }
     P.vehicle.push({ loop: false, pts, name: '入场 → 推荐环线 → 出场' });
+  } else if (b.rotundas.length === 2 && inR && outR) {
+    // 两个圆厅（二期）：坡道喉部 → 中翼内侧车道向西 → 绕 A → 西翼往返 → 绕 A → 中翼外侧车道向东 → 绕 B → 东翼往返 → 绕 B → 中翼内侧车道回到喉部
+    const [rA, rB] = b.rotundas;
+    const link = b.wings.find((w) => w.link);
+    const ends = b.wings.filter((w) => !w.link);
+    const wA = ends.find((w) => w.rot === rA.id), wB = ends.find((w) => w.rot === rB.id);
+    const ringR = rA.R - 7;
+    const delta = Math.atan2(15, ringR) * DEG;
+    const [iu] = [inR.lane.x0 + 2.5];
+    const [ou] = [outR.lane.x0 + 2.5];
+    const back = (w) => [W3(w.F, rA.R - 4, 15, y), W3(w.F, w.uEnd - 9, 15, y), W3(w.F, w.uEnd - 9, -15, y), W3(w.F, rA.R - 4, -15, y)];
+    const pts = [
+      [inR.to.x, y, inR.to.z], W3(link.F, iu, -15, y), W3(link.F, rA.R - 4, -15, y),
+      ...arcDown(rA, ringR, 360 - delta, wA.F.deg + delta, y), ...back(wA),
+      ...arcDown(rA, ringR, wA.F.deg - delta, delta, y),
+      W3(link.F, rA.R - 4, 15, y), W3(link.F, link.len - (rB.R - 4), 15, y),
+      ...arcDown(rB, ringR, 180 - delta, wB.F.deg + delta, y), ...back(wB),
+      ...arcDown(rB, ringR, wB.F.deg - delta, 180 + delta, y),
+      W3(link.F, link.len - (rB.R - 4), -15, y), W3(link.F, ou, -15, y), [outR.from.x, y, outR.from.z],
+    ];
+    P.vehicle.push({ loop: false, pts, name: '入场 → 推荐环线 → 出场' });
   }
   for (const e of layout.elevators) {
     if (e.type !== 'passenger' || !e.serves.includes(lv.id) || !e.id.endsWith('L1')) continue;

@@ -36,6 +36,7 @@ export function sprite(text, style = 'facility', icon = null, sub = null, size =
 const FEATURE_LABEL = {
   ferris: ['fun', 'wheel', 4.2], ip: ['fun', 'star', 8.6], mirror: ['fun', 'star', 2.2], skywalk: ['fun', 'star', 2.4],
   letters: ['fun', 'star', 5.6], arch: ['fun', 'star', 4.0], playground: ['fun', 'star', 3.0], pavilion: ['facility', 'escalator', 5.2],
+  track: ['fun', 'star', 2.4], court: ['fun', 'star', 4.4], lawn: ['fun', 'star', 1.6],
 };
 
 export function buildLabels(ctx) {

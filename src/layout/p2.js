@@ -121,7 +121,7 @@ function p2Roof(api) {
     { id: 'M', rot: 'A', to: 'B', deg: 0 },
     { id: 'E', rot: 'B', deg: 45, uEnd: 72 - 5 },
   ];
-  api.feature({ type: 'track', path: hubOutline(rots, arms, 17, 4), width: 3.6, name: '星湾天空跑道', en: 'SKY TRACK' });
+  api.feature({ type: 'track', path: hubOutline(rots, arms, 17, 4), width: 3.6, frame: W.F, lu: 66, lv: 17, name: '星湾天空跑道', en: 'SKY TRACK' });
   api.feature({ type: 'court', frame: M.F, rect: rect(38, -7.5, 66, 7.5), name: '屋顶篮球场' });
   api.feature({ type: 'lawn', frame: W.F, rect: rect(56, -12, 78, 0), name: '屋顶花园' });
   api.feature({ type: 'lawn', frame: E.F, rect: rect(34, 2, 56, 12), name: '观景草坪' });

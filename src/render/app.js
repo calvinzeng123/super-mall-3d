@@ -45,7 +45,7 @@ const WAYFINDING = [
 ];
 
 /** 园区总览 */
-const OVERVIEW = [V(150, 260, 300), V(-60, 0, -70)];
+const OVERVIEW = [V(70, 290, 300), V(0, 0, -95)];
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -470,6 +470,8 @@ function buildPicks(ctx) {
         pavilion: ['扶梯玻璃亭', '3F → 天台扶梯出口'],
         pergola: ['花架长廊', '紫藤花架长廊'],
         letters: ['「云澜汇」立体字', '天台打卡点'],
+        track: ['星湾天空跑道', '沿屋面一圈的环形跑道 · 三条分道 · 夜间灯带'],
+        court: ['屋顶篮球场', '标准全场 · 围网 · 夜间灯光'],
       }[f.type];
       if (!t) continue;
       if (f.rect) pickBox(G, geo, mat, f.frame, f.rect, lv.elev, f.type === 'pavilion' ? 4.6 : 2.5, { kind: 'facility', title: t[0], desc: t[1] });

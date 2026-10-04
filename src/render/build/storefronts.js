@@ -24,6 +24,7 @@ export function shade(hex, k) {
 /** 店面样式：布局数据里的 style 为准；美食层的档口与小吃改为开敞柜台 */
 export function storeStyle(lv, u) {
   const cat = u.brand.cat;
+  if (u.style === 'showroom') return 'glass';
   if (u.style && u.style !== 'glass') return u.style;
   if (lv.kind === 'food' && ['food', 'snack'].includes(cat)) return 'stall';
   if (cat === 'cinema') return 'cinema';
@@ -37,7 +38,7 @@ export function buildStorefronts(ctx) {
     const atlas = ctx.atlas[lv.id];
     for (const u of lv.units) {
       const style = storeStyle(lv, u);
-      if (style === 'bar') continue;
+      if (style === 'bar' || style === 'rink') continue;
       L.batch.frame(u.frame, () => L.signs.frame(u.frame, () => {
         for (const f of u.fronts) front(L.batch, L.signs, lv, u, f, atlas.cell(u.id), style);
       }));

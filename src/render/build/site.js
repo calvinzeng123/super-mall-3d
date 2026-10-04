@@ -9,6 +9,12 @@ import { COLORS } from '../theme.js';
 import { windowTextures, rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 
 const DEG = 180 / Math.PI;
+/** 各期围合的铺装广场（椭圆）：渲染铺装与水景，并让草坪树阵避开 */
+const COURTYARDS = { P2: { cx: 158, cz: -50, rx: 26, rz: 15 } };
+const inCourtyard = (bid, [x, z], pad = 2) => {
+  const c = COURTYARDS[bid];
+  return !!c && ((x - c.cx) / (c.rx + pad)) ** 2 + ((z - c.cz) / (c.rz + pad)) ** 2 < 1;
+};
 
 export function buildSite(ctx) {
   const { layout, mats } = ctx;
@@ -99,7 +105,7 @@ function landscape(ctx, b, holes, G, B) {
     for (let z = r.z0; z < r.z1; z += 10) {
       if (rand() < 0.35) continue;
       const p = [x + (rand() - 0.5) * 6, z + (rand() - 0.5) * 6];
-      if (near(p, band) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d))) continue;
+      if (near(p, band) || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d))) continue;
       const k = 3;
       if ([[k, 0], [-k, 0], [0, k], [0, -k]].some(([dx, dz]) => near([p[0] + dx, p[1] + dz], band) || paths.some((q) => near([p[0] + dx, p[1] + dz], q)))) continue;
       trees.push({ x: p[0], y: -0.3, z: p[1], s: 0.85 + rand() * 0.5, kind: rand() < 0.3 ? 'cone' : 'round' });
@@ -277,9 +283,10 @@ function garageGates(ctx, S, B) {
   }
 }
 
-/** 一期广场：喷泉、IP 雕塑、立牌、卸货区货车、公交站 */
+/** 一期广场：喷泉、IP 雕塑、立牌、卸货区货车、公交站；二期星湾广场：椭圆铺装、旱喷、座椅 */
 function plazaFeatures(ctx, B) {
   const y = -0.14;
+  if (ctx.bById.P2) starBayPlaza(ctx, B);
   const p1 = ctx.bById.P1;
   if (!p1) return;
   // 喷泉（东南主入口与路口之间，偏离天桥轴线）
@@ -331,6 +338,40 @@ function plazaFeatures(ctx, B) {
   B.get('extMetal').box(bs.x, y + 3.05, bs.z, 8.4, 0.12, 2.4, '#2f3439');
   B.get('glow').box(bs.x + 3.2, y + 1.6, bs.z - 0.95, 1.2, 1.8, 0.05, '#cfe8ff');
   bench(B, bs.x - 1.5, y, bs.z - 0.2, 0);
+}
+
+/** 二期星湾广场：三翼围合的椭圆铺装、旱喷水景、环形座椅与树池 */
+function starBayPlaza(ctx, B) {
+  const y = -0.14;
+  const { cx, cz, rx, rz } = COURTYARDS.P2;
+  const pts = [];
+  for (let i = 0; i < 64; i++) {
+    const a = (i / 64) * Math.PI * 2;
+    pts.push([cx + Math.cos(a) * rx, cz + Math.sin(a) * rz]);
+  }
+  const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(pts), -0.075), ctx.mats.floor('stone', 0.7));
+  m.receiveShadow = true;
+  ctx.site.group.add(m);
+  // 旱喷：地面喷头阵列 + 水雾柱
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    const x = cx + Math.cos(a) * 7, z = cz + Math.sin(a) * 4.2;
+    B.get('glass').cyl(x, y, z, 0.12, 1.2 + (i % 3) * 0.7, '#ffffff', 6);
+    B.get('glow').cyl(x, y + 0.02, z, 0.25, 0.03, '#bfe9f5', 8);
+  }
+  B.get('glass').cyl(cx, y, cz, 0.35, 4.2, '#ffffff', 10);
+  B.get('water').cyl(cx, y + 0.02, cz, 9.5, 0.04, '#ffffff', 32);
+  // 环形座椅与树池
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + 0.3;
+    const x = cx + Math.cos(a) * (rx - 4), z = cz + Math.sin(a) * (rz - 3);
+    if (i % 2) bench(B, x, y, z, -a + Math.PI / 2);
+    else {
+      B.get('extSatin').cyl(x, y, z, 1.3, 0.5, COLORS.stoneDark, 16);
+      B.get('foliage').sphere(x, y + 2.6, z, 1.6, '#4f8a3a', 1.4, 1.6, 'ico');
+      B.get('ext').cyl(x, y + 0.5, z, 0.16, 1.6, '#6b4d33', 6);
+    }
+  }
 }
 
 /** 未建地块：围挡 + 效果图广告牌 */

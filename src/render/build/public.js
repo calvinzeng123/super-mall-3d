@@ -15,6 +15,7 @@ export function buildPublic(ctx) {
         oldStreet(ctx, b, lv);
       }
       if (lv.kind === 'retail' || lv.kind === 'food') lounges(ctx, b, lv);
+      iceRinks(ctx, lv);
       if (lv.short === '1F') atrium1F(ctx, b, lv);
       if (lv.short === '2F') popups(ctx, b, lv);
     }
@@ -254,4 +255,77 @@ function atriumArt(ctx, b, levels) {
       }
     });
   }
+}
+
+/** 真冰场：冰面与场线、白色挡板 + 玻璃护栏、挡板招牌、滑冰的人（动画） */
+function iceRinks(ctx, lv) {
+  const L = ctx.levels[lv.id];
+  const B = L.batch;
+  for (const u of lv.units.filter((x) => x.style === 'rink')) {
+    const r = u.rects[0], F = u.frame, y0 = lv.elev;
+    const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+    const iw = r.x1 - r.x0 - 1.2, id = r.z1 - r.z0 - 1.2;
+    const cell = ctx.atlas[lv.id].cell(u.id);
+    B.frame(F, () => L.signs.frame(F, () => {
+      B.get('satin').box(cx, y0 + 0.04, cz, iw, 0.08, id, '#eef7fc');
+      B.get('matte').box(cx, y0 + 0.085, cz, 0.3, 0.01, id - 0.6, '#d33a3a');
+      for (const k of [-1, 1]) B.get('matte').box(cx + k * iw * 0.16, y0 + 0.085, cz, 0.3, 0.01, id - 0.6, '#2f6fd6');
+      for (const k of [-1, 1]) B.get('matte').box(cx + k * (iw / 2 - 3.3), y0 + 0.085, cz, 0.06, 0.01, id - 2.2, '#d33a3a');
+      const flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      B.get('matte').shape('torus', new THREE.Vector3(cx, y0 + 0.09, cz), flat, new THREE.Vector3(9, 9, 0.25), '#2f6fd6');
+      for (const k of [-1, 1]) for (const j of [-1, 1]) B.get('matte').shape('torus', new THREE.Vector3(cx + k * (iw / 2 - 7), y0 + 0.09, cz + j * 3.6), flat, new THREE.Vector3(6, 6, 0.25), '#d33a3a');
+      const board = (x, z, sx, sz) => {
+        B.get('satin').box(x, y0 + 0.55, z, sx, 1.1, sz, '#f7f7f5');
+        B.get('satin').box(x, y0 + 0.2, z, sx + 0.01, 0.12, sz + 0.01, '#f2c230');
+        B.get('glass').box(x, y0 + 1.65, z, sx, 1.1, Math.max(0.03, sz * 0.3), 0xffffff);
+        B.get('metal').box(x, y0 + 1.13, z, sx, 0.06, sz + 0.06, '#c3c9cf');
+      };
+      for (const z of [r.z0 + 0.6, r.z1 - 0.6]) {
+        board(cx - iw / 4 - 1, z, iw / 2 - 2, 0.15);
+        board(cx + iw / 4 + 1, z, iw / 2 - 2, 0.15);
+      }
+      for (const x of [r.x0 + 0.6, r.x1 - 0.6]) board(x, cz, 0.15, id);
+      L.signs.place(cx - iw / 4 - 1, y0 + 0.62, r.z0 + 0.5, 4.4, 1.1, 'N', cell);
+      L.signs.place(cx + iw / 4 + 1, y0 + 0.62, r.z1 - 0.5, 4.4, 1.1, 'S', cell);
+      // 冰场灯：悬在 2F 洞口下沿的灯带
+      for (const z of [r.z0 + 1, r.z1 - 1]) B.get('glow').box(cx, y0 + 6.0, z, iw, 0.08, 0.3, '#eaf6ff');
+    }));
+    skaters(ctx, L, F, cx, cz, iw, id, y0);
+  }
+}
+
+function skaters(ctx, L, F, cx, cz, iw, id, y0) {
+  const n = 18;
+  const body = new THREE.CapsuleGeometry(0.2, 0.9, 3, 8).translate(0, 0.72, 0);
+  const mesh = new THREE.InstancedMesh(body, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }), n);
+  const rand = rng(909);
+  const cols = ['#c0392b', '#2f6fd6', '#f2f2f0', '#1f2328', '#e0a526', '#2e9c6a', '#7b4fd6', '#d1495b'];
+  const c = new THREE.Color();
+  const sk = [];
+  for (let i = 0; i < n; i++) {
+    sk.push({ a: rand() * Math.PI * 2, rx: iw / 2 - 1.6 - rand() * (iw / 2 - 5), rz: id / 2 - 1.4 - rand() * (id / 2 - 3.5), w: 0.18 + rand() * 0.22 });
+    mesh.setColorAt(i, c.set(cols[i % cols.length]));
+  }
+  mesh.instanceColor.needsUpdate = true;
+  mesh.frustumCulled = false;
+  const holder = new THREE.Group();
+  const [hx, hz] = toW(F, 0, 0);
+  holder.position.set(hx, 0, hz);
+  holder.rotation.y = -F.a;
+  holder.add(mesh);
+  L.people.add(holder);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s1 = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+  ctx.dynamic.push({
+    update(dt) {
+      if (!L.people.visible || !L.group.visible) return;
+      sk.forEach((k, i) => {
+        k.a += k.w * dt;
+        p.set(cx + Math.cos(k.a) * k.rx, y0 + 0.08, cz + Math.sin(k.a) * k.rz);
+        q.setFromAxisAngle(up, -k.a);
+        m.compose(p, q, s1);
+        mesh.setMatrixAt(i, m);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    },
+  });
 }
