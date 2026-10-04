@@ -1,48 +1,62 @@
-// 一键导览（一期版）：园区 → 东南主入口 → 圆厅中庭 → 乘扶梯上 2F → 3F → 西翼扶梯上天台 → 摩天轮 → 一期全景。
-// 镜头位置由布局数据（套件 / 翼楼局部坐标）换算，不依赖写死的世界坐标。
+// 一键导览（园区版，规格第 9 节）：园区全景 → 一期东南主入口 → 圆厅中庭 → 乘扶梯上 2F → 2F 天桥入口 → 经云环天桥
+// → 二期西翼 2F → 星湾真冰场圆厅 → 天空跑道 → 俯瞰三期街区 → 街巷与中心广场 → 一期天台摩天轮 → 园区全景。
+// 镜头位置全部由布局数据（套件 / 翼楼 / 连廊局部坐标）换算；每一步可指定要展开室内的那一期与阴影范围。
 import * as THREE from 'three';
 import { toW } from '../layout/geom.js';
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 function steps(layout) {
-  const b = layout.buildings.find((x) => x.id === 'P1');
-  const lv = (s) => layout.levels.find((l) => l.building === 'P1' && l.short === s);
-  const kit = b.rotundas[0].kitF;
-  const wing = (id) => b.wings.find((w) => w.id === id);
-  const K = (x, y, z) => { const [wx, wz] = toW(kit, x, z); return new THREE.Vector3(wx, y, wz); };
-  const Wg = (id, u, y, v) => { const [wx, wz] = toW(wing(id).F, u, v); return new THREE.Vector3(wx, y, wz); };
-  const esc = (pair, dir = 'up') => layout.escalators.find((e) => e.pair === `P1-${pair}` && e.dir === dir);
+  const B = (id) => layout.buildings.find((x) => x.id === id);
+  const lv = (id) => layout.levels.find((l) => l.id === id);
+  const p1 = B('P1'), p2 = B('P2'), p3 = B('P3');
+  const wing = (b, id) => b.wings.find((w) => w.id === id);
+  const W = (b, id, u, y, v) => { const [x, z] = toW(wing(b, id).F, u, v); return V(x, y, z); };
+  const K = (b, rot, x, y, z) => { const [wx, wz] = toW(b.rotundas.find((r) => r.id === rot).kitF, x, z); return V(wx, y, wz); };
+  const esc = (pair, dir = 'up') => layout.escalators.find((e) => e.pair === pair && e.dir === dir);
   const ride = (e, eye = 1.8) => {
     const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z);
     const ux = (e.top.x - e.bottom.x) / run, uz = (e.top.z - e.bottom.z) / run;
     return [
-      { pos: new THREE.Vector3(e.bottom.x - ux * 1.4, e.bottom.y + eye, e.bottom.z - uz * 1.4), target: new THREE.Vector3(e.top.x, e.top.y + 1.2, e.top.z), dur: 2.5 },
-      { pos: new THREE.Vector3(e.top.x + ux * 0.6, e.top.y + eye, e.top.z + uz * 0.6), target: new THREE.Vector3(e.top.x + ux * 12, e.top.y + 1.6, e.top.z + uz * 12), dur: 4.5 },
+      { pos: V(e.bottom.x - ux * 1.4, e.bottom.y + eye, e.bottom.z - uz * 1.4), target: V(e.top.x, e.top.y + 1.2, e.top.z), dur: 2.5 },
+      { pos: V(e.top.x + ux * 0.6, e.top.y + eye, e.top.z + uz * 0.6), target: V(e.top.x + ux * 12, e.top.y + 1.6, e.top.z + uz * 12), dur: 4.5 },
     ];
   };
-  const SE = wing('SE');
-  const ferris = lv('RF').features.find((f) => f.type === 'ferris');
-  const hub = (() => { const [x, z] = toW(ferris.frame, ferris.lu, ferris.lv); return new THREE.Vector3(x, lv('RF').elev + 18.5, z); })();
-  const k4 = ride(esc('K4'));
-  const k6 = ride(esc('K6'));
-  const p7 = ride(esc('P7'));
+  const br = layout.bridges;
+  const link = (id) => br.links.find((k) => k.id === id);
+  const L = (id, u, y, v = 0) => { const [x, z] = toW(link(id).frame, u, v); return V(x, y, z); };
+  const ring = (deg, y, r = br.R) => V(Math.cos((deg * Math.PI) / 180) * r, y, Math.sin((deg * Math.PI) / 180) * r);
+  const eye = br.y + 1.7;
+  const SE = wing(p1, 'SE'), P2W = wing(p2, 'W');
+  const rf1 = lv('P1-RF'), rf2 = lv('P2-RF');
+  const ferris = rf1.features.find((f) => f.type === 'ferris');
+  const hub = (() => { const [x, z] = toW(ferris.frame, ferris.lu, ferris.lv); return V(x, rf1.elev + 18.5, z); })();
+  const court = rf2.features.find((f) => f.type === 'court');
+  const C = (u, y, v) => { const [x, z] = toW(court.frame, u, v); return V(x, y, z); };
+  const plaza = lv('P3-1F').features.find((f) => f.type === 'plaza');
+  const k4 = ride(esc('P1-K4'));
   return [
-    { caption: '云澜汇园区 · 一期 Y 形三翼', pos: new THREE.Vector3(60, 120, 120), target: new THREE.Vector3(-100, 8, -100), dur: 5 },
-    { caption: '东南主入口 · 正对路口', pos: Wg('SE', SE.uEnd + 46, 9, 0), target: Wg('SE', SE.uEnd, 7, 0), dur: 4.5 },
-    { caption: '1F 主入口大堂', pos: Wg('SE', SE.uEnd - 2, 2.4, -3), target: Wg('SE', 40, 2.2, 0), dur: 4 },
-    { caption: '1F 圆厅中庭 · 俯瞰 B1M 美食广场', pos: Wg('SE', 31, 4.0, 5), target: K(0, -3.5, 0), dur: 4 },
+    { caption: '云澜汇园区 · 三期商业 + 云环天桥 + 中央公园', pos: V(150, 300, 330), target: V(0, 0, 0), dur: 5, shadow: 380 },
+    { caption: '一期东南主入口 · 正对路口', building: 'P1', pos: W(p1, 'SE', SE.uEnd + 46, 9, 0), target: W(p1, 'SE', SE.uEnd, 7, 0), dur: 4.5, shadow: 120 },
+    { caption: '1F 主入口大堂', pos: W(p1, 'SE', SE.uEnd - 2, 2.4, -3), target: W(p1, 'SE', 40, 2.2, 0), dur: 4 },
+    { caption: '1F 圆厅中庭 · 俯瞰 B1M 美食广场', pos: W(p1, 'SE', 31, 4.0, 5), target: K(p1, 'C', 0, -3.5, 0), dur: 4 },
     { caption: '乘扶梯上 2F', ...k4[0] },
     { caption: '乘扶梯上 2F', ...k4[1] },
-    { caption: '2F 圆厅 · 潮流服饰', pos: K(18, 8.0, 16), target: K(-6, 6.5, -4), dur: 3.5 },
-    { caption: '乘扶梯上 3F', ...k6[0] },
-    { caption: '乘扶梯上 3F', ...k6[1] },
-    { caption: '3F 亲子 · 餐饮 · 影城', pos: Wg('W', 34, 13.8, 4), target: Wg('W', 70, 12.5, 0), dur: 4 },
-    { caption: '西翼扶梯 · 上天台花园', ...p7[0] },
-    { caption: '西翼扶梯 · 上天台花园', ...p7[1] },
-    { caption: '天台花园 · 云澜之眼摩天轮', pos: Wg('W', 72, 21.5, 10), target: hub, dur: 4.5 },
-    { caption: '东南翼天台 · 餐吧与立体字', pos: Wg('SE', 52, 22.5, -4), target: Wg('SE', 78, 19.5, 0), dur: 4 },
-    { caption: '一期全景', pos: Wg('SE', SE.uEnd + 120, 85, 60), target: new THREE.Vector3(b.center[0], 10, b.center[1]), dur: 5 },
+    { caption: '2F 天桥入口 · 前往云环', pos: W(p1, 'SE', SE.uEnd - 16, 8.3, 2), target: W(p1, 'SE', SE.uEnd + 12, 7.6, 0), dur: 4.5 },
+    { caption: '一期连廊 → 云环天桥', pos: L('L-P1', link('L-P1').u1 - 3, eye, 1.7), target: L('L-P1', 36, eye - 0.4, 0.6), dur: 4.5, shadow: 140 },
+    { caption: '云环天桥 · 俯瞰路口车流', pos: ring(250, eye + 0.6), target: ring(292, eye - 1.5), dur: 4.5 },
+    { caption: '云环天桥 · 四个地块一桥相连', pos: ring(282, eye + 0.6), target: L('L-P2', 50, eye - 0.5), dur: 4 },
+    { caption: '二期连廊 → 星湾西门', building: 'P2', pos: L('L-P2', 42, eye, -1.7), target: L('L-P2', link('L-P2').u1 + 6, eye - 0.3, -0.4), dur: 4.5, shadow: 140 },
+    { caption: '二期西翼 2F 运动潮流街', pos: W(p2, 'W', P2W.uEnd - 8, 8.6, 2), target: W(p2, 'W', 36, 8.0, 0), dur: 4.5, shadow: 140 },
+    { caption: '中翼 2F → 冰场圆厅', pos: W(p2, 'M', 40, 9.6, 3), target: K(p2, 'B', 0, 4, 0), dur: 5 },
+    { caption: '星湾真冰场 · 圆厅俯瞰', pos: K(p2, 'B', 19, 10.4, 13), target: K(p2, 'B', 0, 0.2, 0), dur: 4.5 },
+    { caption: '二期天台 · 天空跑道与篮球场', pos: C(52, rf2.elev + 22, -42), target: C(52, rf2.elev, 0), dur: 5, shadow: 160 },
+    { caption: '俯瞰三期 云澜里 · 开放街区', building: 'P3', pos: V(-40, 80, 20), target: V(-130, 4, 110), dur: 5.5, shadow: 170 },
+    { caption: '三期街巷 · 店铺、外摆与串灯', pos: V(-58, 2.4, 44.5), target: V(-140, 3, 43), dur: 5, shadow: 90 },
+    { caption: '中心广场 · 街区舞台与旱喷', pos: V(plaza.x - 10, 7, plaza.z - 8), target: V(plaza.x + 3, 2, plaza.z - 1), dur: 4.5 },
+    { caption: '一期天台 · 云澜之眼摩天轮', building: 'P1', pos: W(p1, 'W', 72, 21.5, 10), target: hub, dur: 5.5, shadow: 140 },
+    { caption: '园区全景', pos: V(110, 430, 480), target: V(0, 0, 0), dur: 5, shadow: 380 },
   ];
 }
 
@@ -50,15 +64,21 @@ export function attachTour(app, ui) {
   const { camera, controls } = app;
   const TOUR = steps(app.ctx.layout);
   let run = null;
+  const enter = (seg) => {
+    if (seg.building && app.state.building !== seg.building) {
+      app.state.building = seg.building;
+      app.refresh();
+    }
+    if (seg.shadow) app.env.setShadowFocus(seg.target.clone(), seg.shadow);
+    ui.tour(seg.caption);
+  };
   app.startTour = () => {
     app.reset(true);
-    app.state.building = 'P1';
     controls.enabled = false;
     run = { i: 0, t: 0, from: { pos: camera.position.clone(), target: controls.target.clone() } };
     app.state.touring = true;
     app.refresh();
-    app.env.setShadowFocus(new THREE.Vector3(-110, 0, -110), 160);
-    ui.tour(TOUR[0].caption);
+    enter(TOUR[0]);
     app.emit();
   };
   app.stopTour = () => {
@@ -86,11 +106,12 @@ export function attachTour(app, ui) {
         run.t = 0;
         if (run.i >= TOUR.length) {
           app.stopTour();
-          app.setBuilding('P1');
+          app.reset();
           return;
         }
-        ui.tour(TOUR[run.i].caption);
+        enter(TOUR[run.i]);
       }
     },
   });
+  app.tourSteps = TOUR;
 }

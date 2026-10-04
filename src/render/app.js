@@ -48,7 +48,7 @@ const WAYFINDING = [
 ];
 
 /** 园区总览（四个地块 + 路口云环） */
-const OVERVIEW = [V(150, 430, 470), V(0, 0, 0)];
+const OVERVIEW = [V(110, 430, 480), V(0, 0, 0)];
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -233,7 +233,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     if (L.lv.kind === 'roof') return [c.clone().add(V(0.45, 0.7, 0.6).normalize().multiplyScalar(b.radius * 1.75)), c.clone().add(V(0, 6, 0)), b.radius * 1.15];
     return [c.clone().add(V(0.3, 0.95, 0.5).normalize().multiplyScalar(b.radius * 2.0)), c, b.radius * 1.15];
   }
-  const overview = () => [OVERVIEW[0], OVERVIEW[1], 380];
+  // 竖屏时总览再拉远一些，让四个地块都在画面里（flyTo 自身还会按竖屏放大 1.22 倍）
+  const overview = () => [OVERVIEW[0].clone().sub(OVERVIEW[1]).multiplyScalar(camera.aspect < 1 ? 1.2 : 1).add(OVERVIEW[1]), OVERVIEW[1], 380];
 
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
@@ -441,7 +442,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
   applyVisibility();
   resize();
-  if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22).add(controls.target);
+  if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22 * 1.2).add(controls.target);
   env.setShadowFocus(controls.target.clone(), 380);
   return app;
 }
