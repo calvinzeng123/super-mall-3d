@@ -47,7 +47,7 @@ const LEVELS = [
   },
   {
     short: '1F', name: '1F 街巷', kind: 'street', elev: 0, height: 5, ground: true,
-    theme: { key: 'street', floor: 'stone', accent: '#9a5b34', label: '街巷首层 · 咖啡 · 买手店 · 中心广场' },
+    theme: { key: 'street', floor: 'cobble', accent: '#9a5b34', label: '街巷首层 · 咖啡 · 买手店 · 中心广场' },
     cats: ['cafe', 'fashion', 'accessory', 'tea', 'home', 'beauty', 'books', 'shoes', 'toys', 'snack'],
   },
   {
@@ -109,7 +109,7 @@ export function buildP3(site, picker) {
   for (const b of blocks) {
     const serves = b.lift ? ids('B1', '1F', '2F', '3F') : ids('1F', '2F', '3F');
     stairs.push({ id: `${bid}-${b.id}-ST`, building: bid, block: b.n, kind: 'exterior', frame: b.F, rect: b.stairRect, door: b.stairDoor, doorByLevel: {}, serves });
-    if (b.lift) elevators.push(lift(`${bid}-${b.id}-L`, bid, 'passenger', b.F, b.h + GAL + 1.8, b.w - 9, 3, 2.6, 'W', serves));
+    if (b.lift) elevators.push({ ...lift(`${bid}-${b.id}-L`, bid, 'passenger', b.F, b.h + GAL + 1.8, b.w - 9, 3, 2.6, 'W', serves), exterior: true, block: b.n });
   }
   for (const k of KIOSKS) {
     const r = k.r;
@@ -133,8 +133,8 @@ export function buildP3(site, picker) {
     const { h, w } = b;
     let u0 = -h;
     if (b.wc) {
-      g.rooms.push({ id: `${bid}-${b.id}-wc`, type: 'wc', label: '洗手间', frame: b.F, rects: [rect(-h, -w, -h + 6, w)], doors: [{ x0: -h, z0: -2.5, x1: -h, z1: 2.5, side: 'W' }], block: b.n });
-      u0 = -h + 6;
+      g.rooms.push({ id: `${bid}-${b.id}-wc`, type: 'wc', label: '洗手间', frame: b.F, rects: [rect(-h, -w, -h + 8, w)], doors: [{ x0: -h + 2.5, z0: -w, x1: -h + 5.5, z1: -w, side: 'N' }], block: b.n });
+      u0 = -h + 8;
     }
     const parts = split(u0, h, [10, 9, 12, 8, 11], state.split);
     parts.forEach(([p, q], i) => {
@@ -177,9 +177,10 @@ export function buildP3(site, picker) {
   const p = by['B1'];
   const B = BASEMENT;
   const aisleZ = Array.from({ length: 9 }, (_, k) => 45 + 16 * k);
-  aisleZ.forEach((z, k) => p.walk.push(walkL(IDENTITY, `A${k}`, 'aisle', rect(B.x0, z, B.x1, z + 6))));
-  const cross = [['XW', B.x0, B.x0 + 6], ['XM', -143, -137], ['XE', B.x1 - 6, B.x1]];
-  for (const [id, a, c] of cross) p.walk.push(walkL(IDENTITY, id, 'aisle', rect(a, B.z0, c, B.z1)));
+  // 单向车道：东西向车道隔行反向，三条南北向车道连成回路（dir 为行驶方向，供地面箭头与车流使用）
+  aisleZ.forEach((z, k) => p.walk.push({ ...walkL(IDENTITY, `A${k}`, 'aisle', rect(B.x0, z, B.x1, z + 6)), dir: k % 2 ? [-1, 0] : [1, 0] }));
+  const cross = [['XW', B.x0, B.x0 + 6, [0, 1]], ['XM', -143, -137, [0, -1]], ['XE', B.x1 - 6, B.x1, [0, -1]]];
+  for (const [id, a, c, dir] of cross) p.walk.push({ ...walkL(IDENTITY, id, 'aisle', rect(a, B.z0, c, B.z1)), dir });
   for (const b of blocks.filter((k) => k.lift)) p.walk.push(walkL(b.F, `${b.id}-lobby`, 'lobby', rect(b.h - 2, b.w - 12, b.h + GAL, b.w + GAL)));
   const segs = [['G', B.x0 + 6, -143], ['H', -137, B.x1 - 6]];
   const rows = [];
@@ -252,9 +253,9 @@ export function buildP3(site, picker) {
 /** 1F 室外：中心广场（舞台 + 旱喷水景）、梧桐小广场、沿街行道树与巷内散植乔木 */
 function streetFeatures(lv, blocks) {
   const plaza = { x: -151, z: 95, r: 15 };
-  lv.features.push({ type: 'plaza', x: plaza.x, z: plaza.z, r: plaza.r, name: '云澜里中心广场' });
-  lv.features.push({ type: 'fountain', x: -155, z: 99, r: 5.5, name: '旱喷水景' });
-  lv.features.push({ type: 'stage', x: -141, z: 89, w: 10, d: 6, deg: 146, name: '街区舞台' });
+  lv.features.push({ type: 'plaza', x: plaza.x, z: plaza.z, r: plaza.r, name: '云澜里中心广场', en: 'LIVE STAGE · FOUNTAIN' });
+  lv.features.push({ type: 'fountain', x: -155, z: 99, r: 5.5 });
+  lv.features.push({ type: 'stage', x: -141, z: 89, w: 10, d: 6, deg: 146 });
   lv.features.push({ type: 'grove', x: -88, z: 134, r: 12, name: '梧桐小广场' });
   const obstacles = [...blocks.map((b) => b.poly), ...KIOSKS.map((k) => rectPoly(k.r))];
   const clear = (p) => !obstacles.some((o) => pointInPoly(p, o)) && Math.min(...obstacles.map((o) => distToPolyEdge(p, o))) >= 4;

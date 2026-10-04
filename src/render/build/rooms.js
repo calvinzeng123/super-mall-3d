@@ -32,7 +32,10 @@ export function buildRooms(ctx) {
     const roof = lv.kind === 'roof';
     const hh = roof ? 4.2 : H;
     const lifts = layout.elevators.filter((e) => e.type === 'passenger' && e.serves.includes(lv.id));
+    // 三期地上层：楼梯为外挂钢梯、客梯为室外玻璃梯，由 street.js / elevators.js 绘制
+    const street = ctx.bById[lv.building].kind === 'street' && lv.kind !== 'parking';
     for (const r of lv.rooms) {
+      if (street && (r.type === 'core' || r.type === 'stair')) continue;
       B.frame(r.frame, () => L.signs.frame(r.frame, () => {
         if (r.type === 'core') coreShafts(B, lv, r, y0, hh, lifts.filter((e) => e.frame.id === r.frame.id));
         else if (r.type === 'stair') stair(B, L, atlas, r, y0, roof ? 3.6 : H, roof);
@@ -50,7 +53,7 @@ export function buildRooms(ctx) {
       const g = w.rect;
       B.frame(w.frame, () => B.get('satin').box(rcx(g), y0 + 0.01, rcz(g), rw(g) - 0.1, 0.02, rd(g) - 0.1, lv.kind === 'parking' ? '#d9dde1' : '#cfc6b8'));
     }
-    lobbySigns(L, atlas, lv, y0, H, lifts);
+    if (!street) lobbySigns(L, atlas, lv, y0, H, lifts);
     if (lv.kind === 'parking') parkingVestibules(B, L, atlas, lv, y0, H, lifts);
   }
 }
@@ -197,6 +200,10 @@ function parkingVestibules(B, L, atlas, lv, y0, H, lifts) {
     if (seen.has(key)) continue;
     seen.add(key);
     const mates = lifts.filter((o) => o.frame.id === e.frame.id && Math.abs(o.lv - e.lv) < 0.1 && Math.abs(o.lu - e.lu) < 6);
+    if (e.door === 'E' || e.door === 'W') {
+      sideVestibule(B, L, atlas, e, y0, H);
+      continue;
+    }
     const u0 = Math.min(...mates.map((o) => o.lu)) - 2.2, u1 = Math.max(...mates.map((o) => o.lu)) + 2.2;
     const nz = NORMAL[e.door][1];
     const face = e.lv + nz * (e.d / 2);
@@ -215,4 +222,25 @@ function parkingVestibules(B, L, atlas, lv, y0, H, lifts) {
     });
     L.signs.frame(e.frame, () => L.signs.place((u0 + u1) / 2, y0 + 3.15, v + nz * 0.13, 2.8, 0.7, e.door, atlas.cell('wf-lift')));
   }
+}
+
+/** 门朝 E / W 的单台电梯门斗（三期地库）：玻璃门斗沿 v 方向展开 */
+function sideVestibule(B, L, atlas, e, y0, H) {
+  const nx = NORMAL[e.door][0];
+  const face = e.lu + nx * (e.w / 2);
+  const u = face + nx * 2.4;
+  const v0 = e.lv - 2.2, v1 = e.lv + 2.2;
+  B.frame(e.frame, () => {
+    const len = v1 - v0;
+    const n = Math.round(len / 1.4);
+    for (let i = 0; i < n; i++) {
+      const v = v0 + (i + 0.5) * (len / n);
+      if (Math.abs(v - e.lv) < 1.0) continue;
+      B.get('glass').box(u, y0 + 1.4, v, 0.04, 2.8, len / n - 0.05, 0xffffff);
+    }
+    for (const v of [v0, v1]) B.get('glass').box((u + face) / 2, y0 + 1.4, v, 2.4, 2.8, 0.04, 0xffffff);
+    B.get('metal').box(u, y0 + 2.85, e.lv, 0.12, 0.12, len, '#4a5056');
+    B.get('matte').box(u, y0 + (2.9 + H) / 2, e.lv, 0.2, H - 2.9, len, '#d4d8dc');
+  });
+  L.signs.frame(e.frame, () => L.signs.place(u + nx * 0.13, y0 + 3.15, e.lv, 2.8, 0.7, e.door, atlas.cell('wf-lift')));
 }

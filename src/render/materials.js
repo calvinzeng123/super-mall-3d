@@ -70,7 +70,7 @@ export class MaterialLib {
     const { texture, meters } = floorTexture(kind);
     texture.repeat.set(1 / meters, 1 / meters);
     const m = new THREE.MeshStandardMaterial({ map: texture, roughness, metalness: 0, emissiveMap: texture, emissive: 0x000000 });
-    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'rubber'].includes(kind);
+    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'rubber', 'cobble'].includes(kind);
     this.onNight((t) => m.emissive.copy(WARM).multiplyScalar(outdoor ? t * 0.06 : t * 0.36));
     this.floors[kind] = m;
     return m;

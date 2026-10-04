@@ -31,8 +31,8 @@ export function buildBridges(buildings) {
   const defs = [
     { id: 'L-P1', deg: 225, building: 'P1', wing: 'SE', name: '一期连廊' },
     { id: 'L-P2', deg: 315, building: 'P2', wing: 'W', name: '二期连廊' },
-    { id: 'L-P3', deg: 135, tower: 'T-P3', name: '三期连廊', side: 1 },
-    { id: 'L-PK', deg: 45, tower: 'T-PK', name: '公园连廊', side: -1 },
+    { id: 'L-P3', deg: 135, tower: 'T-P3', name: '三期连廊', towerName: '三期落地塔', side: 1 },
+    { id: 'L-PK', deg: 45, tower: 'T-PK', name: '公园连廊', towerName: '公园落地塔', side: -1 },
   ];
   const links = [];
   const towers = [];
@@ -53,7 +53,7 @@ export function buildBridges(buildings) {
       const t0 = tc - TS / 2, t1 = tc + TS / 2;
       u1 = t0 + 1;
       end = toW(F, t0 + 2, 0);
-      const T = { id: d.tower, link: d.id, name: `${d.name}落地塔`, frame: F, rect: rect(t0, -TS / 2, t1, TS / 2), center: toW(F, tc, 0), side: d.side };
+      const T = { id: d.tower, link: d.id, name: d.towerName, frame: F, rect: rect(t0, -TS / 2, t1, TS / 2), center: toW(F, tc, 0), side: d.side };
       T.poly = lrectPoly(F, T.rect);
       towers.push(T);
       walk.push({ id: d.tower, kind: 'tower', poly: T.poly });

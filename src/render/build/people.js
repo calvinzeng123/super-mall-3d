@@ -24,7 +24,7 @@ export function buildPeople(ctx) {
   for (const lv of ctx.layout.levels) {
     const paths = (ctx.paths.levels[lv.id] || {}).people || [];
     if (!paths.length) continue;
-    const n = COUNT[lv.kind] || 20;
+    const n = lv.kind === 'street' && lv.ground ? 120 : COUNT[lv.kind] || 20;
     const bodies = new THREE.InstancedMesh(bodyGeo, bodyMat, n);
     const heads = new THREE.InstancedMesh(headGeo, headMat, n);
     bodies.castShadow = false;

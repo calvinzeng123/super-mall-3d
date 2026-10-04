@@ -1,7 +1,7 @@
 // 动线路径（数据驱动）：人流（商业街两侧往返、圆厅回游环、扶梯上下行、车位 → 电梯）、
 // 车流（车库：坡道口 → 各翼外侧车道 → 圆厅环道，靠右行驶、逆时针绕圆厅）、货流（卸货区 → 北翼）。
 // 每条路径为三维折线 [[x,y,z],...]，loop=true 表示闭合环线。动线箭头与行人、车辆动画共用。
-import { frame, toW } from '../layout/geom.js';
+import { frame, toW, pointInPoly } from '../layout/geom.js';
 
 const DEG = 180 / Math.PI;
 const mod360 = (a) => ((a % 360) + 360) % 360;
@@ -39,6 +39,10 @@ export function levelPaths(layout) {
   const bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
   for (const lv of layout.levels) {
     const b = bById[lv.building];
+    if (b.kind === 'street') {
+      streetPaths(layout, b, lv, P(lv.id));
+      continue;
+    }
     if (b.kind !== 'mall') continue;
     const y = lv.elev + 0.07;
     if (lv.kind === 'parking') {
@@ -130,6 +134,77 @@ function parkingPaths(layout, b, lv, P) {
   }
 }
 
+/** 三期街区：1F 绕楼栋的街巷环线、楼上沿外挑连廊、屋顶露台环线；B1 单向车行回路与楼梯口步行线 */
+function streetPaths(layout, b, lv, P) {
+  const y = lv.elev + 0.07;
+  const GAL = 2.5, BAY = 4;
+  if (lv.kind === 'parking') {
+    const yv = lv.elev + 0.05;
+    const inR = layout.ramps.find((r) => r.building === b.id && r.type === 'street-in');
+    const outR = layout.ramps.find((r) => r.building === b.id && r.type === 'street-out');
+    if (inR && outR) {
+      P.vehicle.push({
+        loop: false, name: '入场 → 推荐环线 → 出场',
+        pts: [[inR.to.x, yv, inR.to.z], [-237, yv, 110], [-237, yv, 128], [-43, yv, 128], [-43, yv, 96], [-237, yv, 96], [-237, yv, 100], [outR.from.x, yv, outR.from.z]],
+      });
+    }
+    for (const k of b.kiosks) {
+      const r = k.r;
+      const dz = k.side === 'S' ? 1 : -1;
+      const z = k.side === 'S' ? r.z1 : r.z0;
+      const cx = (r.x0 + r.x1) / 2;
+      P.people.push({ loop: false, name: '车位 → 楼梯口', pts: [[cx - 14, y, z + dz * 3], [cx, y, z + dz * 3], [cx, y, z + dz * 0.8]] });
+    }
+    for (const e of layout.elevators.filter((x) => x.exterior && x.serves.includes(lv.id))) {
+      P.people.push({ loop: false, name: '车位 → 电梯厅', pts: [W3(e.frame, e.lu - 2.2, e.lv, y), W3(e.frame, e.lu - 4.5, e.lv, y), W3(e.frame, e.lu - 4.5, e.lv - 6, y)] });
+    }
+    return;
+  }
+  const others = (k) => [...b.blocks.filter((o) => o !== k).map((o) => o.poly), ...b.kiosks.map((o) => o.poly)];
+  const clear = (pts, k) => {
+    const obs = others(k);
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], c = pts[(i + 1) % pts.length];
+      const n = Math.ceil(Math.hypot(c[0] - a[0], c[2] - a[2]));
+      for (let j = 0; j <= n; j++) {
+        const p = [a[0] + ((c[0] - a[0]) * j) / n, a[2] + ((c[2] - a[2]) * j) / n];
+        if (obs.some((o) => pointInPoly(p, o))) return false;
+      }
+    }
+    return true;
+  };
+  for (const k of b.blocks) {
+    const { h, w } = k;
+    if (lv.short === '1F') {
+      for (const off of [2.8, 1.8]) {
+        const pts = [[-h - off, -w - off], [h + GAL + BAY + off, -w - off], [h + GAL + BAY + off, w + GAL + off], [-h - off, w + GAL + off]].map(([u, v]) => W3(k.F, u, v, y));
+        if (!clear(pts, k)) continue;
+        P.people.push({ loop: true, pts, name: '街巷漫游' });
+        break;
+      }
+    } else if (lv.short === '3F' && k.floors === 2) {
+      P.people.push({ loop: true, name: '屋顶露台', pts: [[-h + 1.8, -w + 1.8], [h + 1.3, -w + 1.8], [h + 1.3, w + 1.3], [-h + 1.8, w + 1.3]].map(([u, v]) => W3(k.F, u, v, y)) });
+    } else {
+      P.people.push({ loop: false, name: '外挑连廊', pts: [[-h + 0.8, w + 1.25], [h + 1.25, w + 1.25], [h + 1.25, -w + 0.8]].map(([u, v]) => W3(k.F, u, v, y)) });
+    }
+  }
+}
+
+/** 天桥：云环双向环线、四条连廊、落地塔扶梯 */
+export function bridgePaths(br) {
+  const y = br.y + 0.07;
+  const people = [];
+  for (const [r, name] of [[br.R - 1.2, '云环 · 内圈'], [br.R + 1.2, '云环 · 外圈']]) people.push({ loop: true, pts: ring(0, 0, r, y, 72), name });
+  for (const k of br.links) people.push({ loop: false, name: k.name, pts: [W3(k.frame, k.u0 - 1, 0, y), W3(k.frame, k.u1 + (k.building ? 2 : 3), 0, y)] });
+  for (const v of br.verticals.filter((x) => x.type === 'escalator')) {
+    const T = (lu, lv, yy) => W3(v.frame, lu, lv, yy);
+    const s = Math.sign(v.bottom.lv - v.top.lv);
+    const a = T(v.lu, v.bottom.lv + s * 2, 1.35), b2 = T(v.lu, v.bottom.lv, 1.35), c = T(v.lu, v.top.lv, br.y + 1.35), d = T(v.lu, v.top.lv - s * 2, br.y + 1.35);
+    people.push({ loop: false, escalator: true, name: v.dir === 'up' ? '扶梯上行' : '扶梯下行', pts: v.dir === 'up' ? [a, b2, c, d] : [d, c, b2, a] });
+  }
+  return people;
+}
+
 /** 场地动线：车库进出（含坡道）、人行至各入口、货车至卸货区 */
 export function sitePaths(layout) {
   const y = -0.08;
@@ -159,6 +234,7 @@ export function sitePaths(layout) {
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
     people.push({ loop: false, name: '过街', pts: c.axis === 'z' ? [[cx, y, r.z0 - 3], [cx, y, r.z1 + 3]] : [[r.x0 - 3, y, cz], [r.x1 + 3, y, cz]] });
   }
+  if (layout.bridges) people.push(...bridgePaths(layout.bridges));
   const goods = [];
   const p1 = layout.buildings.find((b) => b.id === 'P1');
   if (p1) {

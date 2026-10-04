@@ -38,7 +38,7 @@ export function buildStorefronts(ctx) {
     const atlas = ctx.atlas[lv.id];
     for (const u of lv.units) {
       const style = storeStyle(lv, u);
-      if (style === 'bar' || style === 'rink') continue;
+      if (style === 'bar' || style === 'rink' || style === 'street' || style === 'pavilion') continue;
       L.batch.frame(u.frame, () => L.signs.frame(u.frame, () => {
         for (const f of u.fronts) front(L.batch, L.signs, lv, u, f, atlas.cell(u.id), style);
       }));

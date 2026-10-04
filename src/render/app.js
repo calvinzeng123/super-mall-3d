@@ -22,7 +22,10 @@ import { buildFlows } from './build/flows.js';
 import { buildLabels } from './build/labels.js';
 import { buildPeople } from './build/people.js';
 import { buildTraffic } from './build/traffic.js';
-import { toW, frame } from '../layout/geom.js';
+import { buildStreet } from './build/street.js';
+import { buildBridges } from './build/bridges.js';
+import { buildPark } from './build/park.js';
+import { toW, frame, IDENTITY } from '../layout/geom.js';
 
 const EXPLODE_GAP = 13;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -44,8 +47,8 @@ const WAYFINDING = [
   { id: 'wf-wheel', kind: 'wheel', text: '摩天轮 Sky Eye', bg: '#6a3fb5' },
 ];
 
-/** 园区总览 */
-const OVERVIEW = [V(70, 290, 300), V(0, 0, -95)];
+/** 园区总览（四个地块 + 路口云环） */
+const OVERVIEW = [V(150, 430, 470), V(0, 0, 0)];
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -125,6 +128,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     ['布置美食广场与公共区', buildPublic],
     ['划设停车位', buildParking],
     ['打造天台花园与摩天轮', buildRoof],
+    ['营造三期街区', buildStreet],
+    ['架设云环天桥', buildBridges],
+    ['种植中央公园', buildPark],
     ['铺设道路与广场', buildSite],
     ['绘制动线', buildFlows],
     ['添加标注', buildLabels],
@@ -171,10 +177,11 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
           L.facade.visible = !state.focus || L.index < fi;
         } else {
           L.group.visible = true;
-          L.base.visible = L.lv.kind === 'roof' || B.b.kind === 'street';
+          L.base.visible = L.lv.kind === 'roof' || (B.b.kind === 'street' && L.lv.elev >= 0);
           L.facade.visible = true;
         }
-        L.shell.visible = true;
+        // 爆炸视图里街区的 1F 室外铺装让开，露出下面的地库
+        L.shell.visible = !(state.exploded && B.b.kind === 'street' && L.lv.ground);
         L.people.visible = L.base.visible;
         L.labels.visible = state.labels && !state.touring && !state.exploded && state.focus === id;
         if (L.title) L.title.visible = state.exploded && sel && state.labels && !state.touring;
@@ -226,7 +233,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     if (L.lv.kind === 'roof') return [c.clone().add(V(0.45, 0.7, 0.6).normalize().multiplyScalar(b.radius * 1.75)), c.clone().add(V(0, 6, 0)), b.radius * 1.15];
     return [c.clone().add(V(0.3, 0.95, 0.5).normalize().multiplyScalar(b.radius * 2.0)), c, b.radius * 1.15];
   }
-  const overview = () => [OVERVIEW[0], OVERVIEW[1], 340];
+  const overview = () => [OVERVIEW[0], OVERVIEW[1], 380];
 
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
@@ -333,6 +340,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       if (shadow) env.setShadowFocus(controls.target.clone(), shadow);
       for (const L of Object.values(ctx.levels)) { L.offset = L.offsetTarget; L.group.position.y = L.offset; }
       controls.update();
+      updateNear();
       for (let i = 0; i < n; i++) {
         env.night = env.target;
         env.apply();
@@ -351,6 +359,15 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   };
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
+
+  // 近裁剪面随视距调整：远景时抬高 near，提高深度精度，避免大面积铺装与楼板顶面在远处闪烁
+  function updateNear() {
+    const near = Math.min(4, Math.max(0.3, camera.position.distanceTo(controls.target) / 120));
+    if (Math.abs(near - camera.near) > 0.05) {
+      camera.near = near;
+      camera.updateProjectionMatrix();
+    }
+  }
 
   // ---------- 主循环 ----------
   const clock = new THREE.Clock();
@@ -390,6 +407,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     }
     if (moving) renderer.shadowMap.needsUpdate = true;
     if (!state.touring) controls.update();
+    updateNear();
     env.update(dt);
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
     highlight.update(elapsed, ctx);
@@ -424,7 +442,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   applyVisibility();
   resize();
   if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22).add(controls.target);
-  env.setShadowFocus(controls.target.clone(), 340);
+  env.setShadowFocus(controls.target.clone(), 380);
   return app;
 }
 
@@ -472,8 +490,17 @@ function buildPicks(ctx) {
         letters: ['「云澜汇」立体字', '天台打卡点'],
         track: ['星湾天空跑道', '沿屋面一圈的环形跑道 · 三条分道 · 夜间灯带'],
         court: ['屋顶篮球场', '标准全场 · 围网 · 夜间灯光'],
+        plaza: ['云澜里中心广场', '街区舞台 · 旱喷水景 · 周末市集'],
+        stage: ['街区舞台', '每周五 19:30 街区音乐节 · LED 背景屏'],
+        fountain: ['旱喷水景', '16 组喷头 · 夜间灯光'],
+        grove: ['梧桐小广场', '树阵 · 环形座椅'],
       }[f.type];
       if (!t) continue;
+      if (!f.frame) {
+        const r = f.r || Math.max(f.w || 6, f.d || 6) / 2;
+        pickBox(G, geo, mat, IDENTITY, { x0: f.x - r, x1: f.x + r, z0: f.z - r, z1: f.z + r }, lv.elev, f.type === 'stage' ? 7 : 2, { kind: 'facility', title: t[0], desc: t[1] });
+        continue;
+      }
       if (f.rect) pickBox(G, geo, mat, f.frame, f.rect, lv.elev, f.type === 'pavilion' ? 4.6 : 2.5, { kind: 'facility', title: t[0], desc: t[1] });
       else if (f.type === 'ferris') pickBox(G, geo, mat, f.frame, { x0: f.lu - f.radius, x1: f.lu + f.radius, z0: f.lv - 3, z1: f.lv + 3 }, lv.elev, f.radius * 2 + 4, { kind: 'facility', title: t[0], desc: t[1] });
       else pickBox(G, geo, mat, f.frame, { x0: f.lu - 3, x1: f.lu + 3, z0: f.lv - 3, z1: f.lv + 3 }, lv.elev, 7, { kind: 'facility', title: t[0], desc: t[1] });
@@ -501,15 +528,18 @@ function buildPicks(ctx) {
   for (const r of layout.ramps.filter((x) => x.type.startsWith('street'))) {
     pickBox(ctx.site.picks, geo, mat, r.frame, r.lane, -2, 4, { kind: 'facility', title: r.name, desc: r.type === 'street-in' ? '15% 坡道下至 B1' : '由 B1 上行驶出' });
   }
-  // 整栋楼：园区视角点击进入该期
+  // 整栋楼：园区视角点击进入该期（街区按各楼栋体量 + 街巷地面拾取，避免挡住上空的天桥）
   for (const b of layout.buildings) {
-    const shape = new THREE.Shape(b.outline.map(([x, z]) => new THREE.Vector2(x, -z)));
     const top = Math.max(...layout.levels.filter((l) => l.building === b.id).map((l) => l.elev));
-    const g = new THREE.ExtrudeGeometry(shape, { depth: top + 2, bevelEnabled: false });
-    g.rotateX(-Math.PI / 2);
-    const m = new THREE.Mesh(g, mat);
-    m.userData = { kind: 'building', id: b.id, title: b.name, desc: '点击进入这一期' };
-    ctx.site.picks.add(m);
+    const vols = b.kind === 'street' ? [...b.blocks.map((k) => [k.poly, k.top + 1]), [b.outline, 0.6]] : [[b.outline, top + 2]];
+    for (const [poly, h] of vols) {
+      const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+      const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
+      g.rotateX(-Math.PI / 2);
+      const m = new THREE.Mesh(g, mat);
+      m.userData = { kind: 'building', id: b.id, title: b.name, desc: '点击进入这一期' };
+      ctx.site.picks.add(m);
+    }
   }
 }
 

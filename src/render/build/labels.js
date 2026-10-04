@@ -37,6 +37,7 @@ const FEATURE_LABEL = {
   ferris: ['fun', 'wheel', 4.2], ip: ['fun', 'star', 8.6], mirror: ['fun', 'star', 2.2], skywalk: ['fun', 'star', 2.4],
   letters: ['fun', 'star', 5.6], arch: ['fun', 'star', 4.0], playground: ['fun', 'star', 3.0], pavilion: ['facility', 'escalator', 5.2],
   track: ['fun', 'star', 2.4], court: ['fun', 'star', 4.4], lawn: ['fun', 'star', 1.6],
+  plaza: ['fun', 'star', 7.5], stage: ['fun', 'star', 6.2], fountain: ['fun', 'star', 3.4], grove: ['fun', 'star', 6.5],
 };
 
 export function buildLabels(ctx) {
@@ -74,6 +75,15 @@ export function buildLabels(ctx) {
     }
     // 观光梯、客梯（每个核心筒一个）
     for (const g of layout.elevators.filter((e) => e.type === 'glass' && e.serves.includes(lv.id))) put(G, '观光电梯', g.x, y + 3.4, g.z, 'facility', 'lift');
+    for (const e of layout.elevators.filter((x) => x.exterior && x.serves.includes(lv.id))) {
+      const [x, z] = toW(e.frame, e.lu - 3.2, e.lv);
+      put(G, '客梯', x, y + 3.4, z, 'facility', 'lift', `${short(e.serves[0])}–${short(e.serves[e.serves.length - 1])}`);
+    }
+    for (const r of lv.rooms.filter((m) => m.type === 'stair' && /-KS\d$/.test(m.id))) {
+      const d = r.wdoors[0];
+      const t = lv.kind === 'parking' ? ['楼梯 → 街区', 'exit', 'exit'] : ['地库出入口', 'parking', 'parking'];
+      put(G, t[0], (d.x0 + d.x1) / 2 + d.nx * 1.4, y + (lv.kind === 'parking' ? 2.4 : 4.6), (d.z0 + d.z1) / 2 + d.nz * 1.4, t[1], t[2], null, 0.02);
+    }
     for (const e of layout.elevators.filter((x) => x.type === 'passenger' && x.serves.includes(lv.id) && x.id.endsWith('L1'))) {
       const s = e.door === 'N' ? -1 : 1;
       const [x, z] = toW(e.frame, e.lu + 1.5, e.lv + s * 3.2);
@@ -107,9 +117,21 @@ export function buildLabels(ctx) {
         put(G, '云澜老街', x, y + 3.6, z, 'food', 'food', 'OLD STREET');
       }
     }
+    // 三期街巷：广场、舞台、水景；屋顶露台酒吧
+    if (lv.kind === 'street') {
+      for (const f of lv.features) {
+        const m = FEATURE_LABEL[f.type];
+        if (m && f.name) put(G, f.name, f.x, y + m[2], f.z, m[0], m[1], f.en || null, 0.022);
+      }
+      for (const u of lv.units.filter((x) => x.style === 'pavilion')) {
+        const [x, z] = toW(u.frame, (u.rects[0].x0 + u.rects[0].x1) / 2, (u.rects[0].z0 + u.rects[0].z1) / 2);
+        put(G, u.brand.name, x, y + 5.0, z, 'food', 'cup', u.brand.en, 0.022);
+      }
+    }
     // 停车层
     if (lv.kind === 'parking') {
       const b = ctx.bById[lv.building];
+      if (b.kind === 'street') for (const [zone, x] of [['G', -188], ['H', -91]]) put(G, `${lv.short} · ${zone}区`, x, y + 2.6, 112, 'parking', 'parking');
       for (const w of b.wings) {
         if (w.link) continue;
         const [x, z] = toW(w.F, (w.u0 + w.uEnd - 12) / 2, 15);
@@ -145,7 +167,7 @@ export function buildLabels(ctx) {
     // 爆炸视图楼层名
     const b = ctx.bById[lv.building];
     const lw = b.wings[0];
-    const [tx, tz] = toW(lw.F, lw.uEnd + 8, -26);
+    const [tx, tz] = lw ? toW(lw.F, lw.uEnd + 8, -26) : [Math.max(...b.outline.map((p) => p[0])) + 14, Math.min(...b.outline.map((p) => p[1]))];
     const title = put(L.group, `${lv.short}  ${lv.theme.label.split(' · ').slice(0, 2).join(' · ')}`, tx, y + 2, tz, 'facility', null, null, 0.03);
     title.visible = false;
     L.title = title;
@@ -167,5 +189,16 @@ export function buildLabels(ctx) {
   for (const r of layout.ramps.filter((x) => x.type === 'street-out')) {
     const [ox, oz] = rampOffset(r);
     put(S, '车库出口', r.to.x + ox, 6, r.to.z + oz, 'parking', 'parking', 'P · OUT', 0.022);
+  }
+  // 天桥、落地塔、公园与地铁口
+  const br = layout.bridges;
+  if (br) {
+    put(S, '云环天桥', 0, br.y + 9, -br.R, 'title', 'star', 'SKY RING', 0.026);
+    for (const t of br.towers) put(S, t.name, t.center[0], br.y + 7, t.center[1], 'facility', 'escalator', '楼梯 · 扶梯 · 电梯', 0.02);
+  }
+  const pk = layout.site.park;
+  if (pk) {
+    put(S, '中央公园', pk.center[0], 16, pk.center[1], 'title', 'star', 'CENTRAL PARK', 0.03);
+    put(S, pk.metro.name, pk.metro.x, 7, pk.metro.z, 'entrance', 'info', 'METRO', 0.022);
   }
 }

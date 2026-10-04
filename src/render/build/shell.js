@@ -74,13 +74,14 @@ export function buildShell(ctx) {
   for (const lv of layout.levels) {
     const L = ctx.levels[lv.id];
     const t = SLAB_T[lv.kind] || 0.45;
-    const floorMat = mats.floor(lv.theme.floor, lv.kind === 'parking' ? 0.62 : lv.short === '1F' ? 0.2 : 0.42);
+    const floorMat = mats.floor(lv.theme.floor, lv.kind === 'parking' ? 0.62 : lv.kind === 'street' ? 0.78 : lv.short === '1F' ? 0.2 : 0.42);
     for (const piece of lv.slab.pieces) {
       const shape = shapeFromPoly(piece.outer, piece.holes);
       const top = new THREE.Mesh(flatShapeGeometry(shape, lv.elev), floorMat);
       top.receiveShadow = true;
       top.name = 'floor';
-      const body = new THREE.Mesh(slabGeometry(shape, lv.elev - 0.012, t), slabBody);
+      // 楼板体顶面比地面低 3cm：远景时两者不会深度冲突
+      const body = new THREE.Mesh(slabGeometry(shape, lv.elev - 0.03, t), slabBody);
       body.castShadow = true;
       body.receiveShadow = true;
       L.shell.add(top, body);

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { rng, labelTexture } from '../textures.js';
 import { themeOf } from '../theme.js';
 import { clearHeight, shapeFromPoly, flatShapeGeometry } from './shell.js';
-import { frame, toW, pointInPoly as pointInPolyLocal } from '../../layout/geom.js';
+import { frame, toW, toL, IDENTITY, convexOverlap, pointInPoly as pointInPolyLocal } from '../../layout/geom.js';
 
 const CAR_COLORS = ['#f2f2f0', '#c9ccd0', '#1f2328', '#6b7178', '#2f5d9e', '#a8262b', '#d8cbb0', '#2f5f4a', '#f2f2f0', '#c9ccd0', '#1f2328'];
 
@@ -179,7 +179,7 @@ export function buildParking(ctx) {
       const r = w.rect;
       const alongU = r.x1 - r.x0 > r.z1 - r.z0;
       const len = alongU ? r.x1 - r.x0 : r.z1 - r.z0;
-      const dir = w.id.endsWith('aisle1') ? [-1, 0] : w.id.endsWith('aisle2') ? [1, 0] : [0, -1];
+      const dir = w.dir || (w.id.endsWith('aisle1') ? [-1, 0] : w.id.endsWith('aisle2') ? [1, 0] : [0, -1]);
       B.frame(w.frame, () => {
         const n = Math.floor((len - 4) / 3);
         for (let i = 0; i < n; i++) {
@@ -202,9 +202,13 @@ export function buildParking(ctx) {
       hangSign(ctx, L, `${lv.short} · ${w.zone || w.id}区`, w.F, mid, 15, y0 + H - 0.5, band, 'parking');
       hangSign(ctx, L, `${lv.short} · ${w.zone || w.id}区`, w.F, mid, -15, y0 + H - 0.5, band, 'parking');
     }
+    if (b.kind === 'street') {
+      for (const [zone, x] of [['G', -188], ['H', -91]]) for (const z of [64, 112, 160]) hangSign(ctx, L, `${lv.short} · ${zone}区`, IDENTITY, x, z, y0 + H - 0.5, band, 'parking');
+    }
     for (const e of ctx.layout.elevators) {
-      if (e.type !== 'passenger' || !e.serves.includes(lv.id) || !e.id.endsWith('L1')) continue;
-      hangSign(ctx, L, '电梯厅 · 客梯', e.frame, e.lu + 1.5, e.lv + (e.door === 'N' ? -4.5 : 4.5), y0 + H - 0.5, '#1f2933', 'lift');
+      if (e.type !== 'passenger' || !e.serves.includes(lv.id)) continue;
+      if (e.exterior) hangSign(ctx, L, '电梯厅 · 客梯', e.frame, e.lu - 5.5, e.lv, y0 + H - 0.5, '#1f2933', 'lift');
+      else if (e.id.endsWith('L1')) hangSign(ctx, L, '电梯厅 · 客梯', e.frame, e.lu + 1.5, e.lv + (e.door === 'N' ? -4.5 : 4.5), y0 + H - 0.5, '#1f2933', 'lift');
     }
   }
   streetRamps(ctx);
@@ -255,8 +259,27 @@ function rampMarks(B, len, ya, yb, w, steps) {
   for (const v of [-w / 2 + 0.25, w / 2 - 0.25]) B.get('matte').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + 0.03, v), q, new THREE.Vector3(sl, 0.02, 0.15), '#e7b416');
 }
 
-/** 地面车库出入口坡道（敞开段 + 暗埋段），属于其地下层 */
+/** 地面车库出入口坡道（敞开段 + 暗埋段），属于其地下层；敞开段（坡道槽）另画一份整宽坡面到场地组，园区视角也可见 */
 function streetRamps(ctx) {
+  const S = ctx.site.batch;
+  for (const t of ctx.layout.site.trenches) {
+    const r = ctx.layout.ramps.find((x) => x.type.startsWith('street') && convexOverlap(x.poly, t));
+    if (!r) continue;
+    const { F, len } = rampFrame(r);
+    const loc = t.map(([x, z]) => toL(F, x, z));
+    const ua = Math.max(0, Math.min(...loc.map((p) => p[0]))), ub = Math.min(len, Math.max(...loc.map((p) => p[0])));
+    const va = Math.min(...loc.map((p) => p[1])), vb = Math.max(...loc.map((p) => p[1]));
+    if (ub - ua < 1) continue;
+    const yAt = (u) => r.from.y + ((r.to.y - r.from.y) * u) / len;
+    const [ox, oz] = toW(F, ua, (va + vb) / 2);
+    const G = frame(ox, oz, F.deg);
+    S.frame(G, () => {
+      slopedSlab(S, 'ext', ub - ua, yAt(ua) - 0.02, yAt(ub) - 0.02, vb - va, 0.4, '#555b62');
+      const sl = Math.hypot(ub - ua, yAt(ub) - yAt(ua));
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(yAt(ub) - yAt(ua), ub - ua));
+      S.get('ext').shape('box', new THREE.Vector3((ub - ua) / 2, (yAt(ua) + yAt(ub)) / 2 + 0.01, 0), q, new THREE.Vector3(sl, 0.02, 0.15), '#ecebe6');
+    });
+  }
   for (const r of ctx.layout.ramps.filter((x) => x.type === 'street-in' || x.type === 'street-out')) {
     const lvId = r.from.level === 'street' ? r.to.level : r.from.level;
     const B = ctx.levels[lvId].batch;

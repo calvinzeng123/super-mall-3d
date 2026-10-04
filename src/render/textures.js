@@ -200,6 +200,27 @@ export function floorTexture(kind) {
       }
       break;
     }
+    case 'cobble': {
+      // 街巷花岗岩条石：暖灰为主，夹少量赭红，错缝铺设
+      meters = 3;
+      ctx.fillStyle = '#5d5852';
+      ctx.fillRect(0, 0, S, S);
+      const rows = 24;
+      const rh = S / rows;
+      for (let r = 0; r < rows; r++) {
+        let x = -rand() * 80;
+        while (x < S) {
+          const w = 56 + rand() * 40;
+          const warm = rand() < 0.16;
+          const v = 122 + rand() * 36;
+          ctx.fillStyle = warm ? `rgb(${v + 16},${v - 20},${v - 40})` : `rgb(${v},${v - 5},${v - 12})`;
+          ctx.fillRect(x + 3, r * rh + 3, w - 6, rh - 6);
+          x += w;
+        }
+      }
+      chips(ctx, S, 4000, ['rgba(0,0,0,0.08)', 'rgba(255,255,255,0.08)'], 0.5, 1.5, rand);
+      break;
+    }
     case 'asphalt': {
       meters = 8;
       ctx.fillStyle = '#3c3f43';

@@ -1,28 +1,31 @@
-// 中庭观光电梯：分层玻璃井道 + 轿厢在 B1M–3F 之间往返停靠（爆炸视图中跟随楼层偏移）。
+// 观光电梯（中庭观光梯、三期楼栋外挂客梯）：分层玻璃井道 + 轿厢在各停靠层之间往返（爆炸视图中跟随楼层偏移）。
+// 外挂客梯在地库一段由 rooms.js 的电梯井绘制，这里只画地上井道。
 import * as THREE from 'three';
 import { COLORS } from '../theme.js';
 
 export function buildElevators(ctx) {
   const { layout } = ctx;
   const byId = ctx.lvById;
-  for (const e of layout.elevators.filter((x) => x.type === 'glass')) {
+  for (const e of layout.elevators.filter((x) => x.type === 'glass' || x.exterior)) {
     const half = e.w / 2;
     const topId = e.serves[e.serves.length - 1];
+    const frameCol = e.exterior ? '#2b3036' : COLORS.white;
     // 井道：每个停靠层一段（套件局部坐标）
     for (const id of e.serves) {
       const lv = byId[id];
+      if (lv.kind === 'parking') continue;
       const B = ctx.levels[id].batch;
       const yA = lv.elev, yB = lv.elev + lv.height + (id === topId ? 0.2 : 0);
       const h = yB - yA;
       B.frame(e.frame, () => {
         for (const [dx, dz] of [[-half, -half], [half, -half], [half, half], [-half, half]]) {
-          B.get('metal').box(e.lu + dx, yA + h / 2, e.lv + dz, 0.14, h, 0.14, COLORS.white);
+          B.get('metal').box(e.lu + dx, yA + h / 2, e.lv + dz, 0.14, h, 0.14, frameCol);
         }
         for (const [sx, sz, ox, oz] of [[e.w, 0.03, 0, -half], [e.w, 0.03, 0, half], [0.03, e.d, -half, 0], [0.03, e.d, half, 0]]) {
           B.get('glass').box(e.lu + ox, yA + h / 2, e.lv + oz, sx, h - 0.1, sz, 0xffffff);
         }
-        B.get('metal').box(e.lu, yA - 0.2, e.lv, e.w + 0.2, 0.4, e.d + 0.2, COLORS.white);
-        if (id === topId) B.get('metal').box(e.lu, yB, e.lv, e.w + 0.3, 0.5, e.d + 0.3, COLORS.white);
+        B.get('metal').box(e.lu, yA - 0.2, e.lv, e.w + 0.2, 0.4, e.d + 0.2, frameCol);
+        if (id === topId) B.get('metal').box(e.lu, yB, e.lv, e.w + 0.3, 0.5, e.d + 0.3, frameCol);
       });
     }
     // 轿厢

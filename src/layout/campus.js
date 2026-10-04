@@ -80,4 +80,7 @@ export function addPark(site) {
   };
   const r = rect(16, 20, 286, 256);
   site.walk.push({ id: 'park', kind: 'park', poly: rectPoly(r), outdoor: true });
+  // 地铁口下沉梯井（地面开口）
+  const m = site.park.metro;
+  addTrench(site, rectPoly(rect(m.x - 2.2, m.z - 1.95, m.x + 5.2, m.z + 1.95)));
 }
