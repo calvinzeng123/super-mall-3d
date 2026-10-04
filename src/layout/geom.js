@@ -194,3 +194,163 @@ export function segHitsRect(s, r, eps = 0.05) {
   if (isH(s)) return s.z0 > r.z0 + eps && s.z0 < r.z1 - eps && b > r.x0 + eps && a < r.x1 - eps;
   return s.x0 > r.x0 + eps && s.x0 < r.x1 - eps && b > r.z0 + eps && a < r.z1 - eps;
 }
+
+// ---------------------------------------------------------------------------
+// v2：局部坐标系（frame）与任意多边形
+// 局部 (u,v) 沿用 v1 写法：rect 的 x≡u、z≡v；side 'N'=−v 'S'=+v 'W'=−u 'E'=+u。
+// 世界坐标 = (ox + u·c − v·s, oz + u·s + v·c)；渲染时 rotation.y = −a。
+
+/** 局部坐标系：原点 (ox,oz)，u 轴方向角 deg（从 +x 转向 +z） */
+export function frame(ox, oz, deg = 0, id = '') {
+  const a = (deg * Math.PI) / 180;
+  return { id, ox, oz, deg, a, c: Math.cos(a), s: Math.sin(a) };
+}
+export const IDENTITY = frame(0, 0, 0, 'world');
+export const toW = (F, u, v) => [F.ox + u * F.c - v * F.s, F.oz + u * F.s + v * F.c];
+export function toL(F, x, z) {
+  const dx = x - F.ox, dz = z - F.oz;
+  return [dx * F.c + dz * F.s, -dx * F.s + dz * F.c];
+}
+/** 局部方向向量 → 世界方向向量 */
+export const dirW = (F, du, dv) => [du * F.c - dv * F.s, du * F.s + dv * F.c];
+/** 局部轴对齐矩形 → 世界四边形 */
+export const lrectPoly = (F, r) => rectPoly(r).map(([u, v]) => toW(F, u, v));
+/** 局部门面 {x0,z0,x1,z1,side} → 世界线段 + 外法线 */
+export function lseg(F, s) {
+  const [x0, z0] = toW(F, s.x0, s.z0);
+  const [x1, z1] = toW(F, s.x1, s.z1);
+  const [nx, nz] = dirW(F, ...NORMAL[s.side]);
+  return { x0, z0, x1, z1, nx, nz };
+}
+/** 局部点集 → 世界点集 */
+export const lpoly = (F, pts) => pts.map(([u, v]) => toW(F, u, v));
+
+export function polyCentroid(poly) {
+  let x = 0, z = 0;
+  for (const p of poly) { x += p[0]; z += p[1]; }
+  return [x / poly.length, z / poly.length];
+}
+
+export function distToSeg(p, a, b) {
+  const dx = b[0] - a[0], dz = b[1] - a[1];
+  const l2 = dx * dx + dz * dz;
+  let t = l2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dz * t));
+}
+
+export function distToPolyEdge(p, poly) {
+  let d = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) d = Math.min(d, distToSeg(p, poly[j], poly[i]));
+  return d;
+}
+
+/** 凸多边形分离轴判定：内部交叠超过 eps 才算重叠（相接不算） */
+export function convexOverlap(a, b, eps = 0.02) {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p0 = poly[i], p1 = poly[(i + 1) % poly.length];
+      let nx = p1[1] - p0[1], nz = -(p1[0] - p0[0]);
+      const len = Math.hypot(nx, nz);
+      if (len < 1e-9) continue;
+      nx /= len; nz /= len;
+      let amin = Infinity, amax = -Infinity, bmin = Infinity, bmax = -Infinity;
+      for (const [x, z] of a) { const d = x * nx + z * nz; if (d < amin) amin = d; if (d > amax) amax = d; }
+      for (const [x, z] of b) { const d = x * nx + z * nz; if (d < bmin) bmin = d; if (d > bmax) bmax = d; }
+      if (amax <= bmin + eps || bmax <= amin + eps) return false;
+    }
+  }
+  return true;
+}
+
+function lineHit(P, Q, A, B) {
+  const r = [Q[0] - P[0], Q[1] - P[1]], s = [B[0] - A[0], B[1] - A[1]];
+  const den = r[0] * s[1] - r[1] * s[0];
+  if (Math.abs(den) < 1e-12) return [P[0], P[1]];
+  const t = ((A[0] - P[0]) * s[1] - (A[1] - P[1]) * s[0]) / den;
+  return [P[0] + r[0] * t, P[1] + r[1] * t];
+}
+
+/** Sutherland–Hodgman：subject 被凸多边形 clip 裁剪（自动适应 clip 的方向） */
+export function clipConvex(subject, clip) {
+  const sgn = Math.sign(polyArea(clip)) || 1;
+  let out = subject;
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const A = clip[i], B = clip[(i + 1) % clip.length];
+    const inside = (p) => sgn * ((B[0] - A[0]) * (p[1] - A[1]) - (B[1] - A[1]) * (p[0] - A[0])) >= -1e-9;
+    const input = out;
+    out = [];
+    for (let j = 0; j < input.length; j++) {
+      const P = input[j], Q = input[(j + 1) % input.length];
+      const pin = inside(P), qin = inside(Q);
+      if (pin) out.push(P);
+      if (pin !== qin) out.push(lineHit(P, Q, A, B));
+    }
+  }
+  return out;
+}
+
+/** 圆（n 边形近似），顶点在 a0 + k·360/n 度 */
+export function circlePoly(cx, cz, r, n = 120, a0 = 0) {
+  const pts = [];
+  for (let k = 0; k < n; k++) {
+    const a = ((a0 + (k * 360) / n) * Math.PI) / 180;
+    pts.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]);
+  }
+  return pts;
+}
+
+/** 多边形内部网格采样（离边 ≥ inset），外加向形心内缩的顶点 */
+export function polySamples(poly, step = 1.5, inset = 0.05) {
+  const b = polyBounds(poly);
+  const nx = Math.max(1, Math.ceil((b.x1 - b.x0) / step));
+  const nz = Math.max(1, Math.ceil((b.z1 - b.z0) / step));
+  const pts = [];
+  for (let i = 0; i <= nx; i++) {
+    for (let j = 0; j <= nz; j++) {
+      const p = [b.x0 + ((b.x1 - b.x0) * i) / nx, b.z0 + ((b.z1 - b.z0) * j) / nz];
+      if (pointInPoly(p, poly) && distToPolyEdge(p, poly) >= inset) pts.push(p);
+    }
+  }
+  const c = polyCentroid(poly);
+  for (const v of poly) {
+    const d = dist(v, c);
+    if (d <= inset * 4) continue;
+    const k = (inset * 2) / d;
+    pts.push([v[0] + (c[0] - v[0]) * k, v[1] + (c[1] - v[1]) * k]);
+  }
+  return pts;
+}
+
+/** 世界门面线段外侧探测点（1/4、1/2、3/4 处沿外法线偏 d） */
+export function segProbes(f, d = 0.5) {
+  return [0.25, 0.5, 0.75].map((t) => [f.x0 + (f.x1 - f.x0) * t + f.nx * d, f.z0 + (f.z1 - f.z0) * t + f.nz * d]);
+}
+
+/** 两个多边形是否相连：重叠或共边，且接触长度 ≥ minLen */
+export function polysConnect(a, b, minLen = 1, tol = 0.05) {
+  const ba = polyBounds(a), bb = polyBounds(b);
+  if (ba.x0 > bb.x1 + tol || bb.x0 > ba.x1 + tol || ba.z0 > bb.z1 + tol || bb.z0 > ba.z1 + tol) return false;
+  const step = 0.5;
+  let len = 0;
+  for (const [P, Q, bq] of [[a, b, bb], [b, a, ba]]) {
+    for (let i = 0; i < P.length; i++) {
+      const p0 = P[i], p1 = P[(i + 1) % P.length];
+      const l = dist(p0, p1);
+      const n = Math.max(1, Math.ceil(l / step));
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        const p = [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t];
+        if (p[0] < bq.x0 - tol || p[0] > bq.x1 + tol || p[1] < bq.z0 - tol || p[1] > bq.z1 + tol) continue;
+        if (pointInPoly(p, Q) || distToPolyEdge(p, Q) <= tol) {
+          len += l / n;
+          if (len >= minLen) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** 圆角矩形（局部）→ 世界多边形 */
+export const lroundPoly = (F, r, radius, seg = 6) => roundedRectPoly(r, radius, seg).map(([u, v]) => toW(F, u, v));
