@@ -1,4 +1,6 @@
-// 应用主体：渲染器、相机、楼层分组、构建流程、状态（聚焦/爆炸/昼夜/动线/标注）、拾取高亮与主循环。
+// 应用主体：渲染器、相机、楼栋 → 楼层分组、构建流程、状态（楼栋 / 楼层 / 爆炸 / 昼夜 / 动线 / 标注）、拾取高亮与主循环。
+// 每层分组：base（室内）、shell（楼板）、facade（外立面）、labels、flows、people、picks。
+// 园区视角只显示各层 shell + facade（屋面层与街区显示完整内容）；选中某期才显示其室内。
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MaterialLib } from './materials.js';
@@ -20,10 +22,10 @@ import { buildFlows } from './build/flows.js';
 import { buildLabels } from './build/labels.js';
 import { buildPeople } from './build/people.js';
 import { buildTraffic } from './build/traffic.js';
-import { NORMAL } from '../layout/geom.js';
-import { CORE_W, CORE_E, SERVICE } from '../layout/constants.js';
+import { toW, frame } from '../layout/geom.js';
 
 const EXPLODE_GAP = 13;
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 // 让出主线程以刷新加载进度；后台标签页没有 rAF，用定时器兜底
 const nextFrame = () => new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 60); });
@@ -42,6 +44,9 @@ const WAYFINDING = [
   { id: 'wf-wheel', kind: 'wheel', text: '摩天轮 Sky Eye', bg: '#6a3fb5' },
 ];
 
+/** 园区总览 */
+const OVERVIEW = [V(150, 260, 300), V(-60, 0, -70)];
+
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -54,15 +59,15 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(42, canvas.clientWidth / canvas.clientHeight, 0.3, 4000);
-  camera.position.set(150, 105, 185);
+  const camera = new THREE.PerspectiveCamera(42, canvas.clientWidth / canvas.clientHeight, 0.3, 7000);
+  camera.position.copy(OVERVIEW[0]);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.495;
   controls.minDistance = 3;
-  controls.maxDistance = 650;
-  controls.target.set(0, 4, 0);
+  controls.maxDistance = 1400;
+  controls.target.copy(OVERVIEW[1]);
   controls.screenSpacePanning = true;
 
   const mats = new MaterialLib();
@@ -70,32 +75,39 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const root = new THREE.Group();
   scene.add(root);
 
-  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, atlas: {}, dynamic: [], site: null };
-  layout.levels.forEach((lv, index) => {
-    const group = new THREE.Group();
-    group.name = lv.id;
-    const base = new THREE.Group();
-    const facade = new THREE.Group();
-    const labels = new THREE.Group();
-    const flows = new THREE.Group();
-    const people = new THREE.Group();
-    const picks = new THREE.Group();
-    group.add(base, facade, labels, flows, people, picks);
-    root.add(group);
-    const entries = [
-      ...lv.units.map((u) => ({ id: u.id, brand: u.brand })),
-      ...WAYFINDING.map((w) => ({ id: w.id, draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, w.kind, w.text, w.bg) })),
-    ];
-    const atlas = makeSignAtlas(entries);
-    atlas.material = mats.sign(atlas.texture);
-    ctx.atlas[lv.id] = atlas;
-    ctx.levels[lv.id] = {
-      lv, index, group, base, facade, labels, flows, people, picks,
-      batch: new BatchSet(mats.base), facadeBatch: new BatchSet(mats.base),
-      signs: new SignBatch(), facadeSigns: new SignBatch(),
-      offset: 0, offsetTarget: 0, title: null,
-    };
-  });
+  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], site: null };
+  ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
+  ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
+  for (const b of layout.buildings) {
+    const bg = new THREE.Group();
+    bg.name = b.id;
+    root.add(bg);
+    const B = { b, group: bg, levels: [] };
+    ctx.buildings[b.id] = B;
+    layout.levels.filter((l) => l.building === b.id).forEach((lv, index) => {
+      const group = new THREE.Group();
+      group.name = lv.id;
+      const parts = ['base', 'shell', 'facade', 'labels', 'flows', 'people', 'picks'].map(() => new THREE.Group());
+      const [base, shell, facade, labels, flows, people, picks] = parts;
+      group.add(...parts);
+      bg.add(group);
+      const entries = [
+        ...lv.units.map((u) => ({ id: u.id, brand: u.brand })),
+        ...WAYFINDING.map((w) => ({ id: w.id, draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, w.kind, w.text, w.bg) })),
+      ];
+      const atlas = makeSignAtlas(entries);
+      atlas.material = mats.sign(atlas.texture);
+      ctx.atlas[lv.id] = atlas;
+      const L = {
+        lv, index, building: b.id, group, base, shell, facade, labels, flows, people, picks,
+        batch: new BatchSet(mats.base), shellBatch: new BatchSet(mats.base), facadeBatch: new BatchSet(mats.base),
+        signs: new SignBatch(), facadeSigns: new SignBatch(),
+        offset: 0, offsetTarget: 0, title: null,
+      };
+      ctx.levels[lv.id] = L;
+      B.levels.push(L);
+    });
+  }
   const siteGroup = new THREE.Group();
   siteGroup.name = 'site';
   root.add(siteGroup);
@@ -128,6 +140,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   await nextFrame();
   for (const L of Object.values(ctx.levels)) {
     L.batch.flush(L.base);
+    L.shellBatch.flush(L.shell);
     L.facadeBatch.flush(L.facade);
     L.signs.flush(L.base, ctx.atlas[L.lv.id].material);
     L.facadeSigns.flush(L.facade, ctx.atlas[L.lv.id].material);
@@ -136,25 +149,40 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   buildPicks(ctx);
 
   // ---------- 状态与视图 ----------
-  const ids = layout.levels.map((l) => l.id);
-  const byId = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
-  const state = { focus: null, exploded: false, flows: false, labels: true, night: false, selected: null, touring: false };
+  const state = { building: null, focus: null, exploded: false, flows: false, labels: true, night: false, selected: null, touring: false };
   const listeners = new Set();
   const emit = () => listeners.forEach((fn) => fn(state));
   const highlight = makeHighlight(scene);
 
   function applyVisibility() {
-    const fi = state.focus ? ids.indexOf(state.focus) : ids.length;
-    const focusLv = state.focus ? byId[state.focus] : null;
-    for (const id of ids) {
-      const L = ctx.levels[id];
-      L.group.visible = state.exploded || L.index <= fi;
-      L.facade.visible = !state.exploded && (!state.focus || L.index < fi);
-      L.labels.visible = state.labels && !state.touring && !state.exploded && state.focus === id;
-      if (L.title) L.title.visible = state.exploded && state.labels && !state.touring;
-      L.flows.visible = state.flows && (state.focus ? id === state.focus : state.exploded || id === 'RF');
-      L.offsetTarget = state.exploded ? L.index * EXPLODE_GAP : 0;
+    for (const B of Object.values(ctx.buildings)) {
+      const sel = state.building === B.b.id;
+      const fi = sel && state.focus ? B.levels.findIndex((L) => L.lv.id === state.focus) : B.levels.length;
+      for (const L of B.levels) {
+        const id = L.lv.id;
+        const exterior = !sel;
+        if (state.exploded) {
+          L.group.visible = sel;
+          L.base.visible = sel;
+          L.facade.visible = false;
+        } else if (sel) {
+          L.group.visible = L.index <= fi;
+          L.base.visible = true;
+          L.facade.visible = !state.focus || L.index < fi;
+        } else {
+          L.group.visible = true;
+          L.base.visible = L.lv.kind === 'roof' || B.b.kind === 'street';
+          L.facade.visible = true;
+        }
+        L.shell.visible = true;
+        L.people.visible = L.base.visible;
+        L.labels.visible = state.labels && !state.touring && !state.exploded && state.focus === id;
+        if (L.title) L.title.visible = state.exploded && sel && state.labels && !state.touring;
+        L.flows.visible = state.flows && !exterior && (state.focus ? id === state.focus : state.exploded || L.lv.kind === 'roof');
+        L.offsetTarget = state.exploded && sel ? L.index * EXPLODE_GAP : 0;
+      }
     }
+    const focusLv = state.focus ? ctx.lvById[state.focus] : null;
     siteGroup.visible = !state.exploded && (!focusLv || focusLv.elev >= 0);
     ctx.site.labels.visible = state.labels && !state.touring && !state.focus && !state.exploded;
     if (ctx.site.flows) ctx.site.flows.visible = state.flows && !state.focus && !state.exploded;
@@ -163,57 +191,92 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     renderer.shadowMap.needsUpdate = true;
   }
   function findUnit(id) {
-    for (const lv of layout.levels) { const u = lv.units.find((x) => x.id === id); if (u) return u; }
+    for (const lv of layout.levels) {
+      const u = lv.units.find((x) => x.id === id);
+      if (u) return u;
+    }
     return null;
   }
 
-  // ---------- 相机飞行 ----------
+  // ---------- 相机飞行与阴影范围 ----------
   let flight = null;
-  function flyTo(position, target, duration = 1.4) {
+  function flyTo(position, target, duration = 1.4, shadowRadius = null) {
     const p1 = position.clone();
     if (camera.aspect < 1) p1.sub(target).multiplyScalar(1.22).add(target);
     flight = { p0: camera.position.clone(), t0: controls.target.clone(), p1, t1: target.clone(), time: 0, duration };
+    env.setShadowFocus(target, shadowRadius ?? Math.min(340, Math.max(90, p1.distanceTo(target) * 0.6)));
+  }
+  const bCenter = (b, y = 8) => V(b.center[0], y, b.center[1]);
+  function buildingView(bid) {
+    const b = ctx.bById[bid];
+    const c = bCenter(b, 10);
+    return [c.clone().add(V(0.5, 0.66, 0.62).normalize().multiplyScalar(b.radius * 2.25)), c, b.radius * 1.25];
+  }
+  function explodedView(bid) {
+    const b = ctx.bById[bid];
+    const n = ctx.buildings[bid].levels.length;
+    const c = bCenter(b, (n * EXPLODE_GAP) / 2 + 4);
+    return [c.clone().add(V(0.55, 0.5, 0.68).normalize().multiplyScalar(b.radius * 2.6)), c, b.radius * 1.3];
   }
   function levelView(id) {
     const L = ctx.levels[id];
+    const b = ctx.bById[L.building];
     const y = L.lv.elev + (state.exploded ? L.offsetTarget : 0);
-    if (L.lv.kind === 'roof') return [new THREE.Vector3(70, y + 62, 92), new THREE.Vector3(6, y + 6, 0)];
-    return [new THREE.Vector3(58, y + 74, 92), new THREE.Vector3(0, y, 3)];
+    const c = bCenter(b, y);
+    if (L.lv.kind === 'roof') return [c.clone().add(V(0.45, 0.7, 0.6).normalize().multiplyScalar(b.radius * 1.75)), c.clone().add(V(0, 6, 0)), b.radius * 1.15];
+    return [c.clone().add(V(0.3, 0.95, 0.5).normalize().multiplyScalar(b.radius * 2.0)), c, b.radius * 1.15];
   }
-  const OVERVIEW = [new THREE.Vector3(150, 105, 185), new THREE.Vector3(0, 4, 0)];
-  const EXPLODED = [new THREE.Vector3(178, 118, 214), new THREE.Vector3(0, 44, 0)];
+  const overview = () => [OVERVIEW[0], OVERVIEW[1], 340];
 
   const app = {
-    ctx, state, renderer, scene, camera, controls, env, levelIds: ids, emit,
+    ctx, state, renderer, scene, camera, controls, env, emit,
+    buildingIds: layout.buildings.map((b) => b.id),
+    levelsOf: (bid) => ctx.buildings[bid].levels.map((L) => L.lv),
     refresh() { applyVisibility(); },
-    on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    on(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    setBuilding(bid) {
+      if (state.touring) app.stopTour();
+      state.building = bid || null;
+      state.focus = null;
+      state.exploded = false;
+      state.selected = null;
+      applyVisibility();
+      flyTo(...(bid ? buildingView(bid) : overview()), 1.6);
+      emit();
+    },
     setFocus(id) {
       if (state.touring) app.stopTour();
-      state.focus = id;
+      if (id) state.building = ctx.levels[id].building;
+      state.focus = id || null;
       if (!id || (state.selected && findUnit(state.selected)?.level !== id)) state.selected = null;
       applyVisibility();
       if (id) flyTo(...levelView(id));
-      else flyTo(...(state.exploded ? EXPLODED : OVERVIEW));
+      else flyTo(...(state.building ? (state.exploded ? explodedView(state.building) : buildingView(state.building)) : overview()));
       emit();
     },
     setExploded(on) {
       if (state.touring) app.stopTour();
+      if (on && !state.building) state.building = layout.buildings[0].id;
       state.exploded = on;
       state.focus = null;
       state.selected = null;
       applyVisibility();
-      flyTo(...(on ? EXPLODED : OVERVIEW), 1.6);
+      flyTo(...(on ? explodedView(state.building) : buildingView(state.building)), 1.6);
       emit();
     },
     setNight(on) { state.night = on; env.setNight(on); emit(); },
     setFlows(on) { state.flows = on; applyVisibility(); emit(); },
     setLabels(on) { state.labels = on; applyVisibility(); emit(); },
     reset(noFly = false) {
+      state.building = null;
       state.focus = null;
       state.exploded = false;
       state.selected = null;
       applyVisibility();
-      if (!noFly) flyTo(...OVERVIEW);
+      if (!noFly) flyTo(...overview());
       emit();
     },
     flyTo,
@@ -221,16 +284,16 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     focusUnit(unit) {
       if (state.touring) app.stopTour();
       state.exploded = false;
+      state.building = unit.building;
       state.focus = unit.level;
       state.selected = unit.id;
       applyVisibility();
-      const f = unit.fronts[0];
-      const [nx, nz] = NORMAL[f.side];
-      const lv = byId[unit.level];
+      const f = unit.wfronts[0];
+      const lv = ctx.lvById[unit.level];
       const mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2;
-      const target = new THREE.Vector3(mx - nx * 3, lv.elev + 2.2, mz - nz * 3);
-      const pos = new THREE.Vector3(mx + nx * 16 + nz * 7, lv.elev + 12, mz + nz * 16 - nx * 7);
-      flyTo(pos, target, 1.6);
+      const target = V(mx - f.nx * 3, lv.elev + 2.2, mz - f.nz * 3);
+      const pos = V(mx + f.nx * 16 + f.nz * 7, lv.elev + 12, mz + f.nz * 16 - f.nx * 7);
+      flyTo(pos, target, 1.6, 90);
       emit();
     },
     /** 屏幕坐标拾取：返回提示内容 */
@@ -239,23 +302,26 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
       const cands = [];
-      for (const id of ids) {
-        const L = ctx.levels[id];
-        const ok = state.exploded || (state.focus ? state.focus === id : id === 'RF');
-        if (ok && L.group.visible) cands.push(...L.picks.children);
+      for (const B of Object.values(ctx.buildings)) {
+        if (state.building !== B.b.id) continue;
+        for (const L of B.levels) {
+          const ok = state.exploded || (state.focus ? state.focus === L.lv.id : L.lv.kind === 'roof');
+          if (ok && L.group.visible) cands.push(...L.picks.children);
+        }
       }
-      if (!state.focus && !state.exploded) cands.push(...ctx.site.picks.children);
+      if (!state.focus && !state.exploded) cands.push(...ctx.site.picks.children.filter((m) => m.userData.kind !== 'building' || m.userData.id !== state.building));
       const hit = raycaster.intersectObjects(cands, false)[0];
       if (!hit) return null;
       const d = hit.object.userData;
       if (d.kind === 'unit') {
         const u = d.unit;
-        return { unit: u, html: `<b>${esc(u.brand.name)}</b><div class="en">${esc(u.brand.en)}</div><div class="meta">${esc(u.brand.catLabel)} · ${u.code} · ${esc(byId[u.level].name)}</div>` };
+        return { unit: u, html: `<b>${esc(u.brand.name)}</b><div class="en">${esc(u.brand.en)}</div><div class="meta">${esc(u.brand.catLabel)} · ${u.code} · ${esc(ctx.bById[u.building].short)} ${esc(ctx.lvById[u.level].name)}</div>` };
       }
+      if (d.kind === 'building') return { building: d.id, html: `<b>${esc(d.title)}</b><div class="meta">${esc(d.desc)}</div>` };
       return { html: `<b>${esc(d.title)}</b><div class="meta">${esc(d.desc)}</div>` };
     },
     /** 调试：立即按给定视角渲染一帧并返回 JPEG dataURL（后台标签页也可用） */
-    debugShot({ w = 1280, h = 800, pos, target, dt = 0.016, steps: n = 1 } = {}) {
+    debugShot({ w = 1280, h = 800, pos, target, dt = 0.016, steps: n = 1, shadow = null } = {}) {
       const prev = renderer.getSize(new THREE.Vector2());
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
@@ -264,7 +330,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       flight = null;
       if (pos) camera.position.set(...pos);
       if (target) controls.target.set(...target);
-      for (const id of ids) { const L = ctx.levels[id]; L.offset = L.offsetTarget; L.group.position.y = L.offset; }
+      if (shadow) env.setShadowFocus(controls.target.clone(), shadow);
+      for (const L of Object.values(ctx.levels)) { L.offset = L.offsetTarget; L.group.position.y = L.offset; }
       controls.update();
       for (let i = 0; i < n; i++) {
         env.night = env.target;
@@ -314,8 +381,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       if (k >= 1) flight = null;
     }
     let moving = false;
-    for (const id of ids) {
-      const L = ctx.levels[id];
+    for (const L of Object.values(ctx.levels)) {
       if (Math.abs(L.offset - L.offsetTarget) > 0.01) {
         L.offset += (L.offsetTarget - L.offset) * Math.min(1, dt * 4);
         L.group.position.y = L.offset;
@@ -331,7 +397,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     // 帧率持续过低时自动降级：关阴影、泛光，降低像素比（只在页面可见、加载 6 秒后按真实帧率判断）
     if (!degraded) {
       const now = performance.now();
-      if (document.hidden || now - perf.start < 6000) { perf.t0 = now; perf.frames = 0; }
+      const gap = now - (perf.last || now);
+      perf.last = now;
+      // 单帧间隔 >250ms 视为卡顿或后台节流（不是持续低帧率），重新计时
+      if (document.hidden || now - perf.start < 6000 || gap > 250) { perf.t0 = now; perf.frames = 0; }
       else {
         perf.frames++;
         if (now - perf.t0 > 5000) {
@@ -355,71 +424,90 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   applyVisibility();
   resize();
   if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22).add(controls.target);
-  renderer.shadowMap.needsUpdate = true;
+  env.setShadowFocus(controls.target.clone(), 340);
   return app;
 }
 
-/** 拾取盒：铺位、设施、天台打卡点、场地入口 */
+/** 在局部坐标系 F 内放一个拾取盒（局部矩形 r，底标高 y0，高 h） */
+function pickBox(group, geo, mat, F, r, y0, h, data) {
+  const m = new THREE.Mesh(geo, mat);
+  const [x, z] = toW(F, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2);
+  m.scale.set(Math.max(0.5, r.x1 - r.x0), h, Math.max(0.5, r.z1 - r.z0));
+  m.position.set(x, y0 + h / 2, z);
+  m.rotation.y = -F.a;
+  m.userData = data;
+  group.add(m);
+  return m;
+}
+
+/** 拾取盒：铺位、设施、扶梯、观光梯、天台打卡点、场地入口、车库、整栋楼 */
 function buildPicks(ctx) {
   const geo = new THREE.BoxGeometry(1, 1, 1);
   const mat = new THREE.MeshBasicMaterial({ visible: false });
-  const add = (group, r, y0, h, data) => {
-    const m = new THREE.Mesh(geo, mat);
-    m.scale.set(Math.max(0.5, r.x1 - r.x0), h, Math.max(0.5, r.z1 - r.z0));
-    m.position.set((r.x0 + r.x1) / 2, y0 + h / 2, (r.z0 + r.z1) / 2);
-    m.userData = data;
-    group.add(m);
-  };
   const { layout } = ctx;
+  const INFO = {
+    wc: ['洗手间', '男卫 · 女卫 · 无障碍卫生间 · 母婴室'],
+    stair: ['消防楼梯 · 安全出口', '疏散楼梯'],
+    core: ['客梯', '2 台客梯 · 全楼直达'],
+    equip: ['设备房', '非公共区域'],
+    mech: ['屋顶设备区', '冷却塔 · 空调机组（格栅围挡）'],
+  };
   for (const lv of layout.levels) {
     const G = ctx.levels[lv.id].picks;
     const H = lv.kind === 'roof' ? 4.2 : clearHeight(lv);
-    for (const u of lv.units) for (const r of u.rects) add(G, r, lv.elev, H, { kind: 'unit', unit: u });
-    for (const r of lv.rooms) {
-      const info = {
-        wc: ['洗手间', '男卫 · 女卫 · 无障碍卫生间 · 母婴室'],
-        stair: ['消防楼梯 · 安全出口', `${lv.short} 疏散楼梯`],
-        core: ['客梯厅', '3 台客梯 · B2–RF 全楼直达'],
-        freight: ['货梯', '服务各层商户补货 · B1M–RF'],
-        equip: [r.label || '设备房', '非公共区域'],
-        mech: ['屋顶设备区', '冷却塔 · 空调机组（格栅围挡）'],
-      }[r.type];
-      if (info) for (const rr of r.rects) add(G, rr, lv.elev, H, { kind: 'facility', title: info[0], desc: info[1] });
+    for (const u of lv.units) for (const r of u.rects) pickBox(G, geo, mat, u.frame, r, lv.elev, H, { kind: 'unit', unit: u });
+    for (const m of lv.rooms) {
+      const info = INFO[m.type];
+      if (info) for (const r of m.rects) pickBox(G, geo, mat, m.frame, r, lv.elev, H, { kind: 'facility', title: info[0], desc: m.label && m.type === 'equip' ? m.label : info[1] });
     }
-    for (const [lobby, t] of [[CORE_W.lobby, '西客梯厅'], [CORE_E.lobby, '东客梯厅']]) add(G, lobby, lv.elev, 2.5, { kind: 'facility', title: t, desc: '3 台客梯 · B2 至天台全楼直达' });
-    if (lv.rooms.some((r) => r.type === 'freight')) add(G, SERVICE.lobby, lv.elev, 2.5, { kind: 'facility', title: '货梯厅', desc: '后勤补货通道，连接北侧卸货区' });
+    for (const f of lv.features) {
+      const t = {
+        ferris: ['云澜之眼 摩天轮', '直径 30m · 24 个轿厢 · 天台网红打卡点'],
+        ip: ['IP「云宝」', '云澜汇原创形象 · 打卡点'],
+        mirror: ['天空之镜', '浅水镜面 · 拍照打卡'],
+        skywalk: ['玻璃悬挑观景台', '悬挑 6m 的全玻璃观景台'],
+        playground: ['天台儿童乐园', '滑梯 · 秋千 · 攀爬塔'],
+        pavilion: ['扶梯玻璃亭', '3F → 天台扶梯出口'],
+        pergola: ['花架长廊', '紫藤花架长廊'],
+        letters: ['「云澜汇」立体字', '天台打卡点'],
+      }[f.type];
+      if (!t) continue;
+      if (f.rect) pickBox(G, geo, mat, f.frame, f.rect, lv.elev, f.type === 'pavilion' ? 4.6 : 2.5, { kind: 'facility', title: t[0], desc: t[1] });
+      else if (f.type === 'ferris') pickBox(G, geo, mat, f.frame, { x0: f.lu - f.radius, x1: f.lu + f.radius, z0: f.lv - 3, z1: f.lv + 3 }, lv.elev, f.radius * 2 + 4, { kind: 'facility', title: t[0], desc: t[1] });
+      else pickBox(G, geo, mat, f.frame, { x0: f.lu - 3, x1: f.lu + 3, z0: f.lv - 3, z1: f.lv + 3 }, lv.elev, 7, { kind: 'facility', title: t[0], desc: t[1] });
+    }
   }
   for (const e of layout.escalators) {
-    const xs = [e.bottom.x, e.top.x], zs = [e.bottom.z, e.top.z];
-    const r = { x0: Math.min(...xs) - 0.9, x1: Math.max(...xs) + 0.9, z0: Math.min(...zs) - 0.9, z1: Math.max(...zs) + 0.9 };
-    const lo = layout.levels.find((l) => l.id === e.from), hi = layout.levels.find((l) => l.id === e.to);
-    add(ctx.levels[e.from].picks, r, e.bottom.y, e.top.y - e.bottom.y + 1, { kind: 'facility', title: `扶梯 ${e.dir === 'up' ? '上行' : '下行'}`, desc: `${lo.name} ↔ ${hi.name} · 坡度 30°` });
+    const lo = ctx.lvById[e.from], hi = ctx.lvById[e.to];
+    const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z);
+    const F = frame(e.bottom.x, e.bottom.z, (Math.atan2(e.top.z - e.bottom.z, e.top.x - e.bottom.x) * 180) / Math.PI);
+    pickBox(ctx.levels[e.from].picks, geo, mat, F, { x0: -0.9, x1: run + 0.9, z0: -0.95, z1: 0.95 }, e.bottom.y, e.top.y - e.bottom.y + 1,
+      { kind: 'facility', title: `扶梯 ${e.dir === 'up' ? '上行' : '下行'}`, desc: `${lo.name} ↔ ${hi.name} · 坡度 30°` });
   }
   for (const g of layout.elevators.filter((x) => x.type === 'glass')) {
     for (const id of g.serves) {
-      const lv = layout.levels.find((l) => l.id === id);
-      add(ctx.levels[id].picks, { x0: g.x - 1.3, x1: g.x + 1.3, z0: g.z - 1.3, z1: g.z + 1.3 }, lv.elev, lv.height, { kind: 'facility', title: '中庭观光电梯', desc: '停靠 B1M · 1F · 2F · 3F' });
+      const lv = ctx.lvById[id];
+      pickBox(ctx.levels[id].picks, geo, mat, g.frame, { x0: g.lu - 1.3, x1: g.lu + 1.3, z0: g.lv - 1.3, z1: g.lv + 1.3 }, lv.elev, lv.height,
+        { kind: 'facility', title: '中庭观光电梯', desc: `停靠 ${g.serves.map((s) => ctx.lvById[s].short).join(' · ')}` });
     }
   }
-  const rf = layout.levels.find((l) => l.id === 'RF');
-  const G = ctx.levels.RF.picks;
-  for (const f of rf.features) {
-    if (f.type === 'ferris') add(G, { x0: f.x - f.radius, x1: f.x + f.radius, z0: f.z - 3, z1: f.z + 3 }, rf.elev, f.radius * 2 + 4, { kind: 'facility', title: '云澜之眼 摩天轮', desc: '直径 30m · 24 个轿厢 · 天台网红打卡点' });
-    if (f.type === 'ip') add(G, { x0: f.x - 3, x1: f.x + 3, z0: f.z - 3, z1: f.z + 3 }, rf.elev, 8, { kind: 'facility', title: 'IP「云宝」', desc: '云澜汇原创形象 · 打卡点' });
-    if (f.rect && ['mirror', 'skywalk', 'playground', 'pavilion', 'pergola'].includes(f.type)) add(G, f.rect, rf.elev, f.type === 'pavilion' ? 4.6 : 2.5, { kind: 'facility', title: f.name, desc: { mirror: '浅水镜面 · 拍照打卡', skywalk: '悬挑 6m 的全玻璃观景台', playground: '滑梯 · 秋千 · 攀爬塔', pavilion: '3F → 天台扶梯出口', pergola: '紫藤花架长廊' }[f.type] });
-    if (f.type === 'letters') add(G, { x0: f.x - 7, x1: f.x + 7, z0: f.z - 1, z1: f.z + 1 }, rf.elev, 5.6, { kind: 'facility', title: '「云澜汇」立体字', desc: '天台打卡点' });
-  }
-  for (const e of layout.entrances) {
-    const [nx, nz] = NORMAL[e.side];
-    const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
-    const w = e.width / 2 + 2;
-    const r = e.side === 'N' || e.side === 'S'
-      ? { x0: mx - w, x1: mx + w, z0: Math.min(mz, mz + nz * 7), z1: Math.max(mz, mz + nz * 7) }
-      : { x0: Math.min(mx, mx + nx * 7), x1: Math.max(mx, mx + nx * 7), z0: mz - w, z1: mz + w };
-    add(ctx.site.picks, r, 0, 5, { kind: 'facility', title: e.name, desc: e.main ? '16m 宽 · 旋转门 + 自动门 · 服务台在大堂' : '人行入口 · 自动门' });
+  for (const e of layout.entrances.filter((x) => x.to === 'site')) {
+    const F = frame((e.seg.x0 + e.seg.x1) / 2, (e.seg.z0 + e.seg.z1) / 2, (Math.atan2(e.nz, e.nx) * 180) / Math.PI);
+    pickBox(ctx.site.picks, geo, mat, F, { x0: 0, x1: 7, z0: -e.width / 2 - 2, z1: e.width / 2 + 2 }, 0, 5,
+      { kind: 'facility', title: e.name, desc: e.main ? `${ctx.bById[e.building].name} · 主入口` : `${ctx.bById[e.building].name} · 人行入口` });
   }
   for (const r of layout.ramps.filter((x) => x.type.startsWith('street'))) {
-    add(ctx.site.picks, r.lane, -2, 4, { kind: 'facility', title: r.name, desc: r.type === 'street-in' ? '西北侧进入 · 15% 坡道下至 B1' : '由 B1 上行 · 东北侧驶出' });
+    pickBox(ctx.site.picks, geo, mat, r.frame, r.lane, -2, 4, { kind: 'facility', title: r.name, desc: r.type === 'street-in' ? '15% 坡道下至 B1' : '由 B1 上行驶出' });
+  }
+  // 整栋楼：园区视角点击进入该期
+  for (const b of layout.buildings) {
+    const shape = new THREE.Shape(b.outline.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const top = Math.max(...layout.levels.filter((l) => l.building === b.id).map((l) => l.elev));
+    const g = new THREE.ExtrudeGeometry(shape, { depth: top + 2, bevelEnabled: false });
+    g.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(g, mat);
+    m.userData = { kind: 'building', id: b.id, title: b.name, desc: '点击进入这一期' };
+    ctx.site.picks.add(m);
   }
 }
 
@@ -437,15 +525,19 @@ function makeHighlight(scene) {
       current = unit;
       group.visible = !!unit;
       if (!unit) return;
-      const lv = ctx.levels[unit.level];
-      const H = lv.lv.kind === 'roof' ? 4.2 : clearHeight(lv.lv);
+      const L = ctx.levels[unit.level];
+      const H = L.lv.kind === 'roof' ? 4.2 : clearHeight(L.lv);
+      const F = unit.frame;
       for (const r of unit.rects) {
+        const [x, z] = toW(F, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2);
         const box = new THREE.BoxGeometry(r.x1 - r.x0, H, r.z1 - r.z0);
         const lines = new THREE.LineSegments(new THREE.EdgesGeometry(box), mat);
-        lines.position.set((r.x0 + r.x1) / 2, lv.lv.elev + H / 2, (r.z0 + r.z1) / 2);
+        lines.position.set(x, L.lv.elev + H / 2, z);
+        lines.rotation.y = -F.a;
         lines.renderOrder = 30;
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0).rotateX(-Math.PI / 2), fill);
-        floor.position.set((r.x0 + r.x1) / 2, lv.lv.elev + 0.06, (r.z0 + r.z1) / 2);
+        floor.position.set(x, L.lv.elev + 0.06, z);
+        floor.rotation.y = -F.a;
         group.add(lines, floor);
       }
       group.userData.level = unit.level;

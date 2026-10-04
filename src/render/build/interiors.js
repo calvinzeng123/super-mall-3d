@@ -37,7 +37,10 @@ export function buildInteriors(ctx) {
   for (const lv of ctx.layout.levels) {
     if (lv.kind === 'roof' || lv.kind === 'parking') continue;
     const L = ctx.levels[lv.id];
-    lv.units.forEach((u, i) => furnish(L, ctx.atlas[lv.id], lv, u, rng(1000 + i * 31 + lv.elev * 7)));
+    lv.units.forEach((u, i) => {
+      if (storeStyle(lv, u) === 'bar' || u.brand.cat === 'rink') return;
+      L.batch.frame(u.frame, () => L.signs.frame(u.frame, () => furnish(L, ctx.atlas[lv.id], lv, u, rng(1000 + i * 31 + Math.round(lv.elev * 7) + lv.id.length * 13))));
+    });
   }
 }
 
@@ -163,14 +166,14 @@ function furnish(L, atlas, lv, u, rand) {
       break;
     }
     case 'cafe': case 'tea': {
-      if (style === 'oldstreet' || lv.id === 'B1M') { stallKitchen(P, u0, u1, D, y0, u.brand, rand); if (W * D < 60) break; }
+      if (style === 'oldstreet' || lv.kind === 'food') { stallKitchen(P, u0, u1, D, y0, u.brand, rand); if (W * D < 60) break; }
       else {
         P('satin', mid, D - 1.2, y0 + 0.55, Math.min(W - 1.2, 5), 0.8, 1.1, '#6b4a33');
         P('satin', mid, D - 1.2, y0 + 1.12, Math.min(W - 1.0, 5.2), 0.9, 0.05, '#f3efe7');
         for (let k = 0; k < 3; k++) P('metal', mid - 1.4 + k * 1.4, D - 1.25, y0 + 1.35, 0.5, 0.45, 0.45, k === 1 ? '#c0c4c8' : '#2b2f33');
         P('glow', mid, D - 0.2, y0 + 2.7, Math.min(W - 1.5, 4.5), 0.06, 1.0, '#fff1dc');
       }
-      const rows = Math.floor((D - (lv.id === 'B1M' ? 4.5 : 3.2)) / 2.4);
+      const rows = Math.floor((D - (lv.kind === 'food' ? 4.5 : 3.2)) / 2.4);
       const cols = Math.max(1, Math.floor((W - 1) / 2.4));
       for (let i = 0; i < rows; i++) {
         for (const a of spread(cols, u0 + 1.3, u1 - 1.3)) {
@@ -274,6 +277,43 @@ function furnish(L, atlas, lv, u, rand) {
         }
       }
       for (const a of [u0 + 0.4, u1 - 0.4]) for (let b = 1.8; b < D - 0.8; b += 0.8) P('satin', a, b, y0 + 1.0, 0.45, 0.7, 2.0, '#efe7da');
+      break;
+    }
+    case 'auto': {
+      // 展车：车身 + 车窗 + 轮子，旋转展台
+      const n = Math.max(1, Math.floor(W / 8));
+      for (let i = 0; i < n; i++) {
+        const a = u0 + (i + 0.5) * (W / n), b = D * 0.5;
+        const [x, z] = F.at(a, b);
+        B.get('metal').cyl(x, y0, z, 3.2, 0.12, '#d9dde1', 32);
+        const col = ['#e8e9eb', '#1f2a44', '#b4232c', '#2d6a8f'][i % 4];
+        P('metal', a, b, y0 + 0.75, 4.6, 1.9, 0.7, col, 0.5);
+        P('glass', a, b, y0 + 1.35, 2.8, 1.7, 0.55, 0xffffff, 0.5);
+        P('metal', a, b, y0 + 1.66, 2.6, 1.6, 0.06, col, 0.5);
+      }
+      P('glow', mid, D - 0.25, y0 + 2.6, Math.min(W - 2, 12), 0.08, 2.2, '#cfe8ff');
+      counter(u0 + 2.2, D - 1.6, 2.4);
+      break;
+    }
+    case 'edu': {
+      const rows = Math.max(1, Math.floor((D - 3) / 2.2));
+      for (let i = 0; i < rows; i++) {
+        for (const a of spread(Math.max(1, Math.floor((W - 2) / 1.6)), u0 + 1.2, u1 - 1.2)) {
+          P('satin', a, 2.4 + i * 2.2, y0 + 0.36, 1.2, 0.6, 0.72, '#f3e6c8');
+          P('matte', a, 2.4 + i * 2.2 + 0.55, y0 + 0.24, 0.4, 0.4, 0.48, NEON[(i + Math.round(a)) % NEON.length]);
+        }
+      }
+      P('matte', mid, D - 0.2, y0 + 1.6, Math.min(W - 1.5, 5), 0.06, 1.4, '#2f4f3f');
+      break;
+    }
+    case 'studio': {
+      for (let k = 0; k < Math.max(1, Math.floor(W / 4)); k++) {
+        const a = u0 + 2 + k * 4;
+        if (a > u1 - 1.5) break;
+        P('satin', a, D * 0.5, y0 + 0.45, 2.2, 1.2, 0.9, '#c9a77a');
+        for (let s2 = 0; s2 < 3; s2++) P('matte', a - 0.6 + s2 * 0.6, D * 0.5, y0 + 1.0, 0.3, 0.3, 0.2, CLOTHES[(k + s2) % CLOTHES.length]);
+      }
+      for (const a of [u0 + 0.35, u1 - 0.35]) P('satin', a, D / 2, y0 + 1.2, 0.4, D - 2, 2.4, '#efe7da');
       break;
     }
     default:

@@ -4,23 +4,26 @@ import { COLORS } from '../theme.js';
 
 export function buildElevators(ctx) {
   const { layout } = ctx;
-  const byId = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
+  const byId = ctx.lvById;
   for (const e of layout.elevators.filter((x) => x.type === 'glass')) {
     const half = e.w / 2;
-    // 井道：每个停靠层一段
+    const topId = e.serves[e.serves.length - 1];
+    // 井道：每个停靠层一段（套件局部坐标）
     for (const id of e.serves) {
       const lv = byId[id];
       const B = ctx.levels[id].batch;
-      const yA = lv.elev, yB = lv.elev + lv.height + (id === '3F' ? 0.2 : 0);
+      const yA = lv.elev, yB = lv.elev + lv.height + (id === topId ? 0.2 : 0);
       const h = yB - yA;
-      for (const [dx, dz] of [[-half, -half], [half, -half], [half, half], [-half, half]]) {
-        B.get('metal').box(e.x + dx, yA + h / 2, e.z + dz, 0.14, h, 0.14, COLORS.white);
-      }
-      for (const [sx, sz, ox, oz] of [[e.w, 0.03, 0, -half], [e.w, 0.03, 0, half], [0.03, e.d, -half, 0], [0.03, e.d, half, 0]]) {
-        B.get('glass').box(e.x + ox, yA + h / 2, e.z + oz, sx, h - 0.1, sz, 0xffffff);
-      }
-      B.get('metal').box(e.x, yA - 0.2, e.z, e.w + 0.2, 0.4, e.d + 0.2, COLORS.white);
-      if (id === '3F') B.get('metal').box(e.x, yB, e.z, e.w + 0.3, 0.5, e.d + 0.3, COLORS.white);
+      B.frame(e.frame, () => {
+        for (const [dx, dz] of [[-half, -half], [half, -half], [half, half], [-half, half]]) {
+          B.get('metal').box(e.lu + dx, yA + h / 2, e.lv + dz, 0.14, h, 0.14, COLORS.white);
+        }
+        for (const [sx, sz, ox, oz] of [[e.w, 0.03, 0, -half], [e.w, 0.03, 0, half], [0.03, e.d, -half, 0], [0.03, e.d, half, 0]]) {
+          B.get('glass').box(e.lu + ox, yA + h / 2, e.lv + oz, sx, h - 0.1, sz, 0xffffff);
+        }
+        B.get('metal').box(e.lu, yA - 0.2, e.lv, e.w + 0.2, 0.4, e.d + 0.2, COLORS.white);
+        if (id === topId) B.get('metal').box(e.lu, yB, e.lv, e.w + 0.3, 0.5, e.d + 0.3, COLORS.white);
+      });
     }
     // 轿厢
     const car = new THREE.Group();
@@ -36,6 +39,7 @@ export function buildElevators(ctx) {
     rail.position.y = 1.0;
     car.add(cb, roof, light, glass, rail);
     car.position.set(e.x, 0, e.z);
+    car.rotation.y = -e.frame.a;
     car.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
     ctx.root.add(car);
 
@@ -55,7 +59,7 @@ export function buildElevators(ctx) {
       t += dur;
     }
     const period = t;
-    const phase = e.x < 0 ? 0 : period * 0.45;
+    const phase = e.id.endsWith('GW') ? 0 : period * 0.45;
     ctx.dynamic.push({
       update(dt, time, app) {
         const tt = (time + phase) % period;
@@ -64,32 +68,33 @@ export function buildElevators(ctx) {
         const s = k * k * (3 - 2 * k);
         const y = leg.y0 + (leg.y1 - leg.y0) * s;
         const st = app.state;
-        const offset = levelOffsetAt(ctx, y);
-        car.position.y = y + offset;
-        // 所在楼层隐藏时轿厢也隐藏
-        const lvId = nearestLevel(ctx, y);
-        car.visible = ctx.levels[lvId].group.visible && !(st.focus && byId[st.focus].elev + 0.1 < y);
+        car.position.y = y + levelOffsetAt(ctx, e.building, y);
+        // 所在楼层隐藏（或只显示外观）时轿厢也隐藏
+        const L = ctx.levels[nearestLevel(ctx, e.building, y)];
+        const focus = st.focus && byId[st.focus];
+        car.visible = L.group.visible && L.base.visible && !(focus && focus.building === e.building && focus.elev + 0.1 < y);
       },
     });
   }
 }
 
 /** 某高度处楼层组的插值偏移（爆炸视图） */
-export function levelOffsetAt(ctx, y) {
-  const lv = ctx.layout.levels;
-  if (y <= lv[0].elev) return ctx.levels[lv[0].id].offset;
-  for (let i = 0; i < lv.length - 1; i++) {
-    const a = lv[i], b = lv[i + 1];
-    if (y >= a.elev && y <= b.elev) {
-      const k = (y - a.elev) / (b.elev - a.elev);
-      return ctx.levels[a.id].offset * (1 - k) + ctx.levels[b.id].offset * k;
+export function levelOffsetAt(ctx, bid, y) {
+  const Ls = ctx.buildings[bid].levels;
+  if (y <= Ls[0].lv.elev) return Ls[0].offset;
+  for (let i = 0; i < Ls.length - 1; i++) {
+    const a = Ls[i], b = Ls[i + 1];
+    if (y >= a.lv.elev && y <= b.lv.elev) {
+      const k = (y - a.lv.elev) / (b.lv.elev - a.lv.elev);
+      return a.offset * (1 - k) + b.offset * k;
     }
   }
-  return ctx.levels[lv[lv.length - 1].id].offset;
+  return Ls[Ls.length - 1].offset;
 }
 
-export function nearestLevel(ctx, y) {
-  let best = ctx.layout.levels[0].id;
-  for (const l of ctx.layout.levels) if (y >= l.elev - 0.01) best = l.id;
+export function nearestLevel(ctx, bid, y) {
+  const Ls = ctx.buildings[bid].levels;
+  let best = Ls[0].lv.id;
+  for (const L of Ls) if (y >= L.lv.elev - 0.01) best = L.lv.id;
   return best;
 }

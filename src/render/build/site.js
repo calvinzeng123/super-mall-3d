@@ -1,153 +1,289 @@
-// 场地：草地、广场铺装、道路与标线、人行道、行道树、路灯、南广场（喷泉、IP、立牌）、
-// 四个人行入口的雨棚与门、北侧卸货区、车库出入口道闸与灯箱、周边楼宇。
+// 园区场地：草地（挖去建筑与坡道开口）、广场铺装、道路与标线（大道中央绿化带）、人行道与路缘石、斑马线、
+// 行道树与路灯、入口雨棚与门（按入口法线）、车库道闸与灯箱、坡道护栏、卸货区、一期广场小品、园区外周边楼宇、未建地块围挡。
 import * as THREE from 'three';
 import { shapeFromPoly, flatShapeGeometry } from './shell.js';
-import { rectPoly, rect } from '../../layout/geom.js';
+import { rect, rectPoly, frame, toW, toL, pointInPoly, clipConvex } from '../../layout/geom.js';
+import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
 import { COLORS } from '../theme.js';
-import { windowTextures, rng, labelTexture } from '../textures.js';
+import { windowTextures, rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+
+const DEG = 180 / Math.PI;
 
 export function buildSite(ctx) {
   const { layout, mats } = ctx;
   const S = layout.site;
   const G = ctx.site.group;
   const B = ctx.site.batch;
+  const outlines = layout.buildings.map((b) => b.outline);
+  const holes = [...outlines, ...S.trenches];
 
-  const building = rectPoly(rect(-60, -40, 60, 40));
-  const trenches = S.trenches.map(rectPoly);
-
-  // 草地（挖掉建筑与坡道敞开段）
-  const groundShape = shapeFromPoly([[-900, -900], [900, -900], [900, 900], [-900, 900]], [building, ...trenches]);
-  const grass = mats.floor('grass', 0.95);
-  const ground = new THREE.Mesh(flatShapeGeometry(groundShape, -0.32), grass);
+  // 草地
+  const ground = new THREE.Mesh(flatShapeGeometry(shapeFromPoly([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], holes), -0.32), mats.floor('grass', 0.95));
   ground.receiveShadow = true;
   G.add(ground);
-
-  // 广场铺装
-  const P = S.plaza;
-  const plazaShape = shapeFromPoly(rectPoly(P), [building, ...trenches]);
-  const plaza = new THREE.Mesh(flatShapeGeometry(plazaShape, -0.14), mats.floor('paving', 0.75));
-  plaza.receiveShadow = true;
-  G.add(plaza);
+  // 广场：有地块的商场做"外扩铺装带 + 入口步道 + 草坪树阵"，其余广场整块铺装
+  const landscaped = new Set();
+  for (const b of layout.buildings) {
+    if (b.kind === 'mall' && b.plot) {
+      landscape(ctx, b, holes, G, B);
+      landscaped.add(b.id);
+    }
+  }
+  for (const p of S.plazas) {
+    if (landscaped.has(p.building)) continue;
+    const inner = holes.filter((h) => h.every((q) => pointInPoly(q, p.poly)));
+    const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(p.poly, inner), -0.14), mats.floor('paving', 0.75));
+    m.receiveShadow = true;
+    G.add(m);
+  }
 
   roads(ctx, S, B, G);
-  southPlaza(ctx, S, B);
   entrances(ctx);
-  northYard(ctx, S, B);
   garageGates(ctx, S, B);
+  plazaFeatures(ctx, B);
+  hoardings(ctx, S, B, G);
   context(ctx, G);
-
-  // 行道树与路灯
-  const trees = [];
-  const rand = rng(11);
-  for (let x = -250; x <= 250; x += 12) {
-    for (const z of [64, 92]) if (Math.abs(x) > 6 || z === 92) trees.push({ x: x + (rand() - 0.5), y: -0.14, z, s: 0.9 + rand() * 0.3 });
-    if (Math.abs(x) > 80 || x < -78 || x > 78) trees.push({ x, y: -0.14, z: -78, s: 0.8 + rand() * 0.3 });
-  }
-  for (let z = -250; z <= 250; z += 12) {
-    if (z > 60 && z < 96) continue;
-    if (z > -80 && z < -62) continue;
-    for (const x of [-80, 80, -100, 100]) trees.push({ x, y: -0.14, z: z + (rand() - 0.5), s: 0.85 + rand() * 0.3 });
-  }
-  // 广场树阵
-  for (const [x, z] of [[-70, -30], [-70, -15], [-70, 15], [-70, 30], [70, -30], [70, -15], [70, 15], [70, 30], [-34, -56], [34, -56], [-50, 58], [50, 48], [-64, 50], [64, 56]]) {
-    trees.push({ x, y: -0.14, z, s: 1.1 });
-  }
-  addTrees(G, mats, trees, 21);
-  for (let x = -240; x <= 240; x += 26) {
-    streetLamp(B, x, 63.4, -0.14, [0, 1]);
-    streetLamp(B, x, 92.6, -0.14, [0, -1]);
-    streetLamp(B, x, -62.6, -0.14, [0, -1]);
-  }
-  for (let z = -240; z <= 240; z += 26) {
-    if (z > 62 && z < 94) continue;
-    streetLamp(B, -79.4, z, -0.14, [-1, 0]);
-    streetLamp(B, 79.4, z, -0.14, [1, 0]);
-  }
+  greenery(ctx, S, B, G);
 }
+
+/** 商场地块景观：与建筑同形的外扩铺装带（裁到地块内）、入口步道（直通人行道或地块边）、草坪上的树阵与路灯 */
+function landscape(ctx, b, holes, G, B) {
+  const S = ctx.layout.site;
+  const inset = (r, d) => rect(r.x0 + d, r.z0 + d, r.x1 - d, r.z1 - d);
+  const plotIn = rectPoly(inset(b.plot, 2));
+  const extendOf = (w) => {
+    let lim = w.uEnd + 20;
+    for (const t of S.trenches) {
+      const loc = t.map(([x, z]) => toL(w.F, x, z));
+      if (loc.every(([u, v]) => Math.abs(v) < 23 && u > w.uEnd - 1)) lim = Math.min(lim, Math.min(...loc.map((p) => p[0])) - 0.5);
+    }
+    return lim;
+  };
+  const rots = b.rotundas.map((r) => ({ id: r.id, x: r.x, z: r.z, R: r.R + 18 }));
+  const arms = b.wings.map((w) => (w.link ? { id: w.id, rot: w.rot, to: w.to, deg: w.deg } : { id: w.id, rot: w.rot, deg: w.deg, uEnd: extendOf(w) }));
+  const band = clipConvex(hubOutline(rots, arms, 41), plotIn);
+  const inner = holes.filter((h) => h.every((q) => pointInPoly(q, band)));
+  const pave = ctx.mats.floor('paving', 0.75);
+  const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(band, inner), -0.14), pave);
+  m.receiveShadow = true;
+  G.add(m);
+  // 入口步道：沿入口外法线直到地块边
+  const paths = [];
+  for (const e of ctx.layout.entrances) {
+    if (e.building !== b.id || e.to !== 'site') continue;
+    const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
+    const F = frame(mx, mz, Math.atan2(e.nz, e.nx) * DEG);
+    const hw = Math.max(3, e.width / 2);
+    const strip = clipConvex([toW(F, 8, -hw), toW(F, 160, -hw), toW(F, 160, hw), toW(F, 8, hw)], plotIn);
+    if (strip.length < 3) continue;
+    paths.push(strip);
+    const pm = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(strip), -0.1), pave);
+    pm.receiveShadow = true;
+    G.add(pm);
+    for (let u = 20; u < 160; u += 15) {
+      const [x, z] = toW(F, u, 0);
+      if (!pointInPoly([x, z], strip)) break;
+      for (const k of [-1, 1]) {
+        const [lx, lz] = toW(F, u, k * (hw + 0.6));
+        streetLamp(B, lx, lz, -0.14, [k * F.s, -k * F.c], 5);
+      }
+    }
+  }
+  // 草坪树阵：抖动网格，避开铺装带、步道、坡道与车道入口
+  const rand = rng(b.id.length * 97 + 5);
+  const trees = [];
+  const r = inset(b.plot, 6);
+  const near = (p, poly) => pointInPoly(p, poly);
+  for (let x = r.x0; x < r.x1; x += 10) {
+    for (let z = r.z0; z < r.z1; z += 10) {
+      if (rand() < 0.35) continue;
+      const p = [x + (rand() - 0.5) * 6, z + (rand() - 0.5) * 6];
+      if (near(p, band) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d))) continue;
+      const k = 3;
+      if ([[k, 0], [-k, 0], [0, k], [0, -k]].some(([dx, dz]) => near([p[0] + dx, p[1] + dz], band) || paths.some((q) => near([p[0] + dx, p[1] + dz], q)))) continue;
+      trees.push({ x: p[0], y: -0.3, z: p[1], s: 0.85 + rand() * 0.5, kind: rand() < 0.3 ? 'cone' : 'round' });
+    }
+  }
+  addTrees(G, ctx.mats, trees, 61 + b.id.length);
+}
+
+const flatRect = (G, mat, r, y, tile) => {
+  const g = new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0).rotateX(-Math.PI / 2);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (r.x0 + uv.getX(i) * (r.x1 - r.x0)) / tile, (r.z0 + (1 - uv.getY(i)) * (r.z1 - r.z0)) / tile);
+  const m = new THREE.Mesh(g, mat);
+  m.position.set((r.x0 + r.x1) / 2, y, (r.z0 + r.z1) / 2);
+  m.receiveShadow = true;
+  G.add(m);
+  return m;
+};
 
 function roads(ctx, S, B, G) {
   const asphalt = ctx.mats.floor('asphalt', 0.9);
+  asphalt.map.repeat.set(1, 1);
+  const R = Object.fromEntries(S.roads.map((r) => [r.id, r.rect]));
   const yR = -0.12;
-  const pieces = [];
-  const south = S.roads.find((r) => r.id === 'south').rect;
-  const north = S.roads.find((r) => r.id === 'north').rect;
-  const west = S.roads.find((r) => r.id === 'west').rect;
-  const east = S.roads.find((r) => r.id === 'east').rect;
-  pieces.push(south, north);
-  for (const v of [west, east]) {
-    pieces.push(rect(v.x0, v.z0, v.x1, north.z0), rect(v.x0, north.z1, v.x1, south.z0), rect(v.x0, south.z1, v.x1, v.z1));
-  }
-  for (const d of S.driveways) pieces.push(d);
-  for (const r of pieces) {
-    const g = new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0).rotateX(-Math.PI / 2);
-    // 让贴图按世界坐标平铺
-    const uv = g.attributes.uv;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, (r.x0 + uv.getX(i) * (r.x1 - r.x0)) / 8, (r.z0 + (1 - uv.getY(i)) * (r.z1 - r.z0)) / 8);
-    asphalt.map.repeat.set(1, 1);
-    const m = new THREE.Mesh(g, asphalt);
-    m.position.set((r.x0 + r.x1) / 2, yR + (S.driveways.includes(r) ? 0.006 : 0), (r.z0 + r.z1) / 2);
+  // 路面：交叉处只铺一次
+  const pieces = [
+    R.avenue, R['ring-n'], R['ring-s'], R['service-n'],
+    rect(-10, -256, 10, -14), rect(-10, 14, 10, 256), rect(-10, -298, 10, -268), rect(-10, 268, 10, 298),
+    rect(-298, -256, -286, -14), rect(-298, 14, -286, 256), rect(286, -256, 298, -14), rect(286, 14, 298, 256),
+  ];
+  for (const r of pieces) flatRect(G, asphalt, r, yR, 8);
+  for (const d of S.driveways) {
+    const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(d), yR + 0.006), asphalt);
     m.receiveShadow = true;
     G.add(m);
   }
   const y = yR + 0.012;
   const white = '#ecebe6', yellow = '#e7b416';
-  // 横向道路：中心双黄线 + 车道虚线
-  for (const road of [south, north]) {
-    const cz = (road.z0 + road.z1) / 2;
-    const lanes = road === south ? 6 : 2;
-    const lw = (road.z1 - road.z0) / lanes;
-    for (const off of [-0.12, 0.12]) B.get('ext').box(0, y, cz + off, road.x1 - road.x0, 0.02, 0.12, yellow);
-    for (let k = 1; k < lanes; k++) {
-      if (k === lanes / 2) continue;
-      const z = road.z0 + k * lw;
-      for (let x = road.x0 + 2; x < road.x1 - 4; x += 9) {
-        if (x > west.x0 - 4 && x < west.x1 + 4) continue;
-        if (x > east.x0 - 4 && x < east.x1 + 4) continue;
-        B.get('ext').box(x + 1.5, y, z, 3, 0.02, 0.14, white);
-      }
-    }
+  const inX = (x) => Math.abs(x) < 17 || Math.abs(x) > 284;
+  // 云澜大道：中央绿化隔离带 + 每向 3 车道
+  const av = R.avenue;
+  for (const seg of [[av.x0, -17], [17, av.x1]]) {
+    const len = seg[1] - seg[0], cx = (seg[0] + seg[1]) / 2;
+    B.get('ext').box(cx, -0.02, 0, len - 2, 0.2, 4, COLORS.stoneDark);
+    B.get('foliage').box(cx, 0.12, 0, len - 2.4, 0.24, 3.4, '#5e8f45');
   }
-  for (const road of [west, east]) {
-    const cx = (road.x0 + road.x1) / 2;
-    const lw = (road.x1 - road.x0) / 4;
-    for (const seg of [[road.z0, north.z0], [north.z1, south.z0], [south.z1, road.z1]]) {
-      const cz = (seg[0] + seg[1]) / 2, len = seg[1] - seg[0];
-      for (const off of [-0.12, 0.12]) B.get('ext').box(cx + off, y, cz, 0.12, 0.02, len - 8, yellow);
-      for (const k of [1, 3]) {
-        for (let z = seg[0] + 6; z < seg[1] - 6; z += 9) B.get('ext').box(road.x0 + k * lw, y, z + 1.5, 0.14, 0.02, 3, white);
-      }
-    }
+  for (const z of [-10, -6, 6, 10]) {
+    for (let x = av.x0 + 2; x < av.x1 - 4; x += 9) if (!inX(x) && !inX(x + 3)) B.get('ext').box(x + 1.5, y, z, 3, 0.02, 0.14, white);
   }
-  // 斑马线：南门正对、四个路口
-  zebra(B, 0, (south.z0 + south.z1) / 2, 12, south.z1 - south.z0 - 1, 'z', y);
-  for (const road of [west, east]) {
-    zebra(B, (road.x0 + road.x1) / 2, south.z0 - 3, road.x1 - road.x0 - 1, 4, 'x', y);
-    zebra(B, (road.x0 + road.x1) / 2, north.z1 + 3, road.x1 - road.x0 - 1, 4, 'x', y);
+  for (const z of [-2.2, 2.2]) for (const seg of [[av.x0, -17], [17, av.x1]]) B.get('ext').box((seg[0] + seg[1]) / 2, y, z, seg[1] - seg[0] - 2, 0.02, 0.12, yellow);
+  // 星湾路：双黄线 + 车道虚线
+  for (const seg of [[-298, -20], [20, 298]]) {
+    const cz = (seg[0] + seg[1]) / 2, len = seg[1] - seg[0];
+    for (const off of [-0.12, 0.12]) B.get('ext').box(off, y, cz, 0.12, 0.02, len, yellow);
+    for (const x of [-5, 5]) for (let z = seg[0] + 3; z < seg[1] - 3; z += 9) if (Math.abs(z + 170) > 8) B.get('ext').box(x, y, z + 1.5, 0.14, 0.02, 3, white);
   }
-  // 人行道路缘石
-  const curb = (x0, z0, x1, z1) => B.get('ext').boxMinMax(x0, -0.14, z0, x1, 0.02, z1, '#c9c5bc');
-  curb(-260, south.z0 - 0.3, 260, south.z0);
-  curb(-260, south.z1, 260, south.z1 + 0.3);
-  curb(-260, north.z1, 260, north.z1 + 0.3);
-  curb(-260, north.z0 - 0.3, 260, north.z0);
-  // 外侧人行道
+  // 外环与星湾北街：中心黄线
+  for (const id of ['ring-n', 'ring-s']) {
+    const r = R[id];
+    B.get('ext').box(0, y, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 30, 0.02, 0.12, yellow);
+  }
+  for (const id of ['ring-w', 'ring-e']) {
+    const r = R[id];
+    for (const seg of [[-256, -20], [20, 256]]) B.get('ext').box((r.x0 + r.x1) / 2, y, (seg[0] + seg[1]) / 2, 0.12, 0.02, seg[1] - seg[0] - 4, yellow);
+  }
+  { const r = R['service-n']; B.get('ext').box((r.x0 + r.x1) / 2 + 4, y, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 12, 0.02, 0.12, yellow); }
+  // 斑马线与停止线
+  for (const c of S.crossings) {
+    const r = c.rect;
+    if (c.axis === 'z') zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 1, r.z1 - r.z0 - 4.4, 'z', y);
+    else zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 1, r.z1 - r.z0 - 1, 'x', y);
+  }
+  for (const x of [-17.5, 17.5]) B.get('ext').box(x, y, x < 0 ? 8 : -8, 0.3, 0.02, 12, white);
+  for (const z of [-21, 21]) B.get('ext').box(z < 0 ? -5 : 5, y, z, 10, 0.02, 0.3, white);
+  // 人行道 + 路缘石
   const walk = ctx.mats.floor('paving', 0.8);
-  for (const r of [rect(-260, south.z1, 260, south.z1 + 6), rect(-260, north.z0 - 6, 260, north.z0), rect(west.x0 - 6, -260, west.x0, 260), rect(east.x1, -260, east.x1 + 6, 260)]) {
-    const g = new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0).rotateX(-Math.PI / 2);
-    const uv = g.attributes.uv;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, (r.x0 + uv.getX(i) * (r.x1 - r.x0)) / 4.8, (r.z0 + (1 - uv.getY(i)) * (r.z1 - r.z0)) / 4.8);
-    const m = new THREE.Mesh(g, walk);
-    m.position.set((r.x0 + r.x1) / 2, -0.135, (r.z0 + r.z1) / 2);
-    m.receiveShadow = true;
-    G.add(m);
+  for (const s of S.sidewalks) {
+    flatRect(G, walk, s.rect, -0.135, 4.8);
+    const r = s.rect;
+    const horiz = r.x1 - r.x0 > r.z1 - r.z0;
+    if (horiz) for (const z of [r.z0, r.z1]) B.get('ext').boxMinMax(r.x0, -0.14, z - 0.15, r.x1, 0.02, z + 0.15, '#c9c5bc');
+    else for (const x of [r.x0, r.x1]) B.get('ext').boxMinMax(x - 0.15, -0.14, r.z0, x + 0.15, 0.02, r.z1, '#c9c5bc');
   }
 }
 
-function southPlaza(ctx, S, B) {
+/** 人行入口：雨棚 + 玻璃门（主入口带旋转门与台阶）+ 门头标识；在以入口外法线为 u 轴的局部坐标系内绘制 */
+function entrances(ctx) {
+  for (const e of ctx.layout.entrances) {
+    if (e.to !== 'site') continue;
+    const L = ctx.levels[e.level];
+    const FB = L.facadeBatch;
+    const main = e.main;
+    const width = e.width;
+    const depth = main ? 7 : 4.5;
+    const hY = main ? 4.9 : 4.4;
+    const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
+    const F = frame(mx, mz, Math.atan2(e.nz, e.nx) * DEG);
+    const cw = width + (main ? 8 : 4);
+    const y0 = L.lv.elev;
+    FB.frame(F, () => {
+      FB.get('glass').box(depth / 2, y0 + hY, 0, depth, 0.06, cw, 0xffffff);
+      FB.get('extMetal').box(depth / 2, y0 + hY + 0.18, 0, depth + 0.1, 0.28, cw + 0.2, COLORS.white);
+      FB.get('glow').box(depth, y0 + hY + 0.05, 0, 0.08, 0.05, cw, COLORS.led);
+      for (const k of [-1, 1]) FB.get('extMetal').cyl(depth - 0.4, y0, k * (cw / 2 - 0.6), 0.16, hY, COLORS.steel, 12);
+      const n = Math.max(2, Math.round(width / 2));
+      for (let i = 0; i < n; i++) {
+        const a = -width / 2 + (i + 0.5) * (width / n);
+        if (main && Math.abs(a) < 2.2) continue;
+        if (i % 3 !== 1) FB.get('glass').box(0, y0 + 2.0, a, 0.05, 3.9, width / n - 0.1, 0xffffff);
+        FB.get('extMetal').box(0, y0 + 2.0, a - width / n / 2, 0.08, 4.0, 0.08, COLORS.glassFrame);
+      }
+      if (main) {
+        FB.get('glass').cyl(0, y0 + 0.02, 0, 2.0, 3.0, 0xffffff, 24);
+        FB.get('extMetal').cyl(0, y0 + 3.0, 0, 2.1, 0.35, COLORS.steel, 24);
+        for (let k = 0; k < 4; k++) FB.get('glass').box(0, y0 + 1.5, 0, 3.9, 2.9, 0.04, 0xffffff, (k / 4) * Math.PI + 0.3);
+        ctx.site.batch.frame(F, () => ctx.site.batch.get('extSatin').box(2.6, -0.07, 0, 5, 0.14, width + 6, COLORS.stone));
+      }
+    });
+    const lab = labelTexture(e.name.replace(' · ', ' '), { bg: 'rgba(15,111,134,0.95)', fg: '#ffffff', icon: 'info', accent: '#a5ecff' });
+    const mat = ctx.mats.screen(lab.texture, 0.95, 1.35);
+    mat.transparent = true;
+    const h = main ? 1.1 : 0.8;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * lab.aspect, h), mat);
+    const [px, pz] = toW(F, depth + 0.08, 0);
+    plane.position.set(px, y0 + hY + 0.75, pz);
+    plane.rotation.y = Math.atan2(e.nx, e.nz);
+    L.facade.add(plane);
+  }
+}
+
+/** 车库出入口：限高架、道闸、岗亭、P 灯箱（在坡道地面端，沿坡道方向的局部坐标系）；坡道敞开段护栏 */
+function garageGates(ctx, S, B) {
   const y = -0.14;
-  // 喷泉
-  const f = S.fountain;
+  for (const r of ctx.layout.ramps.filter((x) => x.type.startsWith('street'))) {
+    const street = r.from.level === 'street' ? r.from : r.to;
+    const other = r.from.level === 'street' ? r.to : r.from;
+    const deg = Math.atan2(street.z - other.z, street.x - other.x) * DEG; // u 指向坡道外（地面方向）
+    const F = frame(street.x, street.z, deg);
+    const inbound = r.type === 'street-in';
+    B.frame(F, () => {
+      const g = 4;
+      for (const dv of [-r.width / 2 - 0.4, r.width / 2 + 0.4]) B.get('extMetal').cyl(g, y, dv, 0.14, 3.0, '#e7b416', 8);
+      B.get('extMetal').box(g, y + 2.9, 0, 0.3, 0.35, r.width + 1.2, '#e7b416');
+      for (let i = 0; i < 6; i++) B.get('ext').box(g + 0.16, y + 2.9, -r.width / 2 + 0.4 + i * ((r.width - 0.8) / 5), 0.02, 0.36, 0.5, i % 2 ? '#1d2023' : '#e7b416');
+      B.get('extMetal').box(1.5, y + 0.55, r.width / 2 + 0.6, 0.45, 1.1, 0.45, '#d9dde0');
+      B.get('ext').box(1.5, y + 1.05, 0, 0.12, 0.12, r.width, '#e8352b');
+      B.get('ext').box(1.6, y + 1.4, r.width / 2 + 2.4, 2.2, 2.8, 2.2, '#e9ecef');
+      B.get('glass').box(1.6, y + 1.7, r.width / 2 + 1.29, 1.8, 1.2, 0.04, 0xffffff);
+      B.get('extMetal').cyl(7, y, -r.width / 2 - 1.2, 0.12, 4.0, '#3b4046', 8);
+    });
+    const lab = labelTexture(inbound ? '车库入口' : '车库出口', { bg: 'rgba(29,78,216,0.96)', fg: '#ffffff', icon: 'parking', sub: inbound ? 'P · ENTRANCE' : 'P · EXIT' });
+    const mat = ctx.mats.screen(lab.texture, 1.0, 1.45);
+    const h = 2.0;
+    const [px, pz] = toW(F, 7, -r.width / 2 - 1.2);
+    for (const k of [0, Math.PI]) {
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * lab.aspect, h), mat);
+      plane.position.set(px, y + 5.0, pz);
+      plane.rotation.y = -F.a + Math.PI / 2 + k;
+      ctx.site.group.add(plane);
+    }
+  }
+  // 坡道敞开段两侧矮墙
+  for (const t of S.trenches) {
+    for (let i = 0; i < t.length; i++) {
+      const p0 = t[i], p1 = t[(i + 1) % t.length];
+      const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+      if (len < 15) continue;
+      const F = frame(p0[0], p0[1], Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) * DEG);
+      B.frame(F, () => {
+        B.get('ext').box(len / 2, 0.45, 0, len, 1.2, 0.3, COLORS.concrete);
+        B.get('glass').box(len / 2, 1.5, 0, len, 0.9, 0.04, 0xffffff);
+        B.get('extMetal').box(len / 2, 1.98, 0, len, 0.06, 0.08, COLORS.steel);
+      });
+    }
+  }
+}
+
+/** 一期广场：喷泉、IP 雕塑、立牌、卸货区货车、公交站 */
+function plazaFeatures(ctx, B) {
+  const y = -0.14;
+  const p1 = ctx.bById.P1;
+  if (!p1) return;
+  // 喷泉（东南主入口与路口之间，偏离天桥轴线）
+  const f = { x: -30, z: -52, r: 6 };
   B.get('extSatin').cyl(f.x, y, f.z, f.r, 0.55, COLORS.stoneDark, 24);
   B.get('water').cyl(f.x, y + 0.05, f.z, f.r - 0.35, 0.45, '#ffffff', 24);
   B.get('extSatin').cyl(f.x, y, f.z, 1.2, 1.2, COLORS.stone, 16);
@@ -156,166 +292,138 @@ function southPlaza(ctx, S, B) {
     B.get('glass').cyl(f.x + Math.cos(a) * 3.2, y + 0.5, f.z + Math.sin(a) * 3.2, 0.08, 1.6 + (i % 3) * 0.5, '#ffffff', 6);
   }
   B.get('glass').cyl(f.x, y + 1.2, f.z, 0.18, 3.2, '#ffffff', 8);
-  // IP 雕塑
-  ipMascot(B, S.southIP.x, y, S.southIP.z, S.southIP.scale, -0.35);
+  ipMascot(B, -52, y, -30, 0.75, 0.6);
   // 立牌
-  const m = S.monument;
-  B.get('extSatin').box(m.x, y + 2.2, m.z, 9, 4.4, 1.4, '#2d3339');
-  B.get('glow').box(m.x, y + 0.25, m.z, 9.2, 0.08, 1.5, COLORS.led);
+  const m = { x: -24, z: -40 };
+  const F = frame(m.x, m.z, 45);
+  B.frame(F, () => {
+    B.get('extSatin').box(0, y + 2.2, 0, 1.4, 4.4, 9, '#2d3339');
+    B.get('glow').box(0, y + 0.25, 0, 1.5, 0.08, 9.2, COLORS.led);
+  });
   const lab = labelTexture('云澜汇', { bg: 'rgba(0,0,0,0)', fg: '#ffffff', sub: 'YUNLAN MALL' });
   const mat = ctx.mats.screen(lab.texture, 0.95, 1.4);
   mat.transparent = true;
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(3.4 * lab.aspect, 3.4), mat);
-  plane.position.set(m.x, y + 2.4, m.z + 0.72);
+  const [px, pz] = toW(F, 0.72, 0);
+  plane.position.set(px, y + 2.4, pz);
+  plane.rotation.y = Math.atan2(Math.cos(Math.PI / 4), Math.sin(Math.PI / 4));
   ctx.site.group.add(plane);
   // 花坛与长椅
-  for (const x of [-48, -32, 32, 48]) planter(B, x - 4, 44, x + 4, 48, y, x + 100);
-  for (const x of [-40, -24, 24, 40]) { bench(B, x, y, 50.5, 0); bench(B, x, y, 53.5, Math.PI); }
-  for (let x = -54; x <= 54; x += 6) if (Math.abs(x) > 10) bollard(B, x, 41.6, y);
-  // 公交站
-  const bs = S.busStop;
-  B.get('extMetal').box(bs.x, y + 1.5, bs.z + 0.9, 8, 3, 0.08, '#4b5563');
-  B.get('glass').box(bs.x, y + 1.4, bs.z + 0.85, 7.8, 2.4, 0.04, '#ffffff');
+  for (const [x, z] of [[-40, -64], [-64, -40], [-28, -70], [-70, -28]]) planter(B, x - 3, z - 2, x + 3, z + 2, y, x * 7 + z);
+  for (const [x, z, r] of [[-36, -60, 0.8], [-60, -36, 2.4], [-24, -60, 0.8]]) bench(B, x, y, z, r);
+  // 卸货区：北翼末端坡道旁
+  const N = p1.wings.find((w) => w.id === 'N');
+  if (N) {
+    B.frame(N.F, () => {
+      B.get('ext').box(N.uEnd + 1, y + 0.6, 12, 2, 1.2, 8, '#8d9298');
+      for (let v = 9; v <= 15; v += 2.2) B.get('ext').box(N.uEnd + 6, y + 0.02, v, 8, 0.03, 0.15, '#e7b416');
+      const tu = N.uEnd + 8.5, tv = 12;
+      B.get('ext').box(tu, y + 2.1, tv, 7.5, 2.8, 2.5, '#f2f2ee');
+      B.get('ext').box(tu + 4.9, y + 1.5, tv, 2.2, 2.2, 2.4, '#2f6fd6');
+      B.get('glass').box(tu + 6.0, y + 2.0, tv, 0.05, 0.9, 2.2, 0xffffff);
+      for (const [du, dv] of [[-3, -1.2], [-3, 1.2], [1.5, -1.2], [1.5, 1.2], [4.8, -1.2], [4.8, 1.2]]) B.get('ext').box(tu + du, y + 0.45, tv + dv, 0.9, 0.9, 0.4, '#1d2023');
+    });
+  }
+  // 公交站：云澜大道北侧人行道
+  const bs = { x: -70, z: -17 };
+  B.get('extMetal').box(bs.x, y + 1.5, bs.z - 0.9, 8, 3, 0.08, '#4b5563');
+  B.get('glass').box(bs.x, y + 1.4, bs.z - 0.85, 7.8, 2.4, 0.04, '#ffffff');
   B.get('extMetal').box(bs.x, y + 3.05, bs.z, 8.4, 0.12, 2.4, '#2f3439');
-  B.get('glow').box(bs.x + 3.2, y + 1.6, bs.z + 0.95, 1.2, 1.8, 0.05, '#cfe8ff');
-  bench(B, bs.x - 1.5, y, bs.z + 0.2, Math.PI);
-  // 非机动车停车
-  for (let i = 0; i < 12; i++) B.get('extMetal').box(-28 + i * 0.9, y + 0.4, 60.5, 0.05, 0.8, 0.8, '#6b7280');
+  B.get('glow').box(bs.x + 3.2, y + 1.6, bs.z - 0.95, 1.2, 1.8, 0.05, '#cfe8ff');
+  bench(B, bs.x - 1.5, y, bs.z - 0.2, 0);
 }
 
-/** 四个人行入口：雨棚 + 玻璃门（南门主入口带旋转门） */
-function entrances(ctx) {
-  const L = ctx.levels['1F'];
-  const F = L.facadeBatch;
-  for (const e of ctx.layout.entrances) {
-    const main = e.main;
-    const width = e.width;
-    const depth = main ? 7 : 4.5;
-    const hY = main ? 4.9 : 4.4;
-    const alongX = e.side === 'S' || e.side === 'N';
-    const out = { S: [0, 1], N: [0, -1], E: [1, 0], W: [-1, 0] }[e.side];
-    const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
-    const cw = width + (main ? 8 : 4);
-    // 雨棚
-    const cx = mx + out[0] * depth / 2, cz = mz + out[1] * depth / 2;
-    F.get('glass').box(cx, hY, cz, alongX ? cw : depth, 0.06, alongX ? depth : cw, 0xffffff);
-    F.get('extMetal').box(cx, hY + 0.18, cz, alongX ? cw + 0.2 : depth + 0.1, 0.28, alongX ? depth + 0.1 : cw + 0.2, COLORS.white);
-    const edgeX = mx + out[0] * depth, edgeZ = mz + out[1] * depth;
-    F.get('glow').box(edgeX, hY + 0.05, edgeZ, alongX ? cw : 0.08, 0.05, alongX ? 0.08 : cw, COLORS.led);
-    for (const k of [-1, 1]) {
-      const px = alongX ? mx + k * (cw / 2 - 0.6) : edgeX - out[0] * 0.4;
-      const pz = alongX ? edgeZ - out[1] * 0.4 : mz + k * (cw / 2 - 0.6);
-      F.get('extMetal').cyl(px, 0, pz, 0.16, hY, COLORS.steel, 12);
-    }
-    // 门：玻璃门扇 + 门框
-    const n = Math.round(width / 2);
-    for (let i = 0; i < n; i++) {
-      const a = -width / 2 + (i + 0.5) * (width / n);
-      if (main && Math.abs(a) < 2.2) continue;
-      const px = alongX ? mx + a : mx, pz = alongX ? mz : mz + a;
-      const open = i % 3 === 1;
-      if (!open) F.get('glass').box(px, 2.0, pz, alongX ? width / n - 0.1 : 0.05, 3.9, alongX ? 0.05 : width / n - 0.1, 0xffffff);
-      F.get('extMetal').box(alongX ? px - width / n / 2 : px, 2.0, alongX ? pz : pz - width / n / 2, 0.08, 4.0, 0.08, COLORS.glassFrame);
-    }
-    if (main) {
-      // 旋转门
-      F.get('glass').cyl(mx, 0.02, mz, 2.0, 3.0, 0xffffff, 24);
-      F.get('extMetal').cyl(mx, 3.0, mz, 2.1, 0.35, COLORS.steel, 24);
-      F.get('extMetal').cyl(mx, 0.0, mz, 2.1, 0.06, COLORS.steel, 24);
-      for (let k = 0; k < 4; k++) {
-        const a = (k / 4) * Math.PI + 0.3;
-        F.get('glass').box(mx, 1.5, mz, 3.9, 2.9, 0.04, 0xffffff, a);
-      }
-      // 台阶与无障碍坡道
-      ctx.site.batch.get('extSatin').box(mx, -0.07, mz + 2.5, width + 6, 0.14, 5, COLORS.stone);
-    }
-    // 门头标识
-    const text = e.name.replace(' · ', ' ');
-    const lab = labelTexture(text, { bg: 'rgba(15,111,134,0.95)', fg: '#ffffff', icon: 'info', accent: '#a5ecff' });
-    const mat = ctx.mats.screen(lab.texture, 0.95, 1.35);
-    mat.transparent = true;
-    const h = main ? 1.1 : 0.8;
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * lab.aspect, h), mat);
-    plane.position.set(edgeX + out[0] * 0.08, hY + 0.75, edgeZ + out[1] * 0.08);
-    plane.rotation.y = { S: 0, N: Math.PI, E: Math.PI / 2, W: -Math.PI / 2 }[e.side];
-    L.facade.add(plane);
-  }
-}
-
-/** 北侧：卸货区货车、卸货平台 */
-function northYard(ctx, S, B) {
-  const y = -0.14;
-  const ld = S.loading;
-  B.get('ext').box((ld.x0 + ld.x1) / 2, y + 0.6, -41, ld.x1 - ld.x0, 1.2, 2, '#8d9298');
-  for (let x = ld.x0 + 1; x < ld.x1; x += 2.2) B.get('ext').box(x, y + 0.02, -46, 0.15, 0.03, 8, '#e7b416');
-  // 货车
-  const tx = 16, tz = -48.5;
-  B.get('ext').box(tx, y + 2.1, tz, 2.5, 2.8, 7.5, '#f2f2ee');
-  B.get('ext').box(tx, y + 1.5, tz - 4.9, 2.4, 2.2, 2.2, '#2f6fd6');
-  B.get('glass').box(tx, y + 2.0, tz - 6.0, 2.2, 0.9, 0.05, 0xffffff);
-  for (const [dx, dz] of [[-1.2, -4.8], [1.2, -4.8], [-1.2, 1.5], [1.2, 1.5], [-1.2, 3], [1.2, 3]]) B.get('ext').box(tx + dx, y + 0.45, tz + dz, 0.4, 0.9, 0.9, '#1d2023');
-  B.get('glow').box(tx, y + 3.6, tz, 2.0, 0.05, 6, '#ffd9a0');
-}
-
-/** 车库出入口：道闸、岗亭、限高架、P 灯箱 */
-function garageGates(ctx, S, B) {
-  const y = -0.14;
-  const gates = [
-    { x: -66, z: -49.5, label: '车库入口', sub: 'P · ENTRANCE', icon: 'parking', dir: 1 },
-    { x: 66, z: -49.5, label: '车库出口', sub: 'P · EXIT', icon: 'parking', dir: -1 },
+/** 未建地块：围挡 + 效果图广告牌 */
+function hoardings(ctx, S, B, G) {
+  const built = new Set(ctx.layout.buildings.map((b) => b.id));
+  const plans = [
+    { id: 'P2', title: '二期 · 星湾', sub: 'XINGWAN · 冰场 · IMAX · 天空跑道', a: '#0f3d5c', b: '#2f86b0' },
+    { id: 'P3', title: '三期 · 云澜里', sub: 'YUNLAN LANES · 开放街区', a: '#5a2d18', b: '#c0703a' },
+    { id: 'park', title: '中央公园 · 地铁站', sub: 'CENTRAL PARK · METRO', a: '#1f5133', b: '#4a9a50' },
   ];
-  for (const g of gates) {
-    // 限高架
-    for (const dz of [-3.2, 3.2]) B.get('extMetal').cyl(g.x, y, g.z + dz, 0.14, 3.0, '#e7b416', 8);
-    B.get('extMetal').box(g.x, y + 2.9, g.z, 0.3, 0.35, 6.8, '#e7b416');
-    for (let i = 0; i < 6; i++) B.get('ext').box(g.x + 0.16, y + 2.9, g.z - 2.75 + i * 1.1, 0.02, 0.36, 0.55, i % 2 ? '#1d2023' : '#e7b416');
-    // 道闸
-    const bx = g.x + g.dir * 3;
-    B.get('extMetal').box(bx, y + 0.55, g.z + 2.6, 0.45, 1.1, 0.45, '#d9dde0');
-    B.get('ext').box(bx, y + 1.05, g.z - 0.2, 0.12, 0.12, 5.4, '#e8352b');
-    for (let i = 0; i < 5; i++) B.get('ext').box(bx, y + 1.05, g.z - 2.4 + i * 1.1, 0.13, 0.13, 0.5, '#ffffff');
-    // 岗亭
-    B.get('ext').box(bx, y + 1.4, g.z + 4.8, 2.2, 2.8, 2.2, '#e9ecef');
-    B.get('glass').box(bx, y + 1.7, g.z + 3.69, 1.8, 1.2, 0.04, 0xffffff);
-    // P 灯箱
-    const lab = labelTexture(g.label, { bg: 'rgba(29,78,216,0.96)', fg: '#ffffff', icon: g.icon, sub: g.sub });
-    const mat = ctx.mats.screen(lab.texture, 1.0, 1.45);
-    const h = 2.2;
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * lab.aspect, h), mat);
-    const px = g.x - g.dir * 2;
-    plane.position.set(px, y + 5.2, g.z - 5.6);
-    plane.rotation.y = g.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
-    const back = plane.clone();
-    back.rotation.y += Math.PI;
-    ctx.site.group.add(plane, back);
-    B.get('extMetal').cyl(px, y, g.z - 5.6, 0.12, 4.0, '#3b4046', 8);
-  }
-  // 坡道敞开段的雨棚
-  for (const t of S.trenches) {
-    const cx = (t.x0 + t.x1) / 2, cz = (t.z0 + t.z1) / 2;
-    const near = cx < 0 ? t.x0 : t.x1;
-    const cover = 10;
-    const x0 = cx < 0 ? near : near - cover, x1 = cx < 0 ? near + cover : near;
-    B.get('glass').boxMinMax(x0, 4.2, t.z0 - 0.4, x1, 4.26, t.z1 + 0.4, 0xffffff);
-    B.get('extMetal').boxMinMax(x0, 4.26, t.z0 - 0.5, x1, 4.5, t.z0 - 0.3, COLORS.white);
-    B.get('extMetal').boxMinMax(x0, 4.26, t.z1 + 0.3, x1, 4.5, t.z1 + 0.5, COLORS.white);
-    for (let x = x0 + 1; x <= x1; x += 4.5) for (const z of [t.z0 - 0.4, t.z1 + 0.4]) B.get('extMetal').cyl(x, 0, z, 0.1, 4.2, COLORS.white, 8);
-    // 敞开段两侧护栏
-    for (const z of [t.z0 - 0.15, t.z1 + 0.15]) B.get('ext').boxMinMax(t.x0, -0.14, z - 0.15, t.x1, 1.05, z + 0.15, COLORS.concrete);
+  for (const p of plans) {
+    if (built.has(p.id) || (p.id === 'park' && S.park)) continue;
+    const r = S.plots.find((x) => x.id === p.id).rect;
+    // 围挡：沿靠路口的两条边
+    const edges = [];
+    edges.push([[r.x0 + 2, r.z0 > 0 ? r.z0 + 2 : r.z1 - 2], [r.x1 - 2, r.z0 > 0 ? r.z0 + 2 : r.z1 - 2]]);
+    edges.push([[r.x0 > 0 ? r.x0 + 2 : r.x1 - 2, r.z0 + 2], [r.x0 > 0 ? r.x0 + 2 : r.x1 - 2, r.z1 - 2]]);
+    for (const [p0, p1] of edges) {
+      const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+      const F = frame(p0[0], p0[1], Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) * DEG);
+      B.frame(F, () => {
+        for (let u = 0; u < len; u += 3) B.get('ext').box(u + 1.5, 1.1, 0, 2.96, 2.5, 0.12, Math.floor(u / 3) % 2 ? '#e9ecef' : '#d9dde0');
+        B.get('ext').box(len / 2, 2.42, 0, len, 0.12, 0.2, '#2f86b0');
+      });
+    }
+    const c = makeCanvas(1024, 384);
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 1024, 384);
+    grd.addColorStop(0, p.a);
+    grd.addColorStop(1, p.b);
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 1024, 384);
+    g.fillStyle = '#ffffff';
+    g.textBaseline = 'middle';
+    g.font = `800 112px ${FONT_CN}`;
+    g.fillText(p.title, 56, 150);
+    g.font = `700 40px ${FONT_EN}`;
+    g.fillText(p.sub, 60, 268);
+    g.font = `700 34px ${FONT_CN}`;
+    g.fillText('规划建设中', 60, 330);
+    const mat = ctx.mats.screen(canvasTexture(c, { clamp: true }), 0.9, 1.3);
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(24, 9), mat);
+    const cx = r.x0 > 0 ? r.x0 + 30 : r.x1 - 30, cz = r.z0 > 0 ? r.z0 + 22 : r.z1 - 22;
+    board.position.set(cx, 7.5, cz);
+    board.rotation.y = Math.atan2(-cx, -cz);
+    G.add(board);
+    B.get('extMetal').box(cx, 1.6, cz, 0.3, 3.2, 0.3, '#3b4046');
   }
 }
 
-/** 周边楼宇体块（带窗格贴图，夜间窗户发光） */
+/** 行道树、隔离带乔木、路灯、广场树阵 */
+function greenery(ctx, S, B, G) {
+  const trees = [];
+  const rand = rng(11);
+  const blocked = (x, z) =>
+    S.crossings.some((c) => pointInPoly([x, z], c.poly)) ||
+    S.driveways.some((d) => pointInPoly([x, z], d)) ||
+    ctx.layout.buildings.some((b) => pointInPoly([x, z], b.outline));
+  for (let x = -280; x <= 280; x += 12) {
+    if (Math.abs(x) < 20) continue;
+    for (const z of [-17, 17]) if (!blocked(x, z)) trees.push({ x: x + (rand() - 0.5), y: -0.14, z, s: 0.9 + rand() * 0.3 });
+    if (Math.abs(x) > 24) trees.push({ x: x + 6, y: 0.1, z: 0, s: 0.75 + rand() * 0.2 });
+  }
+  for (let z = -250; z <= 250; z += 12) {
+    if (Math.abs(z) < 24) continue;
+    for (const x of [-13, 13]) if (!blocked(x, z) && Math.abs(z + 170) > 10) trees.push({ x, y: -0.14, z: z + (rand() - 0.5), s: 0.85 + rand() * 0.3 });
+  }
+  addTrees(G, ctx.mats, trees, 21);
+  for (let x = -270; x <= 270; x += 26) {
+    if (Math.abs(x) < 24) continue;
+    streetLamp(B, x, -15, -0.14, [0, 1]);
+    streetLamp(B, x, 15, -0.14, [0, -1]);
+  }
+  for (let z = -250; z <= 250; z += 26) {
+    if (Math.abs(z) < 24) continue;
+    streetLamp(B, -15, z, -0.14, [1, 0]);
+    streetLamp(B, 15, z, -0.14, [-1, 0]);
+  }
+}
+
+/** 园区外周边楼宇（带窗格贴图，夜间窗户发光） */
 function context(ctx, G) {
   const rand = rng(42);
   const spots = [];
-  // 只放在北、东北、西北、西侧的远处，避免遮挡从东南方向看过来的主视角
-  for (const [x0, x1, z0, z1] of [[-460, -170, -420, -150], [170, 460, -420, -150], [-150, 150, -440, -170], [-470, -190, -120, 160], [190, 470, -140, 40]]) {
-    for (let i = 0; i < 5; i++) spots.push([x0 + rand() * (x1 - x0), z0 + rand() * (z1 - z0)]);
+  for (const [x0, x1, z0, z1, n] of [
+    [-760, -360, -760, -360, 8], [-320, 320, -780, -380, 9], [360, 760, -760, -360, 7],
+    [-780, -380, -300, 300, 8], [380, 780, -300, 140, 6], [-760, -360, 360, 760, 5], [-320, 320, 380, 780, 5], [360, 760, 360, 760, 4],
+  ]) {
+    for (let i = 0; i < n; i++) spots.push([x0 + rand() * (x1 - x0), z0 + rand() * (z1 - z0)]);
   }
-  const tints = ['#9fb3c2', '#a9b8c0', '#b4c1c9', '#93a7b8'];
+  const tints = ['#8fa6b8', '#a9b8c0', '#7f95a8', '#b9a98f', '#9aa79a', '#6f8296'];
   const mats = [];
-  for (let k = 0; k < 4; k++) {
+  for (let k = 0; k < tints.length; k++) {
     const tx = windowTextures(100 + k, { tint: tints[k] });
     const m = new THREE.MeshStandardMaterial({ map: tx.map, emissiveMap: tx.emissive, emissive: 0x000000, roughness: 0.55, metalness: 0.2 });
     ctx.mats.onNight((t) => m.emissive.setScalar(t * 0.5));
@@ -323,14 +431,12 @@ function context(ctx, G) {
   }
   const geo = new THREE.BoxGeometry(1, 1, 1);
   for (const [x, z] of spots) {
-    const w = 24 + rand() * 30, d = 22 + rand() * 26, h = 28 + rand() * 90;
-    const mat = mats[Math.floor(rand() * mats.length)];
-    const mesh = new THREE.Mesh(geo, mat);
+    const w = 26 + rand() * 34, d = 24 + rand() * 30, h = 24 + rand() * rand() * 120;
+    const mesh = new THREE.Mesh(geo, mats[Math.floor(rand() * mats.length)]);
     mesh.scale.set(w, h, d);
     mesh.position.set(x, h / 2 - 0.3, z);
     mesh.castShadow = false;
     mesh.receiveShadow = false;
-    // 按尺寸调整贴图平铺
     G.add(mesh);
   }
 }

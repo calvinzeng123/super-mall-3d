@@ -5,7 +5,7 @@ import { rng } from '../textures.js';
 
 const CLOTHES = ['#2f3a45', '#c0392b', '#2f6fd6', '#f2f2f0', '#e0a526', '#2e9c6a', '#7b4fd6', '#d1495b', '#8a6a4a', '#1f2328', '#f08a24', '#5bb4d6'];
 const SKIN = ['#f1d3b8', '#e8c1a0', '#d9a77f', '#c68e63'];
-const COUNT = { B2: 10, B1: 14, B1M: 70, '1F': 80, '2F': 70, '3F': 70, RF: 50 };
+const COUNT = { parking: 12, food: 70, retail: 75, roof: 45, street: 40 };
 
 export function buildPeople(ctx) {
   const bodyGeo = new THREE.CapsuleGeometry(0.21, 0.92, 3, 8).translate(0, 0.67, 0);
@@ -24,7 +24,7 @@ export function buildPeople(ctx) {
   for (const lv of ctx.layout.levels) {
     const paths = (ctx.paths.levels[lv.id] || {}).people || [];
     if (!paths.length) continue;
-    const n = COUNT[lv.id] || 20;
+    const n = COUNT[lv.kind] || 20;
     const bodies = new THREE.InstancedMesh(bodyGeo, bodyMat, n);
     const heads = new THREE.InstancedMesh(headGeo, headMat, n);
     bodies.castShadow = false;
@@ -64,7 +64,8 @@ export function buildPeople(ctx) {
       const step = acc;
       acc = 0;
       for (const w of walkers) {
-        if (!w.bodies.parent || !w.bodies.parent.parent || !w.bodies.parent.parent.visible) continue;
+        const grp = w.bodies.parent;
+        if (!grp || !grp.visible || !grp.parent || !grp.parent.visible || !grp.parent.parent.visible) continue;
         w.list.forEach((a, i) => {
           a.d += a.speed * a.dir * step;
           if (!a.loop && (a.d > a.pl.total || a.d < 0)) a.d = a.dir > 0 ? 0 : a.pl.total;

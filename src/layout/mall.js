@@ -163,9 +163,9 @@ export function buildMall(spec, site, picker) {
   const center = [(b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2];
   const radius = Math.max(...outline.map(([x, z]) => Math.hypot(x - center[0], z - center[1])));
   const building = {
-    id: bid, code: spec.code, name: spec.name, short: spec.short, en: spec.en, kind: 'mall', levels: allIds, outline, center, radius,
+    id: bid, code: spec.code, name: spec.name, short: spec.short, en: spec.en, kind: 'mall', levels: allIds, outline, center, radius, plot: spec.plot,
     rotundas: Object.values(rots).map((r) => ({ id: r.id, x: r.x, z: r.z, R: r.R, kitF: r.kitF })),
-    wings: wings.map((w) => ({ id: w.id, F: w.F, ua: w.ua, u0: w.u0, uEnd: w.uEnd, bandEnd: w.bandEnd, link: w.link, len: w.len, core: w.core, zone: w.zone, R: w.r.R })),
+    wings: wings.map((w) => ({ id: w.id, rot: w.rot, to: w.to || null, deg: w.deg, F: w.F, ua: w.ua, u0: w.u0, uEnd: w.uEnd, bandEnd: w.bandEnd, link: w.link, len: w.len, core: w.core, zone: w.zone, R: w.r.R })),
   };
   for (const lv of levels) delete lv.cfg;
   return { building, levels, escalators, elevators, stairs, entrances, ramps };

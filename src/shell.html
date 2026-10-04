@@ -1,4 +1,4 @@
-<title>云澜汇 3D 商场</title>
+<title>云澜汇园区 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
@@ -50,8 +50,18 @@ button { font: inherit; color: inherit; }
 .brand-en { font: 600 13px/1 var(--font-sign); letter-spacing: 0.18em; color: var(--accent); }
 .brand-floor { font-size: 12px; color: var(--ink-2); }
 
-/* 楼层牌 */
-.floors { position: absolute; left: 16px; top: 50%; transform: translateY(-46%); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+/* 分期切换 + 楼层牌 */
+.floors { position: absolute; left: 16px; top: 50%; transform: translateY(-46%); padding: 6px; display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 200px); }
+.phases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; }
+.phase { all: unset; box-sizing: border-box; display: grid; gap: 1px; padding: 6px 8px; border-radius: 7px; cursor: pointer; background: var(--chip); }
+.phase b { font: 600 14px/1.1 var(--font-ui); }
+.phase span { font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+.phase:hover { background: var(--line); }
+.phase:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.phase[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.phase[aria-pressed="true"] span { color: var(--accent-ink); opacity: 0.8; }
+.phase:disabled { cursor: default; opacity: 0.45; }
+.floor-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
 .floor { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 46px 1fr; align-items: center; gap: 10px; width: 156px; padding: 4px 10px 4px 4px; border-radius: 7px; cursor: pointer; color: var(--ink); }
 .floor:hover { background: var(--chip); }
 .floor:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -128,7 +138,11 @@ button { font: inherit; color: inherit; }
   .tool span { display: none; }
   .tool { padding: 0 9px; }
   .tool.dir-btn { display: inline-flex; }
-  .floors { top: auto; transform: none; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; flex-direction: row; overflow-x: auto; }
+  .floors { top: auto; transform: none; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; flex-direction: row; overflow-x: auto; max-height: none; }
+  .phases { display: flex; flex: none; }
+  .phase { padding: 6px 8px; }
+  .phase span { display: none; }
+  .floor-list { flex-direction: row; overflow: visible; }
   .floor { width: auto; grid-template-columns: 44px; padding: 3px; }
   .fl-name { display: none; }
   .directory { left: 12px; right: 12px; width: auto; top: 30%; bottom: calc(124px + env(safe-area-inset-bottom, 0px)); }
@@ -150,14 +164,17 @@ button { font: inherit; color: inherit; }
   <canvas id="stage" tabindex="0" aria-label="云澜汇 3D 商场场景"></canvas>
 
   <header class="brand panel">
-    <div class="brand-row"><div class="brand-mark">云澜汇</div><div class="brand-en">YUNLAN MALL</div></div>
-    <div class="brand-floor" id="floorInfo">全楼 · 地上 3 层 + 夹层 + 地下 2 层 + 天台</div>
+    <div class="brand-row"><div class="brand-mark">云澜汇</div><div class="brand-en">YUNLAN CAMPUS</div></div>
+    <div class="brand-floor" id="floorInfo">园区总览</div>
   </header>
 
-  <nav class="floors panel" id="floorBar" aria-label="楼层选择"></nav>
+  <nav class="floors panel" id="floorBar" aria-label="分期与楼层选择">
+    <div class="phases" id="phaseTabs" role="group" aria-label="分期"></div>
+    <div class="floor-list" id="floorList" role="group" aria-label="楼层"></div>
+  </nav>
 
   <div class="toolbar panel" id="toolbar" role="toolbar" aria-label="视图工具">
-    <button class="tool" data-act="explode" aria-pressed="false" title="把各层拉开同时看">
+    <button class="tool" data-act="explode" aria-pressed="false" title="把当前这一期的各层拉开同时看">
       <svg viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 17 9 4.5 9-4.5"/></svg><span>爆炸视图</span>
     </button>
     <button class="tool" data-act="flows" aria-pressed="false" title="显示人流、车流、货流">
@@ -172,7 +189,7 @@ button { font: inherit; color: inherit; }
     <button class="tool" data-act="tour" aria-pressed="false" title="沿顾客动线自动游览">
       <svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5-12-7.5Z"/></svg><span>导览</span>
     </button>
-    <button class="tool" data-act="reset" title="回到全景视角">
+    <button class="tool" data-act="reset" title="回到园区总览">
       <svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg><span>复位</span>
     </button>
     <button class="tool dir-btn" data-act="directory" aria-pressed="false" title="店铺目录">
@@ -183,7 +200,7 @@ button { font: inherit; color: inherit; }
   <aside class="directory panel collapsed" id="directory" aria-label="店铺目录">
     <div class="dir-head">
       <div class="dir-badge" id="dirBadge">全</div>
-      <div><div class="dir-title" id="dirTitle">全楼导览</div><div class="dir-theme" id="dirTheme">选择左侧楼层查看该层店铺</div></div>
+      <div><div class="dir-title" id="dirTitle">园区导览</div><div class="dir-theme" id="dirTheme">选择左侧分期或楼层查看店铺</div></div>
     </div>
     <div class="dir-search"><input id="search" type="search" placeholder="搜索店铺、美食、设施" autocomplete="off" aria-label="搜索店铺"></div>
     <div class="dir-facts" id="dirFacts"></div>
@@ -195,12 +212,12 @@ button { font: inherit; color: inherit; }
     <div class="legend-row"><span class="legend-swatch" style="background:#f08a24"></span>车流动线</div>
     <div class="legend-row"><span class="legend-swatch" style="background:#8b5cf6"></span>货流动线</div>
   </div>
-  <div class="hint panel" id="hint">拖动旋转 · 滚轮缩放 · 右键平移 · 点店铺查看</div>
+  <div class="hint panel" id="hint">拖动旋转 · 滚轮缩放 · 右键平移 · 点建筑进入 · 点店铺查看</div>
   <div class="tooltip panel" id="tooltip" hidden></div>
   <div class="tour-bar panel" id="tourBar" hidden><span class="step" id="tourStep">南广场</span><button type="button" id="tourStop">退出导览</button></div>
 
   <div class="loading" id="loading">
-    <div class="mark">云澜汇</div><div class="en">YUNLAN MALL</div>
+    <div class="mark">云澜汇</div><div class="en">YUNLAN CAMPUS</div>
     <div class="bar"><i id="loadingBar"></i></div>
     <div id="loadingText">正在加载 3D 引擎…</div>
   </div>

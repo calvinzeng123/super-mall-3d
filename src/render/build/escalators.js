@@ -32,7 +32,8 @@ export function buildEscalators(ctx) {
     const Xh = new THREE.Vector3(ux, 0, uz);
     const Yh = new THREE.Vector3(0, 1, 0);
     const at = (s, t, y) => new THREE.Vector3(e.bottom.x + ux * s + px * t, y, e.bottom.z + uz * s + pz * t);
-    const trussCol = e.from === '1F' || e.from === 'B1M' ? '#b9a27a' : '#c3c9cf';
+    const short = ctx.lvById[e.from].short;
+    const trussCol = short === '1F' || short === 'B1M' ? '#b9a27a' : '#c3c9cf';
     const midY = (y0 + y1) / 2;
 
     // 桁架：斜段 + 上下水平段（外包装饰板）

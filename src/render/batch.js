@@ -51,10 +51,21 @@ export function tpl(name) {
   return TEMPLATES[name];
 }
 
+/** 局部坐标系 frame → 变换矩阵（平移到原点 + 绕 Y 旋转 −a，使局部 u 轴对准世界方向） */
+export function frameMatrix(F) {
+  const m = new THREE.Matrix4().makeRotationY(-F.a);
+  m.setPosition(F.ox, 0, F.oz);
+  return m;
+}
+
+const _mf = new THREE.Matrix4();
+
 export class Batcher {
-  constructor() {
+  constructor(owner = null) {
     this.cap = 0;
     this.n = 0;
+    this.owner = owner;
+    this.xf = null;
     this.grow(8192);
   }
 
@@ -74,6 +85,8 @@ export class Batcher {
 
   /** 写入一个模板，按矩阵变换，颜色可为 THREE.Color / 十六进制数 / CSS 字符串 */
   push(t, m, color, uvMap) {
+    const xf = this.owner ? this.owner.xf : this.xf;
+    if (xf) m = _mf.multiplyMatrices(xf, m);
     if (this.n + t.count > this.cap) this.grow(this.n + t.count);
     _n.getNormalMatrix(m);
     const e = m.elements;
@@ -191,6 +204,19 @@ export class SignBatch {
   constructor() {
     this.b = new Batcher();
   }
+  /** 之后的 place 都按局部坐标系 F 解释（null 恢复世界坐标） */
+  setFrame(F) {
+    this.b.xf = F ? frameMatrix(F) : null;
+    return this;
+  }
+  /** 按世界法线 (nx,nz) 放置招牌 */
+  placeN(x, y, z, w, h, nx, nz, uv) {
+    if (!uv) return;
+    _sq.setFromAxisAngle(Y, Math.atan2(nx, nz));
+    _sp.set(x, y, z);
+    _ss.set(w, h, 1);
+    this.b.shape('plane', _sp, _sq, _ss, 0xffffff, uv);
+  }
   /** 中心 (x,y,z)，宽 w 高 h，朝向 side（外法线），uv=[u0,v0,u1,v1] */
   place(x, y, z, w, h, side, uv) {
     if (!uv) return;
@@ -199,17 +225,16 @@ export class SignBatch {
     _ss.set(w, h, 1);
     this.b.shape('plane', _sp, _sq, _ss, 0xffffff, uv);
   }
-  /** 贴在建筑外立面（x∈[-60,60], z∈[-40,40]）上的招牌 */
-  quad(side, along, y, w, h, uv, off = 0.36) {
-    if (side === 'S') this.place(along, y, 40 + off, w, h, side, uv);
-    else if (side === 'N') this.place(along, y, -40 - off, w, h, side, uv);
-    else if (side === 'E') this.place(60 + off, y, along, w, h, side, uv);
-    else this.place(-60 - off, y, along, w, h, side, uv);
-  }
   flush(group, material) {
     const m = this.b.mesh(material, { shadow: false, receive: false, name: 'signs' });
     if (m) group.add(m);
     this.b = new Batcher();
+  }
+  /** 与 BatchSet.frame 相同：在 F 内执行 fn 后恢复 */
+  frame(F, fn) {
+    const prev = this.b.xf;
+    this.setFrame(F);
+    try { fn(); } finally { this.b.xf = prev; }
   }
 }
 
@@ -218,10 +243,22 @@ export class BatchSet {
   constructor(materials) {
     this.materials = materials;
     this.sets = {};
+    this.xf = null;
   }
   get(key) {
-    if (!this.sets[key]) this.sets[key] = new Batcher();
+    if (!this.sets[key]) this.sets[key] = new Batcher(this);
     return this.sets[key];
+  }
+  /** 之后写入的几何都按局部坐标系 F 解释（null 恢复世界坐标） */
+  setFrame(F) {
+    this.xf = F ? frameMatrix(F) : null;
+    return this;
+  }
+  /** 在 F 内执行 fn 后恢复原 frame */
+  frame(F, fn) {
+    const prev = this.xf;
+    this.setFrame(F);
+    try { fn(); } finally { this.xf = prev; }
   }
   /** 把所有批次合成网格加入 group */
   flush(group, opts = {}) {

@@ -14,7 +14,7 @@ const V1 = {
 };
 
 export const P1 = {
-  id: 'P1', code: 'A', name: '一期 · 云澜汇', short: '一期', en: 'YUNLAN MALL',
+  id: 'P1', code: 'A', name: '一期 · 云澜汇', short: '一期', en: 'YUNLAN MALL', plot: rect(-286, -256, -16, -20),
   rotundas: [{ id: 'C', x: -106, z: -106, R: 34, kitDeg: 45, glass: ['B1M', '1F', '2F', '3F'] }],
   wings: [
     { id: 'SE', rot: 'C', deg: 45, uEnd: 84, core: { band: -1, u: 51 }, zone: 'A', name: '东南翼' },

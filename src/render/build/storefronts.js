@@ -1,7 +1,7 @@
 // 店面：玻璃橱窗 + 门洞 + 门头招牌；美食档口为开敞柜台；B1M 西翼为"云澜老街"木门脸、瓦檐与红灯笼。
 import * as THREE from 'three';
 import { NORMAL } from '../../layout/geom.js';
-import { THEME } from '../theme.js';
+import { themeOf } from '../theme.js';
 import { clearHeight } from './shell.js';
 
 export function frontFrame(f) {
@@ -21,14 +21,11 @@ export function shade(hex, k) {
   return k < 0 ? c.lerp(new THREE.Color('#000000'), -k) : c.lerp(new THREE.Color('#ffffff'), k);
 }
 
+/** 店面样式：布局数据里的 style 为准；美食层的档口与小吃改为开敞柜台 */
 export function storeStyle(lv, u) {
   const cat = u.brand.cat;
-  if (lv.id === 'B1M') {
-    const cx = u.rects[0].x0 + u.rects[0].x1;
-    if (cx < -46 && ['snack', 'tea', 'restaurant'].includes(cat)) return 'oldstreet';
-    if (cat === 'supermarket') return 'market';
-    if (['food', 'snack'].includes(cat)) return 'stall';
-  }
+  if (u.style && u.style !== 'glass') return u.style;
+  if (lv.kind === 'food' && ['food', 'snack'].includes(cat)) return 'stall';
   if (cat === 'cinema') return 'cinema';
   return 'glass';
 }
@@ -40,7 +37,10 @@ export function buildStorefronts(ctx) {
     const atlas = ctx.atlas[lv.id];
     for (const u of lv.units) {
       const style = storeStyle(lv, u);
-      for (const f of u.fronts) front(L.batch, L.signs, lv, u, f, atlas.cell(u.id), style);
+      if (style === 'bar') continue;
+      L.batch.frame(u.frame, () => L.signs.frame(u.frame, () => {
+        for (const f of u.fronts) front(L.batch, L.signs, lv, u, f, atlas.cell(u.id), style);
+      }));
     }
   }
 }
@@ -57,7 +57,7 @@ function front(B, S, lv, u, f, cell, style) {
     const [x, z] = F.at(uu, v);
     B.get(key).box(x, y, z, su, sy, sv, color, F.ang);
   };
-  const frameCol = style === 'oldstreet' ? '#4a2c1a' : lv.id === '1F' ? '#a88a55' : '#3f454b';
+  const frameCol = style === 'oldstreet' ? '#4a2c1a' : lv.short === '1F' ? '#a88a55' : '#3f454b';
 
   if (style === 'glass' || style === 'cinema' || style === 'market') {
     const doorW = F.len >= 5 ? Math.min(3.2, F.len * 0.3) : F.len >= 3 ? 1.8 : 0;
@@ -105,7 +105,7 @@ function front(B, S, lv, u, f, cell, style) {
   // 门头
   const fascia = style === 'oldstreet' ? '#3b2416' : shade(brand.bg, brand.bg.toLowerCase() === '#ffffff' ? -0.06 : -0.12);
   box('satin', F.len / 2, 0.05, y0 + fy, F.len + 0.02, 0.3, fasciaTop - glassTop, fascia);
-  if (H > fasciaTop + 0.1) box('matte', F.len / 2, 0.08, y0 + (fasciaTop + H) / 2, F.len, 0.24, H - fasciaTop, THEME[lv.id].wall);
+  if (H > fasciaTop + 0.1) box('matte', F.len / 2, 0.08, y0 + (fasciaTop + H) / 2, F.len, 0.24, H - fasciaTop, themeOf(lv).wall);
   const maxW = F.len >= 14 ? 12 : 6.4;
   let w = Math.min(F.len * 0.78, maxW);
   let h = w / 4;

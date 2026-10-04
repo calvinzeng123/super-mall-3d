@@ -1,9 +1,8 @@
 // 用房：客梯核（电梯门、楼层显示）、货梯、楼梯间（梯段 + 安全出口灯）、卫生间（男/女/无障碍/母婴）、
 // 设备房、停车层电梯厅玻璃门斗与 B1 扶梯厅。
 import { NORMAL, rw, rd, rcx, rcz } from '../../layout/geom.js';
-import { THEME, COLORS } from '../theme.js';
+import { themeOf, COLORS } from '../theme.js';
 import { clearHeight } from './shell.js';
-import { CORE_W, CORE_E, SERVICE } from '../../layout/constants.js';
 
 /** 以一段门（或墙）为基准的局部坐标：u 沿门所在墙，v 向房间内部 */
 function wallFrame(rect, side) {
@@ -32,55 +31,47 @@ export function buildRooms(ctx) {
     const H = clearHeight(lv);
     const roof = lv.kind === 'roof';
     const hh = roof ? 4.2 : H;
+    const lifts = layout.elevators.filter((e) => e.type === 'passenger' && e.serves.includes(lv.id));
     for (const r of lv.rooms) {
-      if (r.type === 'core') coreShafts(B, L, atlas, lv, r, y0, hh);
-      else if (r.type === 'freight') freight(B, L, atlas, r, y0, hh);
-      else if (r.type === 'stair') stair(B, L, atlas, r, y0, roof ? 3.6 : H, roof);
-      else if (r.type === 'wc') restroom(B, L, atlas, lv, r, y0, roof ? 3.6 : H, roof);
-      else if (r.type === 'equip') {
-        const g = r.rects[0];
-        B.get('matte').box(rcx(g), y0 + H / 2, rcz(g), rw(g) - 0.05, H, rd(g) - 0.05, '#b4b9be');
-        B.get('matte').box(rcx(g), y0 + H + 0.015, rcz(g), rw(g), 0.03, rd(g), '#6b7178');
-      }
+      B.frame(r.frame, () => L.signs.frame(r.frame, () => {
+        if (r.type === 'core') coreShafts(B, lv, r, y0, hh, lifts.filter((e) => e.frame.id === r.frame.id));
+        else if (r.type === 'stair') stair(B, L, atlas, r, y0, roof ? 3.6 : H, roof);
+        else if (r.type === 'wc') restroom(B, L, atlas, lv, r, y0, roof ? 3.6 : H, roof);
+        else if (r.type === 'equip') {
+          const g = r.rects[0];
+          B.get('matte').box(rcx(g), y0 + H / 2, rcz(g), rw(g) - 0.05, H, rd(g) - 0.05, '#b4b9be');
+          B.get('matte').box(rcx(g), y0 + H + 0.015, rcz(g), rw(g), 0.03, rd(g), '#6b7178');
+        }
+      }));
     }
-    // 电梯厅地面、导视
+    // 电梯厅地面
     for (const w of lv.walk) {
-      if (w.kind === 'lobby' || w.kind === 'service' || (w.kind === 'eschall' && lv.kind === 'parking')) {
-        const g = w.rect;
-        B.get('satin').box(rcx(g), y0 + 0.01, rcz(g), rw(g) - 0.1, 0.02, rd(g) - 0.1, lv.kind === 'parking' ? '#d9dde1' : '#cfc6b8');
-      }
+      if (!w.rect || !(w.kind === 'lobby' || w.kind === 'service' || w.kind === 'eschall')) continue;
+      const g = w.rect;
+      B.frame(w.frame, () => B.get('satin').box(rcx(g), y0 + 0.01, rcz(g), rw(g) - 0.1, 0.02, rd(g) - 0.1, lv.kind === 'parking' ? '#d9dde1' : '#cfc6b8'));
     }
-    lobbySigns(L, atlas, lv, y0, H);
-    if (lv.kind === 'parking') parkingVestibules(B, L, atlas, lv, y0, H);
+    lobbySigns(L, atlas, lv, y0, H, lifts);
+    if (lv.kind === 'parking') parkingVestibules(B, L, atlas, lv, y0, H, lifts);
   }
 }
 
-function coreShafts(B, L, atlas, lv, r, y0, H) {
+function coreShafts(B, lv, r, y0, H, lifts) {
   const g = r.rects[0];
-  const clad = lv.kind === 'parking' ? '#c3c8cc' : THEME[lv.id].column;
+  const clad = lv.kind === 'parking' ? '#c3c8cc' : themeOf(lv).column;
   B.get('satin').box(rcx(g), y0 + H / 2, rcz(g), rw(g), H, rd(g), clad);
   B.get('matte').box(rcx(g), y0 + H + 0.015, rcz(g), rw(g), 0.03, rd(g), '#5d5650');
-  // 电梯门（朝电梯厅）
-  const east = g.x1 < 0; // 西核：门在东侧 x1；东核：门在西侧 x0
-  const fx = east ? g.x1 + 0.03 : g.x0 - 0.03;
-  for (const zc of east ? [-32.1, -29.5, -26.9] : [26.9, 29.5, 32.1]) {
-    B.get('metal').box(fx, y0 + 1.15, zc, 0.04, 2.3, 1.5, '#5f666d');
-    B.get('metal').box(fx + (east ? 0.01 : -0.01), y0 + 1.1, zc, 0.04, 2.2, 1.2, '#c9ced3');
-    B.get('metal').box(fx + (east ? 0.012 : -0.012), y0 + 1.1, zc, 0.045, 2.2, 0.02, '#8a9198');
-    B.get('glow').box(fx + (east ? 0.02 : -0.02), y0 + 2.55, zc, 0.03, 0.18, 0.5, '#ff7a45');
-    B.get('glow').box(fx + (east ? 0.02 : -0.02), y0 + 1.2, zc + (east ? 1.0 : -1.0), 0.03, 0.22, 0.1, '#7fd3ff');
+  // 电梯门（在电梯的门所在面，局部坐标）
+  for (const e of lifts) {
+    if (e.lu < g.x0 || e.lu > g.x1 || e.lv < g.z0 || e.lv > g.z1) continue;
+    const [nx, nz] = NORMAL[e.door];
+    const alongU = e.door === 'N' || e.door === 'S';
+    const fx = e.lu + nx * (e.d / 2 + 0.03), fz = e.lv + nz * (e.d / 2 + 0.03);
+    const box = (k, y, w, h, color, o = 0) => B.get(k).box(fx + nx * o, y, fz + nz * o, alongU ? w : 0.04, h, alongU ? 0.04 : w, color);
+    box('metal', y0 + 1.15, 1.5, 2.3, '#5f666d');
+    box('metal', y0 + 1.1, 1.2, 2.2, '#c9ced3', 0.01);
+    box('metal', y0 + 1.1, 0.02, 2.2, '#8a9198', 0.012);
+    box('glow', y0 + 2.55, 0.5, 0.18, '#ff7a45', 0.02);
   }
-  void L; void atlas;
-}
-
-function freight(B, L, atlas, r, y0, H) {
-  const g = r.rects[0];
-  B.get('matte').box(rcx(g), y0 + H / 2, rcz(g), rw(g), H, rd(g), '#b9bec3');
-  B.get('matte').box(rcx(g), y0 + H + 0.015, rcz(g), rw(g), 0.03, rd(g), '#5d5650');
-  B.get('metal').box(g.x1 + 0.03, y0 + 1.35, -29, 0.05, 2.7, 2.4, '#7d848b');
-  B.get('metal').box(g.x1 + 0.04, y0 + 1.35, -29, 0.05, 2.6, 0.03, '#4a5056');
-  B.get('glow').box(g.x1 + 0.05, y0 + 2.9, -29, 0.03, 0.18, 0.6, '#ff7a45');
-  void L; void atlas;
 }
 
 /** 楼梯：两跑楼梯 + 平台 + 门上方安全出口灯 */
@@ -181,34 +172,47 @@ function restroom(B, L, atlas, lv, r, y0, H, roof) {
   void lv;
 }
 
-/** 电梯厅、货梯厅入口的导视牌 */
-function lobbySigns(L, atlas, lv, y0, H) {
+/** 客梯厅导视牌：挂在电梯门前方的商业街 / 步行脊上空 */
+function lobbySigns(L, atlas, lv, y0, H, lifts) {
   const y = y0 + Math.min(3.35, H - 0.4);
-  L.signs.place(-30.5, y, -24 + 0.12, 2.4, 0.6, 'S', atlas.cell('wf-lift'));
-  L.signs.place(30.5, y, 24 - 0.12, 2.4, 0.6, 'N', atlas.cell('wf-lift'));
-  if (lv.rooms.some((r) => r.type === 'freight')) L.signs.place((SERVICE.lobby.x0 + SERVICE.lobby.x1) / 2, y, -24 + 0.12, 2.0, 0.5, 'S', atlas.cell('wf-freight'));
-  void CORE_W; void CORE_E;
+  const seen = new Set();
+  for (const e of lifts) {
+    const key = `${e.frame.id}:${Math.round(e.lu / 8)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const [nx, nz] = NORMAL[e.door];
+    const mates = lifts.filter((o) => o.frame.id === e.frame.id && Math.abs(o.lv - e.lv) < 0.1 && Math.abs(o.lu - e.lu) < 6);
+    const cu = mates.reduce((a, o) => a + o.lu, 0) / mates.length;
+    const sx = cu + nx * (e.d / 2 + 0.6), sz = e.lv + nz * (e.d / 2 + 0.6);
+    L.signs.frame(e.frame, () => L.signs.place(sx, y, sz, 2.4, 0.6, e.door, atlas.cell('wf-lift')));
+    L.batch.frame(e.frame, () => L.batch.get('metal').box(sx, y + 0.55, sz, 0.04, 0.5, 0.04, '#4a5056'));
+  }
 }
 
-/** 停车层：电梯厅与扶梯厅的玻璃门斗 */
-function parkingVestibules(B, L, atlas, lv, y0, H) {
-  const fronts = [
-    { x0: -33, x1: -28, z: -24, side: 'S' },
-    { x0: 28, x1: 33, z: 24, side: 'N' },
-  ];
-  if (lv.id === 'B1') fronts.push({ x0: -20, x1: -6, z: -24, side: 'S', esc: true });
-  for (const f of fronts) {
-    const len = f.x1 - f.x0;
-    const n = Math.round(len / 1.4);
-    for (let i = 0; i < n; i++) {
-      const a = f.x0 + (i + 0.5) * (len / n);
-      const mid = (f.x0 + f.x1) / 2;
-      if (Math.abs(a - mid) < 1.0) continue;
-      B.get('glass').box(a, y0 + 1.4, f.z, len / n - 0.05, 2.8, 0.04, 0xffffff);
-    }
-    B.get('metal').box((f.x0 + f.x1) / 2, y0 + 2.85, f.z, len, 0.12, 0.12, '#4a5056');
-    B.get('matte').box((f.x0 + f.x1) / 2, y0 + (2.9 + H) / 2, f.z, len, H - 2.9, 0.2, '#d4d8dc');
-    const sign = f.esc ? 'wf-food' : 'wf-lift';
-    L.signs.place((f.x0 + f.x1) / 2, y0 + 3.15, f.z + (f.side === 'S' ? 0.13 : -0.13), Math.min(len - 0.4, 2.8), Math.min(len - 0.4, 2.8) / 4, f.side, atlas.cell(sign));
+/** 停车层：电梯门前的玻璃门斗 */
+function parkingVestibules(B, L, atlas, lv, y0, H, lifts) {
+  const seen = new Set();
+  for (const e of lifts) {
+    const key = `${e.frame.id}:${Math.round(e.lu / 8)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const mates = lifts.filter((o) => o.frame.id === e.frame.id && Math.abs(o.lv - e.lv) < 0.1 && Math.abs(o.lu - e.lu) < 6);
+    const u0 = Math.min(...mates.map((o) => o.lu)) - 2.2, u1 = Math.max(...mates.map((o) => o.lu)) + 2.2;
+    const nz = NORMAL[e.door][1];
+    const face = e.lv + nz * (e.d / 2);
+    const v = face + nz * 2.4;
+    B.frame(e.frame, () => {
+      const len = u1 - u0;
+      const n = Math.round(len / 1.4);
+      for (let i = 0; i < n; i++) {
+        const a = u0 + (i + 0.5) * (len / n);
+        if (Math.abs(a - (u0 + u1) / 2) < 1.0) continue;
+        B.get('glass').box(a, y0 + 1.4, v, len / n - 0.05, 2.8, 0.04, 0xffffff);
+      }
+      for (const a of [u0, u1]) B.get('glass').box(a, y0 + 1.4, (v + face) / 2, 0.04, 2.8, 2.4, 0xffffff);
+      B.get('metal').box((u0 + u1) / 2, y0 + 2.85, v, len, 0.12, 0.12, '#4a5056');
+      B.get('matte').box((u0 + u1) / 2, y0 + (2.9 + H) / 2, v, len, H - 2.9, 0.2, '#d4d8dc');
+    });
+    L.signs.frame(e.frame, () => L.signs.place((u0 + u1) / 2, y0 + 3.15, v + nz * 0.13, 2.8, 0.7, e.door, atlas.cell('wf-lift')));
   }
 }

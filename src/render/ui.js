@@ -1,16 +1,45 @@
-// 界面：楼层牌、工具条、店铺目录与搜索、悬停提示。
+// 界面：分期切换（园区 / 一期 / 二期 / 三期）、所选期的楼层牌、工具条、全园区店铺目录与搜索、悬停提示。
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+const PHASES = [
+  { id: null, label: '园区', sub: '总览' },
+  { id: 'P1', label: '一期', sub: '云澜汇' },
+  { id: 'P2', label: '二期', sub: '星湾' },
+  { id: 'P3', label: '三期', sub: '云澜里' },
+];
+
 export function createUI(app, layout) {
-  const levels = [...layout.levels].reverse();
-  const floorBar = $('floorBar');
-  floorBar.innerHTML =
-    `<button class="floor all" data-level="" aria-pressed="true"><span class="fl-num">全楼</span><span class="fl-name">整体外观</span></button>` +
-    levels
-      .map((lv) => `<button class="floor" data-level="${lv.id}" aria-pressed="false" style="--fc:${lv.theme.accent}"><span class="fl-num">${lv.short}</span><span class="fl-name">${esc(lv.theme.label.split(' · ')[0])}</span></button>`)
-      .join('');
-  floorBar.addEventListener('click', (e) => {
+  const built = new Set(layout.buildings.map((b) => b.id));
+  const bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
+  const lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
+  const phaseTabs = $('phaseTabs');
+  const floorList = $('floorList');
+  phaseTabs.innerHTML = PHASES.map((p) => {
+    const ok = !p.id || built.has(p.id);
+    return `<button class="phase" data-building="${p.id || ''}" aria-pressed="false"${ok ? '' : ' disabled'}><b>${p.label}</b><span>${ok ? p.sub : '规划中'}</span></button>`;
+  }).join('');
+  phaseTabs.addEventListener('click', (e) => {
+    const b = e.target.closest('.phase');
+    if (!b || b.disabled) return;
+    app.setBuilding(b.dataset.building || null);
+  });
+  let floorsFor = undefined;
+  function renderFloors(bid) {
+    if (floorsFor === bid) return;
+    floorsFor = bid;
+    if (!bid) {
+      floorList.innerHTML = '';
+      floorList.hidden = true;
+      return;
+    }
+    floorList.hidden = false;
+    const levels = layout.levels.filter((l) => l.building === bid).reverse();
+    floorList.innerHTML =
+      `<button class="floor all" data-level="" aria-pressed="true"><span class="fl-num">全楼</span><span class="fl-name">${esc(bById[bid].short)}外观</span></button>` +
+      levels.map((lv) => `<button class="floor" data-level="${lv.id}" aria-pressed="false" style="--fc:${lv.theme.accent}"><span class="fl-num">${lv.short}</span><span class="fl-name">${esc(lv.theme.label.split(' · ')[0])}</span></button>`).join('');
+  }
+  floorList.addEventListener('click', (e) => {
     const b = e.target.closest('.floor');
     if (!b) return;
     app.setFocus(b.dataset.level || null);
@@ -41,53 +70,66 @@ export function createUI(app, layout) {
   const search = $('search');
   const unitsById = new Map(layout.levels.flatMap((l) => l.units.map((u) => [u.id, u])));
   const catColor = (cat) => (layout.categories[cat] || {}).color || '#64748b';
-  const facts = (lv) => {
-    if (!lv) {
-      const units = layout.levels.reduce((n, l) => n + l.units.length, 0);
-      const stalls = layout.levels.reduce((n, l) => n + (l.parking ? l.parking.stalls.length : 0), 0);
-      return [['店铺', units], ['扶梯', layout.escalators.length], ['电梯', layout.elevators.length], ['人行入口', layout.entrances.length], ['车位', stalls]];
+  const stallsOf = (levels) => levels.reduce((n, l) => n + (l.parking ? l.parking.stalls.length : 0), 0);
+  const facts = (bid, lv) => {
+    if (lv) {
+      const esc2 = layout.escalators.filter((e) => e.from === lv.id || e.to === lv.id).length;
+      const lifts = layout.elevators.filter((e) => e.serves.includes(lv.id)).length;
+      const wc = lv.rooms.filter((r) => r.type === 'wc').length;
+      const out = [['扶梯', esc2], ['电梯', lifts], ['洗手间', wc]];
+      if (lv.units.length) out.unshift(['店铺', lv.units.length]);
+      if (lv.parking) out.push(['车位', lv.parking.stalls.length]);
+      const ents = layout.entrances.filter((e) => e.level === lv.id).length;
+      if (ents) out.push(['入口', ents]);
+      return out;
     }
-    const esc2 = layout.escalators.filter((e) => e.from === lv.id || e.to === lv.id).length;
-    const lifts = layout.elevators.filter((e) => e.serves.includes(lv.id)).length;
-    const wc = lv.rooms.filter((r) => r.type === 'wc').length;
-    const out = [['扶梯', esc2], ['电梯', lifts], ['洗手间', wc]];
-    if (lv.units.length) out.unshift(['店铺', lv.units.length]);
-    if (lv.parking) out.push(['车位', lv.parking.stalls.length]);
-    if (lv.id === '1F') out.push(['人行入口', layout.entrances.length]);
+    const levels = bid ? layout.levels.filter((l) => l.building === bid) : layout.levels;
+    const ids = new Set(levels.map((l) => l.id));
+    const units = levels.reduce((n, l) => n + l.units.length, 0);
+    const out = [['店铺', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', layout.elevators.filter((e) => ids.has(e.serves[0])).length],
+      ['人行入口', layout.entrances.filter((e) => ids.has(e.level) && e.to === 'site').length], ['车位', stallsOf(levels)]];
+    if (!bid) out.unshift(['已建', `${layout.buildings.length} 期`]);
     return out;
   };
   function renderDirectory() {
     const s = app.state;
-    const lv = s.focus ? layout.levels.find((l) => l.id === s.focus) : null;
+    const lv = s.focus ? lvById[s.focus] : null;
+    const b = s.building ? bById[s.building] : null;
     const q = search.value.trim().toLowerCase();
-    $('dirBadge').textContent = lv ? lv.short : '全';
+    $('dirBadge').textContent = lv ? lv.short : b ? b.short.replace('期', '') : '园';
     $('dirBadge').style.setProperty('--fc', lv ? lv.theme.accent : 'var(--accent)');
-    $('dirTitle').textContent = lv ? lv.name : '全楼导览';
-    $('dirTheme').textContent = lv ? lv.theme.label : '7 个楼层 · 点击楼层或店铺查看';
-    $('dirFacts').innerHTML = facts(lv).map(([k, v]) => `<span class="fact">${k} <b>${v}</b></span>`).join('');
+    $('dirTitle').textContent = lv ? `${b.short} · ${lv.name}` : b ? b.name : '园区导览';
+    $('dirTheme').textContent = lv ? lv.theme.label : b ? `${layout.levels.filter((l) => l.building === b.id).length} 个楼层 · 点击楼层或店铺查看` : '三期规划 · 点击分期、建筑或店铺查看';
+    $('dirFacts').innerHTML = facts(s.building, lv).map(([k, v]) => `<span class="fact">${k} <b>${v}</b></span>`).join('');
     const pool = q
       ? layout.levels.flatMap((l) => l.units).filter((u) => `${u.brand.name} ${u.brand.en} ${u.brand.catLabel} ${u.code}`.toLowerCase().includes(q))
-      : lv
-        ? lv.units
-        : [];
-    const groups = new Map();
-    for (const u of pool) {
-      const key = q ? layout.levels.find((l) => l.id === u.level).name : u.brand.catLabel;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(u);
-    }
+      : lv ? lv.units : [];
     let html = '';
     if (!lv && !q) {
-      html = levels
-        .map((l) => `<li><button class="shop" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + ' 家' : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`)
-        .join('');
+      if (!b) {
+        html = PHASES.filter((p) => p.id).map((p) => {
+          const ok = built.has(p.id);
+          const n = layout.levels.filter((l) => l.building === p.id).reduce((k, l) => k + l.units.length, 0);
+          return `<li><button class="shop" data-building="${p.id}"${ok ? '' : ' disabled'}><span class="shop-code">${p.label}</span><span class="shop-name"><b>${esc(ok ? bById[p.id].name : p.sub)}</b><span>${esc(ok ? bById[p.id].en : '规划建设中')}</span></span><span class="shop-cat" style="--cc:var(--accent)">${ok ? n + ' 家' : '规划中'}</span></button></li>`;
+        }).join('');
+      } else {
+        html = layout.levels.filter((l) => l.building === b.id).reverse()
+          .map((l) => `<li><button class="shop" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + ' 家' : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`)
+          .join('');
+      }
     } else if (!pool.length) {
       html = `<li class="empty">${q ? '没有找到匹配的店铺，换个关键词试试。' : '这一层没有店铺，主要是停车位和设备用房。'}</li>`;
     } else {
+      const groups = new Map();
+      for (const u of pool) {
+        const key = q ? `${bById[u.building].short} · ${lvById[u.level].name}` : u.brand.catLabel;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(u);
+      }
       for (const [k, us] of groups) {
         html += `<li class="dir-group">${esc(k)}</li>`;
         html += us
-          .sort((a, b) => a.code.localeCompare(b.code))
+          .sort((a, c) => a.code.localeCompare(c.code))
           .map((u) => `<li><button class="shop${s.selected === u.id ? ' active' : ''}" data-unit="${u.id}"><span class="shop-code">${u.code}</span><span class="shop-name"><b>${esc(u.brand.name)}</b><span>${esc(u.brand.en)}</span></span><span class="shop-cat" style="--cc:${catColor(u.brand.cat)}">${esc(u.brand.catLabel)}</span></button></li>`)
           .join('');
       }
@@ -96,15 +138,18 @@ export function createUI(app, layout) {
   }
   list.addEventListener('click', (e) => {
     const b = e.target.closest('.shop');
-    if (!b) return;
-    if (b.dataset.level) app.setFocus(b.dataset.level);
+    if (!b || b.disabled) return;
+    if (b.dataset.building) app.setBuilding(b.dataset.building);
+    else if (b.dataset.level) app.setFocus(b.dataset.level);
     else if (b.dataset.unit) app.focusUnit(unitsById.get(b.dataset.unit));
   });
   search.addEventListener('input', renderDirectory);
 
   // ---------- 状态同步 ----------
   function sync(s) {
-    for (const b of floorBar.querySelectorAll('.floor')) b.setAttribute('aria-pressed', String((b.dataset.level || null) === s.focus && !s.exploded) );
+    for (const t of phaseTabs.querySelectorAll('.phase')) t.setAttribute('aria-pressed', String((t.dataset.building || null) === s.building));
+    renderFloors(s.building);
+    for (const f of floorList.querySelectorAll('.floor')) f.setAttribute('aria-pressed', String((f.dataset.level || null) === s.focus && !s.exploded));
     const press = (act, on) => toolbar.querySelector(`[data-act="${act}"]`)?.setAttribute('aria-pressed', String(!!on));
     press('explode', s.exploded);
     press('flows', s.flows);
@@ -112,14 +157,15 @@ export function createUI(app, layout) {
     press('night', s.night);
     press('tour', s.touring);
     $('legend').hidden = !s.flows;
-    const lv = s.focus ? layout.levels.find((l) => l.id === s.focus) : null;
-    $('floorInfo').textContent = s.exploded ? '爆炸视图 · 7 个楼层分层展开' : lv ? `${lv.name} · ${lv.theme.label}` : '全楼 · 地上 3 层 + 夹层 + 地下 2 层 + 天台';
+    const lv = s.focus ? lvById[s.focus] : null;
+    const b = s.building ? bById[s.building] : null;
+    $('floorInfo').textContent = s.exploded ? `${b.name} · 爆炸视图` : lv ? `${b.short} · ${lv.name} · ${lv.theme.label}` : b ? `${b.name} · ${b.en}` : '园区总览 · 一期云澜汇 · 二期星湾 · 三期云澜里';
     renderDirectory();
   }
   app.on(sync);
   sync(app.state);
 
-  // ---------- 悬停提示 ----------
+  // ---------- 悬停提示与点击 ----------
   const tip = $('tooltip');
   const canvas = app.renderer.domElement;
   let downAt = null;
@@ -130,10 +176,9 @@ export function createUI(app, layout) {
     tip.innerHTML = hit.html;
     tip.hidden = false;
     const r = canvas.getBoundingClientRect();
-    const x = Math.min(e.clientX - r.left, r.width - 260);
-    tip.style.left = `${x}px`;
+    tip.style.left = `${Math.min(e.clientX - r.left, r.width - 260)}px`;
     tip.style.top = `${e.clientY - r.top}px`;
-    canvas.style.cursor = hit.unit ? 'pointer' : '';
+    canvas.style.cursor = hit.unit || hit.building ? 'pointer' : '';
   });
   canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
   canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
@@ -141,6 +186,7 @@ export function createUI(app, layout) {
     if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !app.pick) return;
     const hit = app.pick(e.clientX, e.clientY);
     if (hit && hit.unit) app.focusUnit(hit.unit);
+    else if (hit && hit.building) app.setBuilding(hit.building);
   });
   $('tourStop').addEventListener('click', () => app.stopTour && app.stopTour());
 

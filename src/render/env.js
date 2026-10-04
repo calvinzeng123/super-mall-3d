@@ -38,7 +38,7 @@ export class Environment {
       bottomColor: { value: DAY.bottom.clone() },
     };
     this.sky = new THREE.Mesh(
-      new THREE.SphereGeometry(1800, 32, 16),
+      new THREE.SphereGeometry(3200, 32, 16),
       new THREE.ShaderMaterial({
         side: THREE.BackSide,
         depthWrite: false,
@@ -63,27 +63,25 @@ export class Environment {
       const u = Math.random(), v = Math.random() * 0.9 + 0.08;
       const th = u * Math.PI * 2, y = v;
       const r = Math.sqrt(1 - y * y);
-      pts.push(Math.cos(th) * r * 1700, y * 1700, Math.sin(th) * r * 1700);
+      pts.push(Math.cos(th) * r * 3000, y * 3000, Math.sin(th) * r * 3000);
     }
     starGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     this.stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false }));
     this.stars.frustumCulled = false;
     scene.add(this.stars);
 
-    scene.fog = new THREE.Fog(DAY.fog.clone(), 520, 1700);
+    scene.fog = new THREE.Fog(DAY.fog.clone(), 900, 3000);
 
     this.hemi = new THREE.HemisphereLight(DAY.hemiSky.clone(), DAY.hemiGround.clone(), 0.62);
     scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(DAY.sun.clone(), 2.1);
     this.sunDir = new THREE.Vector3(-0.55, 0.78, 0.62).normalize();
-    this.sun.position.copy(this.sunDir).multiplyScalar(320);
     this.sun.castShadow = true;
-    const sc = this.sun.shadow.camera;
-    sc.left = -140; sc.right = 140; sc.top = 140; sc.bottom = -140; sc.near = 20; sc.far = 760;
     this.sun.shadow.mapSize.set(4096, 4096);
     this.sun.shadow.bias = -0.00025;
     this.sun.shadow.normalBias = 0.035;
     scene.add(this.sun, this.sun.target);
+    this.setShadowFocus(new THREE.Vector3(0, 0, 0), 150);
 
     const size = renderer.getSize(new THREE.Vector2());
     this.composer = new EffectComposer(renderer);
@@ -96,6 +94,19 @@ export class Environment {
   }
 
   setNight(on) { this.target = on ? 1 : 0; }
+
+  /** 阴影相机跟随视角：以 center 为中心、覆盖半径 radius（园区约 330，单期约 150） */
+  setShadowFocus(center, radius) {
+    const r = Math.max(60, radius);
+    this.sun.target.position.copy(center);
+    this.sun.position.copy(center).addScaledVector(this.sunDir, r * 2 + 260);
+    const sc = this.sun.shadow.camera;
+    sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r;
+    sc.near = 20; sc.far = r * 4 + 600;
+    sc.updateProjectionMatrix();
+    this.sun.target.updateMatrixWorld();
+    this.renderer.shadowMap.needsUpdate = true;
+  }
 
   apply() {
     const t = this.night;
