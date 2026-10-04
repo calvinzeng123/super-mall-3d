@@ -1,6 +1,8 @@
-// 步行连通图：同层走廊相接、铺位门面临走廊、扶梯/电梯/楼梯跨层、入口接 1F。
-import { rectsConnect, pointInRect, frontProbes, doorProbe, NORMAL, mid } from './geom.js';
-import { stairDoor } from './vertical.js';
+// 步行连通图（多边形版）：同层走道相接、铺位门面临走道、扶梯 / 电梯 / 楼梯跨层、
+// 入口连接楼内走道与场地（或天桥）、首层为室外地面的楼层直接与场地相接、天桥落地塔连接桥面与地面。
+import { pointInPoly, polysConnect, segProbes } from './geom.js';
+
+const mid = (s) => [(s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2];
 
 export function buildWalkGraph(L) {
   const adj = new Map();
@@ -9,28 +11,37 @@ export function buildWalkGraph(L) {
     return n;
   };
   const link = (a, b) => {
-    node(a); node(b);
+    node(a);
+    node(b);
     adj.get(a).add(b);
     adj.get(b).add(a);
   };
-  const levelById = Object.fromEntries(L.levels.map((l) => [l.id, l]));
+  const byId = Object.fromEntries(L.levels.map((l) => [l.id, l]));
   const walksAt = (levelId, p) => {
-    const lv = levelById[levelId];
-    return lv ? lv.walk.filter((w) => pointInRect(p, w.rect)).map((w) => `walk:${levelId}:${w.id}`) : [];
+    const lv = byId[levelId];
+    return lv ? lv.walk.filter((w) => pointInPoly(p, w.poly)).map((w) => `walk:${levelId}:${w.id}`) : [];
+  };
+  const siteAt = (p) => L.site.walk.filter((w) => pointInPoly(p, w.poly)).map((w) => `site:${w.id}`);
+  const bridgeAt = (p) => (L.bridges ? L.bridges.walk.filter((w) => pointInPoly(p, w.poly)).map((w) => `bridge:${w.id}`) : []);
+  const group = (prefix, regions) => {
+    const ids = regions.map((w) => node(`${prefix}${w.id}`));
+    for (let i = 0; i < regions.length; i++) {
+      for (let j = i + 1; j < regions.length; j++) if (polysConnect(regions[i].poly, regions[j].poly, 1)) link(ids[i], ids[j]);
+    }
   };
 
   for (const lv of L.levels) {
-    const ids = lv.walk.map((w) => node(`walk:${lv.id}:${w.id}`));
-    for (let i = 0; i < lv.walk.length; i++) {
-      for (let j = i + 1; j < lv.walk.length; j++) {
-        if (rectsConnect(lv.walk[i].rect, lv.walk[j].rect, 1)) link(ids[i], ids[j]);
-      }
-    }
+    group(`walk:${lv.id}:`, lv.walk);
     for (const u of lv.units) {
       const id = node(`unit:${u.id}`);
-      for (const f of u.fronts) for (const p of frontProbes(f)) for (const w of walksAt(lv.id, p)) link(id, w);
+      for (const f of u.wfronts) for (const p of segProbes(f)) for (const w of walksAt(lv.id, p)) link(id, w);
+    }
+    if (lv.ground) {
+      for (const w of lv.walk) for (const s of L.site.walk) if (polysConnect(w.poly, s.poly, 1)) link(`walk:${lv.id}:${w.id}`, `site:${s.id}`);
     }
   }
+  group('site:', L.site.walk);
+  if (L.bridges) group('bridge:', L.bridges.walk);
 
   const chain = (list) => {
     for (let i = 1; i < list.length; i++) link(list[0], list[i]);
@@ -39,18 +50,23 @@ export function buildWalkGraph(L) {
     const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z);
     const ux = (e.top.x - e.bottom.x) / run;
     const uz = (e.top.z - e.bottom.z) / run;
-    const lo = walksAt(e.from, [e.bottom.x - ux * 1.2, e.bottom.z - uz * 1.2]);
-    const hi = walksAt(e.to, [e.top.x + ux * 1.2, e.top.z + uz * 1.2]);
-    chain([...lo, ...hi]);
+    chain([...walksAt(e.from, [e.bottom.x - ux * 1.2, e.bottom.z - uz * 1.2]), ...walksAt(e.to, [e.top.x + ux * 1.2, e.top.z + uz * 1.2])]);
   }
-  for (const e of L.elevators) chain(e.serves.flatMap((id) => walksAt(id, doorProbe(e))));
-  for (const s of L.stairs) chain(s.serves.flatMap((id) => frontProbes(stairDoor(s, id)).flatMap((p) => walksAt(id, p))));
+  for (const e of L.elevators) {
+    const p = [e.x + e.nx * (e.reach + 0.6), e.z + e.nz * (e.reach + 0.6)];
+    chain(e.serves.flatMap((id) => walksAt(id, p)));
+  }
+  for (const s of L.stairs) {
+    chain(s.serves.flatMap((id) => segProbes((s.wdoorByLevel && s.wdoorByLevel[id]) || s.wdoor).flatMap((p) => walksAt(id, p))));
+  }
   for (const e of L.entrances) {
-    const [nx, nz] = NORMAL[e.side];
     const [mx, mz] = mid(e.seg);
     const id = node(`ent:${e.id}`);
-    for (const w of walksAt(e.level, [mx - nx, mz - nz])) link(id, w);
+    for (const w of walksAt(e.level, [mx - e.nx, mz - e.nz])) link(id, w);
+    const out = [mx + e.nx, mz + e.nz];
+    for (const w of e.to === 'bridge' ? bridgeAt(out) : siteAt(out)) link(id, w);
   }
+  if (L.bridges) for (const v of L.bridges.verticals) chain([...bridgeAt(v.deck), ...siteAt(v.ground)]);
   return { adj };
 }
 
@@ -65,7 +81,10 @@ export function components({ adj }) {
     while (stack.length) {
       const cur = stack.pop();
       for (const nb of adj.get(cur)) {
-        if (!comp.has(nb)) { comp.set(nb, n); stack.push(nb); }
+        if (!comp.has(nb)) {
+          comp.set(nb, n);
+          stack.push(nb);
+        }
       }
     }
     n++;
