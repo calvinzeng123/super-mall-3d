@@ -38,7 +38,7 @@
 
 **文件：** 创建 `tests/p1x.test.js`
 
-- [ ] 写测试：
+- [x] 写测试：
 
 ```js
 // 一期延展：第四翼（西北翼）+ 方庭（原四方格商场）（v3 规格第 2、3、6 节）。
@@ -97,15 +97,15 @@ test('方庭垂直交通与天台', () => {
 });
 ```
 
-- [ ] 运行 `node --test tests/p1x.test.js`，预期 5 项 FAIL（`wings` 只有 3 个、`square` 未定义）。
-- [ ] Commit `test(layout): 一期第四翼与方庭规则测试（任务 D1）`
+- [x] 运行 `node --test tests/p1x.test.js`，预期 5 项 FAIL（`wings` 只有 3 个、`square` 未定义）。
+- [x] Commit `test(layout): 一期第四翼与方庭规则测试（任务 D1）`
 
 ### 任务 D2：广义外轮廓
 
 **文件：** 修改 `src/layout/hub.js`；测试 `tests/geom.test.js`
 
-- [ ] 在 `geom.test.js` 加测试：单圆厅 R=34、四翼 45/165/225/285（225 翼带 `annex` 折线），`hubOutline` 结果是简单多边形（任意两条非相邻边不相交），西翼与 225 翼之间的连接点等于两条内侧边的交点（误差 <1e-6），且不含 207°–242° 之间的圆弧点。
-- [ ] 实现：`rots.length === 1` 时走新流程——
+- [x] 在 `geom.test.js` 加测试：单圆厅 R=34、四翼 45/165/225/285（225 翼带 `annex` 折线），`hubOutline` 结果是简单多边形（任意两条非相邻边不相交），西翼与 225 翼之间的连接点等于两条内侧边的交点（误差 <1e-6），且不含 207°–242° 之间的圆弧点。
+- [x] 实现：`rots.length === 1` 时走新流程——
 
 ```js
 function singleHub(r, arms, HW, step) {
@@ -134,23 +134,23 @@ function singleHub(r, arms, HW, step) {
 ```
 
   `lineHit(p, d, q, e)` 解两直线交点。多圆厅（二期）保持原算法。
-- [ ] `npm test` 全部 PASS（一期原三翼外轮廓与旧算法一致：旧测试不变）。Commit `feat(layout): 外轮廓支持相邻翼在圆外相接与末端拼接（任务 D2）`
+- [x] `npm test` 全部 PASS（一期原三翼外轮廓与旧算法一致：旧测试不变）。Commit `feat(layout): 外轮廓支持相邻翼在圆外相接与末端拼接（任务 D2）`
 
 ### 任务 D3：西北翼
 
 **文件：** 修改 `src/layout/mall.js`、`src/layout/p1.js`
 
-- [ ] `makeWing`：`w.start` 存在时 `u0 = w.start`、停车层 `aisleStart = w.start`、车位排起点 `w.start + 1.5`；`w.annex` 存在时 `bandEnd = streetEnd = aisleEnd = spineEnd = rowEnd = uEnd`，且不生成端部区、端楼梯、端入口；`wingRetail` 中 `w.neck`（局部多边形 `{ plus, minus }`）替代首段矩形口袋；末端两家店的端门面朝 `+u`（进入方庭大厅）。
-- [ ] `p1.js`：`wings` 加 `{ id: 'NW', rot: 'C', deg: 225, uEnd: 99.37, start: 39.85, annex: true, core: { band: -1, u: 62 }, zone: 'J', name: '西北翼' }`；喇叭口口袋（西北翼局部坐标）`plus = [[33.27,7],[39.85,7],[39.85,23],[32.44,10.17]]`、`minus` 为其关于 v 的镜像；各层 `wings.NW`：B1M `cats: ['food','snack','tea']`；2F `slots: [[59,67]]`；3F `slots: [[44,56]]`；RF `skylights: [[59,67]]`；扶梯 `{ pair: 'K7', wing: 'NW', from: '1F', to: '2F', axis: 'x', sign: 1, bottom: 44, cross: 0, slot: true }`、`{ pair: 'K8', wing: 'NW', from: '2F', to: '3F', axis: 'x', sign: 1, bottom: 70, cross: 0, slot: true }`；外轮廓臂表传 `annex` 折线（由 square.js 导出的 `SQUARE_CHAIN`）。
-- [ ] 一期广场 `plazas` 改为 `rect(-286,-256,-16,-20)`。
-- [ ] `npm test`：p1x 前两项 PASS，其余待 D4。Commit `feat(layout): 一期西北翼（任务 D3）`
+- [x] `makeWing`：`w.start` 存在时 `u0 = w.start`、停车层 `aisleStart = w.start`、车位排起点 `w.start + 1.5`；`w.annex` 存在时 `bandEnd = streetEnd = aisleEnd = spineEnd = rowEnd = uEnd`，且不生成端部区、端楼梯、端入口；`wingRetail` 中 `w.neck`（局部多边形 `{ plus, minus }`）替代首段矩形口袋；末端两家店的端门面朝 `+u`（进入方庭大厅）。
+- [x] `p1.js`：`wings` 加 `{ id: 'NW', rot: 'C', deg: 225, uEnd: 99.37, start: 39.85, annex: true, core: { band: -1, u: 62 }, zone: 'J', name: '西北翼' }`；喇叭口口袋（西北翼局部坐标）`plus = [[33.27,7],[39.85,7],[39.85,23],[32.44,10.17]]`、`minus` 为其关于 v 的镜像；各层 `wings.NW`：B1M `cats: ['food','snack','tea']`；2F `slots: [[59,67]]`；3F `slots: [[44,56]]`；RF `skylights: [[59,67]]`；扶梯 `{ pair: 'K7', wing: 'NW', from: '1F', to: '2F', axis: 'x', sign: 1, bottom: 44, cross: 0, slot: true }`、`{ pair: 'K8', wing: 'NW', from: '2F', to: '3F', axis: 'x', sign: 1, bottom: 70, cross: 0, slot: true }`；外轮廓臂表传 `annex` 折线（由 square.js 导出的 `SQUARE_CHAIN`）。
+- [x] 一期广场 `plazas` 改为 `rect(-286,-256,-16,-20)`。
+- [x] `npm test`：p1x 前两项 PASS，其余待 D4。Commit `feat(layout): 一期西北翼（任务 D3）`
 
 ### 任务 D4：方庭
 
 **文件：** 创建 `src/layout/square.js`；修改 `src/layout/mall.js`（`spec.annex` 钩子）
 
-- [ ] 局部 frame `F_SQ = frame(-220, -200, 0, 'P1-SQ')`；`SQUARE_CHAIN = [[-192.53,-160],[-280,-160],[-280,-240],[-160,-240],[-160,-192.53]]`（世界坐标，西北翼右后角 → 方庭外圈 → 左后角）；`CHAMFER = [[-192.53,-160],[-160,-192.53]]`。
-- [ ] 槽位表：v1 `SLOTS` 去掉 `S6`、`SE`、`E2`、`E3`、`S5`、`arcade`；`E1` 改 `EB(-18,-10)`；新增 `arcade: island(23,38,6,18)`（3F 合并东南岛铺）；`market` 改 `rect(23,-18,49,18)`。各层使用：
+- [x] 局部 frame `F_SQ = frame(-220, -200, 0, 'P1-SQ')`；`SQUARE_CHAIN = [[-192.53,-160],[-280,-160],[-280,-240],[-160,-240],[-160,-192.53]]`（世界坐标，西北翼右后角 → 方庭外圈 → 左后角）；`CHAMFER = [[-192.53,-160],[-160,-192.53]]`。
+- [x] 槽位表：v1 `SLOTS` 去掉 `S6`、`SE`、`E2`、`E3`、`S5`、`arcade`；`E1` 改 `EB(-18,-10)`；新增 `arcade: island(23,38,6,18)`（3F 合并东南岛铺）；`market` 改 `rect(23,-18,49,18)`。各层使用：
 
 ```js
 const RING = ['N1', 'N2', 'N3', 'N5', 'N6', 'N7', 'S1', 'S2', 'S3', 'NW', 'W1', 'W2', 'W3', 'SW', 'NE', 'E1'];
@@ -164,30 +164,30 @@ const LEVEL_SLOTS = {
 ```
 
   品牌：按所在层 `cfg.cats` 轮流 `picker.take`；`cinema` → `arcade` 业态（"沉浸剧场 / VR"），`kids`、`books`、`market` → 各自业态。铺位 `square: true`，id `${lv.id}-SQ-${slot}`。
-- [ ] 走廊：v1 `corridors()`，`ringS` 截到 `x≤43.47`、`ringE` 截到 `z≤23.47`；各商业层加入口大厅多边形 `[[24,24],[24,40],[27.47,40],[60,7.47],[60,4],[44,4],[44,24]]`（B1/B2 同形为车道）。
-- [ ] 核心筒与用房：西客梯核（v1 `CORE_W`，3 台，门朝 E）；东客梯核移到南带：井道 `rect(12.5,24,16,33)`（3 台沿 z，门朝 W）、电梯厅 `rect(8,24,12.5,33)`、楼梯 `rect(8,33,16,40)` 门朝 N；东卫生间 `rect(16,24,24,40)` 门 `x∈[18.5,21.5]` 朝 N；西卫生间、服务核、楼梯 S4 沿用 v1；S5 移到 `rect(55,-10,60,-4)`（1F–RF，门朝 S）。
-- [ ] 中庭：1F 洞口 `rect(-5,-8,5,8)` r0.6；2F/3F 洞口 `rect(-17,-10,17,10)` r4；RF 天窗同形（`kind: 'skylight'`、`square: true`、带 `radius`）。观光梯 `(±15.5,0)` 服务 B1M–3F，`square: true`。
-- [ ] 扶梯（按一期层高重算）：`SQ-P0` B1→B1M（axis z, sign 1, top −24, cross −16.15, slot）；`SQ-P1/P2` B1M→1F（axis z, sign ∓1, top ∓8, cross ∓2.55）；`SQ-P3/P4` 1F→2F（axis z, sign ∓1, top ∓10, cross ∓10.65）；`SQ-P5/P6` 2F→3F（axis x, sign ±1, centered, cross ∓15.15, slot）；`SQ-P7` 3F→RF（axis x, sign −1, bottom −23.5, cross 0, slot）。B1 扶梯厅 `rect(-20,-40,-6,-24)`，B1M 扶梯厅 `rect(-20,-40,-12,-24)`。
-- [ ] 入口（1F，`square: true`，均非主）：南门 `x∈[-8,8], z=40`、北门 `x∈[-4,4], z=-40`、西门 `z∈[-4,4], x=-60`、东门 `z∈[-4,4], x=60`。
-- [ ] 车库（B1/B2）：v1 `ROWS`、`aisles()`、设备房（去掉 v1 坡道相关：`CN`、`RAMP`、`B1_RAMP_HOLE`），被斜面切到的车位排在大厅处截断；车位 `zone: 'K'`。
-- [ ] 天台：木平台走道（v1 `fillRoof` 的 D1–D4、SK* 走道，去掉 SW3/SKY）；`cinema-open`（东半部 `rect(22,-20,56,16)`，银幕在东墙）、`farm`（西半部 `rect(-56,-22,-26,20)`，种植池 + 温室）、`viewdeck`（北侧 `rect(-18,-40,10,-26)`）；扶梯玻璃亭 `rect(-37,-5,-19,5)`；天台卫生间 `rect(-8,28,0,36)`。
-- [ ] `building.square = { F, outline, chamfer, zone: 'K' }`。
-- [ ] `npm test` 全部 PASS（含 p1x 5 项、rules 全部、p1 原测试）。Commit `feat(layout): 方庭（原四方格商场）并入一期（任务 D4）`
+- [x] 走廊：v1 `corridors()`，`ringS` 截到 `x≤43.47`、`ringE` 截到 `z≤23.47`；各商业层加入口大厅多边形 `[[24,24],[24,40],[27.47,40],[60,7.47],[60,4],[44,4],[44,24]]`（B1/B2 同形为车道）。
+- [x] 核心筒与用房：西客梯核（v1 `CORE_W`，3 台，门朝 E）；东客梯核移到南带：井道 `rect(12.5,24,16,33)`（3 台沿 z，门朝 W）、电梯厅 `rect(8,24,12.5,33)`、楼梯 `rect(8,33,16,40)` 门朝 N；东卫生间 `rect(16,24,24,40)` 门 `x∈[18.5,21.5]` 朝 N；西卫生间、服务核、楼梯 S4 沿用 v1；S5 移到 `rect(55,-10,60,-4)`（1F–RF，门朝 S）。
+- [x] 中庭：1F 洞口 `rect(-5,-8,5,8)` r0.6；2F/3F 洞口 `rect(-17,-10,17,10)` r4；RF 天窗同形（`kind: 'skylight'`、`square: true`、带 `radius`）。观光梯 `(±15.5,0)` 服务 B1M–3F，`square: true`。
+- [x] 扶梯（按一期层高重算）：`SQ-P0` B1→B1M（axis z, sign 1, top −24, cross −16.15, slot）；`SQ-P1/P2` B1M→1F（axis z, sign ∓1, top ∓8, cross ∓2.55）；`SQ-P3/P4` 1F→2F（axis z, sign ∓1, top ∓10, cross ∓10.65）；`SQ-P5/P6` 2F→3F（axis x, sign ±1, centered, cross ∓15.15, slot）；`SQ-P7` 3F→RF（axis x, sign −1, bottom −23.5, cross 0, slot）。B1 扶梯厅 `rect(-20,-40,-6,-24)`，B1M 扶梯厅 `rect(-20,-40,-12,-24)`。
+- [x] 入口（1F，`square: true`，均非主）：南门 `x∈[-8,8], z=40`、北门 `x∈[-4,4], z=-40`、西门 `z∈[-4,4], x=-60`、东门 `z∈[-4,4], x=60`。
+- [x] 车库（B1/B2）：v1 `ROWS`、`aisles()`、设备房（去掉 v1 坡道相关：`CN`、`RAMP`、`B1_RAMP_HOLE`），被斜面切到的车位排在大厅处截断；车位 `zone: 'K'`。
+- [x] 天台：木平台走道（v1 `fillRoof` 的 D1–D4、SK* 走道，去掉 SW3/SKY）；`cinema-open`（东半部 `rect(22,-20,56,16)`，银幕在东墙）、`farm`（西半部 `rect(-56,-22,-26,20)`，种植池 + 温室）、`viewdeck`（北侧 `rect(-18,-40,10,-26)`）；扶梯玻璃亭 `rect(-37,-5,-19,5)`；天台卫生间 `rect(-8,28,0,36)`。
+- [x] `building.square = { F, outline, chamfer, zone: 'K' }`。
+- [x] `npm test` 全部 PASS（含 p1x 5 项、rules 全部、p1 原测试）。Commit `feat(layout): 方庭（原四方格商场）并入一期（任务 D4）`
 
 ### 任务 D5：方庭渲染
 
 **文件：** 创建 `src/render/build/square.js`；修改 `app.js`（构建步骤）、`paths.js`、`build/labels.js`、`build/site.js`、`build/roof.js`
 
-- [ ] 方庭中庭：1F 服务台、中庭悬挂装置（云朵灯组）、观光梯（通用模块已覆盖）。
-- [ ] 天台：露天星空影院（银幕框架 + LED 银幕动画 + 阶梯木平台 + 懒人沙发）、屋顶农场（种植池 + 玻璃温室 + 稻草人）、观景台（玻璃栏板 + 望远镜）。
-- [ ] 动线：方庭环廊环线 + 十字轴线 + 西北翼商业街；停车层 K 区标注。
-- [ ] 景观：一期地块树阵避开一期外轮廓（含方庭）；方庭四门外的入口步道（通用模块）。
-- [ ] 浏览器验证：园区、一期全楼、1F/2F/3F/B1M/B1/RF 各层、方庭天台近景；无控制台报错。Commit `feat(render): 一期西北翼与方庭（任务 D5）`
+- [x] 方庭中庭：1F 服务台、中庭悬挂装置（云朵灯组）、观光梯（通用模块已覆盖）。
+- [x] 天台：露天星空影院（银幕框架 + LED 银幕动画 + 阶梯木平台 + 懒人沙发）、屋顶农场（种植池 + 玻璃温室 + 稻草人）、观景台（玻璃栏板 + 望远镜）。
+- [x] 动线：方庭环廊环线 + 十字轴线 + 西北翼商业街；停车层 K 区标注。
+- [x] 景观：一期地块树阵避开一期外轮廓（含方庭）；方庭四门外的入口步道（通用模块）。
+- [x] 浏览器验证：园区、一期全楼、1F/2F/3F/B1M/B1/RF 各层、方庭天台近景；无控制台报错。Commit `feat(render): 一期西北翼与方庭（任务 D5）`
 
 ### 任务 D6：D 阶段验证与发布
 
-- [ ] `npm test`、`npm run build`；截图（园区昼 / 夜、一期各层、方庭天台、手机竖屏）；记录性能。
-- [ ] 发布到同一链接。Commit `chore: D 阶段打包与发布`
+- [x] `npm test`、`npm run build`；截图（园区昼 / 夜、一期各层、方庭天台、手机竖屏）；记录性能。
+- [x] 发布到同一链接。Commit `chore: D 阶段打包与发布`
 
 ---
 
@@ -197,9 +197,9 @@ const LEVEL_SLOTS = {
 
 **文件：** 创建 `tests/metro.test.js`；修改 `tests/campus.test.js`、`tests/p1.test.js`、`tests/p2.test.js`
 
-- [ ] campus：楼板压路、外轮廓重叠两条规则只检查 `elev ≥ 0` 的楼层 / 非 `metro` 楼栋（地下站厅本就在道路下方）。
-- [ ] p1/p2 入口测试：`e.to` 为楼层 id 时外侧落在该层走道。
-- [ ] metro.test.js：
+- [x] campus：楼板压路、外轮廓重叠两条规则只检查 `elev ≥ 0` 的楼层 / 非 `metro` 楼栋（地下站厅本就在道路下方）。
+- [x] p1/p2 入口测试：`e.to` 为楼层 id 时外侧落在该层走道。
+- [x] metro.test.js：
 
 ```js
 // 地铁云澜汇站（v3 规格第 4、6 节）。
@@ -251,21 +251,21 @@ test('四条通道沿对角线', () => {
 });
 ```
 
-- [ ] 运行，预期新增 FAIL。Commit `test(layout): 地铁云澜汇站规则测试（任务 E1）`
+- [x] 运行，预期新增 FAIL。Commit `test(layout): 地铁云澜汇站规则测试（任务 E1）`
 
 ### 任务 E2：地铁布局
 
 **文件：** 创建 `src/layout/metro.js`；修改 `layout.js`、`walk.js`、`campus.js`
 
-- [ ] 楼层：`M-B2` 站台（−12、层高 5.5、主题 `platform`）、`M-B1` 站厅（−4.5、层高 4.0、主题 `metro`）。
-- [ ] 站厅走道：`rect(-66,-5,66,5)`、`rect(-56,-11,66,-5)`、`rect(-66,5,56,11)`；铺位 便利店 `rect(-66,-11,-56,-5)` 门面朝 S、面包店 `rect(56,5,66,11)` 门面朝 N；客服中心、卫生间为用房；闸机线 `x=±36`（要素，不挡走道）。
-- [ ] 站台走道 `rect(-60,-6,60,6)`；轨道 `z=±8.75`；列车 6 节 × 19m。
-- [ ] 扶梯：`MA` axis x、sign −1、bottom −12、cross −3（站台 → 站厅西）；`MB` axis x、sign 1、bottom 12、cross 3；站厅楼板洞口为斜段外包矩形。楼梯 `rect(-4,-5,4,-1)` 门朝 N、`rect(-4,1,4,5)` 门朝 S（两层同门）。客梯 `(-32,0)` 门朝 N、`(32,0)` 门朝 S，玻璃井道（`exterior: true`）。
-- [ ] 通道（站厅层走道，frame(0,0,θ) 局部 `u∈[12,uEnd]×v∈[-4,4]`）：225° uEnd 65.9、315° uEnd 64、135° uEnd 60、45° uEnd 76；A/C/D 分支 `u∈[45,52.6]×v∈[∓14,∓4]`（A：225° 取 −v；C：315° 取 +v；D：135° 取 −v）。
-- [ ] 连接口：一期 B1M 东南翼末端（翼局部 `u=84, v∈[-4,4]`，外法线 +u，`to: 'M-B1'`）；二期 B1 西翼末端（`u=86`）；三期 B1 东北角（135° frame `u=57.6, v∈[-4,4]`，外法线指向原点）。
-- [ ] 地面出入口（`building: 'M'`, `to: 'site'`, 带 `kiosk: { x, z, deg, poly }`）：A (−44.4,−24.6)、C (44.4,−24.6)、D (−24.6,44.4)、B (53,53)；公园 `site.park.metro` 移到 B。
-- [ ] `walk.js`：入口外侧——`to === 'site'` 用场地、`'bridge'` 用桥面，否则当作楼层 id 用 `walksAt(e.to, out)`。
-- [ ] `npm test` 全部 PASS。Commit `feat(layout): 地铁站厅、站台与四条通道（任务 E2）`
+- [x] 楼层：`M-B2` 站台（−12、层高 5.5、主题 `platform`）、`M-B1` 站厅（−4.5、层高 4.0、主题 `metro`）。
+- [x] 站厅走道：`rect(-66,-5,66,5)`、`rect(-56,-11,66,-5)`、`rect(-66,5,56,11)`；铺位 便利店 `rect(-66,-11,-56,-5)` 门面朝 S、面包店 `rect(56,5,66,11)` 门面朝 N；客服中心、卫生间为用房；闸机线 `x=±36`（要素，不挡走道）。
+- [x] 站台走道 `rect(-60,-6,60,6)`；轨道 `z=±8.75`；列车 6 节 × 19m。
+- [x] 扶梯：`MA` axis x、sign −1、bottom −12、cross −3（站台 → 站厅西）；`MB` axis x、sign 1、bottom 12、cross 3；站厅楼板洞口为斜段外包矩形。楼梯 `rect(-4,-5,4,-1)` 门朝 N、`rect(-4,1,4,5)` 门朝 S（两层同门）。客梯 `(-32,0)` 门朝 N、`(32,0)` 门朝 S，玻璃井道（`exterior: true`）。
+- [x] 通道（站厅层走道，frame(0,0,θ) 局部 `u∈[12,uEnd]×v∈[-4,4]`）：225° uEnd 65.9、315° uEnd 64、135° uEnd 60、45° uEnd 76；A/C/D 分支 `u∈[45,52.6]×v∈[∓14,∓4]`（A：225° 取 −v；C：315° 取 +v；D：135° 取 −v）。
+- [x] 连接口：一期 B1M 东南翼末端（翼局部 `u=84, v∈[-4,4]`，外法线 +u，`to: 'M-B1'`）；二期 B1 西翼末端（`u=86`）；三期 B1 东北角（135° frame `u=57.6, v∈[-4,4]`，外法线指向原点）。
+- [x] 地面出入口（`building: 'M'`, `to: 'site'`, 带 `kiosk: { x, z, deg, poly }`）：A (−44.4,−24.6)、C (44.4,−24.6)、D (−24.6,44.4)、B (53,53)；公园 `site.park.metro` 移到 B。
+- [x] `walk.js`：入口外侧——`to === 'site'` 用场地、`'bridge'` 用桥面，否则当作楼层 id 用 `walksAt(e.to, out)`。
+- [x] `npm test` 全部 PASS。Commit `feat(layout): 地铁站厅、站台与四条通道（任务 E2）`
 - 实施偏差（E2 落地时按几何校核调整）：
   - 站台仅宽 12m，扶梯 `cross` 改为 0（居中），否则扶梯外侧只剩 1.1m；客梯改为站台正中背靠背两部 `(0,∓1.5)` 门朝 N / S；两部楼梯改到站台两端 `rect(∓54,−2,∓46,2)`，门朝站台中部。
   - 三期地库东北角改为 45° 切角（切面在 135° 对角线 u=61.57，宽 10m），通道口落在切面上，不再与地库重叠。
@@ -276,18 +276,18 @@ test('四条通道沿对角线', () => {
 
 **文件：** 创建 `src/render/build/metro.js`；修改 `app.js`、`ui.js`、`build/labels.js`、`paths.js`、`build/shell.js`
 
-- [ ] 站厅：浅色水磨石、铝板吊顶 + 线形灯带、圆柱、闸机阵列、售票机、客服中心、导向牌"云澜汇站 YUNLAN HUI"、线路图灯箱。
-- [ ] 通道：墙面瓷砖、地面导向线、灯带、广告灯箱、方向牌（"一期云澜汇 →" 等）。
-- [ ] 站台：屏蔽门、轨道（道床 + 钢轨）、列车（6 节，进站减速 → 停站开门 → 出站加速，两侧交替）、到站信息屏。
-- [ ] 地面出入口：玻璃雨棚 + M 标识柱 + 楼梯 + 上行扶梯（复用 `drawEscalator`）；场地挖洞。
-- [ ] 各期连接口：地下墙面开口 + "地铁 Metro" 灯箱。
-- [ ] 分期按钮加"地铁"；地铁楼栋在园区视角隐藏，选中后显示两层；拾取信息。
-- [ ] 浏览器验证：站厅、站台列车、通道、出入口、各期连接口；手机竖屏。Commit `feat(render): 地铁云澜汇站（任务 E3）`
+- [x] 站厅：浅色水磨石、铝板吊顶 + 线形灯带、圆柱、闸机阵列、售票机、客服中心、导向牌"云澜汇站 YUNLAN HUI"、线路图灯箱。
+- [x] 通道：墙面瓷砖、地面导向线、灯带、广告灯箱、方向牌（"一期云澜汇 →" 等）。
+- [x] 站台：屏蔽门、轨道（道床 + 钢轨）、列车（6 节，进站减速 → 停站开门 → 出站加速，两侧交替）、到站信息屏。
+- [x] 地面出入口：玻璃雨棚 + M 标识柱 + 楼梯 + 上行扶梯（复用 `drawEscalator`）；场地挖洞。
+- [x] 各期连接口：地下墙面开口 + "地铁 Metro" 灯箱。
+- [x] 分期按钮加"地铁"；地铁楼栋在园区视角隐藏，选中后显示两层；拾取信息。
+- [x] 浏览器验证：站厅、站台列车、通道、出入口、各期连接口；手机竖屏。Commit `feat(render): 地铁云澜汇站（任务 E3）`
 
 ### 任务 E4：导览与最终验证
 
-- [ ] 导览：二期天台之后加入"地铁站厅 → 站台列车"，一期段加入"方庭中庭"。
-- [ ] `npm test`、`npm run build`、全套截图、性能；发布同一链接；finishing-a-development-branch 收尾。Commit `chore: E 阶段打包与发布`
+- [x] 导览：二期天台之后加入"地铁站厅 → 站台列车"，一期段加入"方庭中庭"。
+- [x] `npm test`、`npm run build`、全套截图、性能；发布同一链接；finishing-a-development-branch 收尾。Commit `chore: E 阶段打包与发布`
 
 ---
 
