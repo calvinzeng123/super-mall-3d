@@ -296,6 +296,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     ctx, state, renderer, scene, camera, controls, env, emit,
     get flying() { return !!flight; },
     cancelFlight() { flight = null; },
+    fitFov() { fitFov(); },
     buildingIds: layout.buildings.map((b) => b.id),
     levelsOf: (bid) => ctx.buildings[bid].levels.map((L) => L.lv),
     refresh() { applyVisibility(); },
@@ -435,14 +436,18 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   let elapsed = 0;
   let degraded = false;
   const perfMon = createPerfMonitor(performance.now());
+  /** 垂直视场角：俯瞰 42°，第一人称 60°（横屏时横向约 90°）；竖屏时加大，保证横向能放下 */
+  function fitFov() {
+    const [base, max, k] = state.explore ? [60, 85, 0.35] : [42, 72, 0.62];
+    camera.fov = camera.aspect < 1 ? Math.min(max, base / Math.pow(camera.aspect, k)) : base;
+    camera.updateProjectionMatrix();
+  }
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // 竖屏时加大垂直视场角，保证建筑横向能放下
-    camera.fov = camera.aspect < 1 ? Math.min(72, 42 / Math.pow(camera.aspect, 0.62)) : 42;
-    camera.updateProjectionMatrix();
+    fitFov();
     env.resize(w, h);
   }
   window.addEventListener('resize', resize);

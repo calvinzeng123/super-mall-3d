@@ -101,7 +101,9 @@ export function createUI(app, layout) {
     $('dirBadge').textContent = lv ? lv.short : b ? b.short.replace('期', '') : '园';
     $('dirBadge').style.setProperty('--fc', lv ? lv.theme.accent : 'var(--accent)');
     $('dirTitle').textContent = lv ? `${b.short} · ${lv.name}` : b ? b.name : '园区导览';
-    $('dirTheme').textContent = lv ? lv.theme.label : b ? `${layout.levels.filter((l) => l.building === b.id).length} 个楼层 · 点击楼层或店铺查看` : '三期规划 · 点击分期、建筑或店铺查看';
+    $('dirTheme').textContent = s.explore ? '点分期、楼层或店铺，直接传送过去'
+      : lv ? lv.theme.label : b ? `${layout.levels.filter((l) => l.building === b.id).length} 个楼层 · 点击楼层或店铺查看` : '三期规划 · 点击分期、建筑或店铺查看';
+    $('dirUp').hidden = !(s.explore && (s.focus || s.building));
     $('dirFacts').innerHTML = facts(s.building, lv).map(([k, v]) => `<span class="fact">${k} <b>${v}</b></span>`).join('');
     const pool = q
       ? layout.levels.flatMap((l) => l.units).filter((u) => `${u.brand.name} ${u.brand.en} ${u.brand.catLabel} ${u.code}`.toLowerCase().includes(q))
@@ -148,12 +150,32 @@ export function createUI(app, layout) {
   list.addEventListener('click', (e) => {
     const b = e.target.closest('.shop');
     if (!b || b.disabled) return;
+    if (app.state.explore) { exploreGo(b.dataset); return; }
     if (b.dataset.building) app.setBuilding(b.dataset.building);
     else if (b.dataset.level) app.setFocus(b.dataset.level);
     else if (b.dataset.unit) app.focusUnit(unitsById.get(b.dataset.unit));
     collapseOnPhone();
   });
   search.addEventListener('input', renderDirectory);
+
+  // 漫游时点了就传送（分期 → 主入口内侧，楼层 → 该层出生点，店铺 → 店门外 2m 面朝店），
+  // 目录跟着切到那一期 / 那一层（只改目录，不动俯瞰相机；退出漫游时恢复原来的选择），然后收起
+  function exploreGo(d) {
+    const s = app.state;
+    const unit = d.unit ? unitsById.get(d.unit) : null;
+    if (d.building) Object.assign(s, { building: d.building, focus: null });
+    else if (d.level) Object.assign(s, { building: lvById[d.level].building, focus: d.level });
+    else if (unit) Object.assign(s, { building: unit.building, focus: unit.level, selected: unit.id });
+    app.explore.teleport(unit ? { unit } : { building: s.building, level: s.focus });
+    document.body.classList.remove('ex-places');
+    app.emit();
+  }
+  $('dirUp').addEventListener('click', () => {
+    const s = app.state;
+    if (s.focus) s.focus = null;
+    else s.building = null;
+    app.emit();
+  });
 
   // ---------- 状态同步 ----------
   function sync(s) {

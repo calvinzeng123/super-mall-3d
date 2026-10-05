@@ -2,12 +2,13 @@
 // 步行时由导航模型挡墙、换楼面、上下扶梯与坡道；飞行时自由穿行，关掉飞行落到下方楼面。
 // 楼梯 / 电梯 / 落地塔在门口弹出互动面板；目录可传送；准星对准铺位或设施时显示名称。
 import * as THREE from 'three';
-import { buildNav, step, landAt, linksNear, spawn, floorLabel, sightBlocked, NAV, yawOf } from '../layout/nav.js';
+import { buildNav, step, clear, landAt, linksNear, spawn, floorLabel, sightBlocked, NAV, yawOf } from '../layout/nav.js';
 import { pointInPoly, distToPolyEdge } from '../layout/geom.js';
 
 const WALK = 2.8, RUN = 6, FLY = 8, FLY_MAX = 30;
 const JUMP = 4.5, GRAVITY = 12;
-const LOOK = 0.0024, TOUCH_LOOK = 0.0055;
+const LOOK = 0.0024, TOUCH_LOOK = 0.0055; // 每像素转多少弧度
+const STICK_R = 56; // 摇杆行程（px），推过 80% 为跑
 const PITCH = (85 * Math.PI) / 180;
 /** 与站厅同高、通过连接口相连的地下层：在这些楼面时也显示地铁 */
 const METRO_LINKED = new Set(['P1-B1M', 'P2-B1', 'P3-B1']);
@@ -20,6 +21,7 @@ export function attachExplore(app, ui) {
   const hud = {
     root: $('exHud'), where: $('exWhere'), mode: $('exMode'), card: $('exCard'), prompt: $('exPrompt'),
     help: $('exHelp'), toast: $('exToast'), fade: $('exFade'),
+    stick: $('exStick'), knob: $('exKnob'), up: $('exUp'), down: $('exDown'), fly: $('exFly'),
   };
 
   let nav = null;
@@ -31,7 +33,7 @@ export function attachExplore(app, ui) {
   let eyeY = 0;
   let saved = null;
   let lastSpace = 0;
-  let lookX = 0, lookY = 0;
+  let lookYaw = 0, lookPitch = 0; // 本帧累计的视角增量（弧度）
   const keys = new Set();
   const input = { stickX: 0, stickY: 0, up: false, down: false, jump: false };
   let near = [];
@@ -49,19 +51,22 @@ export function attachExplore(app, ui) {
     if (on) return;
     if (app.state.touring && app.stopTour) app.stopTour();
     if (!nav) nav = buildNav(layout);
-    saved = { pos: camera.position.clone(), target: controls.target.clone() };
+    // 退出时回到进入前的俯瞰视角与选择（漫游中目录会跟着传送切换分期、楼层）
+    const { building, focus, selected } = app.state;
+    saved = { pos: camera.position.clone(), target: controls.target.clone(), building, focus, selected };
     const st = opts.state || spawn(nav, layout, { building: app.state.building, level: app.state.focus }) || spawn(nav, layout, {});
     on = true;
     app.cancelFlight();
     controls.enabled = false;
     app.state.exploded = false;
     for (const L of Object.values(ctx.levels)) { L.offset = 0; L.offsetTarget = 0; L.group.position.y = 0; }
-    flying = false;
+    setFlying(false);
     jumpY = 0;
     vy = 0;
     place(st);
     eyeY = s.y + NAV.eye;
     app.state.explore = { building: null, metro: false, near: null, under: false };
+    app.fitFov();
     document.body.classList.add('exploring');
     hud.root.hidden = false;
     hud.help.hidden = false;
@@ -76,10 +81,14 @@ export function attachExplore(app, ui) {
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     closePrompt();
     keys.clear();
-    Object.assign(input, { stickX: 0, stickY: 0, up: false, down: false, jump: false });
+    endStick();
+    lookTouch = null;
+    Object.assign(input, { up: false, down: false, jump: false });
     document.body.classList.remove('exploring', 'ex-places');
     hud.root.hidden = true;
     app.state.explore = null;
+    app.fitFov();
+    Object.assign(app.state, { building: saved.building, focus: saved.focus, selected: saved.selected });
     controls.enabled = true;
     camera.position.copy(saved.pos);
     controls.target.copy(saved.target);
@@ -97,10 +106,14 @@ export function attachExplore(app, ui) {
       if (!nav) nav = buildNav(layout);
       let st = null;
       if (t.unit) {
+        // 店门外 2m 面朝店；门口外是中庭洞口或窄走道时往近处找可站立的点
         const u = t.unit;
         const w = u.wfronts[0];
-        const x = (w.x0 + w.x1) / 2 + w.nx * 2, z = (w.z0 + w.z1) / 2 + w.nz * 2;
-        st = { floor: u.level, x, z, y: nav.floors.get(u.level).y, slope: null, yaw: yawOf(-w.nx, -w.nz) };
+        const y = nav.floors.get(u.level).y;
+        for (const d of [2, 1.5, 1, 2.5, 3]) {
+          const q = { floor: u.level, x: (w.x0 + w.x1) / 2 + w.nx * d, z: (w.z0 + w.z1) / 2 + w.nz * d, y, slope: null, yaw: yawOf(-w.nx, -w.nz) };
+          if (clear(nav, q)) { st = q; break; }
+        }
       } else st = spawn(nav, layout, t);
       if (!st) return;
       if (!on) app.enterExplore({ state: st });
@@ -121,7 +134,7 @@ export function attachExplore(app, ui) {
     closePrompt();
     hud.fade.classList.add('on');
     setTimeout(() => {
-      flying = false;
+      setFlying(false);
       place(st);
       eyeY = s.y + NAV.eye;
       updateVisibility(true);
@@ -199,16 +212,82 @@ export function attachExplore(app, ui) {
   window.addEventListener('pointermove', (e) => {
     if (!on || e.pointerType !== 'mouse') return;
     if (document.pointerLockElement === canvas) {
-      lookX += e.movementX;
-      lookY += e.movementY;
+      lookYaw += e.movementX * LOOK;
+      lookPitch += e.movementY * LOOK;
     } else if (dragging && dragging.id === e.pointerId) {
-      lookX += e.clientX - dragging.x;
-      lookY += e.clientY - dragging.y;
+      lookYaw += (e.clientX - dragging.x) * LOOK;
+      lookPitch += (e.clientY - dragging.y) * LOOK;
       dragging.x = e.clientX;
       dragging.y = e.clientY;
     }
   });
   window.addEventListener('pointerup', (e) => { if (dragging && dragging.id === e.pointerId) dragging = null; });
+
+  // ---------- 输入：触屏（屏幕左侧 40% 是摇杆，右侧拖动转视角；按 pointerId 区分多指） ----------
+  const isTouch = () => document.body.classList.contains('touch');
+  document.body.classList.toggle('touch', navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches);
+  let stick = null; // { id, cx, cy }：按下时的摇杆中心
+  let lookTouch = null; // { id, x, y }
+  window.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') { document.body.classList.remove('touch'); return; }
+    if (!on) return;
+    document.body.classList.add('touch');
+    const onStick = hud.stick.contains(e.target);
+    if (e.target !== canvas && !onStick) return;
+    hud.help.hidden = true;
+    if (!stick && (onStick || e.clientX < window.innerWidth * 0.4)) {
+      const r = hud.stick.getBoundingClientRect();
+      if (onStick) stick = { id: e.pointerId, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+      else {
+        // 浮动摇杆：底座移到手指下，松手回原位
+        stick = { id: e.pointerId, cx: e.clientX, cy: e.clientY };
+        Object.assign(hud.stick.style, { left: `${e.clientX - r.width / 2}px`, top: `${e.clientY - r.height / 2}px`, bottom: 'auto' });
+      }
+      moveStick(e);
+    } else if (!lookTouch && !onStick) lookTouch = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!on || e.pointerType === 'mouse') return;
+    if (stick && e.pointerId === stick.id) moveStick(e);
+    else if (lookTouch && e.pointerId === lookTouch.id) {
+      lookYaw += (e.clientX - lookTouch.x) * TOUCH_LOOK;
+      lookPitch += (e.clientY - lookTouch.y) * TOUCH_LOOK;
+      lookTouch.x = e.clientX;
+      lookTouch.y = e.clientY;
+    }
+  });
+  const endTouch = (e) => {
+    if (stick && e.pointerId === stick.id) endStick();
+    if (lookTouch && e.pointerId === lookTouch.id) lookTouch = null;
+  };
+  window.addEventListener('pointerup', endTouch);
+  window.addEventListener('pointercancel', endTouch);
+  function moveStick(e) {
+    let dx = e.clientX - stick.cx, dy = e.clientY - stick.cy;
+    const d = Math.hypot(dx, dy);
+    if (d > STICK_R) { dx *= STICK_R / d; dy *= STICK_R / d; }
+    hud.knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    input.stickX = dx / STICK_R;
+    input.stickY = dy / STICK_R;
+  }
+  function endStick() {
+    stick = null;
+    input.stickX = input.stickY = 0;
+    hud.knob.style.transform = '';
+    Object.assign(hud.stick.style, { left: '', top: '', bottom: '' });
+  }
+  /** 按住型按钮（▲ ▼）：按下 on、松开 off */
+  const hold = (el, down, up) => {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      down();
+      try { el.setPointerCapture(e.pointerId); } catch { /* 手指已抬起等情况下捕获会失败，不影响按下 */ }
+    });
+    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(t, up);
+  };
+  hold(hud.up, () => { input.up = true; input.jump = true; }, () => { input.up = false; });
+  hold(hud.down, () => { input.down = true; }, () => { input.down = false; });
+  hud.fly.addEventListener('click', () => toggleFly());
 
   // ---------- HUD 按钮 ----------
   $('exExit').addEventListener('click', () => app.exitExplore());
@@ -218,21 +297,26 @@ export function attachExplore(app, ui) {
   });
 
   // ---------- 飞行 ----------
+  function setFlying(v) {
+    flying = v;
+    hud.mode.textContent = v ? '飞行' : '步行';
+    hud.down.hidden = !v;
+    hud.fly.setAttribute('aria-pressed', String(v));
+  }
   function toggleFly() {
     if (!flying) {
-      flying = true;
+      setFlying(true);
       flyY = eyeY;
       jumpY = 0;
       vy = 0;
-      toast('飞行模式 · 空格上升 · C 下降 · 再按两下空格落地');
+      toast(isTouch() ? '飞行模式 · ▲ 上升 · ▼ 下降 · 再点「飞」落地' : '飞行模式 · 空格上升 · C 下降 · 再按两下空格落地');
     } else {
       const hit = landAt(nav, camera.position.x, camera.position.z, flyY - NAV.eye + 0.3);
       if (!hit) { toast('下方没有可站立的地方'); return; }
-      flying = false;
+      setFlying(false);
       place({ ...hit, yaw });
       toast('步行');
     }
-    hud.mode.textContent = flying ? '飞行' : '步行';
     updateVisibility(true);
   }
 
@@ -242,6 +326,7 @@ export function attachExplore(app, ui) {
     if (!near.length) return;
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     promptOpen = true;
+    hud.card.hidden = true; // 选楼层时名称卡会和面板叠在一起（横屏尤其）
     renderPrompt();
   }
   function closePrompt() {
@@ -265,16 +350,18 @@ export function attachExplore(app, ui) {
     const list = on && !flying ? options() : [];
     if (!list.length) { hud.prompt.hidden = true; return; }
     hud.prompt.hidden = false;
+    // 触屏上面板本身就是「互动」按钮：点开选楼层，再点空白处收起
+    const touch = isTouch();
     if (!promptOpen) {
-      hud.prompt.innerHTML = `<span class="ex-key">E</span>${esc(near[0].link.name)} · 换楼层`;
+      hud.prompt.innerHTML = `<span class="ex-key">${touch ? '⇅' : 'E'}</span>${esc(near[0].link.name)} · 换楼层`;
       return;
     }
-    hud.prompt.innerHTML = list.map((o, i) => `<button type="button" class="ex-opt" data-i="${i}"><span class="ex-key">${i + 1}</span>${esc(o.text)}</button>`).join('');
+    hud.prompt.innerHTML = list.map((o, i) => `<button type="button" class="ex-opt" data-i="${i}">${touch ? '' : `<span class="ex-key">${i + 1}</span>`}${esc(o.text)}</button>`).join('');
   }
   hud.prompt.addEventListener('click', (e) => {
     const b = e.target.closest('.ex-opt');
     if (b) choose(Number(b.dataset.i));
-    else if (!promptOpen) togglePrompt();
+    else togglePrompt();
   });
   function choose(i) {
     const o = options()[i];
@@ -294,6 +381,7 @@ export function attachExplore(app, ui) {
 
   // ---------- 准星拾取 ----------
   function pickCenter() {
+    if (promptOpen) return;
     const cands = [];
     for (const B of Object.values(ctx.buildings)) {
       for (const L of B.levels) if (L.group.visible && L.base.visible) cands.push(...L.picks.children);
@@ -328,10 +416,9 @@ export function attachExplore(app, ui) {
       if (!on) return;
       dt = Math.min(dt, 0.05);
       // 视角
-      const touchK = app.state.touchLook ? TOUCH_LOOK : LOOK;
-      yaw -= lookX * touchK;
-      pitch = Math.max(-PITCH, Math.min(PITCH, pitch - lookY * touchK));
-      lookX = lookY = 0;
+      yaw -= lookYaw;
+      pitch = Math.max(-PITCH, Math.min(PITCH, pitch - lookPitch));
+      lookYaw = lookPitch = 0;
       // 移动输入（局部：前进 f、右移 r）
       let f = 0, r = 0;
       if (keys.has('w') || keys.has('ArrowUp')) f += 1;
@@ -362,8 +449,7 @@ export function attachExplore(app, ui) {
         const n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.1));
         const prev = s.floor;
         for (let i = 0; i < n; i++) s = step(nav, s, dx / n, dz / n, dt / n);
-        if ((input.jump || input.up) && jumpY === 0 && !s.slope) vy = JUMP;
-        input.jump = false;
+        if (input.jump && jumpY === 0 && !s.slope) vy = JUMP;
         if (vy || jumpY) {
           jumpY = Math.max(0, jumpY + vy * dt);
           vy -= GRAVITY * dt;
@@ -373,6 +459,7 @@ export function attachExplore(app, ui) {
         eyeY += (target - eyeY) * (1 - Math.exp(-dt * (s.slope || jumpY ? 30 : 10)));
         if (s.floor !== prev) updateVisibility();
       }
+      input.jump = false; // 跳是一次性的：飞行中按的不留到落地
       syncCamera();
       // 互动点、显示、拾取、阴影、位置名称
       visTimer += dt;

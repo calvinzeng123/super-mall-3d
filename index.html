@@ -91,6 +91,9 @@ button { font: inherit; color: inherit; }
 /* 店铺目录 */
 .directory { position: absolute; right: 16px; top: calc(72px + env(safe-area-inset-top, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 312px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .dir-head { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+.dir-up { all: unset; grid-column: 3; padding: 6px 10px; border-radius: 7px; background: var(--chip); cursor: pointer; font-size: 13px; white-space: nowrap; }
+.dir-up:hover { background: var(--line); }
+.dir-up[hidden] { display: none; }
 .dir-badge { display: grid; place-items: center; min-width: 52px; height: 52px; padding: 0 6px; border-radius: 8px; background: var(--fc, var(--accent)); color: #fff; font: 700 24px/1 var(--font-sign); }
 .dir-title { font-weight: 700; font-size: 15px; }
 .dir-theme { font-size: 12px; color: var(--ink-2); }
@@ -168,10 +171,13 @@ body.exploring.ex-places .directory { display: flex !important; z-index: 6; }
 .ex-opt .ex-key { margin-right: 0; }
 .ex-help { position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 7px 14px; font-size: 12px; color: var(--ink-2); white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
 .ex-toast { position: absolute; left: 50%; top: calc(62px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); padding: 6px 14px; font-size: 13px; white-space: nowrap; }
-.ex-stick, .ex-pad { display: none; }
+.ex-stick, .ex-pad, .ex-help-touch { display: none; }
+.ex-pbtn[hidden] { display: none; }
 .ex-fade { position: absolute; inset: 0; background: #05070a; opacity: 0; transition: opacity 0.18s ease; }
 .ex-fade.on { opacity: 1; }
-body.touch .ex-help { display: none; }
+body.touch .ex-help-desk { display: none; }
+body.touch .ex-help-touch { display: inline; }
+body.touch .ex-help { bottom: auto; top: calc(60px + env(safe-area-inset-top, 0px)); white-space: normal; text-align: center; width: max-content; max-width: min(88vw, 560px); box-sizing: border-box; line-height: 1.6; }
 body.touch .ex-stick { display: block; position: absolute; left: calc(22px + env(safe-area-inset-left, 0px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); width: 128px; height: 128px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .ex-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255, 255, 255, 0.82); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
 body.touch .ex-pad { display: grid; position: absolute; right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); grid-template-columns: repeat(2, 58px); gap: 12px; pointer-events: auto; }
@@ -200,6 +206,9 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
   .fl-name { display: none; }
   .directory { left: 12px; right: 12px; width: auto; top: 30%; bottom: calc(124px + env(safe-area-inset-bottom, 0px)); }
   .directory.collapsed { display: none; }
+  /* 漫游时底部没有楼层栏和工具条：目录占满位置条以下 */
+  body.exploring.ex-places .directory { top: calc(64px + env(safe-area-inset-top, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  body.exploring .dir-facts { display: none; }
   .hint, .legend { display: none; }
   .tour-bar { bottom: calc(130px + env(safe-area-inset-bottom, 0px)); width: calc(100% - 48px); box-sizing: border-box; justify-content: space-between; }
 }
@@ -257,6 +266,7 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
     <div class="dir-head">
       <div class="dir-badge" id="dirBadge">全</div>
       <div><div class="dir-title" id="dirTitle">园区导览</div><div class="dir-theme" id="dirTheme">选择左侧分期或楼层查看店铺</div></div>
+      <button type="button" class="dir-up" id="dirUp" hidden>上一级</button>
     </div>
     <div class="dir-search"><input id="search" type="search" placeholder="搜索店铺、美食、设施" autocomplete="off" aria-label="搜索店铺"></div>
     <div class="dir-facts" id="dirFacts"></div>
@@ -281,7 +291,7 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
     <div class="ex-cross" aria-hidden="true"></div>
     <div class="ex-card panel" id="exCard" hidden></div>
     <div class="ex-prompt panel" id="exPrompt" hidden></div>
-    <div class="ex-help panel" id="exHelp">点击画面开始 · 鼠标看 · WASD 走 · Shift 跑 · 空格跳（连按两下飞行）· E 换楼层 · Esc 放开鼠标</div>
+    <div class="ex-help panel" id="exHelp"><span class="ex-help-desk">点击画面开始 · 鼠标看 · WASD 走 · Shift 跑 · 空格跳（连按两下飞行）· E 换楼层 · Esc 放开鼠标</span><span class="ex-help-touch">左边摇杆走（推到底跑）· 右边拖动看 · ▲ 跳 ·「飞」飞行 · 楼梯电梯口点提示换楼层</span></div>
     <div class="ex-toast panel" id="exToast" hidden></div>
     <div class="ex-stick" id="exStick" aria-hidden="true"><div class="ex-knob" id="exKnob"></div></div>
     <div class="ex-pad" id="exPad">
