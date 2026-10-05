@@ -129,6 +129,11 @@ export function buildMall(spec, site, picker) {
     const serves = r.glass.map((s) => byShort[s].id);
     for (const g of KIT.glass) elevators.push(lift(`${bid}-${r.id}-${g.id}`, bid, 'glass', r.kitF, g.x, g.z, KIT.shaft, KIT.shaft, g.door, serves));
   }
+  if (spec.square) {
+    const sq = spec.square.setup(bid, byShort, lift);
+    elevators.push(...sq.elevators);
+    stairs.push(...sq.stairs);
+  }
   ctx.stairs = stairs;
 
   // ---------- 各层 ----------
@@ -136,6 +141,11 @@ export function buildMall(spec, site, picker) {
     if (lv.kind === 'parking') parkingLevel(ctx, lv);
     else if (lv.kind === 'roof') roofLevel(ctx, lv);
     else retailLevel(ctx, lv);
+    if (spec.square) {
+      const r = spec.square.level(lv, picker, ctx.state);
+      if (r.rows) ctx.state[`rows-${lv.id}`].push(r.rows);
+      ctx.state[`blocks-${lv.id}`] = r.blocks;
+    }
     commonRooms(ctx, lv);
     if (lv.kind === 'parking') fillParking(ctx, lv, elevators);
   }
@@ -170,6 +180,7 @@ export function buildMall(spec, site, picker) {
   const building = {
     id: bid, code: spec.code, name: spec.name, short: spec.short, en: spec.en, kind: 'mall', levels: allIds, outline, center, radius, plot: spec.plot,
     rotundas: Object.values(rots).map((r) => ({ id: r.id, x: r.x, z: r.z, R: r.R, kitF: r.kitF })),
+    square: spec.square ? spec.square.info : null,
     wings: wings.map((w) => ({ id: w.id, rot: w.rot, to: w.to || null, deg: w.deg, F: w.F, ua: w.ua, u0: w.u0, uEnd: w.uEnd, bandEnd: w.bandEnd, link: w.link, len: w.len, core: w.core, zone: w.zone, R: w.r.R, start: w.start || null, annex: !!w.annex })),
   };
   for (const lv of levels) delete lv.cfg;
@@ -179,7 +190,7 @@ export function buildMall(spec, site, picker) {
 // ---------------------------------------------------------------------------
 
 function escalatorPair(p, ctx) {
-  const F = p.rot ? ctx.rots[p.rot].kitF : ctx.wingById[p.wing].F;
+  const F = p.frame || (p.rot ? ctx.rots[p.rot].kitF : ctx.wingById[p.wing].F);
   const lo = ctx.byShort[p.from];
   const hi = ctx.byShort[p.to];
   const rise = +(hi.elev - lo.elev).toFixed(3);
@@ -199,7 +210,7 @@ function escalatorPair(p, ctx) {
     return {
       id: `${ctx.bid}-${p.pair}-${i ? 'D' : 'U'}`, building: ctx.bid, pair: `${ctx.bid}-${p.pair}`, from: lo.id, to: hi.id, dir: i ? 'down' : 'up',
       bottom: { x: bx, y: lo.elev, z: bz }, top: { x: tx, y: hi.elev, z: tz }, width: ESC.width, rise, run, slot: !!p.slot, label: p.label,
-      frame: F, axis: p.axis, wing: p.wing || null, rot: p.rot || null, slotRect,
+      frame: F, axis: p.axis, wing: p.wing || null, rot: p.rot || null, slotRect, square: !!p.square,
     };
   });
 }
@@ -209,7 +220,12 @@ function entrance(e, ctx) {
   let seg;
   let nx;
   let nz;
-  if (e.wing) {
+  if (e.frame) {
+    const [x0, z0] = toW(e.frame, e.seg.x0, e.seg.z0);
+    const [x1, z1] = toW(e.frame, e.seg.x1, e.seg.z1);
+    seg = { x0, z0, x1, z1 };
+    [nx, nz] = dirW(e.frame, e.n[0], e.n[1]);
+  } else if (e.wing) {
     const w = ctx.wingById[e.wing];
     const [x0, z0] = toW(w.F, w.uEnd, e.v0);
     const [x1, z1] = toW(w.F, w.uEnd, e.v1);
@@ -226,7 +242,7 @@ function entrance(e, ctx) {
     nz = Math.sin(m);
   }
   const width = Math.hypot(seg.x1 - seg.x0, seg.z1 - seg.z0);
-  return { id: `${ctx.bid}-${e.id}`, building: ctx.bid, name: e.name, level: lv.id, seg, nx, nz, width, main: !!e.main, to: e.to || 'site' };
+  return { id: `${ctx.bid}-${e.id}`, building: ctx.bid, name: e.name, level: lv.id, seg, nx, nz, width, main: !!e.main, to: e.to || 'site', square: !!e.square };
 }
 
 /** 楼层品牌来源：翼楼队列 → 楼层队列（v1 槽位）→ 按业态取用 */
@@ -412,7 +428,7 @@ function parkingLevel(ctx, lv) {
 }
 
 function fillParking(ctx, lv, elevators) {
-  const blocks = [...lv.walk.map((w) => w.poly), ...lv.rooms.flatMap((m) => m.rects.map((r) => lrectPoly(m.frame, r))), ...lv.voids.map((v) => v.poly)];
+  const blocks = [...lv.walk.map((w) => w.poly), ...lv.rooms.flatMap((m) => m.rects.map((r) => lrectPoly(m.frame, r))), ...lv.voids.map((v) => v.poly), ...(ctx.state[`blocks-${lv.id}`] || [])];
   const stalls = [];
   const columns = [];
   for (const g of ctx.state[`rows-${lv.id}`]) {

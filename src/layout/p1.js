@@ -1,7 +1,7 @@
 // 一期 云澜汇：Y 形三翼 + 圆厅（规格第 4 节）。所有局部坐标见实现计划"一期关键数值"。
 import { rect, rectPoly } from './geom.js';
 import { KIT, HW } from './constants.js';
-import { SQUARE_CHAIN, NW_END } from './square.js';
+import { SQUARE_CHAIN, NW_END, SQUARE_ESCALATORS, SQUARE_ENTRANCES, SQUARE_INFO, squareSetup, squareLevel } from './square.js';
 
 /** 西北翼喇叭口：圆厅弧（西翼、北翼外墙与圆周交点之间）到全宽段起点 u=NW_START 的两块口袋（西北翼局部坐标） */
 const NW_START = 39.85;
@@ -110,13 +110,16 @@ export const P1 = {
     { pair: 'P7', wing: 'W', from: '3F', to: 'RF', axis: 'x', sign: 1, bottom: 42, cross: 0, slot: true, label: '3F → 天台花园' },
     { pair: 'K7', wing: 'NW', from: '1F', to: '2F', axis: 'x', sign: 1, bottom: 44, cross: 0, slot: true, label: '1F ↔ 2F' },
     { pair: 'K8', wing: 'NW', from: '2F', to: '3F', axis: 'x', sign: 1, bottom: 70, cross: 0, slot: true, label: '2F ↔ 3F' },
+    ...SQUARE_ESCALATORS,
   ],
+  square: { setup: squareSetup, level: squareLevel, info: SQUARE_INFO },
   entrances: [
     { id: 'SE', name: '东南主入口', level: '1F', wing: 'SE', v0: -8, v1: 8, main: true },
     { id: 'W', name: '西门', level: '1F', wing: 'W', v0: -4, v1: 4 },
     { id: 'S', name: '南门', level: '1F', rot: 'C', a0: 99, a1: 111 },
     { id: 'E', name: '东门', level: '1F', rot: 'C', a0: 339, a1: 351 },
     { id: 'BR', name: '天桥入口', level: '2F', wing: 'SE', v0: -5, v1: 5, to: 'bridge' },
+    ...SQUARE_ENTRANCES,
   ],
   ramps: [
     { id: 'IN', type: 'street-in', name: '车库入口', wing: 'N', lane: rect(85, -5.5, 141, -0.5), from: [141, -3, 'street'], to: [85, -3, 'B1'] },
