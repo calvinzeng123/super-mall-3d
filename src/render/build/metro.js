@@ -285,16 +285,19 @@ export function buildMetro(ctx) {
   signs.b2.flush(L2.base, signMat);
   signs.shell.flush(L1.shell, signMat);
 
-  // 动态：吊顶按相机高度显隐；列车进站 → 停站开门 → 出站
+  // 动态：吊顶按相机高度显隐；列车进站 → 停站开门 → 出站（导览可把时钟对到"列车正在进站"）
   const period = 84;
+  let offset = 0, last = 0;
+  ctx.metroSync = (at) => { offset = at - (((last % period) + period) % period); };
   ctx.dynamic.push({
     name: 'metro',
     update(dt, time, app) {
+      last = time;
       const cy = app.camera.position.y;
       for (const c of ceilings) c.group.visible = !!(c.L.base.visible && c.L.group.visible) && cy < c.y - 0.05;
       trains.forEach((tr, i) => {
         if (!L2.base.visible || !L2.group.visible) return;
-        const t = (time + i * period * 0.5) % period;
+        const t = (((time + offset + i * period * 0.5) % period) + period) % period;
         const s = tr.dir;
         let x = 0, open = 0, on = true;
         if (t < 22) x = -s * XFAR * (1 - t / 22) ** 2;

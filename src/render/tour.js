@@ -1,5 +1,6 @@
 // 一键导览（园区版，规格第 9 节）：园区全景 → 一期东南主入口 → 圆厅中庭 → 乘扶梯上 2F → 2F 天桥入口 → 经云环天桥
-// → 二期西翼 2F → 星湾真冰场圆厅 → 天空跑道 → 俯瞰三期街区 → 街巷与中心广场 → 一期天台摩天轮 → 园区全景。
+// → 二期西翼 2F → 星湾真冰场圆厅 → 天空跑道 → 地铁站厅 → 乘扶梯下站台 → 站台列车 → 俯瞰三期街区 → 街巷与中心广场
+// → 一期方庭中庭 → 一期天台摩天轮 → 园区全景。
 // 镜头位置全部由布局数据（套件 / 翼楼 / 连廊局部坐标）换算；每一步可指定要展开室内的那一期与阴影范围。
 import * as THREE from 'three';
 import { toW } from '../layout/geom.js';
@@ -36,6 +37,9 @@ function steps(layout) {
   const C = (u, y, v) => { const [x, z] = toW(court.frame, u, v); return V(x, y, z); };
   const plaza = lv('P3-1F').features.find((f) => f.type === 'plaza');
   const k4 = ride(esc('P1-K4'));
+  const sq = p1.square;
+  const SQ = (u, y, v) => { const [x, z] = toW(sq.F, u, v); return V(x, y, z); };
+  const mb = esc('M-MB', 'down');
   return [
     { caption: '云澜汇园区 · 三期商业 + 云环天桥 + 中央公园', pos: V(150, 300, 330), target: V(0, 0, 0), dur: 5, shadow: 380 },
     { caption: '一期东南主入口 · 正对路口', building: 'P1', pos: W(p1, 'SE', SE.uEnd + 46, 9, 0), target: W(p1, 'SE', SE.uEnd, 7, 0), dur: 4.5, shadow: 120 },
@@ -52,9 +56,14 @@ function steps(layout) {
     { caption: '中翼 2F → 冰场圆厅', pos: W(p2, 'M', 40, 9.6, 3), target: K(p2, 'B', 0, 4, 0), dur: 5 },
     { caption: '星湾真冰场 · 圆厅俯瞰', pos: K(p2, 'B', 19, 10.4, 13), target: K(p2, 'B', 0, 0.2, 0), dur: 4.5 },
     { caption: '二期天台 · 天空跑道与篮球场', pos: C(52, rf2.elev + 22, -42), target: C(52, rf2.elev, 0), dur: 5, shadow: 160 },
+    { caption: '地铁云澜汇站 · 站厅与闸机', building: 'M', pos: V(47, -2.2, -8.5), target: V(5, -3.6, 0.5), dur: 5.5, shadow: 120 },
+    { caption: '乘扶梯下站台', pos: V(mb.top.x + 3.4, mb.top.y + 2.3, mb.top.z - 0.4), target: V(mb.bottom.x, mb.bottom.y + 1.2, mb.bottom.z), dur: 3.5 },
+    { caption: '乘扶梯下站台', pos: V(mb.bottom.x - 1.5, mb.bottom.y + 1.75, mb.bottom.z), target: V(-20, mb.bottom.y + 1.4, 3), dur: 4 },
+    { caption: '岛式站台 · 列车进站，屏蔽门开启', pos: V(-24, -10.3, 3.6), target: V(6, -10.9, 6.5), dur: 10, train: 16 },
     { caption: '俯瞰三期 云澜里 · 开放街区', building: 'P3', pos: V(-40, 80, 20), target: V(-130, 4, 110), dur: 5.5, shadow: 170 },
     { caption: '三期街巷 · 店铺、外摆与串灯', pos: V(-58, 2.4, 44.5), target: V(-140, 3, 43), dur: 5, shadow: 90 },
     { caption: '中心广场 · 街区舞台与旱喷', pos: V(plaza.x - 10, 7, plaza.z - 8), target: V(plaza.x + 3, 2, plaza.z - 1), dur: 4.5 },
+    { caption: '一期方庭 · 原四方格商场的通高中庭', building: 'P1', pos: SQ(-21, 6.5 + 1.75, 14), target: SQ(6, 10.5, -3), dur: 5.5, shadow: 120 },
     { caption: '一期天台 · 云澜之眼摩天轮', building: 'P1', pos: W(p1, 'W', 72, 21.5, 10), target: hub, dur: 5.5, shadow: 140 },
     { caption: '园区全景', pos: V(110, 430, 480), target: V(0, 0, 0), dur: 5, shadow: 380 },
   ];
@@ -70,6 +79,7 @@ export function attachTour(app, ui) {
       app.refresh();
     }
     if (seg.shadow) app.env.setShadowFocus(seg.target.clone(), seg.shadow);
+    if (seg.train !== undefined && app.ctx.metroSync) app.ctx.metroSync(seg.train);
     ui.tour(seg.caption);
   };
   app.startTour = () => {
