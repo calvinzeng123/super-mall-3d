@@ -136,12 +136,20 @@ export function createUI(app, layout) {
     }
     list.innerHTML = html;
   }
+  // 手机上目录面板盖住画面中部：从目录里选了分期 / 楼层 / 店铺后自动收起，否则触摸落在面板上，3D 视角转不动
+  const narrow = window.matchMedia('(max-width: 760px)');
+  const collapseOnPhone = () => {
+    if (!narrow.matches) return;
+    directory.classList.add('collapsed');
+    toolbar.querySelector('[data-act="directory"]')?.setAttribute('aria-pressed', 'false');
+  };
   list.addEventListener('click', (e) => {
     const b = e.target.closest('.shop');
     if (!b || b.disabled) return;
     if (b.dataset.building) app.setBuilding(b.dataset.building);
     else if (b.dataset.level) app.setFocus(b.dataset.level);
     else if (b.dataset.unit) app.focusUnit(unitsById.get(b.dataset.unit));
+    collapseOnPhone();
   });
   search.addEventListener('input', renderDirectory);
 

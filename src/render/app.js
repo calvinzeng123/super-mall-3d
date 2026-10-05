@@ -25,6 +25,7 @@ import { buildTraffic } from './build/traffic.js';
 import { buildStreet } from './build/street.js';
 import { buildBridges } from './build/bridges.js';
 import { buildPark } from './build/park.js';
+import { createPerfMonitor } from './perf.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
 const EXPLODE_GAP = 13;
@@ -213,6 +214,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     flight = { p0: camera.position.clone(), t0: controls.target.clone(), p1, t1: target.clone(), time: 0, duration };
     env.setShadowFocus(target, shadowRadius ?? Math.min(340, Math.max(90, p1.distanceTo(target) * 0.6)));
   }
+  // 用户一开始拖动 / 缩放就交还控制权：取消正在进行的镜头飞行（慢设备上飞行会持续数秒，期间拖不动）
+  controls.addEventListener('start', () => { flight = null; });
   const bCenter = (b, y = 8) => V(b.center[0], y, b.center[1]);
   function buildingView(bid) {
     const b = ctx.bById[bid];
@@ -238,6 +241,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
+    get flying() { return !!flight; },
     buildingIds: layout.buildings.map((b) => b.id),
     levelsOf: (bid) => ctx.buildings[bid].levels.map((L) => L.lv),
     refresh() { applyVisibility(); },
@@ -374,7 +378,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const clock = new THREE.Clock();
   let elapsed = 0;
   let degraded = false;
-  const perf = { start: performance.now(), t0: performance.now(), frames: 0 };
+  const perfMon = createPerfMonitor(performance.now());
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (!w || !h) return;
@@ -413,30 +417,15 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
     highlight.update(elapsed, ctx);
     env.render();
-    // 帧率持续过低时自动降级：关阴影、泛光，降低像素比（只在页面可见、加载 6 秒后按真实帧率判断）
-    if (!degraded) {
-      const now = performance.now();
-      const gap = now - (perf.last || now);
-      perf.last = now;
-      // 单帧间隔 >250ms 视为卡顿或后台节流（不是持续低帧率），重新计时
-      if (document.hidden || now - perf.start < 6000 || gap > 250) { perf.t0 = now; perf.frames = 0; }
-      else {
-        perf.frames++;
-        if (now - perf.t0 > 5000) {
-          const fps = (perf.frames * 1000) / (now - perf.t0);
-          perf.t0 = now;
-          perf.frames = 0;
-          if (fps < 22) {
-            degraded = true;
-            renderer.setPixelRatio(1);
-            renderer.shadowMap.enabled = false;
-            env.bloomEnabled = false;
-            scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
-            resize();
-            console.info(`性能降级：平均 ${fps.toFixed(1)} fps，已关闭阴影与泛光`);
-          }
-        }
-      }
+    // 帧率持续过低时自动降级：关阴影、泛光，降低像素比（规则见 perf.js：极慢设备也能触发，单次卡顿与后台节流不触发）
+    if (!degraded && perfMon.tick(performance.now(), document.hidden)) {
+      degraded = true;
+      renderer.setPixelRatio(1);
+      renderer.shadowMap.enabled = false;
+      env.bloomEnabled = false;
+      scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
+      resize();
+      console.info(`性能降级：平均 ${perfMon.fps.toFixed(1)} fps，已关闭阴影与泛光`);
     }
   });
 
