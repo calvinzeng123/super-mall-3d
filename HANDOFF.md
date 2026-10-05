@@ -95,7 +95,7 @@ serve.py                  开发服务器：禁缓存；POST /__shot?name=xx 把
 - 统计绘制调用要先设 `renderer.info.autoReset = false`（后期处理有多个 pass）。当前园区视角约 495 次。
 - **内存预算（手机能否打开的关键）**：iOS 会直接结束内存超限的网页进程，Claude App 里表现为整页 "Something went wrong"。第 7 版几何体约 302 MB、贴图约 367 MB、构建峰值堆约 700 MB，在 iPhone 上打不开（判断为内存超限，未能在真机上抓到崩溃日志）。第 8 版的对策：
   - `batch.js` 顶点格式压缩为 18 字节/顶点（Float32 位置 + Int8 法线 + Uint8 颜色，只有招牌批次带 uv），几何体约 117 MB；
-  - `app.js` 的 `releaseGeometryAfterUpload`：顶点数组上传显卡后释放（包围体提前算好；拾取盒不上传所以数组保留）；
+  - `app.js` 的 `releaseGeometryAfterUpload`：顶点数组上传显卡后释放（包围体提前算好；拾取盒的几何体排除在外——渲染器照样会上传它们，但射线拾取要读顶点）；
   - `textures.js` 的 `scaled` / `releaseAfterUpload`：招牌图集、地面材质、地铁导向牌在手机上缩到一半边长，上传后释放画布；
   - `device.js`：手机 / 平板阴影贴图 2048、像素比 ≤1.5。
   - 新增大量几何前先在本地量一下（遍历场景，累加各 attribute 的字节数与贴图像素），别让总量回到第 7 版的水平。
