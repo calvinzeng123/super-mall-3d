@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { NORMAL } from '../../layout/geom.js';
 import { themeOf } from '../theme.js';
 import { clearHeight } from './shell.js';
+import { storeStyle, glassDoors } from '../../layout/frontage.js';
+
+export { storeStyle };
 
 export function frontFrame(f) {
   const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0);
@@ -19,16 +22,6 @@ export function frontFrame(f) {
 export function shade(hex, k) {
   const c = new THREE.Color(hex);
   return k < 0 ? c.lerp(new THREE.Color('#000000'), -k) : c.lerp(new THREE.Color('#ffffff'), k);
-}
-
-/** 店面样式：布局数据里的 style 为准；美食层的档口与小吃改为开敞柜台 */
-export function storeStyle(lv, u) {
-  const cat = u.brand.cat;
-  if (u.style === 'showroom') return 'glass';
-  if (u.style && u.style !== 'glass') return u.style;
-  if (lv.kind === 'food' && ['food', 'snack'].includes(cat)) return 'stall';
-  if (cat === 'cinema') return 'cinema';
-  return 'glass';
 }
 
 export function buildStorefronts(ctx) {
@@ -62,8 +55,7 @@ function front(B, S, lv, u, f, cell, style) {
   const frameCol = style === 'oldstreet' ? '#4a2c1a' : lv.short === '1F' ? '#a88a55' : '#3f454b';
 
   if (style === 'glass' || style === 'cinema' || style === 'market') {
-    const doorW = F.len >= 5 ? Math.min(3.2, F.len * 0.3) : F.len >= 3 ? 1.8 : 0;
-    const doors = style === 'market' ? [F.len * 0.25, F.len * 0.75] : [F.len / 2];
+    const { width: doorW, at: doors } = glassDoors(style, F.len);
     const n = Math.max(1, Math.round(F.len / 1.6));
     for (let i = 0; i < n; i++) {
       const a = (i / n) * F.len, b = ((i + 1) / n) * F.len, m = (a + b) / 2;

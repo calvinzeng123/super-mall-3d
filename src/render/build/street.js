@@ -8,6 +8,7 @@ import { COLORS } from '../theme.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bench, planter, umbrella, tableSet } from './props.js';
 import { shade } from './storefronts.js';
+import { streetDoor } from '../../layout/frontage.js';
 
 const GAL = 2.5;
 const BAY = 4;
@@ -180,7 +181,7 @@ function shopfront(B, S, atlas, sd, [a, c], y0, top, u, skin, ground) {
   const cell = atlas.cell(u.id);
   const glassTop = ground ? y0 + 3.45 : y0 + 2.95;
   const kerb = ground ? y0 + 0.32 : y0 + 0.06;
-  const door = Math.min(2.2, len * 0.3);
+  const door = streetDoor(len);
   const mid = (a + c) / 2;
   const n = Math.max(2, Math.round(len / 1.8));
   for (let i = 0; i < n; i++) {
