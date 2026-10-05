@@ -1,5 +1,6 @@
 // 步行连通图（多边形版）：同层走道相接、铺位门面临走道、扶梯 / 电梯 / 楼梯跨层、
-// 入口连接楼内走道与场地（或天桥）、首层为室外地面的楼层直接与场地相接、天桥落地塔连接桥面与地面。
+// 入口连接楼内走道与场地、天桥或另一栋的楼层（如各期地下层 ↔ 地铁站厅）、首层为室外地面的楼层直接与场地相接、
+// 天桥落地塔连接桥面与地面。
 import { pointInPoly, polysConnect, segProbes } from './geom.js';
 
 const mid = (s) => [(s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2];
@@ -64,7 +65,8 @@ export function buildWalkGraph(L) {
     const id = node(`ent:${e.id}`);
     for (const w of walksAt(e.level, [mx - e.nx, mz - e.nz])) link(id, w);
     const out = [mx + e.nx, mz + e.nz];
-    for (const w of e.to === 'bridge' ? bridgeAt(out) : siteAt(out)) link(id, w);
+    const outer = e.to === 'bridge' ? bridgeAt(out) : e.to === 'site' ? siteAt(out) : walksAt(e.to, out);
+    for (const w of outer) link(id, w);
   }
   if (L.bridges) for (const v of L.bridges.verticals) chain([...bridgeAt(v.deck), ...siteAt(v.ground)]);
   return { adj };

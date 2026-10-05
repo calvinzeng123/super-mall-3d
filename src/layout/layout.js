@@ -4,6 +4,7 @@ import { BrandPicker } from './brands.js';
 import { buildMall } from './mall.js';
 import { buildP3 } from './p3.js';
 import { buildBridges } from './bridges.js';
+import { buildMetro } from './metro.js';
 import { P1 } from './p1.js';
 import { P2 } from './p2.js';
 import { CATEGORIES } from './constants.js';
@@ -13,6 +14,7 @@ export function buildLayout() {
   const picker = new BrandPicker(2026);
   const parts = [buildMall(P1, site, picker), buildMall(P2, site, picker), buildP3(site, picker)];
   addPark(site);
+  parts.push(buildMetro(parts, site, picker));
   const all = (k) => parts.flatMap((p) => p[k]);
   const buildings = parts.map((p) => p.building);
   return {

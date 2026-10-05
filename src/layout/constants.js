@@ -27,6 +27,8 @@ export const CATEGORIES = {
   edu: { label: '教育培训', color: '#3f8f6d' },
   studio: { label: '设计工作室', color: '#8a6f5a' },
   rink: { label: '真冰场', color: '#4aa3df' },
+  convenience: { label: '便利店', color: '#1c7c54' },
+  bakery: { label: '面包烘焙', color: '#b7791f' },
 };
 
 /** 翼楼半宽、商业街半宽、端部区长度、核心筒长度、商业街通高缝半宽 */

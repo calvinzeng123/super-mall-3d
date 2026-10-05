@@ -2,7 +2,7 @@
 // 楼上经外挑连廊与端部外挂楼梯进入；地下一层整片停车，西侧直坡道接西外环。
 // 约定：每栋一个 frame（原点在楼栋中心，u 沿长边 L），楼栋 u∈[−L/2,L/2]、v∈[−W/2,W/2]；
 // 外挑连廊在 +v 侧与 +u 端（宽 2.5m），+u 端再外挂 4m 服务区：楼梯（部分楼栋另有客梯井）。
-import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, polyBounds, pointInPoly, distToPolyEdge, dist } from './geom.js';
+import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, toW, dirW, polyBounds, pointInPoly, distToPolyEdge, dist } from './geom.js';
 import { fillRows, markSpecial } from './parking.js';
 import { split, lift } from './mall.js';
 import { addDriveway, addTrench } from './campus.js';
@@ -32,6 +32,11 @@ const BAY = 4;
 /** 街区铺装（1F 室外地面）、地下车库范围 */
 export const DISTRICT = rect(-245, 20, -16, 205);
 const BASEMENT = rect(-240, 40, -40, 184);
+/** 地库东北角 45° 切角：切面正对路口，是地铁三期通道口（135° 对角线 frame 上 u = PORTAL_U，v∈[−5,5]） */
+const CHAMFER = 5 * Math.SQRT2;
+const BASEMENT_POLY = [[BASEMENT.x0, BASEMENT.z0], [BASEMENT.x1 - CHAMFER, BASEMENT.z0], [BASEMENT.x1, BASEMENT.z0 + CHAMFER], [BASEMENT.x1, BASEMENT.z1], [BASEMENT.x0, BASEMENT.z1]];
+const CORNER_CUT = [[BASEMENT.x1 - CHAMFER, BASEMENT.z0], [BASEMENT.x1, BASEMENT.z0], [BASEMENT.x1, BASEMENT.z0 + CHAMFER]];
+export const PORTAL_U = Math.hypot(BASEMENT.x1, BASEMENT.z0) + CHAMFER / Math.SQRT2;
 /** 地库楼梯口（广场上的玻璃亭，B1 与 1F 共用一扇门，门开向 B1 车道） */
 const KIOSKS = [
   { id: 'KS1', r: rect(-226, 71, -218, 77), side: 'S' },
@@ -88,7 +93,7 @@ export function buildP3(site, picker) {
   const district = rectPoly(DISTRICT);
   const levels = LEVELS.map((c) => ({
     id: `${bid}-${c.short}`, building: bid, short: c.short, name: c.name, kind: c.kind, elev: c.elev, height: c.height,
-    theme: { ...c.theme }, outline: c.short === 'B1' ? rectPoly(BASEMENT) : district, ground: !!c.ground,
+    theme: { ...c.theme }, outline: c.short === 'B1' ? BASEMENT_POLY : district, ground: !!c.ground,
     units: [], rooms: [], walk: [], voids: [], features: [], slab: null, cfg: c,
   }));
   const by = Object.fromEntries(levels.map((l) => [l.short, l]));
@@ -178,9 +183,11 @@ export function buildP3(site, picker) {
   const B = BASEMENT;
   const aisleZ = Array.from({ length: 9 }, (_, k) => 45 + 16 * k);
   // 单向车道：东西向车道隔行反向，三条南北向车道连成回路（dir 为行驶方向，供地面箭头与车流使用）
-  aisleZ.forEach((z, k) => p.walk.push({ ...walkL(IDENTITY, `A${k}`, 'aisle', rect(B.x0, z, B.x1, z + 6)), dir: k % 2 ? [-1, 0] : [1, 0] }));
-  const cross = [['XW', B.x0, B.x0 + 6, [0, 1]], ['XM', -143, -137, [0, -1]], ['XE', B.x1 - 6, B.x1, [0, -1]]];
-  for (const [id, a, c, dir] of cross) p.walk.push({ ...walkL(IDENTITY, id, 'aisle', rect(a, B.z0, c, B.z1)), dir });
+  // 东北角切角：A0 止于东车道西缘，东车道自切面起，切面与东车道之间补一块三角车道
+  aisleZ.forEach((z, k) => p.walk.push({ ...walkL(IDENTITY, `A${k}`, 'aisle', rect(B.x0, z, k ? B.x1 : B.x1 - 6, z + 6)), dir: k % 2 ? [-1, 0] : [1, 0] }));
+  const cross = [['XW', B.x0, B.x0 + 6, [0, 1], B.z0], ['XM', -143, -137, [0, -1], B.z0], ['XE', B.x1 - 6, B.x1, [0, -1], B.z0 + CHAMFER]];
+  for (const [id, a, c, dir, z0] of cross) p.walk.push({ ...walkL(IDENTITY, id, 'aisle', rect(a, z0, c, B.z1)), dir });
+  p.walk.push({ id: 'XE-cut', kind: 'aisle', poly: [[B.x1 - 6, B.z0 + CHAMFER - 6], [B.x1, B.z0 + CHAMFER], [B.x1 - 6, B.z0 + CHAMFER]], outdoor: false });
   for (const b of blocks.filter((k) => k.lift)) p.walk.push(walkL(b.F, `${b.id}-lobby`, 'lobby', rect(b.h - 2, b.w - 12, b.h + GAL, b.w + GAL)));
   const segs = [['G', B.x0 + 6, -143], ['H', -137, B.x1 - 6]];
   const rows = [];
@@ -193,7 +200,7 @@ export function buildP3(site, picker) {
     }
     rows.push({ id: `${zone}-w1`, u0, u1, v0: aisleZ[aisleZ.length - 1] + 6, v1: B.z1, face: 'N', zone });
   }
-  const blocked = [...p.walk.map((w) => w.poly), ...p.rooms.flatMap((m) => m.rects.map((r) => lrectPoly(m.frame, r)))];
+  const blocked = [...p.walk.map((w) => w.poly), ...p.rooms.flatMap((m) => m.rects.map((r) => lrectPoly(m.frame, r))), CORNER_CUT];
   const stalls = [];
   const columns = [];
   for (const zone of ['G', 'H']) {
@@ -247,7 +254,13 @@ export function buildP3(site, picker) {
     kiosks: KIOSKS.map((k) => ({ ...k, poly: rectPoly(k.r) })),
   };
   for (const lv of levels) delete lv.cfg;
-  return { building, levels, escalators: [], elevators, stairs, entrances: [], ramps };
+  // 地铁三期通道口：切面中段 8m，外法线指向路口
+  const PF = frame(0, 0, 135, 'P3-metro');
+  const [x0, z0] = toW(PF, PORTAL_U, -4);
+  const [x1, z1] = toW(PF, PORTAL_U, 4);
+  const [nx, nz] = dirW(PF, -1, 0);
+  const entrances = [{ id: `${bid}-MT`, building: bid, name: '地铁通道口', level: p.id, seg: { x0, z0, x1, z1 }, nx, nz, width: 8, main: false, to: 'M-B1', square: false }];
+  return { building, levels, escalators: [], elevators, stairs, entrances, ramps };
 }
 
 /** 1F 室外：中心广场（舞台 + 旱喷水景）、梧桐小广场、沿街行道树与巷内散植乔木 */

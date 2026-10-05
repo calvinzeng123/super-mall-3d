@@ -54,7 +54,7 @@ export function addPlaza(site, id, poly, building) {
 export const addDriveway = (site, poly) => site.driveways.push(poly);
 export const addTrench = (site, poly) => site.trenches.push(poly);
 
-/** 中央公园：不规则湖面、环湖步道、林地；地铁站出入口（规格第 7 节） */
+/** 中央公园：不规则湖面、环湖步道、林地（地铁 B 口由 metro.js 登记，规格第 7 节） */
 export function addPark(site) {
   const cx = 168, cz = 142;
   const lake = [];
@@ -75,12 +75,9 @@ export function addPark(site) {
   site.park = {
     lake, loop, center: [cx, cz],
     paths: entries.map(([a, b]) => [a, b, near(b)]),
-    metro: { x: 62, z: 48, deg: 0, name: '地铁云澜汇站 · B 口' },
+    metro: null,
     plaza: rect(30, 26, 92, 70),
   };
   const r = rect(16, 20, 286, 256);
   site.walk.push({ id: 'park', kind: 'park', poly: rectPoly(r), outdoor: true });
-  // 地铁口下沉梯井（地面开口）
-  const m = site.park.metro;
-  addTrench(site, rectPoly(rect(m.x - 2.2, m.z - 1.95, m.x + 5.2, m.z + 1.95)));
 }

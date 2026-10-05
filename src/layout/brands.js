@@ -301,6 +301,8 @@ const MORE = {
   bar: [['精酿车间', 'BREW WORKSHOP', '#1e293b', '#fcd34d', 'cup'], ['爵士酒廊', 'JAZZ LOUNGE', '#0f172a', '#f5d0fe', 'moon'], ['酒馆 99', 'TAVERN 99', '#451a03', '#fde68a', 'cup']],
   home: [['竹编', 'BAMBOO WEAVE', '#efe7da', '#5c4a32', 'leaf'], ['灯具社', 'LAMP CLUB', '#1f2937', '#fde047', 'sun'], ['香插', 'INCENSE NOOK', '#efe6f5', '#4b2a6b', 'drop']],
   studio: [['皮具工坊', 'LEATHER LAB', '#5a3b22', '#f1dcc0', 'mono'], ['花艺课', 'FLORAL CLASS', '#f4f7ee', '#5c7a3a', 'flower'], ['纸艺', 'PAPER CRAFT', '#fff7ed', '#c2410c', 'star']],
+  convenience: [['途中便利', 'EN ROUTE MART', '#0f5132', '#f8f9fa', 'star']],
+  bakery: [['麦香站', 'WHEAT STATION', '#fff4e0', '#9a4a12', 'sun']],
 };
 for (const [cat, list] of Object.entries(MORE)) POOLS[cat] = [...(POOLS[cat] || []), ...list];
 

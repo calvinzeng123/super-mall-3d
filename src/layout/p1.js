@@ -119,6 +119,7 @@ export const P1 = {
     { id: 'S', name: '南门', level: '1F', rot: 'C', a0: 99, a1: 111 },
     { id: 'E', name: '东门', level: '1F', rot: 'C', a0: 339, a1: 351 },
     { id: 'BR', name: '天桥入口', level: '2F', wing: 'SE', v0: -5, v1: 5, to: 'bridge' },
+    { id: 'MT', name: '地铁通道口', level: 'B1M', wing: 'SE', v0: -4, v1: 4, to: 'M-B1' },
     ...SQUARE_ENTRANCES,
   ],
   ramps: [

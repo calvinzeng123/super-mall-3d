@@ -102,6 +102,7 @@ export const P2 = {
     { id: 'SB', name: '冰场门', level: '1F', rot: 'B', a0: 105, a1: 117 },
     { id: 'N', name: '北门', level: '1F', rot: 'A', a0: 264, a1: 276 },
     { id: 'BR', name: '天桥入口', level: '2F', wing: 'W', v0: -5, v1: 5, to: 'bridge' },
+    { id: 'MT', name: '地铁通道口', level: 'B1', wing: 'W', v0: -4, v1: 4, to: 'M-B1' },
   ],
   ramps: [
     { id: 'IN', type: 'street-in', name: '车库入口', wing: 'M', lane: rect(48.5, -50, 53.5, -22), from: [51, -50, 'street'], to: [51, -22, 'B1'] },
