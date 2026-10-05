@@ -33,7 +33,7 @@
 
 **文件：** 创建 `tests/nav.test.js`
 
-- [ ] 写测试：
+- [x] 写测试：
 
 ```js
 // 第一人称导航模型（v4 规格第 3、8 节）。
@@ -199,29 +199,29 @@ test('连通：一期 1F 从主入口内侧能走到同层每家店的门口', (
 });
 ```
 
-- [ ] 运行 `node --test tests/nav.test.js`，预期失败（模块不存在）。Commit `test(nav): 第一人称导航模型测试（任务 F1）`
+- [x] 运行 `node --test tests/nav.test.js`，预期失败（模块不存在）。Commit `test(nav): 第一人称导航模型测试（任务 F1）`
 
 ### 任务 F2：门洞规则共享（frontage.js）
 
 **文件：** 创建 `src/layout/frontage.js`；修改 `src/render/build/storefronts.js`、`street.js`、`interiors.js`
 
-- [ ] `storeStyle(lv, u)`：从 storefronts.js 原样搬过来（showroom → glass；u.style 优先；美食层的 food / snack → stall；cinema → cinema；其余 glass）。P3 店铺 style 为 `street`，冰场 cat 为 `rink` 时返回 `rink`。
-- [ ] `doorGaps(style, len)` 返回门面局部区间数组 `[[a, b], ...]`：
+- [x] `storeStyle(lv, u)`：从 storefronts.js 原样搬过来（showroom → glass；u.style 优先；美食层的 food / snack → stall；cinema → cinema；其余 glass）。P3 店铺 style 为 `street`，冰场 cat 为 `rink` 时返回 `rink`。
+- [x] `doorGaps(style, len)` 返回门面局部区间数组 `[[a, b], ...]`：
   - glass / cinema / market / showroom：门宽 `len ≥ 5 ? min(3.2, 0.3·len) : len ≥ 3 ? 1.8 : 0`；门中心 market 为 `[0.25·len, 0.75·len]`，其余 `[0.5·len]`；门宽为 0 时返回 `[[0, len]]`；
   - street：门宽 `min(2.2, 0.3·len)`，居中；
   - stall / oldstreet / bar / pavilion：`[[0, len]]`；
   - rink：`[]`。
-- [ ] storefronts.js 的 `doorW`、`doors` 与 street.js 的 `door` 改为由 `doorGaps` 推出（画面不变）；`storefronts.js` 继续导出 `storeStyle`（转导出），interiors.js 不用改调用。
-- [ ] `npm test`、`npm run build` 通过；浏览器抽看一期 1F、三期 1F 店面不变。Commit `refactor(render): 店面门洞规则抽到 frontage.js（任务 F2）`
+- [x] storefronts.js 的 `doorW`、`doors` 与 street.js 的 `door` 改为由 `doorGaps` 推出（画面不变）；`storefronts.js` 继续导出 `storeStyle`（转导出），interiors.js 不用改调用。
+- [x] `npm test`、`npm run build` 通过；浏览器抽看一期 1F、三期 1F 店面不变。Commit `refactor(render): 店面门洞规则抽到 frontage.js（任务 F2）`
 
 ### 任务 F3：导航模型（nav.js）
 
 **文件：** 创建 `src/layout/nav.js`
 
-- [ ] 常量 `NAV = { r: 0.3, eye: 1.62, reach: 1.6, cell: 8 }`。
-- [ ] 楼面：每个楼层（`y = elev`，可站立区 = `slab.pieces` 的外框减洞，再减 `voids`）；`ground`（园区 ±298 减一期 / 二期外轮廓、三期街区矩形、湖、`site.trenches`、`site.openings`）；`bridge`（`bridges.walk` 多边形并集，`y = bridges.y`）。
-- [ ] 门口区（zone）：每个传送边、每段坡道两端，在相关楼面各加一个跨在边线上的矩形（沿边宽同门宽、法向 ±0.6m）计入可站立区。
-- [ ] 墙（局部线段 → 世界线段）：
+- [x] 常量 `NAV = { r: 0.3, eye: 1.62, reach: 1.6, cell: 8 }`。
+- [x] 楼面：每个楼层（`y = elev`，可站立区 = `slab.pieces` 的外框减洞，再减 `voids`）；`ground`（园区 ±298 减一期 / 二期外轮廓、三期街区矩形、湖、`site.trenches`、`site.openings`）；`bridge`（`bridges.walk` 多边形并集，`y = bridges.y`）。
+- [x] 门口区（zone）：每个传送边、每段坡道两端，在相关楼面各加一个跨在边线上的矩形（沿边宽同门宽、法向 ±0.6m）计入可站立区。
+- [x] 墙（局部线段 → 世界线段）：
   - 铺位：`subtractOpenings(mergeSegments(unionOutline(u.rects)), 门洞)`，门洞由 `doorGaps(storeStyle(lv,u), len)` 落到每段门面上；
   - 用房：`unionOutline(m.rects)` 全封闭；
   - 不在核心筒的电梯（`glass` 或 `exterior`）：井道矩形；
@@ -229,48 +229,56 @@ test('连通：一期 1F 从主入口内侧能走到同层每家店的门口', (
   - 地铁要素：`gates` 每个闸机柜一段（x ± 0.85）；`fence`；`tvm` 外包矩形；`psd`；
   - 地面：地铁出入口雨棚两侧玻璃与背板（`kiosk.frame` 局部 u∈[−0.5,12]，v=±3.45；u=−0.5 背板）。
   - 按 `NAV.cell` 网格建索引。
-- [ ] 传送边：入口（排除 `kiosk`）`e.level` ↔ 目标楼面（`site` → 入口在三期街区内为 `P3-1F`，否则 `ground`；`bridge` → `bridge`；其他为楼层 id）；三期街区矩形四边 `ground` ↔ `P3-1F`。
-- [ ] 坡道（`{ id, kind, F, len, hw, y0, y1, low, high, belt }`，u 从低端指向高端）：
+- [x] 传送边：入口（排除 `kiosk`）`e.level` ↔ 目标楼面（`site` → 入口在三期街区内为 `P3-1F`，否则 `ground`；`bridge` → `bridge`；其他为楼层 id）；三期街区矩形四边 `ground` ↔ `P3-1F`。
+- [x] 坡道（`{ id, kind, F, len, hw, y0, y1, low, high, belt }`，u 从低端指向高端）：
   - 每部扶梯一段：`F` 原点在 bottom、u 指向 top，`hw = 0.9`，`belt = dir === 'up' ? 1 : -1`（m/s 乘 0.5）；
   - 地铁出入口：`kiosk.frame`，u∈[0, run]，`hw = 3`，低端 `M-B1`、高端为该口所在地面楼面；
   - 落地塔扶梯：`bridges.verticals` 中 `type === 'escalator'`，底端 → 顶端，低端 `ground`、高端 `bridge`；
   - 车库坡道与一期 B1↔B2 坡道：`ramps`，`from`/`to` 中标高较低者为低端；`street` 端为 `ground` / `P3-1F`。
-- [ ] 互动点：每部楼梯（门段中点外 1m，`doorByLevel` 优先）、每部电梯（门外 `reach + 0.6`）、落地塔楼梯与电梯（`v.ground` ↔ `v.deck`）。
-- [ ] `clear(nav, s)`：中心与半径 r 的四个方向点都可站立，且中心离墙 ≥ r − 0.01；坡道状态时检查 v 在 ±(hw − r) 内。
-- [ ] `step(nav, s, dx, dz, dt)`：
+- [x] 互动点：每部楼梯（门段中点外 1m，`doorByLevel` 优先）、每部电梯（门外 `reach + 0.6`）、落地塔楼梯与电梯（`v.ground` ↔ `v.deck`）。
+- [x] `clear(nav, s)`：中心与半径 r 的四个方向点都可站立，且中心离墙 ≥ r − 0.01；坡道状态时检查 v 在 ±(hw − r) 内。
+- [x] `step(nav, s, dx, dz, dt)`：
   1. 坡道状态：投到坡道局部坐标，加皮带速度 `belt·0.5·dt`，v 夹在 ±(hw − r)；u<0 / u>len 时尝试落到低 / 高端楼面（落点不可站立就夹住），高度 `y0 + (y1−y0)·u/len`；
   2. 楼面状态：先查传送边（移动线段与传送边相交且目标楼面 `clear` → 切换），再查坡道入口（低端楼面从 u<0 跨到 u≥0、或高端楼面从 u>len 跨到 u≤len，且 |v| < hw − r → 进入坡道），再做墙的扫掠检测（移动线段穿过墙就停在墙前，任意步长都不会穿墙），然后按墙做圆与线段碰撞滑动（迭代 3 次），最后检查可站立；不行就分别只走 x、只走 z，都不行就不动。
-- [ ] `landAt(nav, x, z, yMax)`：所有楼面中 `y ≤ yMax` 且中心可站立的最高者。
-- [ ] `linksNear(nav, floor, x, z)`：本楼面 `NAV.reach` 内的互动点及其可去楼层。
-- [ ] `spawn(nav, layout, { building, level })`：按规格 2.1；楼层出生点在最大走道多边形里按 `polySamples` 找第一个 `clear` 的点，朝向多边形长边方向。
-- [ ] `floorLabel(nav, layout, s)`：按规格 2.3。
-- [ ] `node --test tests/nav.test.js` 全部通过；`npm test` 全部通过。Commit `feat(layout): 第一人称导航模型（任务 F3）`
+- [x] `landAt(nav, x, z, yMax)`：所有楼面中 `y ≤ yMax` 且中心可站立的最高者。
+- [x] `linksNear(nav, floor, x, z)`：本楼面 `NAV.reach` 内的互动点及其可去楼层。
+- [x] `spawn(nav, layout, { building, level })`：按规格 2.1；楼层出生点在最大走道多边形里按 `polySamples` 找第一个 `clear` 的点，朝向多边形长边方向。
+- [x] `floorLabel(nav, layout, s)`：按规格 2.3。
+- [x] `node --test tests/nav.test.js` 全部通过；`npm test` 全部通过。Commit `feat(layout): 第一人称导航模型（任务 F3）`
 
 ### 任务 F4：漫游控制器（电脑）
 
 **文件：** 创建 `src/render/explore.js`；修改 `app.js`、`ui.js`、`main.js`、`shell.html`
 
-- [ ] `attachExplore(app, ui)`：首次进入时 `buildNav(layout)`；`app.enterExplore()` / `app.exitExplore()`；保存 / 恢复进入前的相机与状态；进入时停导览、取消镜头飞行、`controls.enabled = false`。
-- [ ] app.js：`state.explore = { building, metro, near }`；`applyVisibility` 漫游分支（规格第 5 节）；主循环漫游时不调用 `controls.update()`；`updateNear()` 漫游时 near = 0.08。
-- [ ] 输入：点击画面请求指针锁定；`mousemove` 改 yaw / pitch（pitch 夹在 ±85°）；WASD / 方向键、Shift、空格（300ms 内双击切换飞行）、C / Ctrl、F、E、数字键；Esc 释放鼠标。
-- [ ] 物理：每帧把水平位移拆成 ≤0.1m 的小步调用 `step`；跳跃与重力只影响视线；飞行时直接移动（8m/s，按住加速到 30m/s）；关闭飞行用 `landAt` 落地。相机高度指数平滑；楼栋或楼面变化时更新 `state.explore` 并 `app.refresh()`；移动超过 20m 更新阴影中心。
-- [ ] 工具栏「漫游」按钮（`data-act="explore"`），`body.exploring` 时隐藏工具条、楼层栏、目录、图例、提示。
-- [ ] 浏览器验证：从园区进入、走进一期主入口、上扶梯到 2F、走上天桥、坐落地塔扶梯下到地面、走进地铁出入口到站台；飞行与落地。Commit `feat(render): 第一人称漫游控制器（任务 F4）`
+- [x] `attachExplore(app, ui)`：首次进入时 `buildNav(layout)`；`app.enterExplore()` / `app.exitExplore()`；保存 / 恢复进入前的相机与状态；进入时停导览、取消镜头飞行、`controls.enabled = false`。
+- [x] app.js：`state.explore = { building, metro, near }`；`applyVisibility` 漫游分支（规格第 5 节）；主循环漫游时不调用 `controls.update()`；`updateNear()` 漫游时 near = 0.08。
+- [x] 输入：点击画面请求指针锁定；`mousemove` 改 yaw / pitch（pitch 夹在 ±85°）；WASD / 方向键、Shift、空格（300ms 内双击切换飞行）、C / Ctrl、F、E、数字键；Esc 释放鼠标。
+- [x] 物理：每帧把水平位移拆成 ≤0.1m 的小步调用 `step`；跳跃与重力只影响视线；飞行时直接移动（8m/s，按住加速到 30m/s）；关闭飞行用 `landAt` 落地。相机高度指数平滑；楼栋或楼面变化时更新 `state.explore` 并 `app.refresh()`；移动超过 20m 更新阴影中心。
+- [x] 工具栏「漫游」按钮（`data-act="explore"`），`body.exploring` 时隐藏工具条、楼层栏、目录、图例、提示。
+- [x] 浏览器验证：从园区进入、走进一期主入口、上扶梯到 2F、走上天桥、坐落地塔扶梯下到地面、走进地铁出入口到站台；飞行与落地。Commit `feat(render): 第一人称漫游控制器（任务 F4）`
 
 ### 任务 F5：手机操作与 HUD
 
 **文件：** 修改 `src/render/explore.js`、`src/shell.html`、`src/render/ui.js`
 
-- [ ] HUD：位置条、「地点」「退出」、准星、名称卡（每 0.2s 从屏幕中心对当前楼栋各层与场地的拾取盒做 25m 射线）、互动面板（楼梯：相邻楼层；电梯：全部停靠层）、黑场过渡、电脑操作提示。
-- [ ] 手机（触屏设备加 `body.touch`）：左下摇杆（半径 56px，推过 80% 为跑）；屏幕 40% 以右拖动转视角；右下按钮 ▲ / ▼（飞行时）/ 飞 / 互动；按 `pointerId` 区分多指；横屏、竖屏布局。
-- [ ] 目录传送：漫游时点分期 → 主入口内侧，点楼层 → 该层出生点，点店铺 → 店门外 2m 面朝店；点完收起目录。
-- [ ] 浏览器验证（电脑 + 手机模拟横竖屏）：摇杆走、拖动看、上下楼互动、传送、名称卡。Commit `feat(render): 漫游 HUD、手机摇杆与目录传送（任务 F5）`
+- [x] HUD：位置条、「地点」「退出」、准星、名称卡（每 0.2s 从屏幕中心对当前楼栋各层与场地的拾取盒做 25m 射线）、互动面板（楼梯：相邻楼层；电梯：全部停靠层）、黑场过渡、电脑操作提示。
+- [x] 手机（触屏设备加 `body.touch`）：左下摇杆（半径 56px，推过 80% 为跑）；屏幕 40% 以右拖动转视角；右下按钮 ▲ / ▼（飞行时）/ 飞 / 互动；按 `pointerId` 区分多指；横屏、竖屏布局。
+- [x] 目录传送：漫游时点分期 → 主入口内侧，点楼层 → 该层出生点，点店铺 → 店门外 2m 面朝店；点完收起目录。
+- [x] 浏览器验证（电脑 + 手机模拟横竖屏）：摇杆走、拖动看、上下楼互动、传送、名称卡。Commit `feat(render): 漫游 HUD、手机摇杆与目录传送（任务 F5）`
 
 ### 任务 F6：收尾与发布
 
-- [ ] `HANDOFF.md` 增加"漫游"一节（入口、操作、导航模型、测试、已知限制）。
-- [ ] `npm test`、`npm run build`；性能（漫游时绘制调用、帧时间）与内存（导航模型大小）记录；截图。
-- [ ] 发布到同一链接；Commit `chore: v4 漫游打包与发布`；按 finishing-a-development-branch 收尾。
+- [x] `HANDOFF.md` 增加"漫游"一节（入口、操作、导航模型、测试、已知限制）。
+- [x] `npm test`、`npm run build`；性能（漫游时绘制调用、帧时间）与内存（导航模型大小）记录；截图。
+- [x] 发布到同一链接；Commit `chore: v4 漫游打包与发布`；按 finishing-a-development-branch 收尾。
+
+### 实施记录（相对计划的调整）
+
+- F4：近裁剪面取 0.15m（计划 0.08）——人离墙至少 0.29m，0.15 贴墙不穿帮，远处深度精度翻倍。
+- F4：`state.explore` 加 `under`（人在地面以下）；显示规则细化为：地面以上不画所在楼的车库层，室外附近那栋楼只显示地上室内，在坡道上按低端楼面算（走下地铁口、车库坡道时下面已显示）。广场视角三角形 3.2M → 2.35M。
+- F4：新增 `nav.sightBlocked`（带测试）：拾取盒不挡射线，准星命中若隔着楼板就不显示名称卡。
+- F4：发现第 8 版回归——拾取盒的几何体被"上传后释放"（three.js 对视锥内网格不管材质是否可见都会上传），悬停、点击、准星拾取都会抛错；在 `main` 上热修并发布第 9 版，再合回本分支。
+- F5：摇杆做成浮动式（左侧 40% 任意处按下，底座移到手指下）；「互动」按钮由楼梯电梯提示面板兼任（触屏显示 ⇅、不显示数字键）；目录加「上一级」，退出漫游时恢复原来的分期 / 楼层选择；第一人称视场角 60°（`app.fitFov`）。
 
 ---
 
