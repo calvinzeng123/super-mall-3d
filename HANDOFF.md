@@ -21,7 +21,7 @@
 
 - **代码**：开发分支 `feat/campus-v2`（v2、v3 的全部 28 个提交）已在本地**快进合并进 `main`**；分支保留着，留给 PR 用。
 - **测试**：`npm test` 57/57 通过。
-- **线上**：<https://claude.ai/artifact/VAMbvbuX4yirRLGBpbYMuK>，第 7 版（私有，需在页面 Share 菜单里分享给别人才能打开）。版本对应：第 5 版 = C 阶段（三期 + 天桥 + 公园），第 6 版 = D 阶段（第四翼 + 方庭），第 7 版 = E 阶段（地铁）。
+- **线上**：<https://claude.ai/artifact/VAMbvbuX4yirRLGBpbYMuK>，第 8 版（私有，需在页面 Share 菜单里分享给别人才能打开）。版本对应：第 5 版 = C 阶段（三期 + 天桥 + 公园），第 6 版 = D 阶段（第四翼 + 方庭），第 7 版 = E 阶段（地铁），第 8 版 = 内存瘦身（第 7 版在 iPhone 的 Claude App 里打不开，判断是内存超限，见第 7 节"内存预算"）。
 - **还没做**：推送到 GitHub 并开 PR——这台机器 `gh` 未登录、仓库没有远程地址。做法见第 9 节。
 
 ## 3. 快速上手
@@ -93,6 +93,12 @@ serve.py                  开发服务器：禁缓存；POST /__shot?name=xx 把
 - 页面里 `window.__mall` 就是 app。`app.debugShot({ pos, target, w, h, steps })` 立即渲染一帧并返回 JPEG dataURL；配合 `fetch('/__shot?name=xx', { method: 'POST', body: url })` 存到 `shots/`（已 gitignore）。
 - **后台标签页没有 rAF**：预览面板隐藏时主循环不跑，动态内容只在 `debugShot` 的 `steps` 里更新。测地铁时先摆好相机，再手动调用 `app.ctx.dynamic.find(d => d.name === 'metro').update(0, t, app)`，然后 `debugShot({ steps: 0 })`。
 - 统计绘制调用要先设 `renderer.info.autoReset = false`（后期处理有多个 pass）。当前园区视角约 495 次。
+- **内存预算（手机能否打开的关键）**：iOS 会直接结束内存超限的网页进程，Claude App 里表现为整页 "Something went wrong"。第 7 版几何体约 302 MB、贴图约 367 MB、构建峰值堆约 700 MB，在 iPhone 上打不开（判断为内存超限，未能在真机上抓到崩溃日志）。第 8 版的对策：
+  - `batch.js` 顶点格式压缩为 18 字节/顶点（Float32 位置 + Int8 法线 + Uint8 颜色，只有招牌批次带 uv），几何体约 117 MB；
+  - `app.js` 的 `releaseGeometryAfterUpload`：顶点数组上传显卡后释放（包围体提前算好；拾取盒不上传所以数组保留）；
+  - `textures.js` 的 `scaled` / `releaseAfterUpload`：招牌图集、地面材质、地铁导向牌在手机上缩到一半边长，上传后释放画布；
+  - `device.js`：手机 / 平板阴影贴图 2048、像素比 ≤1.5。
+  - 新增大量几何前先在本地量一下（遍历场景，累加各 attribute 的字节数与贴图像素），别让总量回到第 7 版的水平。
 - 踩过的坑：
   - three.js 只把 `visible === false` 当作隐藏，`null` 会被渲染——可见性表达式要转成布尔值。
   - 给 `THREE.Shape` 挖洞时，洞不能互相包含（会被三角剖分重新填上）。`site.js` 已过滤被其它洞包含的洞。
@@ -104,6 +110,8 @@ serve.py                  开发服务器：禁缓存；POST /__shot?name=xx 把
 - 手机上选中地铁后，楼层栏要横向滑动才能看到 B2（与一期楼层多时相同）。
 - 列车按固定 84 秒周期往返，与时刻无关；夜景下出入口雨棚偏暗（只有 M 标识柱和檐口灯带发光）。
 - 室内只有站厅、站台吊顶会随相机高度显隐；各期商场仍是"聚焦某层就隐藏上层"的剖切方式。
+- 顶点数组上传后已释放：若手机切后台导致 WebGL 上下文丢失，无法自动恢复，页面会提示刷新。
+- 手机竖屏的园区总览里，路口一带的标注（四个地铁口、两座落地塔、天桥）比较挤。
 
 ## 9. 待办：推送到 GitHub 并开 PR
 

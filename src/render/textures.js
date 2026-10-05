@@ -1,5 +1,6 @@
 // Canvas 程序化贴图：地面材质、招牌图集、图标、标注、LED 屏、周边楼窗格。
 import * as THREE from 'three';
+import { TEX_SCALE } from './device.js';
 
 export const FONT_CN = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Source Han Sans SC",sans-serif';
 export const FONT_EN = '"Barlow Semi Condensed","Avenir Next Condensed","Helvetica Neue",Arial,sans-serif';
@@ -22,6 +23,25 @@ export function rng(seed = 1) {
 
 let ANISO = 8;
 export function setAnisotropy(n) { ANISO = n; }
+
+/** 手机上把画好的画布缩小（图集的 UV 是比例坐标，缩放后不变） */
+export function scaled(c, k = TEX_SCALE) {
+  if (k >= 1) return c;
+  const s = makeCanvas(Math.max(1, Math.round(c.width * k)), Math.max(1, Math.round(c.height * k)));
+  const g = s.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(c, 0, 0, s.width, s.height);
+  return s;
+}
+
+/** 静态贴图上传显卡后丢掉画布，释放内存里的那份像素 */
+export function releaseAfterUpload(t) {
+  t.onUpdate = () => {
+    t.onUpdate = null;
+    t.image = null;
+  };
+  return t;
+}
 
 export function canvasTexture(c, { repeat = 1, srgb = true, clamp = false } = {}) {
   const t = new THREE.CanvasTexture(c);
@@ -273,7 +293,7 @@ export function floorTexture(kind) {
       ctx.fillStyle = '#cccccc';
       ctx.fillRect(0, 0, S, S);
   }
-  const texture = canvasTexture(c);
+  const texture = releaseAfterUpload(canvasTexture(scaled(c)));
   return { texture, meters };
 }
 
@@ -447,8 +467,9 @@ export function makeSignAtlas(entries) {
     const pad = 1.5;
     cells.set(e.id, [(x + pad) / W, 1 - (y + CH - pad) / H, (x + CW - pad) / W, 1 - (y + pad) / H]);
   });
-  const texture = canvasTexture(c, { clamp: true });
-  return { texture, cell: (id) => cells.get(id), canvas: c };
+  // 图集只在建场景时用到画布：手机上缩小一半，上传显卡后释放
+  const texture = releaseAfterUpload(canvasTexture(scaled(c), { clamp: true }));
+  return { texture, cell: (id) => cells.get(id) };
 }
 
 // ---------- 图标与标注 ----------

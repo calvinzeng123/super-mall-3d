@@ -87,7 +87,7 @@ function cinema(ctx, L, f, y0) {
       const n = Math.round(Math.hypot(xb - xa, zb - za) / 1.2);
       for (let k = 1; k < n; k++) {
         const t = k / n;
-        B.get('glow').sphere(xa + (xb - xa) * t, y0 + 4.0 - Math.sin(Math.PI * t) * 0.8, za + (zb - za) * t, 0.08, '#ffd9a0');
+        B.get('glow').sphere(xa + (xb - xa) * t, y0 + 4.0 - Math.sin(Math.PI * t) * 0.8, za + (zb - za) * t, 0.08, '#ffd9a0', 0.08, 0.08, 'sphereLo');
       }
     }
   });

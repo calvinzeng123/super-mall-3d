@@ -1,5 +1,6 @@
 // 环境：天空、雾、灯光、阴影、夜景泛光、性能降级。
 import * as THREE from 'three';
+import { SHADOW_SIZE } from './device.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -77,7 +78,7 @@ export class Environment {
     this.sun = new THREE.DirectionalLight(DAY.sun.clone(), 2.1);
     this.sunDir = new THREE.Vector3(-0.55, 0.78, 0.62).normalize();
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(4096, 4096);
+    this.sun.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE);
     this.sun.shadow.bias = -0.00025;
     this.sun.shadow.normalBias = 0.035;
     scene.add(this.sun, this.sun.target);

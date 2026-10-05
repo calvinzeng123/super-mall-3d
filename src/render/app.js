@@ -28,6 +28,7 @@ import { buildPark } from './build/park.js';
 import { buildSquare } from './build/square.js';
 import { buildMetro } from './build/metro.js';
 import { createPerfMonitor } from './perf.js';
+import { MAX_PIXEL_RATIO } from './device.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
 const EXPLODE_GAP = 13;
@@ -55,7 +56,7 @@ const OVERVIEW = [V(110, 430, 480), V(0, 0, 0)];
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
   renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -158,6 +159,12 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   }
   ctx.site.batch.flush(siteGroup);
   buildPicks(ctx);
+  releaseGeometryAfterUpload(scene);
+  // 系统回收了 WebGL 上下文（多见于手机切后台）：顶点数据已释放，无法恢复，提示刷新
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    if (window.__mallFail) window.__mallFail('显示资源被系统回收了', '手机切到后台较久时会这样，刷新页面即可恢复。');
+  });
 
   // ---------- 状态与视图 ----------
   const state = { building: null, focus: null, exploded: false, flows: false, labels: true, night: false, selected: null, touring: false };
@@ -448,6 +455,25 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22 * 1.2).add(controls.target);
   env.setShadowFocus(controls.target.clone(), 380);
   return app;
+}
+
+/**
+ * 静态网格的顶点数据上传显卡后就不再需要留在内存里：七百多万个顶点在手机上会把网页进程撑爆。
+ * 拾取盒用的是不可见材质、从不上传，数组得以保留，射线拾取不受影响；实例化矩阵（行人）每帧更新，跳过。
+ */
+function releaseGeometryAfterUpload(scene) {
+  const drop = function () { this.array = null; };
+  const seen = new Set();
+  scene.traverse((o) => {
+    const g = o.geometry;
+    if (!g || seen.has(g) || !(o.isMesh || o.isLine || o.isPoints)) return;
+    seen.add(g);
+    // 视锥剔除、透明排序要用的包围体先算好（之后数组就没了，渲染器不能再临时去算）
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    if (!g.boundingBox) g.computeBoundingBox();
+    for (const a of Object.values(g.attributes)) if (a.isBufferAttribute && !a.isInstancedBufferAttribute) a.onUpload(drop);
+    if (g.index) g.index.onUpload(drop);
+  });
 }
 
 /** 在局部坐标系 F 内放一个拾取盒（局部矩形 r，底标高 y0，高 h） */

@@ -6,7 +6,7 @@ import { frame, toW, toL, subtractInterval } from '../../layout/geom.js';
 import { EXIT } from '../../layout/metro.js';
 import { BatchSet, SignBatch } from '../batch.js';
 import { drawEscalator, stripGeometry } from './escalators.js';
-import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+import { makeCanvas, canvasTexture, scaled, releaseAfterUpload, FONT_CN, FONT_EN } from '../textures.js';
 import { clearHeight } from './shell.js';
 
 const RED = '#c8352b';
@@ -171,7 +171,7 @@ function makeAtlas(entries) {
     const pad = 1.5;
     cells.set(e.id, { uv: [(px + pad) / W, 1 - (py + e.h - pad) / H, (px + e.w - pad) / W, 1 - (py + pad) / H], aspect: e.w / e.h });
   }
-  const texture = canvasTexture(c, { clamp: true });
+  const texture = releaseAfterUpload(canvasTexture(scaled(c), { clamp: true }));
   return { texture, get: (id) => cells.get(id) };
 }
 

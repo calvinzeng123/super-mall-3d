@@ -409,7 +409,7 @@ function catenary(B, a, b, sag, step = 0.9) {
     const t = i / n;
     const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
     B.get('extMetal').bar({ x: prev[0], y: prev[1], z: prev[2] }, { x: p[0], y: p[1], z: p[2] }, 0.02, '#2a2d30');
-    if (i < n) B.get('glow').sphere(p[0], p[1] - 0.08, p[2], 0.07, '#ffd9a0', 0.09, 0.07, 'sphere');
+    if (i < n) B.get('glow').sphere(p[0], p[1] - 0.08, p[2], 0.07, '#ffd9a0', 0.09, 0.07, 'sphereLo');
     prev = p;
   }
 }

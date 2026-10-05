@@ -1,5 +1,7 @@
 // Batcher：把大量小几何（盒子、圆柱、球……）按矩阵变换写入同一块顶点缓冲，
 // 带逐顶点颜色，最后合成一个 Mesh —— 每层每种材质只需一次绘制调用。
+// 顶点格式尽量紧凑（位置 Float32、法线 Int8、颜色 Uint8，只有招牌批次带 uv）：
+// 全园区七百多万个顶点，44 字节/顶点会把手机浏览器的内存撑爆，现在是 18 字节/顶点。
 import * as THREE from 'three';
 
 const _m = new THREE.Matrix4();
@@ -61,25 +63,26 @@ export function frameMatrix(F) {
 const _mf = new THREE.Matrix4();
 
 export class Batcher {
-  constructor(owner = null) {
+  constructor(owner = null, withUv = false) {
     this.cap = 0;
     this.n = 0;
     this.owner = owner;
     this.xf = null;
-    this.grow(8192);
+    this.withUv = withUv;
+    this.grow(4096);
   }
 
   grow(min) {
-    const cap = Math.max(min, this.cap * 2);
-    const resize = (arr, k) => {
-      const next = new Float32Array(cap * k);
+    const cap = Math.max(min, Math.ceil(this.cap * 1.5));
+    const resize = (arr, k, Type) => {
+      const next = new Type(cap * k);
       if (arr) next.set(arr.subarray(0, this.n * k));
       return next;
     };
-    this.pos = resize(this.pos, 3);
-    this.nor = resize(this.nor, 3);
-    this.uv = resize(this.uv, 2);
-    this.col = resize(this.col, 3);
+    this.pos = resize(this.pos, 3, Float32Array);
+    this.nor = resize(this.nor, 3, Int8Array);
+    this.col = resize(this.col, 3, Uint8Array);
+    if (this.withUv) this.uv = resize(this.uv, 2, Float32Array);
     this.cap = cap;
   }
 
@@ -94,6 +97,7 @@ export class Batcher {
     if (color && color.isColor) _c.copy(color);
     else _c.set(color === undefined ? 0xffffff : color);
     const { pos, nor, uv, col } = this;
+    const cr = Math.round(Math.min(1, Math.max(0, _c.r)) * 255), cg = Math.round(Math.min(1, Math.max(0, _c.g)) * 255), cb = Math.round(Math.min(1, Math.max(0, _c.b)) * 255);
     for (let i = 0; i < t.count; i++) {
       const x = t.pos[i * 3], y = t.pos[i * 3 + 1], z = t.pos[i * 3 + 2];
       const o = (this.n + i) * 3;
@@ -101,14 +105,14 @@ export class Batcher {
       pos[o + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
       pos[o + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
       const nx = t.nor[i * 3], ny = t.nor[i * 3 + 1], nz = t.nor[i * 3 + 2];
-      let ax = ne[0] * nx + ne[3] * ny + ne[6] * nz;
-      let ay = ne[1] * nx + ne[4] * ny + ne[7] * nz;
-      let az = ne[2] * nx + ne[5] * ny + ne[8] * nz;
-      const len = Math.hypot(ax, ay, az) || 1;
-      nor[o] = ax / len; nor[o + 1] = ay / len; nor[o + 2] = az / len;
-      col[o] = _c.r; col[o + 1] = _c.g; col[o + 2] = _c.b;
+      const ax = ne[0] * nx + ne[3] * ny + ne[6] * nz;
+      const ay = ne[1] * nx + ne[4] * ny + ne[7] * nz;
+      const az = ne[2] * nx + ne[5] * ny + ne[8] * nz;
+      const k = 127 / (Math.hypot(ax, ay, az) || 1);
+      nor[o] = Math.round(ax * k); nor[o + 1] = Math.round(ay * k); nor[o + 2] = Math.round(az * k);
+      col[o] = cr; col[o + 1] = cg; col[o + 2] = cb;
       const ou = (this.n + i) * 2;
-      if (t.uv) {
+      if (uv && t.uv) {
         const u = t.uv[i * 2], v = t.uv[i * 2 + 1];
         if (uvMap) { uv[ou] = uvMap[0] + u * (uvMap[2] - uvMap[0]); uv[ou + 1] = uvMap[1] + v * (uvMap[3] - uvMap[1]); }
         else { uv[ou] = u; uv[ou + 1] = v; }
@@ -179,9 +183,9 @@ export class Batcher {
     if (this.n === 0) return null;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, this.n * 3), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.slice(0, this.n * 3), 3));
-    g.setAttribute('uv', new THREE.BufferAttribute(this.uv.slice(0, this.n * 2), 2));
-    g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, this.n * 3), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.slice(0, this.n * 3), 3, true));
+    if (this.withUv) g.setAttribute('uv', new THREE.BufferAttribute(this.uv.slice(0, this.n * 2), 2));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, this.n * 3), 3, true));
     g.computeBoundingSphere();
     g.computeBoundingBox();
     const mesh = new THREE.Mesh(g, material);
@@ -202,7 +206,7 @@ const _ss = new THREE.Vector3();
 /** 招牌面片批次：每块招牌是一张朝向某方向的平面，UV 指向图集中的一格 */
 export class SignBatch {
   constructor() {
-    this.b = new Batcher();
+    this.b = new Batcher(null, true);
   }
   /** 之后的 place 都按局部坐标系 F 解释（null 恢复世界坐标） */
   setFrame(F) {
@@ -228,7 +232,7 @@ export class SignBatch {
   flush(group, material) {
     const m = this.b.mesh(material, { shadow: false, receive: false, name: 'signs' });
     if (m) group.add(m);
-    this.b = new Batcher();
+    this.b = new Batcher(null, true);
   }
   /** 与 BatchSet.frame 相同：在 F 内执行 fn 后恢复 */
   frame(F, fn) {
