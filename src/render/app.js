@@ -459,11 +459,13 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
 /**
  * 静态网格的顶点数据上传显卡后就不再需要留在内存里：七百多万个顶点在手机上会把网页进程撑爆。
- * 拾取盒用的是不可见材质、从不上传，数组得以保留，射线拾取不受影响；实例化矩阵（行人）每帧更新，跳过。
+ * 拾取盒（不可见材质，只给射线用）例外：渲染器对视锥内的网格不管材质可不可见都会上传顶点，
+ * 而射线拾取要读顶点，所以先把它们的几何体排除；实例化矩阵（行人）每帧更新，也跳过。
  */
 function releaseGeometryAfterUpload(scene) {
   const drop = function () { this.array = null; };
   const seen = new Set();
+  scene.traverse((o) => { if (o.geometry && o.material && o.material.visible === false) seen.add(o.geometry); });
   scene.traverse((o) => {
     const g = o.geometry;
     if (!g || seen.has(g) || !(o.isMesh || o.isLine || o.isPoints)) return;
