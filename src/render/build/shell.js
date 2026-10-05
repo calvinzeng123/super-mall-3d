@@ -1,7 +1,8 @@
 // 建筑主体：楼板拼块（shell 组）、柱、洞口栏板、剖切矮墙、地下挡土墙、外立面（沿外轮廓任意边生成）、
 // 屋面（女儿墙、圆厅玻璃拱顶、商业街天窗）、楼名与 LED 屏、楼板下筒灯。
 import * as THREE from 'three';
-import { pointInPoly, distToPolyEdge, frame, toW, toL, lrectPoly } from '../../layout/geom.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { pointInPoly, distToPolyEdge, frame, toW, toL, lrectPoly, subtractInterval } from '../../layout/geom.js';
 import { themeOf, COLORS } from '../theme.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 
@@ -61,6 +62,18 @@ export function outlineEdges(poly, building) {
   return out;
 }
 
+/** 外轮廓边扣掉本层入口（如地铁连接口）所占的区间，返回剩余墙段 [a,b]（沿边的 u，两端各外延 ext） */
+export function edgeSpans(e, entrances, ext = 0.2) {
+  let ivs = [[0, e.len]];
+  for (const en of entrances) {
+    const [u0, v0] = toL(e.F, en.seg.x0, en.seg.z0);
+    const [u1, v1] = toL(e.F, en.seg.x1, en.seg.z1);
+    if (Math.abs(v0) > 0.15 || Math.abs(v1) > 0.15) continue;
+    ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]);
+  }
+  return ivs.map(([a, b]) => [a < 0.01 ? a - ext : a, b > e.len - 0.01 ? b + ext : b]);
+}
+
 export function buildShell(ctx) {
   const { layout, mats } = ctx;
   const slabBody = new THREE.MeshStandardMaterial({ color: 0xdcdcd8, roughness: 0.9 });
@@ -75,13 +88,19 @@ export function buildShell(ctx) {
     const L = ctx.levels[lv.id];
     const t = SLAB_T[lv.kind] || 0.45;
     const floorMat = mats.floor(lv.theme.floor, lv.kind === 'parking' ? 0.62 : lv.kind === 'street' ? 0.78 : lv.short === '1F' ? 0.2 : 0.42);
+    // 同层所有楼板拼块合并成一个地面网格 + 一个楼板体网格（三期楼栋、地铁通道的拼块多，省绘制调用）
+    const tops = [], bodies = [];
     for (const piece of lv.slab.pieces) {
       const shape = shapeFromPoly(piece.outer, piece.holes);
-      const top = new THREE.Mesh(flatShapeGeometry(shape, lv.elev), floorMat);
+      tops.push(flatShapeGeometry(shape, lv.elev));
+      // 楼板体顶面比地面低 3cm：远景时两者不会深度冲突
+      bodies.push(slabGeometry(shape, lv.elev - 0.03, t));
+    }
+    if (tops.length) {
+      const top = new THREE.Mesh(tops.length > 1 ? mergeGeometries(tops) : tops[0], floorMat);
       top.receiveShadow = true;
       top.name = 'floor';
-      // 楼板体顶面比地面低 3cm：远景时两者不会深度冲突
-      const body = new THREE.Mesh(slabGeometry(shape, lv.elev - 0.03, t), slabBody);
+      const body = new THREE.Mesh(bodies.length > 1 ? mergeGeometries(bodies) : bodies[0], slabBody);
       body.castShadow = true;
       body.receiveShadow = true;
       L.shell.add(top, body);
@@ -107,6 +126,7 @@ export function buildShell(ctx) {
 /** 楼板底面的灯具：商业层为筒灯点阵，停车层为沿车道的灯管（随上层楼板显示，从下方可见） */
 function ceilingLights(ctx) {
   for (const B of Object.values(ctx.buildings)) {
+    if (B.b.kind === 'metro') continue;
     const levels = B.levels.map((L) => L.lv);
     for (let i = 1; i < levels.length; i++) {
       const above = levels[i], below = levels[i - 1];
@@ -226,8 +246,9 @@ function sill(ctx, lv) {
   const c = lv.kind === 'parking' || lv.kind === 'food' ? COLORS.concrete : COLORS.stone;
   const h = lv.kind === 'roof' ? 0.3 : 0.9;
   const key = lv.kind === 'roof' ? 'satin' : 'matte';
+  const ents = ctx.layout.entrances.filter((x) => x.level === lv.id && x.to !== 'site' && x.to !== 'bridge');
   for (const e of ctx.outlineEdges(lv)) {
-    B.frame(e.F, () => B.get(key).box(e.len / 2, lv.elev + h / 2, -0.15, e.len + 0.02, h, 0.3, c));
+    for (const [a, b] of edgeSpans(e, ents, 0.01)) B.frame(e.F, () => B.get(key).box((a + b) / 2, lv.elev + h / 2, -0.15, b - a, h, 0.3, c));
   }
 }
 
@@ -235,8 +256,10 @@ function sill(ctx, lv) {
 function retaining(ctx, lv) {
   const F = ctx.levels[lv.id].facadeBatch;
   const h = lv.height;
+  // 地下层外墙在地铁连接口处开洞
+  const ents = ctx.layout.entrances.filter((x) => x.level === lv.id);
   for (const e of ctx.outlineEdges(lv)) {
-    F.frame(e.F, () => F.get('ext').box(e.len / 2, lv.elev + h / 2 - 0.05, 0.2, e.len + 0.4, h, 0.4, '#9fa5ab'));
+    for (const [a, b] of edgeSpans(e, ents)) F.frame(e.F, () => F.get('ext').box((a + b) / 2, lv.elev + h / 2 - 0.05, 0.2, b - a, h, 0.4, '#9fa5ab'));
   }
 }
 

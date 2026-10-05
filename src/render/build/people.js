@@ -5,7 +5,7 @@ import { rng } from '../textures.js';
 
 const CLOTHES = ['#2f3a45', '#c0392b', '#2f6fd6', '#f2f2f0', '#e0a526', '#2e9c6a', '#7b4fd6', '#d1495b', '#8a6a4a', '#1f2328', '#f08a24', '#5bb4d6'];
 const SKIN = ['#f1d3b8', '#e8c1a0', '#d9a77f', '#c68e63'];
-const COUNT = { parking: 12, food: 70, retail: 75, roof: 45, street: 40 };
+const COUNT = { parking: 12, food: 70, retail: 75, roof: 45, street: 40, concourse: 80, platform: 56 };
 
 export function buildPeople(ctx) {
   const bodyGeo = new THREE.CapsuleGeometry(0.21, 0.92, 3, 8).translate(0, 0.67, 0);
@@ -57,6 +57,25 @@ export function buildPeople(ctx) {
   const pos = [0, 0, 0];
   const dir = [0, 0, 1];
   let acc = 0;
+  const place = (w, step, time) => {
+    w.list.forEach((a, i) => {
+      a.d += a.speed * a.dir * step;
+      if (!a.loop && (a.d > a.pl.total || a.d < 0)) a.d = a.dir > 0 ? 0 : a.pl.total;
+      a.pl.at(a.d, pos, dir);
+      const nx = -dir[2], nz = dir[0];
+      const ln = Math.hypot(nx, nz) || 1;
+      const bob = a.escalator ? 0 : Math.abs(Math.sin((time + a.phase) * 7)) * 0.035;
+      p.set(pos[0] + (nx / ln) * a.lateral, pos[1] - (a.escalator ? 1.32 : 0.07) + bob, pos[2] + (nz / ln) * a.lateral);
+      q.setFromAxisAngle(up, Math.atan2(dir[0] * a.dir, dir[2] * a.dir));
+      m.compose(p, q, s);
+      w.bodies.setMatrixAt(i, m);
+      w.heads.setMatrixAt(i, m);
+    });
+    w.bodies.instanceMatrix.needsUpdate = true;
+    w.heads.instanceMatrix.needsUpdate = true;
+  };
+  // 建好就先摆一次位置：避免首帧（或页面在后台时）所有人叠在原点
+  for (const w of walkers) place(w, 0, 0);
   ctx.dynamic.push({
     update(dt, time) {
       acc += dt;
@@ -66,21 +85,7 @@ export function buildPeople(ctx) {
       for (const w of walkers) {
         const grp = w.bodies.parent;
         if (!grp || !grp.visible || !grp.parent || !grp.parent.visible || !grp.parent.parent.visible) continue;
-        w.list.forEach((a, i) => {
-          a.d += a.speed * a.dir * step;
-          if (!a.loop && (a.d > a.pl.total || a.d < 0)) a.d = a.dir > 0 ? 0 : a.pl.total;
-          a.pl.at(a.d, pos, dir);
-          const nx = -dir[2], nz = dir[0];
-          const ln = Math.hypot(nx, nz) || 1;
-          const bob = a.escalator ? 0 : Math.abs(Math.sin((time + a.phase) * 7)) * 0.035;
-          p.set(pos[0] + (nx / ln) * a.lateral, pos[1] - (a.escalator ? 1.32 : 0.07) + bob, pos[2] + (nz / ln) * a.lateral);
-          q.setFromAxisAngle(up, Math.atan2(dir[0] * a.dir, dir[2] * a.dir));
-          m.compose(p, q, s);
-          w.bodies.setMatrixAt(i, m);
-          w.heads.setMatrixAt(i, m);
-        });
-        w.bodies.instanceMatrix.needsUpdate = true;
-        w.heads.instanceMatrix.needsUpdate = true;
+        place(w, step, time);
       }
     },
   });

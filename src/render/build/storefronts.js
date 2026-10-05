@@ -50,7 +50,8 @@ function front(B, S, lv, u, f, cell, style) {
   const F = frontFrame(f);
   const y0 = lv.elev;
   const H = clearHeight(lv);
-  const glassTop = 3.7;
+  // 低净高楼层（地铁站厅 3.5m）橱窗与门头整体压低
+  const glassTop = H < 3.8 ? H - 0.8 : 3.7;
   const fasciaTop = Math.min(4.75, H - 0.05);
   const fy = (glassTop + fasciaTop) / 2;
   const brand = u.brand;

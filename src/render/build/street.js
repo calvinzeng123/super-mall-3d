@@ -3,7 +3,7 @@
 // 1F 街巷小品（中心广场旱喷与舞台、梧桐小广场、行道树、庭院灯、长椅、外摆、跨巷串灯）与街区外围绿化。
 // 楼栋内容按楼层放进各层的 base（街区在园区视角也显示 base），三层楼栋的屋面放进 3F 的 facade（聚焦 3F 时隐藏）。
 import * as THREE from 'three';
-import { toW, frame, pointInPoly, distToPolyEdge } from '../../layout/geom.js';
+import { toW, frame, pointInPoly, distToPolyEdge, toL, subtractInterval } from '../../layout/geom.js';
 import { COLORS } from '../theme.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bench, planter, umbrella, tableSet } from './props.js';
@@ -636,13 +636,22 @@ function basement(ctx, b, lv) {
   if (!lv) return;
   const L = ctx.levels[lv.id];
   const P = lv.outline;
+  const ents = ctx.layout.entrances.filter((e) => e.level === lv.id);
   for (let i = 0; i < P.length; i++) {
     const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length];
     const len = Math.hypot(x1 - x0, z1 - z0);
-    const ang = Math.atan2(-(z1 - z0), x1 - x0);
-    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-    L.batch.get('matte').box(cx, lv.elev + 0.45, cz, len, 0.9, 0.3, COLORS.concrete, ang);
-    L.facadeBatch.get('ext').box(cx, lv.elev + lv.height / 2 - 0.2, cz, len + 0.4, lv.height - 0.4, 0.4, '#9fa5ab', ang);
+    const F = frame(x0, z0, (Math.atan2(z1 - z0, x1 - x0) * 180) / Math.PI);
+    // 地铁连接口（东北角切面）处开洞
+    let ivs = [[0, len]];
+    for (const e of ents) {
+      const [u0, v0] = toL(F, e.seg.x0, e.seg.z0), [u1, v1] = toL(F, e.seg.x1, e.seg.z1);
+      if (Math.abs(v0) < 0.15 && Math.abs(v1) < 0.15) ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]);
+    }
+    for (const [a, b] of ivs) {
+      const a2 = a < 0.01 ? -0.2 : a, b2 = b > len - 0.01 ? len + 0.2 : b;
+      L.batch.frame(F, () => L.batch.get('matte').box((a + b) / 2, lv.elev + 0.45, 0, b - a, 0.9, 0.3, COLORS.concrete));
+      L.facadeBatch.frame(F, () => L.facadeBatch.get('ext').box((a2 + b2) / 2, lv.elev + lv.height / 2 - 0.2, 0, b2 - a2, lv.height - 0.4, 0.4, '#9fa5ab'));
+    }
   }
   void b;
 }

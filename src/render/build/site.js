@@ -21,8 +21,11 @@ export function buildSite(ctx) {
   const S = layout.site;
   const G = ctx.site.group;
   const B = ctx.site.batch;
-  const outlines = layout.buildings.map((b) => b.outline);
-  const holes = [...outlines, ...S.trenches];
+  // 地铁站在道路下方，不在地面挖洞；地面只为它的出入口梯井开洞。
+  // 洞不能互相包含（如三期街区内的 D 口），否则三角剖分会把重叠处重新填上
+  const outlines = layout.buildings.filter((b) => b.kind !== 'metro').map((b) => b.outline);
+  const raw = [...outlines, ...S.trenches, ...(S.openings || [])];
+  const holes = raw.filter((h, i) => !raw.some((g, j) => j !== i && h.every((q) => pointInPoly(q, g))));
 
   // 草地
   const ground = new THREE.Mesh(flatShapeGeometry(shapeFromPoly([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], holes), -0.32), mats.floor('grass', 0.95));
@@ -96,7 +99,8 @@ function landscape(ctx, b, holes, G, B) {
       }
     }
   }
-  // 草坪树阵：抖动网格，避开铺装带、步道、坡道与车道入口
+  // 草坪树阵：抖动网格，避开铺装带、步道、坡道、车道入口与地铁出入口
+  const kiosks = ctx.layout.entrances.filter((e) => e.kiosk).map((e) => e.kiosk.poly);
   const rand = rng(b.id.length * 97 + 5);
   const trees = [];
   const r = inset(b.plot, 6);
@@ -105,7 +109,7 @@ function landscape(ctx, b, holes, G, B) {
     for (let z = r.z0; z < r.z1; z += 10) {
       if (rand() < 0.35) continue;
       const p = [x + (rand() - 0.5) * 6, z + (rand() - 0.5) * 6];
-      if (near(p, band) || near(p, b.outline) || distToPolyEdge(p, b.outline) < 4 || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d))) continue;
+      if (near(p, band) || near(p, b.outline) || distToPolyEdge(p, b.outline) < 4 || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d)) || kiosks.some((k) => near(p, k) || distToPolyEdge(p, k) < 3)) continue;
       const k = 3;
       if ([[k, 0], [-k, 0], [0, k], [0, -k]].some(([dx, dz]) => near([p[0] + dx, p[1] + dz], band) || paths.some((q) => near([p[0] + dx, p[1] + dz], q)))) continue;
       trees.push({ x: p[0], y: -0.3, z: p[1], s: 0.85 + rand() * 0.5, kind: rand() < 0.3 ? 'cone' : 'round' });
@@ -194,7 +198,7 @@ function roads(ctx, S, B, G) {
 /** 人行入口：雨棚 + 玻璃门（主入口带旋转门与台阶）+ 门头标识；在以入口外法线为 u 轴的局部坐标系内绘制 */
 function entrances(ctx) {
   for (const e of ctx.layout.entrances) {
-    if (e.to !== 'site') continue;
+    if (e.to !== 'site' || e.kiosk) continue;
     const L = ctx.levels[e.level];
     const FB = L.facadeBatch;
     const main = e.main;
@@ -429,7 +433,7 @@ function greenery(ctx, S, B, G) {
   const blocked = (x, z) =>
     S.crossings.some((c) => pointInPoly([x, z], c.poly)) ||
     S.driveways.some((d) => pointInPoly([x, z], d)) ||
-    ctx.layout.buildings.some((b) => pointInPoly([x, z], b.outline));
+    ctx.layout.buildings.some((b) => b.kind !== 'metro' && pointInPoly([x, z], b.outline));
   for (let x = -280; x <= 280; x += 12) {
     if (Math.abs(x) < 20) continue;
     for (const z of [-17, 17]) if (!blocked(x, z)) trees.push({ x: x + (rand() - 0.5), y: -0.14, z, s: 0.9 + rand() * 0.3 });

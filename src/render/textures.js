@@ -136,6 +136,28 @@ export function floorTexture(kind) {
       grid(ctx, S, 512, 'rgba(185,162,107,0.95)', 4);
       break;
     }
+    case 'metro-terrazzo': {
+      // 地铁站厅：浅灰水磨石大板 + 深灰分隔条
+      meters = 4.8;
+      ctx.fillStyle = '#d9dde0';
+      ctx.fillRect(0, 0, S, S);
+      chips(ctx, S, 7000, ['#ffffff', '#b9c0c5', '#8c959c', '#eef1f3', '#a7b0b6', '#cfd5d9'], 1.2, 4.2, rand);
+      grid(ctx, S, 256, 'rgba(96,104,112,0.85)', 5);
+      break;
+    }
+    case 'granite': {
+      // 地铁站台：600×600 浅灰花岗岩
+      meters = 2.4;
+      ctx.fillStyle = '#9ea3a7';
+      ctx.fillRect(0, 0, S, S);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+        const v = 186 + rand() * 18;
+        ctx.fillStyle = `rgb(${v},${v + 2},${v + 4})`;
+        ctx.fillRect(i * 256 + 2, j * 256 + 2, 252, 252);
+      }
+      chips(ctx, S, 9000, ['rgba(40,44,48,0.28)', 'rgba(255,255,255,0.35)', 'rgba(120,110,100,0.25)'], 0.6, 2.2, rand);
+      break;
+    }
     case 'terrazzo-warm': {
       meters = 4;
       ctx.fillStyle = '#dfc9aa';
@@ -505,6 +527,10 @@ export function drawPicto(ctx, kind, cx, cy, s, color) {
       break;
     case 'star':
       drawGlyph(ctx, 'star', 0, 0, s * 0.4, color);
+      break;
+    case 'metro':
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.42, 0, Math.PI * 2); ctx.lineWidth = s * 0.09; ctx.stroke();
+      ctx.font = `800 ${Math.round(s * 0.52)}px ${FONT_EN}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M', 0, s * 0.03);
       break;
     case 'cup':
       drawGlyph(ctx, 'cup', 0, 0, s * 0.38, color);

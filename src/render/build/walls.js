@@ -5,7 +5,7 @@ import { unionOutline, mergeSegments, subtractOpenings, toW, distToPolyEdge } fr
 import { themeOf } from '../theme.js';
 import { clearHeight } from './shell.js';
 
-const SKIP_ROOMS = new Set(['core', 'equip', 'mech', 'ramp']);
+const SKIP_ROOMS = new Set(['core', 'equip', 'mech', 'ramp', 'service']);
 
 export function buildWalls(ctx) {
   for (const lv of ctx.layout.levels) {

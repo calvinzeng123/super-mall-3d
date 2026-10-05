@@ -53,6 +53,7 @@ button { font: inherit; color: inherit; }
 /* 分期切换 + 楼层牌 */
 .floors { position: absolute; left: 16px; top: 50%; transform: translateY(-46%); padding: 6px; display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 200px); }
 .phases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; }
+.phases .phase:first-child:nth-last-child(odd) { grid-column: span 2; }
 .phase { all: unset; box-sizing: border-box; display: grid; gap: 1px; padding: 6px 8px; border-radius: 7px; cursor: pointer; background: var(--chip); }
 .phase b { font: 600 14px/1.1 var(--font-ui); }
 .phase span { font-size: 11px; color: var(--ink-3); white-space: nowrap; }

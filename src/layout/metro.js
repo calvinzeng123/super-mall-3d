@@ -5,7 +5,6 @@
 import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, toW, polyBounds, subtractInterval, convexOverlap } from './geom.js';
 import { ESC, CATEGORIES } from './constants.js';
 import { lift } from './mall.js';
-import { addTrench } from './campus.js';
 import { PORTAL_U } from './p3.js';
 
 export const METRO = {
@@ -23,12 +22,12 @@ const C0 = 11 * Math.SQRT2;
 
 const LEVELS = [
   {
-    short: 'B2', name: 'B2 站台', kind: 'platform', elev: -12, height: 5.5,
-    theme: { key: 'platform', floor: 'stone', accent: '#c8352b', label: '岛式站台 · 往星湾 / 往云澜里 · 6 节编组' },
+    short: 'B2', name: 'B2 站台', kind: 'platform', elev: -12, height: 7.5,
+    theme: { key: 'platform', floor: 'granite', accent: '#c8352b', label: '岛式站台 · 往星湾 / 往云澜里 · 6 节编组' },
   },
   {
     short: 'B1', name: 'B1 站厅', kind: 'concourse', elev: -4.5, height: 4,
-    theme: { key: 'metro', floor: 'terrazzo-cool', accent: '#c8352b', label: '站厅 · 售检票 · 四向通道接各期商场与公园' },
+    theme: { key: 'metro', floor: 'metro-terrazzo', accent: '#c8352b', label: '站厅 · 售检票 · 四向通道接各期商场与公园' },
   },
 ];
 
@@ -129,7 +128,8 @@ export function buildMetro(parts, site, picker) {
   B2.walk.push(...carve(METRO.platform, [...stairs.map((s) => s.rect), shafts, ...slots]).map((r, i) => walkR(`PF${i}`, 'platform', r)));
   B2.slab = { pieces: [{ outer: rectPoly(METRO.platform), holes: [] }] };
   B2.features.push({ type: 'psd', z: -METRO.platform.z1, x0: -57, x1: 57 }, { type: 'psd', z: METRO.platform.z1, x0: -57, x1: 57 });
-  B2.features.push({ type: 'track', z: -METRO.track, dir: 1, name: '往星湾' }, { type: 'track', z: METRO.track, dir: -1, name: '往云澜里' });
+  // 靠右行车：南侧轨道（z>0）东行往星湾，北侧轨道西行往云澜里
+  B2.features.push({ type: 'rail', z: METRO.track, dir: 1, name: '往星湾', en: 'TO XINGWAN' }, { type: 'rail', z: -METRO.track, dir: -1, name: '往云澜里', en: 'TO YUNLAN LANE' });
 
   // ---------- B1 站厅：中部付费区，两端与南北两条长廊为非付费区 ----------
   const G = METRO.gate;
@@ -155,7 +155,7 @@ export function buildMetro(parts, site, picker) {
   B1.voids.push({ id: 'M-shaft', kind: 'shaft', poly: rectPoly(shafts), frame: IDENTITY, rect: shafts });
   B1.features.push({ type: 'gates', x: -G, z0: -2, z1: 5, name: '西闸机' }, { type: 'gates', x: G, z0: -5, z1: 2, name: '东闸机' });
   B1.features.push({ type: 'fence', x0: -G + 2, x1: G, z: -5 }, { type: 'fence', x0: -G, x1: G - 2, z: 5 });
-  B1.features.push({ type: 'tvm', x: -46, z: 4.2, n: 4, face: 'N' }, { type: 'tvm', x: 46, z: -4.2, n: 4, face: 'S' });
+  B1.features.push({ type: 'tvm', x: -42, z: 4.2, n: 4, face: 'N' }, { type: 'tvm', x: 42, z: -4.2, n: 4, face: 'S' });
 
   // ---------- 四条通道（属于站厅层） ----------
   const passages = PASSAGES.map((p) => {
@@ -181,7 +181,7 @@ export function buildMetro(parts, site, picker) {
     }
     const [kx, kz] = toW(Gf, (EXIT.roof.x0 + EXIT.roof.x1) / 2, 0);
     const kiosk = { x: kx, z: kz, deg: Gf.deg, frame: Gf, poly: lrectPoly(Gf, EXIT.roof), open: lrectPoly(Gf, EXIT.open), run: EXIT.run, rise: -B1.elev, hw: EXIT.hw };
-    addTrench(site, kiosk.open);
+    site.openings.push(kiosk.open);
     const seg = lseg(Gf, { x0: 0, z0: -EXIT.hw, x1: 0, z1: EXIT.hw, side: 'E' });
     return {
       id: `M-${x.id}`, building: bid, name: x.name, level: B1.id, seg: { x0: seg.x0, z0: seg.z0, x1: seg.x1, z1: seg.z1 }, nx: seg.nx, nz: seg.nz,
@@ -216,7 +216,7 @@ export function buildMetro(parts, site, picker) {
   const bb = polyBounds(box);
   const building = {
     id: bid, code: 'M', name: '地铁 · 云澜汇站', short: '地铁', en: 'YUNLAN HUI STATION', kind: 'metro', levels: levels.map((l) => l.id),
-    outline: box, center: [(bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2], radius: 80, plot: null, rotundas: [], wings: [],
+    outline: box, center: [(bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2], radius: 64, plot: null, rotundas: [], wings: [],
     box: METRO.box, platform: METRO.platform, track: METRO.track, train: METRO.train, gate: METRO.gate, line: METRO.line,
     passages, exits: exits.map((e) => ({ id: e.exit, name: e.name, passage: e.passage, entrance: e.id, kiosk: e.kiosk })),
   };

@@ -7,6 +7,7 @@ const PHASES = [
   { id: 'P1', label: '一期', sub: '云澜汇' },
   { id: 'P2', label: '二期', sub: '星湾' },
   { id: 'P3', label: '三期', sub: '云澜里' },
+  { id: 'M', label: '地铁', sub: '云澜汇站' },
 ];
 
 export function createUI(app, layout) {
@@ -88,7 +89,7 @@ export function createUI(app, layout) {
     const units = levels.reduce((n, l) => n + l.units.length, 0);
     const out = [['店铺', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', layout.elevators.filter((e) => ids.has(e.serves[0])).length],
       ['人行入口', layout.entrances.filter((e) => ids.has(e.level) && e.to === 'site').length], ['车位', stallsOf(levels)]];
-    if (!bid) out.unshift(['已建', `${layout.buildings.length} 期`]);
+    if (!bid) out.unshift(['已建', `${layout.buildings.filter((x) => x.kind !== 'metro').length} 期 + 地铁`]);
     return out;
   };
   function renderDirectory() {
@@ -167,7 +168,7 @@ export function createUI(app, layout) {
     $('legend').hidden = !s.flows;
     const lv = s.focus ? lvById[s.focus] : null;
     const b = s.building ? bById[s.building] : null;
-    $('floorInfo').textContent = s.exploded ? `${b.name} · 爆炸视图` : lv ? `${b.short} · ${lv.name} · ${lv.theme.label}` : b ? `${b.name} · ${b.en}` : '园区总览 · 一期云澜汇 · 二期星湾 · 三期云澜里';
+    $('floorInfo').textContent = s.exploded ? `${b.name} · 爆炸视图` : lv ? `${b.short} · ${lv.name} · ${lv.theme.label}` : b ? `${b.name} · ${b.en}` : '园区总览 · 一期云澜汇 · 二期星湾 · 三期云澜里 · 地铁云澜汇站';
     renderDirectory();
   }
   app.on(sync);

@@ -1,7 +1,7 @@
 // 动线路径（数据驱动）：人流（商业街两侧往返、圆厅回游环、扶梯上下行、车位 → 电梯）、
 // 车流（车库：坡道口 → 各翼外侧车道 → 圆厅环道，靠右行驶、逆时针绕圆厅）、货流（卸货区 → 北翼）。
 // 每条路径为三维折线 [[x,y,z],...]，loop=true 表示闭合环线。动线箭头与行人、车辆动画共用。
-import { frame, toW, pointInPoly } from '../layout/geom.js';
+import { frame, toW, toL, pointInPoly } from '../layout/geom.js';
 
 const DEG = 180 / Math.PI;
 const mod360 = (a) => ((a % 360) + 360) % 360;
@@ -41,6 +41,10 @@ export function levelPaths(layout) {
     const b = bById[lv.building];
     if (b.kind === 'street') {
       streetPaths(layout, b, lv, P(lv.id));
+      continue;
+    }
+    if (b.kind === 'metro') {
+      metroPaths(b, lv, P(lv.id));
       continue;
     }
     if (b.kind !== 'mall') continue;
@@ -201,6 +205,46 @@ function streetPaths(layout, b, lv, P) {
   }
 }
 
+/** 地铁：站台候车、站厅长廊与付费区回游、闸机进站、四条通道往返、出入口楼梯与上行扶梯 */
+function metroPaths(b, lv, P) {
+  const y = lv.elev + 0.07;
+  const line = (pts, name, extra = {}) => P.people.push({ loop: false, name, pts: pts.map(([x, z, yy = y]) => [x, yy, z]), ...extra });
+  if (lv.short === 'B2') {
+    for (const s of [-1, 1]) {
+      line([[-56, s * 3.9], [56, s * 3.9]], '站台候车');
+      line([[56, s * 4.6], [-56, s * 4.6]], '站台候车');
+    }
+    return;
+  }
+  line([[-54, -8], [56, -8]], '站厅长廊');
+  line([[56, -7], [-54, -7]], '站厅长廊');
+  line([[-56, 8], [54, 8]], '站厅长廊');
+  line([[54, 7], [-56, 7]], '站厅长廊');
+  P.people.push({ loop: true, name: '付费区', pts: [[-30, y, -3.6], [30, y, -3.6], [30, y, 3.6], [-30, y, 3.6]] });
+  line([[-58, 1.5], [-36, 1.5], [-27.5, 0.9]], '闸机进站');
+  line([[58, -1.5], [36, -1.5], [27.5, -0.9]], '闸机进站');
+  line([[-27.5, -0.9], [-36, -2.5], [-56, -2.5]], '闸机出站');
+  line([[27.5, 0.9], [36, 2.5], [56, 2.5]], '闸机出站');
+  for (const p of b.passages) {
+    const u0 = Math.max(p.lpoly[0][0], p.lpoly[3][0]) - 4;
+    const end = p.uEnd - 1.5;
+    P.people.push({ loop: false, name: p.name, pts: [W3(p.F, u0, -1.4, y), W3(p.F, end, -1.4, y)] });
+    P.people.push({ loop: false, name: p.name, pts: [W3(p.F, end, 1.4, y), W3(p.F, u0, 1.4, y)] });
+  }
+  for (const ex of b.exits) {
+    const G = ex.kiosk.frame;
+    const p = b.passages.find((q) => q.id === ex.passage);
+    const [pu, pv] = toL(p.F, G.ox, G.oz);
+    const side = Math.abs(pv) > 1;
+    const [au, av] = toL(G, ...toW(p.F, side ? pu + 1.2 : pu - 8, 0));
+    const T = (u, v, yy) => W3(G, u, v, yy);
+    const run = ex.kiosk.run;
+    P.people.push({ loop: false, name: `${ex.id} 口出站`, pts: [T(au, av, y), T(side ? -1.2 : au, -1.1, y), T(0, -1.1, y), T(run, -1.1, 0.07), T(run + 2.5, -1.1, 0.07)] });
+    const rise = -lv.elev, er = rise * Math.sqrt(3);
+    P.people.push({ loop: false, escalator: true, name: `${ex.id} 口扶梯`, pts: [T(-1.4, 1.9, lv.elev + 1.35), T(0.85, 1.9, lv.elev + 1.35), T(0.85 + er, 1.9, 1.35), T(0.85 + er + 2, 1.9, 1.35)] });
+  }
+}
+
 /** 天桥：云环双向环线、四条连廊、落地塔扶梯 */
 export function bridgePaths(br) {
   const y = br.y + 0.07;
@@ -237,6 +281,13 @@ export function sitePaths(layout) {
   const people = [];
   for (const e of layout.entrances) {
     if (e.to !== 'site') continue;
+    if (e.kiosk) {
+      // 地铁出入口：从广场走进雨棚、下楼梯到站厅层
+      const T = (u, v, yy) => W3(e.kiosk.frame, u, v, yy);
+      const r = e.kiosk.run;
+      people.push({ loop: false, name: `进站 · ${e.name}`, pts: [T(r + 22, -1.1, y), T(r + 2.5, -1.1, y), T(r, -1.1, 0), T(0, -1.1, -e.kiosk.rise + 0.07), T(-1.5, -1.1, -e.kiosk.rise + 0.07)] });
+      continue;
+    }
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     people.push({ loop: false, name: `前往${e.name}`, pts: [[mx + e.nx * 26, y, mz + e.nz * 26], [mx + e.nx * 1, y, mz + e.nz * 1]] });
   }

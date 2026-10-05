@@ -16,6 +16,8 @@ export const THEME = {
   street: { wall: '#e9dfd0', column: '#dccfbc', band: '#9a5b34', trim: '#6b4a32', ceiling: '#f2ece3' },
   loft: { wall: '#e4ded6', column: '#d6cec4', band: '#3d6f8f', trim: '#5c544b', ceiling: '#efebe5' },
   terrace: { wall: '#e7e2d8', column: '#d8d1c4', band: '#5a8f4e', trim: '#776f62', ceiling: '#efece6' },
+  metro: { wall: '#e8ebee', column: '#e1e5e8', band: '#c8352b', trim: '#8a939b', ceiling: '#d6dade' },
+  platform: { wall: '#e3e6e9', column: '#dadfe3', band: '#c8352b', trim: '#7d858c', ceiling: '#cdd2d7' },
 };
 const DEFAULT = THEME.lux;
 export const themeOf = (lv) => THEME[lv.theme.key] || DEFAULT;

@@ -41,6 +41,7 @@ export function buildSite() {
     plazas: [],
     driveways: [],
     trenches: [],
+    openings: [],
     features: [],
   };
   return site;

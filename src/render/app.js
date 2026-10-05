@@ -26,6 +26,7 @@ import { buildStreet } from './build/street.js';
 import { buildBridges } from './build/bridges.js';
 import { buildPark } from './build/park.js';
 import { buildSquare } from './build/square.js';
+import { buildMetro } from './build/metro.js';
 import { createPerfMonitor } from './perf.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
@@ -134,6 +135,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     ['营造三期街区', buildStreet],
     ['架设云环天桥', buildBridges],
     ['种植中央公园', buildPark],
+    ['开通地铁云澜汇站', buildMetro],
     ['铺设道路与广场', buildSite],
     ['绘制动线', buildFlows],
     ['添加标注', buildLabels],
@@ -164,6 +166,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const highlight = makeHighlight(scene);
 
   function applyVisibility() {
+    const focusLv0 = state.focus ? ctx.lvById[state.focus] : null;
+    // 聚焦某期与站厅同高的地下层（一期 B1M、二期 B1、三期 B1）时，一并显示相连的地铁站厅与通道
+    const metroLink = !!focusLv0 && focusLv0.elev < 0 && ctx.bById[focusLv0.building].kind !== 'metro' && Math.abs(focusLv0.elev + 4.5) < 0.5;
     for (const B of Object.values(ctx.buildings)) {
       const sel = state.building === B.b.id;
       const fi = sel && state.focus ? B.levels.findIndex((L) => L.lv.id === state.focus) : B.levels.length;
@@ -178,6 +183,12 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
           L.group.visible = L.index <= fi;
           L.base.visible = true;
           L.facade.visible = !state.focus || L.index < fi;
+        } else if (B.b.kind === 'metro') {
+          // 地铁未选中：只显示地面出入口（shell 组）；与所聚焦地下层相连时显示站厅层
+          const link = metroLink && L.lv.short === 'B1';
+          L.group.visible = L.lv.short === 'B1';
+          L.base.visible = link;
+          L.facade.visible = false;
         } else {
           L.group.visible = true;
           L.base.visible = L.lv.kind === 'roof' || (B.b.kind === 'street' && L.lv.elev >= 0);
@@ -192,8 +203,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         L.offsetTarget = state.exploded && sel ? L.index * EXPLODE_GAP : 0;
       }
     }
-    const focusLv = state.focus ? ctx.lvById[state.focus] : null;
-    siteGroup.visible = !state.exploded && (!focusLv || focusLv.elev >= 0);
+    const focusLv = focusLv0;
+    // 地铁选中时撤去地面，露出站厅、通道与站台
+    siteGroup.visible = !state.exploded && (!focusLv || focusLv.elev >= 0) && ctx.bById[state.building]?.kind !== 'metro';
     ctx.site.labels.visible = state.labels && !state.touring && !state.focus && !state.exploded;
     if (ctx.site.flows) ctx.site.flows.visible = state.flows && !state.focus && !state.exploded;
     const sel = state.selected && findUnit(state.selected);
@@ -221,13 +233,13 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const bCenter = (b, y = 8) => V(b.center[0], y, b.center[1]);
   function buildingView(bid) {
     const b = ctx.bById[bid];
-    const c = bCenter(b, 10);
+    const c = bCenter(b, b.kind === 'metro' ? -6 : 10);
     return [c.clone().add(V(0.5, 0.66, 0.62).normalize().multiplyScalar(b.radius * 2.25)), c, b.radius * 1.25];
   }
   function explodedView(bid) {
     const b = ctx.bById[bid];
     const n = ctx.buildings[bid].levels.length;
-    const c = bCenter(b, (n * EXPLODE_GAP) / 2 + 4);
+    const c = bCenter(b, b.kind === 'metro' ? -2 : (n * EXPLODE_GAP) / 2 + 4);
     return [c.clone().add(V(0.55, 0.5, 0.68).normalize().multiplyScalar(b.radius * 2.6)), c, b.radius * 1.3];
   }
   function levelView(id) {
@@ -460,6 +472,7 @@ function buildPicks(ctx) {
     stair: ['消防楼梯 · 安全出口', '疏散楼梯'],
     core: ['客梯', '2 台客梯 · 全楼直达'],
     equip: ['设备房', '非公共区域'],
+    service: ['客服中心', '票务 · 问询 · 失物招领 · 一卡通充值'],
     mech: ['屋顶设备区', '冷却塔 · 空调机组（格栅围挡）'],
   };
   for (const lv of layout.levels) {
@@ -508,6 +521,13 @@ function buildPicks(ctx) {
     pickBox(ctx.levels[e.from].picks, geo, mat, F, { x0: -0.9, x1: run + 0.9, z0: -0.95, z1: 0.95 }, e.bottom.y, e.top.y - e.bottom.y + 1,
       { kind: 'facility', title: `扶梯 ${e.dir === 'up' ? '上行' : '下行'}`, desc: `${lo.name} ↔ ${hi.name} · 坡度 30°` });
   }
+  for (const g of layout.elevators.filter((x) => x.building === 'M')) {
+    for (const id of g.serves) {
+      const lv = ctx.lvById[id];
+      pickBox(ctx.levels[id].picks, geo, mat, g.frame, { x0: g.lu - 1.6, x1: g.lu + 1.6, z0: g.lv - 1.4, z1: g.lv + 1.4 }, lv.elev, clearHeight(lv),
+        { kind: 'facility', title: '无障碍电梯', desc: '站厅 ↔ 站台 · 玻璃井道' });
+    }
+  }
   for (const g of layout.elevators.filter((x) => x.type === 'glass')) {
     for (const id of g.serves) {
       const lv = ctx.lvById[id];
@@ -516,6 +536,12 @@ function buildPicks(ctx) {
     }
   }
   for (const e of layout.entrances.filter((x) => x.to === 'site')) {
+    // 地铁出入口：整个雨棚可点击，进入地铁站
+    if (e.kiosk) {
+      const r = { x0: -0.5, x1: 12, z0: -3.5, z1: 3.5 };
+      pickBox(ctx.site.picks, geo, mat, e.kiosk.frame, r, 0, 3.4, { kind: 'building', id: e.building, title: e.name, desc: '地铁 7 号线 · 云澜汇站 · 楼梯 + 上行扶梯 · 点击进入站厅' });
+      continue;
+    }
     const F = frame((e.seg.x0 + e.seg.x1) / 2, (e.seg.z0 + e.seg.z1) / 2, (Math.atan2(e.nz, e.nx) * 180) / Math.PI);
     pickBox(ctx.site.picks, geo, mat, F, { x0: 0, x1: 7, z0: -e.width / 2 - 2, z1: e.width / 2 + 2 }, 0, 5,
       { kind: 'facility', title: e.name, desc: e.main ? `${ctx.bById[e.building].name} · 主入口` : `${ctx.bById[e.building].name} · 人行入口` });
@@ -525,6 +551,7 @@ function buildPicks(ctx) {
   }
   // 整栋楼：园区视角点击进入该期（街区按各楼栋体量 + 街巷地面拾取，避免挡住上空的天桥）
   for (const b of layout.buildings) {
+    if (b.kind === 'metro') continue;
     const top = Math.max(...layout.levels.filter((l) => l.building === b.id).map((l) => l.elev));
     const vols = b.kind === 'street' ? [...b.blocks.map((k) => [k.poly, k.top + 1]), [b.outline, 0.6]] : [[b.outline, top + 2]];
     for (const [poly, h] of vols) {

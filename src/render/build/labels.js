@@ -14,7 +14,10 @@ const STYLE = {
   fun: { bg: 'rgba(106,63,181,0.95)', accent: '#f5d0fe' },
   exit: { bg: 'rgba(15,138,74,0.95)', accent: '#ffffff' },
   title: { bg: 'rgba(20,26,32,0.92)', accent: '#ffc83d' },
+  metro: { bg: 'rgba(200,53,43,0.95)', accent: '#ffffff' },
 };
+/** 地铁通道去向（标注副标题） */
+const PASSAGE_EN = { PA: 'TO YUNLAN MALL · B1M', PC: 'TO XINGWAN · B1', PD: 'TO YUNLAN LANE · B1', PB: 'TO CENTRAL PARK' };
 
 export function sprite(text, style = 'facility', icon = null, sub = null, size = 0.026) {
   const key = `${text}|${style}|${icon}|${sub}`;
@@ -77,6 +80,10 @@ export function buildLabels(ctx) {
     // 观光梯、客梯（每个核心筒一个）
     for (const g of layout.elevators.filter((e) => e.type === 'glass' && e.serves.includes(lv.id))) put(G, '观光电梯', g.x, y + 3.4, g.z, 'facility', 'lift');
     for (const e of layout.elevators.filter((x) => x.exterior && x.serves.includes(lv.id))) {
+      if (e.building === 'M') {
+        if (e.id.endsWith('L1')) put(G, '无障碍电梯', e.x, y + 3.0, e.z + 1.5, 'facility', 'lift', '站厅 ↔ 站台');
+        continue;
+      }
       const [x, z] = toW(e.frame, e.lu - 3.2, e.lv);
       put(G, '客梯', x, y + 3.4, z, 'facility', 'lift', `${short(e.serves[0])}–${short(e.serves[e.serves.length - 1])}`);
     }
@@ -85,7 +92,7 @@ export function buildLabels(ctx) {
       const t = lv.kind === 'parking' ? ['楼梯 → 街区', 'exit', 'exit'] : ['地库出入口', 'parking', 'parking'];
       put(G, t[0], (d.x0 + d.x1) / 2 + d.nx * 1.4, y + (lv.kind === 'parking' ? 2.4 : 4.6), (d.z0 + d.z1) / 2 + d.nz * 1.4, t[1], t[2], null, 0.02);
     }
-    for (const e of layout.elevators.filter((x) => x.type === 'passenger' && x.serves.includes(lv.id) && x.id.endsWith('L1'))) {
+    for (const e of layout.elevators.filter((x) => x.type === 'passenger' && !x.exterior && x.serves.includes(lv.id) && x.id.endsWith('L1'))) {
       const s = e.door === 'N' ? -1 : 1;
       const [x, z] = toW(e.frame, e.lu + 1.5, e.lv + s * 3.2);
       put(G, '客梯', x, y + 3.6, z, 'facility', 'lift', `${short(e.serves[0])}–${short(e.serves[e.serves.length - 1])}`);
@@ -103,7 +110,9 @@ export function buildLabels(ctx) {
     // 入口
     for (const e of layout.entrances.filter((x) => x.level === lv.id)) {
       const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
-      put(G, e.name, mx - e.nx * 4, y + 3.2, mz - e.nz * 4, 'entrance', 'info');
+      const metro = e.building === 'M' || e.to === 'M-B1';
+      const d = e.kiosk ? 1.5 : 4;
+      put(G, e.name, mx - e.nx * d, y + 3.2, mz - e.nz * d, metro ? 'metro' : 'entrance', metro ? 'metro' : 'info', e.to === 'M-B1' ? '云澜汇站 · METRO' : null);
     }
     // 美食层
     if (lv.kind === 'food') {
@@ -127,6 +136,19 @@ export function buildLabels(ctx) {
       for (const u of lv.units.filter((x) => x.style === 'pavilion')) {
         const [x, z] = toW(u.frame, (u.rects[0].x0 + u.rects[0].x1) / 2, (u.rects[0].z0 + u.rects[0].z1) / 2);
         put(G, u.brand.name, x, y + 5.0, z, 'food', 'cup', u.brand.en, 0.022);
+      }
+    }
+    // 地铁：站厅的通道、闸机、客服中心、售票机；站台的行车方向
+    if (lv.building === 'M') {
+      const b = ctx.bById.M;
+      if (lv.short === 'B1') {
+        for (const p of b.passages) {
+          const [x, z] = toW(p.F, (p.u0 + p.uEnd) / 2, 0);
+          put(G, p.name, x, y + 1.8, z, 'metro', 'metro', PASSAGE_EN[p.id], 0.022);
+        }
+        for (const f of lv.features.filter((q) => q.type === 'gates')) put(G, '进出站闸机', f.x, y + 2.3, (f.z0 + f.z1) / 2, 'facility', 'metro', 'FARE GATES', 0.02);
+      } else {
+        for (const f of lv.features.filter((q) => q.type === 'rail')) put(G, f.name, f.dir * 30, y + 3.6, f.z, 'metro', 'metro', f.en, 0.022);
       }
     }
     // 停车层
@@ -180,10 +202,18 @@ export function buildLabels(ctx) {
   // 园区视角：各期名称、入口、车库
   const S = ctx.site.labels;
   for (const b of layout.buildings) {
+    if (b.kind === 'metro') {
+      put(S, b.name, 0, 3, 0, 'metro', 'metro', b.en, 0.026);
+      continue;
+    }
     const top = Math.max(...layout.levels.filter((l) => l.building === b.id).map((l) => l.elev));
     put(S, b.name, b.center[0], top + 26, b.center[1], 'title', 'star', b.en, 0.03);
   }
   for (const e of layout.entrances.filter((x) => x.to === 'site')) {
+    if (e.kiosk) {
+      put(S, `地铁 ${e.exit} 口`, e.kiosk.x, 5.6, e.kiosk.z, 'metro', 'metro', e.name.split(' · ')[1], 0.02);
+      continue;
+    }
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     put(S, e.name, mx + e.nx * 6, 6.5, mz + e.nz * 6, 'entrance', 'info', null, 0.022);
   }
@@ -204,6 +234,5 @@ export function buildLabels(ctx) {
   const pk = layout.site.park;
   if (pk) {
     put(S, '中央公园', pk.center[0], 16, pk.center[1], 'title', 'star', 'CENTRAL PARK', 0.03);
-    put(S, pk.metro.name, pk.metro.x, 7, pk.metro.z, 'entrance', 'info', 'METRO', 0.022);
   }
 }
