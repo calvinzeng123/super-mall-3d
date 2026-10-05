@@ -205,6 +205,7 @@ export function buildParking(ctx) {
     if (b.kind === 'street') {
       for (const [zone, x] of [['G', -188], ['H', -91]]) for (const z of [64, 112, 160]) hangSign(ctx, L, `${lv.short} · ${zone}区`, IDENTITY, x, z, y0 + H - 0.5, band, 'parking');
     }
+    if (b.square) for (const [lu, lv2] of [[-30, -21], [30, -21], [0, 21], [-52, 0]]) hangSign(ctx, L, `${lv.short} · ${b.square.zone}区`, b.square.F, lu, lv2, y0 + H - 0.5, band, 'parking');
     for (const e of ctx.layout.elevators) {
       if (e.type !== 'passenger' || !e.serves.includes(lv.id)) continue;
       if (e.exterior) hangSign(ctx, L, '电梯厅 · 客梯', e.frame, e.lu - 5.5, e.lv, y0 + H - 0.5, '#1f2933', 'lift');

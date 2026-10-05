@@ -62,6 +62,17 @@ export function levelPaths(layout) {
       const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
       P(lv.id).people.push({ loop: false, pts: [[mx - e.nx * 1, y, mz - e.nz * 1], [mx - e.nx * 12, y, mz - e.nz * 12]], name: '入口 → 商场' });
     }
+    // 方庭：环廊回游线 + 十字轴线（天台为平台环线）
+    if (b.square) {
+      const F = b.square.F;
+      const ring = roof ? [[-50, -30], [10, -30], [30, -16], [30, 16], [-10, 30], [-50, 30]] : [[-41, -21], [41, -21], [41, 21], [-41, 21]];
+      P(lv.id).people.push({ loop: true, pts: ring.map(([u, v]) => W3(F, u, v, y)), name: roof ? '方庭天台' : '方庭环廊' });
+      if (!roof) {
+        for (const [a, c] of [[[0, -36], [0, -21]], [[3, 36], [3, 21]], [[-56, 0], [-41, 0]], [[56, 0], [41, 0]]]) {
+          P(lv.id).people.push({ loop: false, pts: [W3(F, a[0], a[1], y), W3(F, c[0], c[1], y)], name: '方庭入口 → 环廊' });
+        }
+      }
+    }
   }
   // 扶梯：上行沿斜面向上，下行向下
   for (const e of layout.escalators) {
@@ -128,7 +139,7 @@ function parkingPaths(layout, b, lv, P) {
     P.vehicle.push({ loop: false, pts, name: '入场 → 推荐环线 → 出场' });
   }
   for (const e of layout.elevators) {
-    if (e.type !== 'passenger' || !e.serves.includes(lv.id) || !e.id.endsWith('L1')) continue;
+    if (e.type !== 'passenger' || !e.serves.includes(lv.id) || !e.id.endsWith('L1') || e.door === 'E' || e.door === 'W') continue;
     const s = e.door === 'N' ? -1 : 1;
     P.people.push({ loop: false, pts: [W3(e.frame, e.lu + 1.5, e.lv + s * 2.2, y + 0.02), W3(e.frame, e.lu + 1.5, e.lv + s * 8.5, y + 0.02), W3(e.frame, e.lu + 14, e.lv + s * 8.5, y + 0.02)], name: '电梯厅 → 步行脊' });
   }

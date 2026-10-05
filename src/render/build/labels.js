@@ -37,6 +37,7 @@ const FEATURE_LABEL = {
   ferris: ['fun', 'wheel', 4.2], ip: ['fun', 'star', 8.6], mirror: ['fun', 'star', 2.2], skywalk: ['fun', 'star', 2.4],
   letters: ['fun', 'star', 5.6], arch: ['fun', 'star', 4.0], playground: ['fun', 'star', 3.0], pavilion: ['facility', 'escalator', 5.2],
   track: ['fun', 'star', 2.4], court: ['fun', 'star', 4.4], lawn: ['fun', 'star', 1.6],
+  'cinema-open': ['fun', 'star', 10.5], farm: ['fun', 'star', 5.0], viewdeck: ['fun', 'star', 3.0],
   plaza: ['fun', 'star', 7.5], stage: ['fun', 'star', 6.2], fountain: ['fun', 'star', 3.4], grove: ['fun', 'star', 6.5],
 };
 
@@ -132,6 +133,10 @@ export function buildLabels(ctx) {
     if (lv.kind === 'parking') {
       const b = ctx.bById[lv.building];
       if (b.kind === 'street') for (const [zone, x] of [['G', -188], ['H', -91]]) put(G, `${lv.short} · ${zone}区`, x, y + 2.6, 112, 'parking', 'parking');
+      if (b.square) {
+        const [x, z] = toW(b.square.F, 0, 0);
+        put(G, `${lv.short} · ${b.square.zone}区`, x, y + 2.6, z, 'parking', 'parking');
+      }
       for (const w of b.wings) {
         if (w.link) continue;
         const [x, z] = toW(w.F, (w.u0 + w.uEnd - 12) / 2, 15);

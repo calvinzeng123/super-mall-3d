@@ -25,6 +25,7 @@ import { buildTraffic } from './build/traffic.js';
 import { buildStreet } from './build/street.js';
 import { buildBridges } from './build/bridges.js';
 import { buildPark } from './build/park.js';
+import { buildSquare } from './build/square.js';
 import { createPerfMonitor } from './perf.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
@@ -129,6 +130,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     ['布置美食广场与公共区', buildPublic],
     ['划设停车位', buildParking],
     ['打造天台花园与摩天轮', buildRoof],
+    ['布置方庭影院与农场', buildSquare],
     ['营造三期街区', buildStreet],
     ['架设云环天桥', buildBridges],
     ['种植中央公园', buildPark],
@@ -480,6 +482,9 @@ function buildPicks(ctx) {
         letters: ['「云澜汇」立体字', '天台打卡点'],
         track: ['星湾天空跑道', '沿屋面一圈的环形跑道 · 三条分道 · 夜间灯带'],
         court: ['屋顶篮球场', '标准全场 · 围网 · 夜间灯光'],
+        'cinema-open': ['星空露天影院', '方庭天台 · LED 银幕 · 每晚 20:00 放映'],
+        farm: ['屋顶农场', '方庭天台 · 种植池 · 玻璃温室 · 亲子采摘'],
+        viewdeck: ['方庭观景台', '抬高木平台 · 望远镜 · 俯瞰园区'],
         plaza: ['云澜里中心广场', '街区舞台 · 旱喷水景 · 周末市集'],
         stage: ['街区舞台', '每周五 19:30 街区音乐节 · LED 背景屏'],
         fountain: ['旱喷水景', '16 组喷头 · 夜间灯光'],

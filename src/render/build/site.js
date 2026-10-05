@@ -2,7 +2,7 @@
 // 行道树与路灯、入口雨棚与门（按入口法线）、车库道闸与灯箱、坡道护栏、卸货区、一期广场小品、园区外周边楼宇、未建地块围挡。
 import * as THREE from 'three';
 import { shapeFromPoly, flatShapeGeometry } from './shell.js';
-import { rect, rectPoly, frame, toW, toL, pointInPoly, clipConvex } from '../../layout/geom.js';
+import { rect, rectPoly, frame, toW, toL, pointInPoly, clipConvex, distToPolyEdge } from '../../layout/geom.js';
 import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
 import { COLORS } from '../theme.js';
@@ -105,7 +105,7 @@ function landscape(ctx, b, holes, G, B) {
     for (let z = r.z0; z < r.z1; z += 10) {
       if (rand() < 0.35) continue;
       const p = [x + (rand() - 0.5) * 6, z + (rand() - 0.5) * 6];
-      if (near(p, band) || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d))) continue;
+      if (near(p, band) || near(p, b.outline) || distToPolyEdge(p, b.outline) < 4 || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d))) continue;
       const k = 3;
       if ([[k, 0], [-k, 0], [0, k], [0, -k]].some(([dx, dz]) => near([p[0] + dx, p[1] + dz], band) || paths.some((q) => near([p[0] + dx, p[1] + dz], q)))) continue;
       trees.push({ x: p[0], y: -0.3, z: p[1], s: 0.85 + rand() * 0.5, kind: rand() < 0.3 ? 'cone' : 'round' });
