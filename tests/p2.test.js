@@ -53,7 +53,8 @@ test('二期入口：≥4 个、朝向 ≥3 个方向、1 个主入口；内侧�
     const out = [mx + e.nx, mz + e.nz];
     assert.ok(!lv.slab.pieces.some((s) => pointInPoly(out, s.outer)), `${e.name} 外侧仍在楼内`);
     if (e.to === 'site') assert.ok(inSite(out), `${e.name} 外侧不在场地步行区`);
-    else if (L.bridges) assert.ok(inBridge(out), `${e.name} 外侧不在天桥桥面上`);
+    else if (e.to === 'bridge') { if (L.bridges) assert.ok(inBridge(out), `${e.name} 外侧不在天桥桥面上`); }
+    else assert.ok(inWalk(lvl(e.to), out), `${e.name} 外侧不在 ${e.to} 走道上`);
   }
 });
 
