@@ -31,9 +31,9 @@ test('一期卫生间：B1M 与 1F–3F 每层 ≥2 组，B1/B2/RF ≥1 组，�
   }
 });
 
-test('一期垂直交通：观光梯 2 部；扶梯 8 对 16 部，五段都有上下行', () => {
-  assert.equal(L.elevators.filter((e) => e.building === 'P1' && e.type === 'glass').length, 2);
-  const E = L.escalators.filter((e) => e.building === 'P1');
+test('一期 Y 形部分（圆厅与三翼）垂直交通：观光梯 2 部；扶梯 8 对 16 部，五段都有上下行', () => {
+  assert.equal(L.elevators.filter((e) => e.building === 'P1' && e.type === 'glass' && !e.square).length, 2);
+  const E = L.escalators.filter((e) => e.building === 'P1' && !e.square && e.wing !== 'NW');
   assert.equal(E.length, 16);
   assert.equal(new Set(E.map((e) => e.pair)).size, 8);
   for (const [a, b] of [['B1', 'B1M'], ['B1M', '1F'], ['1F', '2F'], ['2F', '3F'], ['3F', 'RF']]) {

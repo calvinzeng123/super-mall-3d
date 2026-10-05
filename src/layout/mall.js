@@ -1,6 +1,6 @@
 // 室内商场通用构建器：圆厅 + 翼楼（规格第 3 节）。输入一期 / 二期的 spec，输出该期的楼层与垂直交通。
 // 约定：翼楼 frame 原点在圆厅圆心，u 沿翼楼轴线向外，v = u 转 +90°；+v 店铺带门面朝 −v（N），−v 带朝 +v（S）。
-import { frame, toW, dirW, rect, lrectPoly, lroundPoly, lseg, NORMAL, polyBounds } from './geom.js';
+import { frame, toW, dirW, rect, lrectPoly, lroundPoly, lpoly, lseg, NORMAL, polyBounds } from './geom.js';
 import { HW, SW, END, CORE, SLOT_HW, KIT, ESC, CATEGORIES } from './constants.js';
 import { hubOutline, ringPieces } from './hub.js';
 import { fillRows, markSpecial } from './parking.js';
@@ -36,6 +36,10 @@ function makeWing(w, rots, bid) {
       aisleEnd: w.uEnd - END, spineEnd: w.uEnd - 12, rowEnd: w.uEnd - 12,
     });
   }
+  // 末端接方庭：店铺、商业街、车道一直通到末端，不设端部区 / 端楼梯 / 端入口
+  if (w.annex) Object.assign(W, { bandEnd: w.uEnd, streetEnd: w.uEnd, aisleEnd: w.uEnd, spineEnd: w.uEnd, rowEnd: w.uEnd });
+  // 与相邻翼夹角小时，翼楼全宽段从 start 起（之前为喇叭口）
+  if (w.start) Object.assign(W, { u0: w.start, aisleStart: w.start, rowStart: w.start + 1.5 });
   return W;
 }
 
@@ -54,6 +58,7 @@ export function split(a, b, pattern, state) {
 }
 
 const walkL = (F, id, kind, r) => ({ id, kind, poly: lrectPoly(F, r), frame: F, rect: r });
+const walkP = (F, id, kind, pts) => ({ id, kind, poly: lpoly(F, pts), frame: F, lpoly: pts });
 
 export function lift(id, bid, type, F, lu, lv, w, d, door, serves) {
   const [x, z] = toW(F, lu, lv);
@@ -106,7 +111,7 @@ export function buildMall(spec, site, picker) {
       for (const [k, lu] of [[1, c + 1.3], [2, c + 4.3]]) elevators.push(lift(`${bid}-${w.id}-L${k}`, bid, 'passenger', w.F, lu, s * 8.5, 2.6, 3, toward(s), allIds));
       stair(`${w.id}-ST`, w.F, band(c, c + 8, s, 18, HW), hFront(c + 1.5, c + 6.5, s, 18));
     }
-    if (!w.link) {
+    if (!w.link && !w.annex) {
       for (const s of [1, -1]) {
         stair(`${w.id}-ST${s > 0 ? 'L' : 'R'}`, w.F, band(w.uEnd - END, w.uEnd, s, 17, HW), hFront(w.uEnd - 5, w.uEnd - 1, s, 17),
           vFront(w.uEnd - END, s, 18.5, 22.5, 'W'));
@@ -165,7 +170,7 @@ export function buildMall(spec, site, picker) {
   const building = {
     id: bid, code: spec.code, name: spec.name, short: spec.short, en: spec.en, kind: 'mall', levels: allIds, outline, center, radius, plot: spec.plot,
     rotundas: Object.values(rots).map((r) => ({ id: r.id, x: r.x, z: r.z, R: r.R, kitF: r.kitF })),
-    wings: wings.map((w) => ({ id: w.id, rot: w.rot, to: w.to || null, deg: w.deg, F: w.F, ua: w.ua, u0: w.u0, uEnd: w.uEnd, bandEnd: w.bandEnd, link: w.link, len: w.len, core: w.core, zone: w.zone, R: w.r.R })),
+    wings: wings.map((w) => ({ id: w.id, rot: w.rot, to: w.to || null, deg: w.deg, F: w.F, ua: w.ua, u0: w.u0, uEnd: w.uEnd, bandEnd: w.bandEnd, link: w.link, len: w.len, core: w.core, zone: w.zone, R: w.r.R, start: w.start || null, annex: !!w.annex })),
   };
   for (const lv of levels) delete lv.cfg;
   return { building, levels, escalators, elevators, stairs, entrances, ramps };
@@ -285,15 +290,18 @@ function pocketHasStair(ctx, w, s, far) {
 function wingRetail(ctx, lv, w, wc) {
   const F = w.F;
   // 端部区
-  if (!w.link) lv.walk.push(walkL(F, `${w.id}-end`, wc.end || 'lounge', rect(w.bandEnd, -17, w.uEnd, 17)));
+  if (!w.link && !w.annex) lv.walk.push(walkL(F, `${w.id}-end`, wc.end || 'lounge', rect(w.bandEnd, -17, w.uEnd, 17)));
   // 核心筒电梯厅
   if (w.core) {
     const s = w.core.band, c = w.core.u;
     lv.walk.push(walkL(F, `${w.id}-lobby`, 'lobby', band(c, c + 8, s, 10, 18)));
     lv.walk.push(walkL(F, `${w.id}-passage`, 'lobby', band(c + 5.6, c + 8, s, SW, 10)));
   }
-  // 口袋（翼楼与圆厅之间）
-  const pockets = [[false, w.ua, w.u0]];
+  // 口袋（翼楼与圆厅之间）；喇叭口翼用多边形口袋
+  if (w.neck) {
+    for (const [s, poly] of [[1, w.neck.plus], [-1, w.neck.minus]]) lv.walk.push(walkP(F, `${w.id}-neck${s > 0 ? 'L' : 'R'}`, 'pocket', poly));
+  }
+  const pockets = w.neck ? [] : [[false, w.ua, w.u0]];
   if (w.link) pockets.push([true, w.bandEnd, w.uEnd]);
   for (const [far, pa, pb] of pockets) {
     for (const s of [1, -1]) {
@@ -377,7 +385,7 @@ function parkingLevel(ctx, lv) {
     const F = w.F;
     lv.walk.push(walkL(F, `${w.id}-aisle1`, 'aisle', rect(w.aisleStart, -18, w.aisleEnd, -12)));
     lv.walk.push(walkL(F, `${w.id}-aisle2`, 'aisle', rect(w.aisleStart, 12, w.aisleEnd, 18)));
-    if (!w.link) {
+    if (!w.link && !w.annex) {
       lv.walk.push(walkL(F, `${w.id}-cross`, 'aisle', rect(w.uEnd - 12, -HW, w.uEnd - END, HW)));
       lv.walk.push(walkL(F, `${w.id}-endzone`, wc.end || 'spine', rect(w.uEnd - END, -17, w.uEnd, 17)));
     }
@@ -394,10 +402,10 @@ function parkingLevel(ctx, lv) {
     if (wc.throat) lv.walk.push(walkL(F, `${w.id}-throat`, 'aisle', wc.throat));
     ctx.state[`rows-${lv.id}`].push({
       F, zone: w.zone || w.id, rows: [
-        { id: `${w.id}-r1`, u0: w.ua, u1: w.rowEnd, v0: 18, v1: HW, face: 'N' },
-        { id: `${w.id}-r2`, u0: w.ua, u1: w.rowEnd, v0: SW, v1: 12, face: 'S' },
-        { id: `${w.id}-r3`, u0: w.ua, u1: w.rowEnd, v0: -12, v1: -SW, face: 'N' },
-        { id: `${w.id}-r4`, u0: w.ua, u1: w.rowEnd, v0: -HW, v1: -18, face: 'S' },
+        { id: `${w.id}-r1`, u0: w.rowStart ?? w.ua, u1: w.rowEnd, v0: 18, v1: HW, face: 'N' },
+        { id: `${w.id}-r2`, u0: w.rowStart ?? w.ua, u1: w.rowEnd, v0: SW, v1: 12, face: 'S' },
+        { id: `${w.id}-r3`, u0: w.rowStart ?? w.ua, u1: w.rowEnd, v0: -12, v1: -SW, face: 'N' },
+        { id: `${w.id}-r4`, u0: w.rowStart ?? w.ua, u1: w.rowEnd, v0: -HW, v1: -18, face: 'S' },
       ],
     });
   }

@@ -1,6 +1,17 @@
 // 一期 云澜汇：Y 形三翼 + 圆厅（规格第 4 节）。所有局部坐标见实现计划"一期关键数值"。
 import { rect, rectPoly } from './geom.js';
-import { KIT } from './constants.js';
+import { KIT, HW } from './constants.js';
+import { SQUARE_CHAIN, NW_END } from './square.js';
+
+/** 西北翼喇叭口：圆厅弧（西翼、北翼外墙与圆周交点之间）到全宽段起点 u=NW_START 的两块口袋（西北翼局部坐标） */
+const NW_START = 39.85;
+const NECK = (() => {
+  const R = 34, beta = Math.asin(HW / R);
+  const rel = Math.PI / 3 - beta;
+  const corner = [R * Math.cos(rel), R * Math.sin(rel)];
+  const plus = [[Math.sqrt(R * R - 49), 7], [NW_START, 7], [NW_START, HW], corner];
+  return { plus, minus: plus.map(([u, v]) => [u, -v]).reverse() };
+})();
 
 const HOLE_RAMP = rect(-11.5, -5.25, 11.5, 5.25);
 const SLOTS_2F = { SE: [[40, 52], [58, 72]], W: [[40, 52], [58, 70], [76, 86]], N: [[40, 52], [58, 72]] };
@@ -20,6 +31,7 @@ export const P1 = {
     { id: 'SE', rot: 'C', deg: 45, uEnd: 84, core: { band: -1, u: 51 }, zone: 'A', name: '东南翼' },
     { id: 'W', rot: 'C', deg: 165, uEnd: 96, core: { band: 1, u: 55 }, zone: 'B', name: '西翼' },
     { id: 'N', rot: 'C', deg: 285, uEnd: 88, core: { band: -1, u: 35 }, zone: 'C', name: '北翼' },
+    { id: 'NW', rot: 'C', deg: 225, uEnd: NW_END, start: NW_START, neck: NECK, annex: SQUARE_CHAIN, core: { band: -1, u: 62 }, zone: 'J', name: '西北翼' },
   ],
   pocketStairs: [{ wing: 'SE', band: 1 }, { wing: 'SE', band: -1 }, { wing: 'N', band: -1 }],
   levels: [
@@ -44,6 +56,7 @@ export const P1 = {
         SE: { brands: ['B1M', 'N1', 'N3', 'S1', 'N4', 'S2', 'N5', 'S3', 'N6', 'S5', 'N7', 'S6', 'NE', 'SE', 'S4a', 'S4b'], cats: ['food', 'restaurant'] },
         W: { style: 'oldstreet', widths: [6, 7, 6, 8], brands: ['B1M', 'NW', 'W1', 'W2', 'W3', 'SW', 'INW-a', 'INW-b', 'ISW-a', 'ISW-b'], cats: ['snack', 'tea', 'restaurant'] },
         N: { anchors: [{ slot: 'market', band: 0, u0: 51, u1: 82, v1: ['B1M', 'market'], style: 'market' }], end: 'service', streetEnd: 51 },
+        NW: { cats: ['food', 'snack', 'tea'] },
       },
     },
     {
@@ -58,7 +71,7 @@ export const P1 = {
       theme: { key: 'fashion', floor: 'terrazzo-cool', accent: '#2f86b0', label: '潮流服饰 · 运动户外 · 潮玩' },
       rot: { C: { void: KIT.voidUp } },
       widths: [9, 8, 10, 7, 11, 8], brands: ['2F', ...V1['2F']], cats: ['fashion', 'sports', 'shoes', 'toys'],
-      wings: { SE: { end: 'bridge', slots: SLOTS_2F.SE }, W: { slots: SLOTS_2F.W }, N: { slots: SLOTS_2F.N } },
+      wings: { SE: { end: 'bridge', slots: SLOTS_2F.SE }, W: { slots: SLOTS_2F.W }, N: { slots: SLOTS_2F.N }, NW: { slots: [[59, 67]] } },
     },
     {
       short: '3F', name: '3F 亲子娱乐', kind: 'retail', elev: 12, height: 5.5,
@@ -75,13 +88,14 @@ export const P1 = {
         },
         W: { slots: [[58, 70]], streetEnd: 71, end: 'service', anchors: [{ slot: 'cinema', band: 0, u0: 71, u1: 90, v1: ['3F', 'cinema'], style: 'cinema' }] },
         N: { slots: [[40, 52], [58, 72]], anchors: [{ slot: 'kids', band: 1, u0: 60, u1: 82, v1: ['3F', 'kids'] }] },
+        NW: { slots: [[44, 56]] },
       },
     },
     {
       short: 'RF', name: 'RF 天台花园', kind: 'roof', elev: 17.5, height: 6,
       theme: { key: 'roof', floor: 'deck-garden', accent: '#4a9a50', label: '天台花园 · 餐吧 · 摩天轮' },
       rot: { C: { void: KIT.voidUp, voidKind: 'skylight' } },
-      wings: { SE: { skylights: [[40, 52], [58, 72]] }, W: { skylights: [[58, 70]] } },
+      wings: { SE: { skylights: [[40, 52], [58, 72]] }, W: { skylights: [[58, 70]] }, NW: { skylights: [[44, 56]] } },
       roof: p1Roof,
     },
   ],
@@ -94,13 +108,14 @@ export const P1 = {
     { pair: 'K6', rot: 'C', from: '2F', to: '3F', axis: 'x', sign: -1, cross: 15.15, slot: true, label: '2F ↔ 3F' },
     { pair: 'P0', wing: 'W', from: 'B1', to: 'B1M', axis: 'x', sign: 1, bottom: 48, cross: 0, slot: true, label: '停车场 → 美食广场' },
     { pair: 'P7', wing: 'W', from: '3F', to: 'RF', axis: 'x', sign: 1, bottom: 42, cross: 0, slot: true, label: '3F → 天台花园' },
+    { pair: 'K7', wing: 'NW', from: '1F', to: '2F', axis: 'x', sign: 1, bottom: 44, cross: 0, slot: true, label: '1F ↔ 2F' },
+    { pair: 'K8', wing: 'NW', from: '2F', to: '3F', axis: 'x', sign: 1, bottom: 70, cross: 0, slot: true, label: '2F ↔ 3F' },
   ],
   entrances: [
     { id: 'SE', name: '东南主入口', level: '1F', wing: 'SE', v0: -8, v1: 8, main: true },
     { id: 'W', name: '西门', level: '1F', wing: 'W', v0: -4, v1: 4 },
     { id: 'S', name: '南门', level: '1F', rot: 'C', a0: 99, a1: 111 },
     { id: 'E', name: '东门', level: '1F', rot: 'C', a0: 339, a1: 351 },
-    { id: 'N', name: '北门', level: '1F', rot: 'C', a0: 219, a1: 231 },
     { id: 'BR', name: '天桥入口', level: '2F', wing: 'SE', v0: -5, v1: 5, to: 'bridge' },
   ],
   ramps: [
@@ -111,7 +126,7 @@ export const P1 = {
   ],
   driveways: [{ wing: 'N', rect: rect(139, -8, 162, 8) }],
   trenches: [{ wing: 'N', rect: rect(100, -6, 141, 6) }],
-  plazas: [{ id: 'plaza', poly: rectPoly(rect(-270, -250, -16, -20)) }],
+  plazas: [{ id: 'plaza', poly: rectPoly(rect(-286, -256, -16, -20)) }],
 };
 
 /** 天台：东南翼餐吧 + 卫生间 + 观景台 + 立体字；西翼花园；北翼摩天轮、IP、设备区 */
