@@ -58,6 +58,7 @@ export function createUI(app, layout) {
     else if (act === 'labels') app.setLabels(!s.labels);
     else if (act === 'night') app.setNight(!s.night);
     else if (act === 'tour') { if (s.touring) app.stopTour(); else app.startTour(); }
+    else if (act === 'explore') app.enterExplore();
     else if (act === 'reset') app.reset();
     else if (act === 'directory') {
       directory.classList.toggle('collapsed');
@@ -179,7 +180,7 @@ export function createUI(app, layout) {
   const canvas = app.renderer.domElement;
   let downAt = null;
   canvas.addEventListener('pointermove', (e) => {
-    if (!app.pick) return;
+    if (!app.pick || app.state.explore) { tip.hidden = true; return; }
     const hit = app.pick(e.clientX, e.clientY);
     if (!hit) { tip.hidden = true; canvas.style.cursor = ''; return; }
     tip.innerHTML = hit.html;
@@ -192,7 +193,7 @@ export function createUI(app, layout) {
   canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
   canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
   canvas.addEventListener('pointerup', (e) => {
-    if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !app.pick) return;
+    if (app.state.explore || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !app.pick) return;
     const hit = app.pick(e.clientX, e.clientY);
     if (hit && hit.unit) app.focusUnit(hit.unit);
     else if (hit && hit.building) app.setBuilding(hit.building);

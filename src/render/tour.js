@@ -83,6 +83,7 @@ export function attachTour(app, ui) {
     ui.tour(seg.caption);
   };
   app.startTour = () => {
+    if (app.explore && app.explore.active) app.exitExplore();
     app.reset(true);
     controls.enabled = false;
     run = { i: 0, t: 0, from: { pos: camera.position.clone(), target: controls.target.clone() } };

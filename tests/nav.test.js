@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { L, lvl } from './helpers.js';
 import { pointInPoly, toW, toL, dist } from '../src/layout/geom.js';
 import { doorGaps, storeStyle } from '../src/layout/frontage.js';
-import { buildNav, step, clear, landAt, spawn, NAV } from '../src/layout/nav.js';
+import { buildNav, step, clear, landAt, spawn, sightBlocked, NAV } from '../src/layout/nav.js';
 
 const nav = buildNav(L);
 const at = (floor, x, z) => ({ floor, x, z, y: nav.floors.get(floor).y, slope: null });
@@ -158,4 +158,21 @@ test('连通：一期 1F 从主入口内侧能走到同层每家店的门口', (
     const near = [...seen].some((k) => { const [a, b] = k.split(',').map(Number); return Math.hypot(a - px, b - pz) < 1.2; });
     assert.ok(near, `${u.code} ${u.brand.name} 的门口走不到`);
   }
+});
+
+test('视线遮挡：楼板挡住视线，中庭洞口与同层不挡', () => {
+  const lv2 = lvl('P1-2F');
+  const eye = NAV.eye + lv2.elev;
+  // 站在 2F 楼板上往正下方看：穿过楼板，被挡
+  const p = spawn(nav, L, { building: 'P1', level: 'P1-2F' });
+  assert.ok(sightBlocked(nav, [p.x, eye, p.z], [p.x, 1, p.z]), '透过楼板看到了下层');
+  // 中庭洞口正上方往下看：不挡
+  const v = lv2.voids[0].poly;
+  const cx = v.reduce((a, q) => a + q[0], 0) / v.length, cz = v.reduce((a, q) => a + q[1], 0) / v.length;
+  assert.ok(!sightBlocked(nav, [cx, eye, cz], [cx, 1, cz]), '中庭洞口挡住了视线');
+  // 同层平视：不挡
+  assert.ok(!sightBlocked(nav, [p.x, eye, p.z], [p.x + 10, eye - 0.5, p.z]), '同层平视被挡');
+  // 室外地面以下：从广场往下看，被地面挡住
+  const g = spawn(nav, L, {});
+  assert.ok(sightBlocked(nav, [g.x, NAV.eye, g.z], [g.x, -3, g.z]), '透过室外地面看到了地下');
 });

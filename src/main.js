@@ -3,6 +3,7 @@ import { buildLayout } from './layout/layout.js';
 import { createApp } from './render/app.js';
 import { createUI } from './render/ui.js';
 import { attachTour } from './render/tour.js';
+import { attachExplore } from './render/explore.js';
 
 window.__mallBooted = true;
 const $ = (id) => document.getElementById(id);
@@ -32,6 +33,7 @@ async function main() {
   });
   const ui = createUI(app, layout);
   attachTour(app, ui);
+  attachExplore(app, ui);
   bar.style.width = '100%';
   $('loading').classList.add('done');
   setTimeout(() => { $('loading').hidden = true; }, 700);

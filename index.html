@@ -138,6 +138,51 @@ button { font: inherit; color: inherit; }
 .fatal h2 { margin: 0 0 8px; font-size: 18px; }
 .fatal p { margin: 0; color: var(--ink-2); }
 
+
+/* 第一人称漫游 HUD（v4）：漫游时隐藏俯瞰界面；手机显示左下摇杆与右下按钮 */
+body.exploring .toolbar, body.exploring .floors, body.exploring .hint, body.exploring .legend,
+body.exploring .tooltip, body.exploring .tour-bar, body.exploring .brand { display: none !important; }
+body.exploring:not(.ex-places) .directory { display: none !important; }
+body.exploring.ex-places .directory { display: flex !important; z-index: 6; }
+.tool-explore { font-weight: 600; }
+.ex-hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.ex-top { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; max-width: calc(100% - 24px); pointer-events: auto; }
+.ex-where { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ex-mode { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.ex-btn { all: unset; padding: 5px 11px; border-radius: 7px; background: var(--chip); cursor: pointer; font-size: 13px; white-space: nowrap; }
+.ex-btn:hover { background: var(--line); }
+.ex-exit { background: var(--accent); color: var(--accent-ink); }
+.ex-exit:hover { background: var(--accent); filter: brightness(1.08); }
+.ex-cross { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; }
+.ex-cross::before, .ex-cross::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.92); box-shadow: 0 0 2px rgba(0, 0, 0, 0.7); border-radius: 1px; }
+.ex-cross::before { left: 8px; top: 0; width: 2px; height: 18px; }
+.ex-cross::after { top: 8px; left: 0; width: 18px; height: 2px; }
+.ex-card { position: absolute; left: 50%; top: calc(50% + 24px); transform: translateX(-50%); padding: 6px 12px; display: grid; justify-items: center; gap: 1px; max-width: min(80vw, 360px); text-align: center; }
+.ex-card b { font-size: 14px; }
+.ex-card span { font: 600 11px/1.2 var(--font-sign); letter-spacing: 0.08em; color: var(--ink-2); }
+.ex-card em { font-style: normal; font-size: 12px; color: var(--ink-2); }
+.ex-prompt { position: absolute; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; max-width: min(92vw, 560px); pointer-events: auto; cursor: pointer; font-size: 13px; }
+.ex-opt { all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; background: var(--chip); cursor: pointer; white-space: nowrap; }
+.ex-opt:hover { background: var(--accent); color: var(--accent-ink); }
+.ex-key { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; margin-right: 6px; border-radius: 4px; background: var(--ink); color: var(--panel-solid); font: 700 11px/1 var(--font-sign); }
+.ex-opt .ex-key { margin-right: 0; }
+.ex-help { position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 7px 14px; font-size: 12px; color: var(--ink-2); white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
+.ex-toast { position: absolute; left: 50%; top: calc(62px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); padding: 6px 14px; font-size: 13px; white-space: nowrap; }
+.ex-stick, .ex-pad { display: none; }
+.ex-fade { position: absolute; inset: 0; background: #05070a; opacity: 0; transition: opacity 0.18s ease; }
+.ex-fade.on { opacity: 1; }
+body.touch .ex-help { display: none; }
+body.touch .ex-stick { display: block; position: absolute; left: calc(22px + env(safe-area-inset-left, 0px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); width: 128px; height: 128px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
+.ex-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255, 255, 255, 0.82); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+body.touch .ex-pad { display: grid; position: absolute; right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); grid-template-columns: repeat(2, 58px); gap: 12px; pointer-events: auto; }
+.ex-pbtn { all: unset; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: rgba(20, 26, 32, 0.58); color: #fff; font: 700 18px/1 var(--font-ui); touch-action: none; -webkit-user-select: none; user-select: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); }
+.ex-pbtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.ex-pbtn:active { filter: brightness(1.25); }
+body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+@media (orientation: landscape) and (max-height: 520px) {
+  body.touch .ex-prompt { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+  body.touch .ex-stick { width: 112px; height: 112px; }
+}
 @media (max-width: 760px) {
   .brand { padding: 9px 12px; }
   .brand-mark { font-size: 18px; }
@@ -182,6 +227,9 @@ button { font: inherit; color: inherit; }
   </nav>
 
   <div class="toolbar panel" id="toolbar" role="toolbar" aria-label="视图工具">
+    <button class="tool tool-explore" data-act="explore" title="第一人称漫游：走进每栋楼、每家店，可以飞">
+      <svg viewBox="0 0 24 24"><circle cx="13.5" cy="4.5" r="1.9"/><path d="M8 21l2.6-6.2 2.9 2.4V21"/><path d="M7.5 11.5 11 8.2l3.2 1.2 2.6 3.1"/><path d="M11 8.2 9.6 14.8"/></svg><span>漫游</span>
+    </button>
     <button class="tool" data-act="explode" aria-pressed="false" title="把当前这一期的各层拉开同时看">
       <svg viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 17 9 4.5 9-4.5"/></svg><span>爆炸视图</span>
     </button>
@@ -222,6 +270,27 @@ button { font: inherit; color: inherit; }
   </div>
   <div class="hint panel" id="hint">拖动旋转 · 滚轮缩放 · 右键平移 · 点建筑进入 · 点店铺查看</div>
   <div class="tooltip panel" id="tooltip" hidden></div>
+
+  <div class="ex-hud" id="exHud" hidden>
+    <div class="ex-top panel">
+      <span class="ex-where" id="exWhere">漫游</span>
+      <span class="ex-mode" id="exMode">步行</span>
+      <button type="button" class="ex-btn" id="exPlaces">地点</button>
+      <button type="button" class="ex-btn ex-exit" id="exExit">退出</button>
+    </div>
+    <div class="ex-cross" aria-hidden="true"></div>
+    <div class="ex-card panel" id="exCard" hidden></div>
+    <div class="ex-prompt panel" id="exPrompt" hidden></div>
+    <div class="ex-help panel" id="exHelp">点击画面开始 · 鼠标看 · WASD 走 · Shift 跑 · 空格跳（连按两下飞行）· E 换楼层 · Esc 放开鼠标</div>
+    <div class="ex-toast panel" id="exToast" hidden></div>
+    <div class="ex-stick" id="exStick" aria-hidden="true"><div class="ex-knob" id="exKnob"></div></div>
+    <div class="ex-pad" id="exPad">
+      <button type="button" class="ex-pbtn" id="exUp" aria-label="跳 / 上升">▲</button>
+      <button type="button" class="ex-pbtn" id="exDown" aria-label="下降">▼</button>
+      <button type="button" class="ex-pbtn" id="exFly">飞</button>
+    </div>
+    <div class="ex-fade" id="exFade"></div>
+  </div>
   <div class="tour-bar panel" id="tourBar" hidden><span class="step" id="tourStep">南广场</span><button type="button" id="tourStop">退出导览</button></div>
 
   <div class="loading" id="loading">

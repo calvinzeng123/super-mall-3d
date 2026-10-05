@@ -167,12 +167,44 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   });
 
   // ---------- 状态与视图 ----------
-  const state = { building: null, focus: null, exploded: false, flows: false, labels: true, night: false, selected: null, touring: false };
+  const state = { building: null, focus: null, exploded: false, flows: false, labels: true, night: false, selected: null, touring: false, explore: null };
   const listeners = new Set();
   const emit = () => listeners.forEach((fn) => fn(state));
   const highlight = makeHighlight(scene);
 
+  /**
+   * 第一人称漫游：人所在的楼完整显示（不剖切），在地面以上时车库层看不到、不画；
+   * 室外时附近那栋楼只显示地上各层的室内（透过玻璃能看到）；在地铁或相连地下层时显示地铁。
+   */
+  function applyExploreVisibility() {
+    const ex = state.explore;
+    for (const B of Object.values(ctx.buildings)) {
+      const metro = B.b.kind === 'metro';
+      const inside = B.b.id === ex.building || (metro && ex.metro);
+      const peek = B.b.id === ex.near;
+      for (const L of B.levels) {
+        const lv = L.lv;
+        L.group.visible = metro ? inside || lv.short === 'B1' : true;
+        L.base.visible = (inside && (ex.under || lv.kind !== 'parking')) || (peek && lv.elev >= 0)
+          || lv.kind === 'roof' || (B.b.kind === 'street' && lv.elev >= 0);
+        L.facade.visible = !metro;
+        L.shell.visible = true;
+        L.people.visible = L.base.visible;
+        L.labels.visible = false;
+        if (L.title) L.title.visible = false;
+        L.flows.visible = false;
+        L.offsetTarget = 0;
+      }
+    }
+    siteGroup.visible = true;
+    ctx.site.labels.visible = false;
+    if (ctx.site.flows) ctx.site.flows.visible = false;
+    highlight.show(null, ctx);
+    renderer.shadowMap.needsUpdate = true;
+  }
+
   function applyVisibility() {
+    if (state.explore) { applyExploreVisibility(); return; }
     const focusLv0 = state.focus ? ctx.lvById[state.focus] : null;
     // 聚焦某期与站厅同高的地下层（一期 B1M、二期 B1、三期 B1）时，一并显示相连的地铁站厅与通道
     const metroLink = !!focusLv0 && focusLv0.elev < 0 && ctx.bById[focusLv0.building].kind !== 'metro' && Math.abs(focusLv0.elev + 4.5) < 0.5;
@@ -263,6 +295,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
     get flying() { return !!flight; },
+    cancelFlight() { flight = null; },
     buildingIds: layout.buildings.map((b) => b.id),
     levelsOf: (bid) => ctx.buildings[bid].levels.map((L) => L.lv),
     refresh() { applyVisibility(); },
@@ -365,7 +398,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       if (target) controls.target.set(...target);
       if (shadow) env.setShadowFocus(controls.target.clone(), shadow);
       for (const L of Object.values(ctx.levels)) { L.offset = L.offsetTarget; L.group.position.y = L.offset; }
-      controls.update();
+      // 漫游时相机由漫游控制器摆放，OrbitControls 的俯仰限制会把视线掰走
+      if (!state.explore) controls.update();
       updateNear();
       for (let i = 0; i < n; i++) {
         env.night = env.target;
@@ -388,7 +422,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
   // 近裁剪面随视距调整：远景时抬高 near，提高深度精度，避免大面积铺装与楼板顶面在远处闪烁
   function updateNear() {
-    const near = Math.min(4, Math.max(0.3, camera.position.distanceTo(controls.target) / 120));
+    // 漫游时人离墙至少 0.29m（身体半径），近裁剪面取 0.15m：贴墙不穿帮，远处深度精度也够
+    const near = state.explore ? 0.15 : Math.min(4, Math.max(0.3, camera.position.distanceTo(controls.target) / 120));
     if (Math.abs(near - camera.near) > 0.05) {
       camera.near = near;
       camera.updateProjectionMatrix();
@@ -432,7 +467,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       }
     }
     if (moving) renderer.shadowMap.needsUpdate = true;
-    if (!state.touring) controls.update();
+    if (!state.touring && !state.explore) controls.update();
     updateNear();
     env.update(dt);
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
@@ -459,11 +494,13 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
 /**
  * 静态网格的顶点数据上传显卡后就不再需要留在内存里：七百多万个顶点在手机上会把网页进程撑爆。
- * 拾取盒用的是不可见材质、从不上传，数组得以保留，射线拾取不受影响；实例化矩阵（行人）每帧更新，跳过。
+ * 拾取盒（不可见材质，只给射线用）例外：渲染器对视锥内的网格不管材质可不可见都会上传顶点，
+ * 而射线拾取要读顶点，所以先把它们的几何体排除；实例化矩阵（行人）每帧更新，也跳过。
  */
 function releaseGeometryAfterUpload(scene) {
   const drop = function () { this.array = null; };
   const seen = new Set();
+  scene.traverse((o) => { if (o.geometry && o.material && o.material.visible === false) seen.add(o.geometry); });
   scene.traverse((o) => {
     const g = o.geometry;
     if (!g || seen.has(g) || !(o.isMesh || o.isLine || o.isPoints)) return;

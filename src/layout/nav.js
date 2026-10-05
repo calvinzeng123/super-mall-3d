@@ -426,6 +426,17 @@ export function landAt(nav, x, z, yMax) {
   return best ? { floor: best.id, x, z, y: best.y, slope: null } : null;
 }
 
+/** 视线 a → b（[x, y, z]）是否被楼板挡住：穿过某个楼面高度处若是楼板实体就挡；中庭、扶梯洞等洞口不挡 */
+export function sightBlocked(nav, a, b) {
+  const [x0, y0, z0] = a, [x1, y1, z1] = b;
+  for (const F of nav.floors.values()) {
+    if ((y0 - F.y) * (y1 - F.y) >= 0) continue;
+    const t = (F.y - y0) / (y1 - y0);
+    if (supported(F, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return true;
+  }
+  return false;
+}
+
 /** 本楼面 reach 内的互动点；options 为可去的停靠层（楼梯：相邻层；电梯：全部） */
 export function linksNear(nav, floor, x, z) {
   const out = [];
