@@ -1,6 +1,8 @@
 // 圆厅 + 翼楼：外轮廓、圆厅走道切块、翼楼局部几何。
 // 翼楼矩形从 u_a = √(R² − HW²) 开始，角点正好落在圆周上，所以外轮廓 = 圆弧段 + 翼楼矩形。
-import { frame, toW, rect, lrectPoly, circlePoly, clipConvex } from './geom.js';
+// 单圆厅时允许相邻两翼夹角较小（如一期西北翼与西翼、北翼成 60°）：两翼内侧边在圆外相交，
+// 轮廓直接取交点相接；翼的 annex 折线（世界坐标，自右后角绕到左后角）替换末端边，用于拼接方庭。
+import { frame, toW, dirW, rect, lrectPoly, circlePoly, clipConvex } from './geom.js';
 
 const DEG = 180 / Math.PI;
 const mod360 = (a) => ((a % 360) + 360) % 360;
@@ -19,6 +21,7 @@ function arc(pts, r, a0, a1, step) {
  * arms: 端翼 { id, rot, deg, uEnd } 或连接翼 { id, rot, to, deg }（deg 为从 rot 指向 to 的方向）
  */
 export function hubOutline(rots, arms, HW, step = 3) {
+  if (rots.length === 1) return singleHub(rots[0], arms, HW, step);
   const R = Object.fromEntries(rots.map((r) => [r.id, r]));
   const att = Object.fromEntries(rots.map((r) => [r.id, []]));
   for (const a of arms) {
@@ -58,6 +61,39 @@ export function hubOutline(rots, arms, HW, step = 3) {
     }
   }
   throw new Error('hubOutline 没有闭合');
+}
+
+/** 两直线 p + t·d 与 q + s·e 的交点 */
+function lineHit(p, d, q, e) {
+  const den = d[0] * e[1] - d[1] * e[0];
+  const t = ((q[0] - p[0]) * e[1] - (q[1] - p[1]) * e[0]) / den;
+  return [p[0] + d[0] * t, p[1] + d[1] * t];
+}
+
+/** 单圆厅外轮廓：各翼按角度排序；相邻两翼角点在圆上重叠（夹角 ≤ 2β）时取内侧边交点，否则走圆弧 */
+function singleHub(r, arms, HW, step) {
+  const beta = Math.asin(HW / r.R) * DEG;
+  const ua = Math.sqrt(r.R * r.R - HW * HW);
+  const A = [...arms].sort((a, b) => mod360(a.deg) - mod360(b.deg));
+  const n = A.length;
+  const J = A.map((a, i) => {
+    const b = A[(i + 1) % n];
+    const gap = mod360(b.deg - a.deg);
+    if (gap > 2 * beta) return { arc: [a.deg + beta, a.deg + beta + (gap - 2 * beta)] };
+    const Fa = frame(r.x, r.z, a.deg), Fb = frame(r.x, r.z, b.deg);
+    return { p: lineHit(toW(Fa, 0, HW), dirW(Fa, 1, 0), toW(Fb, 0, -HW), dirW(Fb, 1, 0)) };
+  });
+  const pts = [];
+  A.forEach((a, i) => {
+    const F = frame(r.x, r.z, a.deg);
+    const prev = J[(i - 1 + n) % n], next = J[i];
+    pts.push(prev.p || toW(F, ua, -HW));
+    if (a.annex) pts.push(...a.annex);
+    else pts.push(toW(F, a.uEnd, -HW), toW(F, a.uEnd, HW));
+    pts.push(next.p || toW(F, ua, HW));
+    if (next.arc) arc(pts, r, next.arc[0], next.arc[1], step);
+  });
+  return pts;
 }
 
 /**

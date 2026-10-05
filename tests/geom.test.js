@@ -58,3 +58,32 @@ test('hubOutline：两圆厅由连接翼相连，三翼轮廓闭合', () => {
   assert.ok(!pointInPoly([52, 24], out) && !pointInPoly([52, -24], out), '中翼两侧之外');
   assert.ok(pointInPoly(toW(frame(0, 0, 270), 29.5, 0), out) && !pointInPoly(toW(frame(0, 0, 270), 30.5, 0), out), 'A 北侧圆弧');
 });
+
+test('hubOutline：相邻翼在圆外相交时直接相接，末端可拼接附属轮廓，结果为简单多边形', async () => {
+  const { hubOutline } = await import('../src/layout/hub.js');
+  const { frame: fr, toW: tw } = await import('../src/layout/geom.js');
+  const C = { id: 'C', x: -106, z: -106, R: 34 };
+  const chain = [[-192.53, -160], [-280, -160], [-280, -240], [-160, -240], [-160, -192.53]];
+  const arms = [
+    { id: 'SE', rot: 'C', deg: 45, uEnd: 84 }, { id: 'W', rot: 'C', deg: 165, uEnd: 96 },
+    { id: 'NW', rot: 'C', deg: 225, uEnd: 99.37, annex: chain }, { id: 'N', rot: 'C', deg: 285, uEnd: 88 },
+  ];
+  const P = hubOutline([C], arms, 23);
+  // 简单多边形：任意两条不相邻的边不相交
+  const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const hit = (p, q, r, s) => cross(p, q, r) * cross(p, q, s) < -1e-9 && cross(r, s, p) * cross(r, s, q) < -1e-9;
+  for (let i = 0; i < P.length; i++) {
+    for (let j = i + 2; j < P.length; j++) {
+      if (i === 0 && j === P.length - 1) continue;
+      assert.ok(!hit(P[i], P[(i + 1) % P.length], P[j], P[(j + 1) % P.length]), `边 ${i} 与边 ${j} 相交`);
+    }
+  }
+  // 西翼与西北翼之间的连接点 = 西翼北边与西北翼西南边的交点（u=39.85 处）
+  const I = tw(fr(-106, -106, 225), 39.85, -23);
+  assert.ok(P.some((p) => Math.hypot(p[0] - I[0], p[1] - I[1]) < 0.02), '缺少西翼 / 西北翼交点');
+  // 两个交点之间不再有圆弧点
+  const ang = (p) => (((Math.atan2(p[1] + 106, p[0] + 106) * 180) / Math.PI) + 360) % 360;
+  assert.ok(!P.some((p) => Math.abs(Math.hypot(p[0] + 106, p[1] + 106) - 34) < 0.01 && ang(p) > 208 && ang(p) < 242), '西翼与北翼之间仍有圆弧');
+  // 方庭拼接：外轮廓包含方庭四角中的三个外角
+  for (const q of [[-280, -160], [-280, -240], [-160, -240]]) assert.ok(P.some((p) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-6));
+});
