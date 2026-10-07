@@ -27,7 +27,7 @@ const CAMPUS = rect(-298, -298, 298, 298);
 export function buildNav(layout) {
   const floors = new Map();
   const mk = (id, y, kind, extra = {}) => {
-    const F = { id, y, kind, building: null, level: null, pieces: [], zones: [], walls: [], grid: new Map(), portals: [], slopes: [], ...extra };
+    const F = { id, y, kind, building: null, level: null, pieces: [], zones: [], walls: [], obstacles: [], grid: new Map(), portals: [], slopes: [], ...extra };
     floors.set(id, F);
     return F;
   };
@@ -37,6 +37,14 @@ export function buildNav(layout) {
   for (const lv of layout.levels) {
     const F = mk(lv.id, lv.elev, 'level', { building: lv.building, level: lv });
     for (const p of lv.slab.pieces) F.pieces.push(piece(p.outer, [...p.holes, ...lv.voids.map((v) => v.poly)]));
+    // 夹层属于原楼层的某一户，不新增建筑楼层或住户。独立导航面仅由套内楼梯进入；
+    // 仍站在原楼面的人经过其下方时不会被自动投影到较高的支撑面。
+    for (const u of lv.units) {
+      const d = u.residence?.duplex;
+      if (!d) continue;
+      const M = mk(d.surface.id, lv.elev + d.height, 'mezzanine', { building: lv.building, level: lv, parentFloor: lv.id, unit: u });
+      M.pieces.push(piece(lrectPoly(u.frame, d.surface.rect), (d.surface.holes || []).map(r => lrectPoly(u.frame, r))));
+    }
   }
   // 新区地下联廊与空桥由独立结构板支撑，仍属于其起点楼面；
   // 到终点的门线后再切换到商场/另一栋楼，整条通道可实际步行。
@@ -74,6 +82,22 @@ export function buildNav(layout) {
     const P = lrectPoly(Fr, r);
     for (let i = 0; i < 4; i++) wall(F, ...P[i], ...P[(i + 1) % 4]);
   };
+  const obstacle = (F, Fr, r) => {
+    box(F, Fr, r);
+    F.obstacles.push(piece(lrectPoly(Fr, r)));
+  };
+  const partition = (F, Fr, p) => {
+    const [x0, z0] = p.a, [x1, z1] = p.b;
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    if (len < 0.02) return;
+    const seg = (a, b) => wallL(F, Fr, { x0: x0 + (x1 - x0) * a / len,
+      z0: z0 + (z1 - z0) * a / len, x1: x0 + (x1 - x0) * b / len,
+      z1: z0 + (z1 - z0) * b / len });
+    if (p.door) {
+      seg(0, Math.max(0, p.door.at - p.door.width / 2));
+      seg(Math.min(len, p.door.at + p.door.width / 2), len);
+    } else seg(0, len);
+  };
   for (const lv of layout.levels) {
     const F = floors.get(lv.id);
     for (const u of lv.units) {
@@ -81,23 +105,31 @@ export function buildNav(layout) {
       const openings = [];
       for (const f of u.fronts) {
         const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0);
-        for (const [a, b] of doorGaps(style, len)) {
+        const entry = u.residence?.entryDoor;
+        const gaps = entry ? [[entry.at - entry.width / 2, entry.at + entry.width / 2]] : doorGaps(style, len);
+        for (const [a, b] of gaps) {
           const t0 = a / len, t1 = b / len;
           openings.push({ x0: f.x0 + (f.x1 - f.x0) * t0, z0: f.z0 + (f.z1 - f.z0) * t0, x1: f.x0 + (f.x1 - f.x0) * t1, z1: f.z0 + (f.z1 - f.z0) * t1, side: f.side });
         }
       }
       for (const s of subtractOpenings(mergeSegments(unionOutline(u.rects)), openings)) wallL(F, u.frame, s);
-      for (const p of u.residence?.partitions || []) {
-        const [x0, z0] = p.a, [x1, z1] = p.b;
-        const len = Math.hypot(x1 - x0, z1 - z0);
-        if (len < 0.02) continue;
-        const seg = (a, b) => wallL(F, u.frame, { x0: x0 + (x1 - x0) * a / len,
-          z0: z0 + (z1 - z0) * a / len, x1: x0 + (x1 - x0) * b / len,
-          z1: z0 + (z1 - z0) * b / len });
-        if (p.door) {
-          seg(0, Math.max(0, p.door.at - p.door.width / 2));
-          seg(Math.min(len, p.door.at + p.door.width / 2), len);
-        } else seg(0, len);
+      for (const p of u.residence?.partitions || []) partition(F, u.frame, p);
+      for (const o of u.residence?.obstacles || []) obstacle(F, u.frame, o.rect);
+      const d = u.residence?.duplex;
+      if (d) {
+        const M = floors.get(d.surface.id);
+        for (const p of d.surface.railings) partition(M, u.frame, p);
+        for (const o of d.obstacles || []) obstacle(M, u.frame, o.rect);
+        // 下层不能横穿阶梯实体；低端入口与高端落脚处保留净空。
+        const s = d.stair, hw = s.width / 2;
+        const dx = s.top[0] - s.bottom[0], dz = s.top[1] - s.bottom[1], len = Math.hypot(dx, dz);
+        const nx = -dz / len * hw, nz = dx / len * hw;
+        for (const sign of [-1, 1]) wallL(F, u.frame, { x0: s.bottom[0] + sign * nx, z0: s.bottom[1] + sign * nz, x1: s.top[0] + sign * nx, z1: s.top[1] + sign * nz });
+        wallL(F, u.frame, { x0: s.top[0] + nx, z0: s.top[1] + nz, x1: s.top[0] - nx, z1: s.top[1] - nz });
+        F.obstacles.push(piece([
+          toW(u.frame, s.bottom[0] + nx, s.bottom[1] + nz), toW(u.frame, s.top[0] + nx, s.top[1] + nz),
+          toW(u.frame, s.top[0] - nx, s.top[1] - nz), toW(u.frame, s.bottom[0] - nx, s.bottom[1] - nz),
+        ]));
       }
     }
     for (const m of lv.rooms) for (const s of mergeSegments(unionOutline(m.rects))) wallL(F, m.frame, s);
@@ -182,6 +214,12 @@ export function buildNav(layout) {
     const [lo, hi] = r.from.y <= r.to.y ? [r.from, r.to] : [r.to, r.from];
     const fl = (p) => (p.level === 'street' ? groundAt(p.x, p.z) : p.level);
     lane(r.id, 'ramp', lo.x, lo.z, lo.y, hi.x, hi.z, hi.y, r.width / 2, fl(lo), fl(hi), 0);
+  }
+  for (const lv of layout.levels) for (const u of lv.units) {
+    const d = u.residence?.duplex;
+    if (!d) continue;
+    const s = d.stair, [bx, bz] = toW(u.frame, ...s.bottom), [tx, tz] = toW(u.frame, ...s.top);
+    lane(s.id, 'interior-stair', bx, bz, lv.elev, tx, tz, lv.elev + d.height, s.width / 2, lv.id, d.surface.id, 0);
   }
 
   // ---------- 传送边与门口区 ----------
@@ -317,6 +355,7 @@ function segDist(px, pz, w) {
 
 function clearAt(nav, F, x, z) {
   if (!supported(F, x, z)) return false;
+  for (const o of F.obstacles) if (x >= o.bb.x0 && x <= o.bb.x1 && z >= o.bb.z0 && z <= o.bb.z1 && pointInPoly([x, z], o.outer)) return false;
   const r = NAV.r;
   for (const [ox, oz] of DIRS) {
     const sx = x + ox * r, sz = z + oz * r;
@@ -442,7 +481,15 @@ export function landAt(nav, x, z, yMax) {
     if (F.y > yMax + 1e-6 || (best && F.y <= best.y)) continue;
     if (clearAt(nav, F, x, z)) best = F;
   }
-  return best ? { floor: best.id, x, z, y: best.y, slope: null } : null;
+  let result = best ? { floor: best.id, x, z, y: best.y, slope: null } : null;
+  for (const sl of nav.slopes) {
+    if (sl.kind !== 'interior-stair') continue;
+    const [u, v] = toL(sl.F, x, z);
+    if (u < 0 || u > sl.len || Math.abs(v) > sl.hw - NAV.r) continue;
+    const y = sl.y0 + (sl.y1 - sl.y0) * u / sl.len;
+    if (y <= yMax + 1e-6 && (!result || y > result.y)) result = atSlope({ floor: sl.low }, sl, u, v);
+  }
+  return result;
 }
 
 /** 视线 a → b（[x, y, z]）是否被楼板挡住：穿过某个楼面高度处若是楼板实体就挡；中庭、扶梯洞等洞口不挡 */
@@ -523,13 +570,13 @@ function levelSpawn(nav, layout, levelId, prefer = null) {
 export function floorLabel(nav, layout, s) {
   if (s.slope) {
     const sl = nav.slopeById.get(s.slope.id);
-    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道' }[sl && sl.kind] || '';
+    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道', 'interior-stair': '套内复式楼梯' }[sl && sl.kind] || '';
   }
   const F = nav.floors.get(s.floor);
   if (!F) return '';
-  if (F.kind === 'level') {
+  if (F.kind === 'level' || F.kind === 'mezzanine') {
     const b = layout.buildings.find((x) => x.id === F.building);
-    return `${b.short} · ${F.level.name}`;
+    return `${b.short} · ${F.level.name}${F.kind === 'mezzanine' ? ` · ${F.unit.code} 夹层` : ''}`;
   }
   if (F.kind === 'bridge') return '云环天桥';
   const plot = layout.site.plots.find((p) => pointInPoly([s.x, s.z], p.poly));

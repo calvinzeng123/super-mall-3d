@@ -1,0 +1,154 @@
+{
+  "date": "2026-10-07T08:38:08.372Z",
+  "target": "file:///Users/calvin/Downloads/相册去图标/super-mall-3d/dist/mall.html",
+  "physicalDeviceTested": false,
+  "modes": {
+    "desktop": {
+      "bootMs": 1769,
+      "offline": true,
+      "httpBlocked": true,
+      "hotel": {
+        "floor": "H-20F",
+        "y": 67.7,
+        "local": [
+          4.049999999999727,
+          8.399999999999523
+        ],
+        "lightCount": 10,
+        "activeUnit": "H-20F-U6",
+        "cache": [
+          "H-20F"
+        ]
+      },
+      "upper": {
+        "floor": "A-1F-U6-MEZZ",
+        "y": 3.05,
+        "local": [
+          9.149999999999977,
+          12.699999999999918
+        ],
+        "viewFloor": "A-1F",
+        "lightCount": 10,
+        "activeUnit": "A-1F-U6"
+      },
+      "returned": {
+        "floor": "A-1F",
+        "y": 0
+      },
+      "lightCount": 10,
+      "maxTextureDimension": 2048,
+      "textureCount": 22,
+      "asset": {
+        "primitives": 190,
+        "geometries": 190,
+        "materials": 61,
+        "textures": 22,
+        "lights": 8,
+        "triangles": 111832
+      },
+      "touch": false,
+      "maxTouchPoints": 0,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+      "viewport": [
+        1440,
+        900
+      ],
+      "docWidth": 1440,
+      "canvas": [
+        1440,
+        900
+      ],
+      "cache": [
+        "H-20F",
+        "A-1F"
+      ],
+      "pageErrors": [],
+      "consoleErrors": [],
+      "httpRequests": [],
+      "screenshots": [
+        "desktop-hotel20-offline.png",
+        "desktop-duplex-offline.png"
+      ]
+    },
+    "iphoneSimulation": {
+      "bootMs": 1432,
+      "offline": true,
+      "httpBlocked": true,
+      "hotel": {
+        "floor": "H-20F",
+        "y": 67.7,
+        "local": [
+          4.049999999999727,
+          8.399999999999523
+        ],
+        "lightCount": 8,
+        "activeUnit": "H-20F-U6",
+        "cache": [
+          "H-20F"
+        ]
+      },
+      "upper": {
+        "floor": "A-1F-U6-MEZZ",
+        "y": 3.05,
+        "local": [
+          9.149999999999977,
+          12.699999999999918
+        ],
+        "viewFloor": "A-1F",
+        "lightCount": 8,
+        "activeUnit": "A-1F-U6"
+      },
+      "returned": {
+        "floor": "A-1F",
+        "y": 0
+      },
+      "lightCount": 8,
+      "maxTextureDimension": 512,
+      "textureCount": 22,
+      "asset": {
+        "primitives": 190,
+        "geometries": 190,
+        "materials": 61,
+        "textures": 22,
+        "lights": 8,
+        "triangles": 111832
+      },
+      "touch": true,
+      "maxTouchPoints": 1,
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      "viewport": [
+        390,
+        844
+      ],
+      "docWidth": 390,
+      "canvas": [
+        585,
+        1266
+      ],
+      "cache": [
+        "H-20F",
+        "A-1F"
+      ],
+      "pageErrors": [],
+      "consoleErrors": [],
+      "httpRequests": [],
+      "screenshots": [
+        "iphoneSimulation-hotel20-offline.png",
+        "iphoneSimulation-duplex-offline.png"
+      ]
+    }
+  },
+  "passed": true,
+  "artifact": {
+    "path": "/Users/calvin/Downloads/相册去图标/super-mall-3d/dist/mall.html",
+    "bytes": 21133205,
+    "sha256": "142822539f7f4e784fe0956d76ed8e8636a05148dbcd800c75dcc1bc801c4c8c"
+  },
+  "browserEngine": "Chromium with iPhone UA and touch emulation for the mobile case; physical Safari/iPhone not tested",
+  "notes": [
+    "Contexts were independent within named session suiteoffline.",
+    "Both contexts used setOffline(true) plus HTTP(S) route abort.",
+    "Navigation used keyboard events and the live explore controller in each context; mobile joystick gestures were not exercised.",
+    "The screenshot sequence pauses requestAnimationFrame. HUD picking updates every >0.2 seconds, so final screenshots advance 20 debug frames instead of 2 to avoid retaining a previous room label."
+  ]
+}

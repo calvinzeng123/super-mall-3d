@@ -36,7 +36,7 @@ test('每套有床和独卫，套内隔间、门洞与床均在实际房间范�
     const home = u.residence, outer = u.rects[0];
     assert.equal(u.style, 'residence');
     assert.ok(home.beds.length >= 1 && home.bathrooms.length >= 1, u.id);
-    assert.equal(home.entryDoor.width, 1.25);
+    assert.equal(home.entryDoor.width, home.suitePlan ? .91 : 1.25);
     assert.ok(home.entryDoor.at - home.entryDoor.width / 2 > 0 && home.entryDoor.at + home.entryDoor.width / 2 < outer.x1);
     for (const z of home.rooms) assert.ok(within(outer, z.rect), `${u.id}/${z.id} 超出套内`);
     for (const bath of home.bathrooms) {
@@ -54,7 +54,7 @@ test('每套有床和独卫，套内隔间、门洞与床均在实际房间范�
       for (const q of [p.a, p.b]) assert.ok(within(outer, rect(q[0], q[1], q[0], q[1])), `${u.id} 隔墙超界`);
       if (p.door) {
         const len = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]);
-        assert.ok(p.door.width >= 0.9 && p.door.at - p.door.width / 2 >= 0 && p.door.at + p.door.width / 2 <= len, `${u.id} 隔间门不成立`);
+        assert.ok(p.door.width >= (home.suitePlan ? .7 : .9) && p.door.at - p.door.width / 2 >= -1e-6 && p.door.at + p.door.width / 2 <= len + 1e-6, `${u.id} 隔间门不成立`);
       }
     }
     assert.ok(!lv.rooms.some(r => r.type === 'wc'), `${lv.id} 私卫不应登记为公共独立用房`);

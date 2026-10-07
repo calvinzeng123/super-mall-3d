@@ -1,0 +1,562 @@
+{
+  "title": "User-provided hotel suite — integrated asset",
+  "prepared": "2026-10-07",
+  "original": {
+    "file": "user-suite-original.glb",
+    "suppliedName": "酒店套房_改造后.glb",
+    "bytes": 8089020,
+    "sha256": "db210ebc36728c7afa4b67112c6e8a9f27e68695ade30a2d7d63a59d349e03bd",
+    "provenance": "Provided by the project owner in this task; not a CC0 asset"
+  },
+  "processed": {
+    "file": "user-suite-processed.glb",
+    "bytes": 8977040,
+    "sha256": "a7f99bf01d3ad6e3545102329ecd6ee8269c7cad6d41816dbdcb313a003da80e",
+    "primitives": 190,
+    "triangles": 111832,
+    "sourceCoordinateBounds": [
+      [
+        -0.15,
+        -0.2,
+        -0.15
+      ],
+      [
+        10.5,
+        2.72,
+        5.9
+      ]
+    ],
+    "vertexAO": {
+      "directions": 24,
+      "maxDistance": 0.75,
+      "minimum": 0.62
+    }
+  },
+  "roomTransform": {
+    "rotationY": 1.5707963267948966,
+    "localX": "sourceZ + 1.45",
+    "localZ": "10.35 - sourceX",
+    "scale": 1
+  },
+  "changes": {
+    "removedBackdrop": 1,
+    "entranceDoorLeafRemoved": 1,
+    "entranceDoorHandleRemoved": 1,
+    "mirroredTrianglesMoved": 14,
+    "wetDoorTrianglesOpened": 12,
+    "wcDoorTrianglesOpened": 12,
+    "westWindowOpening": [
+      -0.2,
+      0.13,
+      0.32,
+      0.05,
+      2.36,
+      5.73
+    ],
+    "plasterShellPrimitives": 4,
+    "windowGlassMadeTransparent": true
+  },
+  "geometryChecks": [
+    {
+      "name": "entrance",
+      "from": [
+        10.8,
+        1.4,
+        4.05
+      ],
+      "to": [
+        9.95,
+        1.4,
+        4.05
+      ],
+      "expectedOpen": true,
+      "hits": [],
+      "passed": true
+    },
+    {
+      "name": "side-door",
+      "from": [
+        9.7,
+        1.4,
+        5.05
+      ],
+      "to": [
+        9.7,
+        1.4,
+        4.25
+      ],
+      "expectedOpen": true,
+      "hits": [],
+      "passed": true
+    },
+    {
+      "name": "bathroom",
+      "from": [
+        5.55,
+        1.4,
+        2.5
+      ],
+      "to": [
+        6.05,
+        1.4,
+        2.5
+      ],
+      "expectedOpen": true,
+      "hits": [],
+      "passed": true
+    },
+    {
+      "name": "wet-room",
+      "from": [
+        6.925,
+        1.4,
+        2.35
+      ],
+      "to": [
+        6.925,
+        1.4,
+        1.8
+      ],
+      "expectedOpen": true,
+      "hits": [],
+      "passed": true
+    },
+    {
+      "name": "wc",
+      "from": [
+        7.4,
+        1.4,
+        2.55
+      ],
+      "to": [
+        8,
+        1.4,
+        2.55
+      ],
+      "expectedOpen": true,
+      "hits": [],
+      "passed": true
+    },
+    {
+      "name": "entrance-adjacent-wall",
+      "from": [
+        10.8,
+        1.4,
+        3.5
+      ],
+      "to": [
+        10.1,
+        1.4,
+        3.5
+      ],
+      "expectedOpen": false,
+      "hits": [
+        "Shell 墙体天花 [E 东墙]:1",
+        "EntryWalls 玄关墙面 [E 东墙]:0"
+      ],
+      "passed": true
+    },
+    {
+      "name": "side-adjacent-wall",
+      "from": [
+        9,
+        1.4,
+        5.05
+      ],
+      "to": [
+        9,
+        1.4,
+        4.25
+      ],
+      "expectedOpen": false,
+      "hits": [
+        "Shell 墙体天花 [S 南墙]:1",
+        "EntryWalls 玄关墙面 [S 南墙]:0"
+      ],
+      "passed": true
+    }
+  ],
+  "windowChecks": [
+    {
+      "from": [
+        -0.4,
+        1.2,
+        1
+      ],
+      "to": [
+        0.4,
+        1.2,
+        1
+      ],
+      "opaqueHits": [],
+      "passed": true
+    },
+    {
+      "from": [
+        -0.4,
+        1.2,
+        2.4
+      ],
+      "to": [
+        0.4,
+        1.2,
+        2.4
+      ],
+      "opaqueHits": [],
+      "passed": true
+    },
+    {
+      "from": [
+        -0.4,
+        1.2,
+        3.7
+      ],
+      "to": [
+        0.4,
+        1.2,
+        3.7
+      ],
+      "opaqueHits": [],
+      "passed": true
+    },
+    {
+      "from": [
+        -0.4,
+        1.2,
+        4.85
+      ],
+      "to": [
+        0.4,
+        1.2,
+        4.85
+      ],
+      "opaqueHits": [],
+      "passed": true
+    },
+    {
+      "from": [
+        -0.4,
+        1.6,
+        1
+      ],
+      "to": [
+        0.4,
+        1.6,
+        1
+      ],
+      "opaqueHits": [],
+      "passed": true
+    },
+    {
+      "from": [
+        -0.4,
+        1.6,
+        2.4
+      ],
+      "to": [
+        0.4,
+        1.6,
+        2.4
+      ],
+      "opaqueHits": [],
+      "passed": true
+    },
+    {
+      "from": [
+        -0.4,
+        1.6,
+        3.7
+      ],
+      "to": [
+        0.4,
+        1.6,
+        3.7
+      ],
+      "opaqueHits": [],
+      "passed": true
+    },
+    {
+      "from": [
+        -0.4,
+        1.6,
+        4.85
+      ],
+      "to": [
+        0.4,
+        1.6,
+        4.85
+      ],
+      "opaqueHits": [],
+      "passed": true
+    }
+  ],
+  "images": [
+    {
+      "name": "floor",
+      "mimeType": "image/jpeg",
+      "bytes": 873565,
+      "sha256": "2d1f70e92d9f280aaae06c43fd7ce432a600a38c9b52629d49ecbb52bcfa6151"
+    },
+    {
+      "name": "floorR",
+      "mimeType": "image/jpeg",
+      "bytes": 260203,
+      "sha256": "fdc11fb2cb45db34b22d0576070406f8e2bbf70ce5ecc6e60abc4da098344f47"
+    },
+    {
+      "name": "floorN",
+      "mimeType": "image/jpeg",
+      "bytes": 359680,
+      "sha256": "309ae3a5dd9ee38c9cb4c59868363aba7750c021900a04395acddf7430b025ad"
+    },
+    {
+      "name": "cement",
+      "mimeType": "image/jpeg",
+      "bytes": 94366,
+      "sha256": "614b8199b714b02ba0a56e3d0fb718f39e6ae51dab03f7c9c4f6cce6888f13f0"
+    },
+    {
+      "name": "plasterN",
+      "mimeType": "image/jpeg",
+      "bytes": 152131,
+      "sha256": "ccb9915e37132f9c0db9b998d26db4f82552bff00f535be86287b9fa5fd60664"
+    },
+    {
+      "name": "plaster",
+      "mimeType": "image/jpeg",
+      "bytes": 12472,
+      "sha256": "166f5df5877abd42485ff5fed6ee6dbc9206229250c61cfec8e138416d0ed0d8"
+    },
+    {
+      "name": "sheer",
+      "mimeType": "image/jpeg",
+      "bytes": 86689,
+      "sha256": "3f5324b1a1157131d15773435de481ffd8950f8af551c94976d2bb383cfea1a8"
+    },
+    {
+      "name": "weaveN",
+      "mimeType": "image/jpeg",
+      "bytes": 263355,
+      "sha256": "7b13cc793637c2364892971fc730894cb9602465d3b107b2fc68f09622f82bad"
+    },
+    {
+      "name": "night",
+      "mimeType": "image/jpeg",
+      "bytes": 45275,
+      "sha256": "7be0dd74d15ee48b9a68c884fee50447c105710c82e3ebee769b6382a4dc79ba"
+    },
+    {
+      "name": "trav",
+      "mimeType": "image/jpeg",
+      "bytes": 245708,
+      "sha256": "173a49799a6d2d70b66aa45018ce7246e95c1a10353f65cb6049324665e02c1b"
+    },
+    {
+      "name": "travN",
+      "mimeType": "image/png",
+      "bytes": 173475,
+      "sha256": "438c0ec0e59f3fa7b8192bc7a51e45d4cf82fd3ba01350f4b3806b5f9bc7c2fe"
+    },
+    {
+      "name": "oak",
+      "mimeType": "image/jpeg",
+      "bytes": 273494,
+      "sha256": "81b06e4a3c8c905ac137095ad833025338508d01023284e5930dd72d62c91493"
+    },
+    {
+      "name": "oakN",
+      "mimeType": "image/png",
+      "bytes": 394210,
+      "sha256": "ce42f60c0547fd50b06014a5a4ba2d1692d20794e5d89686fe70018233dc3f42"
+    },
+    {
+      "name": "fluteN",
+      "mimeType": "image/png",
+      "bytes": 1243,
+      "sha256": "b0815687bdeb0b512fdbc7d66eee32b1206b937e41cbaeb02fb64c0bfc7196e1"
+    },
+    {
+      "name": "cottonN",
+      "mimeType": "image/jpeg",
+      "bytes": 223411,
+      "sha256": "f2e77cdfa747848f7a811aeecb414ecb18524b745075042db3fc53f7a333a90c"
+    },
+    {
+      "name": "velvetN",
+      "mimeType": "image/jpeg",
+      "bytes": 327356,
+      "sha256": "8dbbf71d041cda63f39410e73133972831816f3469b1bbd443ec3eb529a56485"
+    },
+    {
+      "name": "wool",
+      "mimeType": "image/jpeg",
+      "bytes": 63342,
+      "sha256": "4de14f4252110a1f26499dbcf57a265408b239e055502dae7724efde8a55c3d7"
+    },
+    {
+      "name": "rugN",
+      "mimeType": "image/jpeg",
+      "bytes": 353895,
+      "sha256": "0b719175a44ae1b8703c6ba63c7031cbdb1e0cf3af39bacf96be5e856b1c33e1"
+    },
+    {
+      "name": "boucleN",
+      "mimeType": "image/jpeg",
+      "bytes": 315383,
+      "sha256": "fed666f878ba7a6230a97d3bb0361a6fb5f60c73dd4bab3fb1e3b4512b8c1be3"
+    },
+    {
+      "name": "linen",
+      "mimeType": "image/jpeg",
+      "bytes": 95562,
+      "sha256": "7a823390509a211ac61369ddb22ba957415915410a7b70bc1fa01f7286fe2b6a"
+    },
+    {
+      "name": "art",
+      "mimeType": "image/jpeg",
+      "bytes": 132349,
+      "sha256": "92b571363cd479b40eb33edcf0dcec1feab85b4798500fda659b19cafcadc495"
+    },
+    {
+      "name": "terryN",
+      "mimeType": "image/png",
+      "bytes": 169851,
+      "sha256": "d1d99e77162fe93a3dc2010f5642110b946c1624fb03730ccec4a0dc8a24b3d5"
+    },
+    {
+      "name": "ribV",
+      "mimeType": "image/png",
+      "bytes": 4233,
+      "sha256": "687a2d6fe0e40966310fd8ed691a71a2c71705fb5a0c2a28bbffc702fd87078b"
+    }
+  ],
+  "lights": [
+    {
+      "name": "Suite bed downlight",
+      "type": "spot",
+      "position": [
+        3.45,
+        2.64,
+        1.3
+      ],
+      "intensity": 12,
+      "range": 4.5,
+      "color": "#ffe2bf",
+      "target": [
+        3.45,
+        0,
+        1.3
+      ]
+    },
+    {
+      "name": "Suite living downlight",
+      "type": "spot",
+      "position": [
+        3.45,
+        2.62,
+        4.35
+      ],
+      "intensity": 13,
+      "range": 4.5,
+      "color": "#ffe2bf",
+      "target": [
+        3.45,
+        0,
+        4.35
+      ]
+    },
+    {
+      "name": "Suite entry downlight",
+      "type": "spot",
+      "position": [
+        8.3,
+        2.42,
+        4.05
+      ],
+      "intensity": 9,
+      "range": 4.5,
+      "color": "#ffe2bf",
+      "target": [
+        8.3,
+        0,
+        4.05
+      ]
+    },
+    {
+      "name": "Suite bath downlight",
+      "type": "spot",
+      "position": [
+        7.3,
+        2.44,
+        1.08
+      ],
+      "intensity": 13,
+      "range": 4.2,
+      "color": "#ffe2bf",
+      "target": [
+        7.3,
+        0,
+        1.08
+      ]
+    },
+    {
+      "name": "Suite vanity wash",
+      "type": "spot",
+      "position": [
+        6.75,
+        2.33,
+        2.65
+      ],
+      "intensity": 4,
+      "range": 3,
+      "color": "#ffe2bf",
+      "target": [
+        6.7,
+        1,
+        3.05
+      ]
+    },
+    {
+      "name": "Suite daybed downlight",
+      "type": "spot",
+      "position": [
+        0.7,
+        2.63,
+        1.6
+      ],
+      "intensity": 6,
+      "range": 4.5,
+      "color": "#ffe2bf",
+      "target": [
+        0.7,
+        0,
+        1.6
+      ]
+    },
+    {
+      "name": "Suite headboard bounce",
+      "type": "point",
+      "position": [
+        3.45,
+        2.38,
+        0.6
+      ],
+      "intensity": 0.7,
+      "range": 3.1,
+      "color": "#ffcf95"
+    },
+    {
+      "name": "Suite floor lamp bounce",
+      "type": "point",
+      "position": [
+        5.2,
+        1.3,
+        5.2
+      ],
+      "intensity": 2,
+      "range": 2.5,
+      "color": "#ffcf95"
+    }
+  ],
+  "runtime": "Shared geometries/materials/textures; source remains unmodified. Real lights are created by suite-lighting runtime."
+}

@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 shots/
 src/render/pbr-data.js
+src/render/suite-data.js
+
+.playwright-cli/

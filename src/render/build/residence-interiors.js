@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { BatchSet, SignBatch } from '../batch.js';
 import { toW } from '../../layout/geom.js';
 import { interiorDetail } from './interior-detail.js';
+import { buildSuiteModels } from './suite-models.js';
 
 const roomCenter = (r) => [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2];
 const WARM = '#eee6d6';
@@ -27,6 +28,13 @@ export function buildResidenceFloor(ctx, L) {
   for (const u of lv.units) {
     const residence = u.residence;
     if (!residence) continue;
+    if (residence.suitePlan && ctx.suiteAsset) {
+      const entry = residence.entryDoor;
+      const [x,z] = toW(u.frame, entry.at - entry.width / 2 - .24, -.12);
+      const [nx,nz] = toW(u.frame,0,-1), [ox,oz] = toW(u.frame,0,0);
+      labels.push({x,z,nx:nx-ox,nz:nz-oz,text:u.code.split('-').at(-1)});
+      continue;
+    }
     B.frame(u.frame, () => {
       const r = u.rects[0];
       const w = r.x1 - r.x0;
@@ -129,15 +137,19 @@ export function buildResidenceFloor(ctx, L) {
   }
 
   B.flush(group);
+  const suite = buildSuiteModels(ctx, lv);
+  if (suite) group.add(suite.group);
   const atlas = labelAtlas(labels, y0, group);
   let disposed = false;
   return {
     group,
+    update(app) { suite?.update(app); },
     dispose() {
       if (disposed) return;
       disposed = true;
+      suite?.dispose();
       group.removeFromParent();
-      group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+      group.traverse((o) => { if (o.isMesh && !o.geometry.userData.sharedSuite) o.geometry.dispose(); });
       group.clear();
       atlas?.texture.dispose();
       atlas?.material.dispose();

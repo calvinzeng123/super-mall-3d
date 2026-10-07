@@ -4,6 +4,7 @@ import { frame, IDENTITY, rect, rectPoly, lrectPoly, lseg, toW, polyBounds, conv
 import { lift } from './mall.js';
 import { fillRows, markSpecial } from './parking.js';
 import { addPlaza } from './campus.js';
+import { createSuitePlan, createSuiteMezzanine, suiteAdditionObstacles } from './suite-plan.js';
 
 export const HOSPITALITY = {
   west: rect(-485, -250, -310, -30),
@@ -23,18 +24,9 @@ function residence(usage, type, w, d) {
   // door.at is the opening center, measured in metres from partition.a.
   const data = { kind: usage, type, area: +(w * d).toFixed(2), entryDoor: { at: w / 2, width: 1.25 }, exteriorSides: ['S'], windowSide: 'S', rooms: [], beds: [], bathrooms: [], partitions: [], kitchen: null, living: null };
   if (usage !== 'residential') {
-    const bath = rect(w - 4, 0, w, 4.8);
-    const living = rect(0.4, 4.9, 5.6, d - 0.4);
-    data.rooms = [zone('entry', 'entry', rect(4.5, 0, 6.8, 4.9)), zone('living', 'living', living), zone('bedroom', 'bedroom', rect(5.8, 5.2, w - 0.25, d - 0.3)), zone('bath', 'bathroom', bath)];
-    data.beds = type === 'twin-suite' ? [{ x: 7.25, z: 10.1, w: 1.25, d: 2.1, room: 'bedroom' }, { x: 9.25, z: 10.1, w: 1.25, d: 2.1, room: 'bedroom' }] : [{ x: 8.45, z: 10.1, w: 2, d: 2.15, room: 'bedroom' }];
-    data.bathrooms = [{ id: 'bath', rect: bath }];
-    data.living = { rect: living };
-    data.partitions = [wall([w - 4, 0], [w - 4, 4.8], 2.35), wall([w - 4, 4.8], [w, 4.8])];
-    if (usage === 'apartment') {
-      const kitchen = rect(0.4, 0.4, 4.2, 4.2);
-      data.kitchen = { rect: kitchen }; data.rooms.push(zone('kitchen', 'kitchen', kitchen));
-      data.rooms.push(zone('dining', 'dining', rect(0.4, 4.9, 4.8, 7.4)));
-    } else data.rooms.push(zone('tea', 'kitchenette', rect(0.4, 0.4, 4.2, 3.8)));
+    const suite = createSuitePlan();
+    Object.assign(data, { suitePlan: suite, entryDoor: suite.entryDoor, rooms: suite.rooms, beds: suite.beds,
+      bathrooms: suite.bathrooms, living: suite.living, partitions: suite.partitions, obstacles: suite.obstacles });
   } else {
     // 三种真实平面：108㎡一居、120㎡两居、180㎡三居；卫生间与卧室用显式门洞分隔。
     const n = type === 'one-bedroom' ? 1 : type === 'two-bedroom' ? 2 : 3;
@@ -65,6 +57,8 @@ function addUnit(lv, spec, slot, F, w, d, type) {
   const fronts = [{ x0: 0, z0: 0, x1: w, z1: 0, side: 'N' }];
   const r = rect(0, 0, w, d);
   const u = { id: `${lv.id}-U${slot}`, code: `${spec.id}-${number}`, slot: String(slot), building: spec.id, level: lv.id, frame: F, rects: [r], polys: [lrectPoly(F, r)], fronts, wfronts: fronts.map(f => lseg(F, f)), style: 'residence', brand: { name: `${spec.name} ${number}`, en: `${spec.en} ${number}`, cat: spec.usage, catLabel, bg: spec.accent, fg: '#ffffff', logo: 'diamond' }, residence: residence(spec.usage, type, w, d) };
+  if (spec.usage === 'apartment' && lv.levelNumber === 1) u.residence.duplex = createSuiteMezzanine(u.id);
+  if (u.residence.suitePlan) u.residence.obstacles = [...u.residence.obstacles, ...suiteAdditionObstacles(spec.usage, !!u.residence.duplex)];
   lv.units.push(u);
 }
 
@@ -108,7 +102,7 @@ function tower(spec) {
         for (let i = 0; i < 5; i++) {
           const x0 = -27.5 + i * 11;
           const north = toW(F, x0 + 11, -2.5), south = toW(F, x0, 2.5);
-          addUnit(lv, spec, i + 1, frame(...north, 180, `${lv.id}-N${i}`), 11, 15, i % 2 && spec.usage === 'hotel' ? 'twin-suite' : 'king-suite');
+          addUnit(lv, spec, i + 1, frame(...north, 180, `${lv.id}-N${i}`), 11, 15, spec.usage === 'apartment' ? 'serviced-suite' : 'king-suite');
           addUnit(lv, spec, i + 6, frame(...south, 0, `${lv.id}-S${i}`), 11, 15, spec.usage === 'apartment' ? 'serviced-suite' : 'king-suite');
         }
       } else {

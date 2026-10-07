@@ -33,6 +33,9 @@ import { loadSurfaceTextures } from './pbr.js';
 import { buildHospitality, setHospitalityCut } from './build/hospitality.js';
 import { buildResidenceFloor } from './build/residence-interiors.js';
 import { buildTowerElevators } from './build/tower-elevators.js';
+import { loadSuiteAsset } from './suite-asset.js';
+import { SUITE_MODEL_URL } from './suite-data.js';
+import { createSuiteLighting } from './suite-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
 const EXPLODE_GAP = 13;
@@ -89,6 +92,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   scene.add(root);
 
   const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], site: null };
+  onProgress('载入你的套房家具、材质与灯具', .015);
+  ctx.suiteAsset = await loadSuiteAsset(SUITE_MODEL_URL, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+  ctx.suiteLighting = createSuiteLighting(ctx);
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
   for (const b of layout.buildings) {
@@ -198,6 +204,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const emit = () => listeners.forEach((fn) => fn(state));
   const highlight = makeHighlight(scene);
   const residenceCache = new Map();
+  ctx.dynamic.push({ name: 'suite-floor-visibility', update(dt, elapsed, app) {
+    for (const result of residenceCache.values()) result.update?.(app);
+  } });
   function ensureTowerFloor(id) {
     const L = ctx.levels[id];
     if (!L || ctx.bById[L.building]?.kind !== 'tower') return;
