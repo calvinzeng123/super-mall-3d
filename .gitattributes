@@ -1,0 +1,4 @@
+# These are generated delivery assets; edit scripts/residential/ to rebuild them.
+prototypes/residential03/** linguist-generated=true
+# The offline page embeds the full GLB plus bundled shader source.
+prototypes/residential03/*.html -diff -text

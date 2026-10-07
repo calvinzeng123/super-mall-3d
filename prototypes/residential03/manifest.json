@@ -1,0 +1,126 @@
+{
+  "title": "云澜汇住宅03四房两厅独立样板",
+  "status": "standalone prototype; not integrated into R1-R4",
+  "blender": "5.1.2",
+  "plan_envelope_m2": 202.4,
+  "balcony_m2": 49.28,
+  "area_basis": "including walls; not net usable or saleable area",
+  "sourceOriginalSHA256": "db210ebc36728c7afa4b67112c6e8a9f27e68695ade30a2d7d63a59d349e03bd",
+  "files": [
+    {
+      "file": "03四房两厅_中文平面图.png",
+      "bytes": 268824,
+      "sha256": "de68b928fa90f2e6cdc3583cdd15e5ae8e6306da2a9052613fadeb64ab574641"
+    },
+    {
+      "file": "03四房两厅_中文平面图.svg",
+      "bytes": 388134,
+      "sha256": "ccc5f4ef84d380c0b37fc6c1796eb0e4a7833cf33eea52980ebd55508d6ca075"
+    },
+    {
+      "file": "actual-mesh-audit.json",
+      "bytes": 2149778,
+      "sha256": "744ef1f921377ad0ad381d86e42891bbfc1ada7df7468eace100f83e4b13f140"
+    },
+    {
+      "file": "asset-validation.json",
+      "bytes": 784,
+      "sha256": "e41797178fdb7c5a2ea8726b437bba23d281ab656dd4ee94eb9bcb8fad2c9c39"
+    },
+    {
+      "file": "balcony.png",
+      "bytes": 2066116,
+      "sha256": "7414b357729b7577ee58e241520d9624d10674c19457c290ea79e693154faac2"
+    },
+    {
+      "file": "bath.png",
+      "bytes": 2111727,
+      "sha256": "59f69fb80fa353d20774c272b5e9ee7d9bd200973815892f8ad4320837e50ab5"
+    },
+    {
+      "file": "bedroom2.png",
+      "bytes": 2109633,
+      "sha256": "0c159ab433f82cb018813c15579cef2a834c71e33298df257c96d20fd4ed803f"
+    },
+    {
+      "file": "bedroom3.png",
+      "bytes": 2008864,
+      "sha256": "dd52d78f2ce221fa6ec17e25e831a10c0c21410dec93a676ef9937706bec1b3a"
+    },
+    {
+      "file": "build-report.json",
+      "bytes": 5056,
+      "sha256": "5ee232f7e4b46f2b7abb3e819e1721abd83d10bb5aebecfb23b30aff435c6b19"
+    },
+    {
+      "file": "dining.png",
+      "bytes": 2336769,
+      "sha256": "06f30e960979f861a2a1320b7a8a9aab276f28395b4104a1522ccdcbfbe8b66f"
+    },
+    {
+      "file": "guest.png",
+      "bytes": 1974017,
+      "sha256": "c58e4a64d05c15af6cfdafc6a4bf5c3f9eb53254080aca55431c27c39e796bce"
+    },
+    {
+      "file": "kitchen.png",
+      "bytes": 2184924,
+      "sha256": "5482ba6822fe5539f979952f09dfa543e13bd269b90fd2b04f1876bd5ea9e29a"
+    },
+    {
+      "file": "living.png",
+      "bytes": 2082756,
+      "sha256": "980f0bec09c94253bc5f42ae7c199937a0642a013199aea3a969fdc95e763726"
+    },
+    {
+      "file": "master.png",
+      "bytes": 2091358,
+      "sha256": "b4458c0fa3b3ed6ef93c832faa26121da35fa3029013117f041aaa98cbe40e3f"
+    },
+    {
+      "file": "night.png",
+      "bytes": 2111866,
+      "sha256": "452be712fb91584b44d2714023714fbfa63112b1e575d94476122819a36d3d44"
+    },
+    {
+      "file": "overview.png",
+      "bytes": 2279040,
+      "sha256": "1a9f7d4206d1f900a102b0a82077eeb52f00e5b544637e23c6679aafb3ba07b8"
+    },
+    {
+      "file": "plan.png",
+      "bytes": 2318608,
+      "sha256": "db492d1f23bbc7ceabc7d3f9c399f8e85a5a3973684451cb27f51ca81e16e9bb"
+    },
+    {
+      "file": "viewer-qa.json",
+      "bytes": 14517,
+      "sha256": "1bfa3ea3ccf3e2d838600b059a2828677bae7f03348617c01b04b99415cd0229"
+    },
+    {
+      "file": "云澜汇_03四房两厅.blend",
+      "bytes": 9881434,
+      "sha256": "0fd9dfb04b9a35e3e8dbe57fbcd63ec48516f94fdbc83fd7aca91bf29cbc4ab9"
+    },
+    {
+      "file": "云澜汇_03四房两厅.glb",
+      "bytes": 27863536,
+      "sha256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4"
+    },
+    {
+      "file": "住宅03_离线漫游.html",
+      "bytes": 37775622,
+      "sha256": "f6921e589c010212c83f8df03a4578b383e9de12d2f17f55f9049bbe6badf169"
+    },
+    {
+      "file": "使用说明.md",
+      "bytes": 1918,
+      "sha256": "f78848fda35427a9ffd16a22e20dfee6bcc9f26a87434bd7a73f6423e1238902"
+    },
+    {
+      "file": "素材来源.md",
+      "bytes": 3736,
+      "sha256": "a80bab660d3bd3d61c903cdfbea49743935b698d81bf2f491a884306f7d0d002"
+    }
+  ]
+}

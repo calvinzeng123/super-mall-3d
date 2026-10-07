@@ -1,0 +1,550 @@
+{
+  "schemaVersion": 2,
+  "checkedAt": "2026-10-07T11:04:34.533Z",
+  "status": "passed",
+  "modelFile": "云澜汇_03四房两厅.glb",
+  "modelBytes": 27863536,
+  "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+  "viewerFile": "住宅03_离线漫游.html",
+  "viewerBytes": 37775622,
+  "viewerSHA256": "f6921e589c010212c83f8df03a4578b383e9de12d2f17f55f9049bbe6badf169",
+  "coverage": "Incremental recheck after replacing oversized foyer artwork with a 0.68 m mirror frame. Viewer source was unchanged. The 12-view, day/night, roof and movement interaction suite was not rerun for this asset-only revision; its separately hash-bound prior evidence is retained below.",
+  "checks": {
+    "desktopOfflineFreshLoad": true,
+    "mobileOfflineFreshLoad": true,
+    "sameCurrentModel": true,
+    "noExternalRequests": true,
+    "noRuntimeErrors": true,
+    "webGL": true,
+    "responsiveLayout": true,
+    "mirrorInsideMainFootprint": true,
+    "mirrorVisuallyReviewed": true
+  },
+  "latestRevisionValidation": {
+    "revision": "foyer mirror replaces oversized artwork",
+    "freshOfflineInitialization": true,
+    "results": [
+      {
+        "kind": "desktop",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+        "state": {
+          "ready": true,
+          "view": "overview",
+          "roof": false,
+          "night": false,
+          "walking": false,
+          "error": null
+        },
+        "stats": {
+          "meshes": 1731,
+          "textures": 17,
+          "authoredLights": 1,
+          "activeLightingRig": 20,
+          "roofObjects": 82,
+          "mobile": false,
+          "bounds": {
+            "min": [
+              -0.025000176535375118,
+              -0.2799999937415123,
+              -11.524999618530273
+            ],
+            "max": [
+              17.625000191461364,
+              3.010000064969063,
+              2.799999952316284
+            ]
+          }
+        },
+        "mirrors": [
+          {
+            "name": "Foyer_bronze_mirror_frame",
+            "min": [
+              9.782500190660357,
+              0.7799999713897705,
+              -11.190000385046005
+            ],
+            "max": [
+              9.817500190809369,
+              2.2200000286102295,
+              -10.510000377893448
+            ],
+            "withinMainFootprint": true
+          },
+          {
+            "name": "Foyer_full_length_mirror",
+            "min": [
+              9.775500282179564,
+              0.8050000071525574,
+              -11.16500037908554
+            ],
+            "max": [
+              9.782500282395631,
+              2.1949999928474426,
+              -10.535000383853912
+            ],
+            "withinMainFootprint": true
+          }
+        ],
+        "externalResources": [],
+        "webglError": 0,
+        "overflow": false
+      },
+      {
+        "kind": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+        "state": {
+          "ready": true,
+          "view": "overview",
+          "roof": false,
+          "night": false,
+          "walking": false,
+          "error": null
+        },
+        "stats": {
+          "meshes": 1731,
+          "textures": 17,
+          "authoredLights": 1,
+          "activeLightingRig": 20,
+          "roofObjects": 82,
+          "mobile": true,
+          "bounds": {
+            "min": [
+              -0.025000176535375118,
+              -0.2799999937415123,
+              -11.524999618530273
+            ],
+            "max": [
+              17.625000191461364,
+              3.010000064969063,
+              2.799999952316284
+            ]
+          }
+        },
+        "mirrors": [
+          {
+            "name": "Foyer_bronze_mirror_frame",
+            "min": [
+              9.782500190660357,
+              0.7799999713897705,
+              -11.190000385046005
+            ],
+            "max": [
+              9.817500190809369,
+              2.2200000286102295,
+              -10.510000377893448
+            ],
+            "withinMainFootprint": true
+          },
+          {
+            "name": "Foyer_full_length_mirror",
+            "min": [
+              9.775500282179564,
+              0.8050000071525574,
+              -11.16500037908554
+            ],
+            "max": [
+              9.782500282395631,
+              2.1949999928474426,
+              -10.535000383853912
+            ],
+            "withinMainFootprint": true
+          }
+        ],
+        "externalResources": [],
+        "webglError": 0,
+        "overflow": false
+      }
+    ],
+    "errors": [],
+    "requests": [],
+    "method": "Both viewport variants initialized the full embedded HTML from about:blank with browser networking disabled.",
+    "visualReview": {
+      "item": "Foyer bronze mirror frame and full length mirror",
+      "result": "Present, rendered on the interior wall segment, both bounds remain inside the main dwelling footprint.",
+      "screenshot": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/work/residential-final-foyer-mirror.png",
+      "cameraBlender": [
+        9.25,
+        10.3,
+        1.5
+      ],
+      "targetBlender": [
+        9.779,
+        10.85,
+        1.5
+      ]
+    },
+    "scopeNotes": [
+      "Desktop Chromium 1440x900; mobile Chromium 390x844 viewport simulation.",
+      "Not a physical-device test."
+    ]
+  },
+  "priorFullInteractionValidation": {
+    "schemaVersion": 1,
+    "checkedAt": "2026-10-07T10:24:44.575Z",
+    "status": "passed",
+    "modelFile": "云澜汇_03四房两厅.glb",
+    "modelBytes": 27852548,
+    "modelSHA256": "6789d6c99a1c5791e5273e95092ea46f342fbea53579b661efc5c429420d1808",
+    "viewerFile": "住宅03_离线漫游.html",
+    "viewerBytes": 37760970,
+    "viewerSHA256": "279f840d8f4538965210194c801a3d31076ea7a5b518b2a51e997d9fbaf30dbb",
+    "method": "Loaded the embedded HTML once, navigated to about:blank, disabled browser network, and freshly initialized the complete HTML with page.setContent. Repeated at desktop and mobile viewport sizes.",
+    "scopeNotes": [
+      "Desktop: Chromium 1440x900.",
+      "Mobile: Chromium 390x844 browser simulation; not a physical-device test.",
+      "Free roam is an observation camera that intentionally permits passing through walls."
+    ],
+    "checks": {
+      "desktopOfflineFreshLoad": true,
+      "mobileOfflineFreshLoad": true,
+      "twelveDesktopViews": true,
+      "twelveMobileViews": true,
+      "roofToggle": true,
+      "dayNight": true,
+      "desktopMovement": true,
+      "mobileMovement": true,
+      "mobileDragLook": true,
+      "exitWalk": true,
+      "noExternalRequests": true,
+      "noRuntimeErrors": true,
+      "webGL": true,
+      "mobileTextureCap": true,
+      "sameModel": true
+    },
+    "desktop": {
+      "offlineFreshLoad": true,
+      "views": [
+        {
+          "view": "overview",
+          "roof": false,
+          "position": [
+            25,
+            22.999999999999996,
+            22
+          ],
+          "pressed": "overview"
+        },
+        {
+          "view": "plan",
+          "roof": false,
+          "position": [
+            8.8,
+            34.9999999999825,
+            -4.349965
+          ],
+          "pressed": "plan"
+        },
+        {
+          "view": "living",
+          "roof": true,
+          "position": [
+            7.15,
+            1.6200000000000006,
+            -4.949999999999999
+          ],
+          "pressed": "living"
+        },
+        {
+          "view": "dining",
+          "roof": true,
+          "position": [
+            8.4,
+            1.6200000000000003,
+            -5.8
+          ],
+          "pressed": "dining"
+        },
+        {
+          "view": "master",
+          "roof": true,
+          "position": [
+            3.02,
+            1.62,
+            -2
+          ],
+          "pressed": "master"
+        },
+        {
+          "view": "bedroom2",
+          "roof": true,
+          "position": [
+            1.55,
+            1.58,
+            -7.95
+          ],
+          "pressed": "bedroom2"
+        },
+        {
+          "view": "bedroom3",
+          "roof": true,
+          "position": [
+            16.3,
+            1.5999999999999999,
+            -7.9
+          ],
+          "pressed": "bedroom3"
+        },
+        {
+          "view": "guest",
+          "roof": true,
+          "position": [
+            15.55,
+            1.6,
+            -2.1
+          ],
+          "pressed": "guest"
+        },
+        {
+          "view": "kitchen",
+          "roof": true,
+          "position": [
+            6.6499999999999995,
+            1.62,
+            -8.15
+          ],
+          "pressed": "kitchen"
+        },
+        {
+          "view": "bath",
+          "roof": true,
+          "position": [
+            3.98,
+            1.6,
+            -2.94
+          ],
+          "pressed": "bath"
+        },
+        {
+          "view": "commonBath",
+          "roof": true,
+          "position": [
+            10.299999999999999,
+            1.62,
+            -9.67
+          ],
+          "pressed": "commonBath"
+        },
+        {
+          "view": "balcony",
+          "roof": true,
+          "position": [
+            9.2,
+            1.6199999999999997,
+            1.4000000000000004
+          ],
+          "pressed": "balcony"
+        }
+      ],
+      "roofs": {
+        "count": 82,
+        "shown": true,
+        "hidden": true
+      },
+      "night": {
+        "enabled": true,
+        "exposure": 1.05
+      },
+      "movement": {
+        "before": [
+          7.15,
+          1.6200000000000006,
+          -4.949999999999999
+        ],
+        "after": [
+          8.305984296218057,
+          2.368045000195504,
+          -4.287235670168316
+        ],
+        "distance": 1.5281124213609043
+      },
+      "errors": [],
+      "requests": [],
+      "final": {
+        "state": {
+          "ready": true,
+          "view": "living",
+          "roof": true,
+          "night": false,
+          "walking": false,
+          "error": null
+        },
+        "stats": {
+          "meshes": 1731,
+          "textures": 17,
+          "authoredLights": 1,
+          "activeLightingRig": 20,
+          "roofObjects": 82,
+          "mobile": false,
+          "bounds": {
+            "min": [
+              -0.025000176535375118,
+              -0.2799999937415123,
+              -11.7199980018714
+            ],
+            "max": [
+              17.625000191461364,
+              3.010000064969063,
+              2.799999952316284
+            ]
+          }
+        },
+        "build": {
+          "title": "云澜汇 · 住宅03 四房两厅",
+          "modelFile": "云澜汇_03四房两厅.glb",
+          "modelBytes": 27852548,
+          "modelSHA256": "6789d6c99a1c5791e5273e95092ea46f342fbea53579b661efc5c429420d1808",
+          "threeVersion": "0.170.0",
+          "coordinateSystem": "glTF Y up; Blender (x,y,z) maps to glTF (x,z,-y)",
+          "standalone": true
+        },
+        "webglError": 0,
+        "overflow": false
+      }
+    },
+    "mobile": {
+      "offlineFreshLoad": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "views": [
+        {
+          "view": "overview",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "plan",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "living",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "dining",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "master",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "bedroom2",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "bedroom3",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "guest",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "kitchen",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "bath",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "commonBath",
+          "activeButtonVisible": true,
+          "overflow": false
+        },
+        {
+          "view": "balcony",
+          "activeButtonVisible": true,
+          "overflow": false
+        }
+      ],
+      "movement": {
+        "before": {
+          "position": [
+            7.15,
+            1.6200000000000006,
+            -4.949999999999999
+          ],
+          "quaternion": [
+            -0.021396317769848582,
+            -0.864481451272823,
+            -0.03693070033528355,
+            0.5008494198497895
+          ]
+        },
+        "after": {
+          "position": [
+            8.068385062580381,
+            2.6823100005865106,
+            -4.42345923078725
+          ],
+          "quaternion": [
+            -0.028624811907927063,
+            -0.9166326517717631,
+            -0.06675140942236613,
+            0.39307690238581716
+          ],
+          "padVisible": true
+        },
+        "distance": 1.4997262557413717
+      },
+      "night": true,
+      "errors": [],
+      "consoleErrors": [],
+      "requests": [],
+      "final": {
+        "state": {
+          "ready": true,
+          "view": "living",
+          "roof": true,
+          "night": false,
+          "walking": false,
+          "error": null
+        },
+        "stats": {
+          "meshes": 1731,
+          "textures": 17,
+          "authoredLights": 1,
+          "activeLightingRig": 20,
+          "roofObjects": 82,
+          "mobile": true,
+          "bounds": {
+            "min": [
+              -0.025000176535375118,
+              -0.2799999937415123,
+              -11.7199980018714
+            ],
+            "max": [
+              17.625000191461364,
+              3.010000064969063,
+              2.799999952316284
+            ]
+          }
+        },
+        "modelSHA256": "6789d6c99a1c5791e5273e95092ea46f342fbea53579b661efc5c429420d1808",
+        "webglError": 0,
+        "overflow": false,
+        "maxTextureDimension": 512
+      }
+    }
+  }
+}

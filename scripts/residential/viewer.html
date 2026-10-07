@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#34483f">
+  <link rel="icon" href="data:,">
+  <title>云澜汇 · 住宅03 四房两厅</title>
+  <style>
+    :root{color-scheme:light;--ink:#24372e;--muted:#65766d;--paper:#f6f8f5;--line:#d2ddd4;--accent:#456c58;--glass:rgba(248,251,247,.92);--shadow:0 3px 24px #233d2e12;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+    *{box-sizing:border-box}body{margin:0;overflow:hidden;background:#dfe7df;color:var(--ink)}button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}button:focus-visible,summary:focus-visible{outline:3px solid #b79c61;outline-offset:3px}button:disabled{cursor:wait;opacity:.5}[hidden]{display:none!important}
+    #viewer{position:fixed;inset:0;display:block;width:100%;height:100%;outline:0;touch-action:none}
+    .top{position:fixed;inset:max(16px,env(safe-area-inset-top)) 20px auto;display:flex;align-items:start;justify-content:space-between;gap:24px;pointer-events:none;z-index:2}
+    .identity{padding:13px 17px 14px;border-left:3px solid var(--accent);background:var(--glass);backdrop-filter:blur(15px);box-shadow:var(--shadow);pointer-events:auto}
+    .identity h1{margin:0;font-family:"Songti SC","STSong","SimSun",serif;font-size:25px;font-weight:600;letter-spacing:.12em;line-height:1.25}
+    .identity p{margin:7px 0 0;font-size:12px;letter-spacing:.06em;color:var(--muted)}
+    .tools{display:flex;flex-direction:column;align-items:end;gap:8px;max-width:min(70vw,920px);min-width:0;pointer-events:auto}
+    .view-tabs,.actions{display:flex;align-items:center;gap:3px;padding:5px;background:var(--glass);backdrop-filter:blur(15px);box-shadow:var(--shadow);border:1px solid #ffffff85;border-radius:5px}
+    .view-tabs{max-width:100%;overflow-x:auto;scrollbar-width:thin}.view-tabs button{flex:none}
+    .view-tabs button,.actions button{border:0;background:transparent;white-space:nowrap;padding:9px 13px;border-radius:3px;font-size:13px;line-height:1.2;transition:background .15s,color .15s}
+    .view-tabs button:hover,.actions button:hover{background:#e5eee6}.view-tabs button[aria-pressed="true"]{background:var(--accent);color:#fff}.actions button[aria-pressed="true"]{background:#dfebe1;color:#214c35}.actions button+button{border-left:1px solid var(--line)}
+    .bottom{position:fixed;left:20px;right:20px;bottom:max(16px,env(safe-area-inset-bottom));display:flex;align-items:end;justify-content:space-between;gap:12px;pointer-events:none;z-index:2}
+    .caption{background:var(--glass);backdrop-filter:blur(15px);border-left:3px solid var(--accent);padding:11px 15px;max-width:640px;box-shadow:var(--shadow)}
+    #view-label{font-size:13px;font-weight:600;letter-spacing:.06em}.caption p{margin:5px 0 0;font-size:12px;color:var(--muted);line-height:1.6}.caption details{font-size:12px;margin-top:6px;pointer-events:auto}.caption summary{color:var(--accent);cursor:pointer;list-style:none}.caption summary::-webkit-details-marker{display:none}.caption details p{max-width:450px}
+    #compass{display:flex;align-items:center;justify-content:center;width:36px;height:52px;color:var(--ink);font:12px Georgia,serif;background:var(--glass);border-radius:3px;box-shadow:var(--shadow)}#compass span::before{content:"↑";display:block;font:27px/1.1 Georgia,serif;text-align:center}
+    #walk-pad{display:grid;grid-template-columns:repeat(3,43px);gap:5px;pointer-events:auto;margin-bottom:62px}
+    #walk-pad button{height:41px;padding:0;border:1px solid #d3ded4;background:var(--glass);backdrop-filter:blur(10px);border-radius:4px;touch-action:none;font-size:20px;user-select:none}#walk-pad button:active{background:var(--accent);color:white}#walk-pad .rise{font-size:12px}
+    #loading{position:fixed;inset:0;display:grid;place-content:center;text-align:center;background:#e6eee6;z-index:5;padding:24px}
+    #loading .title{font-family:"Songti SC","STSong",serif;font-size:31px;letter-spacing:.16em;color:var(--ink);margin-bottom:22px}#load-status{font-size:14px;color:var(--muted);line-height:1.8;max-width:540px}
+    .loading-line{width:160px;height:2px;background:#c9d7cb;margin:0 auto 18px;overflow:hidden}.loading-line::after{content:"";display:block;height:100%;width:45%;background:var(--accent);animation:loading 1.4s ease-in-out infinite}#retry{margin:18px auto 0;max-width:140px;padding:10px 20px;border:1px solid var(--accent);border-radius:3px;background:transparent}
+    @keyframes loading{from{transform:translateX(-105%)}to{transform:translateX(330%)}}
+    @media(max-width:820px){.top{inset:max(10px,env(safe-area-inset-top)) 10px auto;flex-wrap:wrap;gap:9px}.identity{padding:10px 13px}.identity h1{font-size:20px}.identity p{font-size:11px;margin-top:5px}.tools{max-width:100%;width:100%;align-items:start;gap:6px}.view-tabs{max-width:100%;overflow-x:auto;scrollbar-width:none}.view-tabs::-webkit-scrollbar{display:none}.view-tabs button{padding:9px 12px}.actions button{padding:8px 10px;font-size:12px}.bottom{left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom))}.caption{max-width:calc(100vw - 65px);padding:9px 11px}.caption p{font-size:11px}.caption details p{max-width:290px}#walk-pad{position:absolute;right:0;bottom:10px;margin-bottom:80px}.walking .caption{max-width:calc(100vw - 20px)}.walking #compass{display:none}}
+    @media(max-height:520px){.identity p{display:none}.identity h1{font-size:19px}.top{flex-wrap:nowrap}.tools{width:auto;align-items:end}.caption details{display:none}.caption p{margin-top:2px}.view-tabs button{padding:7px 9px}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.loading-line::after{width:100%}}
+  </style>
+</head>
+<body>
+  <canvas id="viewer" aria-label="住宅03三维模型，拖动查看或使用自由漫游" tabindex="0"></canvas>
+  <header class="top">
+    <div class="identity"><h1>云澜汇 · 住宅03</h1><p id="home-description">四房两厅 · 三卫 · 南向大阳台</p></div>
+    <div class="tools">
+      <nav class="view-tabs" aria-label="房间视角">
+        <button type="button" data-view="overview" aria-pressed="true">整体</button>
+        <button type="button" data-view="plan" aria-pressed="false">平面</button>
+        <button type="button" data-view="living" aria-pressed="false">客厅</button>
+        <button type="button" data-view="dining" aria-pressed="false">餐厅</button>
+        <button type="button" data-view="master" aria-pressed="false">主卧</button>
+        <button type="button" data-view="bedroom2" aria-pressed="false">儿童房</button>
+        <button type="button" data-view="bedroom3" aria-pressed="false">次卧</button>
+        <button type="button" data-view="guest" aria-pressed="false">客卧</button>
+        <button type="button" data-view="kitchen" aria-pressed="false">厨房</button>
+        <button type="button" data-view="bath" aria-pressed="false">主卫</button>
+        <button type="button" data-view="commonBath" aria-pressed="false">公卫</button>
+        <button type="button" data-view="balcony" aria-pressed="false">阳台</button>
+      </nav>
+      <div class="actions" aria-label="查看设置">
+        <button id="roof-button" type="button" aria-pressed="false">显示屋顶</button>
+        <button id="night-button" type="button" aria-pressed="false">切换夜景</button>
+        <button id="walk-button" type="button" aria-pressed="false">自由漫游</button>
+        <button id="fullscreen-button" type="button">全屏</button>
+      </div>
+    </div>
+  </header>
+  <footer class="bottom">
+    <div class="caption">
+      <div id="view-label">整体 · 轨道查看</div>
+      <p id="controls-hint">拖动旋转 · 滚轮缩放 · 右键平移</p>
+      <details><summary>操作说明</summary><p>选择上方房间可直接进入对应视角，左右滑动视角栏可查看更多房间。按 F 切换自由漫游；WASD 移动，拖动画面看向，Q / E 下降或上升，Shift 加速，Esc 退出。自由漫游允许穿过墙体。此页面可直接离线打开。</p></details>
+    </div>
+    <div id="walk-pad" aria-label="漫游方向" hidden>
+      <button class="rise" data-key="KeyE" aria-label="上升">上升</button><button data-key="KeyW" aria-label="向前">↑</button><button class="rise" data-key="KeyQ" aria-label="下降">下降</button>
+      <button data-key="KeyA" aria-label="向左">←</button><button data-key="KeyS" aria-label="后退">↓</button><button data-key="KeyD" aria-label="向右">→</button>
+    </div>
+    <div id="compass" aria-label="北向" hidden><span>N</span></div>
+  </footer>
+  <div id="loading" role="status" aria-live="polite"><div class="title">云澜汇 · 住宅03</div><div class="loading-line"></div><div id="load-status">正在载入住宅与家具细节…</div><button id="retry" type="button" hidden>重新载入</button></div>
+  <!--THIRD_PARTY_LICENSE-->
+  <script>/*VIEWER_BUNDLE*/</script>
+</body>
+</html>

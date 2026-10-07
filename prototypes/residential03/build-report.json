@@ -1,0 +1,284 @@
+{
+  "blenderVersion": "5.1.2",
+  "plan": "residential-03",
+  "rooms": [
+    {
+      "id": "bed_primary",
+      "name": "主卧",
+      "type": "bedroom",
+      "floor_rects": [
+        [
+          0,
+          0,
+          5.6,
+          2.6
+        ],
+        [
+          0,
+          2.6,
+          3.5,
+          5.4
+        ]
+      ],
+      "zone_area_m2": 24.36,
+      "suite": "primary",
+      "exterior_sides": [
+        "south",
+        "west"
+      ]
+    },
+    {
+      "id": "bath_primary",
+      "name": "主卫",
+      "type": "bathroom",
+      "floor_rects": [
+        [
+          3.5,
+          2.6,
+          5.6,
+          5.4
+        ]
+      ],
+      "zone_area_m2": 5.88,
+      "suite": "primary"
+    },
+    {
+      "id": "living",
+      "name": "客厅",
+      "type": "living",
+      "floor_rects": [
+        [
+          5.6,
+          0,
+          12.8,
+          5.4
+        ]
+      ],
+      "zone_area_m2": 38.88,
+      "exterior_sides": [
+        "south"
+      ]
+    },
+    {
+      "id": "bed_guest",
+      "name": "南次卧",
+      "type": "bedroom",
+      "floor_rects": [
+        [
+          12.8,
+          0,
+          17.6,
+          2.6
+        ],
+        [
+          12.8,
+          2.6,
+          15.4,
+          5.4
+        ]
+      ],
+      "zone_area_m2": 19.76,
+      "suite": "guest",
+      "exterior_sides": [
+        "south",
+        "east"
+      ]
+    },
+    {
+      "id": "bath_guest",
+      "name": "南次卧套卫",
+      "type": "bathroom",
+      "floor_rects": [
+        [
+          15.4,
+          2.6,
+          17.6,
+          5.4
+        ]
+      ],
+      "zone_area_m2": 6.16,
+      "suite": "guest",
+      "exterior_sides": [
+        "east"
+      ]
+    },
+    {
+      "id": "gallery_west",
+      "name": "西侧家庭厅廊",
+      "type": "circulation",
+      "floor_rects": [
+        [
+          0,
+          5.4,
+          7.4,
+          7.0
+        ]
+      ],
+      "zone_area_m2": 11.84,
+      "exterior_sides": [
+        "west"
+      ]
+    },
+    {
+      "id": "gallery_east",
+      "name": "东侧家庭厅廊",
+      "type": "circulation",
+      "floor_rects": [
+        [
+          13.8,
+          5.4,
+          17.6,
+          7.0
+        ]
+      ],
+      "zone_area_m2": 6.08,
+      "exterior_sides": [
+        "east"
+      ]
+    },
+    {
+      "id": "bed_northwest",
+      "name": "西北次卧",
+      "type": "bedroom",
+      "floor_rects": [
+        [
+          0,
+          7,
+          4.6,
+          11.5
+        ]
+      ],
+      "zone_area_m2": 20.7,
+      "exterior_sides": [
+        "north",
+        "west"
+      ]
+    },
+    {
+      "id": "kitchen",
+      "name": "厨房",
+      "type": "kitchen",
+      "floor_rects": [
+        [
+          4.6,
+          7,
+          7.4,
+          11.5
+        ]
+      ],
+      "zone_area_m2": 12.6,
+      "exterior_sides": [
+        "north"
+      ]
+    },
+    {
+      "id": "dining",
+      "name": "餐厅",
+      "type": "dining",
+      "floor_rects": [
+        [
+          7.4,
+          5.4,
+          13.8,
+          9.3
+        ]
+      ],
+      "zone_area_m2": 24.96
+    },
+    {
+      "id": "foyer",
+      "name": "玄关",
+      "type": "entry",
+      "floor_rects": [
+        [
+          7.4,
+          9.3,
+          9.9,
+          11.5
+        ]
+      ],
+      "zone_area_m2": 5.5,
+      "exterior_sides": [
+        "north"
+      ]
+    },
+    {
+      "id": "bath_common",
+      "name": "公卫",
+      "type": "bathroom",
+      "floor_rects": [
+        [
+          9.9,
+          9.3,
+          12.4,
+          11.5
+        ]
+      ],
+      "zone_area_m2": 5.5,
+      "exterior_sides": [
+        "north"
+      ]
+    },
+    {
+      "id": "laundry",
+      "name": "独立洗衣房",
+      "type": "utility",
+      "floor_rects": [
+        [
+          12.4,
+          9.3,
+          13.8,
+          11.5
+        ]
+      ],
+      "zone_area_m2": 3.08,
+      "exterior_sides": [
+        "north"
+      ]
+    },
+    {
+      "id": "bed_northeast",
+      "name": "东北次卧",
+      "type": "bedroom",
+      "floor_rects": [
+        [
+          13.8,
+          7,
+          17.6,
+          11.5
+        ]
+      ],
+      "zone_area_m2": 17.1,
+      "exterior_sides": [
+        "north",
+        "east"
+      ]
+    }
+  ],
+  "area": {
+    "interior_envelope_m2": 202.4,
+    "balcony_m2": 49.28,
+    "net_usable_m2": null,
+    "basis": "17.6×11.5m平面含墙范围；房间分区面积不可称净使用面积，阳台单列"
+  },
+  "objects": 1789,
+  "meshObjects": 1705,
+  "lights": 23,
+  "sourceFurnitureScale": 1,
+  "blend": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅03样板/云澜汇_03四房两厅.blend",
+  "glb": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅03样板/云澜汇_03四房两厅.glb",
+  "renders": [
+    "overview.png",
+    "plan.png",
+    "living.png",
+    "master.png",
+    "kitchen.png",
+    "balcony.png",
+    "dining.png",
+    "bath.png",
+    "bedroom2.png",
+    "bedroom3.png",
+    "guest.png",
+    "night.png"
+  ]
+}

@@ -5,3 +5,8 @@ src/render/pbr-data.js
 src/render/suite-data.js
 
 .playwright-cli/
+
+# Blender/Python build caches
+__pycache__/
+*.pyc
+*.blend1
