@@ -185,8 +185,10 @@ function columns(ctx, lv) {
         if (seen.has(k) || distToPolyEdge([x, z], lv.outline) < 0.6) continue;
         seen.add(k);
         B.frame(u.frame, () => {
-          B.get('satin').box(a, lv.elev + h / 2, b, 0.7, h, 0.7, th.column);
+          B.get('stone').box(a, lv.elev + h / 2, b, 0.7, h, 0.7, th.column);
           B.get('metal').box(a, lv.elev + 0.06, b, 0.78, 0.12, 0.78, th.trim);
+          B.get('metal').box(a, lv.elev + h - 0.16, b, 0.74, 0.1, 0.74, th.trim);
+          B.get('stone').box(a, lv.elev + 0.32, b, 0.75, 0.36, 0.75, '#cec9bf');
         });
       }
     }
@@ -259,7 +261,7 @@ function retaining(ctx, lv) {
   // 地下层外墙在地铁连接口处开洞
   const ents = ctx.layout.entrances.filter((x) => x.level === lv.id);
   for (const e of ctx.outlineEdges(lv)) {
-    for (const [a, b] of edgeSpans(e, ents)) F.frame(e.F, () => F.get('ext').box((a + b) / 2, lv.elev + h / 2 - 0.05, 0.2, b - a, h, 0.4, '#9fa5ab'));
+    for (const [a, b] of edgeSpans(e, ents)) F.frame(e.F, () => F.get('concrete').box((a + b) / 2, lv.elev + h / 2 - 0.05, 0.2, b - a, h, 0.4, '#ced0cc'));
   }
 }
 
@@ -267,7 +269,7 @@ function retaining(ctx, lv) {
 
 /** 各期外立面配色：一期暖米色石材；二期深灰金属板 + 金色竖向百叶 */
 const PALETTE = {
-  P1: { stone: COLORS.stone, stoneDark: COLORS.stoneDark, spandrel: COLORS.spandrel, frame: COLORS.glassFrame, fin: null },
+  P1: { stone: '#efe9dd', stoneDark: '#c9c0b0', spandrel: COLORS.spandrel, frame: COLORS.glassFrame, fin: null },
   P2: { stone: '#4a4f55', stoneDark: '#33373c', spandrel: '#24272b', frame: '#2b2f33', fin: '#b8925a' },
 };
 const paletteOf = (bid) => PALETTE[bid] || PALETTE.P1;
@@ -303,6 +305,11 @@ function facade(ctx, lv) {
     FB.frame(e.F, () => {
       // place(a0,a1,yA,yB,深度,外偏,材质,颜色)：u∈[a0,a1]，v 为外偏（+v 朝外）
       const place = (a0, a1, yA, yB, depth, offset, key, color) => FB.get(key).box((a0 + a1) / 2, (yA + yB) / 2, offset, Math.abs(a1 - a0), yB - yA, depth, color);
+      const clad = (a, b, ya, yb) => {
+        place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'extSatin' : 'stone', pal.stone);
+        // 石板横向接缝跟随楼层标高；平整贴图之外仍能读到板块尺度。
+        if (!pal.fin) for (let y = ya + 1.35; y < yb - 0.3; y += 1.35) place(a, b, y, y + 0.022, 0.012, 0.325, 'ext', '#8f887b');
+      };
       const n = e.kind === 'arc' ? 1 : Math.max(1, Math.round(e.len / 4));
       const bw = e.len / n;
       for (let i = 0; i < n; i++) {
@@ -310,35 +317,47 @@ function facade(ctx, lv) {
         const center = toW(e.F, m, 0);
         const type = bayType(ctx, lv, e, center, i);
         if (type === 'stone') {
-          place(a + 0.02, b - 0.02, y0, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
+          clad(a + 0.02, b - 0.02, y0, y0 + H);
           place(a, a + 0.04, y0, y0 + H, 0.34, 0.17, 'ext', pal.stoneDark);
           if (pal.fin) for (const p of [a + bw * 0.25, a + bw * 0.5, a + bw * 0.75]) place(p - 0.06, p + 0.06, y0, y0 + H, 0.55, 0.42, 'extMetal', pal.fin);
         } else if (type === 'slot') {
           const s = Math.min(1.6, bw * 0.4);
-          place(a, a + s, y0, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
-          place(b - s, b, y0, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
+          clad(a, a + s, y0, y0 + H);
+          clad(b - s, b, y0, y0 + H);
           place(a + s, b - s, y0, y0 + H, 0.06, 0.05, 'glassTint', 0xffffff);
           place(a + s - 0.05, a + s + 0.05, y0, y0 + H, 0.4, 0.2, 'extMetal', pal.fin || pal.frame);
           place(b - s - 0.05, b - s + 0.05, y0, y0 + H, 0.4, 0.2, 'extMetal', pal.fin || pal.frame);
+          place(a + s, b - s, y0 + 0.38, y0 + 0.46, 0.54, 0.22, 'extMetal', pal.fin || pal.frame);
         } else if (type === 'curtain') {
           place(a, b, y0 + 0.5, y0 + H, 0.06, 0.08, 'glassTint', 0xffffff);
           for (const p of e.kind === 'arc' ? [a] : [a, m]) place(p - 0.05, p + 0.05, y0, y0 + H, 0.32, 0.22, 'extMetal', pal.frame);
           if (pal.fin && e.kind === 'arc') place(a - 0.07, a + 0.07, y0, y0 + H, 0.7, 0.45, 'extMetal', pal.fin);
           place(a, b, y0 + H * 0.62 - 0.04, y0 + H * 0.62 + 0.04, 0.2, 0.18, 'extMetal', pal.frame);
+          // 幕墙楼板处为不透明背衬玻璃；窄压板与盖帽给幕墙实际构造厚度。
+          place(a, b, y0 + 0.35, y0 + 0.78, 0.1, 0.015, 'extSatin', pal.spandrel);
+          place(a, b, y0 + 0.77, y0 + 0.83, 0.22, 0.18, 'extMetal', pal.frame);
         } else if (type === 'shopwindow') {
-          place(a, b, y0, y0 + 0.35, 0.36, 0.18, 'ext', pal.stoneDark);
+          place(a, b, y0, y0 + 0.35, 0.36, 0.18, 'stone', pal.stoneDark);
           place(a + 0.1, b - 0.1, y0 + 0.35, y0 + 4.4, 0.05, 0.06, 'glassTint', 0xffffff);
-          place(a, b, y0 + 4.4, y0 + H, 0.32, 0.16, pal.fin ? 'extSatin' : 'ext', pal.stone);
+          clad(a, b, y0 + 4.4, y0 + H);
           for (const p of [a, m, b]) place(p - 0.05, p + 0.05, y0 + 0.35, y0 + 4.4, 0.22, 0.14, 'extMetal', pal.frame);
+          place(a, b, y0 + 4.3, y0 + 4.39, 0.48, 0.26, 'extMetal', pal.frame);
+          place(a + 0.1, b - 0.1, y0 + 4.28, y0 + 4.3, 0.12, 0.34, 'glow', '#ffe9c7');
         } else if (type === 'entrance') {
           place(a, b, y0 + 4.6, y0 + H, 0.05, 0.06, 'glassTint', 0xffffff);
           place(a, b, y0 + 4.55, y0 + 4.65, 0.3, 0.16, 'extMetal', pal.frame);
         }
       }
       // 楼层分隔带 + 夜间灯带
-      place(-0.3, e.len + 0.3, y0 - 0.32, y0 + 0.3, 0.42, 0.21, 'ext', pal.spandrel);
-      place(-0.3, e.len + 0.3, y0 + 0.31, y0 + 0.36, 0.44, 0.22, 'glow', pal.fin ? '#ffd38a' : COLORS.led);
-      if (top) place(-0.3, e.len + 0.3, y0 + H - 0.1, y0 + H + 0.35, 0.46, 0.23, 'ext', pal.spandrel);
+      const entrances = ctx.layout.entrances.filter((en) => en.level === lv.id);
+      for (const [a, b] of edgeSpans(e, entrances, 0.3)) {
+        place(a, b, y0 - 0.32, y0 + 0.3, 0.42, 0.21, 'ext', pal.spandrel);
+        place(a, b, y0 + 0.31, y0 + 0.36, 0.44, 0.22, 'glow', pal.fin ? '#ffd38a' : COLORS.led);
+      }
+      if (top) {
+        place(-0.3, e.len + 0.3, y0 + H - 0.1, y0 + H + 0.35, 0.7, 0.32, 'ext', pal.spandrel);
+        place(-0.35, e.len + 0.35, y0 + H + 0.35, y0 + H + 0.41, 0.82, 0.34, 'extMetal', pal.frame);
+      }
     });
   }
   facadeSigns(ctx, lv);

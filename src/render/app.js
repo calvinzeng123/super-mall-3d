@@ -29,6 +29,10 @@ import { buildSquare } from './build/square.js';
 import { buildMetro } from './build/metro.js';
 import { createPerfMonitor } from './perf.js';
 import { MAX_PIXEL_RATIO } from './device.js';
+import { loadSurfaceTextures } from './pbr.js';
+import { buildHospitality, setHospitalityCut } from './build/hospitality.js';
+import { buildResidenceFloor } from './build/residence-interiors.js';
+import { buildTowerElevators } from './build/tower-elevators.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
 const EXPLODE_GAP = 13;
@@ -52,7 +56,7 @@ const WAYFINDING = [
 ];
 
 /** 园区总览（四个地块 + 路口云环） */
-const OVERVIEW = [V(110, 430, 480), V(0, 0, 0)];
+const OVERVIEW = [V(125, 480, 590), V(-90, 30, -35)];
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -77,7 +81,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   controls.target.copy(OVERVIEW[1]);
   controls.screenSpacePanning = true;
 
-  const mats = new MaterialLib();
+  onProgress('加载石材、木纹与街区铺装', 0);
+  const surfaces = await loadSurfaceTextures(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+  const mats = new MaterialLib(surfaces);
   const env = new Environment(renderer, scene, camera, mats);
   const root = new THREE.Group();
   scene.add(root);
@@ -102,13 +108,14 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         ...lv.units.map((u) => ({ id: u.id, brand: u.brand })),
         ...WAYFINDING.map((w) => ({ id: w.id, draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, w.kind, w.text, w.bg) })),
       ];
-      const atlas = makeSignAtlas(entries);
-      atlas.material = mats.sign(atlas.texture);
+      // 高层房号按当前楼层生成，避免为160层常驻数百张招牌图集。
+      const atlas = b.kind === 'tower' ? null : makeSignAtlas(entries);
+      if (atlas) atlas.material = mats.sign(atlas.texture);
       ctx.atlas[lv.id] = atlas;
       const L = {
         lv, index, building: b.id, group, base, shell, facade, labels, flows, people, picks,
         batch: new BatchSet(mats.base), shellBatch: new BatchSet(mats.base), facadeBatch: new BatchSet(mats.base),
-        signs: new SignBatch(), facadeSigns: new SignBatch(),
+        signs: b.kind === 'tower' ? null : new SignBatch(), facadeSigns: b.kind === 'tower' ? null : new SignBatch(),
         offset: 0, offsetTarget: 0, title: null,
       };
       ctx.levels[lv.id] = L;
@@ -143,19 +150,38 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     ['安排人流', buildPeople],
     ['安排车流', buildTraffic],
   ];
+  const originalIds = new Set(layout.buildings.filter(b => b.kind !== 'tower').map(b => b.id));
+  const legacyLayout = { ...layout, buildings: layout.buildings.filter(b => originalIds.has(b.id)),
+    levels: layout.levels.filter(l => originalIds.has(l.building)) };
+  for (const key of ['elevators', 'stairs', 'entrances', 'ramps']) legacyLayout[key] = layout[key].filter(v => originalIds.has(v.building));
+  const legacyCtx = { ...ctx, layout: legacyLayout };
   for (let i = 0; i < steps.length; i++) {
     onProgress(steps[i][0], i / steps.length);
     await nextFrame();
-    steps[i][1](ctx);
+    const currentCtx = steps[i][1] === buildSite ? ctx : legacyCtx;
+    steps[i][1](currentCtx);
+    // 构建器注册的动态接口（outlineEdges、metroSync等）回传给完整场景。
+    if (currentCtx === legacyCtx) for (const key of ['outlineEdges', 'metroSync', 'bridgeGroup', 'paths', 'ferris', 'carGeo', 'carMat']) if (legacyCtx[key]) ctx[key] = legacyCtx[key];
   }
+  onProgress('建造云澜汇酒店、公寓与住宅', 0.96);
+  await nextFrame();
+  buildHospitality(ctx);
+  const towerIds = new Set(layout.buildings.filter(b => b.kind === 'tower').map(b => b.id));
+  buildParking({ ...ctx, layout: { ...layout,
+    buildings: layout.buildings.filter(b => towerIds.has(b.id)),
+    levels: layout.levels.filter(l => towerIds.has(l.building)),
+    ramps: layout.ramps.filter(r => towerIds.has(r.building)),
+    elevators: layout.elevators.filter(e => towerIds.has(e.building)),
+  } });
+  buildTowerElevators(ctx);
   onProgress('整理场景', 0.98);
   await nextFrame();
   for (const L of Object.values(ctx.levels)) {
     L.batch.flush(L.base);
     L.shellBatch.flush(L.shell);
     L.facadeBatch.flush(L.facade);
-    L.signs.flush(L.base, ctx.atlas[L.lv.id].material);
-    L.facadeSigns.flush(L.facade, ctx.atlas[L.lv.id].material);
+    if (L.signs) L.signs.flush(L.base, ctx.atlas[L.lv.id].material);
+    if (L.facadeSigns) L.facadeSigns.flush(L.facade, ctx.atlas[L.lv.id].material);
   }
   ctx.site.batch.flush(siteGroup);
   buildPicks(ctx);
@@ -171,6 +197,62 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const listeners = new Set();
   const emit = () => listeners.forEach((fn) => fn(state));
   const highlight = makeHighlight(scene);
+  const residenceCache = new Map();
+  function ensureTowerFloor(id) {
+    const L = ctx.levels[id];
+    if (!L || ctx.bById[L.building]?.kind !== 'tower') return;
+    if (!residenceCache.has(id)) {
+      const result = buildResidenceFloor(ctx, L);
+      L.base.add(result.group);
+      residenceCache.set(id, result);
+    } else {
+      const cached = residenceCache.get(id); residenceCache.delete(id); residenceCache.set(id, cached);
+    }
+    // 最多保留三个访问楼层，进入任意楼层仍可完整加载该层全部房间。
+    for (const [key, result] of residenceCache) {
+      if (residenceCache.size <= 3) break;
+      if (key === id) continue;
+      result.group.removeFromParent(); result.dispose(); residenceCache.delete(key);
+    }
+  }
+  function towerVisibility(B, explore = null) {
+    const selected = state.building === B.b.id;
+    const inside = explore?.building === B.b.id;
+    const focus = selected && state.focus;
+    const wanted = explore ? inside ? explore.level : explore.near === B.b.id ? `${B.b.id}-1F` : null
+      : selected ? focus || `${B.b.id}-1F` : null;
+    if (wanted) ensureTowerFloor(wanted);
+    const selectedLevel = ctx.levels[focus]?.lv;
+    setHospitalityCut(ctx, B.b.id, !explore && selectedLevel && selectedLevel.kind !== 'roof' ? selectedLevel.elev + 0.05 : Infinity);
+    if (B.exterior) B.exterior.visible = true;
+    for (const L of B.levels) {
+      const active = L.lv.id === wanted;
+      const common = (!explore && !focus && (L.lv.short === '1F' || L.lv.kind === 'roof'))
+        || (!!explore && !explore.under && L.lv.kind === 'roof');
+      L.group.visible = active || common;
+      L.base.visible = active || common;
+      L.shell.visible = active; L.facade.visible = active;
+      L.labels.visible = active && state.labels && !explore;
+      L.people.visible = active; L.flows.visible = active && state.flows;
+      L.offset = L.offsetTarget = 0; L.group.position.y = 0;
+    }
+    for (const car of ctx.elevatorCars?.values() || []) if (car.elevator.building === B.b.id) {
+      car.group.visible = !selectedLevel || !!explore || car.group.position.y <= selectedLevel.elev + 0.1;
+    }
+  }
+
+  function connectionVisibility() {
+    const ex = state.explore;
+    const lv = ctx.lvById[ex ? ex.level : state.focus];
+    const under = ex ? ex.under : !!lv && lv.elev < 0;
+    const elevation = lv?.elev ?? camera.position.y - 1.62;
+    if (ctx.hospitality?.connections) ctx.hospitality.connections.visible = !under;
+    for (const record of ctx.hospitality?.underground || []) {
+      const path = record.paths?.[0] || record.path;
+      const y = path?.points?.[0]?.[1];
+      record.group.visible = !!under && Math.abs(y - elevation) < 0.6;
+    }
+  }
 
   /**
    * 第一人称漫游：人所在的楼完整显示（不剖切），在地面以上时车库层看不到、不画；
@@ -179,6 +261,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   function applyExploreVisibility() {
     const ex = state.explore;
     for (const B of Object.values(ctx.buildings)) {
+      if (B.b.kind === 'tower') { towerVisibility(B, ex); continue; }
       const metro = B.b.kind === 'metro';
       const inside = B.b.id === ex.building || (metro && ex.metro);
       const peek = B.b.id === ex.near;
@@ -199,6 +282,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     siteGroup.visible = true;
     ctx.site.labels.visible = false;
     if (ctx.site.flows) ctx.site.flows.visible = false;
+    connectionVisibility();
     highlight.show(null, ctx);
     renderer.shadowMap.needsUpdate = true;
   }
@@ -209,6 +293,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     // 聚焦某期与站厅同高的地下层（一期 B1M、二期 B1、三期 B1）时，一并显示相连的地铁站厅与通道
     const metroLink = !!focusLv0 && focusLv0.elev < 0 && ctx.bById[focusLv0.building].kind !== 'metro' && Math.abs(focusLv0.elev + 4.5) < 0.5;
     for (const B of Object.values(ctx.buildings)) {
+      if (B.b.kind === 'tower') { towerVisibility(B); continue; }
       const sel = state.building === B.b.id;
       const fi = sel && state.focus ? B.levels.findIndex((L) => L.lv.id === state.focus) : B.levels.length;
       for (const L of B.levels) {
@@ -247,6 +332,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     siteGroup.visible = !state.exploded && (!focusLv || focusLv.elev >= 0) && ctx.bById[state.building]?.kind !== 'metro';
     ctx.site.labels.visible = state.labels && !state.touring && !state.focus && !state.exploded;
     if (ctx.site.flows) ctx.site.flows.visible = state.flows && !state.focus && !state.exploded;
+    connectionVisibility();
     const sel = state.selected && findUnit(state.selected);
     highlight.show(sel && ctx.levels[sel.level].group.visible ? sel : null, ctx);
     renderer.shadowMap.needsUpdate = true;
@@ -272,6 +358,11 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const bCenter = (b, y = 8) => V(b.center[0], y, b.center[1]);
   function buildingView(bid) {
     const b = ctx.bById[bid];
+    if (b.kind === 'tower') {
+      const height = Math.max(...ctx.buildings[bid].levels.map(L => L.lv.elev + L.lv.height));
+      const c = bCenter(b, height * 0.42);
+      return [c.clone().add(V(0.7, 0.38, 1).normalize().multiplyScalar(Math.max(b.radius * 2.8, height * 1.8))), c, Math.max(height, b.radius)];
+    }
     const c = bCenter(b, b.kind === 'metro' ? -6 : 10);
     return [c.clone().add(V(0.5, 0.66, 0.62).normalize().multiplyScalar(b.radius * 2.25)), c, b.radius * 1.25];
   }
@@ -294,6 +385,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
+    ensureTowerFloor,
+    get residenceCache() { return [...residenceCache.keys()]; },
     get flying() { return !!flight; },
     cancelFlight() { flight = null; },
     fitFov() { fitFov(); },
@@ -325,6 +418,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       emit();
     },
     setExploded(on) {
+      if (ctx.bById[state.building]?.kind === 'tower') return;
       if (state.touring) app.stopTour();
       if (on && !state.building) state.building = layout.buildings[0].id;
       state.exploded = on;
@@ -510,6 +604,7 @@ function releaseGeometryAfterUpload(scene) {
     const g = o.geometry;
     if (!g || seen.has(g) || !(o.isMesh || o.isLine || o.isPoints)) return;
     seen.add(g);
+    g.userData.bufferBytes = Object.values(g.attributes).reduce((n, a) => n + (a.array?.byteLength || 0), g.index?.array?.byteLength || 0);
     // 视锥剔除、透明排序要用的包围体先算好（之后数组就没了，渲染器不能再临时去算）
     if (!g.boundingSphere) g.computeBoundingSphere();
     if (!g.boundingBox) g.computeBoundingBox();

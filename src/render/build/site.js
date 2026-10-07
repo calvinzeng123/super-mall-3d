@@ -477,6 +477,7 @@ function context(ctx, G) {
   const geo = new THREE.BoxGeometry(1, 1, 1);
   for (const [x, z] of spots) {
     const w = 26 + rand() * 34, d = 24 + rand() * 30, h = 24 + rand() * rand() * 120;
+    if (ctx.layout.buildings.some(b => b.kind === 'tower' && (pointInPoly([x, z], b.outline) || distToPolyEdge([x, z], b.outline) < Math.max(w, d) / 2 + 22))) continue;
     const mesh = new THREE.Mesh(geo, mats[Math.floor(rand() * mats.length)]);
     mesh.scale.set(w, h, d);
     mesh.position.set(x, h / 2 - 0.3, z);

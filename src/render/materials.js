@@ -1,6 +1,7 @@
 // 共享材质库。室内材质在夜间按自身颜色自发光（模拟室内照明），室外材质不发光。
 import * as THREE from 'three';
 import { floorTexture, stepTexture, chevronTexture } from './textures.js';
+import { FLOOR_SURFACES, pbrOptions, metricFloor } from './pbr.js';
 
 /** 让 emissive 乘以顶点色：夜间每个表面按自身颜色"亮起来" */
 function patchVertexEmissive(mat) {
@@ -17,7 +18,8 @@ function patchVertexEmissive(mat) {
 const WARM = new THREE.Color(1.0, 0.9, 0.76);
 
 export class MaterialLib {
-  constructor() {
+  constructor(surfaces = {}) {
+    this.surfaces = surfaces;
     this.night = 0;
     this.nightHooks = [];
     const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -41,6 +43,15 @@ export class MaterialLib {
       water: std({ color: 0x356f8f, roughness: 0.04, metalness: 0.65, transparent: true, opacity: 0.9, envMapIntensity: 2.2 }),
       mirror: std({ color: 0x8fb4c8, roughness: 0.02, metalness: 0.95, envMapIntensity: 2.4 }),
     };
+    for (const [key, id, strength] of [
+      ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22],
+      ['concrete', 'concrete_pavement_02', 0.3], ['brick', 'brick_wall_09', 0.55],
+    ]) {
+      const asset = surfaces[id];
+      this.base[key] = interior({ roughness: key === 'stone' ? 0.48 : 0.86,
+        ...(asset ? pbrOptions(asset, strength) : {}) }, 0.14);
+      this.base[key].name = `CC0 ${key}`;
+    }
     // 灯具类：白天灰白，夜晚明亮（配合泛光）
     const glow = this.base.glow;
     this.onNight((t) => glow.color.setScalar(0.85 + t * 0.9));
@@ -67,10 +78,23 @@ export class MaterialLib {
   /** 楼层地面材质（夜间按贴图自发光） */
   floor(kind, roughness = 0.5) {
     if (this.floors[kind]) return this.floors[kind];
+    const def = FLOOR_SURFACES[kind];
+    const asset = def && this.surfaces[def.id];
+    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'rubber', 'cobble'].includes(kind);
+    if (asset) {
+      const m = metricFloor(new THREE.MeshStandardMaterial({
+        ...pbrOptions(asset, kind === 'grass' ? 0.7 : 0.32), color: def.tint || '#ffffff',
+        roughness: Math.min(1, roughness + 0.2), metalness: 0,
+        emissiveMap: asset.maps.color, emissive: 0x000000,
+      }), asset);
+      m.name = `${kind} · ${asset.id} · CC0`;
+      this.onNight((t) => m.emissive.copy(WARM).multiplyScalar(outdoor ? t * 0.055 : t * 0.32));
+      this.floors[kind] = m;
+      return m;
+    }
     const { texture, meters } = floorTexture(kind);
     texture.repeat.set(1 / meters, 1 / meters);
     const m = new THREE.MeshStandardMaterial({ map: texture, roughness, metalness: 0, emissiveMap: texture, emissive: 0x000000 });
-    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'rubber', 'cobble'].includes(kind);
     this.onNight((t) => m.emissive.copy(WARM).multiplyScalar(outdoor ? t * 0.06 : t * 0.36));
     this.floors[kind] = m;
     return m;

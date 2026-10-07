@@ -14,9 +14,9 @@ const GAL = 2.5;
 const BAY = 4;
 const STEEL = '#30353a';
 const SKINS = {
-  brick: { wall: '#9a4e31', dark: '#74391f', trim: '#ece4d6', frame: '#23272b', key: 'ext' },
-  timber: { wall: '#b8845a', dark: '#7d5434', trim: '#3a2f27', frame: '#2a2622', key: 'ext', slats: '#9c6a40' },
-  stone: { wall: '#d6cbb7', dark: '#b4a88f', trim: '#857a69', frame: '#3f454b', key: 'ext' },
+  brick: { wall: '#fff4e8', dark: '#d0b49c', trim: '#ece4d6', frame: '#23272b', key: 'brick' },
+  timber: { wall: '#f4e9d9', dark: '#c9ad90', trim: '#3a2f27', frame: '#2a2622', key: 'wood', slats: '#efdbc3' },
+  stone: { wall: '#f0e8d9', dark: '#c9beaa', trim: '#857a69', frame: '#3f454b', key: 'stone' },
   glass: { wall: '#6b7a84', dark: '#4b5760', trim: '#d5dbdf', frame: '#283036', key: 'extSatin', curtain: true },
 };
 const CAFE = new Set(['cafe', 'tea', 'restaurant', 'snack']);
@@ -113,8 +113,18 @@ function storey(B, S, atlas, lv, k, skin, sides, idx, top) {
     for (const o of opens) for (const t of o.t) if (t > 0.3 && t < sd.len - 0.3) cuts.add(t.toFixed(2));
     for (const t of cuts) putSide(B, skin.key, sd, +t - 0.25, +t + 0.25, y0, top, 0.05, 0.45, skin.dark);
     // 楼板封边（本层顶）与勒脚
-    putSide(B, 'ext', sd, -0.05, sd.len + 0.05, top, top + 0.42, 0.04, 0.36, skin.trim);
-    if (ground) putSide(B, 'ext', sd, 0, sd.len, y0, y0 + 0.32, 0.06, 0.32, '#4d4a46');
+    putSide(B, 'stone', sd, -0.05, sd.len + 0.05, top, top + 0.32, 0.04, 0.36, skin.trim);
+    putSide(B, 'extMetal', sd, -0.08, sd.len + 0.08, top + 0.32, top + 0.39, 0.12, 0.52, skin.frame);
+    if (ground) {
+      const gaps = opens.map((o) => o.door ? o.t : [(o.t[0] + o.t[1] - streetDoor(o.t[1] - o.t[0])) / 2, (o.t[0] + o.t[1] + streetDoor(o.t[1] - o.t[0])) / 2]);
+      for (const [a, c] of gaps.reduce((ivs, g) => subtractInterval(ivs, g), [[0, sd.len]])) putSide(B, 'stone', sd, a, c, y0, y0 + 0.32, 0.06, 0.32, '#8c867b');
+    }
+    // 雨水立管紧贴实心转角，不占门洞或外挑连廊净宽。
+    if (sd.id === 'N' || sd.id === 'S') {
+      const [u, v] = sd.p(0.34);
+      B.get('extMetal').cyl(u + sd.n[0] * 0.28, y0 + 0.08, v + sd.n[1] * 0.28, 0.065, top - y0 + 0.25, skin.frame, 8);
+      for (const yy of [y0 + 0.65, top - 0.6]) putSide(B, 'extMetal', sd, 0.21, 0.47, yy, yy + 0.07, 0.22, 0.22, skin.frame);
+    }
   }
   // 转角壁柱
   for (const [u, v] of [[-k.h, -k.w], [k.h, -k.w], [k.h, k.w], [-k.h, k.w]]) B.get(skin.key).box(u, (y0 + top) / 2, v, 0.62, top - y0, 0.62, skin.dark);
@@ -126,7 +136,7 @@ function wall(B, sd, a, c, y0, top, skin, ground) {
   if (ground || len < 2.2) {
     putSide(B, skin.key, sd, a, c, y0, top, -0.15, 0.3, skin.wall);
     if (!ground) return;
-    putSide(B, 'ext', sd, a, c, y0 + 3.55, y0 + 3.75, 0.03, 0.34, skin.trim);
+    putSide(B, 'stone', sd, a, c, y0 + 3.55, y0 + 3.75, 0.03, 0.34, skin.trim);
     if (skin.slats) slats(B, sd, a, c, y0 + 0.4, top, []);
     return;
   }
@@ -148,12 +158,19 @@ function wall(B, sd, a, c, y0, top, skin, ground) {
     putSide(B, skin.key, sd, x, m - ww / 2, sill, head, -0.15, 0.3, skin.wall);
     x = m + ww / 2;
     putSide(B, 'glassTint', sd, m - ww / 2, m + ww / 2, sill, head, -0.22, 0.05, 0xffffff);
-    putSide(B, 'extMetal', sd, m - ww / 2, m + ww / 2, sill - 0.06, sill + 0.02, 0.06, 0.34, skin.trim);
+    // 外挑石窗台 + 滴水边，内凹玻璃后有可读的窗洞深度。
+    putSide(B, 'stone', sd, m - ww / 2 - 0.1, m + ww / 2 + 0.1, sill - 0.13, sill + 0.02, 0.01, 0.52, '#ded7ca');
+    putSide(B, 'extMetal', sd, m - ww / 2 - 0.06, m + ww / 2 + 0.06, sill - 0.14, sill - 0.105, 0.24, 0.035, skin.frame);
     putSide(B, 'extMetal', sd, m - ww / 2 - 0.06, m - ww / 2 + 0.02, sill, head, -0.12, 0.2, skin.frame);
     putSide(B, 'extMetal', sd, m + ww / 2 - 0.02, m + ww / 2 + 0.06, sill, head, -0.12, 0.2, skin.frame);
     putSide(B, 'extMetal', sd, m - ww / 2, m + ww / 2, head - 0.02, head + 0.06, -0.12, 0.2, skin.frame);
     putSide(B, 'extMetal', sd, m - 0.03, m + 0.03, sill, head, -0.18, 0.06, skin.frame);
-    if (skin === SKINS.brick) putSide(B, 'ext', sd, m - ww / 2 - 0.12, m + ww / 2 + 0.12, head + 0.02, head + 0.3, 0.02, 0.32, skin.dark);
+    putSide(B, 'extMetal', sd, m - ww / 2, m + ww / 2, head - 0.55, head - 0.51, -0.18, 0.08, skin.frame);
+    if (skin === SKINS.brick) {
+      putSide(B, 'brick', sd, m - ww / 2 - 0.12, m + ww / 2 + 0.12, head + 0.02, head + 0.3, 0.02, 0.32, skin.dark);
+      // 砖拱过梁端部石托，避免只有一条平贴的色带。
+      for (const t of [m - ww / 2, m + ww / 2]) putSide(B, 'stone', sd, t - 0.1, t + 0.1, head - 0.06, head + 0.34, 0.04, 0.4, '#e8dfce');
+    }
   }
   putSide(B, skin.key, sd, x, c, sill, head, -0.15, 0.3, skin.wall);
   if (skin.slats) slats(B, sd, a, c, y0, top, wins.map((m) => [m - ww / 2 - 0.1, m + ww / 2 + 0.1, sill, head]));
@@ -164,7 +181,7 @@ function slats(B, sd, a, c, y0, top, holes) {
   for (let t = a + 0.25; t < c - 0.1; t += 0.5) {
     const hole = holes.find(([p, q]) => t > p && t < q);
     const spans = hole ? [[y0, hole[2]], [hole[3], top]] : [[y0, top]];
-    for (const [ya, yb] of spans) putSide(B, 'ext', sd, t - 0.04, t + 0.04, ya, yb, 0.08, 0.12, SKINS.timber.slats);
+    for (const [ya, yb] of spans) putSide(B, 'wood', sd, t - 0.04, t + 0.04, ya, yb, 0.08, 0.12, SKINS.timber.slats);
   }
 }
 
@@ -199,17 +216,23 @@ function shopfront(B, S, atlas, sd, [a, c], y0, top, u, skin, ground) {
     if (Math.abs(t - mid) < door / 2 - 0.05) continue;
     putSide(B, 'extMetal', sd, t - 0.04, t + 0.04, kerb, glassTop, -0.08, 0.12, skin.frame);
   }
-  // 玻璃门（内凹）+ 门框
-  putSide(B, 'glass', sd, mid - door / 2, mid + door / 2, y0, y0 + 2.5, -0.5, 0.04, 0xffffff);
+  // 开门营业：门扇内收在门洞两侧，中央通行宽度与 streetDoor 完全一致。
+  for (const s of [-1, 1]) {
+    const t = mid + s * (door / 2 + 0.065);
+    putSide(B, 'extMetal', sd, t - 0.06, t + 0.06, y0, y0 + 2.6, -0.1, 0.25, skin.frame);
+    putSide(B, 'glass', sd, t - 0.025, t + 0.025, y0 + 0.04, y0 + 2.5, -0.58, 0.88, 0xffffff);
+    putSide(B, 'extMetal', sd, t - s * 0.085 - 0.012, t - s * 0.085 + 0.012, y0 + 0.85, y0 + 1.35, -0.8, 0.035, '#c9b37a');
+  }
   putSide(B, 'extMetal', sd, mid - door / 2 - 0.05, mid + door / 2 + 0.05, y0 + 2.5, y0 + 2.6, -0.45, 0.14, skin.frame);
-  putSide(B, 'extMetal', sd, mid - 0.03, mid + 0.03, y0, y0 + 2.5, -0.45, 0.08, '#c9b37a');
   putSide(B, 'glass', sd, mid - door / 2, mid + door / 2, y0 + 2.6, glassTop, -0.1, 0.04, 0xffffff);
-  putSide(B, 'ext', sd, a, c, y0, kerb, -0.05, 0.3, '#3f3c39');
+  for (const [p, q] of [[a, mid - door / 2], [mid + door / 2, c]]) putSide(B, 'stone', sd, p, q, y0, kerb, -0.05, 0.3, '#8c867b');
   putSide(B, 'extMetal', sd, a + 0.2, c - 0.2, glassTop, glassTop + 0.08, -0.06, 0.16, skin.frame);
   // 门头：品牌色底板 + 招牌
   const fy0 = glassTop + 0.08, fy1 = Math.min(top, fy0 + (ground ? 0.85 : 0.62));
   const fascia = shade(u.brand.bg, u.brand.bg.toLowerCase() === '#ffffff' ? -0.06 : -0.1);
   putSide(B, 'extSatin', sd, a + 0.2, c - 0.2, fy0, fy1, 0.06, 0.2, fascia);
+  putSide(B, 'extMetal', sd, a + 0.16, c - 0.16, fy1, fy1 + 0.045, 0.09, 0.36, skin.frame);
+  putSide(B, 'glow', sd, a + 0.3, c - 0.3, glassTop - 0.045, glassTop - 0.012, 0.06, 0.12, '#ffdfac');
   if (top > fy1 + 0.02) putSide(B, skin.key, sd, a, c, fy1, top, -0.15, 0.3, skin.wall);
   let sw = Math.min(len * 0.7, ground ? 6 : 5);
   let sh = sw / 4;
@@ -222,6 +245,14 @@ function shopfront(B, S, atlas, sd, [a, c], y0, top, u, skin, ground) {
     const [au, av] = sd.p(mid);
     B.get('ext').shape('box', new THREE.Vector3(au, glassTop - 0.25, av - 0.62), q, new THREE.Vector3(len - 0.8, 0.05, 1.4), shade(u.brand.bg, 0.05));
     B.get('ext').box(au, glassTop - 0.55, av - 1.26, len - 0.8, 0.22, 0.03, shade(u.brand.bg, -0.15));
+    // 支撑悬臂、雨篷前沿和两只檐下射灯都有实体厚度。
+    for (const t of [a + 0.65, c - 0.65]) {
+      const [bu, bv] = sd.p(t);
+      B.get('extMetal').bar({ x: bu, y: glassTop - 0.92, z: bv - 0.05 }, { x: bu, y: glassTop - 0.48, z: bv - 1.2 }, 0.035, skin.frame);
+      B.get('extMetal').box(bu, glassTop - 0.36, bv - 0.45, 0.15, 0.1, 0.18, skin.frame);
+      B.get('glow').box(bu, glassTop - 0.42, bv - 0.45, 0.09, 0.022, 0.1, '#ffe7bd');
+    }
+    B.get('extMetal').box(au, glassTop - 0.51, av - 1.27, len - 0.75, 0.035, 0.035, skin.frame);
     const [bu, bv] = sd.p(c - 0.6);
     B.get('extMetal').box(bu, glassTop + 0.55, bv - 0.55, 0.05, 0.05, 1.1, STEEL);
     S.place(bu + 0.03, glassTop + 0.25, bv - 0.85, 1.4, 0.35, 'E', cell);
@@ -261,6 +292,12 @@ function gallery(B, lv, k, skin) {
   }
   // 服务区外缘封边
   for (const [p, q] of [[[h + GAL, bay0], [h + GAL + BAY, bay0]], [[h + GAL + BAY, bay0], [h + GAL + BAY, w + GAL]], [[h + GAL + BAY, w + GAL], [h + GAL, w + GAL]]]) band(B, p, q, y0 - 0.4, y0, skin.trim);
+  // 外廊底是完整木饰面吊顶，灯具附着在楼板下方；灯距跟随6m结构柱网。
+  B.get('wood').box(GAL / 2, y0 - 0.43, w + GAL / 2, k.L + GAL - 0.2, 0.045, GAL - 0.18, '#e7d7bf');
+  for (let u = -h + 2; u < h + GAL - 0.5; u += 4.5) {
+    B.get('extMetal').cyl(u, y0 - 0.52, w + GAL / 2, 0.13, 0.06, STEEL, 8);
+    B.get('glow').cyl(u, y0 - 0.54, w + GAL / 2, 0.095, 0.025, '#ffe7c0', 8);
+  }
 }
 
 /** 局部线段上的玻璃栏板 + 钢扶手 + 立柱 */
@@ -328,12 +365,14 @@ function wellGuard(B, y0, k) {
 function roof(B, k, skin) {
   const { h, w } = k;
   const y = k.top;
-  B.get('ext').box(0, y - 0.2, 0, k.L + 0.5, 0.4, k.W + 0.5, skin.trim);
+  B.get('concrete').box(0, y - 0.2, 0, k.L + 0.5, 0.4, k.W + 0.5, '#d4d0c7');
   B.get(skin.key).box(0, y + 0.45, -w + 0.12, k.L + 0.5, 0.9, 0.25, skin.dark);
   B.get(skin.key).box(0, y + 0.45, w - 0.12, k.L + 0.5, 0.9, 0.25, skin.dark);
   B.get(skin.key).box(-h + 0.12, y + 0.45, 0, 0.25, 0.9, k.W, skin.dark);
   B.get(skin.key).box(h - 0.12, y + 0.45, 0, 0.25, 0.9, k.W, skin.dark);
-  B.get('ext').box(0, y + 0.02, 0, k.L - 0.4, 0.04, k.W - 0.4, '#8f9396');
+  B.get('concrete').box(0, y + 0.025, 0, k.L - 0.4, 0.05, k.W - 0.4, '#b8b9b5');
+  for (const z of [-w + 0.12, w - 0.12]) B.get('extMetal').box(0, y + 0.93, z, k.L + 0.6, 0.06, 0.4, skin.frame);
+  for (const x of [-h + 0.12, h - 0.12]) B.get('extMetal').box(x, y + 0.93, 0, 0.4, 0.06, k.W + 0.1, skin.frame);
   // 连廊雨棚（侧、端）
   B.get('extMetal').box(GAL / 2, y - 0.15, w + GAL / 2, k.L + GAL, 0.12, GAL + 0.3, STEEL);
   B.get('extMetal').box(h + GAL / 2, y - 0.15, 0, GAL, 0.12, k.W, STEEL);
@@ -341,12 +380,19 @@ function roof(B, k, skin) {
   const rand = rng(k.n * 31);
   for (let i = 0; i < 3; i++) {
     const u = -h + 3 + rand() * (k.L - 8), v = -w + 3 + rand() * (k.W - 8);
-    B.get('ext').box(u, y + 0.75, v, 2.2, 1.5, 1.4, '#c9cdd0');
-    B.get('extMetal').cyl(u, y + 1.5, v, 0.5, 0.06, '#5b636a', 12);
+    B.get('concrete').box(u, y + 0.1, v, 2.45, 0.2, 1.65, '#c1bcb1');
+    B.get('ext').box(u, y + 0.88, v, 2.2, 1.35, 1.4, '#c9cdd0');
+    for (const x of [u - 0.57, u + 0.57]) {
+      B.get('extMetal').cyl(x, y + 1.565, v, 0.42, 0.045, '#333d43', 12);
+      B.get('extMetal').cyl(x, y + 1.61, v, 0.105, 0.05, '#aab1b4', 8);
+      for (const a of [0, Math.PI / 2]) B.get('extMetal').box(x, y + 1.62, v, 0.7, 0.016, 0.025, '#929a9e', a);
+    }
+    for (let yy = y + 0.42; yy < y + 1.48; yy += 0.2) B.get('extMetal').box(u, yy, v - 0.715, 1.9, 0.045, 0.035, '#5d676a');
   }
   const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.35);
   for (let u = -h + 2; u < h - 3; u += 2.4) {
     B.get('extMetal').shape('box', new THREE.Vector3(u + 1, y + 0.75, w - 4), q, new THREE.Vector3(2.2, 0.06, 2.6), '#1f3550');
+    for (const x of [u + 0.15, u + 1.85]) B.get('extMetal').bar({ x, y: y + 0.1, z: w - 4.95 }, { x, y: y + 1.17, z: w - 2.85 }, 0.065, '#707b82');
   }
 }
 
@@ -356,6 +402,9 @@ function terrace(ctx, L, lv, k, skin) {
   const { h, w } = k;
   const y0 = lv.elev;
   const D = k.ldeck;
+  // 主楼范围铺木平台，楼梯服务区保持原铺装；不是覆盖整个L形楼板的悬空贴片。
+  B.get('wood').box(0, y0 + 0.025, 0, k.L - 0.28, 0.05, k.W - 0.28, '#eee3d1');
+  for (const z of [-w + 0.12, w - 0.12]) B.get('extMetal').box(0, y0 + 0.055, z, k.L - 0.24, 0.03, 0.045, '#655b4b');
   for (let i = 0; i < D.length; i++) {
     const p = D[i], q = D[(i + 1) % D.length];
     rail(B, p, q, y0);
@@ -373,7 +422,7 @@ function terrace(ctx, L, lv, k, skin) {
       umbrella(B, u, y0, v, cols[Math.floor(rand() * cols.length)], 1.5);
     }
   }
-  for (let u = -h + 1; u < h; u += 6) planter(B, u, -w + 0.4, u + 2.2, -w + 1.2, y0, k.n * 7 + u, true, 'ext');
+  for (let u = -h + 1; u < h - 2.2; u += 6) planter(B, u, -w + 0.4, u + 2.2, -w + 1.2, y0, k.n * 7 + u, true, 'stone');
   // 串灯：四角灯杆，两两相连成环
   const posts = [[-h + 0.6, -w + 0.6], [h - 0.6, -w + 0.6], [h - 0.6, w + GAL - 0.6], [-h + 0.6, w + GAL - 0.6]];
   for (const [u, v] of posts) B.get('extMetal').cyl(u, y0, v, 0.06, 3.6, STEEL, 8);
@@ -556,7 +605,7 @@ function stage(ctx, L, f, y) {
   // 局部：u 朝观众（舞台正面），v 沿台宽
   B.frame(F, () => {
     B.get('ext').box(0, y + 0.45, 0, f.d, 0.9, f.w, '#3a3f45');
-    B.get('ext').box(0, y + 0.91, 0, f.d - 0.1, 0.02, f.w - 0.1, '#7a5c45');
+    B.get('wood').box(0, y + 0.91, 0, f.d - 0.1, 0.02, f.w - 0.1, '#e4d4bd');
     for (let i = 0; i < 3; i++) B.get('ext').box(f.d / 2 + 0.3 + i * 0.35, y + 0.15 + i * 0.3 - 0.3, 0, 0.35, 0.3 + i * 0.3, 3, '#5d6267');
     for (const v of [-f.w / 2, f.w / 2]) {
       B.get('extMetal').box(-f.d / 2 + 0.3, y + 3.4, v, 0.4, 6.8, 0.4, '#1d2023');

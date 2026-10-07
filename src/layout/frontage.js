@@ -28,6 +28,7 @@ const GLASS = new Set(['glass', 'cinema', 'market']);
  * 档口、老街、餐吧、酒吧亭整段敞开；冰场四周封闭。
  */
 export function doorGaps(style, len) {
+  if (style === 'residence') return [[(len - 1.25) / 2, (len + 1.25) / 2]];
   if (style === 'rink') return [];
   if (GLASS.has(style)) {
     const { width, at } = glassDoors(style, len);

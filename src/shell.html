@@ -1,7 +1,5 @@
 <title>云澜汇园区 3D</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f6f86'/%3E%3Cpath d='M16 44V20h12v24m8 0V12h12v32' fill='none' stroke='white' stroke-width='5'/%3E%3C/svg%3E">
 <style>
 /* 版式概念：全屏 3D 舞台 + 商场导视牌式的浮动面板（左侧楼层牌、右侧店铺目录、右上工具条） */
 :root {
@@ -52,7 +50,7 @@ button { font: inherit; color: inherit; }
 
 /* 分期切换 + 楼层牌 */
 .floors { position: absolute; left: 16px; top: 50%; transform: translateY(-46%); padding: 6px; display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 200px); }
-.phases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; }
+.phases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; max-height: 236px; overflow-y: auto; flex-shrink: 0; }
 .phases .phase:first-child:nth-last-child(odd) { grid-column: span 2; }
 .phase { all: unset; box-sizing: border-box; display: grid; gap: 1px; padding: 6px 8px; border-radius: 7px; cursor: pointer; background: var(--chip); }
 .phase b { font: 600 14px/1.1 var(--font-ui); }
@@ -160,6 +158,8 @@ body.exploring.ex-places .directory { display: flex !important; z-index: 6; }
 .ex-prompt { position: absolute; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; max-width: min(92vw, 560px); pointer-events: auto; cursor: pointer; font-size: 13px; }
 .ex-opt { all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; background: var(--chip); cursor: pointer; white-space: nowrap; }
 .ex-opt:hover { background: var(--accent); color: var(--accent-ink); }
+.ex-prompt { max-height: 44vh; overflow-y: auto; }
+.tool:disabled { opacity: 0.4; cursor: default; }
 .ex-key { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; margin-right: 6px; border-radius: 4px; background: var(--ink); color: var(--panel-solid); font: 700 11px/1 var(--font-sign); }
 .ex-opt .ex-key { margin-right: 0; }
 .ex-help { position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 7px 14px; font-size: 12px; color: var(--ink-2); white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
@@ -211,8 +211,8 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 </style>
 <script type="importmap">
 { "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  "three": "./node_modules/three/build/three.module.js",
+  "three/addons/": "./node_modules/three/examples/jsm/"
 } }
 </script>
 <div id="app">
@@ -311,7 +311,7 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
     f.hidden = false;
   };
   setTimeout(function () {
-    if (!window.__mallBooted) window.__mallFail('3D 引擎没有加载出来', '请确认网络可以访问 cdn.jsdelivr.net，然后刷新页面。');
+    if (!window.__mallBooted) window.__mallFail('3D 引擎没有加载出来', '请用支持 WebGL 的浏览器打开完整的 mall.html 文件，或通过项目本地服务器访问开发版。');
   }, 25000);
 </script>
 <!--APP-->

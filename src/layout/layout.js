@@ -5,6 +5,7 @@ import { buildMall } from './mall.js';
 import { buildP3 } from './p3.js';
 import { buildBridges } from './bridges.js';
 import { buildMetro } from './metro.js';
+import { buildHospitality } from './hospitality.js';
 import { P1 } from './p1.js';
 import { P2 } from './p2.js';
 import { CATEGORIES } from './constants.js';
@@ -15,6 +16,8 @@ export function buildLayout() {
   const parts = [buildMall(P1, site, picker), buildMall(P2, site, picker), buildP3(site, picker)];
   addPark(site);
   parts.push(buildMetro(parts, site, picker));
+  const hospitality = buildHospitality(parts, site);
+  parts.push(...hospitality.parts);
   const all = (k) => parts.flatMap((p) => p[k]);
   const buildings = parts.map((p) => p.building);
   return {
@@ -27,6 +30,7 @@ export function buildLayout() {
     ramps: all('ramps'),
     site,
     bridges: buildBridges(buildings),
-    categories: CATEGORIES,
+    categories: { ...CATEGORIES, hotel: { label: '酒店套房', color: '#a27d49' }, apartment: { label: '服务公寓', color: '#537b78' }, residential: { label: '住宅', color: '#7b8470' } },
+    extensions: hospitality.extensions,
   };
 }

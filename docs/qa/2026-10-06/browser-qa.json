@@ -1,0 +1,167 @@
+{
+  "buildings": [
+    "P1",
+    "P2",
+    "P3",
+    "M",
+    "H",
+    "A",
+    "R1",
+    "R2",
+    "R3",
+    "R4"
+  ],
+  "levels": 193,
+  "ordinaryTowerFloors": 160,
+  "units": 760,
+  "parking": [
+    {
+      "id": "H-B2",
+      "stalls": 45,
+      "meshes": 10
+    },
+    {
+      "id": "A-B2",
+      "stalls": 45,
+      "meshes": 9
+    },
+    {
+      "id": "R1-B1",
+      "stalls": 10,
+      "meshes": 10
+    },
+    {
+      "id": "R2-B1",
+      "stalls": 14,
+      "meshes": 9
+    },
+    {
+      "id": "R3-B1",
+      "stalls": 14,
+      "meshes": 9
+    },
+    {
+      "id": "R4-B1",
+      "stalls": 14,
+      "meshes": 9
+    }
+  ],
+  "rideChecks": [
+    {
+      "id": "H-L1",
+      "from": "H-1F",
+      "to": "H-20F",
+      "offAxis": false,
+      "samples": [
+        0.426,
+        10.832,
+        29.809,
+        50.17,
+        64.733,
+        67.7
+      ],
+      "arrivalY": 67.7,
+      "frames": 256
+    },
+    {
+      "id": "H-L1",
+      "from": "H-20F",
+      "to": "H-B2",
+      "offAxis": false,
+      "samples": [
+        67.32,
+        57.847,
+        39.887,
+        19.124,
+        1.244,
+        -8.066,
+        -8.4
+      ],
+      "arrivalY": -8.4,
+      "frames": 280
+    },
+    {
+      "id": "R1-L1",
+      "from": "R1-1F",
+      "to": "R1-30F",
+      "offAxis": false,
+      "samples": [
+        0.32,
+        8.494,
+        24.727,
+        45.025,
+        65.394,
+        81.841,
+        90.372,
+        90.8
+      ],
+      "arrivalY": 90.8,
+      "frames": 322
+    },
+    {
+      "id": "R1-L1",
+      "from": "R1-30F",
+      "to": "R1-B1",
+      "offAxis": false,
+      "samples": [
+        90.494,
+        82.63,
+        66.856,
+        46.822,
+        26.175,
+        8.565,
+        -2.361,
+        -4.2
+      ],
+      "arrivalY": -4.2,
+      "frames": 334
+    },
+    {
+      "id": "H-L1",
+      "from": "H-2F",
+      "to": "H-20F",
+      "offAxis": true,
+      "samples": [
+        6.5,
+        13.214,
+        31.134,
+        51.566,
+        65.718,
+        67.7
+      ],
+      "arrivalY": 67.7,
+      "frames": 250
+    }
+  ],
+  "maxCache": 3,
+  "cache": [
+    "R2-30F",
+    "R3-30F",
+    "R4-30F"
+  ],
+  "geometryMiB": 172.58,
+  "geometryCount": 1204,
+  "renderer": {
+    "calls": 896,
+    "triangles": 2745533,
+    "memory": {
+      "geometries": 686,
+      "textures": 102
+    }
+  },
+  "shots": [
+    "final-campus",
+    "final-hotel-garden",
+    "final-hotel-20f",
+    "final-residential-30f",
+    "final-roof-garden",
+    "final-residential-garage",
+    "final-hotel-garage",
+    "final-lift-midway",
+    "final-lift-arrived",
+    "final-underground-link",
+    "final-street-detail",
+    "final-campus-night"
+  ],
+  "errors": []
+}

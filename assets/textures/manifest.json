@@ -1,0 +1,511 @@
+{
+  "version": 1,
+  "source": "Poly Haven",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://polyhaven.com/license",
+  "licenseLegalCode": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+  "retrievedAt": "2026-10-06",
+  "apiDocumentationUrl": "https://polyhaven.com/our-api",
+  "apiTermsUrl": "https://github.com/Poly-Haven/Public-API/blob/master/ToS.md",
+  "credit": "Textures from Poly Haven (CC0). Downloaded once and self-hosted; no runtime API requests.",
+  "resolution": [
+    1024,
+    1024
+  ],
+  "totalImageBytes": 6014895,
+  "assets": [
+    {
+      "id": "marble_01",
+      "name": "Marble 01",
+      "label": "浅米色石材",
+      "use": "商场公共走道与圆厅地面，细石纹与错缝大板",
+      "meters": [
+        1.5,
+        1.5
+      ],
+      "sourceDimensionsMillimeters": [
+        1500,
+        1500
+      ],
+      "sourceUrl": "https://polyhaven.com/a/marble_01",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "metadataApiUrl": "https://api.polyhaven.com/assets",
+      "filesApiUrl": "https://api.polyhaven.com/files/marble_01",
+      "maps": {
+        "color": {
+          "path": "assets/textures/marble_01/color.jpg",
+          "bytes": 270770,
+          "sha256": "402d3d2f8781e21f2752455416aa913be342a519864b807f32f8c08045966134",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/marble_01/marble_01_diff_1k.jpg",
+          "sourceMd5": "04325ced5018eb8a2e598a4ef69cb176",
+          "sourceBytes": 305029,
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        },
+        "normal": {
+          "path": "assets/textures/marble_01/normal.jpg",
+          "bytes": 120121,
+          "sha256": "8ae668e3badd5d386dbb5be3228a8dc2f7eb4a6704f7847dd0858c6546cc8ecd",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/marble_01/marble_01_nor_gl_1k.jpg",
+          "sourceMd5": "fa073d722cde733c1bd6cc6e8897c8e3",
+          "sourceBytes": 110230,
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 90
+          },
+          "convention": "OpenGL"
+        },
+        "roughness": {
+          "path": "assets/textures/marble_01/roughness.jpg",
+          "bytes": 76297,
+          "sha256": "6edf2daf5b8645341c7f8e047bb1db11605a9f6ff6bcd3a7d56373a23f087857",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/marble_01/marble_01_rough_1k.jpg",
+          "sourceMd5": "59cef1be1b7376c9d0dcc7a64adf7882",
+          "sourceBytes": 91848,
+          "purpose": "roughness",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "concrete_pavement_02",
+      "name": "Concrete Pavement 02",
+      "label": "混凝土铺装",
+      "use": "室外广场、人行道与街区地坪，方板与砂粒",
+      "meters": [
+        1.8,
+        1.8
+      ],
+      "sourceDimensionsMillimeters": [
+        1800.0000715255737,
+        1800.0000715255737
+      ],
+      "sourceUrl": "https://polyhaven.com/a/concrete_pavement_02",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Charlotte Baglioni": "All"
+      },
+      "metadataApiUrl": "https://api.polyhaven.com/assets",
+      "filesApiUrl": "https://api.polyhaven.com/files/concrete_pavement_02",
+      "maps": {
+        "color": {
+          "path": "assets/textures/concrete_pavement_02/color.jpg",
+          "bytes": 501967,
+          "sha256": "3fbaf294fd7e535a49558d266d6275290c6f116571b8bb323c9df9642eed69ba",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_pavement_02/concrete_pavement_02_diff_1k.jpg",
+          "sourceMd5": "bdee8d4deebb78609414453a5fb299e2",
+          "sourceBytes": 1052909,
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        },
+        "normal": {
+          "path": "assets/textures/concrete_pavement_02/normal.jpg",
+          "bytes": 632817,
+          "sha256": "02430189a96f108ae1473ce4a920500c5df74f61cf9e1169fa53505672a28d82",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_pavement_02/concrete_pavement_02_nor_gl_1k.jpg",
+          "sourceMd5": "2c8ea332b4274e8728c5aa0ecf467d26",
+          "sourceBytes": 1212387,
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 90
+          },
+          "convention": "OpenGL"
+        },
+        "roughness": {
+          "path": "assets/textures/concrete_pavement_02/roughness.jpg",
+          "bytes": 242721,
+          "sha256": "6d7ec0b23daa4e80521744cc01fabc6675763c2a218289ce4bbe51776cdf7c31",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_pavement_02/concrete_pavement_02_rough_1k.jpg",
+          "sourceMd5": "13784e8a94bc8c6d4c34e908df7646b3",
+          "sourceBytes": 541803,
+          "purpose": "roughness",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_wood_planks",
+      "name": "Oak Wood Planks",
+      "label": "暖橡木",
+      "use": "店内木地板、座椅木条、露台木平台",
+      "meters": [
+        1.2,
+        1.2
+      ],
+      "sourceDimensionsMillimeters": [
+        1200.0000476837158,
+        1200.0000476837158
+      ],
+      "sourceUrl": "https://polyhaven.com/a/oak_wood_planks",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Dimitrios Savva": "All"
+      },
+      "metadataApiUrl": "https://api.polyhaven.com/assets",
+      "filesApiUrl": "https://api.polyhaven.com/files/oak_wood_planks",
+      "maps": {
+        "color": {
+          "path": "assets/textures/oak_wood_planks/color.jpg",
+          "bytes": 286752,
+          "sha256": "a188de42bf9198bb3c49b560f0c726a3ebddadc315ff0b293c208f632fe270b4",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/oak_wood_planks/oak_wood_planks_diff_1k.jpg",
+          "sourceMd5": "e9e25ac7abcc482f73214fda23e2de25",
+          "sourceBytes": 696814,
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        },
+        "normal": {
+          "path": "assets/textures/oak_wood_planks/normal.jpg",
+          "bytes": 135866,
+          "sha256": "63f52712f3b94bb9d266496da7a578972a0398ed5fa9f6fa5700d93d97d69245",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/oak_wood_planks/oak_wood_planks_nor_gl_1k.jpg",
+          "sourceMd5": "6a71c23551887b77b29623bb871aefbf",
+          "sourceBytes": 392213,
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 90
+          },
+          "convention": "OpenGL"
+        },
+        "roughness": {
+          "path": "assets/textures/oak_wood_planks/roughness.jpg",
+          "bytes": 475429,
+          "sha256": "7fd2de468f186a17e78d65fdeec9da6e870fdd61ca11d9549f4e0d30f43da998",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/oak_wood_planks/oak_wood_planks_rough_1k.jpg",
+          "sourceMd5": "3609ef0a3155ae90b69395431bf8cec1",
+          "sourceBytes": 845590,
+          "purpose": "roughness",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "brick_wall_09",
+      "name": "Brick Wall 09",
+      "label": "红褐砖墙",
+      "use": "三期街区墙身、店铺实墙，按砖缝真实尺度映射",
+      "meters": [
+        2.01,
+        2.01
+      ],
+      "sourceDimensionsMillimeters": [
+        2009.9999904632568,
+        2009.9999904632568
+      ],
+      "sourceUrl": "https://polyhaven.com/a/brick_wall_09",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Rob Tuytel": "Processing",
+        "Matterfield": "Processing"
+      },
+      "metadataApiUrl": "https://api.polyhaven.com/assets",
+      "filesApiUrl": "https://api.polyhaven.com/files/brick_wall_09",
+      "maps": {
+        "color": {
+          "path": "assets/textures/brick_wall_09/color.jpg",
+          "bytes": 336310,
+          "sha256": "4b05ac9c45cb2ea9c68eaccf4221db7821ec6b73349b54becadaa6a77db7c8a8",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brick_wall_09/brick_wall_09_diff_1k.jpg",
+          "sourceMd5": "d08a1a4be611135d174f051189e00156",
+          "sourceBytes": 777371,
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        },
+        "normal": {
+          "path": "assets/textures/brick_wall_09/normal.jpg",
+          "bytes": 534605,
+          "sha256": "1848e73816802e95356795d967dd12f146643e8169677846ce1bf6023210f95c",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brick_wall_09/brick_wall_09_nor_gl_1k.jpg",
+          "sourceMd5": "dabdbe435f6880f41dc7bbdc3f02840a",
+          "sourceBytes": 1039733,
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 90
+          },
+          "convention": "OpenGL"
+        },
+        "roughness": {
+          "path": "assets/textures/brick_wall_09/roughness.jpg",
+          "bytes": 164362,
+          "sha256": "0ecbbc52c5bfea9cc865f0def42deca02bb7bb6231d358a3a68cb8aa12b67084",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brick_wall_09/brick_wall_09_rough_1k.jpg",
+          "sourceMd5": "fc3b03d624d30064e5f78c82b5b6c0cc",
+          "sourceBytes": 433465,
+          "purpose": "roughness",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "clean_asphalt",
+      "name": "Clean Asphalt",
+      "label": "细粒沥青",
+      "use": "园区道路与停车坡道",
+      "meters": [
+        2.1,
+        2.1
+      ],
+      "sourceDimensionsMillimeters": [
+        2099.9999046325684,
+        2099.9999046325684
+      ],
+      "sourceUrl": "https://polyhaven.com/a/clean_asphalt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Dimitrios Savva": "All"
+      },
+      "metadataApiUrl": "https://api.polyhaven.com/assets",
+      "filesApiUrl": "https://api.polyhaven.com/files/clean_asphalt",
+      "maps": {
+        "color": {
+          "path": "assets/textures/clean_asphalt/color.jpg",
+          "bytes": 339275,
+          "sha256": "216d473cd81362a7b975ee538e49f85fe0d13b222dd659cdad22e1a761466819",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/clean_asphalt/clean_asphalt_diff_1k.jpg",
+          "sourceMd5": "7edccb95cbf72e63889baade8455f9e5",
+          "sourceBytes": 697630,
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        },
+        "normal": {
+          "path": "assets/textures/clean_asphalt/normal.jpg",
+          "bytes": 364957,
+          "sha256": "744aa64e65425ae2e953f98e461c7bc683f29ce9318e43d390539c3dd6aec21c",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/clean_asphalt/clean_asphalt_nor_gl_1k.jpg",
+          "sourceMd5": "24dadd366637a722b59c19a672cbbcf6",
+          "sourceBytes": 776360,
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 90
+          },
+          "convention": "OpenGL"
+        },
+        "roughness": {
+          "path": "assets/textures/clean_asphalt/roughness.jpg",
+          "bytes": 334508,
+          "sha256": "c9216e94586cb9fc8b179c035dece1cbe1489642d3eaec1dee9a591bd4bec9bb",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/clean_asphalt/clean_asphalt_rough_1k.jpg",
+          "sourceMd5": "4238f2eab76530f4b0c66ddb929b142d",
+          "sourceBytes": 641634,
+          "purpose": "roughness",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "grass_ground",
+      "name": "Grass Ground",
+      "label": "自然草地",
+      "use": "公园与屋顶绿化，天然棕绿变化",
+      "meters": [
+        2.51,
+        2.51
+      ],
+      "sourceDimensionsMillimeters": [
+        2509.999990463257,
+        2509.999990463257
+      ],
+      "sourceUrl": "https://polyhaven.com/a/grass_ground",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Charlotte Baglioni": "All"
+      },
+      "metadataApiUrl": "https://api.polyhaven.com/assets",
+      "filesApiUrl": "https://api.polyhaven.com/files/grass_ground",
+      "maps": {
+        "color": {
+          "path": "assets/textures/grass_ground/color.jpg",
+          "bytes": 405955,
+          "sha256": "bd4f8524889bf2a3f3a5f4a6cd56154cecf71f1f6ae2da16598452e00137dcf0",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_diff_1k.jpg",
+          "sourceMd5": "299047258586c762735b7284d3c662c3",
+          "sourceBytes": 876584,
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        },
+        "normal": {
+          "path": "assets/textures/grass_ground/normal.jpg",
+          "bytes": 704408,
+          "sha256": "316ba72f9809e5d29977c17f0214cf4233fae72bb90c3096609ccf489c2d8503",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_nor_gl_1k.jpg",
+          "sourceMd5": "d518c5b2af6f2c0297bc807b351f511f",
+          "sourceBytes": 1310516,
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 90
+          },
+          "convention": "OpenGL"
+        },
+        "roughness": {
+          "path": "assets/textures/grass_ground/roughness.jpg",
+          "bytes": 87775,
+          "sha256": "dc99159a3abad2d6825c18dc749c5230328b8a12bec50588c15ee0fa42c0e2bc",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_rough_1k.jpg",
+          "sourceMd5": "2e6afca246cf6b80bdb53f46fe7e5ce5",
+          "sourceBytes": 328190,
+          "purpose": "roughness",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "processing": {
+            "operation": "JPEG recompression only; no generative synthesis or recoloring",
+            "tool": "macOS sips",
+            "quality": 80
+          }
+        }
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 // 顶点格式尽量紧凑（位置 Float32、法线 Int8、颜色 Uint8，只有招牌批次带 uv）：
 // 全园区七百多万个顶点，44 字节/顶点会把手机浏览器的内存撑爆，现在是 18 字节/顶点。
 import * as THREE from 'three';
+import { surfaceUV } from './surface-uv.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -63,12 +64,13 @@ export function frameMatrix(F) {
 const _mf = new THREE.Matrix4();
 
 export class Batcher {
-  constructor(owner = null, withUv = false) {
+  constructor(owner = null, withUv = false, projected = false) {
     this.cap = 0;
     this.n = 0;
     this.owner = owner;
     this.xf = null;
     this.withUv = withUv;
+    this.projected = projected;
     this.grow(4096);
   }
 
@@ -98,6 +100,7 @@ export class Batcher {
     else _c.set(color === undefined ? 0xffffff : color);
     const { pos, nor, uv, col } = this;
     const cr = Math.round(Math.min(1, Math.max(0, _c.r)) * 255), cg = Math.round(Math.min(1, Math.max(0, _c.g)) * 255), cb = Math.round(Math.min(1, Math.max(0, _c.b)) * 255);
+    let pnx = 0, pny = 1, pnz = 0;
     for (let i = 0; i < t.count; i++) {
       const x = t.pos[i * 3], y = t.pos[i * 3 + 1], z = t.pos[i * 3 + 2];
       const o = (this.n + i) * 3;
@@ -112,7 +115,20 @@ export class Batcher {
       nor[o] = Math.round(ax * k); nor[o + 1] = Math.round(ay * k); nor[o + 2] = Math.round(az * k);
       col[o] = cr; col[o + 1] = cg; col[o + 2] = cb;
       const ou = (this.n + i) * 2;
-      if (uv && t.uv) {
+      if (uv && this.projected) {
+        // 同一三角形使用同一投影面，圆柱跨轴处也不会在三角形内部扭曲。
+        if (i % 3 === 0) {
+          let tx = 0, ty = 0, tz = 0;
+          for (let j = i; j < Math.min(i + 3, t.count); j++) {
+            tx += t.nor[j * 3]; ty += t.nor[j * 3 + 1]; tz += t.nor[j * 3 + 2];
+          }
+          pnx = ne[0] * tx + ne[3] * ty + ne[6] * tz;
+          pny = ne[1] * tx + ne[4] * ty + ne[7] * tz;
+          pnz = ne[2] * tx + ne[5] * ty + ne[8] * tz;
+        }
+        const coords = surfaceUV(pos[o], pos[o + 1], pos[o + 2], pnx, pny, pnz);
+        uv[ou] = coords[0]; uv[ou + 1] = coords[1];
+      } else if (uv && t.uv) {
         const u = t.uv[i * 2], v = t.uv[i * 2 + 1];
         if (uvMap) { uv[ou] = uvMap[0] + u * (uvMap[2] - uvMap[0]); uv[ou + 1] = uvMap[1] + v * (uvMap[3] - uvMap[1]); }
         else { uv[ou] = u; uv[ou + 1] = v; }
@@ -250,7 +266,10 @@ export class BatchSet {
     this.xf = null;
   }
   get(key) {
-    if (!this.sets[key]) this.sets[key] = new Batcher(this);
+    if (!this.sets[key]) {
+      const textured = !!this.materials[key]?.map;
+      this.sets[key] = new Batcher(this, textured, textured);
+    }
     return this.sets[key];
   }
   /** 之后写入的几何都按局部坐标系 F 解释（null 恢复世界坐标） */

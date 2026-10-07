@@ -1,0 +1,36 @@
+# 免费 PBR 贴图来源与授权
+
+核对日期：2026-10-06。该批素材为从 Poly Haven 下载的真实 PBR 图像资源，非项目内 Canvas 程序化色块。
+
+## 授权与获取
+
+- 官方素材许可：[Poly Haven License](https://polyhaven.com/license)。站方将素材以 **CC0 1.0** 提供，允许商用、修改、再分发和随项目打包。
+- 许可证正文：[CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/legalcode)。
+- 下载链接来自[官方公开 API](https://polyhaven.com/our-api)的 `/files/{asset_id}` 返回值，没有凭文件名拼接推测下载地址。
+- 使用 `YunlanMallMaterialPrep/1.0` User-Agent。已核对[官方 API 条款](https://github.com/Poly-Haven/Public-API/blob/master/ToS.md)。该工程使用已下载并本地托管的素材，运行时不调用 Poly Haven API。
+- 署名：Textures from Poly Haven (CC0). 感谢原作者。
+
+## 素材清单
+
+所有路径以工程根目录为起点；每套有 `color.jpg`、`normal.jpg`、`roughness.jpg` 三张 1024 × 1024 图片。
+
+| 素材 | 原作者（官方元数据） | 一次重复覆盖尺寸 | 建议用途 | 本地目录 |
+|---|---|---|---|---|
+| [Marble 01](https://polyhaven.com/a/marble_01) / 浅米色石材 | Rob Tuytel | 1.5 × 1.5 m | 商场公共走道与圆厅地面，细石纹与错缝大板 | `assets/textures/marble_01/` |
+| [Concrete Pavement 02](https://polyhaven.com/a/concrete_pavement_02) / 混凝土铺装 | Charlotte Baglioni | 1.8 × 1.8 m | 室外广场、人行道与街区地坪，方板与砂粒 | `assets/textures/concrete_pavement_02/` |
+| [Oak Wood Planks](https://polyhaven.com/a/oak_wood_planks) / 暖橡木 | Dimitrios Savva | 1.2 × 1.2 m | 店内木地板、座椅木条、露台木平台 | `assets/textures/oak_wood_planks/` |
+| [Brick Wall 09](https://polyhaven.com/a/brick_wall_09) / 红褐砖墙 | Rob Tuytel, Matterfield | 2.01 × 2.01 m | 三期街区墙身、店铺实墙，按砖缝真实尺度映射 | `assets/textures/brick_wall_09/` |
+| [Clean Asphalt](https://polyhaven.com/a/clean_asphalt) / 细粒沥青 | Dimitrios Savva | 2.1 × 2.1 m | 园区道路与停车坡道 | `assets/textures/clean_asphalt/` |
+| [Grass Ground](https://polyhaven.com/a/grass_ground) / 自然草地 | Charlotte Baglioni | 2.51 × 2.51 m | 公园与屋顶绿化，天然棕绿变化 | `assets/textures/grass_ground/` |
+
+## 编码与校验
+
+- 18 张图片共 **6,014,895 bytes（约 5.74 MiB）**。完整来源、下载大小、原始 MD5、本地 SHA-256、贴图用途、色彩空间在 `assets/textures/manifest.json`。
+- 下载后先与 API 提供的原始 MD5 比对，18/18 一致，再由 macOS `sips` 重新压缩 JPEG。颜色与粗糙度质量参数 80，法线 90。尺寸保持 1K，没有重新生成或改色。
+- 颜色图按 sRGB 使用；法线和粗糙度图按线性数据使用。法线为 **OpenGL（+Y）**；不要误设 sRGB，也不要再把 Y 翻转为 DirectX。
+- 原作者尺寸以 API 毫米值除以 1000 换算为米；地图重复应按真实表面尺寸设置，不要整面拉伸。
+- 贴图适用于已有建筑表面；地面纹理宜使用世界/局部米制 UV，竖墙与木条需使用沿构件方向的 UV。PBR 图片的下载体积不代表显存体积；移动端应缩到 512 并共享相同素材。
+
+## 颜色选用提示
+
+`marble_01` 为暖米色石材，`brick_wall_09` 为红褐砖，`grass_ground` 带天然干草棕绿变化。该批保留了原色；颜色微调应在材质参数中审视最终光照，避免重复叠乘导致发黑。

@@ -4,6 +4,7 @@ import { rng } from '../textures.js';
 import { tableSet, roundTable } from './props.js';
 import { shade, storeStyle } from './storefronts.js';
 import { clearHeight } from './shell.js';
+import { interiorDetail } from './interior-detail.js';
 
 const CLOTHES = ['#1f2937', '#e5e7eb', '#9ca3af', '#b91c1c', '#1d4ed8', '#047857', '#d97706', '#f5f5f4', '#7c3aed', '#be185d', '#0f766e', '#78350f'];
 const NEON = ['#39f3ff', '#ff3df2', '#ffd23f', '#7dff6a', '#ff6b3d', '#8b7dff'];
@@ -38,6 +39,7 @@ export function buildInteriors(ctx) {
     if (lv.kind === 'roof' || lv.kind === 'parking') continue;
     const L = ctx.levels[lv.id];
     lv.units.forEach((u, i) => {
+      if (u.residence) return; // 塔楼房间由单层惰性内饰构建器负责。
       if (storeStyle(lv, u) === 'bar' || u.brand.cat === 'rink') return;
       L.batch.frame(u.frame, () => L.signs.frame(u.frame, () => furnish(L, ctx.atlas[lv.id], lv, u, rng(1000 + i * 31 + Math.round(lv.elev * 7) + lv.id.length * 13))));
     });
@@ -59,13 +61,17 @@ function furnish(L, atlas, lv, u, rand) {
   const D = F.depth;
   const u0 = F.umin, u1 = F.umax;
   const mid = (u0 + u1) / 2;
+  const detail = interiorDetail(B, F, P, y0);
 
   // 地面（每个矩形一块）
   const floorCol = {
     cinema: '#2a1d24', arcade: '#1c1530', kids: '#ffe7a8', supermarket: '#e6e8e6', restaurant: '#c9a57c', bar: '#b08a63',
     jewelry: '#2d2c33', food: '#e7dccb', snack: '#8c7b68', tea: '#c7b08a', books: '#d9c6a5', cafe: '#cfae86',
   }[cat] || shade(u.brand.bg, 0.78).getStyle();
-  for (const r of u.rects) B.get('satin').box((r.x0 + r.x1) / 2, y0 + 0.008, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 0.2, 0.016, r.z1 - r.z0 - 0.2, floorCol);
+  const floorKey = ['books', 'cafe', 'tea', 'home', 'fashion', 'luxury'].includes(cat) ? 'wood'
+    : ['jewelry', 'beauty', 'tech', 'accessory'].includes(cat) ? 'stone' : 'satin';
+  const floorTint = floorKey === 'wood' ? '#eee6d9' : floorKey === 'stone' ? '#eeece5' : floorCol;
+  for (const r of u.rects) B.get(floorKey).box((r.x0 + r.x1) / 2, y0 + 0.008, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 0.2, 0.016, r.z1 - r.z0 - 0.2, floorTint);
 
   // 品牌背景墙（深度足够时）
   if (D >= 5 && !['cinema', 'supermarket', 'kids'].includes(cat)) {
@@ -81,40 +87,72 @@ function furnish(L, atlas, lv, u, rand) {
     P('matte', a + len * 0.25, b - 0.05, y0 + 1.25, 0.35, 0.25, 0.35, '#1f2937');
   };
   const mannequin = (a, b, color) => {
-    P('satin', a, b, y0 + 0.05, 0.5, 0.5, 0.1, '#d1d5db');
-    P('matte', a, b, y0 + 1.0, 0.42, 0.28, 1.0, color);
-    P('satin', a, b, y0 + 1.7, 0.2, 0.2, 0.26, '#e5e7eb');
+    detail.cylinder('stone', a, b, .02, .31, .075, '#eeebe1', 12);
+    detail.shirt(a, b, 1.51, color, 0, .94);
+    for (const da of [-.115, .115]) {
+      P('matte', a + da, b, y0 + .45, .145, .18, .65, '#c4c5bd');
+      detail.shoe(a + da, b - .08, .10, '#e1e2d8', Math.PI / 2);
+    }
+    const [x, z] = F.at(a, b);
+    B.get('satin').sphere(x, y0 + 1.73, z, .105, '#e7e3d8', .145, .10, 'ico0');
+    detail.cylinder('satin', a, b, 1.5, .052, .12, '#e7e3d8', 6);
   };
-  const rackRow = (a0, a1, b, y = 1.0) => {
-    P('metal', (a0 + a1) / 2, b, y0 + 1.75, a1 - a0, 0.04, 0.04, '#9aa0a6');
-    for (let a = a0 + 0.3; a < a1 - 0.2; a += 0.55) P('matte', a, b, y0 + y + 0.25, 0.5, 0.45, 0.95, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
+  const rackRow = (a0, a1, b) => {
+    if (a1 - a0 < .8) return;
+    P('metal', (a0 + a1) / 2, b, y0 + 1.82, a1 - a0, .035, .035, '#a8a79a');
+    for (const a of [a0, a1]) {
+      P('metal', a, b, y0 + .91, .035, .035, 1.82, '#a8a79a');
+      P('metal', a, b, y0 + .03, .32, .45, .045, '#a8a79a');
+    }
+    for (let a = a0 + .27; a < a1 - .18; a += .65) detail.shirt(a, b, 1.73, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
   };
 
   switch (cat) {
     case 'fashion': case 'luxury': case 'accessory': case 'shoes': case 'sports': {
-      const side0 = u0 + 0.45, side1 = u1 - 0.45;
-      for (const a of [side0, side1]) {
-        for (let b = 2.2; b < D - 1.2; b += 0.55) {
-          if (cat === 'shoes' || cat === 'sports') {
-            P('matte', a, b, y0 + 1.1, 0.4, 0.5, 2.2, '#efeae2');
-            for (let k = 0; k < 4; k++) P('matte', a, b, y0 + 0.5 + k * 0.48, 0.3, 0.32, 0.14, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
-          } else {
-            P('matte', a, b, y0 + 1.25, 0.45, 0.5, 0.95, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
+      // 陈列沿两侧展开，中间保留连续进深通道；支架与衣物分开，商品有实际轮廓。
+      const bays = Math.max(1, Math.min(3, Math.floor((D - 3.4) / 1.7)));
+      for (const a of [u0 + .47, u1 - .47]) {
+        if (cat === 'shoes' || cat === 'sports' || cat === 'accessory') {
+          for (let bay = 0; bay < bays; bay++) {
+            const b = 2.2 + bay * Math.max(1.7, (D - 5.0) / Math.max(1, bays - 1));
+            P('wood', a, b, y0 + 1.12, .08, 1.48, 2.16, '#ece3d1');
+            for (let k = 0; k < 3; k++) {
+              const h = .45 + k * .57;
+              P('wood', a, b, y0 + h, .62, 1.48, .045, '#efe3d1');
+              for (const db of [-.42, .23]) {
+                const col = CLOTHES[(bay * 3 + k + (db > 0 ? 3 : 0)) % CLOTHES.length];
+                if (cat === 'accessory') detail.bag(a, b + db, h + .025, col);
+                else detail.shoe(a, b + db, h + .025, col, Math.PI / 2);
+              }
+              P('metal', a, b - .73, y0 + h + .02, .40, .014, .065, '#c3b99b');
+            }
+          }
+        } else {
+          const railEnd = Math.max(2.5, Math.min(D - 2, 10.2));
+          P('metal', a, (2.0 + railEnd) / 2, y0 + 1.88, .035, railEnd - 2, .035, '#b4af9d');
+          for (const b of [2, railEnd]) P('metal', a, b, y0 + .94, .035, .035, 1.88, '#b4af9d');
+          for (let b = 2.25; b < railEnd; b += .64) detail.shirt(a, b, 1.79, CLOTHES[Math.floor(rand() * CLOTHES.length)], Math.PI / 2);
+        }
+      }
+      if (W > 6 && D > 6) {
+        // 岛台分居两侧，入口到收银台之间留 1.8m 中央通道。
+        for (const a of [u0 + W * .27, u1 - W * .27]) {
+          const b = D * .48, len = Math.min(1.5, W * .23);
+          P('wood', a, b, y0 + .42, len, .9, .84, '#eee3d4');
+          P('stone', a, b, y0 + .86, len + .05, .95, .06, '#f6f3eb');
+          for (let k = 0; k < 3; k++) {
+            const x = a - len * .29 + k * len * .29;
+            if (cat === 'accessory' || cat === 'luxury') detail.bag(x, b, .89, CLOTHES[(k + 3) % CLOTHES.length]);
+            else if (cat === 'shoes' || cat === 'sports') detail.shoe(x, b, .89, CLOTHES[k]);
+            else for (let h = 0; h < 3; h++) P('matte', x, b, y0 + .92 + h * .045, .32, .38, .038, CLOTHES[(k * 2 + h) % CLOTHES.length]);
           }
         }
-        P('metal', a, (2.2 + D - 1.2) / 2, y0 + 1.78, 0.04, D - 3.2, 0.04, '#9aa0a6');
-      }
-      if (W > 5 && D > 6) {
-        const nt = Math.min(3, Math.floor(W / 3.2));
-        for (let i = 0; i < nt; i++) {
-          const a = u0 + (i + 1) * (W / (nt + 1));
-          P('satin', a, D * 0.48, y0 + 0.42, 1.6, 0.9, 0.84, '#e7e2d8');
-          for (let k = 0; k < 4; k++) P('matte', a - 0.55 + k * 0.37, D * 0.48, y0 + 0.9, 0.3, 0.4, 0.12 + rand() * 0.12, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
+        if (D > 9) {
+          rackRow(u0 + 1.6, mid - 1.0, D * .72);
+          rackRow(mid + 1.0, u1 - 1.6, D * .72);
         }
-        if (D > 9) rackRow(mid - Math.min(3, W / 3), mid + Math.min(3, W / 3), D * 0.72);
       }
-      const nm = Math.max(1, Math.min(3, Math.floor(W / 3)));
-      for (let i = 0; i < nm; i++) mannequin(u0 + (i + 0.6) * (W / (nm + 0.2)), 1.3, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
+      for (const a of (W > 5 ? [u0 + 1.15, u1 - 1.15] : [u0 + .9])) mannequin(a, 1.3, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
       counter(u1 - 1.6, D - 1.3);
       break;
     }
@@ -155,57 +193,111 @@ function furnish(L, atlas, lv, u, rand) {
     }
     case 'tech': {
       const nt = Math.max(1, Math.floor((D - 3) / 3));
+      const tableWidth = Math.max(1.2, Math.min(W - 2.4, 6));
       for (let i = 0; i < nt; i++) {
         const b = 2.5 + i * 3;
-        P('satin', mid, b, y0 + 0.45, Math.min(W - 2.4, 6), 1.3, 0.9, '#d6b88f');
-        for (let k = -2; k <= 2; k++) P('matte', mid + k * Math.min(1.1, (W - 3) / 5), b, y0 + 0.93, 0.36, 0.24, 0.03, '#111827');
+        P('wood', mid, b, y0 + .85, tableWidth, 1.3, .10, '#f4ead7');
+        for (const a of [mid - tableWidth * .4, mid + tableWidth * .4]) P('metal', a, b, y0 + .425, .10, 1.05, .85, '#9caaa4');
+        const count = Math.max(2, Math.min(5, Math.floor(tableWidth / .8)));
+        for (let k = 0; k < count; k++) {
+          const a = mid - tableWidth * .37 + k * tableWidth * .74 / (count - 1);
+          if ((k + i) % 2) detail.laptop(a, b, .9, ['#809c9c', '#78909f', '#9c8668'][i % 3]);
+          else detail.phone(a, b, .9, ['#89b59f', '#8b9ac4', '#b2a287'][k % 3]);
+          P('satin', a, b - .42, y0 + .907, .19, .12, .008, '#ecebe2');
+        }
       }
-      P('glow', mid, D - 0.25, y0 + 2.3, Math.min(W - 1.5, 7), 0.08, 2.2, '#1e3a8a');
-      P('glow', mid, D - 0.2, y0 + 2.3, Math.min(W - 2.5, 6), 0.06, 1.8, '#60a5fa');
+      // 电视墙保留显示器黑色边框；两块独立屏幕避免整面纯色发光墙。
+      for (const da of [-1, 1]) {
+        const a = mid + da * Math.min(1.5, W * .23), w = Math.min(2.45, W * .4);
+        P('matte', a, D - .29, y0 + 2.4, w, .10, 1.45, '#2c3736');
+        P('glow', a, D - .35, y0 + 2.4, w - .09, .02, 1.36, da < 0 ? '#5e847c' : '#657d93');
+        P('glowSoft', a - w * .18, D - .365, y0 + 2.58, w * .44, .012, .70, '#a3b6a3');
+      }
       counter(u0 + 1.6, D - 1.5, 2.0);
       break;
     }
     case 'cafe': case 'tea': {
-      if (style === 'oldstreet' || lv.kind === 'food') { stallKitchen(P, u0, u1, D, y0, u.brand, rand); if (W * D < 60) break; }
-      else {
-        P('satin', mid, D - 1.2, y0 + 0.55, Math.min(W - 1.2, 5), 0.8, 1.1, '#6b4a33');
-        P('satin', mid, D - 1.2, y0 + 1.12, Math.min(W - 1.0, 5.2), 0.9, 0.05, '#f3efe7');
-        for (let k = 0; k < 3; k++) P('metal', mid - 1.4 + k * 1.4, D - 1.25, y0 + 1.35, 0.5, 0.45, 0.45, k === 1 ? '#c0c4c8' : '#2b2f33');
-        P('glow', mid, D - 0.2, y0 + 2.7, Math.min(W - 1.5, 4.5), 0.06, 1.0, '#fff1dc');
+      if (style === 'oldstreet' || lv.kind === 'food') {
+        stallKitchen(P, detail, u0, u1, D, y0, u.brand, rand);
+        if (W > 3.5) {
+          if (cat === 'tea') detail.teaStation(mid, D * .55, .96);
+          else detail.espresso(mid, D * .55, .96);
+        }
+        if (W * D < 60) break;
+      } else {
+        const len = Math.min(W - 1.2, 5.6), b = D - 1.25;
+        P('wood', mid, b, y0 + .53, len, .85, 1.06, '#eee3d4');
+        P('stone', mid, b, y0 + 1.09, len + .10, .96, .07, '#ffffff');
+        P('metal', mid, b - .437, y0 + .09, len - .18, .025, .13, '#887959');
+        for (let k = 0; k < Math.min(16, Math.floor(len / .3)); k++) P('wood', mid - len / 2 + .16 + k * .3, b - .438, y0 + .58, .045, .028, .8, '#e2d5c0');
+        if (cat === 'tea') detail.teaStation(mid - .35, b, 1.13);
+        else detail.espresso(mid - .35, b, 1.13);
+        if (len > 4.2) detail.pastryCase(mid + len / 2 - .6, b, 1.13);
+        // 后墙搁板与杯碟，留出操作面的空间。
+        P('wood', mid, D - .32, y0 + 2.28, Math.min(len, 4.5), .3, .07, '#eee3d4');
+        for (let k = 0; k < 5; k++) detail.cup(mid - 1.0 + k * .5, D - .32, 2.32, '#f2e8d6', false);
+        for (const da of [-1.3, 1.3]) if (Math.abs(da) < len * .4) detail.pendant(mid + da, b - .15, Math.min(H - .65, 2.9), H - .08, cat === 'tea' ? '#426c58' : '#534937');
       }
-      const rows = Math.floor((D - (lv.kind === 'food' ? 4.5 : 3.2)) / 2.4);
+      const rows = Math.floor((D - (lv.kind === 'food' ? 4.5 : 3.8)) / 2.4);
       const cols = Math.max(1, Math.floor((W - 1) / 2.4));
       for (let i = 0; i < rows; i++) {
         for (const a of spread(cols, u0 + 1.3, u1 - 1.3)) {
-          const [x, z] = F.at(a, 1.8 + i * 2.4);
+          const b = 1.8 + i * 2.4, [x, z] = F.at(a, b);
           roundTable(B, x, y0, z, 3, { chair: cat === 'tea' ? '#3f8f6d' : '#c08a5a' });
+          if (i < 2) detail.tableware(a, b, .77);
         }
       }
       break;
     }
     case 'restaurant': case 'bar': {
-      // 后厨出菜口
-      P('metal', mid, D - 1.0, y0 + 0.55, W - 1.2, 0.9, 1.1, '#c9cdd1');
-      P('matte', mid, D - 0.3, y0 + (H - 1) / 2 + 0.2, W - 0.6, 0.4, H - 1, '#e8e4dc');
-      if (style === 'oldstreet') { for (let k = 0; k < 4; k++) P('glow', u0 + (k + 0.5) * (W / 4), D * 0.5, y0 + 3.3, 0.5, 0.5, 0.6, '#d6332a'); }
+      // 后厨出菜口与传菜台，餐区能看到碟盘、保温灯及制作设备。
+      P('metal', mid, D - 1.0, y0 + .52, W - 1.2, .9, 1.04, '#b5bfba');
+      P('stone', mid, D - 1.0, y0 + 1.07, W - 1.1, 1.0, .07, '#ffffff');
+      P('matte', mid, D - .3, y0 + (H - 1) / 2 + .2, W - .6, .4, H - 1, '#e8e4dc');
+      P('metal', mid, D - .8, y0 + 2.15, W - 1.3, .72, .09, '#bec4bd');
+      for (let k = 0; k < Math.min(5, Math.floor(W / 1.5)); k++) {
+        const a = u0 + 1.3 + k * (W - 2.6) / Math.max(1, Math.min(5, Math.floor(W / 1.5)) - 1);
+        detail.cylinder('satin', a, D - 1.08, 1.11, .22, .09, '#e8e6dd');
+        detail.pendant(a, D - 1.0, 1.78, 2.11, '#9b8863');
+      }
       const cols = Math.max(1, Math.floor((W - 1.2) / 2.6));
       const rows = Math.max(1, Math.floor((D - 3.4) / 2.5));
-      const tc = { top: cat === 'bar' ? '#2b2f33' : '#efe9df', chair: shade(u.brand.bg, 0.15).getStyle() };
+      const tc = { top: cat === 'bar' ? '#2b2f33' : '#efe9df', chair: shade(u.brand.bg, .15).getStyle() };
       for (let i = 0; i < rows; i++) {
         for (const a of spread(cols, u0 + 1.4, u1 - 1.4)) {
-          const [x, z] = F.at(a, 1.8 + i * 2.5);
+          const b = 1.8 + i * 2.5, [x, z] = F.at(a, b);
           tableSet(B, x, y0, z, F.ang, tc);
+          if (i < 2) detail.tableware(a, b, .765);
         }
       }
+      if (style === 'oldstreet') for (const a of spread(Math.min(3, cols), u0 + 1.5, u1 - 1.5)) detail.pendant(a, D * .5, Math.min(3.05, H - .65), H - .08, '#9e4939');
       break;
     }
     case 'food': {
-      stallKitchen(P, u0, u1, D, y0, u.brand, rand);
+      stallKitchen(P, detail, u0, u1, D, y0, u.brand, rand);
       break;
     }
     case 'snack': {
-      stallKitchen(P, u0, u1, D, y0, u.brand, rand);
+      stallKitchen(P, detail, u0, u1, D, y0, u.brand, rand);
       for (let k = 0; k < 3; k++) for (let s = 0; s < 3; s++) P('satin', u0 + 1 + k * 0.7, 1.6, y0 + 1.15 + s * 0.16, 0.5, 0.5, 0.15, '#d9c19a');
+      break;
+    }
+    case 'bakery': {
+      const count = Math.max(1, Math.min(3, Math.floor((W - 1.5) / 1.8)));
+      for (const a of spread(count, u0 + 1.2, u1 - 1.2)) {
+        P('wood', a, D * .48, y0 + .42, 1.35, .9, .84, '#eee3d4');
+        detail.pastryCase(a, D * .48, .86);
+      }
+      counter(u1 - 1.4, D - 1.3, 1.8);
+      for (let shelf = 0; shelf < 3; shelf++) {
+        const h = .65 + shelf * .52;
+        P('wood', mid, D - .45, y0 + h, W - 1.1, .58, .07, '#eee3d4');
+        const count = Math.min(10, Math.floor((W - 1.4) / .48));
+        for (let k = 0; k < count; k++) {
+          const [x, z] = F.at(u0 + .9 + k * (W - 1.8) / Math.max(1, count - 1), D - .45);
+          B.get('matte').sphere(x, y0 + h + .14, z, .18, '#cb9250', .10, .11, 'ico0');
+        }
+      }
       break;
     }
     case 'kids': {
@@ -225,20 +317,36 @@ function furnish(L, atlas, lv, u, rand) {
       break;
     }
     case 'books': {
-      const nrows = Math.floor((D - 4) / 2.2);
+      const nrows = Math.max(0, Math.floor((D - 5.5) / 2.3));
       for (let i = 0; i < nrows; i++) {
-        const b = 3 + i * 2.2;
-        const len = W - 3;
-        P('satin', mid, b, y0 + 0.9, len, 0.45, 1.8, '#8a5a35');
-        for (let k = 0; k < Math.floor(len / 0.5); k++) {
-          for (let s = 0; s < 4; s++) P('matte', u0 + 1.75 + k * 0.5, b, y0 + 0.25 + s * 0.42, 0.42, 0.5, 0.3, CLOTHES[(k * 3 + s + i) % CLOTHES.length]);
+        const b = 3 + i * 2.3;
+        // 分成两个书架，中间一直保留 1.7m 通道，实木层板之间露出独立书脊。
+        for (const [a0, a1] of [[u0 + 1.1, mid - .85], [mid + .85, u1 - 1.1]]) {
+          const len = a1 - a0;
+          if (len < .65) continue;
+          const center = (a0 + a1) / 2;
+          P('wood', center, b + .18, y0 + 1.05, len, .035, 1.9, '#e6d6bb');
+          for (const a of [a0, a1]) P('wood', a, b, y0 + 1.05, .065, .48, 1.95, '#efe4cd');
+          for (let shelf = 0; shelf < 4; shelf++) {
+            const h = .17 + shelf * .46;
+            P('wood', center, b, y0 + h, len, .47, .047, '#efe4cd');
+            const count = Math.min(16, Math.floor(len / .18));
+            for (let k = 0; k < count; k++) detail.book(a0 + .14 + k * (len - .27) / Math.max(1, count - 1), b - .035, h + .026, CLOTHES[(k + shelf * 3 + i) % CLOTHES.length], .09 + (k % 3) * .021, .26 + (k % 4) * .035);
+          }
         }
       }
-      for (const a of [u0 + 0.3, u1 - 0.3]) P('satin', a, D / 2, y0 + 1.6, 0.4, D - 1.5, 3.2, '#6b4426');
-      for (let k = 0; k < 3; k++) {
-        const [x, z] = F.at(u0 + 2.5 + k * 3, D - 2.2);
-        roundTable(B, x, y0, z, 4, { chair: '#566a8c' });
+      const count = Math.max(1, Math.min(3, Math.floor((W - 2) / 3)));
+      for (const a of spread(count, u0 + 1.9, u1 - 1.9)) {
+        const b = D - 2.0, [x, z] = F.at(a, b);
+        roundTable(B, x, y0, z, 3, { chair: '#566a77' });
+        P('matte', a - .15, b, y0 + .7925, .3, .38, .045, '#697c67');
+        P('satin', a - .15, b, y0 + .816, .26, .34, .009, '#e8e2d1');
+        detail.cylinder('metal', a + .3, b, .77, .12, .025, '#80704e');
+        detail.line('metal', a + .3, b, .8, a + .3, b, 1.15, .025, '#80704e');
+        detail.box('matte', a + .3, b, 1.17, .3, .18, .085, '#546e5d');
+        detail.box('glow', a + .3, b, 1.123, .26, .15, .015, '#f5d6a2');
       }
+      counter(u0 + 1.6, 1.4, 1.8);
       break;
     }
     case 'cinema': {
@@ -262,7 +370,7 @@ function furnish(L, atlas, lv, u, rand) {
       }
       break;
     }
-    case 'supermarket': {
+    case 'supermarket': case 'convenience': {
       supermarket(P, B, F, u0, u1, D, y0, rand, u);
       break;
     }
@@ -322,16 +430,33 @@ function furnish(L, atlas, lv, u, rand) {
 }
 
 /** 档口后厨：操作台、灶台、排烟罩 */
-function stallKitchen(P, u0, u1, D, y0, brand, rand) {
+function stallKitchen(P, detail, u0, u1, D, y0, brand, rand) {
   const W = u1 - u0, mid = (u0 + u1) / 2;
-  P('metal', mid, D - 0.9, y0 + 0.45, W - 0.8, 0.9, 0.9, '#c9cdd1');
-  for (let k = 0; k < Math.floor((W - 1) / 1.2); k++) {
-    P('metal', u0 + 1 + k * 1.2, D - 0.9, y0 + 0.95, 0.7, 0.6, 0.12, '#2b2f33');
-    if (rand() < 0.6) P('metal', u0 + 1 + k * 1.2, D - 0.9, y0 + 1.15, 0.4, 0.4, 0.3, '#9aa0a6');
+  P('metal', mid, D - .9, y0 + .45, W - .8, .9, .9, '#c9cdd1');
+  const burners = Math.min(4, Math.floor((W - 1) / 1.2));
+  for (let k = 0; k < burners; k++) {
+    const a = u0 + 1 + k * 1.2;
+    P('matte', a, D - .9, y0 + .925, .68, .60, .05, '#293835');
+    detail.cylinder('metal', a, D - .9, .955, .19, .045, '#737e78');
+    detail.cylinder('metal', a, D - .9, 1.0, .18, .22, '#bcc7c0');
+    detail.cylinder('metal', a, D - .9, 1.22, .195, .025, '#d1d7ce');
+    detail.cylinder('matte', a, D - .9, 1.245, .04, .025, '#27332e');
+    detail.line('matte', a - .17, D - .9, 1.14, a - .30, D - .9, 1.14, .045, '#28332c');
+    P('metal', a, D - 1.36, y0 + .71, .07, .018, .07, '#3d4f45');
   }
-  P('metal', mid, D - 0.8, y0 + 2.6, W - 0.6, 1.2, 0.6, '#b8bfc6');
-  P('matte', mid, D - 0.2, y0 + 1.6, W - 0.4, 0.3, 3.2, shade(brand.bg, 0.6));
-  P('satin', mid, D * 0.55, y0 + 0.45, Math.max(1, W - 2), 0.7, 0.9, '#e5e7eb');
+  P('metal', mid, D - .8, y0 + 2.58, W - .6, 1.12, .38, '#b8bfc6');
+  P('matte', mid, D - 1.37, y0 + 2.48, W - .9, .035, .16, '#56645c');
+  P('matte', mid, D - .2, y0 + 1.6, W - .4, .3, 3.2, shade(brand.bg, .6));
+  // 出品台台面与点单小屏，前部保留通向店内的两侧间隙。
+  const len = Math.max(1, W - 2);
+  P('wood', mid, D * .55, y0 + .45, len, .7, .9, '#e8dbc3');
+  P('stone', mid, D * .55, y0 + .935, len + .06, .8, .07, '#ffffff');
+  if (brand.cat !== 'tea' && brand.cat !== 'cafe') {
+    detail.cylinder('satin', mid, D * .55, .972, .23, .04, '#e6e1d2');
+    P('wood', mid - Math.min(.75, len * .28), D * .55, y0 + .982, .42, .32, .025, '#eee3d4');
+    P('matte', mid - Math.min(.75, len * .28), D * .55, y0 + 1.03, .28, .19, .07, '#c99c57');
+  }
+  void rand;
 }
 
 /** 儿童乐园：彩色软垫、滑梯、球池、攀爬架 */
@@ -391,26 +516,51 @@ function hallsCinema(B, F, u, y0, H, rand) {
 /** 超市：收银台、货架、生鲜岛、冷柜 */
 function supermarket(P, B, F, u0, u1, D, y0, rand, u) {
   const W = u1 - u0;
-  // 收银台（靠门面）
-  for (let k = 0; k < 7; k++) {
-    const a = u0 + 4 + k * ((W - 8) / 6);
-    P('satin', a, 3.2, y0 + 0.45, 0.8, 2.2, 0.9, '#f1f3f5');
-    P('glow', a, 2.2, y0 + 1.9, 0.3, 0.05, 0.3, '#2b8a3e');
+  const checkouts = Math.max(1, Math.min(7, Math.floor((W - 2) / 3.6)));
+  for (const a of spread(checkouts, u0 + 1.4, u1 - 1.4)) {
+    P('satin', a, 2.5, y0 + .43, .82, 1.8, .86, '#dce0d4');
+    P('matte', a, 2.5, y0 + .88, .68, 1.05, .035, '#344639');
+    P('metal', a, 1.88, y0 + 1.08, .08, .07, .35, '#9caa9c');
+    P('matte', a, 1.88, y0 + 1.30, .30, .065, .22, '#314333');
+    P('glowSoft', a, 1.838, y0 + 1.31, .25, .012, .16, '#9fbca4');
   }
-  // 货架（垂直于门面，形成纵向通道）
-  for (let a = u0 + 3; a < u1 - 3; a += 2.6) {
-    P('satin', a, D * 0.55, y0 + 0.85, 0.8, D * 0.5, 1.7, '#e9ecef');
-    for (let s = 0; s < 3; s++) P('matte', a, D * 0.55, y0 + 0.4 + s * 0.5, 0.86, D * 0.5 - 0.2, 0.28, PRODUCE[(Math.floor(a) + s) % PRODUCE.length]);
+  // 同一货架的层板、细立柱、包装商品分别建模，纵向通道延续到后部冷柜。
+  for (let a = u0 + 1.3; a < u1 - 1.1; a += 2.6) {
+    const start = 4.2, end = D - 5.2, len = end - start;
+    if (len < 1) continue;
+    for (const b of [start, end]) P('metal', a, b, y0 + .86, .035, .04, 1.70, '#a5afa0');
+    for (let shelf = 0; shelf < 3; shelf++) {
+      const h = .25 + shelf * .51;
+      P('satin', a, (start + end) / 2, y0 + h, .86, len, .05, '#dfe4d6');
+      const bays = Math.max(1, Math.min(9, Math.floor(len / .80)));
+      for (let k = 0; k < bays; k++) {
+        const b = start + .23 + k * Math.max(.1, len - .46) / Math.max(1, bays - 1);
+        for (const da of [-.22, .22]) {
+          const col = PRODUCE[(k + shelf * 2 + Math.abs(Math.round(a))) % PRODUCE.length];
+          P('matte', a + da, b, y0 + h + .18, .24, .28, .30, col);
+          P('satin', a + da, b - .145, y0 + h + .20, .18, .008, .08, '#e9e3c6');
+        }
+      }
+    }
   }
-  // 生鲜岛
-  for (let k = 0; k < 3; k++) {
-    P('satin', u0 + W * (0.3 + k * 0.2), D - 3.5, y0 + 0.4, 2.2, 1.4, 0.8, '#8a5a35');
-    for (let s = 0; s < 6; s++) P('matte', u0 + W * (0.3 + k * 0.2) - 0.8 + (s % 3) * 0.8, D - 3.8 + Math.floor(s / 3) * 0.6, y0 + 0.85, 0.7, 0.55, 0.12, PRODUCE[(s + k) % PRODUCE.length]);
+  const islands = Math.max(1, Math.min(3, Math.floor(W / 5)));
+  for (const a of spread(islands, u0 + Math.min(2, W * .3), u1 - Math.min(2, W * .3))) {
+    P('wood', a, D - 3.3, y0 + .40, Math.min(2.2, W * .6), 1.35, .80, '#eadebf');
+    for (let s = 0; s < 12; s++) {
+      const [x, z] = F.at(a - .73 + s % 4 * .47, D - 3.58 + Math.floor(s / 4) * .3);
+      B.get('matte').sphere(x, y0 + .90, z, .14, PRODUCE[s % PRODUCE.length], .13, .14, 'ico0');
+    }
   }
-  // 冷柜墙
-  P('glow', (u0 + u1) / 2, D - 0.6, y0 + 1.1, W - 2, 0.6, 2.0, '#d8f3ff');
-  P('glass', (u0 + u1) / 2, D - 1.0, y0 + 1.1, W - 2, 0.05, 2.0, 0xffffff);
-  void B;
+  const fridgeW = W - 1;
+  P('satin', (u0 + u1) / 2, D - .48, y0 + 1.05, fridgeW, .63, 2.1, '#cbd7ca');
+  P('glowSoft', (u0 + u1) / 2, D - .813, y0 + 1.1, fridgeW - .15, .015, 1.77, '#b6cab9');
+  P('glass', (u0 + u1) / 2, D - .87, y0 + 1.1, fridgeW - .08, .035, 1.85, '#ffffff');
+  const doors = Math.max(1, Math.floor(fridgeW / 1.15));
+  for (let i = 0; i <= doors; i++) {
+    const a = u0 + .5 + i * fridgeW / doors;
+    P('metal', a, D - .90, y0 + 1.10, .038, .045, 1.9, '#849785');
+    if (i < doors) P('metal', a + .14, D - .93, y0 + 1.05, .025, .045, .40, '#6a846d');
+  }
   void rand;
   void u;
 }

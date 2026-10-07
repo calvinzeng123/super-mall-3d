@@ -10,6 +10,7 @@
     "serve": "python3 serve.py 5174"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "three": "0.170.0"
   }
 }

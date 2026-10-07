@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { buildNav, step, clear, landAt, linksNear, spawn, floorLabel, sightBlocked, NAV, yawOf } from '../layout/nav.js';
 import { pointInPoly, distToPolyEdge } from '../layout/geom.js';
+import { createElevatorRide, sampleElevatorRide } from '../layout/elevator-ride.js';
 
 const WALK = 2.8, RUN = 6, FLY = 8, FLY_MAX = 30;
 const JUMP = 4.5, GRAVITY = 12;
@@ -42,6 +43,7 @@ export function attachExplore(app, ui) {
   let visTimer = 0, pickTimer = 0;
   let label = '';
   let busy = false;
+  let liftRide = null;
   const raycaster = new THREE.Raycaster();
   raycaster.far = 25;
   const center = new THREE.Vector2(0, 0);
@@ -78,6 +80,8 @@ export function attachExplore(app, ui) {
   app.exitExplore = () => {
     if (!on) return;
     on = false;
+    liftRide = null;
+    busy = false;
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     closePrompt();
     keys.clear();
@@ -100,7 +104,14 @@ export function attachExplore(app, ui) {
   app.explore = {
     get active() { return on; },
     /** 调试：当前位置与视角 */
-    get state() { return s && { ...s, yaw, pitch, flying, eyeY }; },
+    get state() { return s && { ...s, yaw, pitch, flying, eyeY, riding: liftRide?.link.id || null }; },
+    get navigation() { return nav; },
+    rideLift(id, floor) {
+      if (!on || busy || flying) return false;
+      const n = linksNear(nav, s.floor, s.x, s.z).find(n => n.link.id === id);
+      const stop = n?.options.find(o => o.floor === floor);
+      return stop ? startLift(n.link, stop) : false;
+    },
     /** 目录传送：楼栋 → 主入口内侧；楼层 → 该层出生点；铺位 → 店门外 2m 面朝店 */
     teleport(t) {
       if (!nav) nav = buildNav(layout);
@@ -154,22 +165,24 @@ export function attachExplore(app, ui) {
       const b = layout.buildings.find((q) => q.kind !== 'metro' && pointInPoly([x, z], q.outline));
       building = b ? b.id : null;
     }
-    let metro = !!F && (F.building === 'M' || METRO_LINKED.has(F.id));
+    let metro = !!F && (F.building === 'M' || METRO_LINKED.has(F.id) || (F.building && ctx.bById[F.building]?.kind === 'tower' && F.y < 0));
     if (flying) metro = camera.position.y < -1 && Math.abs(x) < 120 && Math.abs(z) < 120;
     let nearB = null;
     if (!building || building === 'P3') {
       let best = 30;
       for (const b of layout.buildings) {
-        if (b.kind !== 'mall') continue;
+        if (b.kind !== 'mall' && b.kind !== 'tower') continue;
         if (pointInPoly([x, z], b.outline)) { nearB = b.id; break; }
         const d = distToPolyEdge([x, z], b.outline);
         if (d < best) { best = d; nearB = b.id; }
       }
     }
     const under = flying ? camera.position.y < 0 : !!F && F.y < 0;
+    const level = F?.level?.id || (building && ctx.bById[building]?.kind === 'tower'
+      ? ctx.buildings[building].levels.filter(L => L.lv.elev <= camera.position.y - 0.8).at(-1)?.lv.id : null);
     const ex = app.state.explore;
-    if (force || !ex || ex.building !== building || ex.metro !== metro || ex.near !== nearB || ex.under !== under) {
-      app.state.explore = { building, metro, near: nearB, under };
+    if (force || !ex || ex.building !== building || ex.metro !== metro || ex.near !== nearB || ex.under !== under || ex.level !== level) {
+      app.state.explore = { building, metro, near: nearB, under, level };
       app.refresh();
     }
   }
@@ -304,6 +317,7 @@ export function attachExplore(app, ui) {
     hud.fly.setAttribute('aria-pressed', String(v));
   }
   function toggleFly() {
+    if (busy) return;
     if (!flying) {
       setFlying(true);
       flyY = eyeY;
@@ -341,7 +355,7 @@ export function attachExplore(app, ui) {
         const here = nav.floors.get(n.stop.floor);
         const name = F.kind === 'level' ? F.level.short : F.kind === 'bridge' ? '天桥' : '地面';
         const verb = n.link.kind === 'stair' ? (F.y > here.y ? '上楼' : '下楼') : n.link.name;
-        out.push({ text: `${verb} · ${name}`, stop: o });
+        out.push({ text: `${verb} · ${name}`, stop: o, link: n.link });
       }
     }
     return out;
@@ -367,7 +381,67 @@ export function attachExplore(app, ui) {
     const o = options()[i];
     if (!o) return;
     const st = o.stop;
+    if (o.link.kind === 'lift' && ctx.elevatorCars?.has(o.link.id)) { startLift(o.link, st); return; }
     jump({ floor: st.floor, x: st.x, z: st.z, y: nav.floors.get(st.floor).y, slope: null, yaw: yawOf(st.face[0], st.face[1]) });
+  }
+
+  function startLift(link, stop) {
+    const car = ctx.elevatorCars?.get(link.id);
+    if (!car || busy) return false;
+    const entry = link.stops.find(st => st.floor === s.floor);
+    if (!entry) return false;
+    // 在候梯厅先走到门中央，禁止从斜侧方向穿过玻璃门框进舱。
+    const distance = Math.hypot(entry.x - s.x, entry.z - s.z);
+    let approach = null;
+    if (distance > 0.05) {
+      let check = { ...s };
+      const count = Math.ceil(distance / 0.1);
+      for (let i = 0; i < count; i++) check = step(nav, check, (entry.x - s.x) / count, (entry.z - s.z) / count, 0);
+      if (Math.hypot(check.x - entry.x, check.z - entry.z) > 0.05) { toast('请走到电梯门正前方再选层'); return false; }
+      approach = { ...entry, y: s.y };
+    }
+    closePrompt();
+    near = []; hud.prompt.hidden = true; hud.card.hidden = true;
+    keys.clear(); endStick(); setFlying(false);
+    busy = true;
+    const to = { ...stop, y: nav.floors.get(stop.floor).y };
+    liftRide = { ...createElevatorRide({ ...s }, to, { x: car.elevator.x, z: car.elevator.z }, approach), link, car };
+    app.ensureTowerFloor?.(stop.floor);
+    yaw = yawOf(car.elevator.nx, car.elevator.nz); pitch = 0;
+    hud.help.hidden = true;
+    return true;
+  }
+
+  function updateLift(dt) {
+    const r = liftRide;
+    r.elapsed += dt;
+    const p = sampleElevatorRide(r, r.elapsed);
+    Object.assign(s, { x: p.x, y: p.y, z: p.z, slope: null });
+    // 经过哪层就显示哪层的真实内饰，观光梯外不会出现整栋空壳。
+    // 每次仅切换当前经过层，仍使用全局三层缓存上限。
+    const passFloor = r.link.stops.filter(st => nav.floors.get(st.floor).y <= p.y + 0.05).at(-1)?.floor;
+    if (passFloor && passFloor !== r.viewFloor) {
+      r.viewFloor = passFloor;
+      app.state.explore = { ...app.state.explore, level: passFloor, under: p.y < 0 };
+      app.refresh();
+    }
+    if (p.arrived) {
+      s.floor = r.to.floor;
+      if (!r.landed) { r.landed = true; updateVisibility(true); }
+    }
+    eyeY = p.y + NAV.eye;
+    r.car.set(p.y, p.door, `${Math.round(p.y)}m`);
+    hud.mode.textContent = p.phase;
+    hud.where.textContent = `观光电梯 · ${nav.floors.get(r.to.floor).level.short} · ${Math.round(p.y)}m`;
+    syncCamera();
+    if (p.done) {
+      r.car.set(r.to.y, 1, nav.floors.get(r.to.floor).level.short);
+      liftRide = null; busy = false; label = '';
+      hud.mode.textContent = '步行';
+      Object.assign(app.state, { building: nav.floors.get(s.floor).building, focus: s.floor, selected: null });
+      updateVisibility(true); app.emit();
+      toast('已到达，可走出电梯探索本层');
+    }
   }
 
   // ---------- 提示 ----------
@@ -419,6 +493,8 @@ export function attachExplore(app, ui) {
       yaw -= lookYaw;
       pitch = Math.max(-PITCH, Math.min(PITCH, pitch - lookPitch));
       lookYaw = lookPitch = 0;
+      if (liftRide) { updateLift(dt); return; }
+      if (busy) return;
       // 移动输入（局部：前进 f、右移 r）
       let f = 0, r = 0;
       if (keys.has('w') || keys.has('ArrowUp')) f += 1;

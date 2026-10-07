@@ -38,18 +38,25 @@ export function buildNav(layout) {
     const F = mk(lv.id, lv.elev, 'level', { building: lv.building, level: lv });
     for (const p of lv.slab.pieces) F.pieces.push(piece(p.outer, [...p.holes, ...lv.voids.map((v) => v.poly)]));
   }
+  // 新区地下联廊与空桥由独立结构板支撑，仍属于其起点楼面；
+  // 到终点的门线后再切换到商场/另一栋楼，整条通道可实际步行。
+  for (const path of layout.extensions?.paths || []) {
+    const F = floors.get(path.level);
+    if (!F) continue;
+    for (const p of path.slab?.pieces || []) F.pieces.push(piece(p.outer, p.holes || []));
+  }
   const S = layout.site;
   const p3 = layout.buildings.find((b) => b.kind === 'street');
   const district = p3 ? p3.outline : null;
   const ground = mk('ground', 0, 'ground');
   const groundHoles = [
-    ...layout.buildings.filter((b) => b.kind === 'mall').map((b) => b.outline),
+    ...layout.buildings.filter((b) => b.kind === 'mall' || b.kind === 'tower').map((b) => b.outline),
     ...(district ? [district] : []),
     ...(S.park ? [S.park.lake] : []),
     ...S.trenches,
     ...(S.openings || []),
   ];
-  ground.pieces.push(piece(rectPoly(CAMPUS), groundHoles));
+  ground.pieces.push(piece(rectPoly(S.bounds || CAMPUS), groundHoles));
   const br = layout.bridges;
   const bridge = br ? mk('bridge', br.y, 'bridge') : null;
   if (bridge) for (const w of br.walk) bridge.pieces.push(piece(w.poly));
@@ -80,6 +87,18 @@ export function buildNav(layout) {
         }
       }
       for (const s of subtractOpenings(mergeSegments(unionOutline(u.rects)), openings)) wallL(F, u.frame, s);
+      for (const p of u.residence?.partitions || []) {
+        const [x0, z0] = p.a, [x1, z1] = p.b;
+        const len = Math.hypot(x1 - x0, z1 - z0);
+        if (len < 0.02) continue;
+        const seg = (a, b) => wallL(F, u.frame, { x0: x0 + (x1 - x0) * a / len,
+          z0: z0 + (z1 - z0) * a / len, x1: x0 + (x1 - x0) * b / len,
+          z1: z0 + (z1 - z0) * b / len });
+        if (p.door) {
+          seg(0, Math.max(0, p.door.at - p.door.width / 2));
+          seg(Math.min(len, p.door.at + p.door.width / 2), len);
+        } else seg(0, len);
+      }
     }
     for (const m of lv.rooms) for (const s of mergeSegments(unionOutline(m.rects))) wallL(F, m.frame, s);
     for (const f of lv.features) {
@@ -213,7 +232,7 @@ export function buildNav(layout) {
   }
   for (const e of layout.elevators) {
     const stops = e.serves.filter((id) => floors.has(id)).map((id) => stopAt(id, e.x + e.nx * e.reach, e.z + e.nz * e.reach, e.nx, e.nz));
-    nav.links.push({ id: e.id, kind: 'lift', name: e.type === 'glass' ? '观光电梯' : e.type === 'freight' ? '货梯' : '电梯', stops: sortStops(stops, floors) });
+    nav.links.push({ id: e.id, kind: 'lift', elevator: e, name: e.type === 'glass' || e.tower ? '观光电梯' : e.type === 'freight' ? '货梯' : '电梯', stops: sortStops(stops, floors) });
   }
   if (br) {
     for (const v of br.verticals.filter((x) => x.type !== 'escalator')) {
@@ -459,7 +478,7 @@ export function spawn(nav, layout, { building, level } = {}) {
   };
   if (building) {
     const b = layout.buildings.find((x) => x.id === building);
-    if (b && b.kind === 'mall') {
+    if (b && (b.kind === 'mall' || b.kind === 'tower')) {
       const e = layout.entrances.find((x) => x.building === building && x.main) || layout.entrances.find((x) => x.building === building && x.to === 'site');
       if (e) {
         const p = inside(e, -2);

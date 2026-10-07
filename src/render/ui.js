@@ -11,12 +11,13 @@ const PHASES = [
 ];
 
 export function createUI(app, layout) {
+  const phases = [...PHASES, ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' }))];
   const built = new Set(layout.buildings.map((b) => b.id));
   const bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
   const lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   const phaseTabs = $('phaseTabs');
   const floorList = $('floorList');
-  phaseTabs.innerHTML = PHASES.map((p) => {
+  phaseTabs.innerHTML = phases.map((p) => {
     const ok = !p.id || built.has(p.id);
     return `<button class="phase" data-building="${p.id || ''}" aria-pressed="false"${ok ? '' : ' disabled'}><b>${p.label}</b><span>${ok ? p.sub : '规划中'}</span></button>`;
   }).join('');
@@ -78,8 +79,11 @@ export function createUI(app, layout) {
       const esc2 = layout.escalators.filter((e) => e.from === lv.id || e.to === lv.id).length;
       const lifts = layout.elevators.filter((e) => e.serves.includes(lv.id)).length;
       const wc = lv.rooms.filter((r) => r.type === 'wc').length;
-      const out = [['扶梯', esc2], ['电梯', lifts], ['洗手间', wc]];
-      if (lv.units.length) out.unshift(['店铺', lv.units.length]);
+      const tower = bById[lv.building]?.kind === 'tower';
+      const baths = lv.units.reduce((n, u) => n + (u.residence?.bathrooms.length || 0), 0);
+      const out = tower ? [['电梯', lifts], [baths ? '独立卫浴' : '公共卫生间', baths || wc]]
+        : [['扶梯', esc2], ['电梯', lifts], ['洗手间', wc]];
+      if (lv.units.length) out.unshift([bById[lv.building]?.kind === 'tower' ? '房间 / 户' : '店铺', lv.units.length]);
       if (lv.parking) out.push(['车位', lv.parking.stalls.length]);
       const ents = layout.entrances.filter((e) => e.level === lv.id).length;
       if (ents) out.push(['入口', ents]);
@@ -88,9 +92,9 @@ export function createUI(app, layout) {
     const levels = bid ? layout.levels.filter((l) => l.building === bid) : layout.levels;
     const ids = new Set(levels.map((l) => l.id));
     const units = levels.reduce((n, l) => n + l.units.length, 0);
-    const out = [['店铺', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', layout.elevators.filter((e) => ids.has(e.serves[0])).length],
+    const out = [[bid && bById[bid]?.kind === 'tower' ? '房间 / 户' : bid ? '店铺' : '店铺 / 房间', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', layout.elevators.filter((e) => ids.has(e.serves[0])).length],
       ['人行入口', layout.entrances.filter((e) => ids.has(e.level) && e.to === 'site').length], ['车位', stallsOf(levels)]];
-    if (!bid) out.unshift(['已建', `${layout.buildings.filter((x) => x.kind !== 'metro').length} 期 + 地铁`]);
+    if (!bid) out.unshift(['园区', '商场 · 酒店 · 公寓 · 住宅 · 地铁']);
     return out;
   };
   function renderDirectory() {
@@ -101,8 +105,8 @@ export function createUI(app, layout) {
     $('dirBadge').textContent = lv ? lv.short : b ? b.short.replace('期', '') : '园';
     $('dirBadge').style.setProperty('--fc', lv ? lv.theme.accent : 'var(--accent)');
     $('dirTitle').textContent = lv ? `${b.short} · ${lv.name}` : b ? b.name : '园区导览';
-    $('dirTheme').textContent = s.explore ? '点分期、楼层或店铺，直接传送过去'
-      : lv ? lv.theme.label : b ? `${layout.levels.filter((l) => l.building === b.id).length} 个楼层 · 点击楼层或店铺查看` : '三期规划 · 点击分期、建筑或店铺查看';
+    $('dirTheme').textContent = s.explore ? '点建筑、楼层或房间可快速到达；电梯支持实际乘坐'
+      : lv ? lv.theme.label : b ? `${layout.levels.filter((l) => l.building === b.id).length} 个楼层 · 点击楼层查看` : '云澜汇综合园区 · 点击建筑进入';
     $('dirUp').hidden = !(s.explore && (s.focus || s.building));
     $('dirFacts').innerHTML = facts(s.building, lv).map(([k, v]) => `<span class="fact">${k} <b>${v}</b></span>`).join('');
     const pool = q
@@ -111,18 +115,18 @@ export function createUI(app, layout) {
     let html = '';
     if (!lv && !q) {
       if (!b) {
-        html = PHASES.filter((p) => p.id).map((p) => {
+        html = phases.filter((p) => p.id).map((p) => {
           const ok = built.has(p.id);
           const n = layout.levels.filter((l) => l.building === p.id).reduce((k, l) => k + l.units.length, 0);
-          return `<li><button class="shop" data-building="${p.id}"${ok ? '' : ' disabled'}><span class="shop-code">${p.label}</span><span class="shop-name"><b>${esc(ok ? bById[p.id].name : p.sub)}</b><span>${esc(ok ? bById[p.id].en : '规划建设中')}</span></span><span class="shop-cat" style="--cc:var(--accent)">${ok ? n + ' 家' : '规划中'}</span></button></li>`;
+          return `<li><button class="shop" data-building="${p.id}"${ok ? '' : ' disabled'}><span class="shop-code">${p.label}</span><span class="shop-name"><b>${esc(ok ? bById[p.id].name : p.sub)}</b><span>${esc(ok ? bById[p.id].en : '规划建设中')}</span></span><span class="shop-cat" style="--cc:var(--accent)">${ok ? n + (bById[p.id].kind === 'tower' ? ' 户/间' : ' 家') : '规划中'}</span></button></li>`;
         }).join('');
       } else {
         html = layout.levels.filter((l) => l.building === b.id).reverse()
-          .map((l) => `<li><button class="shop" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + ' 家' : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`)
+          .map((l) => `<li><button class="shop" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + (b.kind === 'tower' ? ' 户/间' : ' 家') : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`)
           .join('');
       }
     } else if (!pool.length) {
-      html = `<li class="empty">${q ? '没有找到匹配的店铺，换个关键词试试。' : '这一层没有店铺，主要是停车位和设备用房。'}</li>`;
+      html = `<li class="empty">${q ? '没有找到匹配的名称或房号。' : '这一层主要是公共设施和停车空间。'}</li>`;
     } else {
       const groups = new Map();
       for (const u of pool) {
@@ -182,8 +186,12 @@ export function createUI(app, layout) {
     for (const t of phaseTabs.querySelectorAll('.phase')) t.setAttribute('aria-pressed', String((t.dataset.building || null) === s.building));
     renderFloors(s.building);
     for (const f of floorList.querySelectorAll('.floor')) f.setAttribute('aria-pressed', String((f.dataset.level || null) === s.focus && !s.exploded));
+    const activeFloor = floorList.querySelector('[aria-pressed="true"]');
+    if (activeFloor && s.focus) activeFloor.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     const press = (act, on) => toolbar.querySelector(`[data-act="${act}"]`)?.setAttribute('aria-pressed', String(!!on));
     press('explode', s.exploded);
+    const explode = toolbar.querySelector('[data-act="explode"]');
+    if (explode) { explode.disabled = bById[s.building]?.kind === 'tower'; explode.title = explode.disabled ? '选择楼层查看室内' : '爆炸视图'; }
     press('flows', s.flows);
     press('labels', s.labels);
     press('night', s.night);
@@ -191,7 +199,7 @@ export function createUI(app, layout) {
     $('legend').hidden = !s.flows;
     const lv = s.focus ? lvById[s.focus] : null;
     const b = s.building ? bById[s.building] : null;
-    $('floorInfo').textContent = s.exploded ? `${b.name} · 爆炸视图` : lv ? `${b.short} · ${lv.name} · ${lv.theme.label}` : b ? `${b.name} · ${b.en}` : '园区总览 · 一期云澜汇 · 二期星湾 · 三期云澜里 · 地铁云澜汇站';
+    $('floorInfo').textContent = s.exploded ? `${b.name} · 爆炸视图` : lv ? `${b.short} · ${lv.name} · ${lv.theme.label}` : b ? `${b.name} · ${b.en}` : '云澜汇 · 商业 / 酒店 / 公寓 / 住宅综合园区';
     renderDirectory();
   }
   app.on(sync);

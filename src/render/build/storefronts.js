@@ -1,6 +1,6 @@
 // 店面：玻璃橱窗 + 门洞 + 门头招牌；美食档口为开敞柜台；B1M 西翼为"云澜老街"木门脸、瓦檐与红灯笼。
 import * as THREE from 'three';
-import { NORMAL } from '../../layout/geom.js';
+import { NORMAL, subtractInterval } from '../../layout/geom.js';
 import { themeOf } from '../theme.js';
 import { clearHeight } from './shell.js';
 import { storeStyle, glassDoors } from '../../layout/frontage.js';
@@ -53,21 +53,57 @@ function front(B, S, lv, u, f, cell, style) {
     B.get(key).box(x, y, z, su, sy, sv, color, F.ang);
   };
   const frameCol = style === 'oldstreet' ? '#4a2c1a' : lv.short === '1F' ? '#a88a55' : '#3f454b';
+  const timber = style === 'oldstreet' || ['cafe', 'tea', 'restaurant', 'home', 'book'].includes(brand.cat);
+  const liningKey = timber ? 'wood' : 'stone';
+  const liningCol = timber ? '#dfc5a8' : '#eee8dc';
 
   if (style === 'glass' || style === 'cinema' || style === 'market') {
     const { width: doorW, at: doors } = glassDoors(style, F.len);
+    const openings = doorW ? doors.map((d) => [d - doorW / 2, d + doorW / 2]) : [[0, F.len]];
+    // 与导航共用精确门宽；玻璃、踢脚与分格竖梃都不能横跨门洞。
+    const panels = openings.reduce((spans, gap) => subtractInterval(spans, gap), [[0, F.len]]);
     const n = Math.max(1, Math.round(F.len / 1.6));
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * F.len, b = ((i + 1) / n) * F.len, m = (a + b) / 2;
-      if (doorW && doors.some((d) => Math.abs(m - d) < doorW / 2)) continue;
-      box('glass', m, 0, y0 + glassTop / 2, b - a - 0.03, 0.04, glassTop, 0xffffff);
+      const a = (i / n) * F.len, b = ((i + 1) / n) * F.len;
+      for (const [p, q] of panels) {
+        const lo = Math.max(a, p), hi = Math.min(b, q);
+        if (hi - lo < 0.04) continue;
+        box('glass', (lo + hi) / 2, 0.04, y0 + glassTop / 2, hi - lo - 0.02, 0.04, glassTop, 0xffffff);
+      }
     }
-    for (let i = 0; i <= n; i++) box('metal', (i / n) * F.len, 0, y0 + glassTop / 2, 0.07, 0.12, glassTop, frameCol);
-    box('metal', F.len / 2, 0, y0 + 0.02, F.len, 0.3, 0.04, '#9aa0a6');
+    for (let i = 0; i <= n; i++) {
+      const p = (i / n) * F.len;
+      if (openings.some(([a, b]) => p > a - 0.04 && p < b + 0.04)) continue;
+      box('metal', p, 0, y0 + glassTop / 2, 0.055, 0.1, glassTop, frameCol);
+    }
+    for (const [a, b] of panels) {
+      box('metal', (a + b) / 2, 0, y0 + 0.025, b - a, 0.2, 0.05, frameCol);
+      box('metal', (a + b) / 2, 0, y0 + glassTop - 0.04, b - a, 0.12, 0.08, frameCol);
+      // 窗内低台与顶灯槽：离玻璃退让，保留通向店内的中心视线。
+      if (b - a > 1.1) {
+        box(liningKey, (a + b) / 2, 0.32, y0 + 0.12, b - a - 0.16, 0.5, 0.24, liningCol);
+        box('glow', (a + b) / 2, 0.34, y0 + glassTop - 0.12, b - a - 0.2, 0.07, 0.045, '#fff0d0');
+      }
+    }
+    for (const d of doors) {
+      if (!doorW) continue;
+      const dh = Math.min(2.65, glassTop - 0.15);
+      for (const side of [-1, 1]) {
+        const p = d + side * (doorW / 2 + 0.065);
+        box(liningKey, p, 0.13, y0 + dh / 2, 0.13, 0.42, dh, liningCol);
+        box('metal', p - side * 0.07, 0, y0 + dh / 2, 0.035, 0.12, dh, frameCol);
+        // 门扇停在门洞侧面的内凹门套中，门中间保持真正敞开。
+        box('glass', p, 0.62, y0 + dh / 2, 0.04, 0.85, dh - 0.08, 0xffffff);
+        box('metal', p - side * 0.09, 0.85, y0 + 1.15, 0.025, 0.035, 0.5, frameCol);
+      }
+      box(liningKey, d, 0.12, y0 + dh + 0.07, doorW + 0.25, 0.42, 0.14, liningCol);
+      if (glassTop - dh > 0.16) box('glass', d, 0.03, y0 + (dh + 0.14 + glassTop) / 2, doorW, 0.04, glassTop - dh - 0.14, 0xffffff);
+      box('metal', d, -0.02, y0 + dh + 0.07, 0.3, 0.09, 0.055, '#343b40');
+    }
   } else if (style === 'stall' || style === 'oldstreet') {
     const top = style === 'oldstreet' ? '#7a4a2a' : '#d8dde2';
-    box('satin', F.len / 2 - 0.4, 0.45, y0 + 0.52, F.len - 1.6, 0.7, 1.04, style === 'oldstreet' ? '#5a3a22' : '#eef1f3');
-    box('satin', F.len / 2 - 0.4, 0.45, y0 + 1.06, F.len - 1.5, 0.8, 0.05, top);
+    box(style === 'oldstreet' ? 'wood' : 'stone', F.len / 2 - 0.4, 0.45, y0 + 0.52, F.len - 1.6, 0.7, 1.04, style === 'oldstreet' ? '#bb9470' : '#eef1f3');
+    box('stone', F.len / 2 - 0.4, 0.45, y0 + 1.06, F.len - 1.5, 0.8, 0.05, top);
     // 菜单灯箱
     const k = Math.max(1, Math.floor(F.len / 2.2));
     for (let i = 0; i < k; i++) {
@@ -99,6 +135,10 @@ function front(B, S, lv, u, f, cell, style) {
   // 门头
   const fascia = style === 'oldstreet' ? '#3b2416' : shade(brand.bg, brand.bg.toLowerCase() === '#ffffff' ? -0.06 : -0.12);
   box('satin', F.len / 2, 0.05, y0 + fy, F.len + 0.02, 0.3, fasciaTop - glassTop, fascia);
+  // 店招嵌在完整的门楣构造里：阴影缝、收边及檐下灯槽。
+  box('metal', F.len / 2, -0.015, y0 + fasciaTop + 0.015, F.len + 0.08, 0.42, 0.035, frameCol);
+  box('metal', F.len / 2, 0.0, y0 + glassTop + 0.01, F.len + 0.08, 0.4, 0.04, frameCol);
+  box('glow', F.len / 2, -0.08, y0 + glassTop - 0.035, Math.max(0.1, F.len - 0.32), 0.065, 0.035, '#fff0d2');
   if (H > fasciaTop + 0.1) box('matte', F.len / 2, 0.08, y0 + (fasciaTop + H) / 2, F.len, 0.24, H - fasciaTop, themeOf(lv).wall);
   const maxW = F.len >= 14 ? 12 : 6.4;
   let w = Math.min(F.len * 0.78, maxW);
