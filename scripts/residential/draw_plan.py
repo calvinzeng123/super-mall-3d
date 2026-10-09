@@ -74,14 +74,16 @@ class Canvas:
 
 def main(args):
     plan=json.loads(args.plan.read_text()); audit=json.loads(args.audit.read_text())
-    canvas=Canvas(); scale=70; left=184; top=184
-    def pt(p):return(left+p[0]*scale,top+(11.5-p[1])*scale)
+    canvas=Canvas();W,D=plan['envelope']['outer_rect'][2:];B=-plan['balcony']['rect'][1]
+    unit=plan.get('unit','03');program='四房两厅' if unit=='03' else '三房两厅'
+    scale=min(1228/W,1000/(D+B));left=(1600-W*scale)/2;top=184
+    def pt(p):return(left+p[0]*scale,top+(D-p[1])*scale)
     def rectangle(r):
         a,b=pt((r[0],r[3])),pt((r[2],r[1]));return(*a,*b)
     canvas.text((96,67),'云澜汇  /  住宅样板',17,'#77766c')
-    canvas.text((96,111),'03 · 四房两厅',38,weight='bold')
-    canvas.text((1504,74),'含墙平面 202.40 ㎡',21,anchor='end')
-    canvas.text((1504,111),'独立阳台 49.28 ㎡',19,'#65766b',anchor='end')
+    canvas.text((96,111),f'{unit} · {program}',38,weight='bold')
+    canvas.text((1504,74),f"含墙平面 {plan['area']['interior_envelope_m2']:.2f} ㎡",21,anchor='end')
+    canvas.text((1504,111),f"独立阳台 {plan['area']['balcony_m2']:.2f} ㎡",19,'#65766b',anchor='end')
     colors={'bedroom':'#ede5d7','bathroom':'#dce9e4','utility':'#dce9e4','kitchen':'#e4e5d8','living':'#eee8dc','dining':'#eee8dc','entry':'#eee8dc','circulation':'#f2ede3'}
     canvas.rect(rectangle(plan['balcony']['rect']),'#dde4d3')
     for room in plan['rooms']:
@@ -130,24 +132,24 @@ def main(args):
         'foyer':(8.69,10.62),'bath_common':(11.10,10.32),'laundry':(13.12,9.76),
         'gallery_west':(3.65,6.20),'gallery_east':(15.76,6.2)}
     for room in plan['rooms']:
-        x,y=pt(labels[room['id']]); title=room['name'].replace('侧家庭厅廊','侧厅廊').replace('南次卧套卫','套卫').replace('独立洗衣房','洗衣房')
+        x,y=pt(room.get('label_position',labels.get(room['id'],[(room['floor_rects'][0][0]+room['floor_rects'][0][2])/2,(room['floor_rects'][0][1]+room['floor_rects'][0][3])/2]))); title=room['name'].replace('侧家庭厅廊','侧厅廊').replace('南次卧套卫','套卫').replace('独立洗衣房','洗衣房')
         # Quiet paper labels stay readable over small furniture mesh details.
         width=max(66,len(title)*19+14)
         canvas.rect((x-width/2,y-15,x+width/2,y+30),'#f8f5ee')
         canvas.text((x,y),title,18,anchor='middle')
         canvas.text((x,y+22),f"{room['zone_area_m2']:.2f} ㎡",13,'#7a776c',anchor='middle')
-    x,y=pt((8.8,-1.85));canvas.rect((x-165,y-20,x+165,y+27),'#edf0e3')
-    canvas.text((x,y-2),'南向通长阳台 · 49.28 ㎡',20,'#4e624c',anchor='middle')
-    x,y=pt((8.55,11.90));canvas.text((x,y),'入户',17,'#77684f',anchor='middle')
+    x,y=pt((W/2,-B*.67));canvas.rect((x-165,y-20,x+165,y+27),'#edf0e3')
+    canvas.text((x,y-2),f"南向通长阳台 · {plan['area']['balcony_m2']:.2f} ㎡",20,'#4e624c',anchor='middle')
+    x,y=pt((plan.get('entry_audit_start',[8.55])[0],D+.40));canvas.text((x,y),'入户',17,'#77684f',anchor='middle')
 
     # Dimensions refer to the external footprint, with balcony shown separately.
     def dimension(a,b,label,labelpos):
         aa,bb=pt(a),pt(b);canvas.line([aa,bb],'#958d7d',1)
         for p in (aa,bb):canvas.line([(p[0]-5,p[1]+5),(p[0]+5,p[1]-5)],'#958d7d',1)
         canvas.text(pt(labelpos),label,16,'#746d60',anchor='middle')
-    dimension((0,12.10),(17.6,12.10),'17.60 m',(8.8,12.31))
-    dimension((-.65,0),(-.65,11.5),'11.50 m',(-1.16,5.75))
-    dimension((-.65,-2.8),(-.65,0),'2.80 m',(-1.14,-1.4))
+    dimension((0,D+.60),(W,D+.60),f'{W:.2f} m',(W/2,D+.81))
+    dimension((-.65,0),(-.65,D),f'{D:.2f} m',(-1.16,D/2))
+    dimension((-.65,-B),(-.65,0),f'{B:.2f} m',(-1.14,-B/2))
     nx,ny=1490,200;canvas.text((nx,ny-48),'北',20,anchor='middle')
     canvas.line([(nx,ny+45),(nx,ny-15)],'#535e52',2)
     canvas.polygon([(nx,ny-27),(nx-9,ny-4),(nx+9,ny-4)],'#535e52')
@@ -164,7 +166,7 @@ def main(args):
     canvas.text((96,1348),'家具及墙体轮廓取自保存后的 Blender 实际网格；门窗符号来自建模平面。',16,'#6b6e63')
     canvas.text((96,1380),'标注面积为含墙平面分区，非净使用面积。独立住宅原型，尚未接入现有园区楼层。',16,'#6b6e63')
     args.out.mkdir(parents=True,exist_ok=True)
-    path=args.out/'03四房两厅_中文平面图';canvas.save(path)
+    path=args.out/f'{unit}{program}_中文平面图';canvas.save(path)
     print(path.with_suffix('.svg'))
     if canvas.image:print(path.with_suffix('.png'))
 

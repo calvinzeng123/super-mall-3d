@@ -1,0 +1,450 @@
+{
+  "blenderVersion": "5.1.2",
+  "plan": "residential-01",
+  "unit": "01",
+  "rooms": [
+    {
+      "id": "bed_primary",
+      "name": "主卧套间",
+      "type": "bedroom",
+      "floor_rects": [
+        [
+          0,
+          0,
+          5.6,
+          2.6
+        ],
+        [
+          0,
+          2.6,
+          3.5,
+          5.4
+        ]
+      ],
+      "label_position": [
+        2.1,
+        1.2
+      ],
+      "audit_point": [
+        3.02,
+        3.45
+      ],
+      "zone_area_m2": 24.36,
+      "suite": "primary",
+      "exterior_sides": [
+        "south",
+        "west"
+      ]
+    },
+    {
+      "id": "bath_primary",
+      "name": "主卫",
+      "type": "bathroom",
+      "floor_rects": [
+        [
+          3.5,
+          2.6,
+          5.6,
+          5.4
+        ]
+      ],
+      "label_position": [
+        4.55,
+        4.0
+      ],
+      "audit_point": [
+        4.5,
+        3.25
+      ],
+      "zone_area_m2": 5.88,
+      "suite": "primary"
+    },
+    {
+      "id": "living",
+      "name": "横向客厅",
+      "type": "living",
+      "floor_rects": [
+        [
+          5.6,
+          0,
+          15.6,
+          5.4
+        ]
+      ],
+      "label_position": [
+        11.8,
+        1.2
+      ],
+      "audit_point": [
+        7.1,
+        2.0
+      ],
+      "zone_area_m2": 54.0,
+      "exterior_sides": [
+        "south",
+        "east"
+      ]
+    },
+    {
+      "id": "gallery_west",
+      "name": "家庭厅廊",
+      "type": "circulation",
+      "floor_rects": [
+        [
+          0,
+          5.4,
+          7.4,
+          7
+        ]
+      ],
+      "label_position": [
+        3.5,
+        6.2
+      ],
+      "audit_point": [
+        6.45,
+        6.2
+      ],
+      "zone_area_m2": 11.84,
+      "exterior_sides": [
+        "west"
+      ]
+    },
+    {
+      "id": "gallery_east",
+      "name": "次卧厅廊",
+      "type": "circulation",
+      "floor_rects": [
+        [
+          12.3,
+          5.4,
+          15.6,
+          7
+        ]
+      ],
+      "label_position": [
+        14,
+        6.2
+      ],
+      "audit_point": [
+        13.05,
+        6.2
+      ],
+      "zone_area_m2": 5.28,
+      "exterior_sides": [
+        "east"
+      ]
+    },
+    {
+      "id": "bed_northwest",
+      "name": "儿童房",
+      "type": "bedroom",
+      "floor_rects": [
+        [
+          0,
+          7,
+          4.6,
+          11.5
+        ]
+      ],
+      "label_position": [
+        2.35,
+        8.45
+      ],
+      "audit_point": [
+        3.25,
+        8.42
+      ],
+      "zone_area_m2": 20.7,
+      "exterior_sides": [
+        "north",
+        "west"
+      ]
+    },
+    {
+      "id": "kitchen",
+      "name": "独立中西厨房",
+      "type": "kitchen",
+      "floor_rects": [
+        [
+          4.6,
+          7,
+          7.4,
+          11.5
+        ]
+      ],
+      "label_position": [
+        6.1,
+        9.5
+      ],
+      "audit_point": [
+        6.2,
+        9.2
+      ],
+      "zone_area_m2": 12.6,
+      "exterior_sides": [
+        "north"
+      ]
+    },
+    {
+      "id": "dining",
+      "name": "六人餐厅",
+      "type": "dining",
+      "floor_rects": [
+        [
+          7.4,
+          5.4,
+          12.3,
+          9.1
+        ]
+      ],
+      "label_position": [
+        10.4,
+        7.45
+      ],
+      "audit_point": [
+        8.0,
+        7.0
+      ],
+      "zone_area_m2": 18.13
+    },
+    {
+      "id": "foyer",
+      "name": "玄关",
+      "type": "entry",
+      "floor_rects": [
+        [
+          7.4,
+          9.1,
+          9.9,
+          11.5
+        ]
+      ],
+      "label_position": [
+        8.55,
+        10.5
+      ],
+      "audit_point": [
+        8.7,
+        10.0
+      ],
+      "zone_area_m2": 6.0,
+      "exterior_sides": [
+        "north"
+      ]
+    },
+    {
+      "id": "bath_common",
+      "name": "公共卫浴",
+      "type": "bathroom",
+      "floor_rects": [
+        [
+          9.9,
+          9.1,
+          12.3,
+          11.5
+        ]
+      ],
+      "label_position": [
+        11.1,
+        10.3
+      ],
+      "audit_point": [
+        10.95,
+        9.9
+      ],
+      "zone_area_m2": 5.76,
+      "exterior_sides": [
+        "north"
+      ]
+    },
+    {
+      "id": "bed_northeast",
+      "name": "成长次卧",
+      "type": "bedroom",
+      "floor_rects": [
+        [
+          12.3,
+          7,
+          15.6,
+          11.5
+        ]
+      ],
+      "label_position": [
+        13.95,
+        8.45
+      ],
+      "audit_point": [
+        13.05,
+        8.4
+      ],
+      "zone_area_m2": 14.85,
+      "exterior_sides": [
+        "north",
+        "east"
+      ]
+    }
+  ],
+  "area": {
+    "interior_envelope_m2": 179.4,
+    "balcony_m2": 43.68,
+    "net_usable_m2": null,
+    "basis": "15.6×11.5m含墙平面范围；房间分区面积不是净使用或销售面积，15.6×2.8m阳台单列"
+  },
+  "objects": 1559,
+  "meshObjects": 1483,
+  "lights": 20,
+  "sourceFurnitureScale": 1,
+  "mirroredMeshesBaked": 0,
+  "assembly": [
+    {
+      "kind": "source_bed",
+      "id": "source_bed",
+      "room": null,
+      "objects": 5,
+      "mirrored": false
+    },
+    {
+      "kind": "source_sofa",
+      "id": "east_sofa",
+      "room": null,
+      "objects": 1,
+      "mirrored": false
+    },
+    {
+      "kind": "source_sofa",
+      "id": "north_sofa",
+      "room": null,
+      "objects": 1,
+      "mirrored": false
+    },
+    {
+      "kind": "source_floorlamp",
+      "id": "source_floorlamp",
+      "room": null,
+      "objects": 1,
+      "mirrored": false
+    },
+    {
+      "kind": "beds",
+      "id": "beds",
+      "room": "bed_northwest",
+      "objects": 21,
+      "mirrored": false
+    },
+    {
+      "kind": "beds",
+      "id": "beds",
+      "room": "bed_northeast",
+      "objects": 21,
+      "mirrored": false
+    },
+    {
+      "kind": "wardrobes",
+      "id": "wardrobes",
+      "room": "bed_primary",
+      "objects": 19,
+      "mirrored": false
+    },
+    {
+      "kind": "wardrobes",
+      "id": "wardrobes",
+      "room": "bed_northwest",
+      "objects": 19,
+      "mirrored": false
+    },
+    {
+      "kind": "wardrobes",
+      "id": "wardrobes",
+      "room": "bed_northeast",
+      "objects": 15,
+      "mirrored": false
+    },
+    {
+      "kind": "wardrobes",
+      "id": "wardrobes",
+      "room": "foyer",
+      "objects": 15,
+      "mirrored": false
+    },
+    {
+      "kind": "studies",
+      "id": "studies",
+      "room": "bed_northwest",
+      "objects": 45,
+      "mirrored": false
+    },
+    {
+      "kind": "studies",
+      "id": "studies",
+      "room": "bed_northeast",
+      "objects": 45,
+      "mirrored": false
+    },
+    {
+      "kind": "baths",
+      "id": "baths",
+      "room": "bath_primary",
+      "objects": 99,
+      "mirrored": false
+    },
+    {
+      "kind": "baths",
+      "id": "baths",
+      "room": "bath_common",
+      "objects": 99,
+      "mirrored": false
+    },
+    {
+      "kind": "kitchens",
+      "id": "cooking_run",
+      "room": null,
+      "objects": 127,
+      "mirrored": false
+    },
+    {
+      "kind": "kitchens",
+      "id": "sink_run",
+      "room": null,
+      "objects": 55,
+      "mirrored": false
+    },
+    {
+      "kind": "dining",
+      "id": "dining",
+      "room": null,
+      "objects": 144,
+      "mirrored": false
+    },
+    {
+      "kind": "laundry",
+      "id": "laundry",
+      "room": "balcony",
+      "objects": 42,
+      "mirrored": false
+    },
+    {
+      "kind": "balcony",
+      "id": "balcony",
+      "room": null,
+      "objects": 140,
+      "mirrored": false
+    }
+  ],
+  "blend": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅01样板/云澜汇_01三房两厅.blend",
+  "glb": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅01样板/云澜汇_01三房两厅.glb",
+  "renders": [
+    "overview.png",
+    "plan.png",
+    "living.png",
+    "master.png",
+    "kitchen.png",
+    "balcony.png",
+    "dining.png",
+    "bath.png",
+    "bedroom2.png",
+    "bedroom3.png",
+    "commonBath.png",
+    "night.png"
+  ]
+}

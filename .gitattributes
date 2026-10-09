@@ -2,3 +2,8 @@
 prototypes/residential03/** linguist-generated=true
 # The offline page embeds the full GLB plus bundled shader source.
 prototypes/residential03/*.html -diff -text
+
+prototypes/residential01/** linguist-generated=true
+prototypes/residential02/** linguist-generated=true
+prototypes/residential01/*.html -diff -text
+prototypes/residential02/*.html -diff -text

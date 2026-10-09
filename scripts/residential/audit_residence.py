@@ -208,7 +208,9 @@ def run(args):
 
     # Real mesh-based occupancy, radius-inflated per individual object, with A*.
     step, radius = args.grid_step, args.radius
-    xmin, ymin, xmax, ymax = -.5, -3.2, 18.1, 12.3
+    envelope = plan['envelope']['outer_rect']; balcony = plan['balcony']['rect']
+    xmin, ymin = min(envelope[0], balcony[0])-.8, min(envelope[1], balcony[1])-.8
+    xmax, ymax = max(envelope[2], balcony[2])+.8, max(envelope[3], balcony[3])+.8
     xs = np.arange(xmin, xmax+step/2, step)
     ys = np.arange(ymin, ymax+step/2, step)
     blocked = np.zeros((len(ys), len(xs)), dtype=bool)
@@ -226,7 +228,7 @@ def run(args):
 
     def cell(point):
         return (int(round((point[1]-ymin)/step)), int(round((point[0]-xmin)/step)))
-    start = cell((8.55, 11.95))
+    start = cell(plan.get('entry_audit_start', (8.55, 11.95)))
     distance, previous = {start: 0.0}, {}
     queue = [(0.0, start)]
     if blocked[start]:
@@ -251,6 +253,7 @@ def run(args):
                    kitchen=(6.2, 9.3), foyer=(8.65, 10.5), bath_primary=(4.12, 3.7),
                    bath_guest=(16.02, 3.7), bath_common=(10.55, 10), laundry=(13.1, 10.1),
                    gallery_west=(5.5, 6.2), gallery_east=(15.5, 6.2), balcony=(9.2, -1.4))
+    anchors = plan.get('navigation_targets', anchors)
     targets = [(key, point) for key, point in anchors.items()]
     for r in furnishings:
         if r['name'].startswith('Flush shower tray'):
@@ -285,7 +288,10 @@ def run(args):
         group = groups.setdefault(r['group'], dict(name=r['group'], bounds=r['bounds'], members=0))
         group['bounds'] = [list(np.minimum(group['bounds'][0], r['bounds'][0])), list(np.maximum(group['bounds'][1], r['bounds'][1]))]
         group['members'] += 1
-    report = dict(schema_version=1, source_blend=str(args.blend.resolve()),
+    outside = [dict(name=r['name'],bounds=r['bounds']) for r in records
+               if r['bounds'][0][0]<min(envelope[0],balcony[0])-.15 or r['bounds'][1][0]>max(envelope[2],balcony[2])+.15
+               or r['bounds'][0][1]<min(envelope[1],balcony[1])-.15 or r['bounds'][1][1]>max(envelope[3],balcony[3])+.15]
+    report = dict(schema_version=2, unit=plan.get('unit','03'), outside_envelope=outside, source_blend=str(args.blend.resolve()),
                   blend_mtime=args.blend.stat().st_mtime, blender_version=bpy.app.version_string,
                   method=dict(source='Evaluated .blend meshes and transforms; JSON only supplies room/aperture intent',
                               body_height_band_m=[.12, 1.75], navigation_radius_m=radius, grid_step_m=step,
@@ -293,7 +299,7 @@ def run(args):
                               projection='Individual mesh convex hulls, clipped to body height; conservative for concave or disconnected meshes',
                               exclusions='Ground rugs/runners/curtains, ceilings, wall artwork and objects wholly below .12m or above 1.75m are not walking obstacles',
                               limitations='Conservative geometric audit; does not certify regulations, accessibility, door swing animation or every furniture operation'),
-                  summary=dict(mesh_objects=len(records), furniture_objects=len(furnishings), wall_penetrations=len(conflicts),
+                  summary=dict(outside_envelope_objects=len(outside), mesh_objects=len(records), furniture_objects=len(furnishings), wall_penetrations=len(conflicts),
                                door_intrusions=sum(bool(d['candidates']) for d in door_checks),
                                window_obstruction_candidates=sum(bool(d['candidates']) for d in window_checks),
                                navigation_targets=len(routes), reachable_targets=sum(r['reachable'] for r in routes)),

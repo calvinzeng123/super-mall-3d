@@ -11,10 +11,20 @@ const mobile = matchMedia('(pointer:coarse)').matches || innerWidth < 700;
 const $ = id => document.getElementById(id);
 const clamp = THREE.MathUtils.clamp;
 const blender = ([x, y, z = 0]) => new THREE.Vector3(x, z, -y);
-const names = { overview: '整体', plan: '平面', living: '客厅', dining: '餐厅', master: '主卧', bedroom2: '儿童房', bedroom3: '次卧', guest: '客卧', kitchen: '厨房', bath: '主卫', commonBath: '公卫', balcony: '阳台' };
+const names = Object.fromEntries(BUILD.views.map(view => [view.id, view.label]));
+const config = PLAN.viewer || {};
+const lighting = config.lighting || {};
+const legacy = BUILD.unit === '03';
+const envelope = PLAN.envelope?.outer_rect || [0, 0, 17.6, 11.5];
+const balconyRect = PLAN.balcony?.rect || envelope;
+const footprint = [Math.min(envelope[0], balconyRect[0]), Math.min(envelope[1], balconyRect[1]), Math.max(envelope[2], balconyRect[2]), Math.max(envelope[3], balconyRect[3])];
+const center = [(footprint[0] + footprint[2]) / 2, (footprint[1] + footprint[3]) / 2];
+const planWidth = legacy ? 21 : footprint[2] - footprint[0] + 2.4;
+const planHeight = legacy ? 17 : footprint[3] - footprint[1] + 2.4;
+const walkBounds = config.walkBounds || { min: [footprint[0] - 5, footprint[1] - 5, .18], max: [footprint[2] + 5, footprint[3] + 5, 25] };
 
-// Camera positions use Blender's east/north/up axes. plan_03.json may override
-// any preset with a views array, viewer.views or viewerViews.
+// Authored positions and bounds use Blender's east/north/up axes. The 03
+// presets remain compatible; other plans expose only their declared views.
 const presets = {
   overview: { position: [26.5, -23, 24], target: [8.8, 4.1, .7], fov: 35, roof: false },
   plan: { position: [8.8, 4.35, 35], target: [8.8, 4.35, 0], roof: false },
@@ -29,10 +39,22 @@ const presets = {
   kitchen: { position: [7.7, 7.7, 1.65], target: [7.1, 10.3, 1.15], fov: 68, roof: true },
   balcony: { position: [6.4, -2.25, 1.65], target: [9.7, .9, 1.25], fov: 72, roof: true },
 };
+if (!legacy) {
+  const extent = Math.max(footprint[2] - footprint[0], footprint[3] - footprint[1]);
+  presets.overview = { position: [center[0] + extent, center[1] - extent * 1.6, extent * 1.4], target: [...center, .6], fov: 35, roof: false };
+  presets.plan = { position: [...center, 35], target: [...center, 0], roof: false };
+}
 const authoredViews = PLAN?.viewer?.views || PLAN?.viewerViews || PLAN?.views || {};
 for (const [key, value] of Array.isArray(authoredViews) ? authoredViews.map(value => [value.id, value]) : Object.entries(authoredViews)) {
   const id = key === 'primary' ? 'master' : key;
-  if (presets[id] && value?.position?.length === 3 && value?.target?.length === 3) presets[id] = { ...presets[id], ...value };
+  if (value?.position?.length === 3 && value?.target?.length === 3) presets[id] = { ...presets[id], ...value };
+}
+for (const id of Object.keys(presets)) if (!(id in names)) delete presets[id];
+const walkStart = config.walkStart || ('living' in presets ? 'living' : Object.keys(presets).find(id => !['overview','plan'].includes(id)));
+function roomCenter(room) {
+  const rects = room.floor_rects || [];
+  const rect = rects.reduce((largest, rect) => !largest || (rect[2]-rect[0])*(rect[3]-rect[1]) > (largest[2]-largest[0])*(largest[3]-largest[1]) ? rect : largest, null);
+  return rect ? [(rect[0]+rect[2])/2, (rect[1]+rect[3])/2] : null;
 }
 
 async function main() {
@@ -41,7 +63,7 @@ async function main() {
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = .93;
+  renderer.toneMappingExposure = lighting.dayExposure ?? .93;
   renderer.shadowMap.enabled = !mobile;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
@@ -52,7 +74,7 @@ async function main() {
   controls.enableDamping = true; controls.dampingFactor = .075;
   controls.minDistance = .25; controls.maxDistance = 85;
   controls.maxPolarAngle = Math.PI / 2 - .015;
-  controls.target.set(8.8, .7, -4.1);
+  controls.target.copy(blender(presets.overview.target));
   const pmrem = new THREE.PMREMGenerator(renderer);
   const roomEnvironment = new RoomEnvironment();
   const environment = pmrem.fromScene(roomEnvironment, .035);
@@ -61,7 +83,7 @@ async function main() {
   const hemisphere = new THREE.HemisphereLight('#fff2db', '#829183', 1.5);
   scene.add(hemisphere);
   const sun = new THREE.DirectionalLight('#fff0d2', 2.5);
-  sun.position.set(12, 20, 12); sun.target.position.set(8.8, 0, -4.1);
+  sun.position.copy(blender(lighting.sunPosition || (legacy ? [12,-12,20] : [center[0]+5,center[1]-16,20]))); sun.target.position.copy(blender(legacy ? [8.8,4.1,0] : [center[0],center[1],0]));
   sun.castShadow = !mobile;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: .5, far: 70 });
@@ -74,7 +96,7 @@ async function main() {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   const gltf = await new GLTFLoader().parseAsync(bytes.buffer, '');
   const model = gltf.scene;
-  model.name = '住宅03_四房两厅';
+  model.name = BUILD.identity;
   scene.add(model); model.updateMatrixWorld(true);
   const roofObjects = [], authoredLights = [], meshes = [], resizedImages = new WeakMap();
   let importedLightCount = 0;
@@ -116,7 +138,7 @@ async function main() {
   // glTF does not encode Blender AREA lamps. A local warm rig preserves room
   // lighting in this standalone viewer, with no image or decoder dependency.
   if (!authoredLights.length) {
-    const roomLamps = [
+    const legacyRoomLamps = [
       ['living west',7.4,2.3,19],['living east',10.6,2.7,19],['dining',10.6,7.4,24],
       ['primary',1.7,2,15],['primary entry',2.6,4.7,7],['guest',16.1,1.2,15],
       ['northwest bedroom',2.3,9,18],['northeast bedroom',16,9,18],['kitchen',6.1,9.7,19],
@@ -124,18 +146,25 @@ async function main() {
       ['primary bath',4.6,4.05,12],['guest bath',16.5,4.05,12],['common bath',11.25,10.4,12],
       ['laundry',13.1,10.5,8],['balcony',9,-1.25,10],
     ];
-    for (const [name,x,y,power] of roomLamps) {
+    const roomLamps = lighting.roomLamps || (legacy ? legacyRoomLamps : (PLAN.rooms || []).map(room => {
+      const position = roomCenter(room);
+      return position ? [room.id, ...position, /bath|laundry|gallery|foyer/.test(room.id) ? 12 : 19] : null;
+    }).filter(Boolean));
+    for (const [name,x,y,rawPower] of roomLamps) {
+      const power = rawPower * (lighting.powerScale ?? 1);
       const light = new THREE.SpotLight('#ffe4c2',power,6.5,1.06,.65,2);
       light.name = `Viewer warm ${name}`; light.position.copy(blender([x,y,2.70]));
       light.target.position.copy(blender([x,y,0]));
       scene.add(light,light.target);
       authoredLights.push({light,intensity:power,position:new THREE.Vector3()});
     }
-    for (const [name,p,t,power] of [
+    const legacyTaskLamps = [
       ['bedside',[.56,3.65,2.40],[1.45,3.65,.8],2.5],
       ['media wash',[6.55,2.9,2.6],[5.6,2.9,1.2],4],
       ['kitchen worktop',[5.25,9.65,1.58],[5.45,9.65,.9],1.5],
-    ]) {
+    ];
+    for (const [name,p,t,rawPower] of lighting.taskLamps || (legacy ? legacyTaskLamps : [])) {
+      const power = rawPower * (lighting.powerScale ?? 1);
       const light = new THREE.SpotLight('#ffdcaf',power,3.5,.9,.75,2);
       light.name = `Viewer task ${name}`; light.position.copy(blender(p)); light.target.position.copy(blender(t));
       scene.add(light,light.target); authoredLights.push({light,intensity:power,position:new THREE.Vector3()});
@@ -157,7 +186,7 @@ async function main() {
   function resize() {
     renderer.setSize(innerWidth, innerHeight, false);
     perspective.aspect = innerWidth / innerHeight; perspective.fov = viewFov(state.view); perspective.updateProjectionMatrix();
-    const aspect = innerWidth / innerHeight, viewHeight = Math.max(17, 21 / aspect);
+    const aspect = innerWidth / innerHeight, viewHeight = Math.max(planHeight, planWidth / aspect);
     orthographic.left = -viewHeight * aspect / 2; orthographic.right = viewHeight * aspect / 2;
     orthographic.top = viewHeight / 2; orthographic.bottom = -viewHeight / 2;
     orthographic.updateProjectionMatrix();
@@ -184,17 +213,17 @@ async function main() {
   function night(on) {
     state.night = !!on;
     scene.background = new THREE.Color(state.night ? '#23332e' : '#dfe7df');
-    scene.environmentIntensity = state.night ? .3 : 1;
-    hemisphere.intensity = state.night ? .3 : 1.5;
-    sun.intensity = state.night ? .14 : 2.5;
+    scene.environmentIntensity = state.night ? (lighting.nightEnvironment ?? .3) : (lighting.dayEnvironment ?? 1);
+    hemisphere.intensity = state.night ? (lighting.nightHemisphere ?? .3) : (lighting.dayHemisphere ?? 1.5);
+    sun.intensity = state.night ? (lighting.nightSun ?? .14) : (lighting.daySun ?? 2.5);
     sun.color.set(state.night ? '#c2d3eb' : '#fff0d2');
-    renderer.toneMappingExposure = state.night ? 1.05 : .93;
+    renderer.toneMappingExposure = state.night ? (lighting.nightExposure ?? 1.05) : (lighting.dayExposure ?? .93);
     $('night-button').setAttribute('aria-pressed', String(state.night));
     $('night-button').textContent = state.night ? '切换日景' : '切换夜景';
     updateLights();
   }
   function label() {
-    $('view-label').textContent = `${names[state.view] || '住宅03'} · ${state.walking ? '自由漫游' : state.view === 'plan' ? '平面查看' : '轨道查看'}`;
+    $('view-label').textContent = `${names[state.view] || BUILD.identity} · ${state.walking ? '自由漫游' : state.view === 'plan' ? '平面查看' : '轨道查看'}`;
     $('controls-hint').textContent = state.walking
       ? mobile ? '按住方向键移动 · 拖动画面看向' : 'WASD 移动 · 拖动看向 · Q / E 升降 · Esc 退出'
       : state.view === 'plan' ? mobile ? '双指缩放 · 拖动平移' : '拖动平移 · 滚轮缩放'
@@ -206,7 +235,7 @@ async function main() {
   }
   function walk(on) {
     const next = !!on;
-    if (next && (camera === orthographic || state.view === 'overview' || camera.position.y > 5)) view('living');
+    if (next && (camera === orthographic || state.view === 'overview' || camera.position.y > 5)) view(walkStart);
     state.walking = next; controls.enabled = !next; keys.clear(); drag = null;
     if (next) {
       euler.setFromQuaternion(camera.quaternion, 'YXZ'); yaw = euler.y; pitch = euler.x;
@@ -286,7 +315,11 @@ async function main() {
       if (keys.has('KeyD')) direction.add(right); if (keys.has('KeyA')) direction.sub(right);
       if (keys.has('KeyE')) direction.y += 1; if (keys.has('KeyQ')) direction.y -= 1;
       if (direction.lengthSq()) camera.position.addScaledVector(direction.normalize(), speed);
-      camera.position.y = clamp(camera.position.y, .18, 25);
+      camera.position.y = clamp(camera.position.y, walkBounds.min[2], walkBounds.max[2]);
+      if (!legacy || config.walkBounds) {
+        camera.position.x = clamp(camera.position.x, walkBounds.min[0], walkBounds.max[0]);
+        camera.position.z = clamp(camera.position.z, -walkBounds.max[1], -walkBounds.min[1]);
+      }
     } else controls.update();
     lightClock += dt;
     if (lightClock > .4) { lightClock = 0; updateLights(); }
@@ -298,7 +331,7 @@ async function main() {
   window.__residentialViewer = {
     state, scene, model, renderer, controls, build: BUILD, plan: PLAN,
     get camera() { return camera; },
-    stats: { meshes: meshes.length, textures: textureSet.size, authoredLights: importedLightCount, activeLightingRig: authoredLights.length, roofObjects: roofObjects.length, mobile, bounds: { min: importedBounds.min.toArray(), max: importedBounds.max.toArray() } },
+    stats: { meshes: meshes.length, textures: textureSet.size, authoredLights: importedLightCount, activeLightingRig: authoredLights.length, roofObjects: roofObjects.length, mobile, viewIds: Object.keys(names), walkBounds, bounds: { min: importedBounds.min.toArray(), max: importedBounds.max.toArray() } },
     setView: view, setNight: night, setRoofVisible: roof, setWalk: walk,
   };
   state.ready = true; $('loading').hidden = true;

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#34483f">
   <link rel="icon" href="data:,">
-  <title>云澜汇 · 住宅03 四房两厅</title>
+  <title>{{TITLE}}</title>
   <style>
     :root{color-scheme:light;--ink:#24372e;--muted:#65766d;--paper:#f6f8f5;--line:#d2ddd4;--accent:#456c58;--glass:rgba(248,251,247,.92);--shadow:0 3px 24px #233d2e12;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
     *{box-sizing:border-box}body{margin:0;overflow:hidden;background:#dfe7df;color:var(--ink)}button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}button:focus-visible,summary:focus-visible{outline:3px solid #b79c61;outline-offset:3px}button:disabled{cursor:wait;opacity:.5}[hidden]{display:none!important}
@@ -35,23 +35,12 @@
   </style>
 </head>
 <body>
-  <canvas id="viewer" aria-label="住宅03三维模型，拖动查看或使用自由漫游" tabindex="0"></canvas>
+  <canvas id="viewer" aria-label="{{IDENTITY}}三维模型，拖动查看或使用自由漫游" tabindex="0"></canvas>
   <header class="top">
-    <div class="identity"><h1>云澜汇 · 住宅03</h1><p id="home-description">四房两厅 · 三卫 · 南向大阳台</p></div>
+    <div class="identity"><h1>{{IDENTITY}}</h1><p id="home-description">{{DESCRIPTION}}</p></div>
     <div class="tools">
       <nav class="view-tabs" aria-label="房间视角">
-        <button type="button" data-view="overview" aria-pressed="true">整体</button>
-        <button type="button" data-view="plan" aria-pressed="false">平面</button>
-        <button type="button" data-view="living" aria-pressed="false">客厅</button>
-        <button type="button" data-view="dining" aria-pressed="false">餐厅</button>
-        <button type="button" data-view="master" aria-pressed="false">主卧</button>
-        <button type="button" data-view="bedroom2" aria-pressed="false">儿童房</button>
-        <button type="button" data-view="bedroom3" aria-pressed="false">次卧</button>
-        <button type="button" data-view="guest" aria-pressed="false">客卧</button>
-        <button type="button" data-view="kitchen" aria-pressed="false">厨房</button>
-        <button type="button" data-view="bath" aria-pressed="false">主卫</button>
-        <button type="button" data-view="commonBath" aria-pressed="false">公卫</button>
-        <button type="button" data-view="balcony" aria-pressed="false">阳台</button>
+        <!--VIEW_BUTTONS-->
       </nav>
       <div class="actions" aria-label="查看设置">
         <button id="roof-button" type="button" aria-pressed="false">显示屋顶</button>
@@ -73,7 +62,7 @@
     </div>
     <div id="compass" aria-label="北向" hidden><span>N</span></div>
   </footer>
-  <div id="loading" role="status" aria-live="polite"><div class="title">云澜汇 · 住宅03</div><div class="loading-line"></div><div id="load-status">正在载入住宅与家具细节…</div><button id="retry" type="button" hidden>重新载入</button></div>
+  <div id="loading" role="status" aria-live="polite"><div class="title">{{IDENTITY}}</div><div class="loading-line"></div><div id="load-status">正在载入住宅与家具细节…</div><button id="retry" type="button" hidden>重新载入</button></div>
   <!--THIRD_PARTY_LICENSE-->
   <script>/*VIEWER_BUNDLE*/</script>
 </body>

@@ -5,9 +5,10 @@ import bpy
 from mathutils import Vector
 import numpy as np
 
-p=argparse.ArgumentParser();p.add_argument('--out',required=True)
+p=argparse.ArgumentParser();p.add_argument('--out',required=True);p.add_argument('--plan',type=Path,default=Path(__file__).with_name('plan_03.json'))
 args=p.parse_args(sys.argv[sys.argv.index('--')+1:]);out=Path(args.out)
-blend=out/'云澜汇_03四房两厅.blend';glb=out/'云澜汇_03四房两厅.glb'
+plan=json.loads(args.plan.read_text());basename=plan.get('model_basename','云澜汇_03四房两厅')
+blend=out/(basename+'.blend');glb=out/(basename+'.glb')
 sha=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
 bpy.ops.wm.open_mainfile(filepath=str(blend))
 used_images=[i for i in bpy.data.images if i.type=='IMAGE' and i.users and i.source=='FILE']
@@ -40,7 +41,12 @@ coordinates=[o.matrix_world@Vector(p) for o in meshes for p in o.bound_box]
 minimum=[min(p[i] for p in coordinates) for i in range(3)];maximum=[max(p[i] for p in coordinates) for i in range(3)]
 assert all(np.isfinite(minimum+maximum))
 print('REIMPORTED_BOUNDS',minimum,maximum)
-assert minimum[0]>-.2 and maximum[0]<17.8 and minimum[1]>-3 and maximum[1]<11.7 and maximum[2]<3.4
-report={'blender':bpy.app.version_string,'blendSHA256':sha(blend),'glbSHA256':sha(glb),'usedPackedImages':len(used_images),'missingPackedImages':missing,'embeddedGLBImages':len(j.get('images',[])),'externalGLBResources':0,'finitePositionAccessors':len(positions),'sourceMeshObjects':source_meshes,'reimportedMeshObjects':len(meshes),'boundsBlender':{'min':minimum,'max':maximum},'punctualLights':len(j.get('extensions',{}).get('KHR_lights_punctual',{}).get('lights',[])),'areaLightsNote':'Blender area lights are saved in the blend; the offline viewer supplies room lighting because glTF has no area-light primitive.'}
+ext=plan['envelope']['outer_rect'];bal=plan['balcony']['rect']
+assert minimum[0]>min(ext[0],bal[0])-.15 and maximum[0]<max(ext[2],bal[2])+.15
+assert minimum[1]>min(ext[1],bal[1])-.15 and maximum[1]<max(ext[3],bal[3])+.15
+assert maximum[2]<plan['envelope']['ceiling_z']+.55
+negative=[o.name for o in meshes if o.matrix_world.to_3x3().determinant()<0]
+assert not negative,negative
+report={'unit':plan.get('unit','03'),'negativeMeshTransforms':negative,'blender':bpy.app.version_string,'blendSHA256':sha(blend),'glbSHA256':sha(glb),'usedPackedImages':len(used_images),'missingPackedImages':missing,'embeddedGLBImages':len(j.get('images',[])),'externalGLBResources':0,'finitePositionAccessors':len(positions),'sourceMeshObjects':source_meshes,'reimportedMeshObjects':len(meshes),'boundsBlender':{'min':minimum,'max':maximum},'punctualLights':len(j.get('extensions',{}).get('KHR_lights_punctual',{}).get('lights',[])),'areaLightsNote':'Blender area lights are saved in the blend; the offline viewer supplies room lighting because glTF has no area-light primitive.'}
 (out/'asset-validation.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
 print('ASSET_VALIDATION',json.dumps(report,ensure_ascii=False))

@@ -1,0 +1,203 @@
+{
+  "unit": "01",
+  "createdAt": "2026-10-09T10:51:48.944588+00:00",
+  "status": "standalone-prototype",
+  "towerIntegration": false,
+  "files": [
+    {
+      "path": "01三房两厅_中文平面图.png",
+      "bytes": 257031,
+      "sha256": "d13362e9c808dc99922e6331293195d87692f3add44e5ace1968bdd78f2c46c9"
+    },
+    {
+      "path": "01三房两厅_中文平面图.svg",
+      "bytes": 353717,
+      "sha256": "3248b0bcbe069289959f1995bd1d6f8571210ece14627e0bc27e823087aef908"
+    },
+    {
+      "path": "actual-mesh-audit.json",
+      "bytes": 1874481,
+      "sha256": "15ea4e349e2f2735030e4149e8ea83a2294b39b05d10f33364dd59feb38c67d3"
+    },
+    {
+      "path": "asset-validation.json",
+      "bytes": 832,
+      "sha256": "f27e9157046e52a24cda47bd0ff540fe4389a8755ba683a2544a4facff51a1bb"
+    },
+    {
+      "path": "balcony.png",
+      "bytes": 2073441,
+      "sha256": "e8e9996508b4dc411b2a633b8c58a08952b7cc17bd398808a26c119909f060db"
+    },
+    {
+      "path": "bath.png",
+      "bytes": 2147431,
+      "sha256": "a59d93aa45427d9421fb80e752658610fdf0508e6556a0fbce86276051e840cd"
+    },
+    {
+      "path": "bedroom2.png",
+      "bytes": 2175138,
+      "sha256": "7613d08a8cc35b15d5142feb7444999a610a67c570f469749141e98c42092578"
+    },
+    {
+      "path": "bedroom3.png",
+      "bytes": 2035916,
+      "sha256": "821fb070c4cd57c2414f874d7e323775d0716fbec4d249bfa53e8b80d8c76675"
+    },
+    {
+      "path": "build-report.json",
+      "bytes": 8020,
+      "sha256": "7a9eda311eb0d20009653bf95c1e11fc360361a6ffe3e1fcea33608a4da51661"
+    },
+    {
+      "path": "commonBath.png",
+      "bytes": 2257647,
+      "sha256": "a9bcf9ce37f48c9c471ed3e820e7fcd9ce8e37b55bfcabdfeb526ebf934b5eef"
+    },
+    {
+      "path": "dining.png",
+      "bytes": 2384453,
+      "sha256": "a64c7b12cae950ca924d1212bd7f03bb79e4ab697fa182e8fb58284f00f401dc"
+    },
+    {
+      "path": "kitchen.png",
+      "bytes": 2196886,
+      "sha256": "d397855f6267594facb867c5b2adb6c66e2f70c102e3dcc59cc12bdf02448614"
+    },
+    {
+      "path": "living.png",
+      "bytes": 2148299,
+      "sha256": "9a6d4ccc5d522564d87f5332a3d4e140d0f1715a011459a21ce38f23df6dc261"
+    },
+    {
+      "path": "master.png",
+      "bytes": 2100852,
+      "sha256": "d5ab78b767574b93eb5772d3ac48653948eb0d7d1caee3c1a0313c64317693df"
+    },
+    {
+      "path": "night.png",
+      "bytes": 2190646,
+      "sha256": "81db4814e3eaf19e80323f58cd2e66b0107eb031b72d1e036b4707c9bc09db19"
+    },
+    {
+      "path": "overview.png",
+      "bytes": 2190570,
+      "sha256": "6fac6fc7b7c73094980a1cec42375f6c425c274f7bd9b1363aa534fe7fec00d4"
+    },
+    {
+      "path": "plan.png",
+      "bytes": 2193189,
+      "sha256": "8b8dae45dfb651b9cc9f3dfdfa7ed90afa922702223001b5011950bcced17994"
+    },
+    {
+      "path": "qa-images/desktop-balcony.png",
+      "bytes": 612282,
+      "sha256": "9e66865775ca3d19cc028911c704aebffe3635532fdf2f4e22b813378c49f34b"
+    },
+    {
+      "path": "qa-images/desktop-bath.png",
+      "bytes": 573973,
+      "sha256": "b9f7717638dc7eaa0a52e123bb86fcd69caf2978f711da927f171007f2ca4a48"
+    },
+    {
+      "path": "qa-images/desktop-bedroom2.png",
+      "bytes": 682111,
+      "sha256": "ab39d818f76188807bf16e246e0f15efcd4cb99ead1a10cca560442ea7e48d4c"
+    },
+    {
+      "path": "qa-images/desktop-bedroom3.png",
+      "bytes": 489878,
+      "sha256": "f1f63a6ba8c77b86c6242703b3157fbad0863310dcf4a667b1a27992109df3f6"
+    },
+    {
+      "path": "qa-images/desktop-commonBath.png",
+      "bytes": 755166,
+      "sha256": "bbec528c37c2b19ff4b916b0b08334597983111bacbc827d30f83795392a9398"
+    },
+    {
+      "path": "qa-images/desktop-dining.png",
+      "bytes": 948569,
+      "sha256": "5ab87e2884ede99d5646c26e5de16ba3be98dbb4a8b8ff8767a5c3dee8616590"
+    },
+    {
+      "path": "qa-images/desktop-kitchen.png",
+      "bytes": 438077,
+      "sha256": "3ca66fbc8128fb06eef96981b3d10b899347332bf52938a2a0aa3298c8085ab6"
+    },
+    {
+      "path": "qa-images/desktop-living.png",
+      "bytes": 683483,
+      "sha256": "1b3e5dd725b1560709b484ed16ae3b2e9b3b85e2754286018d211c1b56770a3c"
+    },
+    {
+      "path": "qa-images/desktop-master.png",
+      "bytes": 890428,
+      "sha256": "f9fad51593da53848ba9ae415c67d3104cdfacf5278070dc05d69c7e37abf879"
+    },
+    {
+      "path": "qa-images/desktop-night.png",
+      "bytes": 766247,
+      "sha256": "00bf8056398af24afd238f0bf452f7500519fc7b7fd212b242f86a7153546529"
+    },
+    {
+      "path": "qa-images/desktop-overview.png",
+      "bytes": 410025,
+      "sha256": "7dbb26c14c18004803b4cab520a51f56f420e1dd65b849f6eb7c47b070d677db"
+    },
+    {
+      "path": "qa-images/desktop-plan.png",
+      "bytes": 659049,
+      "sha256": "021e5f6cbc3f9a8ffc2d2a4e4ae0eb8702cebbdd71f636ac6b582573a021065b"
+    },
+    {
+      "path": "qa-images/mobile-balcony.png",
+      "bytes": 169678,
+      "sha256": "200d4ef2592d32430dc0f89c38a9a7e650d3698daf134e028ecd3102423155d0"
+    },
+    {
+      "path": "qa-images/mobile-living.png",
+      "bytes": 132080,
+      "sha256": "403a4e411bee4256027dbdc64c5a30a89f204c3a53c0950fa6fc69e6a312bc42"
+    },
+    {
+      "path": "qa-images/mobile-night.png",
+      "bytes": 157241,
+      "sha256": "da458bddd47e48baef05c6cdcefbbc52070fc0d64d0635e961e88b2dccc1cb2d"
+    },
+    {
+      "path": "qa-images/mobile-overview.png",
+      "bytes": 80687,
+      "sha256": "e9a7f17bbe045d1718998e96ef6fafbeeeb7714dda45acd4c7e9c48daee83ddd"
+    },
+    {
+      "path": "viewer-qa.json",
+      "bytes": 23306,
+      "sha256": "4bdebf80fb1bd63df1108d2f3c476514ee38eedce7da6dcaae19ebaeb5cbc0f1"
+    },
+    {
+      "path": "云澜汇_01三房两厅.blend",
+      "bytes": 9422072,
+      "sha256": "61b0a4b17ff093e8b2a866b87ee28bb150f7b9dcf5ee7b4a645fb2d6dae04f76"
+    },
+    {
+      "path": "云澜汇_01三房两厅.glb",
+      "bytes": 24262408,
+      "sha256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7"
+    },
+    {
+      "path": "住宅01_离线漫游.html",
+      "bytes": 32982421,
+      "sha256": "f5c8f3d44382bcf084ac98e661ad735580836345aa9b6d31db67a8b2e9d35c36"
+    },
+    {
+      "path": "使用说明.md",
+      "bytes": 2375,
+      "sha256": "0bc957f7e746eced33db827d6dd8fedf19b8653b25a3bc9515313260093aceca"
+    },
+    {
+      "path": "素材来源.md",
+      "bytes": 3736,
+      "sha256": "a80bab660d3bd3d61c903cdfbea49743935b698d81bf2f491a884306f7d0d002"
+    }
+  ]
+}

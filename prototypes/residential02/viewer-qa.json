@@ -1,0 +1,803 @@
+{
+  "schemaVersion": 3,
+  "checkedAt": "2026-10-09T10:46:01.373Z",
+  "status": "passed",
+  "modelFile": "云澜汇_02三房两厅.glb",
+  "modelBytes": 25182940,
+  "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+  "viewerFile": "住宅02_离线漫游.html",
+  "viewerBytes": 34210659,
+  "viewerSHA256": "f3c6b7e53a0cd76d5a3a2e5913d6d429a18fdee085500dd5d5547261df37cea2",
+  "method": "Playwright CLI Chromium: read the exact generated HTML response, navigate to about:blank, disable browser networking, freshly initialize embedded HTML and exercise visible controls.",
+  "scopeNotes": [
+    "Desktop Chromium 1440x900; mobile Chromium 390x844 viewport simulation.",
+    "Not a physical-device test.",
+    "Free roam intentionally permits passing through walls; viewer navigation is not a collision or construction-code audit."
+  ],
+  "checks": {
+    "freshOfflineInitialization": true,
+    "expectedModel": true,
+    "allRoomViews": true,
+    "roofToggle": true,
+    "dayNight": true,
+    "movement": true,
+    "mobileDragLook": true,
+    "noExternalRequests": true,
+    "noRuntimeErrors": true,
+    "webGL": true,
+    "responsiveLayout": true,
+    "mobileTextureCap": true
+  },
+  "results": [
+    {
+      "kind": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "offlineFreshLoad": true,
+      "views": [
+        {
+          "view": "overview",
+          "roof": false,
+          "position": [
+            -7.3999999999999995,
+            23,
+            20
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "plan",
+          "roof": false,
+          "position": [
+            7.799999999999998,
+            29.999999999985,
+            -4.34997
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "living",
+          "roof": true,
+          "position": [
+            8.5,
+            1.6,
+            -0.75
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "dining",
+          "roof": true,
+          "position": [
+            7.7,
+            1.6,
+            -5.050000000000001
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "master",
+          "roof": true,
+          "position": [
+            12.57,
+            1.6200000000000006,
+            -1.5500000000000003
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "bedroom2",
+          "roof": true,
+          "position": [
+            14.049999999999999,
+            1.5799999999999996,
+            -7.949999999999993
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "bedroom3",
+          "roof": true,
+          "position": [
+            1,
+            1.65,
+            -7.95
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "kitchen",
+          "roof": true,
+          "position": [
+            8.62,
+            1.6,
+            -7.730000000000002
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "bath",
+          "roof": true,
+          "position": [
+            11.62,
+            1.6,
+            -2.939999999999999
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "commonBath",
+          "roof": true,
+          "position": [
+            4.55,
+            1.6,
+            -9.5
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "balcony",
+          "roof": true,
+          "position": [
+            8.4,
+            1.5999999999999996,
+            1.7000000000000002
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "reading",
+          "roof": true,
+          "position": [
+            3.300000000000005,
+            1.6000000000000005,
+            -1.099999999999999
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        }
+      ],
+      "roof": {
+        "hidden": true,
+        "shown": true
+      },
+      "night": {
+        "enabled": true,
+        "exposure": 1.05
+      },
+      "movement": {
+        "before": {
+          "position": [
+            8.5,
+            1.6,
+            -0.75
+          ],
+          "quaternion": [
+            -0.044075214438832666,
+            0.4724930407769991,
+            0.023667366070375135,
+            0.8799133807783394
+          ]
+        },
+        "after": {
+          "position": [
+            7.956363645574132,
+            2.252161048741486,
+            -1.1102409577520853
+          ],
+          "quaternion": [
+            -0.044075214438832666,
+            0.4724930407769991,
+            0.023667366070375135,
+            0.8799133807783394
+          ],
+          "padVisible": false
+        },
+        "distance": 0.922294999981667
+      },
+      "final": {
+        "state": {
+          "ready": true,
+          "view": "living",
+          "roof": true,
+          "night": false,
+          "walking": false,
+          "error": null
+        },
+        "stats": {
+          "meshes": 1547,
+          "textures": 16,
+          "authoredLights": 1,
+          "activeLightingRig": 18,
+          "roofObjects": 64,
+          "mobile": false,
+          "viewIds": [
+            "overview",
+            "plan",
+            "living",
+            "dining",
+            "master",
+            "bedroom2",
+            "bedroom3",
+            "kitchen",
+            "bath",
+            "commonBath",
+            "balcony",
+            "reading"
+          ],
+          "walkBounds": {
+            "min": [
+              -0.5,
+              -3.4,
+              0.3
+            ],
+            "max": [
+              16.1,
+              12.3,
+              3.9
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.02500024371480336,
+              -0.2799999937415123,
+              -11.524999758406718
+            ],
+            "max": [
+              15.625000178025491,
+              3.010000064969063,
+              2.799999952316284
+            ]
+          }
+        },
+        "build": {
+          "title": "云澜汇 · 02 三房两厅独立住宅样板 · 镜像阅读型",
+          "identity": "云澜汇 · 住宅02",
+          "description": "三房两厅 · 双卫 · 15.6米大阳台",
+          "unit": "02",
+          "views": [
+            {
+              "id": "overview",
+              "label": "全屋鸟瞰"
+            },
+            {
+              "id": "plan",
+              "label": "三房平面"
+            },
+            {
+              "id": "living",
+              "label": "会客阅读"
+            },
+            {
+              "id": "dining",
+              "label": "纵向餐厅"
+            },
+            {
+              "id": "master",
+              "label": "主卧套间"
+            },
+            {
+              "id": "bedroom2",
+              "label": "客卧书房"
+            },
+            {
+              "id": "bedroom3",
+              "label": "儿童房"
+            },
+            {
+              "id": "kitchen",
+              "label": "中西厨房"
+            },
+            {
+              "id": "bath",
+              "label": "主卫"
+            },
+            {
+              "id": "commonBath",
+              "label": "公共卫浴"
+            },
+            {
+              "id": "balcony",
+              "label": "通长阳台"
+            },
+            {
+              "id": "reading",
+              "label": "窗边阅读工作区"
+            }
+          ],
+          "modelFile": "云澜汇_02三房两厅.glb",
+          "modelBytes": 25182940,
+          "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+          "planFile": "plan_02.json",
+          "planSHA256": "5da680ce540317643b2baed1fcac382ebe8bcf6653af05abbc7a79d3ff38f67c",
+          "threeVersion": "0.170.0",
+          "coordinateSystem": "glTF Y up; Blender (x,y,z) maps to glTF (x,z,-y)",
+          "standalone": true
+        },
+        "webglError": 0,
+        "overflow": false,
+        "maxTextureDimension": 2048,
+        "title": "云澜汇 · 02 三房两厅独立住宅样板 · 镜像阅读型"
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "requests": [],
+      "screenshots": [
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-overview.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-plan.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-living.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-dining.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-master.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-bedroom2.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-bedroom3.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-kitchen.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-bath.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-commonBath.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-balcony.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-reading.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-night.png"
+      ]
+    },
+    {
+      "kind": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "offlineFreshLoad": true,
+      "views": [
+        {
+          "view": "overview",
+          "roof": false,
+          "position": [
+            -7.3999999999999995,
+            23,
+            20
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "plan",
+          "roof": false,
+          "position": [
+            7.799999999999998,
+            29.999999999985,
+            -4.34997
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "living",
+          "roof": true,
+          "position": [
+            8.5,
+            1.6,
+            -0.75
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "dining",
+          "roof": true,
+          "position": [
+            7.7,
+            1.6,
+            -5.050000000000001
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "master",
+          "roof": true,
+          "position": [
+            12.57,
+            1.6200000000000006,
+            -1.5500000000000003
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "bedroom2",
+          "roof": true,
+          "position": [
+            14.049999999999999,
+            1.5799999999999996,
+            -7.949999999999993
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "bedroom3",
+          "roof": true,
+          "position": [
+            1,
+            1.65,
+            -7.95
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "kitchen",
+          "roof": true,
+          "position": [
+            8.62,
+            1.6,
+            -7.730000000000002
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "bath",
+          "roof": true,
+          "position": [
+            11.62,
+            1.6,
+            -2.939999999999999
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "commonBath",
+          "roof": true,
+          "position": [
+            4.55,
+            1.6,
+            -9.5
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "balcony",
+          "roof": true,
+          "position": [
+            8.4,
+            1.5999999999999996,
+            1.7000000000000002
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        },
+        {
+          "view": "reading",
+          "roof": true,
+          "position": [
+            3.300000000000005,
+            1.6000000000000005,
+            -1.099999999999999
+          ],
+          "pressed": "true",
+          "activeButtonVisible": true,
+          "overflow": false,
+          "webglError": 0
+        }
+      ],
+      "roof": {
+        "hidden": true,
+        "shown": true
+      },
+      "night": {
+        "enabled": true,
+        "exposure": 1.05
+      },
+      "movement": {
+        "before": {
+          "position": [
+            8.5,
+            1.6,
+            -0.75
+          ],
+          "quaternion": [
+            -0.044075214438832666,
+            0.4724930407769991,
+            0.023667366070375135,
+            0.8799133807783394
+          ]
+        },
+        "after": {
+          "position": [
+            7.72861879857359,
+            1.6,
+            -1.2611562178126798
+          ],
+          "quaternion": [
+            -0.07308532410659462,
+            0.40444192626327746,
+            0.032444326616803514,
+            0.911061265421303
+          ],
+          "padVisible": true
+        },
+        "distance": 0.9253700000122194
+      },
+      "final": {
+        "state": {
+          "ready": true,
+          "view": "living",
+          "roof": true,
+          "night": false,
+          "walking": false,
+          "error": null
+        },
+        "stats": {
+          "meshes": 1547,
+          "textures": 16,
+          "authoredLights": 1,
+          "activeLightingRig": 18,
+          "roofObjects": 64,
+          "mobile": true,
+          "viewIds": [
+            "overview",
+            "plan",
+            "living",
+            "dining",
+            "master",
+            "bedroom2",
+            "bedroom3",
+            "kitchen",
+            "bath",
+            "commonBath",
+            "balcony",
+            "reading"
+          ],
+          "walkBounds": {
+            "min": [
+              -0.5,
+              -3.4,
+              0.3
+            ],
+            "max": [
+              16.1,
+              12.3,
+              3.9
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.02500024371480336,
+              -0.2799999937415123,
+              -11.524999758406718
+            ],
+            "max": [
+              15.625000178025491,
+              3.010000064969063,
+              2.799999952316284
+            ]
+          }
+        },
+        "build": {
+          "title": "云澜汇 · 02 三房两厅独立住宅样板 · 镜像阅读型",
+          "identity": "云澜汇 · 住宅02",
+          "description": "三房两厅 · 双卫 · 15.6米大阳台",
+          "unit": "02",
+          "views": [
+            {
+              "id": "overview",
+              "label": "全屋鸟瞰"
+            },
+            {
+              "id": "plan",
+              "label": "三房平面"
+            },
+            {
+              "id": "living",
+              "label": "会客阅读"
+            },
+            {
+              "id": "dining",
+              "label": "纵向餐厅"
+            },
+            {
+              "id": "master",
+              "label": "主卧套间"
+            },
+            {
+              "id": "bedroom2",
+              "label": "客卧书房"
+            },
+            {
+              "id": "bedroom3",
+              "label": "儿童房"
+            },
+            {
+              "id": "kitchen",
+              "label": "中西厨房"
+            },
+            {
+              "id": "bath",
+              "label": "主卫"
+            },
+            {
+              "id": "commonBath",
+              "label": "公共卫浴"
+            },
+            {
+              "id": "balcony",
+              "label": "通长阳台"
+            },
+            {
+              "id": "reading",
+              "label": "窗边阅读工作区"
+            }
+          ],
+          "modelFile": "云澜汇_02三房两厅.glb",
+          "modelBytes": 25182940,
+          "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+          "planFile": "plan_02.json",
+          "planSHA256": "5da680ce540317643b2baed1fcac382ebe8bcf6653af05abbc7a79d3ff38f67c",
+          "threeVersion": "0.170.0",
+          "coordinateSystem": "glTF Y up; Blender (x,y,z) maps to glTF (x,z,-y)",
+          "standalone": true
+        },
+        "webglError": 0,
+        "overflow": false,
+        "maxTextureDimension": 512,
+        "title": "云澜汇 · 02 三房两厅独立住宅样板 · 镜像阅读型"
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "requests": [],
+      "screenshots": [
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-overview.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-living.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-balcony.png",
+        "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-night.png"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-overview.png",
+      "bytes": 406793,
+      "sha256": "45db2c35531b6b958810f01acdae03a5888e1c3a27752f3f280029da6a79e773"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-plan.png",
+      "bytes": 659495,
+      "sha256": "d64b154f8de040a52d7e55e75d432f91591c644e807812c76e0fc9cb60f2660d"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-living.png",
+      "bytes": 730526,
+      "sha256": "d0bae1cbcb6020ff8588098cada3d01b88b26d1b5f1b8b449cfbb8439d78349f"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-dining.png",
+      "bytes": 833930,
+      "sha256": "f46d61dd0b8106a5616c6e71dd5c3fd828420afb5b1e0115b0db4f8cc3176c48"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-master.png",
+      "bytes": 910582,
+      "sha256": "7dbb986a9129e8cfd8f50eb73a7f706449607fd0b4385c7f6b8c5c021b3525ad"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-bedroom2.png",
+      "bytes": 628130,
+      "sha256": "ef249217c482d1aee2834015708aa9af5573f4b6600d078a2ac160c6c0bc9186"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-bedroom3.png",
+      "bytes": 530641,
+      "sha256": "244510ecc2cb77c3566f7cdf715c49db0382226f9aec3db2563aac1ae7ff21c7"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-kitchen.png",
+      "bytes": 452460,
+      "sha256": "77ac393bfc9f4e7fa92fe66bd368ef7453d27cdda9a3453f080e4514a71ce98a"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-bath.png",
+      "bytes": 561338,
+      "sha256": "db65abbadb980b737a1bf85746852d25199ba1b174c08e47408e644ddd7b85eb"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-commonBath.png",
+      "bytes": 687505,
+      "sha256": "76902a175a1e3e0a5255a8639ce2330a1c63cb6f656a374370241ffb4d56c8c0"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-balcony.png",
+      "bytes": 647219,
+      "sha256": "0c77de4cc9e344d14799f9db5051126644de62d393bdedf34ab9197a71d6da14"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-reading.png",
+      "bytes": 841799,
+      "sha256": "67605649fcb270f04beefd8d8baac155a0052bb697b118ca35712b2036186550"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/desktop-night.png",
+      "bytes": 807406,
+      "sha256": "66579496166c65391ae972c544a919f634fa9e3a9e300baf653475c02c06eedd"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-overview.png",
+      "bytes": 81664,
+      "sha256": "45fde668a112c0dfd02bfef334d18a7da4bc811f111079fd73c6cf992ec0028d"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-living.png",
+      "bytes": 133037,
+      "sha256": "95d0acf263a894e1cf80c8d7366a20b2c8460b668d7f1a05a2e87b9dcf6b0439"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-balcony.png",
+      "bytes": 169964,
+      "sha256": "05f96895466c8b23dfb145bf94471d7b7658244309028c315f47102ad15769d2"
+    },
+    {
+      "path": "/Users/calvin/Documents/Codex/2026-10-06/users-calvin-downloads-super-mall-3d/outputs/住宅02样板/qa-images/mobile-night.png",
+      "bytes": 158940,
+      "sha256": "52811d72849233b3927a8d1da6a875665b3c8d08a210ee0c90f33172bf5f05d5"
+    }
+  ]
+}

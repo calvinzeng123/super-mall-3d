@@ -1,0 +1,28 @@
+{
+  "unit": "01",
+  "negativeMeshTransforms": [],
+  "blender": "5.1.2",
+  "blendSHA256": "61b0a4b17ff093e8b2a866b87ee28bb150f7b9dcf5ee7b4a645fb2d6dae04f76",
+  "glbSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+  "usedPackedImages": 16,
+  "missingPackedImages": [],
+  "embeddedGLBImages": 16,
+  "externalGLBResources": 0,
+  "finitePositionAccessors": 1504,
+  "sourceMeshObjects": 1483,
+  "reimportedMeshObjects": 1483,
+  "boundsBlender": {
+    "min": [
+      -0.025000175461173058,
+      -2.799999952316284,
+      -0.2800000011920929
+    ],
+    "max": [
+      15.625,
+      11.524999618530273,
+      3.009999990463257
+    ]
+  },
+  "punctualLights": 1,
+  "areaLightsNote": "Blender area lights are saved in the blend; the offline viewer supplies room lighting because glTF has no area-light primitive."
+}
