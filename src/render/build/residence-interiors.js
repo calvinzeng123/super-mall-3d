@@ -4,6 +4,7 @@ import { BatchSet, SignBatch } from '../batch.js';
 import { toW } from '../../layout/geom.js';
 import { interiorDetail } from './interior-detail.js';
 import { buildSuiteModels } from './suite-models.js';
+import { buildResidentialModels } from './residential-models.js';
 
 const roomCenter = (r) => [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2];
 const WARM = '#eee6d6';
@@ -28,7 +29,7 @@ export function buildResidenceFloor(ctx, L) {
   for (const u of lv.units) {
     const residence = u.residence;
     if (!residence) continue;
-    if (residence.suitePlan && ctx.suiteAsset) {
+    if (residence.prototype || (residence.suitePlan && ctx.suiteAsset)) {
       const entry = residence.entryDoor;
       const [x,z] = toW(u.frame, entry.at - entry.width / 2 - .24, -.12);
       const [nx,nz] = toW(u.frame,0,-1), [ox,oz] = toW(u.frame,0,0);
@@ -93,7 +94,41 @@ export function buildResidenceFloor(ctx, L) {
         const opening = door ? { at: Math.hypot((door.x0 + door.x1) / 2 - a[0], (door.z0 + door.z1) / 2 - a[1]), width: Math.hypot(door.x1 - door.x0, door.z1 - door.z0) } : null;
         wall(a, b, opening, core, '#dce2d7');
       }
-      const R = makeRoomTools(B, y0), run = Math.min(r.z1 - r.z0 - 3, 3.3);
+      const R = makeRoomTools(B, y0);
+      if (core.shaftRect) {
+        if (lv.kind !== 'roof') {
+        // Residential stairs occupy the surveyed opening and connect exact
+        // storey elevations. The return flight arrives at the front landing.
+        const s = core.shaftRect, storey = lv.height, half = storey / 2;
+        const steps = Math.max(10, Math.ceil(half / .17)), run = steps * .285;
+        const back = s.z0 + 1.08, front = back + run;
+        const flightWidth = Math.min(1.5, (s.x1 - s.x0 - .5) / 2);
+        const centers = [s.x0 + flightWidth / 2 + .10, s.x1 - flightWidth / 2 - .10];
+        for (const [side, x] of centers.entries()) {
+          for (let k = 0; k < steps; k++) {
+            const fraction = (k + .5) / steps;
+            const z = side ? back + fraction * run : front - fraction * run;
+            const top = side ? half + (k + 1) * half / steps : (k + 1) * half / steps;
+            R.box('concrete', x, z, top - .065, flightWidth, run / steps + .005, .13, '#c9cfbf');
+            R.box('metal', x, z + (side ? 1 : -1) * run / steps * .43, top + .006, flightWidth, .025, .012, '#859785');
+          }
+          const railX = x + (side ? -1 : 1) * flightWidth * .44;
+          R.line('metal', railX, front, side ? storey + .94 : .94,
+            railX, back, half + .94, .045, '#7b8f7b');
+          for (let k = 0; k <= steps; k += 2) {
+            const fraction = k / steps, z = front - fraction * run;
+            const h = side ? storey - fraction * half : fraction * half;
+            R.line('metal', railX, z, h + .03, railX, z, h + .94, .024, '#7b8f7b');
+          }
+        }
+        R.box('concrete', (s.x0 + s.x1) / 2, s.z0 + .54, half - .075, s.x1 - s.x0, 1.08, .15, '#d6dacb');
+        // Fill the uncut entry landing; bridge only each flight's approach in
+        // the opening, keeping a real void between the two flights.
+        for (const [side, x] of centers.entries()) R.box('concrete', x, (front + s.z1) / 2,
+          (side ? storey : 0) - .075, flightWidth, s.z1 - front, .15, '#d6dacb');
+        }
+      } else {
+      const run = Math.min(r.z1 - r.z0 - 3, 3.3);
       const steps = 11, rise = Math.min(height - .4, (lv.height || 3.4) / 2);
       const startZ = r.z0 + 1.2, flightWidth = Math.min(1.45, (r.x1 - r.x0 - 1.1) / 2);
       for (const [side, x] of [[0, r.x0 + flightWidth / 2 + .32], [1, r.x1 - flightWidth / 2 - .32]]) {
@@ -109,6 +144,7 @@ export function buildResidenceFloor(ctx, L) {
         R.line('metal', railX, startZ + .1, side ? height - .1 : .95, railX, startZ + run - .1, side ? rise + .88 : rise + .88, .04, '#7b8f7b');
       }
       R.box('concrete', (r.x0 + r.x1) / 2, startZ + run + .52, rise - .075, r.x1 - r.x0 - .35, 1.02, .15, '#d6dacb');
+      }
       for (const door of core.doors || []) {
         const x = (door.x0 + door.x1) / 2, z = (door.z0 + door.z1) / 2;
         const nz = door.side === 'S' ? 1 : -1;
@@ -139,17 +175,20 @@ export function buildResidenceFloor(ctx, L) {
   B.flush(group);
   const suite = buildSuiteModels(ctx, lv);
   if (suite) group.add(suite.group);
+  const residential = buildResidentialModels(ctx, lv);
+  if (residential) group.add(residential.group);
   const atlas = labelAtlas(labels, y0, group);
   let disposed = false;
   return {
     group,
-    update(app) { suite?.update(app); },
+    update(app) { suite?.update(app); residential?.update(app); },
     dispose() {
       if (disposed) return;
       disposed = true;
       suite?.dispose();
+      residential?.dispose();
       group.removeFromParent();
-      group.traverse((o) => { if (o.isMesh && !o.geometry.userData.sharedSuite) o.geometry.dispose(); });
+      group.traverse((o) => { if (o.isMesh && !o.geometry.userData.sharedSuite && !o.geometry.userData.sharedResidential) o.geometry.dispose(); });
       group.clear();
       atlas?.texture.dispose();
       atlas?.material.dispose();

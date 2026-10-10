@@ -24,13 +24,13 @@ function go(s, u, p, audit = null) {
 }
 const reached = (s, u, p) => Math.hypot(...toL(u.frame, s.x, s.z).map((v, i) => v - p[i])) < .025;
 
-test('模型套房覆盖酒店公寓400户，首层10套夹层保留原有楼层与760住户', () => {
+test('模型套房覆盖酒店公寓400户和10套夹层，住宅大堂改造后合计748住户', () => {
   assert.equal(homes.length, 400);
   assert.equal(duplexes.length, 10);
   assert.ok(duplexes.every(({ lv }) => lv.id === 'A-1F' && lv.height === 6.5));
   assert.equal(L.levels.filter(l => l.building === 'H' && l.levelNumber).length, 20);
   assert.equal(L.levels.filter(l => l.building === 'A' && l.levelNumber).length, 20);
-  assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 760);
+  assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 748);
   assert.equal(nav.floors.size, L.levels.length + 2 + 10);
 });
 

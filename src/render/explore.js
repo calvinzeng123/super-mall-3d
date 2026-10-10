@@ -121,8 +121,11 @@ export function attachExplore(app, ui) {
         const u = t.unit;
         const w = u.wfronts[0];
         const y = nav.floors.get(u.level).y;
-        for (const d of [2, 1.5, 1, 2.5, 3]) {
-          const q = { floor: u.level, x: (w.x0 + w.x1) / 2 + w.nx * d, z: (w.z0 + w.z1) / 2 + w.nz * d, y, slope: null, yaw: yawOf(-w.nx, -w.nz) };
+        const entry = u.residence?.entryDoor;
+        const tDoor = entry ? entry.at / Math.hypot(w.x1-w.x0,w.z1-w.z0) : .5;
+        const doorX = w.x0 + (w.x1-w.x0)*tDoor, doorZ = w.z0 + (w.z1-w.z0)*tDoor;
+        for (const d of entry ? [.85, 1.15, 1.5, 2] : [2, 1.5, 1, 2.5, 3]) {
+          const q = { floor: u.level, x: doorX + w.nx * d, z: doorZ + w.nz * d, y, slope: null, yaw: yawOf(-w.nx, -w.nz) };
           if (clear(nav, q)) { st = q; break; }
         }
       } else st = spawn(nav, layout, t);

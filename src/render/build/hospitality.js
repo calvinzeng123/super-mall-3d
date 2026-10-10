@@ -6,6 +6,8 @@ import { toW, toL, subtractInterval, pointInPoly, polyBounds, unionOutline, merg
 import { shapeFromPoly } from './shell.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bollard, bench, planter } from './props.js';
+import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden } from './residential-shell.js';
+export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
   hotel: { key: 'stone', wall: '#f3ebdc', dark: '#bfb29b', metal: '#8e7653', glazing: '#526b76', fabric: '#eadfc9' },
@@ -82,21 +84,28 @@ export function buildHospitality(ctx) {
       for(const lv of levels) {
         slab(ctx,B,b,lv,pal);
         if(lv.kind==='roof')continue;
-        for(const e of edges) facadeFloor(ctx,B,b,lv,e,pal);
-        corridorLights(B,b,lv);
+        if(b.usage==='residential') {
+          if(lv.elev<=0)for(const e of edges)facadeFloor(ctx,B,b,lv,e,pal);
+          residentialCommon(ctx,B,b,lv);
+        } else {
+          for(const e of edges) facadeFloor(ctx,B,b,lv,e,pal);
+          corridorLights(B,b,lv);
+        }
       }
-      crown(B,b,levels.at(-1),pal);
+      if(b.usage==='residential')residentialCrown(B,b,levels.at(-1));
+      else crown(B,b,levels.at(-1),pal);
       liftEnclosures(ctx,B,b,levels,pal);
     });
     B.flush(group);
+    const residentialShells=b.usage==='residential'?buildResidentialLevelShells(ctx,b,levels,materials,group):null;
     ctx.buildings[b.id].group.add(group);
     ctx.buildings[b.id].exterior=group;
     ctx.buildings[b.id].exteriorClip=plane;
-    const groundGroup=buildLobby(ctx,b,levels.find(l=>l.short==='1F'),pal);
-    const roofGroup=buildRoofGarden(ctx,b,levels.find(l=>l.kind==='roof'),pal);
+    const groundGroup=b.usage==='residential'?buildResidentialLobby(ctx,b,levels.find(l=>l.short==='1F'),plane):buildLobby(ctx,b,levels.find(l=>l.short==='1F'),pal);
+    const roofGroup=b.usage==='residential'?buildResidentialRoofGarden(ctx,b,levels.find(l=>l.kind==='roof')):buildRoofGarden(ctx,b,levels.find(l=>l.kind==='roof'),pal);
     const sign=buildingSign(ctx,b,pal,plane);
     if(sign)group.add(sign);
-    records.set(b.id,{group,plane,groundGroup,roofGroup,materials});
+    records.set(b.id,{group,plane,groundGroup,roofGroup,materials,residentialShells,detailLevel:null});
   }
   landscape(ctx,towers);
   connections(ctx);
@@ -116,10 +125,17 @@ function slab(ctx,B,b,lv,pal) {
     g.rotateX(-Math.PI/2);g.translate(0,-0.28,0);
     const geo=g.index?g.toNonIndexed():g;
     const t={pos:geo.attributes.position.array,nor:geo.attributes.normal.array,uv:geo.attributes.uv?.array,count:geo.attributes.position.count};
-    B.get(lv.elev<0?'concrete':'stone').push(t,new THREE.Matrix4().makeTranslation(0,lv.elev,0),lv.elev<0?'#c9cecb':'#ece9e0');
+    const plateTop=lv.elev-(b.usage==='residential'&&lv.elev>=0?.04:0);
+    B.get(lv.elev<0?'concrete':'stone').push(t,new THREE.Matrix4().makeTranslation(0,plateTop,0),lv.elev<0?'#c9cecb':'#ece9e0');
+    if(lv.lobbyPlan) {
+      // The lobby finish repeats the punched plate, so neither lift nor stair
+      // opening is accidentally bridged by a decorative rectangular floor.
+      const finish=new THREE.Matrix4().makeScale(1,.04/.28,1);
+      finish.setPosition(0,lv.elev,0);B.get('stone').push(t,finish,'#e5e0d3');
+    }
     geo.dispose();if(geo!==g)g.dispose();
   }
-  if(lv.elev>=0)for(const e of rectEdges(b.footprint))sideBox(B,e,'extSatin',0,e.len,lv.elev-0.2,lv.elev+0.045,0.04,0.34,pal.dark);
+  if(lv.elev>=0&&b.usage!=='residential')for(const e of rectEdges(b.footprint))sideBox(B,e,'extSatin',0,e.len,lv.elev-0.2,lv.elev+0.045,0.04,0.34,pal.dark);
 }
 
 function facadeFloor(ctx,B,b,lv,e,pal) {
@@ -135,6 +151,23 @@ function facadeFloor(ctx,B,b,lv,e,pal) {
   if(lv.elev<0) {
     for(const [a,z] of entrances.reduce((ivs,g)=>subtractInterval(ivs,g),[[0,e.len]]))sideBox(B,e,'concrete',a,z,y,y+h-0.24,-0.12,0.28,'#c6cfcb');
     for(const [a,z] of entrances)sideBox(B,e,'concrete',a,z,y+3.1,y+h-0.24,-0.12,0.28,'#c6cfcb');
+    return;
+  }
+  if(lv.lobbyPlan) {
+    // The whole first storey is a separate glazed community lobby, with its
+    // actual four-metre arrival portal cut out of the curtain wall.
+    const spans=entrances.reduce((ivs,gap)=>subtractInterval(ivs,gap),[[0,e.len]]);
+    for(const [a,z] of spans) {
+      sideBox(B,e,'stone',a,z,y,y+.16,-.07,.2,'#c9c8bc');
+      sideBox(B,e,'glassTint',a,z,y+.16,y+h-.4,-.055,.035,'#ffffff');
+      for(let t=a+.1;t<z;t+=3.2)sideBox(B,e,'extMetal',t-.035,t+.035,y+.1,y+h-.25,-.012,.1,pal.metal);
+    }
+    sideBox(B,e,'stone',0,e.len,y+h-.4,y+h-.04,-.09,.24,pal.wall);
+    for(const [a,z] of entrances) {
+      sideBox(B,e,'glass',a,z,y+3.5,y+h-.4,-.055,.035,'#ffffff');
+      for(const t of [a-.04,z+.04])sideBox(B,e,'extMetal',t-.04,t+.04,y,y+3.55,-.005,.14,pal.metal);
+      sideBox(B,e,'extMetal',a,z,y+3.47,y+3.55,-.005,.14,pal.metal);
+    }
     return;
   }
   const windows=[];

@@ -30,12 +30,15 @@ import { buildMetro } from './build/metro.js';
 import { createPerfMonitor } from './perf.js';
 import { MAX_PIXEL_RATIO } from './device.js';
 import { loadSurfaceTextures } from './pbr.js';
-import { buildHospitality, setHospitalityCut } from './build/hospitality.js';
+import { buildHospitality, setHospitalityCut, setResidentialDetailLevel } from './build/hospitality.js';
 import { buildResidenceFloor } from './build/residence-interiors.js';
 import { buildTowerElevators } from './build/tower-elevators.js';
 import { loadSuiteAsset } from './suite-asset.js';
 import { SUITE_MODEL_URL } from './suite-data.js';
 import { createSuiteLighting } from './suite-lighting.js';
+import { loadResidentialAssets } from './residential-asset.js';
+import { RESIDENTIAL_ASSETS } from './residential-data.js';
+import { createResidentialLighting } from './residential-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
 const EXPLODE_GAP = 13;
@@ -95,6 +98,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   onProgress('载入你的套房家具、材质与灯具', .015);
   ctx.suiteAsset = await loadSuiteAsset(SUITE_MODEL_URL, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
   ctx.suiteLighting = createSuiteLighting(ctx);
+  ctx.residentialAssets = await loadResidentialAssets(RESIDENTIAL_ASSETS,
+    Math.min(8, renderer.capabilities.getMaxAnisotropy()), unit => onProgress(`展开住宅${unit}精细户型与共享材质`, .02));
+  ctx.residentialLighting = createResidentialLighting(ctx);
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
   for (const b of layout.buildings) {
@@ -231,6 +237,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     const wanted = explore ? inside ? explore.level : explore.near === B.b.id ? `${B.b.id}-1F` : null
       : selected ? focus || `${B.b.id}-1F` : null;
     if (wanted) ensureTowerFloor(wanted);
+    setResidentialDetailLevel(ctx, B.b.id, wanted);
     const selectedLevel = ctx.levels[focus]?.lv;
     setHospitalityCut(ctx, B.b.id, !explore && selectedLevel && selectedLevel.kind !== 'roof' ? selectedLevel.elev + 0.05 : Infinity);
     if (B.exterior) B.exterior.visible = true;
@@ -396,6 +403,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     ctx, state, renderer, scene, camera, controls, env, emit,
     ensureTowerFloor,
     get residenceCache() { return [...residenceCache.keys()]; },
+    get residentialStats() { return ctx.residentialAssets.stats; },
     get flying() { return !!flight; },
     cancelFlight() { flight = null; },
     fitFov() { fitFov(); },

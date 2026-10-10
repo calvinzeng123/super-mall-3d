@@ -3,8 +3,10 @@ node_modules/
 shots/
 src/render/pbr-data.js
 src/render/suite-data.js
+src/render/residential-data.js
 
 .playwright-cli/
+output/playwright/
 
 # Blender/Python build caches
 __pycache__/

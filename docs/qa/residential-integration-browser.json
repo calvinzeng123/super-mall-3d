@@ -1,0 +1,906 @@
+{
+  "door": [
+    {
+      "level": "R1-2F",
+      "index": 0,
+      "before": {
+        "floor": "R1-2F",
+        "x": 38.150000000000006,
+        "z": -217.25,
+        "y": 4.8,
+        "slope": null,
+        "yaw": 3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 6.42,
+        "riding": null
+      },
+      "after": {
+        "state": {
+          "floor": "R1-2F",
+          "x": 38.150000000000006,
+          "z": -214.15599999999958,
+          "y": 4.8,
+          "slope": null,
+          "yaw": 3.141592653589793,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 6.42,
+          "riding": null
+        },
+        "local": [
+          8.550000000000004,
+          2.244000000000426
+        ],
+        "lights": "R1-2F-U1"
+      }
+    },
+    {
+      "level": "R1-2F",
+      "index": 1,
+      "before": {
+        "floor": "R1-2F",
+        "x": 59.849999999999994,
+        "z": -217.25,
+        "y": 4.8,
+        "slope": null,
+        "yaw": 3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 6.42,
+        "riding": null
+      },
+      "after": {
+        "state": {
+          "floor": "R1-2F",
+          "x": 59.849999999999994,
+          "z": -213.31820000000002,
+          "y": 4.8,
+          "slope": null,
+          "yaw": 3.141592653589793,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 6.42,
+          "riding": null
+        },
+        "local": [
+          7.049999999999997,
+          3.081799999999987
+        ],
+        "lights": "R1-2F-U2"
+      }
+    },
+    {
+      "level": "R1-2F",
+      "index": 2,
+      "before": {
+        "floor": "R1-2F",
+        "x": 49.25,
+        "z": -218.75,
+        "y": 4.8,
+        "slope": null,
+        "yaw": 1.2246467991473532e-16,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 6.42,
+        "riding": null
+      },
+      "after": {
+        "state": {
+          "floor": "R1-2F",
+          "x": 49.25,
+          "z": -221.85744000003336,
+          "y": 4.8,
+          "slope": null,
+          "yaw": 1.2246467991473532e-16,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 6.42,
+          "riding": null
+        },
+        "local": [
+          8.549999999999997,
+          2.2574400000333705
+        ],
+        "lights": "R1-2F-U3"
+      }
+    },
+    {
+      "level": "H-2F",
+      "index": 0,
+      "before": {
+        "floor": "H-2F",
+        "x": -454,
+        "z": -208.65,
+        "y": 6.5,
+        "slope": null,
+        "yaw": 1.2246467991473532e-16,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 8.120000000000001,
+        "riding": null
+      },
+      "after": {
+        "state": {
+          "floor": "H-2F",
+          "x": -453.96999999999997,
+          "z": -211.73403105988098,
+          "y": 6.5,
+          "slope": null,
+          "yaw": 1.2246467991473532e-16,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 8.120000000000001,
+          "riding": null
+        },
+        "local": [
+          5.46999999999997,
+          2.2340310598809774
+        ],
+        "lights": null
+      }
+    },
+    {
+      "level": "A-1F",
+      "index": 0,
+      "before": {
+        "floor": "A-1F",
+        "x": -454,
+        "z": -83.65,
+        "y": 0,
+        "slope": null,
+        "yaw": 1.2246467991473532e-16,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.62,
+        "riding": null
+      },
+      "after": {
+        "state": {
+          "floor": "A-1F",
+          "x": -453.96999999999997,
+          "z": -86.74480889435002,
+          "y": 0,
+          "slope": null,
+          "yaw": 1.2246467991473532e-16,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 1.62,
+          "riding": null
+        },
+        "local": [
+          5.46999999999997,
+          2.244808894350016
+        ],
+        "lights": null
+      }
+    }
+  ],
+  "lift": {
+    "started": true,
+    "arrival": {
+      "state": {
+        "floor": "R1-30F",
+        "x": 47.3,
+        "z": -215.4,
+        "y": 100,
+        "slope": null,
+        "yaw": 0,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 101.62,
+        "riding": null
+      },
+      "samples": [
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 4.8,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 6.42,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 7.577412583638934,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 9.197412583638934,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 15.863980943190246,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 17.483980943190247,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 28.14715639558678,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 29.76715639558678,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 42.89378989297825,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 44.513789892978245,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 58.571117594534066,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 60.19111759453406,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 73.64637565942381,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 75.26637565942382,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 86.58680024681706,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 88.20680024681707,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 95.85916563053269,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 97.47916563053269,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-2F",
+          "x": 47.3,
+          "z": -212.9,
+          "y": 99.93209362579238,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 101.55209362579238,
+          "riding": "R1-L1"
+        },
+        {
+          "floor": "R1-30F",
+          "x": 47.3,
+          "z": -214.89153812775044,
+          "y": 100,
+          "slope": null,
+          "yaw": 0,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 101.62,
+          "riding": "R1-L1"
+        }
+      ],
+      "cache": [
+        "R1-28F",
+        "R1-29F",
+        "R1-30F"
+      ],
+      "stats": {
+        "templates": 3,
+        "geometries": 169,
+        "materials": 116,
+        "textures": 17,
+        "imageSources": 17,
+        "geometryBytes": 71668220,
+        "cpuGeometryBytes": 71668220,
+        "maxTextureDimension": 2048,
+        "sourceBytes": 77308884,
+        "compressedBytes": 28884578,
+        "variants": {
+          "01": {
+            "sourcePrimitives": 1508,
+            "excludedSlabs": 2,
+            "batches": 56,
+            "triangles": 585802,
+            "materials": 38,
+            "modelSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+            "bounds": {
+              "min": [
+                -0.025000175461173058,
+                -0.038999997079372406,
+                -11.524999618530273
+              ],
+              "max": [
+                15.625,
+                3.009999990463257,
+                2.799999952316284
+              ]
+            }
+          },
+          "02": {
+            "sourcePrimitives": 1547,
+            "excludedSlabs": 2,
+            "batches": 56,
+            "triangles": 583662,
+            "materials": 38,
+            "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+            "bounds": {
+              "min": [
+                -0.02500024251639843,
+                -0.038999997079372406,
+                -11.524999618530273
+              ],
+              "max": [
+                15.625,
+                3.009999990463257,
+                2.799999952316284
+              ]
+            }
+          },
+          "03": {
+            "sourcePrimitives": 1731,
+            "excludedSlabs": 2,
+            "batches": 57,
+            "triangles": 716706,
+            "materials": 40,
+            "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+            "bounds": {
+              "min": [
+                -0.025000175461173058,
+                -0.038999997079372406,
+                -11.524999618530273
+              ],
+              "max": [
+                17.625,
+                3.009999990463257,
+                2.799999952316284
+              ]
+            }
+          }
+        },
+        "floorGroupsCreated": 30,
+        "floorGroupsDisposed": 27,
+        "activeFloorGroups": 3,
+        "sharedGeometryDisposals": 0,
+        "sharedMaterialDisposals": 0,
+        "sharedTextureDisposals": 0,
+        "reusedTextures": 50,
+        "disposed": false
+      }
+    },
+    "exit": {
+      "floor": "R1-30F",
+      "x": 47.3,
+      "z": -217.22000000000037,
+      "y": 100,
+      "slope": null,
+      "yaw": 0,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 101.62,
+      "riding": null
+    }
+  },
+  "views": {
+    "reports": [
+      {
+        "name": "floor",
+        "cache": [
+          "R1-29F",
+          "R1-30F",
+          "R1-2F"
+        ]
+      },
+      {
+        "name": "lobby",
+        "cache": [
+          "R1-30F",
+          "R1-2F",
+          "R1-1F"
+        ]
+      },
+      {
+        "name": "r4-30f",
+        "cache": [
+          "R1-2F",
+          "R1-1F",
+          "R4-30F"
+        ]
+      },
+      {
+        "name": "roof",
+        "cache": [
+          "R1-1F",
+          "R4-30F",
+          "R1-RF"
+        ]
+      },
+      {
+        "name": "parking",
+        "cache": [
+          "R4-30F",
+          "R1-RF",
+          "R1-B1"
+        ]
+      },
+      {
+        "name": "01-living",
+        "lights": {
+          "mode": "dwelling",
+          "unit": "R4-30F-U1",
+          "count": 12
+        }
+      },
+      {
+        "name": "02-living",
+        "lights": {
+          "mode": "dwelling",
+          "unit": "R4-30F-U2",
+          "count": 12
+        }
+      },
+      {
+        "name": "03-living",
+        "lights": {
+          "mode": "dwelling",
+          "unit": "R4-30F-U3",
+          "count": 12
+        }
+      },
+      {
+        "name": "03-night",
+        "lights": {
+          "mode": "dwelling",
+          "unit": "R4-30F-U3",
+          "count": 12
+        }
+      },
+      {
+        "name": "03-balcony",
+        "lights": {
+          "mode": "dwelling",
+          "unit": "R4-30F-U3",
+          "count": 12
+        }
+      }
+    ],
+    "stats": {
+      "templates": 3,
+      "geometries": 169,
+      "materials": 116,
+      "textures": 17,
+      "imageSources": 17,
+      "geometryBytes": 71668220,
+      "cpuGeometryBytes": 71668220,
+      "maxTextureDimension": 2048,
+      "sourceBytes": 77308884,
+      "compressedBytes": 28884578,
+      "variants": {
+        "01": {
+          "sourcePrimitives": 1508,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 585802,
+          "materials": 38,
+          "modelSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "02": {
+          "sourcePrimitives": 1547,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 583662,
+          "materials": 38,
+          "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+          "bounds": {
+            "min": [
+              -0.02500024251639843,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "03": {
+          "sourcePrimitives": 1731,
+          "excludedSlabs": 2,
+          "batches": 57,
+          "triangles": 716706,
+          "materials": 40,
+          "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              17.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        }
+      },
+      "floorGroupsCreated": 33,
+      "floorGroupsDisposed": 32,
+      "activeFloorGroups": 1,
+      "sharedGeometryDisposals": 0,
+      "sharedMaterialDisposals": 0,
+      "sharedTextureDisposals": 0,
+      "reusedTextures": 50,
+      "disposed": false
+    }
+  },
+  "stairs": [
+    {
+      "id": "R1-ST1",
+      "prompt": "1\n下楼 · 1F\n2\n上楼 · 3F",
+      "state": {
+        "floor": "R1-3F",
+        "x": 31.3,
+        "z": -220.1,
+        "y": 8.2,
+        "slope": null,
+        "yaw": -3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 9.82,
+        "riding": null
+      }
+    },
+    {
+      "id": "R4-ST2",
+      "prompt": "1\n下楼 · 29F\n2\n上楼 · RF",
+      "state": {
+        "floor": "R4-RF",
+        "x": 264.7,
+        "z": -220.1,
+        "y": 103.4,
+        "slope": null,
+        "yaw": -3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 105.02000000000001,
+        "riding": null
+      }
+    }
+  ],
+  "offline_desktop": {
+    "url": "file:///Users/calvin/Downloads/%E7%9B%B8%E5%86%8C%E5%8E%BB%E5%9B%BE%E6%A0%87/super-mall-3d/dist/mall.html",
+    "errors": [],
+    "http": [],
+    "lobbyCeilings": {
+      "overhead": false,
+      "inside": true
+    },
+    "stats": {
+      "templates": 3,
+      "geometries": 169,
+      "materials": 116,
+      "textures": 17,
+      "imageSources": 17,
+      "geometryBytes": 71668220,
+      "cpuGeometryBytes": 71668220,
+      "maxTextureDimension": 2048,
+      "sourceBytes": 77308884,
+      "compressedBytes": 28884578,
+      "variants": {
+        "01": {
+          "sourcePrimitives": 1508,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 585802,
+          "materials": 38,
+          "modelSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "02": {
+          "sourcePrimitives": 1547,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 583662,
+          "materials": 38,
+          "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+          "bounds": {
+            "min": [
+              -0.02500024251639843,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "03": {
+          "sourcePrimitives": 1731,
+          "excludedSlabs": 2,
+          "batches": 57,
+          "triangles": 716706,
+          "materials": 40,
+          "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              17.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        }
+      },
+      "floorGroupsCreated": 1,
+      "floorGroupsDisposed": 0,
+      "activeFloorGroups": 1,
+      "sharedGeometryDisposals": 0,
+      "sharedMaterialDisposals": 0,
+      "sharedTextureDisposals": 0,
+      "reusedTextures": 50,
+      "disposed": false
+    },
+    "dimensions": {
+      "w": 1440,
+      "h": 1000,
+      "scroll": 1440
+    },
+    "shadows": true
+  },
+  "offline_mobile": {
+    "errors": [],
+    "http": [],
+    "before": {
+      "floor": "R1-2F",
+      "x": 59.849999999999994,
+      "z": -217.25,
+      "y": 4.8,
+      "slope": null,
+      "yaw": 3.141592653589793,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 6.42,
+      "riding": null
+    },
+    "cacheVisits": [
+      [
+        "R1-2F"
+      ],
+      [
+        "R1-2F",
+        "R1-3F"
+      ],
+      [
+        "R1-2F",
+        "R1-3F",
+        "R2-2F"
+      ],
+      [
+        "R1-3F",
+        "R2-2F",
+        "R4-30F"
+      ],
+      [
+        "R2-2F",
+        "R4-30F",
+        "R1-2F"
+      ]
+    ],
+    "screenshot": "captured",
+    "state": {
+      "floor": "R1-2F",
+      "x": 59.849999999999994,
+      "z": -214.12295999996687,
+      "y": 4.8,
+      "slope": null,
+      "yaw": 3.141592653589793,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 6.42,
+      "riding": null
+    },
+    "stats": {
+      "templates": 3,
+      "geometries": 169,
+      "materials": 116,
+      "textures": 17,
+      "imageSources": 17,
+      "geometryBytes": 71668220,
+      "cpuGeometryBytes": 0,
+      "maxTextureDimension": 512,
+      "sourceBytes": 77308884,
+      "compressedBytes": 28884578,
+      "variants": {
+        "01": {
+          "sourcePrimitives": 1508,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 585802,
+          "materials": 38,
+          "modelSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "02": {
+          "sourcePrimitives": 1547,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 583662,
+          "materials": 38,
+          "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+          "bounds": {
+            "min": [
+              -0.02500024251639843,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "03": {
+          "sourcePrimitives": 1731,
+          "excludedSlabs": 2,
+          "batches": 57,
+          "triangles": 716706,
+          "materials": 40,
+          "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              17.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        }
+      },
+      "floorGroupsCreated": 5,
+      "floorGroupsDisposed": 2,
+      "activeFloorGroups": 3,
+      "sharedGeometryDisposals": 0,
+      "sharedMaterialDisposals": 0,
+      "sharedTextureDisposals": 0,
+      "reusedTextures": 50,
+      "disposed": false
+    },
+    "lightCount": 8,
+    "activeUnit": "R1-2F-U2",
+    "dimensions": {
+      "w": 390,
+      "h": 664,
+      "scroll": 390
+    },
+    "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+    "cache": [
+      "R2-2F",
+      "R4-30F",
+      "R1-2F"
+    ]
+  },
+  "mobile_touch": {
+    "before": {
+      "floor": "R1-2F",
+      "x": 38.150000000000006,
+      "z": -217.25,
+      "y": 4.8,
+      "slope": null,
+      "yaw": 3.141592653589793,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 6.42,
+      "riding": null
+    },
+    "after": {
+      "floor": "R1-2F",
+      "x": 38.150000000000006,
+      "z": -214.2496000000239,
+      "y": 4.8,
+      "slope": null,
+      "yaw": 3.141592653589793,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 6.42,
+      "riding": null
+    },
+    "touch": true,
+    "viewport": {
+      "w": 390,
+      "h": 844,
+      "scroll": 390
+    }
+  }
+}

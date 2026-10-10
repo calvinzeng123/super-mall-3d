@@ -18,7 +18,7 @@ export const SUITE_LIGHTS = [
 export function createSuiteLighting(ctx) {
   const { scene, renderer, camera } = ctx;
   const specs = MOBILE ? SUITE_LIGHTS.filter((_, i) => i !== 5 && i !== 7) : SUITE_LIGHTS;
-  const group = new THREE.Group(); group.name = 'suite-light-pool'; scene.add(group);
+  const group = new THREE.Group(); group.name = 'suite-light-pool'; group.visible = false; scene.add(group);
   const pool = [...specs, { name: 'apartment-kitchen', unit: true, p: [9.3, 2.88, 4.1], intensity: 16, range: 5 },
     { name: 'duplex-bedroom', unit: true, p: [5.2, 5.92, 10.8], intensity: 20, range: 5 }].map((spec, i) => {
     const light = spec.type === 'point' ? new THREE.PointLight('#ffcf95', 0, spec.range, 2)
@@ -58,6 +58,9 @@ export function createSuiteLighting(ctx) {
     get lightCount() { return pool.length; },
     update(dt, elapsed, app) {
       const r = resolve(app);
+      // Inactive lamps must leave the renderer light list, not just have zero
+      // intensity; otherwise every campus material evaluates the whole pool.
+      group.visible = !!r;
       const next = r ? `${r.lv.id}:${r.unit.id}` : '';
       if (next !== key) {
         key = next; active = r?.unit || null; activeLevel = r?.lv || null;

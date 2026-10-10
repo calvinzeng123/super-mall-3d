@@ -2,14 +2,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { L, lvl, inWalk, inVoid, onSlab, stairDoor, midOf, liftProbe, insetPts, segProbes } from './helpers.js';
-import { convexOverlap, polySamples, dist } from '../src/layout/geom.js';
+import { convexOverlap, polySamples, dist, pointInPoly, lrectPoly } from '../src/layout/geom.js';
 import { buildWalkGraph, components } from '../src/layout/walk.js';
 
 test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', () => {
   for (const lv of L.levels) {
     const items = [
       ...lv.units.flatMap((u) => u.polys.map((p) => ({ id: `${u.code} ${u.brand.name}`, p }))),
-      ...lv.rooms.flatMap((m) => m.polys.map((p) => ({ id: m.id, p }))),
+      ...lv.rooms.flatMap((m) => m.polys.map((p) => ({ id: m.id, p, room: m }))),
     ];
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
@@ -17,8 +17,15 @@ test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', ()
         if (convexOverlap(items[i].p, items[j].p)) assert.fail(`${lv.id}: ${items[i].id} 与 ${items[j].id} 重叠`);
       }
       for (const q of polySamples(items[i].p, 1.5, 0.05)) {
-        if (!onSlab(lv, q)) assert.fail(`${lv.id}: ${items[i].id} 在 (${q[0].toFixed(1)}, ${q[1].toFixed(1)}) 处不在楼板上或落入洞口`);
+        const ownShaft = items[i].room?.type === 'stair' && lv.voids.find(v =>
+          v.kind === 'stair' && v.stair === items[i].id && pointInPoly(q, v.poly));
+        const cutShaft = ownShaft && lv.slab.pieces.some(s => s.holes.some(h =>
+          h.length === ownShaft.poly.length && ownShaft.poly.every(p => h.some(v => dist(p, v) < 1e-6)) && pointInPoly(q, h)));
+        if (!onSlab(lv, q) && !cutShaft) assert.fail(`${lv.id}: ${items[i].id} 在 (${q[0].toFixed(1)}, ${q[1].toFixed(1)}) 处不在楼板上或落入无关洞口`);
       }
+      const room = items[i].room;
+      if (room?.landingRect) for (const q of polySamples(lrectPoly(room.frame, room.landingRect), .5, .08))
+        assert.ok(onSlab(lv, q), `${lv.id}: ${room.id} 消防落脚平台没有楼板`);
     }
   }
 });

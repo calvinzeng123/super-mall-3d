@@ -9,7 +9,7 @@ const towers = L.buildings.filter(b => b.kind === 'tower');
 const floors = bid => L.levels.filter(l => l.building === bid);
 const within = (outer, inner, eps = 1e-6) => inner.x0 >= outer.x0 - eps && inner.x1 <= outer.x1 + eps && inner.z0 >= outer.z0 - eps && inner.z1 <= outer.z1 + eps;
 
-test('西侧酒店公寓各20层每层10套，后区4栋住宅各30层每层3种户型', () => {
+test('酒店公寓各20层10套，四栋30层住宅首层独立大堂、2至30层各01/02/03三户', () => {
   assert.deepEqual(towers.map(b => b.id), ['H', 'A', 'R1', 'R2', 'R3', 'R4']);
   for (const b of towers) {
     const live = floors(b.id).filter(l => l.levelNumber);
@@ -17,18 +17,20 @@ test('西侧酒店公寓各20层每层10套，后区4栋住宅各30层每层3种
     assert.equal(live.length, n, `${b.id} 层数`);
     for (const [i, lv] of live.entries()) {
       assert.equal(lv.levelNumber, i + 1);
-      assert.equal(lv.units.length, b.usage === 'residential' ? 3 : 10, lv.id);
-      if (b.usage === 'residential') {
-        assert.deepEqual(new Set(lv.units.map(u => u.residence.type)), new Set(['one-bedroom', 'two-bedroom', 'three-bedroom']));
-        assert.equal(new Set(lv.units.map(u => u.residence.area)).size, 3, `${lv.id} 三户不是重复平面`);
-        assert.deepEqual(lv.units.map(u => u.residence.beds.length).sort(), [1, 2, 3]);
+      assert.equal(lv.units.length, b.usage === 'residential' ? (lv.levelNumber === 1 ? 0 : 3) : 10, lv.id);
+      if (b.usage === 'residential' && lv.levelNumber > 1) {
+        assert.deepEqual(lv.units.map(u => u.residence.prototype), ['01', '02', '03']);
+        assert.deepEqual(lv.units.map(u => u.residence.type), ['three-bedroom', 'three-bedroom', 'four-bedroom']);
+        assert.deepEqual(lv.units.map(u => u.residence.area), [179.4, 179.4, 202.4]);
+        assert.deepEqual(lv.units.map(u => u.residence.beds.length), [3, 3, 4]);
+        assert.notDeepEqual(lv.units[0].residence.partitions, lv.units[1].residence.partitions, `${lv.id} 01/02必须保留不同实际布局`);
       }
     }
     const bounds = polyBounds(b.outline);
     assert.ok(within(b.usage === 'residential' ? HOSPITALITY.residential : HOSPITALITY.west, bounds));
     for (const old of L.buildings.filter(q => q.kind === 'mall' || q.kind === 'street')) assert.ok(!convexOverlap(b.outline, old.outline), `${b.id} 不应改占原商场`);
   }
-  assert.equal(towers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 760);
+  assert.equal(towers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 748);
 });
 
 test('每套有床和独卫，套内隔间、门洞与床均在实际房间范围内', () => {
@@ -36,11 +38,14 @@ test('每套有床和独卫，套内隔间、门洞与床均在实际房间范�
     const home = u.residence, outer = u.rects[0];
     assert.equal(u.style, 'residence');
     assert.ok(home.beds.length >= 1 && home.bathrooms.length >= 1, u.id);
-    assert.equal(home.entryDoor.width, home.suitePlan ? .91 : 1.25);
+    assert.equal(home.entryDoor.width, home.suitePlan ? .91 : 1.1);
     assert.ok(home.entryDoor.at - home.entryDoor.width / 2 > 0 && home.entryDoor.at + home.entryDoor.width / 2 < outer.x1);
     for (const z of home.rooms) assert.ok(within(outer, z.rect), `${u.id}/${z.id} 超出套内`);
     for (const bath of home.bathrooms) {
-      assert.ok(bath.rect.x1 - bath.rect.x0 >= 2.6 && bath.rect.z1 - bath.rect.z0 >= 3, `${u.id} 卫浴过小`);
+      // Residential bathrooms use the surveyed Blender plans rather than the
+      // superseded 2.6 x 3m rectangular placeholder; actual navigation is tested.
+      const minWidth = home.prototype ? 2 : 2.6, minDepth = home.prototype ? 2.2 : 3;
+      assert.ok(bath.rect.x1 - bath.rect.x0 >= minWidth - 1e-6 && bath.rect.z1 - bath.rect.z0 >= minDepth - 1e-6, `${u.id} 卫浴尺寸超出已核验样板范围`);
       assert.ok(home.rooms.some(r => r.id === bath.id && r.kind === 'bathroom'));
     }
     for (const bed of home.beds) {
@@ -54,7 +59,8 @@ test('每套有床和独卫，套内隔间、门洞与床均在实际房间范�
       for (const q of [p.a, p.b]) assert.ok(within(outer, rect(q[0], q[1], q[0], q[1])), `${u.id} 隔墙超界`);
       if (p.door) {
         const len = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]);
-        assert.ok(p.door.width >= (home.suitePlan ? .7 : .9) && p.door.at - p.door.width / 2 >= -1e-6 && p.door.at + p.door.width / 2 <= len + 1e-6, `${u.id} 隔间门不成立`);
+        const minDoor = home.suitePlan ? .7 : p.role === 'measured-shower' ? .75 : .8;
+        assert.ok(p.door.width >= minDoor - 1e-6 && p.door.at - p.door.width / 2 >= -1e-6 && p.door.at + p.door.width / 2 <= len + 1e-6, `${u.id} 隔间门不成立`);
       }
     }
     assert.ok(!lv.rooms.some(r => r.type === 'wc'), `${lv.id} 私卫不应登记为公共独立用房`);
@@ -167,7 +173,7 @@ test('住宅→二期→地铁→一期→酒店→公寓完整地下链路可�
   const { buildNav, clear, step } = await import('../src/layout/nav.js');
   const nav = buildNav(L);
   // 实际走道内的转点：避开原商场核心筒和站厅设施，不穿墙或借助传送/飞行。
-  const route = [[49, -218], [49, -190], [106.066, -190], [106.066, -134.402], [106.066, -106.066], [69.266, -74.066], [50.066, -54.866], [46.668, -46.668], [43.84, -43.84], [5.44, -10.24], [-5.76, -10.24], [-45.19, -45.19], [-48.02, -48.02], [-109.62, -97.62], [-152.82, -144.02], [-180.82, -172.02], [-250.42, -194.42], [-278.5, -200], [-281.5, -200], [-370, -200], [-370, -196], [-370, -82], [-395, -82], [-432, -82]];
+  const route = [[49, -218], [57.5, -218], [57.5, -190], [106.066, -190], [106.066, -134.402], [106.066, -106.066], [69.266, -74.066], [50.066, -54.866], [46.668, -46.668], [43.84, -43.84], [5.44, -10.24], [-5.76, -10.24], [-45.19, -45.19], [-48.02, -48.02], [-109.62, -97.62], [-152.82, -144.02], [-180.82, -172.02], [-250.42, -194.42], [-278.5, -200], [-281.5, -200], [-370, -200], [-370, -196], [-370, -82], [-395, -82], [-432, -82]];
   const order = ['R1-B1', 'P2-B1', 'M-B1', 'P1-B1M', 'H-B1', 'A-B1'];
   for (const reverse of [false, true]) {
     const points = reverse ? [...route].reverse() : route, expected = reverse ? [...order].reverse() : order;

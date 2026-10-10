@@ -20,8 +20,8 @@ function walk(from, to) {
 }
 const near = (a, b, eps = .035) => a.floor === b.floor && !a.slope && Math.hypot(a.x - b.x, a.z - b.z) < eps;
 
-test('全部760套的入户门与内部卧室/卫浴门均有双侧净空且能实际穿越', () => {
-  assert.equal(homes.length, 760);
+test('全部748套的入户门与内部卧室/卫浴门均有双侧净空且能实际穿越', () => {
+  assert.equal(homes.length, 748);
   let partitionDoors = 0;
   for (const { lv, u } of homes) {
     const entry = u.residence.entryDoor;
@@ -56,14 +56,32 @@ test('全部760套的入户门与内部卧室/卫浴门均有双侧净空且能�
 const templates = new Map();
 for (const home of homes) {
   const { u } = home;
-  const key = `${u.residence.kind}/${u.residence.type}/${u.frame.a.toFixed(3)}`;
+  const key = `${u.residence.kind}/${u.residence.prototype || u.residence.type}/${u.frame.a.toFixed(3)}`;
   if (!templates.has(key)) templates.set(key, home);
 }
 
 test('全部酒店、公寓及三种住宅模板从入户点经套内走道可达每间卧室和卫生间', () => {
   const testedTypes = new Set();
   for (const [template, { lv, u }] of templates) {
-    testedTypes.add(`${u.residence.kind}/${u.residence.type}`);
+    testedTypes.add(`${u.residence.kind}/${u.residence.prototype || u.residence.type}`);
+    if (u.residence.prototype) {
+      // The model audit supplies routes through actual 0.6m body clearance,
+      // including curved fixtures and the open door leaves. Verify each route
+      // with real step calls; a coarse replacement BFS would miss those gaps.
+      for (const zone of u.residence.rooms.filter(r => ['bedroom', 'bathroom'].includes(r.kind))) {
+        const target = u.residence.navigationTargets.find(t => t.id === zone.id);
+        assert.ok(target?.path.length > 1, `${template} 缺少${zone.id}真实模型路径`);
+        let s = state(lv, u, ...target.path[0]);
+        assert.ok(clear(nav, s));
+        for (const p of target.path.slice(1)) {
+          const goal = state(lv, u, ...p);
+          assert.ok(clear(nav, goal), `${template}/${zone.id} 路径点被模型挡住 ${p}`);
+          s = walk(s, goal);
+          assert.ok(near(s, goal, .055), `${template}/${zone.id} 实际移动被挡住 ${p}`);
+        }
+      }
+      continue;
+    }
     // The surveyed suite foyer turns between a console and bench (0.623m
     // minimum gap). Its valid centre line is x5.46, off the old 0.25m grid.
     const spacing = u.residence.suitePlan ? .1 : .25;
@@ -95,19 +113,20 @@ test('全部酒店、公寓及三种住宅模板从入户点经套内走道可�
       assert.ok(ok, `${template} ${u.id} 无法从入户门到达 ${zone.id}`);
     }
   }
-  for (const type of ['residential/one-bedroom', 'residential/two-bedroom', 'residential/three-bedroom', 'hotel/king-suite', 'apartment/serviced-suite']) {
+  for (const type of ['residential/01', 'residential/02', 'residential/03', 'hotel/king-suite', 'apartment/serviced-suite']) {
     assert.ok(testedTypes.has(type), `缺少${type}模板审计`);
   }
 });
 
 test('套内实墙在非门洞处阻挡移动，卫浴与卧室不是仅视觉隔墙', () => {
   let checked = 0;
+  const checkedTemplates = new Set();
   for (const [template, { lv, u }] of templates) {
     for (const p of u.residence.partitions.filter((p) => p.door)) {
       const dx = p.b[0] - p.a[0], dz = p.b[1] - p.a[1], len = Math.hypot(dx, dz);
       const solidEnd = p.door.at - p.door.width / 2;
       if (solidEnd < NAV.r * 2 + .1) continue;
-      const nx = -dz / len, nz = dx / len, offset = NAV.r + .005;
+      const nx = -dz / len, nz = dx / len, offset = NAV.r + (u.residence.prototype ? .15 : .005);
       // A solid panel may be backed by a real cabinet. Pick an unobstructed
       // probe pair where possible; occupied points are covered by obstacle QA.
       for (let t = NAV.r + .01; t < solidEnd - NAV.r; t += .1) {
@@ -115,9 +134,10 @@ test('套内实墙在非门洞处阻挡移动，卫浴与卧室不是仅视觉�
         const a = state(lv, u, cx - nx * offset, cz - nz * offset), b = state(lv, u, cx + nx * offset, cz + nz * offset);
         if (!clear(nav, a) || !clear(nav, b)) continue;
         assert.ok(!near(walk(a, b), b), `${template} 穿过${JSON.stringify(p)}实墙`);
-        checked++; break;
+        checked++; checkedTemplates.add(template); break;
       }
     }
   }
   assert.ok(checked >= 6, `仅检查${checked}片可双侧站立的实墙`);
+  for (const template of templates.keys()) assert.ok(checkedTemplates.has(template), `${template}没有验证实际实墙阻挡`);
 });

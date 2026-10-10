@@ -35,7 +35,8 @@ test('每个铺位都能从门口走进去（冰场除外）', () => {
       const ok = u.fronts.some((f, i) => {
         const w = u.wfronts[i];
         const len = Math.hypot(w.x1 - w.x0, w.z1 - w.z0);
-        const gaps = doorGaps(style, len);
+        const entry = u.residence?.entryDoor;
+        const gaps = entry ? [[entry.at-entry.width/2, entry.at+entry.width/2]] : doorGaps(style, len);
         if (!gaps.length) return false;
         const [a, b] = gaps[0];
         const t = (a + b) / 2 / len;

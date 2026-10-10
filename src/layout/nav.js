@@ -86,6 +86,16 @@ export function buildNav(layout) {
     box(F, Fr, r);
     F.obstacles.push(piece(lrectPoly(Fr, r)));
   };
+  const polygonObstacle = (F, Fr, o) => {
+    const transform = P => P.map(p => toW(Fr, ...p));
+    const outer = transform(o.poly), holes = (o.holes || []).map(transform);
+    for (const P of [outer, ...holes]) for (let i = 0; i < P.length; i++) wall(F, ...P[i], ...P[(i + 1) % P.length]);
+    F.obstacles.push(piece(outer, holes));
+  };
+  // All 29 residential floors reuse the same three plans at identical world
+  // X/Z frames. Collision vertices and wall records are immutable; share them
+  // instead of allocating another complete model projection on every storey.
+  const measuredUnitGeometry = new Map();
   const partition = (F, Fr, p) => {
     const [x0, z0] = p.a, [x1, z1] = p.b;
     const len = Math.hypot(x1 - x0, z1 - z0);
@@ -101,6 +111,20 @@ export function buildNav(layout) {
   for (const lv of layout.levels) {
     const F = floors.get(lv.id);
     for (const u of lv.units) {
+      // Detailed residential models already include measured external walls,
+      // open door leaves, balcony glass, wetroom screens and furniture solids.
+      // Rebuilding a generic rectangular shell would seal their real openings.
+      if (u.residence?.collisionFromModel) {
+        const key = `${u.residence.prototype}/${u.frame.ox}/${u.frame.oz}/${u.frame.a}`;
+        if (!measuredUnitGeometry.has(key)) {
+          const geometry = { walls: [], obstacles: [] };
+          for (const o of u.residence.obstacles) polygonObstacle(geometry, u.frame, o);
+          measuredUnitGeometry.set(key, geometry);
+        }
+        const geometry = measuredUnitGeometry.get(key);
+        F.walls.push(...geometry.walls); F.obstacles.push(...geometry.obstacles);
+        continue;
+      }
       const style = storeStyle(lv, u);
       const openings = [];
       for (const f of u.fronts) {
@@ -132,7 +156,17 @@ export function buildNav(layout) {
         ]));
       }
     }
-    for (const m of lv.rooms) for (const s of mergeSegments(unionOutline(m.rects))) wallL(F, m.frame, s);
+    for (const m of lv.rooms) {
+      const outline = mergeSegments(unionOutline(m.rects));
+      // Protected residential stair rooms have a real doorway and a solid
+      // landing before the shaft. Their floor-change interaction is retained.
+      const segments = m.shaftRect ? subtractOpenings(outline, m.doors || []) : outline;
+      for (const s of segments) wallL(F, m.frame, s);
+    }
+    if (lv.lobbyPlan) {
+      for (const p of lv.lobbyPlan.partitions || []) partition(F, lv.lobbyPlan.frame, p);
+      for (const o of lv.lobbyPlan.obstacles || []) obstacle(F, lv.lobbyPlan.frame, o.rect);
+    }
     for (const f of lv.features) {
       if (f.type === 'gates') {
         const n = Math.max(2, Math.round((f.z1 - f.z0) / 0.95));
@@ -355,7 +389,8 @@ function segDist(px, pz, w) {
 
 function clearAt(nav, F, x, z) {
   if (!supported(F, x, z)) return false;
-  for (const o of F.obstacles) if (x >= o.bb.x0 && x <= o.bb.x1 && z >= o.bb.z0 && z <= o.bb.z1 && pointInPoly([x, z], o.outer)) return false;
+  for (const o of F.obstacles) if (x >= o.bb.x0 && x <= o.bb.x1 && z >= o.bb.z0 && z <= o.bb.z1
+    && pointInPoly([x, z], o.outer) && !o.holes.some(h => pointInPoly([x, z], h.poly))) return false;
   const r = NAV.r;
   for (const [ox, oz] of DIRS) {
     const sx = x + ox * r, sz = z + oz * r;
