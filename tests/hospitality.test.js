@@ -172,7 +172,7 @@ test('住宅两条独立坡道均可从地面步行下库及反向上行，标�
   }
 });
 
-test('住宅→二期→地铁→一期→西侧乐园公共车库完整地下链路可连续双向步行', async () => {
+test('住宅→二期→地铁→一期→西侧公共停车附库完整地下链路可连续双向步行', async () => {
   const { buildNav, clear, step } = await import('../src/layout/nav.js');
   const nav = buildNav(L);
   // 实际走道内的转点：绕 A 圆厅西侧环道避开新 B1/B2 双车坡，

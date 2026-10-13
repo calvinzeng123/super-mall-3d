@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { BatchSet, SignBatch } from '../batch.js';
 import { planter, umbrella, tableSet, bollard, ipMascot, addTrees } from './props.js';
-import { frame, pointInPoly } from '../../layout/geom.js';
+import { frame, pointInPoly, toW } from '../../layout/geom.js';
 import { shapeFromPoly, flatShapeGeometry } from './shell.js';
 import { makeSignAtlas, FONT_CN, FONT_EN, rng } from '../textures.js';
 
@@ -290,7 +290,7 @@ function gardenIsland(B,f,trees){
   const count=Math.ceil(f.w*f.d*.25),colors=['#677f4b','#809b60','#9cb078','#537347'];
   let made=0;
   for(let i=0;i<count*8&&made<count;i++){
-    const x=f.x+(rand()-.5)*f.w*.85,z=f.z+(rand()-.5)*f.d*.85;
+    const x=f.x+(rand()-.5)*(f.rect.x1-f.rect.x0)*.85,z=f.z+(rand()-.5)*(f.rect.z1-f.rect.z0)*.85;
     if(!pointInPoly([x,z],inner))continue;
     const r=.22+rand()*.32;
     B.get('foliage').sphere(x,.34+r*.5,z,r,colors[made%4],r*.68,r,'ico0');
@@ -300,12 +300,12 @@ function gardenIsland(B,f,trees){
     }
     made++;
   }
-  for(const [dx,dz,s] of f.trees||[])trees.push({x:f.x+dx,y:.25,z:f.z+dz,s,kind:'round'});
+  for(const [dx,dz,s] of f.trees||[]){const [x,z]=toW(f.frame,dx,dz);trees.push({x,y:.25,z,s,kind:'round'});}
 }
 
-function zoneEdging(B,r){
+function zoneEdging(B,poly){
   // 地面嵌石带与步行面平齐，入口轴线无需跨越台阶或围挡。
-  const sides=[[[r.x0,r.z0],[r.x1,r.z0]],[[r.x1,r.z0],[r.x1,r.z1]],[[r.x1,r.z1],[r.x0,r.z1]],[[r.x0,r.z1],[r.x0,r.z0]]];
+  const sides=poly.map((p,i)=>[p,poly[(i+1)%poly.length]]);
   for(const [a,b] of sides){
     const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz),n=Math.ceil(len/1.8);
     for(let i=0;i<n;i++){
@@ -332,20 +332,25 @@ export function buildForecourt(ctx){
   B.materials.forecourtGrass=ctx.mats.floor('grass',.9);
   const trees=[];
   for(const zone of plan.zones){
-    const r=zone.rect;B.get('forecourtPaving').box((r.x0+r.x1)/2,-.065,(r.z0+r.z1)/2,r.x1-r.x0,.08,r.z1-r.z0,zone.color);
-    zoneEdging(B,r);
+    const r=zone.rect,slab=new THREE.ExtrudeGeometry(shapeFromPoly(zone.poly),{depth:.08,bevelEnabled:false,curveSegments:4});
+    slab.rotateX(-Math.PI/2);slab.translate(0,-.105,0);
+    pushGeometry(B,'forecourtPaving',slab,zone.color);
+    zoneEdging(B,zone.poly);
     // 导览柱紧靠地块边角，保留主要轴线。
-    const x=r.x1-1.5,z=r.z1-1.1;B.get('wood').box(x,1.0,z,.11,2.0,.11,C.wood);B.get('ext').box(x,1.84,z,3.8,.86,.1,C.dark);
+    const [x,z]=zone.signPoint||[r.x1-1.5,r.z1-1.1];B.get('wood').box(x,1.0,z,.11,2.0,.11,C.wood);B.get('ext').box(x,1.84,z,3.8,.86,.1,C.dark);
     S.place(x,1.84,z+.06,3.65,.8,'S',atlas.cell(zone.id));
   }
   let layer=0;
-  for(const path of plan.paths)for(let i=1;i<path.points.length;i++){
+  for(const path of plan.paths.filter(p=>!p.pavedBy))for(let i=1;i<path.points.length;i++){
     // 标记的过街段使用场地同源斑马线，保持柏油车道连续，不盖一条石材地板。
     if(path.crossingSegments?.includes(i-1))continue;
     const a=path.points[i-1],b=path.points[i],dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz);
     B.get('forecourtStone').box((a[0]+b[0])/2,-.012+(layer++)*.003,(a[1]+b[1])/2,len,.05,path.width,'#ded7c9',-Math.atan2(dz,dx));
   }
-  for(const f of plan.items){
+  for(const item of plan.items){
+    const rotated=!!item.rotation&&!['carousel','garden-island'].includes(item.type);
+    const f=rotated?{...item,x:0,z:0,rect:{x0:-item.w/2,x1:item.w/2,z0:-item.d/2,z1:item.d/2}}:item;
+    const draw=()=>{
     if(f.type==='carousel')carousel(ctx,f);
     else if(f.type==='play-castle')playGarden(ctx,f);
     else if(f.type==='swings')swing(B,f.x,f.z,f.w,f.d);
@@ -361,6 +366,8 @@ export function buildForecourt(ctx){
     else if(f.type==='mascot')ipMascot(B,f.x,0,f.z,.63,0);
     else if(f.type==='bikes')bikes(B,f);
     else if(f.type==='garden-island')gardenIsland(B,f,trees);
+    };
+    if(rotated)B.frame(item.frame,draw);else draw();
   }
   addTrees(ctx.site.group,ctx.mats,trees,124);
   S.flush(ctx.site.group,new THREE.MeshBasicMaterial({map:atlas.texture}));

@@ -103,6 +103,7 @@ export function buildNav(layout) {
     F.obstacles.push(piece(outer, holes));
   };
   for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  for (const o of S.westParking?.islands || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const lot of layout.extensions?.surfaceParking || []) {
     for (const [i, s] of lot.stalls.entries()) {
       if (i % 4 === 0) continue;

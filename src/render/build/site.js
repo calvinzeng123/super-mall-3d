@@ -8,6 +8,7 @@ import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from '
 import { COLORS } from '../theme.js';
 import { windowTextures, rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { buildForecourt } from './forecourt.js';
+import { buildWestParkingDetails } from './west-parking.js';
 
 const DEG = 180 / Math.PI;
 /** 各期围合的铺装广场（椭圆）：渲染铺装与水景，并让草坪树阵避开 */
@@ -63,6 +64,7 @@ const raisedConnections = layout => [
 const siteActivityFootprints = layout => {
   const S = layout.site, ext = layout.extensions;
   return [...(S.activityExclusions || []), ...(S.trenches || []), ...(S.openings || []), ...(S.driveways || []),
+    ...(S.westParking?.poly ? [S.westParking.poly] : []),
     ...(S.crossings || []).map(c => c.poly), ...(ext?.surfaceParking || []).map(lot => lot.poly),
     ...(ext?.roads || []).flatMap(road => road.polys || []), ...(ext?.paths || []).filter(p => p.kind === 'ground').flatMap(p => p.polys || [])];
 };
@@ -120,6 +122,7 @@ export function buildSite(ctx) {
   context(ctx, G);
   greenery(ctx, S, B, G);
   buildForecourt(ctx);
+  buildWestParkingDetails(ctx);
 }
 
 /** 商场地块景观：与建筑同形的外扩铺装带（裁到地块内）、入口步道（直通人行道或地块边）、草坪上的树阵与路灯 */
@@ -254,8 +257,12 @@ function roads(ctx, S, B, G) {
   // 斑马线与停止线
   for (const c of S.crossings) {
     const r = c.rect;
-    if (c.axis === 'z') zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 1, r.z1 - r.z0 - 4.4, 'z', y);
-    else zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.z1 - r.z0 - 1, r.x1 - r.x0 - 1, 'x', y);
+    const paintY=(ctx.layout.extensions?.roads||[]).some(road=>road.polys.some(p=>convexOverlap(c.poly,p)))?.065:y;
+    if(c.id.startsWith('west-cross-')){
+      zebra(B,(r.x0+r.x1)/2,(r.z0+r.z1)/2,c.axis==='z'?r.x1-r.x0-.3:r.z1-r.z0-.3,c.axis==='z'?r.z1-r.z0-.3:r.x1-r.x0-.3,c.axis,paintY);continue;
+    }
+    if (c.axis === 'z') zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 1, r.z1 - r.z0 - 4.4, 'z', paintY);
+    else zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.z1 - r.z0 - 1, r.x1 - r.x0 - 1, 'x', paintY);
   }
   for (const x of [-17.5, 17.5]) B.get('ext').box(x, y, x < 0 ? 8 : -8, 0.3, 0.02, 12, white);
   for (const z of [-21, 21]) B.get('ext').box(z < 0 ? -5 : 5, y, z, 10, 0.02, 0.3, white);
@@ -532,10 +539,12 @@ function greenery(ctx, S, B, G) {
   }
 }
 
-/** 园区外周边楼宇（带窗格贴图，夜间窗户发光） */
-function context(ctx, G) {
+/** 每座背景楼固定抽取尺寸和配色，避让改动不会重排其他楼的几何。 */
+export function siteContextBuildings(layout) {
   const rand = rng(42);
-  const activities = siteActivityFootprints(ctx.layout);
+  const reserved = [...siteActivityFootprints(layout), ...raisedConnections(layout),
+    ...layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline),
+    ...(layout.site.roads || []).map(r => r.poly), ...(layout.site.sidewalks || []).map(r => r.poly)];
   const spots = [];
   for (const [x0, x1, z0, z1, n] of [
     [-760, -360, -760, -360, 8], [-320, 320, -780, -380, 9], [360, 760, -760, -360, 7],
@@ -543,6 +552,17 @@ function context(ctx, G) {
   ]) {
     for (let i = 0; i < n; i++) spots.push([x0 + rand() * (x1 - x0), z0 + rand() * (z1 - z0)]);
   }
+  return spots.map(([x, z], id) => ({ id, x, z, w: 26 + rand() * 34, d: 24 + rand() * 30, h: 24 + rand() * rand() * 120, tint: Math.floor(rand() * 6) }))
+    .filter(({ x, z, w, d }) => {
+      if (layout.buildings.some(b => b.kind === 'tower' && !b.undergroundOnly && (pointInPoly([x, z], b.outline) || distToPolyEdge([x, z], b.outline) < Math.max(w, d) / 2 + 22))) return false;
+      // 按完整楼体再留两米边距，包含车位组之间、停车入口和主步行轴。
+      const footprint = rectPoly(rect(x - w / 2 - 2, z - d / 2 - 2, x + w / 2 + 2, z + d / 2 + 2));
+      return !reserved.some(poly => convexOverlap(footprint, poly));
+    });
+}
+
+/** 园区外周边楼宇（带窗格贴图，夜间窗户发光） */
+function context(ctx, G) {
   const tints = ['#8fa6b8', '#a9b8c0', '#7f95a8', '#b9a98f', '#9aa79a', '#6f8296'];
   const mats = [];
   for (let k = 0; k < tints.length; k++) {
@@ -552,12 +572,8 @@ function context(ctx, G) {
     mats.push(m);
   }
   const geo = new THREE.BoxGeometry(1, 1, 1);
-  for (const [x, z] of spots) {
-    const w = 26 + rand() * 34, d = 24 + rand() * 30, h = 24 + rand() * rand() * 120;
-    if (ctx.layout.buildings.some(b => b.kind === 'tower' && !b.undergroundOnly && (pointInPoly([x, z], b.outline) || distToPolyEdge([x, z], b.outline) < Math.max(w, d) / 2 + 22))) continue;
-    const footprint = rectPoly(rect(x - w / 2, z - d / 2, x + w / 2, z + d / 2));
-    if (activities.some(poly => convexOverlap(footprint, poly))) continue;
-    const mesh = new THREE.Mesh(geo, mats[Math.floor(rand() * mats.length)]);
+  for (const { x, z, w, d, h, tint } of siteContextBuildings(ctx.layout)) {
+    const mesh = new THREE.Mesh(geo, mats[tint]);
     mesh.scale.set(w, h, d);
     mesh.position.set(x, h / 2 - 0.3, z);
     mesh.castShadow = false;

@@ -1,27 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { L } from './helpers.js';
-import { pointInPoly, convexOverlap, dist } from '../src/layout/geom.js';
+import { pointInPoly, convexOverlap, dist, distToPolyEdge } from '../src/layout/geom.js';
 import { buildNav, clear, step } from '../src/layout/nav.js';
 const F=L.site.forecourt,nav=buildNav(L);
 const at=(x,z)=>({floor:'ground',x,z,y:0,slope:null});
 const move=(s,p)=>{const dx=p[0]-s.x,dz=p[1]-s.z,n=Math.ceil(Math.hypot(dx,dz)/.09);for(let i=0;i<n;i++)s=step(nav,s,dx/n,dz/n,0);return s;};
 
-test('一期五个活动地块不压建筑、道路、车库坡道或共享车位',()=>{
+test('五个活动地块不压建筑、道路、车库坡道或共享车位',()=>{
   assert.equal(F.zones.length,5);
   for(const zone of F.zones){
     for(let x=zone.rect.x0+.25;x<zone.rect.x1;x+=1)for(let z=zone.rect.z0+.25;z<zone.rect.z1;z+=1){
+      if(!pointInPoly([x,z],zone.poly))continue;
       assert.ok(!L.buildings.filter(b=>b.kind!=='metro'&&!b.undergroundOnly).some(b=>pointInPoly([x,z],b.outline)),`${zone.id}:建筑 ${x},${z}`);
     }
     for(const p of [...L.site.roads.map(r=>r.poly),...L.extensions.roads.flatMap(r=>r.polys),...L.site.trenches,...(L.extensions.surfaceParking||[]).map(r=>r.poly)])assert.ok(!convexOverlap(zone.poly,p,.02),`${zone.id}:车道/停车位冲突`);
   }
 });
 
-test('原酒店西側地块接纳完整乐园与五间食集，游具保持原尺寸且首层功能不丢失',()=>{
+test('二期与住宅之间接纳完整乐园与五间食集，轨道旋转且设备不缩小',()=>{
   assert.equal(F.items.length,61);
   const family=F.zones.find(z=>z.id==='family'),market=F.zones.find(z=>z.id==='market');
-  assert.deepEqual(family.rect,{x0:-391,z0:-253,x1:-347,z1:-181});
-  assert.deepEqual(market.rect,{x0:-342,z0:-244,x1:-305,z1:-201});
+  assert.deepEqual(family.rect,{x0:16,z0:-163,x1:90,z1:-115});
+  assert.deepEqual(market.rect,{x0:244,z0:-162,x1:281,z1:-119});
   const expected={carousel:[16,16],'play-castle':[15,13],swings:[7,5],sandpit:[8,7],'mini-train':[42,66]};
   for(const [type,size] of Object.entries(expected)){
     const item=F.items.find(i=>i.type===type);assert.equal(item.zone,'family');assert.deepEqual([item.w,item.d],size,type);
@@ -30,6 +31,18 @@ test('原酒店西側地块接纳完整乐园与五间食集，游具保持原�
   assert.equal(F.items.filter(i=>i.zone==='market'&&i.type==='cafe-table').length,4);
   assert.equal(F.items.filter(i=>i.type==='garden-island').length,14);
   assert.equal(F.zones.find(z=>z.id==='east-garden').name,'星湾街角庭院');
+  const train=F.items.find(i=>i.type==='mini-train'),p2=L.buildings.find(b=>b.id==='P2');
+  assert.equal(train.rotation,90);
+  assert.ok(Math.abs(train.rect.x1-train.rect.x0-67.2)<1e-6,'66m轨道长轴及两侧0.6m轨枕沿x');
+  assert.ok(Math.abs(train.rect.z1-train.rect.z0-43.2)<1e-6,'42m轨道短轴及两侧0.6m轨枕沿z');
+  assert.ok(train.poly.every(p=>!pointInPoly(p,p2.outline)&&distToPolyEdge(p,p2.outline)>4.5),'轨枕轮廓与商场外墙净距不足');
+});
+
+test('西侧原乐园及市集连同专用步道全部腾出，保留原一期三处庭院',()=>{
+  assert.ok(F.items.filter(i=>['family','market'].includes(i.zone)).every(i=>i.poly.every(p=>p[0]>0)));
+  assert.ok(F.paths.every(p=>p.points.every(([x])=>x>=-280)));
+  for(const id of ['events','north-garden','east-garden'])assert.ok(F.zones.some(z=>z.id===id));
+  assert.equal(F.paths.some(p=>p.id==='square-west-recreation'),false);
 });
 
 test('亲子设施、食集、阅读庭院共用实际物件和碰撞足迹',()=>{
@@ -42,7 +55,7 @@ test('亲子设施、食集、阅读庭院共用实际物件和碰撞足迹',()=
   for(const o of F.obstacles){const c=o.poly.reduce((a,p)=>[a[0]+p[0]/o.poly.length,a[1]+p[1]/o.poly.length],[0,0]);assert.equal(clear(nav,at(...c)),false,`${o.id}:实体可穿过`);}
 });
 
-test('一期每条入口至活动区的步行主线连续可达并双向走通',()=>{
+test('每条入口至活动区的步行主线连续可达并双向走通',()=>{
   for(const path of F.paths){
     const points=path.points.map(p=>[...p]);
     // 建筑入口线留在既有楼层，测试起点向室外推进0.8m。
@@ -54,7 +67,7 @@ test('一期每条入口至活动区的步行主线连续可达并双向走通',
   }
 });
 
-test('一期真实入口可从楼内出门到庭院，并沿原路返回楼内',()=>{
+test('商场和住宅真实入口可从楼内出门到庭院，并沿原路返回楼内',()=>{
   for(const path of F.paths.filter(p=>p.entrance)){
     const e=L.entrances.find(e=>e.id===path.entrance);assert.ok(e,path.entrance);
     const mid=[(e.seg.x0+e.seg.x1)/2,(e.seg.z0+e.seg.z1)/2];
@@ -69,15 +82,20 @@ test('一期真实入口可从楼内出门到庭院，并沿原路返回楼内',
   }
 });
 
-test('方庭西门经实际过街线连接食集与乐园，旧南侧公共车位仍保留',()=>{
-  const crossing=F.paths.find(p=>p.id==='square-west-recreation');
-  assert.deepEqual(crossing.crossingSegments,[1]);
-  assert.ok(L.site.crossings.some(c=>pointInPoly([-295,-200],c.poly)&&pointInPoly([-303,-200],c.poly)),'缺少贯通两条车道的斑马线');
-  const route=[[-280.8,-200],[-284,-200],[-307,-200],[-325.8,-200],[-325.8,-242],[-325.8,-200],[-344.5,-200],[-344.5,-197],[-352,-197],[-344.5,-197],[-344.5,-233],[-352,-233]];
-  for(const points of [route,[...route].reverse()]){
-    let s=at(...points[0]);assert.ok(clear(nav,s));
-    for(const p of points.slice(1)){s=move(s,p);assert.ok(dist([s.x,s.z],p)<.12,`食集乐园路线停在${s.x},${s.z}`);assert.equal(s.floor,'ground');}
+test('二期真实北门与四栋住宅逐一往返乐园和食集，跨街路线连续可走',()=>{
+  const x=150/Math.SQRT2,crossing=F.paths.find(p=>p.id==='residential-recreation');
+  assert.deepEqual(crossing.crossingSegments,[1,2]);
+  for(const z of [-184,-170])assert.ok(L.site.crossings.some(c=>pointInPoly([x,z],c.poly)),`缺少z=${z}过街线`);
+  const destinations=[[[88,-142],[78,-142]],[[175,-142],[240,-142],[240,-120],[260.2,-120],[260.2,-158]]];
+  for(const id of ['P2-N','R1-MAIN','R2-MAIN','R3-MAIN','R4-MAIN'])for(const target of destinations){
+    const e=L.entrances.find(e=>e.id===id),mid=[(e.seg.x0+e.seg.x1)/2,(e.seg.z0+e.seg.z1)/2];
+    const inside=[mid[0]-e.nx*1.1,mid[1]-e.nz*1.1],outside=[mid[0]+e.nx*1.1,mid[1]+e.nz*1.1];
+    const route=[outside,...(id==='P2-N'?[[x,-142]]:[[mid[0],-193],[x,-193],[x,-190],[x,-178],[x,-162],[x,-142]]),...target];
+    let s={...at(...inside),floor:e.level};assert.ok(clear(nav,s),`${id}:室内起点`);
+    for(const p of route){s=move(s,p);assert.ok(dist([s.x,s.z],p)<.12,`${id}:去活动区停在${s.x},${s.z}`);assert.equal(s.floor,'ground');}
+    for(const p of [...route.slice(0,-1)].reverse()){
+      s=move(s,p);assert.ok(dist([s.x,s.z],p)<.12,`${id}:返程停在${s.x},${s.z}`);
+    }
+    s=move(s,inside);assert.equal(s.floor,e.level);assert.ok(dist([s.x,s.z],inside)<.12,`${id}:未返回门内`);
   }
-  const oldLots=L.extensions.surfaceParking.filter(l=>l.rect.x1<-300);
-  assert.equal(oldLots.reduce((n,l)=>n+l.stalls.length,0),31);
 });

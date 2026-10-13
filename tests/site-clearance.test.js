@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { L } from './helpers.js';
 import { rect, rectPoly, frame, toW, lrectPoly, clipConvex, polyArea, pointInPoly, convexOverlap, distToPolyEdge } from '../src/layout/geom.js';
-import { subtractTowerFootprints, siteLampPlacement, siteTreePlacement, siteGroundHoles } from '../src/render/build/site.js';
+import { subtractTowerFootprints, siteLampPlacement, siteTreePlacement, siteGroundHoles, siteContextBuildings } from '../src/render/build/site.js';
 import { shapeFromPoly, flatShapeGeometry } from '../src/render/build/shell.js';
 import { BatchSet } from '../src/render/batch.js';
 import { addTrees, streetLamp } from '../src/render/build/props.js';
@@ -72,8 +72,9 @@ test('按实际树心和尺寸避让，含随机偏移的真实树冠不穿建�
   const solids = [...L.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline), ...accessKiosks,
     ...L.extensions.gateways.filter(g => g.elev >= 0).map(g => g.poly),
     ...L.extensions.paths.filter(p => p.kind === 'skybridge').flatMap(p => p.slab.pieces.map(s => s.outer)),
-    ...L.site.activityExclusions, ...L.site.trenches, ...L.extensions.surfaceParking.map(p => p.poly)];
-  for (let x = -410; x < 290; x += 15) for (let z = -265; z < -10; z += 17) {
+    ...L.site.activityExclusions, ...L.site.trenches, ...L.extensions.surfaceParking.map(p => p.poly),
+    ...(L.site.westParking?.poly ? [L.site.westParking.poly] : [])];
+  for (let x = -500; x < 290; x += 15) for (let z = -265; z < -10; z += 17) {
     const tree = { x: x + .37, z: z - .41, y: -.14, s: 1.35, kind: (x + z) % 3 ? 'round' : 'cone' };
     if (allow(tree)) list.push(tree);
   }
@@ -121,13 +122,13 @@ test('地下附库上方保留真实地面及绿化照明，实际坡口仍挖�
   assert.ok(!siteLampPlacement(layout)(...ramp));
   ground.dispose();
 
-  // Use buildSite's real mesh boundary and actual park locations as well as
-  // the synthetic garage: underground mass must never cut out the park.
+  // Use buildSite's real mesh boundary and actual annex roof locations as well
+  // as the synthetic garage: underground mass must never cut out the surface.
   const actual = flatShapeGeometry(shapeFromPoly([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], siteGroundHoles(L)), -.32);
   const ap = actual.attributes.position, ai = actual.index, actualTriangles = [];
   for (let i = 0; i < ai.count; i += 3) actualTriangles.push([0, 1, 2].map(k => { const j = ai.getX(i + k); return [ap.getX(j), ap.getZ(j)]; }));
   for (const point of [[-344.5, -200], [-344.5, -215], [-377, -200]]) {
-    assert.ok(actualTriangles.some(t => pointInPoly(point, t)), `乐园真实地面缺失 ${point}`);
+    assert.ok(actualTriangles.some(t => pointInPoly(point, t)), `西侧附库上方真实地面缺失 ${point}`);
   }
   for (const kiosk of accessKiosks) {
     const center = kiosk.reduce((p, q) => [p[0] + q[0] / kiosk.length, p[1] + q[1] / kiosk.length], [0, 0]);
@@ -136,4 +137,56 @@ test('地下附库上方保留真实地面及绿化照明，实际坡口仍挖�
     assert.ok(!siteLampPlacement(L)(...center));
   }
   actual.dispose();
+});
+
+test('大型停车场整片地块、外接车道及步行轴不被通用树木路灯占用', () => {
+  const boundary = rectPoly(rect(-484, -250, -301, -33));
+  const drive = rectPoly(rect(-484, -243, -292, -235));
+  const promenade = rectPoly(rect(-303, -31, -203, -27));
+  const layout = { buildings: [], site: { westParking: { poly: boundary } }, extensions: {
+    surfaceParking: [{ poly: rectPoly(rect(-475, -220, -460, -210)) }],
+    roads: [{ polys: [drive] }], paths: [{ kind: 'ground', polys: [promenade] }],
+  } };
+  const lamp = siteLampPlacement(layout), tree = siteTreePlacement(layout);
+  for (const [x, z] of [[-479, -247], [-390, -130], [-302, -34], [-296, -239], [-240, -29]]) {
+    assert.ok(!lamp(x, z), `停车地块或交通主线出现通用灯杆 ${x},${z}`);
+    assert.ok(!tree({ x, z, s: 1.35 }), `停车地块或交通主线出现通用树木 ${x},${z}`);
+  }
+  assert.ok(!tree({ x: -486, z: -180, s: 1.35 }), '树干在界外但树冠越入停车地块');
+  assert.ok(tree({ x: -490, z: -180, s: 1.35 }), '仍应保留界外安全绿化');
+  assert.ok(lamp(-490, -180), '仍应保留界外路灯');
+});
+
+test('背景城市楼按完整楼体避让停车场、入口车道与步行轴且不因删除邻楼而重排', () => {
+  const empty = { buildings: [], site: {}, extensions: {} };
+  const all = siteContextBuildings(empty);
+  assert.equal(all.length, 52);
+  const edgeStrip = b => rectPoly(rect(b.x + b.w / 2 - 1, b.z - 1, b.x + b.w / 2 + 5, b.z + 1));
+  const boundary = rectPoly(rect(-484, -250, -301, -33));
+  // These exclusions touch facade corners while all three building centers
+  // remain outside; a center-only collision test would miss the conflict.
+  const layout = { buildings: [], site: { westParking: { poly: boundary }, driveways: [edgeStrip(all[0])] }, extensions: {
+    roads: [{ polys: [edgeStrip(all[1])] }], paths: [{ kind: 'ground', polys: [edgeStrip(all[2])] }],
+  } };
+  const reserved = [boundary, ...layout.site.driveways, ...layout.extensions.roads[0].polys, ...layout.extensions.paths[0].polys];
+  const remaining = siteContextBuildings(layout);
+  assert.ok(remaining.length >= 40, '应保留周边城市环境');
+  for (const b of remaining) {
+    assert.deepEqual(b, all.find(old => old.id === b.id), '避让一栋楼不应改变其他楼的尺寸或配色');
+    const footprint = rectPoly(rect(b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2));
+    assert.ok(reserved.every(poly => !convexOverlap(footprint, poly)), `背景楼 ${b.id} 越入保留地块`);
+  }
+  for (const id of [0, 1, 2]) assert.ok(!remaining.some(b => b.id === id), `中心未重叠的 ${id} 号楼仍压入口或步行轴`);
+
+  const actualReserved = [...L.site.activityExclusions, ...L.site.driveways,
+    ...L.site.roads.map(r => r.poly), ...L.site.sidewalks.map(r => r.poly),
+    ...L.extensions.surfaceParking.map(p => p.poly), ...L.extensions.roads.flatMap(r => r.polys),
+    ...L.extensions.paths.filter(p => p.kind === 'ground').flatMap(p => p.polys),
+    ...(L.site.westParking?.poly ? [L.site.westParking.poly] : [])];
+  const actual = siteContextBuildings(L);
+  assert.ok(actual.length >= 35);
+  for (const b of actual) {
+    const footprint = rectPoly(rect(b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2));
+    assert.ok(actualReserved.every(poly => !convexOverlap(footprint, poly)), `实际背景楼 ${b.id} 占用停车或交通空间`);
+  }
 });
