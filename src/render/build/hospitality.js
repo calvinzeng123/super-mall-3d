@@ -108,6 +108,7 @@ export function buildHospitality(ctx) {
     if(sign)group.add(sign);
     records.set(b.id,{group,plane,groundGroup,roofGroup,materials,residentialShells,detailLevel:null});
   }
+  buildPublicGarageShells(ctx);
   landscape(ctx,towers);
   connections(ctx);
   sharedSurfaceParking(ctx);
@@ -358,7 +359,7 @@ function landscape(ctx,towers) {
   const group=new THREE.Group();group.name='hospitality-landscape';
   const B=new BatchSet(ctx.mats.base),trees=[];
   // 道路和地块由布局提供，景观只落在楼边已有plot内，避开全部建筑轮廓。
-  const occupied=p=>ctx.layout.buildings.some(b=>pointInPoly(p,b.outline))||ctx.layout.site.trenches.some(q=>pointInPoly(p,q))||(ctx.layout.extensions.roads||[]).some(r=>r.polys.some(q=>pointInPoly(p,q)))||(ctx.layout.extensions.surfaceParking||[]).some(r=>pointInPoly(p,r.poly));
+  const occupied=p=>ctx.layout.buildings.some(b=>!b.undergroundOnly&&pointInPoly(p,b.outline))||ctx.layout.site.trenches.some(q=>pointInPoly(p,q))||(ctx.layout.extensions.roads||[]).some(r=>r.polys.some(q=>pointInPoly(p,q)))||(ctx.layout.extensions.surfaceParking||[]).some(r=>pointInPoly(p,r.poly));
   for(const b of towers) {
     const r=b.footprint,F=b.frame;
     B.frame(F,()=>{
@@ -404,11 +405,11 @@ function districtGarden(ctx,B,group,trees) {
   };
   // The former remote hotel/apartment island has been vacated. Planting now
   // follows the attached tower forecourts, outside traffic and garage openings.
-  for(const [x,z] of [[-382,-223],[-382,-178],[-319,-222],[-306,-221],[-282,-121],[-252,-112]]) {
+  for(const [x,z] of [[-282,-121],[-252,-112]]) {
     planter(B,x-1.25,z-.7,x+1.25,z+.7,0,x+z,true,'stone');
     trees.push({x,y:.65,z,s:1.2,kind:'round'});
   }
-  for(const [x,z] of [[-340,-177],[-326,-177],[-254,-105]])bench(B,x,0,z,Math.PI);
+  for(const [x,z] of [[-254,-105]])bench(B,x,0,z,Math.PI);
   // 四栋住宅之间的口袋花园：不占南侧主入口轴线、消防路或地库坡道。
   for(const x of [82,148,214]) {
     lawn(x,-219,17,15);
@@ -567,18 +568,19 @@ function sharedSurfaceParking(ctx) {
     const sign=new THREE.Mesh(new THREE.PlaneGeometry(4.5,.95),ctx.mats.sign(canvasTexture(c,{clamp:true})));sign.position.set(r.x1-2.5,2.7,r.z1+.12);group.add(sign);
   }
   for(const ramp of ctx.layout.ramps.filter(r=>['H','A'].includes(r.building)&&r.type.startsWith('street'))) {
-    const high=ramp.from.level==='street'?ramp.from:ramp.to;
-    const low=ramp.from.level==='street'?ramp.to:ramp.from,outward=Math.sign(high.z-low.z);
+    const high=ramp.from.level==='street'?ramp.from:ramp.to,low=ramp.from.level==='street'?ramp.to:ramp.from;
+    const len=Math.hypot(high.x-low.x,high.z-low.z),dx=(high.x-low.x)/len,dz=(high.z-low.z)/len,px=dz,pz=-dx;
+    const horizontal=Math.abs(dx)>.5;
     for(const side of [-1,1]) {
-      const x=high.x+side*(ramp.width/2+.35),z=high.z+outward*1.5;
-      B.get('extMetal').box(x,.7,z,.34,1.4,.48,'#445c58');
+      const x=high.x+px*side*(ramp.width/2+.35)+dx*1.5,z=high.z+pz*side*(ramp.width/2+.35)+dz*1.5;
+      B.get('extMetal').box(x,.7,z,horizontal?.48:.34,1.4,horizontal?.34:.48,'#445c58');
       B.get('extMetal').box(x,2.8,z,.12,2.8,.12,'#64756e');
-      B.get('glowSoft').box(x,1.05,z+outward*.25,.17,.15,.025,'#b3e6d0');
+      B.get('glowSoft').box(x+dx*.25,1.05,z+dz*.25,horizontal?.025:.17,.15,horizontal?.17:.025,'#b3e6d0');
     }
-    B.get('extMetal').box(high.x,4.18,high.z+outward*1.5,ramp.width+.85,.14,.25,'#596b64');
-    B.get('glowSoft').box(high.x,4.08,high.z+outward*1.5,ramp.width,.04,.2,'#f0e6c8');
+    B.get('extMetal').box(high.x+dx*1.5,4.18,high.z+dz*1.5,horizontal?.25:ramp.width+.85,.14,horizontal?ramp.width+.85:.25,'#596b64');
+    B.get('glowSoft').box(high.x+dx*1.5,4.08,high.z+dz*1.5,horizontal?.2:ramp.width,.04,horizontal?ramp.width:.2,'#f0e6c8');
     const c=makeCanvas(512,144),g=c.getContext('2d');g.fillStyle='#284e44';g.fillRect(0,0,512,144);g.fillStyle='#f4ecd6';g.textAlign='center';g.font=`600 45px ${FONT_CN}`;g.fillText(ramp.type==='street-in'?'住客车库入口':'住客车库出口',256,56);g.font=`31px ${FONT_EN}`;g.fillText('B1  /  B2 · 2.6 m',256,113);
-    const sign=new THREE.Mesh(new THREE.PlaneGeometry(4.4,1.15),ctx.mats.sign(canvasTexture(c,{clamp:true})));sign.position.set(high.x,3.54,high.z+outward*1.67);sign.rotation.y=outward>0?0:Math.PI;group.add(sign);
+    const sign=new THREE.Mesh(new THREE.PlaneGeometry(4.4,1.15),ctx.mats.sign(canvasTexture(c,{clamp:true})));sign.position.set(high.x+dx*1.67,3.54,high.z+dz*1.67);sign.rotation.y=Math.atan2(dx,dz);group.add(sign);
   }
   B.flush(group);
   const geo=ctx.carGeo||carGeometry(),mat=ctx.carMat||new THREE.MeshStandardMaterial({vertexColors:true,roughness:.35,metalness:.45});
@@ -597,7 +599,8 @@ function apartmentDockLobbies(ctx) {
     const B=new BatchSet(ctx.mats.base),y=dock.elev,p=dock.poly,below=y<0;
     const sides=[[p[1],p[2]],[p[3],p[0]]];
     const x=dock.outerSeg.x0;
-    for(const [lo,hi] of [[p[2][1],dock.outerSeg.z0],[dock.outerSeg.z1,p[3][1]]])if(hi-lo>.01)sides.push([[x,lo],[x,hi]]);
+    const outerMin=Math.min(p[2][1],p[3][1]),outerMax=Math.max(p[2][1],p[3][1]);
+    for(const [lo,hi] of [[outerMin,dock.outerSeg.z0],[dock.outerSeg.z1,outerMax]])if(hi-lo>.01)sides.push([[x,lo],[x,hi]]);
     for(const [a,b] of sides) {
       const aa=[a[0],y,a[1]],bb=[b[0],y,b[1]];
       segmentBox(B,below?'concrete':'glass',aa,bb,below?.22:.035,3.1,1.6,below?'#d3d7d1':'#ffffff');
@@ -615,5 +618,45 @@ function apartmentDockLobbies(ctx) {
     // neighbouring apartment is selected and P1's interior base is hidden.
     ctx.levels[dock.level].shell.add(group);
     ctx.dynamic.push({name:`${dock.id}-ceiling`,update(){ceiling.visible=ctx.camera.position.y<y+3.2;}});
+  }
+}
+
+/** The former hotel garage remains below the recreation district. Generic
+ * buildShell/buildParking own its floors and bays; only the missing retaining
+ * shell and opaque park-support roof are added here. */
+function buildPublicGarageShells(ctx) {
+  for(const b of ctx.layout.buildings.filter(b=>b.undergroundOnly)) {
+    for(const lv of ctx.layout.levels.filter(l=>l.building===b.id)) {
+      const group=new THREE.Group();group.name=`${lv.id}-retaining-shell`;
+      const B=new BatchSet(ctx.mats.base);
+      B.frame(b.frame,()=>{
+        if(lv.short==='G') {
+          for(const r of b.accessKiosks) {
+            const kb={...b,footprint:r};
+            for(const e of rectEdges(r))facadeFloor(ctx,B,kb,{...lv,lobbyPlan:true},e,PALETTES.hotel);
+            B.get('stone').box((r.x0+r.x1)/2,3.58,(r.z0+r.z1)/2,r.x1-r.x0+.2,.22,r.z1-r.z0+.2,'#c8d0c4');
+            B.get('glowSoft').box((r.x0+r.x1)/2,3.4,r.z1+.08,r.x1-r.x0-.5,.08,.12,'#e7ecd1');
+          }
+        } else for(const e of rectEdges(b.footprint))facadeFloor(ctx,B,b,lv,e,PALETTES.hotel);
+        for(const room of lv.rooms.filter(r=>r.garageLift)) {
+          for(const r of room.rects.slice(1))B.get('concrete').box((r.x0+r.x1)/2,lv.elev+(lv.height-.24)/2,(r.z0+r.z1)/2,r.x1-r.x0,lv.height-.24,r.z1-r.z0,'#c7cfcb');
+          const lift=ctx.layout.elevators.find(e=>e.id===room.garageLift),z=lift.lv+lift.d/2+.03;
+          B.get('extMetal').box(lift.lu,lv.elev+1.15,z,1.65,2.3,.05,'#667873');
+          B.get('extSatin').box(lift.lu,lv.elev+1.1,z+.04,1.4,2.2,.03,'#c6d1ca');
+          B.get('extMetal').box(lift.lu,lv.elev+1.1,z+.06,.025,2.2,.02,'#586e65');
+          B.get('glowSoft').box(lift.lu,lv.elev+2.6,z+.05,.55,.18,.04,'#c9e6b9');
+        }
+        if(lv.short==='B1')for(let x=-30;x<=30;x+=10)for(const z of [-10,0,10]) {
+          B.get('extMetal').box(x,-.65,z,3.2,.09,.2,'#68736f');
+          B.get('glowSoft').box(x,-.71,z,3.0,.025,.16,'#e6eedc');
+        }
+      });
+      B.flush(group);ctx.levels[lv.id].shell.add(group);
+      if(lv.short==='B1') {
+        const roof=new THREE.ExtrudeGeometry(shapeFromPoly(b.outline,b.accessKiosks.map(r=>[toW(b.frame,r.x0,r.z0),toW(b.frame,r.x1,r.z0),toW(b.frame,r.x1,r.z1),toW(b.frame,r.x0,r.z1)])),{depth:.18,bevelEnabled:false});roof.rotateX(-Math.PI/2);roof.translate(0,-.32,0);
+        const ceiling=new THREE.Mesh(roof,ctx.mats.base.concrete);ceiling.name='WPG-park-support-ceiling';group.add(ceiling);
+        ctx.dynamic.push({name:'WPG-camera-aware-ceiling',update(){ceiling.visible=ctx.camera.position.y< -1;}});
+      }
+    }
   }
 }

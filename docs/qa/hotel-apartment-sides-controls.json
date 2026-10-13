@@ -1,0 +1,116 @@
+{
+  "visibility": {
+    "defaultFocus": "WPG-B1",
+    "undergroundConnections": 2,
+    "groundPavilionsVisible": true,
+    "noGarageMassingPick": true
+  },
+  "hotelLift": {
+    "from": "H-1F",
+    "to": "H-20F",
+    "samples": 320,
+    "min": 0,
+    "max": 67.7,
+    "floors": [
+      "H-1F",
+      "H-20F"
+    ],
+    "end": {
+      "floor": "H-20F",
+      "x": -37,
+      "z": -248.25,
+      "y": 67.7,
+      "slope": null,
+      "yaw": -1.5707963267948966,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 69.32000000000001,
+      "riding": null
+    }
+  },
+  "garageInteractions": [
+    {
+      "id": "WPG-L1",
+      "from": "WPG-G",
+      "to": "WPG-B2",
+      "options": [
+        "1电梯 · B2",
+        "2电梯 · B1"
+      ],
+      "end": {
+        "floor": "WPG-B2",
+        "x": -332,
+        "z": -189.5,
+        "y": -8.4,
+        "slope": null,
+        "yaw": -3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -6.78,
+        "riding": null
+      }
+    },
+    {
+      "id": "WPG-L2",
+      "from": "WPG-B2",
+      "to": "WPG-G",
+      "options": [
+        "1电梯 · B1",
+        "2电梯 · G"
+      ],
+      "end": {
+        "floor": "WPG-G",
+        "x": -310,
+        "z": -189.5,
+        "y": 0,
+        "slope": null,
+        "yaw": -3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.62,
+        "riding": null
+      }
+    },
+    {
+      "id": "WPG-ST1",
+      "from": "WPG-G",
+      "to": "WPG-B1",
+      "options": [
+        "1下楼 · B1"
+      ],
+      "end": {
+        "floor": "WPG-B1",
+        "x": -338,
+        "z": -187,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.88,
+        "riding": null
+      }
+    },
+    {
+      "id": "WPG-ST2",
+      "from": "WPG-B1",
+      "to": "WPG-G",
+      "options": [
+        "1下楼 · B2",
+        "2上楼 · G"
+      ],
+      "end": {
+        "floor": "WPG-G",
+        "x": -316,
+        "z": -187,
+        "y": 0,
+        "slope": null,
+        "yaw": -3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.62,
+        "riding": null
+      }
+    }
+  ]
+}

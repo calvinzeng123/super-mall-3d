@@ -9,8 +9,8 @@ const strip = (a, b, width) => {
 
 export function addForecourt(site) {
   const zones = [
-    area('family', '云宝亲子乐园', [-60,-254,-16,-182], '#d5b993'),
-    area('market', '云澜花园食集', [-59,-175,-16,-135], '#c7b99c'),
+    area('family', '云宝亲子乐园', [-391,-253,-347,-181], '#d5b993'),
+    area('market', '云澜花园食集', [-342,-244,-305,-201], '#c7b99c'),
     area('events', '城市客厅 · 小剧场', [-184,-57,-104,-27], '#d4c9b5'),
     area('north-garden', '方庭阅读花园', [-154,-246,-105,-210], '#a8b49b'),
     area('east-garden', '星湾街角庭院', [-59,-131,-24,-99], '#c7c4ad'),
@@ -22,10 +22,11 @@ export function addForecourt(site) {
     { id:'rotunda-garden', width:6, entrance:'P1-S', points:[[-114.75,-73.34],[-122,-48],[-122,-23]] },
     { id:'north-reading', width:6, entrance:'P1-SQ-E', points:[[-160,-200],[-130,-200],[-130,-221]] },
     { id:'east-court', width:6, entrance:'P1-E', points:[[-73.34,-114.75],[-61,-120],[-24,-120]] },
-    { id:'garden-market', width:6, points:[[-61,-120],[-61,-132],[-38,-132],[-38,-178],[-13,-178]] },
-    { id:'east-family-promenade', width:4, points:[[-24,-120],[-13,-120],[-13,-234]] },
-    { id:'playground-north', width:4, points:[[-13,-234],[-21,-234]] },
-    { id:'playground-south', width:4, points:[[-13,-198],[-21,-198]] },
+    { id:'square-west-recreation', width:6, entrance:'P1-SQ-W', crossingSegments:[1], points:[[-280,-200],[-284,-200],[-307,-200],[-344.5,-200]] },
+    { id:'garden-market', width:6, points:[[-307,-200],[-325.8,-200],[-325.8,-242]] },
+    { id:'west-family-promenade', width:4, points:[[-344.5,-178],[-344.5,-249]] },
+    { id:'playground-north', width:4, points:[[-344.5,-233],[-352,-233]] },
+    { id:'playground-south', width:4, points:[[-344.5,-197],[-352,-197]] },
   ];
   for (const p of paths) p.polys=p.points.slice(1).map((b,i)=>strip(p.points[i],b,p.width));
   const items=[];
@@ -33,16 +34,16 @@ export function addForecourt(site) {
     const item={id:`${zone}-${type}-${items.length+1}`,zone,type,x,z,w,d,...extra};
     item.rect=rect(x-w/2,z-d/2,x+w/2,z+d/2);item.poly=rectPoly(item.rect);items.push(item);return item;
   };
-  // 原乐园整体平移(+219,-100)，所有游具保持原尺寸，释放公寓新址。
-  add('family','carousel',-38,-235,16,16,{radius:8,name:'云朵旋转木马'});
-  add('family','play-castle',-38,-201,15,13,{name:'云宝探险城堡'});
-  add('family','swings',-24,-217,7,5,{name:'林间秋千'});
-  add('family','sandpit',-52,-216,8,7,{name:'沙趣工坊'});
-  add('family','mini-train',-38,-218,42,66,{rx:21,rz:33,name:'环园小火车'});
-  for(const [x,z] of [[-20,-247],[-54,-244],[-51,-189.2]])add('family','bench',x,z,2.8,.7);
-  const kiosks=[[-168,'云朵冰淇淋'],[-161,'花园咖啡'],[-154,'手作烘焙'],[-147,'柠檬小站'],[-140,'云澜花铺']];
-  for(const [z,name] of kiosks)add('market','kiosk',-51.5,z,5.6,3.6,{name});
-  for(const z of [-168,-159,-150,-141])add('market','cafe-table',-25.5,z,4,4,{umbrella:true});
+  // 乐园整体搬至原酒店西侧地块，全部游具保持1:1，避开南侧公共停车与原坡口。
+  add('family','carousel',-369,-234,16,16,{radius:8,name:'云朵旋转木马'});
+  add('family','play-castle',-369,-200,15,13,{name:'云宝探险城堡'});
+  add('family','swings',-355,-216,7,5,{name:'林间秋千'});
+  add('family','sandpit',-383,-215,8,7,{name:'沙趣工坊'});
+  add('family','mini-train',-369,-217,42,66,{rx:21,rz:33,name:'环园小火车'});
+  for(const [x,z] of [[-351,-246],[-385,-243],[-382,-188.2]])add('family','bench',x,z,2.8,.7);
+  const kiosks=[[-237,'云朵冰淇淋'],[-230,'花园咖啡'],[-223,'手作烘焙'],[-216,'柠檬小站'],[-209,'云澜花铺']];
+  for(const [z,name] of kiosks)add('market','kiosk',-336.3,z,5.6,3.6,{name});
+  for(const z of [-237,-228,-219,-210])add('market','cafe-table',-313.5,z,4,4,{umbrella:true});
   add('events','stage',-171,-49,17,7,{name:'草坪小剧场'});
   for(const x of [-179,-171,-163])for(const z of [-38,-34])add('events','bench',x,z,2.8,.7);
   add('events','pergola',-145,-44,15,10,{name:'花园会客厅'});
@@ -55,7 +56,7 @@ export function addForecourt(site) {
   for(const x of [-50,-42,-33])add('east-garden','cafe-table',x,-107,3.4,3.4);
   add('east-garden','bikes',-33,-127,14,2.2,{name:'共享单车'});
   for(const [zone,x,z,w,d] of [
-    ['market',-57.7,-154,1.6,27],['market',-44.5,-142,1.6,12],
+    ['market',-340.8,-223,1.6,27],['market',-331,-211,1.6,12],
     ['events',-174,-29,18,1.4],['events',-143,-29,18,1.4],
     ['north-garden',-131,-243,39,2],['north-garden',-152,-232,2,18],
     ['east-garden',-57,-105,1.6,8],
@@ -66,14 +67,14 @@ export function addForecourt(site) {
     item.poly=Array.from({length:32},(_,i)=>{const a=i*Math.PI*2/32,k=.88+.09*Math.sin(a*3+.5);return[x+Math.cos(a)*w*.5*k,z+Math.sin(a)*d*.5*k];});
     return item;
   };
-  island('family',-37.5,-217,13,10,[[0,0,1.2],[-3,.6,.8],[3,-.6,.9]]);
-  island('family',-50.7,-233.5,6.3,17,[[0,-3,1.0],[.2,3,.9]]);
-  island('family',-51.5,-202,7,12,[[0,0,1.15]]);
-  island('family',-23.5,-206,7,6,[[0,0,.9]]);
-  const canopy=add('market','pergola',-25.5,-155,15,34,{name:'食集林荫长廊',shade:true});
+  island('family',-368.5,-216,13,10,[[0,0,1.2],[-3,.6,.8],[3,-.6,.9]]);
+  island('family',-381.7,-232.5,6.3,17,[[0,-3,1.0],[.2,3,.9]]);
+  island('family',-382.5,-201,7,12,[[0,0,1.15]]);
+  island('family',-354.5,-205,7,6,[[0,0,.9]]);
+  const canopy=add('market','pergola',-313.5,-224,15,34,{name:'食集林荫长廊',shade:true});
   canopy.posts=Array.from({length:5},(_,i)=>canopy.rect.z0+.3+i*(canopy.d-.6)/4).flatMap(z=>[canopy.rect.x0+.3,canopy.rect.x1-.3].map(x=>[x,z]));
-  for(const z of [-171,-162,-153])island('market',-44.5,z,2.8,6,[[0,0,.72]]);
-  island('market',-25.5,-172.5,12,4);
+  for(const z of [-240,-231,-222])island('market',-331,z,2.8,6,[[0,0,.72]]);
+  island('market',-313.5,-241.5,12,4);
   island('events',-156,-36,4,10,[[0,0,.85]]);
   island('events',-132,-33.5,8,5,[[0,0,.8]]);
   island('north-garden',-144,-224,12,3,[[0,0,.8]]);

@@ -11,17 +11,17 @@ test('一期五个活动地块不压建筑、道路、车库坡道或共享车�
   assert.equal(F.zones.length,5);
   for(const zone of F.zones){
     for(let x=zone.rect.x0+.25;x<zone.rect.x1;x+=1)for(let z=zone.rect.z0+.25;z<zone.rect.z1;z+=1){
-      assert.ok(!L.buildings.filter(b=>b.kind!=='metro').some(b=>pointInPoly([x,z],b.outline)),`${zone.id}:建筑 ${x},${z}`);
+      assert.ok(!L.buildings.filter(b=>b.kind!=='metro'&&!b.undergroundOnly).some(b=>pointInPoly([x,z],b.outline)),`${zone.id}:建筑 ${x},${z}`);
     }
     for(const p of [...L.site.roads.map(r=>r.poly),...L.extensions.roads.flatMap(r=>r.polys),...L.site.trenches,...(L.extensions.surfaceParking||[]).map(r=>r.poly)])assert.ok(!convexOverlap(zone.poly,p,.02),`${zone.id}:车道/停车位冲突`);
   }
 });
 
-test('公寓原址接纳完整乐园与五间食集，游具保持原尺寸且首层功能不丢失',()=>{
+test('原酒店西側地块接纳完整乐园与五间食集，游具保持原尺寸且首层功能不丢失',()=>{
   assert.equal(F.items.length,61);
   const family=F.zones.find(z=>z.id==='family'),market=F.zones.find(z=>z.id==='market');
-  assert.deepEqual(family.rect,{x0:-60,z0:-254,x1:-16,z1:-182});
-  assert.deepEqual(market.rect,{x0:-59,z0:-175,x1:-16,z1:-135});
+  assert.deepEqual(family.rect,{x0:-391,z0:-253,x1:-347,z1:-181});
+  assert.deepEqual(market.rect,{x0:-342,z0:-244,x1:-305,z1:-201});
   const expected={carousel:[16,16],'play-castle':[15,13],swings:[7,5],sandpit:[8,7],'mini-train':[42,66]};
   for(const [type,size] of Object.entries(expected)){
     const item=F.items.find(i=>i.type===type);assert.equal(item.zone,'family');assert.deepEqual([item.w,item.d],size,type);
@@ -69,11 +69,15 @@ test('一期真实入口可从楼内出门到庭院，并沿原路返回楼内',
   }
 });
 
-test('东门、食集及迁移乐园构成连续步行网络',()=>{
-  const route=[[-73.34,-114.75],[-61,-120],[-61,-132],[-38,-132],[-38,-178],[-13,-178],[-13,-198],[-21,-198],[-13,-198],[-13,-234],[-21,-234]];
-  route[0]=[-72.55,-115.08];
+test('方庭西门经实际过街线连接食集与乐园，旧南侧公共车位仍保留',()=>{
+  const crossing=F.paths.find(p=>p.id==='square-west-recreation');
+  assert.deepEqual(crossing.crossingSegments,[1]);
+  assert.ok(L.site.crossings.some(c=>pointInPoly([-295,-200],c.poly)&&pointInPoly([-303,-200],c.poly)),'缺少贯通两条车道的斑马线');
+  const route=[[-280.8,-200],[-284,-200],[-307,-200],[-325.8,-200],[-325.8,-242],[-325.8,-200],[-344.5,-200],[-344.5,-197],[-352,-197],[-344.5,-197],[-344.5,-233],[-352,-233]];
   for(const points of [route,[...route].reverse()]){
     let s=at(...points[0]);assert.ok(clear(nav,s));
     for(const p of points.slice(1)){s=move(s,p);assert.ok(dist([s.x,s.z],p)<.12,`食集乐园路线停在${s.x},${s.z}`);assert.equal(s.floor,'ground');}
   }
+  const oldLots=L.extensions.surfaceParking.filter(l=>l.rect.x1<-300);
+  assert.equal(oldLots.reduce((n,l)=>n+l.stalls.length,0),31);
 });

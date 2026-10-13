@@ -11,7 +11,8 @@ const PHASES = [
 ];
 
 export function createUI(app, layout) {
-  const phases = [...PHASES, ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' }))];
+  const phases = [...PHASES, ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' })),
+    ...layout.buildings.filter(b => b.undergroundOnly).map(b => ({ id: b.id, label: b.short, sub: '地下公共停车' }))];
   const built = new Set(layout.buildings.map((b) => b.id));
   const bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
   const lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
@@ -38,7 +39,7 @@ export function createUI(app, layout) {
     floorList.hidden = false;
     const levels = layout.levels.filter((l) => l.building === bid).reverse();
     floorList.innerHTML =
-      `<button class="floor all" data-level="" aria-pressed="true"><span class="fl-num">全楼</span><span class="fl-name">${esc(bById[bid].short)}外观</span></button>` +
+      `<button class="floor all" data-level="" aria-pressed="true"><span class="fl-num">${bById[bid].undergroundOnly ? '全部' : '全楼'}</span><span class="fl-name">${esc(bById[bid].short)}${bById[bid].undergroundOnly ? '总览' : '外观'}</span></button>` +
       levels.map((lv) => `<button class="floor" data-level="${lv.id}" aria-pressed="false" style="--fc:${lv.theme.accent}"><span class="fl-num">${lv.short}</span><span class="fl-name">${esc(lv.theme.label.split(' · ')[0])}</span></button>`).join('');
   }
   floorList.addEventListener('click', (e) => {
@@ -117,8 +118,9 @@ export function createUI(app, layout) {
       if (!b) {
         html = phases.filter((p) => p.id).map((p) => {
           const ok = built.has(p.id);
-          const n = layout.levels.filter((l) => l.building === p.id).reduce((k, l) => k + l.units.length, 0);
-          return `<li><button class="shop" data-building="${p.id}"${ok ? '' : ' disabled'}><span class="shop-code">${p.label}</span><span class="shop-name"><b>${esc(ok ? bById[p.id].name : p.sub)}</b><span>${esc(ok ? bById[p.id].en : '规划建设中')}</span></span><span class="shop-cat" style="--cc:var(--accent)">${ok ? n + (bById[p.id].kind === 'tower' ? ' 户/间' : ' 家') : '规划中'}</span></button></li>`;
+          const parkingOnly = bById[p.id]?.undergroundOnly;
+          const n = layout.levels.filter((l) => l.building === p.id).reduce((k, l) => k + (parkingOnly ? l.parking?.stalls.length || 0 : l.units.length), 0);
+          return `<li><button class="shop" data-building="${p.id}"${ok ? '' : ' disabled'}><span class="shop-code">${p.label}</span><span class="shop-name"><b>${esc(ok ? bById[p.id].name : p.sub)}</b><span>${esc(ok ? bById[p.id].en : '规划建设中')}</span></span><span class="shop-cat" style="--cc:var(--accent)">${ok ? n + (parkingOnly ? ' 车位' : bById[p.id].kind === 'tower' ? ' 户/间' : ' 家') : '规划中'}</span></button></li>`;
         }).join('');
       } else {
         html = layout.levels.filter((l) => l.building === b.id).reverse()

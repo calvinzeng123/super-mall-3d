@@ -2,7 +2,7 @@
 // 行道树与路灯、入口雨棚与门（按入口法线）、车库道闸与灯箱、坡道护栏、卸货区、一期广场小品、园区外周边楼宇、未建地块围挡。
 import * as THREE from 'three';
 import { shapeFromPoly, flatShapeGeometry } from './shell.js';
-import { rect, rectPoly, frame, toW, toL, pointInPoly, clipConvex, distToPolyEdge, polyArea, convexOverlap } from '../../layout/geom.js';
+import { rect, rectPoly, frame, toW, toL, lrectPoly, pointInPoly, clipConvex, distToPolyEdge, polyArea, convexOverlap } from '../../layout/geom.js';
 import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
 import { COLORS } from '../theme.js';
@@ -47,13 +47,42 @@ export function subtractTowerFootprints(poly, footprints) {
   return pieces;
 }
 
-/** 灯臂与灯头合计伸出约 2.1m；活动、停车和坡口仅保留边界外的灯杆。 */
+/** 斜向灯臂加方灯头的最远角约 2.24m；活动、停车和坡口仅保留边界外的灯杆。 */
 export function siteLampPlacement(layout) {
-  const S = layout.site, towers = layout.buildings.filter(b => b.kind === 'tower').map(b => b.outline);
-  const clear = [...(S.activityExclusions || []), ...(S.trenches || []), ...(S.openings || []), ...(S.driveways || []),
-    ...(layout.extensions?.surfaceParking || []).map(lot => lot.poly), ...(layout.extensions?.roads || []).flatMap(road => road.polys)];
+  const towers = [...layout.buildings.filter(b => b.kind === 'tower' && !b.undergroundOnly).map(b => b.outline), ...raisedConnections(layout)];
+  const clear = siteActivityFootprints(layout);
   const near = (p, poly, margin) => pointInPoly(p, poly) || distToPolyEdge(p, poly) < margin;
-  return (x, z) => !towers.some(poly => near([x, z], poly, 2.2)) && !clear.some(poly => near([x, z], poly, .45));
+  return (x, z) => !towers.some(poly => near([x, z], poly, 2.25)) && !clear.some(poly => near([x, z], poly, .45));
+}
+
+const raisedConnections = layout => [
+  ...(layout.extensions?.gateways || []).filter(g => g.elev >= 0).map(g => g.poly),
+  ...(layout.extensions?.paths || []).filter(p => p.kind === 'skybridge').flatMap(p => (p.slab?.pieces || []).map(s => s.outer)),
+  ...layout.buildings.flatMap(b => (b.accessKiosks || []).map(r => lrectPoly(b.frame, r))),
+];
+const siteActivityFootprints = layout => {
+  const S = layout.site, ext = layout.extensions;
+  return [...(S.activityExclusions || []), ...(S.trenches || []), ...(S.openings || []), ...(S.driveways || []),
+    ...(S.crossings || []).map(c => c.poly), ...(ext?.surfaceParking || []).map(lot => lot.poly),
+    ...(ext?.roads || []).flatMap(road => road.polys || []), ...(ext?.paths || []).filter(p => p.kind === 'ground').flatMap(p => p.polys || [])];
+};
+
+/** 使用抖动后的实际树心和树冠外包半径；不只检查树干中心是否落在楼内。 */
+export function siteTreePlacement(layout) {
+  const solids = [...layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline), ...raisedConnections(layout), ...siteActivityFootprints(layout)];
+  return tree => {
+    const p = [tree.x, tree.z], radius = (tree.kind === 'cone' ? 1.1 : 2.05) * (tree.s || 1) + .15;
+    return !solids.some(poly => pointInPoly(p, poly) || distToPolyEdge(p, poly) < radius);
+  };
+}
+
+/** 地下附库上方仍是场地，只给实际坡口和地铁梯井留洞。 */
+export function siteGroundHoles(layout) {
+  const S = layout.site;
+  const outlines = layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline);
+  const raw = [...outlines, ...S.trenches, ...(S.openings || [])];
+  // 包含的洞合并，避免三期街区内的地铁梯井与街区轮廓重复剖分。
+  return raw.filter((h, i) => !raw.some((g, j) => j !== i && h.every(q => pointInPoly(q, g))));
 }
 
 export function buildSite(ctx) {
@@ -61,11 +90,7 @@ export function buildSite(ctx) {
   const S = layout.site;
   const G = ctx.site.group;
   const B = ctx.site.batch;
-  // 地铁站在道路下方，不在地面挖洞；地面只为它的出入口梯井开洞。
-  // 洞不能互相包含（如三期街区内的 D 口），否则三角剖分会把重叠处重新填上
-  const outlines = layout.buildings.filter((b) => b.kind !== 'metro').map((b) => b.outline);
-  const raw = [...outlines, ...S.trenches, ...(S.openings || [])];
-  const holes = raw.filter((h, i) => !raw.some((g, j) => j !== i && h.every((q) => pointInPoly(q, g))));
+  const holes = siteGroundHoles(layout);
 
   // 草地
   const ground = new THREE.Mesh(flatShapeGeometry(shapeFromPoly([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], holes), -0.32), mats.floor('grass', 0.95));
@@ -120,7 +145,7 @@ function landscape(ctx, b, holes, G, B) {
   G.add(m);
   // 入口步道：沿入口外法线直到地块边
   const paths = [];
-  const towers = ctx.layout.buildings.filter(other => other.kind === 'tower').map(other => other.outline);
+  const towers = ctx.layout.buildings.filter(other => other.kind === 'tower' && !other.undergroundOnly).map(other => other.outline);
   const allowLamp = siteLampPlacement(ctx.layout);
   for (const e of ctx.layout.entrances) {
     if (e.building !== b.id || e.to !== 'site') continue;
@@ -149,7 +174,8 @@ function landscape(ctx, b, holes, G, B) {
   const kiosks = ctx.layout.entrances.filter((e) => e.kiosk).map((e) => e.kiosk.poly);
   const rand = rng(b.id.length * 97 + 5);
   const trees = [];
-  const otherBuildings = ctx.layout.buildings.filter((other) => other.id !== b.id && other.kind !== 'metro').map((other) => other.outline);
+  const allowTree = siteTreePlacement(ctx.layout);
+  const otherBuildings = ctx.layout.buildings.filter((other) => other.id !== b.id && other.kind !== 'metro' && !other.undergroundOnly).map((other) => other.outline);
   const r = inset(b.plot, 6);
   const near = (p, poly) => pointInPoly(p, poly);
   for (let x = r.x0; x < r.x1; x += 10) {
@@ -160,7 +186,8 @@ function landscape(ctx, b, holes, G, B) {
       if (near(p, band) || near(p, b.outline) || distToPolyEdge(p, b.outline) < 4 || otherBuildings.some((q) => near(p, q) || distToPolyEdge(p, q) < 3) || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d)) || activities.some(q => near(p,q) || distToPolyEdge(p,q)<2) || kiosks.some((k) => near(p, k) || distToPolyEdge(p, k) < 3)) continue;
       const k = 3;
       if ([[k, 0], [-k, 0], [0, k], [0, -k]].some(([dx, dz]) => near([p[0] + dx, p[1] + dz], band) || paths.some((q) => near([p[0] + dx, p[1] + dz], q)))) continue;
-      trees.push({ x: p[0], y: -0.3, z: p[1], s: 0.85 + rand() * 0.5, kind: rand() < 0.3 ? 'cone' : 'round' });
+      const tree = { x: p[0], y: -0.3, z: p[1], s: 0.85 + rand() * 0.5, kind: rand() < 0.3 ? 'cone' : 'round' };
+      if (allowTree(tree)) trees.push(tree);
     }
   }
   addTrees(G, ctx.mats, trees, 61 + b.id.length);
@@ -228,7 +255,7 @@ function roads(ctx, S, B, G) {
   for (const c of S.crossings) {
     const r = c.rect;
     if (c.axis === 'z') zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 1, r.z1 - r.z0 - 4.4, 'z', y);
-    else zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 1, r.z1 - r.z0 - 1, 'x', y);
+    else zebra(B, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, r.z1 - r.z0 - 1, r.x1 - r.x0 - 1, 'x', y);
   }
   for (const x of [-17.5, 17.5]) B.get('ext').box(x, y, x < 0 ? 8 : -8, 0.3, 0.02, 12, white);
   for (const z of [-21, 21]) B.get('ext').box(z < 0 ? -5 : 5, y, z, 10, 0.02, 0.3, white);
@@ -481,7 +508,7 @@ function greenery(ctx, S, B, G) {
   const blocked = (x, z) =>
     S.crossings.some((c) => pointInPoly([x, z], c.poly)) ||
     S.driveways.some((d) => pointInPoly([x, z], d)) ||
-    ctx.layout.buildings.some((b) => b.kind !== 'metro' && pointInPoly([x, z], b.outline));
+    ctx.layout.buildings.some((b) => b.kind !== 'metro' && !b.undergroundOnly && pointInPoly([x, z], b.outline));
   for (let x = -280; x <= 280; x += 12) {
     if (Math.abs(x) < 20) continue;
     for (const z of [-17, 17]) if (!blocked(x, z)) trees.push({ x: x + (rand() - 0.5), y: -0.14, z, s: 0.9 + rand() * 0.3 });
@@ -491,7 +518,7 @@ function greenery(ctx, S, B, G) {
     if (Math.abs(z) < 24) continue;
     for (const x of [-13, 13]) if (!blocked(x, z) && Math.abs(z + 170) > 10) trees.push({ x, y: -0.14, z: z + (rand() - 0.5), s: 0.85 + rand() * 0.3 });
   }
-  addTrees(G, ctx.mats, trees, 21);
+  addTrees(G, ctx.mats, trees.filter(siteTreePlacement(ctx.layout)), 21);
   const allowLamp = siteLampPlacement(ctx.layout);
   for (let x = -270; x <= 270; x += 26) {
     if (Math.abs(x) < 24) continue;
@@ -508,6 +535,7 @@ function greenery(ctx, S, B, G) {
 /** 园区外周边楼宇（带窗格贴图，夜间窗户发光） */
 function context(ctx, G) {
   const rand = rng(42);
+  const activities = siteActivityFootprints(ctx.layout);
   const spots = [];
   for (const [x0, x1, z0, z1, n] of [
     [-760, -360, -760, -360, 8], [-320, 320, -780, -380, 9], [360, 760, -760, -360, 7],
@@ -526,7 +554,9 @@ function context(ctx, G) {
   const geo = new THREE.BoxGeometry(1, 1, 1);
   for (const [x, z] of spots) {
     const w = 26 + rand() * 34, d = 24 + rand() * 30, h = 24 + rand() * rand() * 120;
-    if (ctx.layout.buildings.some(b => b.kind === 'tower' && (pointInPoly([x, z], b.outline) || distToPolyEdge([x, z], b.outline) < Math.max(w, d) / 2 + 22))) continue;
+    if (ctx.layout.buildings.some(b => b.kind === 'tower' && !b.undergroundOnly && (pointInPoly([x, z], b.outline) || distToPolyEdge([x, z], b.outline) < Math.max(w, d) / 2 + 22))) continue;
+    const footprint = rectPoly(rect(x - w / 2, z - d / 2, x + w / 2, z + d / 2));
+    if (activities.some(poly => convexOverlap(footprint, poly))) continue;
     const mesh = new THREE.Mesh(geo, mats[Math.floor(rand() * mats.length)]);
     mesh.scale.set(w, h, d);
     mesh.position.set(x, h / 2 - 0.3, z);

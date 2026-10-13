@@ -1,0 +1,175 @@
+{
+  "towers": [
+    {
+      "id": "H",
+      "center": [
+        -35,
+        -214
+      ],
+      "bounds": {
+        "x0": -54,
+        "z0": -251,
+        "x1": -16,
+        "z1": -177
+      },
+      "rotation": 90
+    },
+    {
+      "id": "A",
+      "center": [
+        -247,
+        -81.1533717
+      ],
+      "bounds": {
+        "x0": -284,
+        "z0": -100.1533717,
+        "x1": -210,
+        "z1": -62.153371699999994
+      },
+      "rotation": 0
+    },
+    {
+      "id": "R1",
+      "center": [
+        49,
+        -218
+      ],
+      "bounds": {
+        "x0": 28,
+        "z0": -234.6,
+        "x1": 70,
+        "z1": -201.4
+      },
+      "rotation": 0
+    },
+    {
+      "id": "R2",
+      "center": [
+        115,
+        -218
+      ],
+      "bounds": {
+        "x0": 94,
+        "z0": -234.6,
+        "x1": 136,
+        "z1": -201.4
+      },
+      "rotation": 0
+    },
+    {
+      "id": "R3",
+      "center": [
+        181,
+        -218
+      ],
+      "bounds": {
+        "x0": 160,
+        "z0": -234.6,
+        "x1": 202,
+        "z1": -201.4
+      },
+      "rotation": 0
+    },
+    {
+      "id": "R4",
+      "center": [
+        247,
+        -218
+      ],
+      "bounds": {
+        "x0": 226,
+        "z0": -234.6,
+        "x1": 268,
+        "z1": -201.4
+      },
+      "rotation": 0
+    }
+  ],
+  "shops": 456,
+  "residences": 748,
+  "levels": 198,
+  "ramps": 28,
+  "surfaceRamps": 16,
+  "surfaceParking": [
+    {
+      "id": "hotel-shared-parking",
+      "count": 22
+    },
+    {
+      "id": "hotel-garden-parking",
+      "count": 9
+    },
+    {
+      "id": "apartment-shared-parking",
+      "count": 46
+    }
+  ],
+  "publicGarage": [
+    {
+      "id": "WPG-B2",
+      "elev": -8.4,
+      "stalls": 18
+    },
+    {
+      "id": "WPG-B1",
+      "elev": -4.5,
+      "stalls": 18
+    },
+    {
+      "id": "WPG-G",
+      "elev": 0,
+      "stalls": 0
+    }
+  ],
+  "forecourt": {
+    "zones": [
+      {
+        "id": "family",
+        "bounds": {
+          "x0": -391,
+          "z0": -253,
+          "x1": -347,
+          "z1": -181
+        }
+      },
+      {
+        "id": "market",
+        "bounds": {
+          "x0": -342,
+          "z0": -244,
+          "x1": -305,
+          "z1": -201
+        }
+      },
+      {
+        "id": "events",
+        "bounds": {
+          "x0": -184,
+          "z0": -57,
+          "x1": -104,
+          "z1": -27
+        }
+      },
+      {
+        "id": "north-garden",
+        "bounds": {
+          "x0": -154,
+          "z0": -246,
+          "x1": -105,
+          "z1": -210
+        }
+      },
+      {
+        "id": "east-garden",
+        "bounds": {
+          "x0": -59,
+          "z0": -131,
+          "x1": -24,
+          "z1": -99
+        }
+      }
+    ],
+    "items": 61,
+    "paths": 11
+  }
+}

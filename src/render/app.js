@@ -283,7 +283,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       const peek = B.b.id === ex.near;
       for (const L of B.levels) {
         const lv = L.lv;
-        L.group.visible = metro ? inside || lv.short === 'B1' : true;
+        L.group.visible = B.b.undergroundOnly ? ex.under || lv.elev >= 0 : metro ? inside || lv.short === 'B1' : true;
         L.base.visible = (inside && (ex.under || lv.kind !== 'parking')) || (peek && lv.elev >= 0)
           || lv.kind === 'roof' || (B.b.kind === 'street' && lv.elev >= 0);
         L.facade.visible = !metro;
@@ -323,6 +323,11 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
           L.group.visible = L.index <= fi;
           L.base.visible = true;
           L.facade.visible = !state.focus || L.index < fi;
+        } else if (B.b.undergroundOnly) {
+          // A public garage may sit below a park: it has no above-ground mass.
+          L.group.visible = L.lv.elev >= 0 || (!!focusLv0 && focusLv0.elev < 0 && L.lv.elev <= focusLv0.elev + .1);
+          L.base.visible = L.group.visible;
+          L.facade.visible = false;
         } else if (B.b.kind === 'metro') {
           // 地铁未选中：只显示地面出入口（shell 组）；与所聚焦地下层相连时显示站厅层
           const link = metroLink && L.lv.short === 'B1';
@@ -345,7 +350,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     }
     const focusLv = focusLv0;
     // 地铁选中时撤去地面，露出站厅、通道与站台
-    siteGroup.visible = !state.exploded && (!focusLv || focusLv.elev >= 0) && ctx.bById[state.building]?.kind !== 'metro';
+    siteGroup.visible = !state.exploded && (!focusLv || focusLv.elev >= 0) && ctx.bById[state.building]?.kind !== 'metro' && (!ctx.bById[state.building]?.undergroundOnly || focusLv?.elev >= 0);
     ctx.site.labels.visible = state.labels && !state.touring && !state.focus && !state.exploded;
     if (ctx.site.flows) ctx.site.flows.visible = state.flows && !state.focus && !state.exploded;
     connectionVisibility();
@@ -417,20 +422,20 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     setBuilding(bid) {
       if (state.touring) app.stopTour();
       state.building = bid || null;
-      state.focus = null;
+      state.focus = ctx.bById[bid]?.undergroundOnly ? ctx.buildings[bid].levels.find(L => L.lv.short === 'B1').lv.id : null;
       state.exploded = false;
       state.selected = null;
       applyVisibility();
-      flyTo(...(bid ? buildingView(bid) : overview()), 1.6);
+      flyTo(...(state.focus ? levelView(state.focus) : bid ? buildingView(bid) : overview()), 1.6);
       emit();
     },
     setFocus(id) {
       if (state.touring) app.stopTour();
       if (id) state.building = ctx.levels[id].building;
-      state.focus = id || null;
+      state.focus = id || (ctx.bById[state.building]?.undergroundOnly ? ctx.buildings[state.building].levels.find(L => L.lv.short === 'B1').lv.id : null);
       if (!id || (state.selected && findUnit(state.selected)?.level !== id)) state.selected = null;
       applyVisibility();
-      if (id) flyTo(...levelView(id));
+      if (state.focus) flyTo(...levelView(state.focus));
       else flyTo(...(state.building ? (state.exploded ? explodedView(state.building) : buildingView(state.building)) : overview()));
       emit();
     },
@@ -439,10 +444,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       if (state.touring) app.stopTour();
       if (on && !state.building) state.building = layout.buildings[0].id;
       state.exploded = on;
-      state.focus = null;
+      state.focus = !on && ctx.bById[state.building]?.undergroundOnly ? ctx.buildings[state.building].levels.find(L => L.lv.short === 'B1').lv.id : null;
       state.selected = null;
       applyVisibility();
-      flyTo(...(on ? explodedView(state.building) : buildingView(state.building)), 1.6);
+      flyTo(...(on ? explodedView(state.building) : state.focus ? levelView(state.focus) : buildingView(state.building)), 1.6);
       emit();
     },
     setNight(on) { state.night = on; env.setNight(on); emit(); },
@@ -731,7 +736,7 @@ function buildPicks(ctx) {
   }
   // 整栋楼：园区视角点击进入该期（街区按各楼栋体量 + 街巷地面拾取，避免挡住上空的天桥）
   for (const b of layout.buildings) {
-    if (b.kind === 'metro') continue;
+    if (b.kind === 'metro' || b.undergroundOnly) continue;
     const top = Math.max(...layout.levels.filter((l) => l.building === b.id).map((l) => l.elev));
     const vols = b.kind === 'street' ? [...b.blocks.map((k) => [k.poly, k.top + 1]), [b.outline, 0.6]] : [[b.outline, top + 2]];
     for (const [poly, h] of vols) {

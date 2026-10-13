@@ -340,6 +340,8 @@ export function buildForecourt(ctx){
   }
   let layer=0;
   for(const path of plan.paths)for(let i=1;i<path.points.length;i++){
+    // 标记的过街段使用场地同源斑马线，保持柏油车道连续，不盖一条石材地板。
+    if(path.crossingSegments?.includes(i-1))continue;
     const a=path.points[i-1],b=path.points[i],dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz);
     B.get('forecourtStone').box((a[0]+b[0])/2,-.012+(layer++)*.003,(a[1]+b[1])/2,len,.05,path.width,'#ded7c9',-Math.atan2(dz,dx));
   }

@@ -202,6 +202,7 @@ export function buildLabels(ctx) {
   // 园区视角：各期名称、入口、车库
   const S = ctx.site.labels;
   for (const b of layout.buildings) {
+    if (b.undergroundOnly) continue; // Surface labels belong to the garage ramps.
     if (b.kind === 'metro') {
       put(S, b.name, 0, 3, 0, 'metro', 'metro', b.en, 0.026);
       continue;
