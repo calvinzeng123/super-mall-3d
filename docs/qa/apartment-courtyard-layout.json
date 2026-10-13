@@ -1,0 +1,22 @@
+{
+  "levels": 195,
+  "shops": 452,
+  "residences": 748,
+  "apartment": {
+    "x0": -284,
+    "z0": -100.1533717,
+    "x1": -210,
+    "z1": -62.153371699999994
+  },
+  "center": [
+    -247,
+    -81.1533717
+  ],
+  "forecourt": {
+    "zones": 5,
+    "items": 61,
+    "paths": 10
+  },
+  "surfaceParking": 77,
+  "ramps": 24
+}

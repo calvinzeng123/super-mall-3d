@@ -1,0 +1,176 @@
+{
+  "url": "file:///Users/calvin/Downloads/%E7%9B%B8%E5%86%8C%E5%8E%BB%E5%9B%BE%E6%A0%87/super-mall-3d/dist/mall.html",
+  "loadingMs": 2584,
+  "errors": [],
+  "http": [],
+  "cacheVisits": [
+    {
+      "level": "H-2F",
+      "cache": [
+        "H-2F"
+      ]
+    },
+    {
+      "level": "A-1F",
+      "cache": [
+        "H-2F",
+        "A-1F"
+      ]
+    },
+    {
+      "level": "R1-2F",
+      "cache": [
+        "H-2F",
+        "A-1F",
+        "R1-2F"
+      ]
+    },
+    {
+      "level": "R1-3F",
+      "cache": [
+        "A-1F",
+        "R1-2F",
+        "R1-3F"
+      ]
+    },
+    {
+      "level": "R4-30F",
+      "cache": [
+        "R1-2F",
+        "R1-3F",
+        "R4-30F"
+      ]
+    },
+    {
+      "level": "A-1F",
+      "cache": [
+        "R1-3F",
+        "R4-30F",
+        "A-1F"
+      ]
+    }
+  ],
+  "interaction": {
+    "mode": "DOM keyboard",
+    "unit": "A-1F-U1",
+    "before": {
+      "floor": "A-1F",
+      "x": -269,
+      "z": -82.8033717,
+      "y": 0,
+      "slope": null,
+      "yaw": 1.2246467991473532e-16,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 1.62,
+      "riding": null
+    },
+    "after": {
+      "floor": "A-1F",
+      "x": -269,
+      "z": -84.48337169999984,
+      "y": 0,
+      "slope": null,
+      "yaw": 1.2246467991473532e-16,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 1.62,
+      "riding": null
+    },
+    "distance": 1.6799999999998363,
+    "cache": [
+      "R1-3F",
+      "R4-30F",
+      "A-1F"
+    ],
+    "stats": {
+      "templates": 3,
+      "geometries": 169,
+      "materials": 116,
+      "textures": 17,
+      "imageSources": 17,
+      "geometryBytes": 71668220,
+      "cpuGeometryBytes": 71668220,
+      "maxTextureDimension": 2048,
+      "sourceBytes": 77308884,
+      "compressedBytes": 28884578,
+      "variants": {
+        "01": {
+          "sourcePrimitives": 1508,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 585802,
+          "materials": 38,
+          "modelSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "02": {
+          "sourcePrimitives": 1547,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 583662,
+          "materials": 38,
+          "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+          "bounds": {
+            "min": [
+              -0.02500024251639843,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "03": {
+          "sourcePrimitives": 1731,
+          "excludedSlabs": 2,
+          "batches": 57,
+          "triangles": 716706,
+          "materials": 40,
+          "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              17.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        }
+      },
+      "floorGroupsCreated": 3,
+      "floorGroupsDisposed": 1,
+      "activeFloorGroups": 2,
+      "sharedGeometryDisposals": 0,
+      "sharedMaterialDisposals": 0,
+      "sharedTextureDisposals": 0,
+      "reusedTextures": 50,
+      "disposed": false
+    },
+    "dimensions": {
+      "w": 1440,
+      "h": 1000,
+      "scroll": 1440
+    },
+    "touch": false,
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+  }
+}

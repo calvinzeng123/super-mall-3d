@@ -9,21 +9,23 @@ const strip = (a, b, width) => {
 
 export function addForecourt(site) {
   const zones = [
-    area('family', '云宝亲子乐园', [-280,-154,-233,-82], '#d5b993'),
-    area('market', '云澜花园食集', [-280,-60,-200,-27], '#c7b99c'),
+    area('family', '云宝亲子乐园', [-60,-254,-16,-182], '#d5b993'),
+    area('market', '云澜花园食集', [-59,-175,-16,-135], '#c7b99c'),
     area('events', '城市客厅 · 小剧场', [-184,-57,-104,-27], '#d4c9b5'),
     area('north-garden', '方庭阅读花园', [-154,-246,-105,-210], '#a8b49b'),
-    area('east-garden', '公寓共享庭院', [-59,-131,-24,-99], '#c7c4ad'),
+    area('east-garden', '星湾街角庭院', [-59,-131,-24,-99], '#c7c4ad'),
   ];
   const paths = [
-    { id:'square-family', width:10, points:[[-220,-160],[-220,-74],[-220,-23]] },
-    { id:'west-arrival', width:8, points:[[-198.73,-81.15],[-219,-75.5],[-279,-64]] },
+    { id:'square-events', width:3, entrance:'P1-SQ-S', points:[[-220,-160],[-220,-154],[-208,-154],[-208,-25],[-184,-23]] },
+    { id:'west-arrival', width:3, entrance:'P1-apartment-ground', points:[[-207,-81.1533717],[-208,-81.1533717],[-208,-25],[-184,-23]] },
     { id:'south-promenade', width:6, points:[[-280,-23],[-61,-23]] },
-    { id:'rotunda-garden', width:6, points:[[-114.75,-73.34],[-122,-48],[-122,-23]] },
-    { id:'north-reading', width:6, points:[[-160,-200],[-130,-200],[-130,-221]] },
-    { id:'east-court', width:6, points:[[-73.34,-114.75],[-61,-120],[-24,-120]] },
-    { id:'playground-north', width:4, points:[[-220,-156],[-231,-156],[-231,-134],[-240,-134]] },
-    { id:'playground-south', width:4, points:[[-220,-77],[-230,-77],[-230,-98],[-240,-98]] },
+    { id:'rotunda-garden', width:6, entrance:'P1-S', points:[[-114.75,-73.34],[-122,-48],[-122,-23]] },
+    { id:'north-reading', width:6, entrance:'P1-SQ-E', points:[[-160,-200],[-130,-200],[-130,-221]] },
+    { id:'east-court', width:6, entrance:'P1-E', points:[[-73.34,-114.75],[-61,-120],[-24,-120]] },
+    { id:'garden-market', width:6, points:[[-61,-120],[-61,-132],[-38,-132],[-38,-178],[-13,-178]] },
+    { id:'east-family-promenade', width:4, points:[[-24,-120],[-13,-120],[-13,-234]] },
+    { id:'playground-north', width:4, points:[[-13,-234],[-21,-234]] },
+    { id:'playground-south', width:4, points:[[-13,-198],[-21,-198]] },
   ];
   for (const p of paths) p.polys=p.points.slice(1).map((b,i)=>strip(p.points[i],b,p.width));
   const items=[];
@@ -31,15 +33,16 @@ export function addForecourt(site) {
     const item={id:`${zone}-${type}-${items.length+1}`,zone,type,x,z,w,d,...extra};
     item.rect=rect(x-w/2,z-d/2,x+w/2,z+d/2);item.poly=rectPoly(item.rect);items.push(item);return item;
   };
-  add('family','carousel',-257,-135,16,16,{radius:8,name:'云朵旋转木马'});
-  add('family','play-castle',-257,-101,15,13,{name:'云宝探险城堡'});
-  add('family','swings',-243,-117,7,5,{name:'林间秋千'});
-  add('family','sandpit',-271,-116,8,7,{name:'沙趣工坊'});
-  add('family','mini-train',-257,-118,42,66,{rx:21,rz:33,name:'环园小火车'});
-  for(const [x,z] of [[-239,-147],[-273,-144],[-270,-89.2]])add('family','bench',x,z,2.8,.7);
-  const kiosks=[[-271,'云朵冰淇淋'],[-259,'花园咖啡'],[-247,'手作烘焙'],[-235,'柠檬小站'],[-207,'云澜花铺']];
-  for(const [x,name] of kiosks)add('market','kiosk',x,-54,5.6,3.6,{name});
-  for(const x of [-269,-255,-241,-205])add('market','cafe-table',x,-40,4,4,{umbrella:true});
+  // 原乐园整体平移(+219,-100)，所有游具保持原尺寸，释放公寓新址。
+  add('family','carousel',-38,-235,16,16,{radius:8,name:'云朵旋转木马'});
+  add('family','play-castle',-38,-201,15,13,{name:'云宝探险城堡'});
+  add('family','swings',-24,-217,7,5,{name:'林间秋千'});
+  add('family','sandpit',-52,-216,8,7,{name:'沙趣工坊'});
+  add('family','mini-train',-38,-218,42,66,{rx:21,rz:33,name:'环园小火车'});
+  for(const [x,z] of [[-20,-247],[-54,-244],[-51,-189.2]])add('family','bench',x,z,2.8,.7);
+  const kiosks=[[-168,'云朵冰淇淋'],[-161,'花园咖啡'],[-154,'手作烘焙'],[-147,'柠檬小站'],[-140,'云澜花铺']];
+  for(const [z,name] of kiosks)add('market','kiosk',-51.5,z,5.6,3.6,{name});
+  for(const z of [-168,-159,-150,-141])add('market','cafe-table',-25.5,z,4,4,{umbrella:true});
   add('events','stage',-171,-49,17,7,{name:'草坪小剧场'});
   for(const x of [-179,-171,-163])for(const z of [-38,-34])add('events','bench',x,z,2.8,.7);
   add('events','pergola',-145,-44,15,10,{name:'花园会客厅'});
@@ -52,7 +55,7 @@ export function addForecourt(site) {
   for(const x of [-50,-42,-33])add('east-garden','cafe-table',x,-107,3.4,3.4);
   add('east-garden','bikes',-33,-127,14,2.2,{name:'共享单车'});
   for(const [zone,x,z,w,d] of [
-    ['market',-262,-29,27,1.6],['market',-234,-29,12,1.6],
+    ['market',-57.7,-154,1.6,27],['market',-44.5,-142,1.6,12],
     ['events',-174,-29,18,1.4],['events',-143,-29,18,1.4],
     ['north-garden',-131,-243,39,2],['north-garden',-152,-232,2,18],
     ['east-garden',-57,-105,1.6,8],
@@ -63,14 +66,14 @@ export function addForecourt(site) {
     item.poly=Array.from({length:32},(_,i)=>{const a=i*Math.PI*2/32,k=.88+.09*Math.sin(a*3+.5);return[x+Math.cos(a)*w*.5*k,z+Math.sin(a)*d*.5*k];});
     return item;
   };
-  island('family',-256.5,-117,13,10,[[0,0,1.2],[-3,.6,.8],[3,-.6,.9]]);
-  island('family',-269.7,-133.5,6.3,17,[[0,-3,1.0],[.2,3,.9]]);
-  island('family',-270.5,-102,7,12,[[0,0,1.15]]);
-  island('family',-242.5,-106,7,6,[[0,0,.9]]);
-  const canopy=add('market','pergola',-254.5,-40,45,8,{name:'食集林荫长廊',shade:true});
-  canopy.posts=Array.from({length:7},(_,i)=>canopy.rect.x0+.3+i*(canopy.w-.6)/6).flatMap(x=>[canopy.rect.z0+.3,canopy.rect.z1-.3].map(z=>[x,z]));
-  for(const x of [-265,-253,-241])island('market',x,-47,6,2.8,[[0,0,.72]]);
-  island('market',-208,-31.4,12,4);
+  island('family',-37.5,-217,13,10,[[0,0,1.2],[-3,.6,.8],[3,-.6,.9]]);
+  island('family',-50.7,-233.5,6.3,17,[[0,-3,1.0],[.2,3,.9]]);
+  island('family',-51.5,-202,7,12,[[0,0,1.15]]);
+  island('family',-23.5,-206,7,6,[[0,0,.9]]);
+  const canopy=add('market','pergola',-25.5,-155,15,34,{name:'食集林荫长廊',shade:true});
+  canopy.posts=Array.from({length:5},(_,i)=>canopy.rect.z0+.3+i*(canopy.d-.6)/4).flatMap(z=>[canopy.rect.x0+.3,canopy.rect.x1-.3].map(x=>[x,z]));
+  for(const z of [-171,-162,-153])island('market',-44.5,z,2.8,6,[[0,0,.72]]);
+  island('market',-25.5,-172.5,12,4);
   island('events',-156,-36,4,10,[[0,0,.85]]);
   island('events',-132,-33.5,8,5,[[0,0,.8]]);
   island('north-garden',-144,-224,12,3,[[0,0,.8]]);

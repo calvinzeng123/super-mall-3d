@@ -133,13 +133,13 @@ function pavilion(B,f){
     B.get('stone').box(x,.08,z,.36,.16,.36,'#b2a692');
     B.get('wood').box(x,y/2,z,.24,y,.24,C.wood);
   }
-  for(const z of [r.z0+.3,r.z1-.3])B.get('wood').box(f.x,y,z,f.w,.22,.23,C.wood);
+  for(const z of new Set(posts.map(p=>p[1])))B.get('wood').box(f.x,y,z,f.w,.22,.23,C.wood);
   if(f.shade){
     // 连续遮阴食集：布面与上方木格栅保持高度差，雨棚跨距随柱网分段。
-    for(let x=r.x0+.55;x<r.x1-.55;x+=3.4){
-      const w=Math.min(3.08,r.x1-.35-x);
-      B.get('ext').box(x+w/2,y-.08,f.z,w,.045,f.d-.7,Math.round((x-r.x0)/3.4)%2?C.cream:'#d8e0cf');
-      for(const zz of [r.z0+.65,r.z1-.65])B.get('extMetal').box(x+w/2,y-.04,zz,w,.025,.025,C.dark);
+    for(let x=r.x0+.55;x<r.x1-.55;x+=3.4)for(let z=r.z0+.35;z<r.z1-.35;z+=5.5){
+      const w=Math.min(3.08,r.x1-.35-x),d=Math.min(5.25,r.z1-.35-z);
+      B.get('ext').box(x+w/2,y-.08,z+d/2,w,.045,d,Math.round((x-r.x0)/3.4)%2?C.cream:'#d8e0cf');
+      for(const zz of [z+.1,z+d-.1])B.get('extMetal').box(x+w/2,y-.04,zz,w,.025,.025,C.dark);
     }
   }
   for(let x=r.x0+.3;x<r.x1-.1;x+=.65)B.get('wood').box(x,y+.16,f.z,.13,.17,f.d,C.cream);

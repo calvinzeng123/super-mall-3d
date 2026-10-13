@@ -2,7 +2,7 @@
 // 行道树与路灯、入口雨棚与门（按入口法线）、车库道闸与灯箱、坡道护栏、卸货区、一期广场小品、园区外周边楼宇、未建地块围挡。
 import * as THREE from 'three';
 import { shapeFromPoly, flatShapeGeometry } from './shell.js';
-import { rect, rectPoly, frame, toW, toL, pointInPoly, clipConvex, distToPolyEdge } from '../../layout/geom.js';
+import { rect, rectPoly, frame, toW, toL, pointInPoly, clipConvex, distToPolyEdge, polyArea, convexOverlap } from '../../layout/geom.js';
 import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
 import { COLORS } from '../theme.js';
@@ -16,6 +16,45 @@ const inCourtyard = (bid, [x, z], pad = 2) => {
   const c = COURTYARDS[bid];
   return !!c && ((x - c.cx) / (c.rx + pad)) ** 2 + ((z - c.cz) / (c.rz + pad)) ** 2 < 1;
 };
+
+/** 凸入口步道减去凸塔楼占地，交界处拆成实体铺装片，不把越界塔楼当作内洞。 */
+export function subtractTowerFootprints(poly, footprints) {
+  let pieces = [poly];
+  for (const footprint of footprints) {
+    const winding = Math.sign(polyArea(footprint)) || 1;
+    pieces = pieces.flatMap(piece => {
+      if (!convexOverlap(piece, footprint, 1e-8)) return [piece];
+      let inside = piece;
+      const outside = [];
+      for (let i = 0; i < footprint.length && inside.length >= 3; i++) {
+        const a = footprint[i], b = footprint[(i + 1) % footprint.length];
+        const distance = p => winding * ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]));
+        const keep = [], cut = [];
+        for (let j = 0; j < inside.length; j++) {
+          const p = inside[j], q = inside[(j + 1) % inside.length], dp = distance(p), dq = distance(q);
+          (dp >= 0 ? keep : cut).push(p);
+          if ((dp >= 0) !== (dq >= 0)) {
+            const t = dp / (dp - dq), hit = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+            keep.push(hit); cut.push(hit);
+          }
+        }
+        if (cut.length >= 3 && Math.abs(polyArea(cut)) > 1e-7) outside.push(cut);
+        inside = keep;
+      }
+      return outside;
+    });
+  }
+  return pieces;
+}
+
+/** 灯臂与灯头合计伸出约 2.1m；活动、停车和坡口仅保留边界外的灯杆。 */
+export function siteLampPlacement(layout) {
+  const S = layout.site, towers = layout.buildings.filter(b => b.kind === 'tower').map(b => b.outline);
+  const clear = [...(S.activityExclusions || []), ...(S.trenches || []), ...(S.openings || []), ...(S.driveways || []),
+    ...(layout.extensions?.surfaceParking || []).map(lot => lot.poly), ...(layout.extensions?.roads || []).flatMap(road => road.polys)];
+  const near = (p, poly, margin) => pointInPoly(p, poly) || distToPolyEdge(p, poly) < margin;
+  return (x, z) => !towers.some(poly => near([x, z], poly, 2.2)) && !clear.some(poly => near([x, z], poly, .45));
+}
 
 export function buildSite(ctx) {
   const { layout, mats } = ctx;
@@ -81,6 +120,8 @@ function landscape(ctx, b, holes, G, B) {
   G.add(m);
   // 入口步道：沿入口外法线直到地块边
   const paths = [];
+  const towers = ctx.layout.buildings.filter(other => other.kind === 'tower').map(other => other.outline);
+  const allowLamp = siteLampPlacement(ctx.layout);
   for (const e of ctx.layout.entrances) {
     if (e.building !== b.id || e.to !== 'site') continue;
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
@@ -88,15 +129,18 @@ function landscape(ctx, b, holes, G, B) {
     const hw = Math.max(3, e.width / 2);
     const strip = clipConvex([toW(F, 8, -hw), toW(F, 160, -hw), toW(F, 160, hw), toW(F, 8, hw)], plotIn);
     if (strip.length < 3) continue;
-    paths.push(strip);
-    const pm = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(strip), -0.1), pave);
-    pm.receiveShadow = true;
-    G.add(pm);
+    for (const piece of subtractTowerFootprints(strip, towers)) {
+      paths.push(piece);
+      const pm = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(piece), -0.1), pave);
+      pm.receiveShadow = true;
+      G.add(pm);
+    }
     for (let u = 20; u < 160; u += 15) {
       const [x, z] = toW(F, u, 0);
       if (!pointInPoly([x, z], strip)) break;
       for (const k of [-1, 1]) {
         const [lx, lz] = toW(F, u, k * (hw + 0.6));
+        if (!allowLamp(lx, lz)) continue;
         streetLamp(B, lx, lz, -0.14, [k * F.s, -k * F.c], 5);
       }
     }
@@ -202,7 +246,7 @@ function roads(ctx, S, B, G) {
 /** 人行入口：雨棚 + 玻璃门（主入口带旋转门与台阶）+ 门头标识；在以入口外法线为 u 轴的局部坐标系内绘制 */
 function entrances(ctx) {
   for (const e of ctx.layout.entrances) {
-    if (e.to !== 'site' || e.kiosk) continue;
+    if (e.to !== 'site' || e.kiosk || e.coveredConnection) continue;
     const L = ctx.levels[e.level];
     const FB = L.facadeBatch;
     const main = e.main;
@@ -448,15 +492,16 @@ function greenery(ctx, S, B, G) {
     for (const x of [-13, 13]) if (!blocked(x, z) && Math.abs(z + 170) > 10) trees.push({ x, y: -0.14, z: z + (rand() - 0.5), s: 0.85 + rand() * 0.3 });
   }
   addTrees(G, ctx.mats, trees, 21);
+  const allowLamp = siteLampPlacement(ctx.layout);
   for (let x = -270; x <= 270; x += 26) {
     if (Math.abs(x) < 24) continue;
-    streetLamp(B, x, -15, -0.14, [0, 1]);
-    streetLamp(B, x, 15, -0.14, [0, -1]);
+    if (allowLamp(x, -15)) streetLamp(B, x, -15, -0.14, [0, 1]);
+    if (allowLamp(x, 15)) streetLamp(B, x, 15, -0.14, [0, -1]);
   }
   for (let z = -250; z <= 250; z += 26) {
     if (Math.abs(z) < 24) continue;
-    streetLamp(B, -15, z, -0.14, [1, 0]);
-    streetLamp(B, 15, z, -0.14, [-1, 0]);
+    if (allowLamp(-15, z)) streetLamp(B, -15, z, -0.14, [1, 0]);
+    if (allowLamp(15, z)) streetLamp(B, 15, z, -0.14, [-1, 0]);
   }
 }
 

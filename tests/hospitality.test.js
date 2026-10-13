@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { L, inWalk, midOf } from './helpers.js';
 import { HOSPITALITY } from '../src/layout/hospitality.js';
-import { convexOverlap, rect, rectPoly, polyBounds } from '../src/layout/geom.js';
+import { convexOverlap, rect, rectPoly, polyBounds, polySamples, pointInPoly } from '../src/layout/geom.js';
 import { buildWalkGraph, components } from '../src/layout/walk.js';
 
 const towers = L.buildings.filter(b => b.kind === 'tower');
@@ -28,7 +28,10 @@ test('酒店公寓各20层10套，四栋30层住宅首层独立大堂、2至30�
     }
     const bounds = polyBounds(b.outline);
     assert.ok(within(b.usage === 'residential' ? HOSPITALITY.residential : b.id === 'A' ? HOSPITALITY.east : HOSPITALITY.west, bounds));
-    for (const old of L.buildings.filter(q => q.kind === 'mall' || q.kind === 'street')) assert.ok(!convexOverlap(b.outline, old.outline), `${b.id} 不应改占原商场`);
+    // Mall outlines are concave: SAT convexOverlap would incorrectly reject a
+    // tower fitted into the existing west-wing recess. Probe the true polygon.
+    for (const old of L.buildings.filter(q => q.kind === 'mall' || q.kind === 'street'))
+      for (const p of polySamples(b.outline,.75,.03)) assert.ok(!pointInPoly(p,old.outline), `${b.id} 不应改占原商场`);
   }
   assert.equal(towers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 748);
 });

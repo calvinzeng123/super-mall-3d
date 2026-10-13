@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { L } from './helpers.js';
-import { toW, toL, convexOverlap, pointInPoly } from '../src/layout/geom.js';
+import { toW, toL, convexOverlap, pointInPoly, polySamples } from '../src/layout/geom.js';
 import { buildNav, clear, step } from '../src/layout/nav.js';
 
 const nav=buildNav(L);
-test('酒店贴一期西侧、公寓贴一期东侧，旋转后所有400套模型保持1:1且不占商场和车道',()=>{
+test('酒店原位、公寓位于用户红框内且全部400套模型保持1:1、不占商场车道',()=>{
   const H=L.buildings.find(b=>b.id==='H'),A=L.buildings.find(b=>b.id==='A');
-  assert.deepEqual(H.center,[-342,-200]);assert.deepEqual(A.center,[-35,-214]);assert.equal(A.frame.deg,90);
+  assert.deepEqual(H.center,[-342,-200]);assert.deepEqual(A.center,[-247,-81.1533717]);assert.equal(A.frame.deg,0);
+  assert.ok(A.bounds.x0>=-286&&A.bounds.x1<=-203&&A.bounds.z0>=-151&&A.bounds.z1<=-27,'公寓必须位于用户标注红框内');
+  const P1=L.buildings.find(b=>b.id==='P1');
+  for(const p of polySamples(A.outline,.5,.02))assert.ok(!pointInPoly(p,P1.outline),'公寓压一期现有楼体');
   for(const b of [H,A]) {
     for(const road of L.site.roads)assert.ok(!convexOverlap(b.outline,road.poly),`${b.id}/${road.id}压原车道`);
     for(const road of L.extensions.roads)for(const poly of road.polys)assert.ok(!convexOverlap(b.outline,poly),`${b.id}/${road.id}压新落客车道`);
@@ -52,7 +55,7 @@ test('共享地面停车包含真实车位、充电位和两端通路，避开�
   }
 });
 
-test('旋转后的酒店公寓双电梯在B2至RF每层有真实候梯净空',()=>{
+test('迁移后的酒店公寓双电梯在B2至RF每层有真实候梯净空',()=>{
   for(const b of ['H','A'])for(const link of nav.links.filter(l=>l.kind==='lift'&&l.elevator?.building===b)) {
     assert.equal(link.stops.length,23);
     for(const stop of link.stops) {
@@ -65,11 +68,19 @@ test('旋转后的酒店公寓双电梯在B2至RF每层有真实候梯净空',()
   }
 });
 
-test('公寓通过地面与2F/B1/B2连接，穿过真实北翼侧廊而不借道店铺',()=>{
-  const F=L.buildings.find(b=>b.id==='P1').wings.find(w=>w.id==='N').F;
+test('公寓通过地面与2F/B1/B2短连廊进入原西翼公共走道，首层连廊不跨道路',()=>{
+  const F=L.buildings.find(b=>b.id==='P1').wings.find(w=>w.id==='W').F;
   for(const [aShort,pShort] of [['1F','1F'],['2F','2F'],['B1','B1M'],['B2','B1']]) {
     const dock=L.extensions.gateways.find(g=>g.level===`P1-${pShort}`),z=(dock.outerSeg.z0+dock.outerSeg.z1)/2;
-    const route=[[-35,-180],[-35,z],[-59,z],toW(F,76,21),toW(F,76,6),toW(F,76,0)];
+    const route=[[-213,z],[-208,z],[-204,z],toW(F,94,0),toW(F,88,0)];
+    if(aShort==='1F'){
+      const groundLink=L.extensions.paths.find(p=>p.kind==='ground'&&p.id==='公寓与一期迎宾连廊');
+      const roads=[...L.site.roads.map(r=>r.poly),...L.extensions.roads.flatMap(r=>r.polys)];
+      for(const poly of [...groundLink.polys,dock.poly])
+        assert.ok(!roads.some(q=>convexOverlap(poly,q)),'公寓首层连廊的整个净宽都不能横穿道路');
+      for(const id of ['A-MAIN','P1-apartment-ground'])
+        assert.ok(L.entrances.find(e=>e.id===id).coveredConnection,'贴合入口不能生成穿入对楼的通用长雨棚');
+    }
     for(const reverse of [false,true]) {
       const pts=reverse?[...route].reverse():route;
       let s={floor:reverse?`P1-${pShort}`:`A-${aShort}`,x:pts[0][0],z:pts[0][1],y:dock.elev,slope:null};const floors=[s.floor];
