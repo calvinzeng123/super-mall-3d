@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-10-13T08:46:02.766221+00:00",
+  "site": {
+    "id": "3af33d60-6f93-4be3-a2e2-06f122ed5fc3",
+    "name": "yunlan-mall-calvin",
+    "ssl_url": "https://yunlan-mall-calvin.netlify.app",
+    "sso_login": false,
+    "has_password": false
+  },
+  "deployment": {
+    "id": "6acded0c4ee1a3d97508ceb0",
+    "state": "ready",
+    "context": "production",
+    "published_at": "2026-10-13T08:36:07.412Z",
+    "error_message": null
+  },
+  "publishing": "manual CLI",
+  "gitAutoDeploy": false
+}

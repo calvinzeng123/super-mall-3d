@@ -1,0 +1,155 @@
+{
+  "url": "http://127.0.0.1:5176/",
+  "loadingMs": 7572,
+  "errors": [],
+  "failed": [],
+  "requests": [
+    {
+      "url": "http://127.0.0.1:5176/",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/app.b49b17420f898a26.js",
+      "status": 304
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/marble_01-roughness.6edf2daf5b864534.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/marble_01-color.402d3d2f8781e21f.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/marble_01-normal.8ae668e3badd5d38.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/concrete_pavement_02-color.3fbaf294fd7e535a.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/concrete_pavement_02-roughness.6d7ec0b23daa4e80.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/concrete_pavement_02-normal.02430189a96f108a.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/oak_wood_planks-color.a188de42bf9198bb.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/oak_wood_planks-normal.63f52712f3b94bb9.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/brick_wall_09-color.4b05ac9c45cb2ea9.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/oak_wood_planks-roughness.7fd2de468f186a17.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/brick_wall_09-normal.1848e73816802e95.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/brick_wall_09-roughness.0ecbbc52c5bfea9c.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/clean_asphalt-color.216d473cd81362a7.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/clean_asphalt-normal.744aa64e65425ae2.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/grass_ground-color.bd4f8524889bf2a3.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/clean_asphalt-roughness.c9216e94586cb9fc.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/grass_ground-normal.316ba72f9809e5d2.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/grass_ground-roughness.dc99159a3abad2d6.jpg",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/suite.a7f99bf01d3ad6e3.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/residence-01.d7c68cf855216de9.bin",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/residence-02.80b8dd6722294589.bin",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5176/assets/residence-03.81f09c875fb2b416.bin",
+      "status": 200
+    }
+  ],
+  "result": {
+    "title": "云澜汇园区 3D",
+    "hotel": [
+      -247,
+      -81.1533717
+    ],
+    "apartment": [
+      -35,
+      -214
+    ],
+    "parking": 732,
+    "totalSurface": 778,
+    "templates": 3,
+    "maxTexture": 2048,
+    "sharedDisposals": [
+      0,
+      0,
+      0
+    ],
+    "visits": [
+      {
+        "floor": "H-20F",
+        "cache": [
+          "H-20F"
+        ]
+      },
+      {
+        "floor": "A-1F",
+        "cache": [
+          "H-20F",
+          "A-1F"
+        ]
+      },
+      {
+        "floor": "R1-2F",
+        "cache": [
+          "H-20F",
+          "A-1F",
+          "R1-2F"
+        ]
+      },
+      {
+        "floor": "R4-30F",
+        "cache": [
+          "A-1F",
+          "R1-2F",
+          "R4-30F"
+        ]
+      }
+    ]
+  }
+}

@@ -9,15 +9,26 @@ const roofPattern = /roof|ceiling|屋顶|天花|顶盖|顶板/i;
 const structuralSlab = /^(Structure main floor slab|Balcony structural slab)$/;
 const yieldFrame = () => new Promise(resolve => setTimeout(resolve, 0));
 
-/** Decode compressed embedded transport without fetching a URL, even on file://. */
+/** Online builds fetch hashed assets; embedded records remain usable on file://. */
 export async function decodeResidentialAsset(record) {
-  const binary = atob(record.data), bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   if (record.compression !== 'gzip') throw new Error(`未知住宅模型压缩格式：${record.compression}`);
   if (typeof DecompressionStream !== 'function') throw new Error('当前浏览器不支持住宅模型解压，请使用新版 Chrome、Edge 或 Safari。');
+  let bytes;
+  if (record.url) {
+    const response = await fetch(record.url);
+    if (!response.ok) throw new Error(`住宅${record.unit}模型下载失败：HTTP ${response.status}`);
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } else {
+    const binary = atob(record.data);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  }
+  if (bytes.length !== record.compressedBytes || bytes[0] !== 0x1f || bytes[1] !== 0x8b || bytes[2] !== 8)
+    throw new Error(`住宅${record.unit}模型压缩数据校验失败`);
   const buffer = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   const view = new DataView(buffer);
-  if (buffer.byteLength !== record.modelBytes || view.getUint32(0, true) !== 0x46546c67
+  if (buffer.byteLength < 12 || buffer.byteLength !== record.modelBytes || view.getUint32(0, true) !== 0x46546c67
+      || view.getUint32(4, true) !== 2
       || view.getUint32(8, true) !== buffer.byteLength) throw new Error(`住宅${record.unit}模型解压校验失败`);
   return buffer;
 }

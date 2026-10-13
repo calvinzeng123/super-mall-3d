@@ -12,3 +12,7 @@ output/playwright/
 __pycache__/
 *.pyc
 *.blend1
+
+# Netlify local linkage and generated online release
+.netlify/
+dist/netlify/

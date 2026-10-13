@@ -2,7 +2,33 @@
 
 > 最后更新：2026-10-13。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
-## 2026-10-13 最新交接：酒店公寓互换、二期乐园食集与西侧大型停车场
+## 2026-10-13 最新线上交接：Netlify 正式发布
+
+正式入口：[云澜汇 3D 园区](https://yunlan-mall-calvin.netlify.app)。本次新站点已正式发布，关闭了该站点的 `sso_login`，公开首页返回 HTTP 200。场景继续使用下节的酒店、公寓、乐园与西侧停车布局，原套房及住宅模型未改。
+
+| 项目 | 本次记录 |
+|---|---|
+| 正式 URL | `https://yunlan-mall-calvin.netlify.app` |
+| Netlify site ID | `3af33d60-6f93-4be3-a2e2-06f122ed5fc3` |
+| Production deploy ID | `6acded0c4ee1a3d97508ceb0` |
+| 发布方式 | 本地构建后使用 Netlify CLI 手动发布；未连接 GitHub 自动构建 |
+| 线上产物 | `dist/netlify/`，25 个文件，约 43.34 MiB |
+
+- **双构建入口**：`npm run build` 继续生成开发入口、`dist/mall.html` 和 Artifact 片段。新增 `npm run build:netlify` 调用 `scripts/build-netlify.mjs`，先运行原离线构建，再生成独立的线上目录；不要把整个仓库或离线大 HTML 当作线上发布目录。
+- **线上资源**：约 1.5 MiB 的打包 JS、18 张 JPEG、套房 GLB 和 3 份住宅 gzip `.bin`，加入口 HTML 与 `asset-manifest.json`，合计 25 文件。资源从同站点按内容哈希路径读取；`netlify.toml` 为 `/assets/*` 设置一年 `immutable` 缓存，首页与 `/index.html` 使用 `must-revalidate`。住宅 `.bin` 保留 gzip 原始字节，由浏览器 `DecompressionStream` 解压；不要额外设置 `Content-Encoding: gzip` 导致 HTTP 层提前解压。
+- **离线与模型**：`dist/mall.html` 仍将 Three.js、贴图与模型全部内嵌，直接本地打开不依赖网络。线上外置资源来自相同生成数据；原 Blender、GLB、模型比例、房间数量及当前布局保持不变。
+- **验证状态**：本轮 `npm test` **142/142 通过**；公网 24 文件哈希一致，桌面与触屏模拟线上加载、楼层切换和离线回归通过。正式站首次加载在本轮网络下约 94–116 秒，手机仍未做实体设备验证。完整证据与发布细节见 [Netlify QA](docs/qa-2026-10-13-netlify.md)。下节的布局验收继续单独保留。
+
+后续发布在已登录的 Netlify CLI 环境执行：
+
+```sh
+npm run build:netlify
+netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3
+```
+
+`--no-build` 上传的是前一步生成的文件，因此源码或素材变更后必须先重新构建。当前 GitHub 推送只更新仓库，不触发 Netlify 发布；构建配置已写入 `netlify.toml`，不代表已连接自动构建。
+
+## 2026-10-13 布局交接：酒店公寓互换、二期乐园食集与西侧大型停车场
 
 用户最新要求覆盖上一版双红框布局：**H 酒店在左下 `(-247,-81.1533717)`、0°；A 公寓在右上 `(-35,-214)`、90°**。乐园和市集移到二期商场与住宅之间，原一期西侧活动地块改为大型地面停车。下方所有历史章节中的位置、用途和车位数量仅用于追溯，不能覆盖本节。
 

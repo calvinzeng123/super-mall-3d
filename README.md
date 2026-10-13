@@ -6,7 +6,9 @@
 
 ## 快速打开
 
-**只想浏览：** 下载仓库 ZIP 并解压，使用新版 Chrome、Edge 或 Safari 打开 [`dist/mall.html`](dist/mall.html)。Three.js、贴图及三套住宅模型已内嵌，打开后无需联网，也不需要安装依赖。住宅模型解压需要浏览器支持 `DecompressionStream`。GitHub 文件页本身不会运行这个 HTML。
+**在线浏览：** [打开云澜汇 3D 园区](https://yunlan-mall-calvin.netlify.app)。这是已正式发布的 Netlify 站点，公开访问，无需登录。完整模型约 43 MiB，首次加载可能需要一两分钟，后续可使用浏览器缓存。
+
+**离线浏览：** 下载仓库 ZIP 并解压，使用新版 Chrome、Edge 或 Safari 打开 [`dist/mall.html`](dist/mall.html)。Three.js、贴图及三套住宅模型已内嵌，打开后无需联网，也不需要安装依赖。住宅模型解压需要浏览器支持 `DecompressionStream`。GitHub 文件页本身不会运行这个 HTML。
 
 **继续开发：** 安装 Node.js（建议 20 或更新版本）、npm 和 Python 3，然后执行：
 
@@ -19,6 +21,19 @@ npm run serve
 ```
 
 打开 <http://127.0.0.1:5174/>。本仓库为私有仓库，克隆需要对应账号权限；首次安装依赖需要联网。修改源码后重新执行 `npm run build`，再刷新浏览器。
+
+## Netlify 构建与发布
+
+线上专用构建由 [`scripts/build-netlify.mjs`](scripts/build-netlify.mjs) 生成 `dist/netlify/`。本次产物共 25 个文件、约 43.34 MiB：约 1.5 MiB 的应用 JS、18 张 JPEG 贴图、套房 GLB、3 份住宅 gzip 二进制资源，以及入口 HTML 和资源清单。素材从同站点加载，带内容哈希的资源文件使用长期不可变缓存，首页每次校验更新。`dist/mall.html` 继续作为资源全部内嵌的单文件离线版。
+
+使用已登录的 Netlify CLI，先构建再手动发布：
+
+```sh
+npm run build:netlify
+netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3
+```
+
+本次通过 CLI 手动发布，**尚未连接 GitHub 自动构建**；推送代码后仍需执行上述构建与发布步骤。构建目录、Node 版本和缓存规则见 [`netlify.toml`](netlify.toml)，部署与线上验证记录见 [Netlify 交付记录](docs/qa-2026-10-13-netlify.md)。
 
 ## 2026-10-13 · 酒店公寓互换、星湾乐园与西侧大型停车场
 
@@ -144,8 +159,11 @@ WPG 西侧公共停车附库继续保留 B1/B2 共 36 位，地面两座入口�
 | `scripts/prepare-suite-asset.mjs` | 保留原件，重建套房门洞、窗外视线、接触阴影及 GLB 灯光 |
 | `tests/` | 布局、通行、房间、电梯与素材验证 |
 | `build.mjs` | 生成开发入口及离线页面 |
+| `scripts/build-netlify.mjs` | 生成线上入口、哈希资源文件与资源清单 |
+| `netlify.toml` | Netlify 构建目录、Node 版本及缓存规则 |
 | `dist/mall.html` | 可直接打开的完整离线页面 |
 | `dist/artifact.html` | 供 Artifact 包装使用的页面片段 |
+| `dist/netlify/` | Netlify 线上专用构建产物，运行 `npm run build:netlify` 生成 |
 
 `index.html`、`dist/`、`src/render/pbr-data.js`、`src/render/suite-data.js` 和 `src/render/residential-data.js` 由构建生成；不要直接修改生成文件。三个渲染数据模块不纳入 Git，首次启动开发服务前必须先构建。普通源码修改只需运行 `npm run build`；修改套房预处理规则时，先运行 `node scripts/prepare-suite-asset.mjs`。住宅源模型或实际审计结果变化时，先重新审计，再运行 `uv run --with shapely scripts/prepare-residential-plans.py` 更新纳入 Git 的 `src/layout/residential-plan-data.js`，最后构建。
 
@@ -156,7 +174,9 @@ npm test
 npm run build
 ```
 
-本次酒店公寓互换、乐园迁移和西侧停车扩建的自动测试、构建、浏览器与离线验收结果统一记录于[本次验收](docs/qa-2026-10-13-west-parking.md)。
+2026-10-13 Netlify 发布轮次的 **142/142 项自动化测试通过**，正式站点首页公开访问返回 HTTP 200。线上场景与浏览器操作的验证结果见 [Netlify 交付记录](docs/qa-2026-10-13-netlify.md)。
+
+酒店公寓互换、乐园迁移和西侧停车扩建的自动测试、构建、浏览器与离线验收结果见[布局验收](docs/qa-2026-10-13-west-parking.md)。
 
 历史记录：2026-10-13 上一版双侧整合通过 **131/131 项自动化测试**，覆盖当时的酒店/公寓四层连廊、公共车库与地面入口、停车坡道、活动区和实际树冠/灯具避让；见[历史验收](docs/qa-2026-10-13-hotel-apartment-sides.md)。
 
@@ -173,9 +193,9 @@ npm run build
 - 新塔楼电梯连续升降；三期街区楼梯与套内复式楼梯连续可步行，住宅等消防梯和原商场电梯仍通过互动换层。
 - 酒店、公寓的大件家具、隔墙、复式护栏和楼梯，以及住宅实际模型的墙体、家具、淋浴玻璃和大堂陈设参与人物碰撞；新增乐园主要设施、三期集市摊位和地面共享停车中的可见车辆也参与碰撞；既有商铺小陈设、树木和地下车辆沿用原规则。
 - 套房灯光使用固定近景灯池（桌面 10 盏、移动端 8 盏），随当前房间移动；未同时点亮 400 套独立灯组。
-- 住宅使用固定灯池（桌面 12 盏、移动端 8 盏），塔楼精装楼层共用最多 3 层的访问缓存。三套 GLB 以 gzip 内嵌，顺序解压并共享材质、几何和贴图。
+- 住宅使用固定灯池（桌面 12 盏、移动端 8 盏），塔楼精装楼层共用最多 3 层的访问缓存。三套 GLB 使用 gzip 压缩：离线版内嵌，线上版加载同站点二进制文件；均顺序解压并共享材质、几何和贴图。
 - 手机仅做浏览器模拟，尚未验证实体 iPhone 的性能与兼容性。
-- 仓库保存源码与离线页面；上传 GitHub 不等同于部署在线体验站点。
+- 仓库保存源码与离线页面；正式在线站点通过 Netlify CLI 手动更新，GitHub 推送不会自动部署。
 
 ## 材质与许可
 
