@@ -304,7 +304,20 @@ function facade(ctx, lv) {
   for (const e of ctx.outlineEdges(lv)) {
     FB.frame(e.F, () => {
       // place(a0,a1,yA,yB,深度,外偏,材质,颜色)：u∈[a0,a1]，v 为外偏（+v 朝外）
-      const place = (a0, a1, yA, yB, depth, offset, key, color) => FB.get(key).box((a0 + a1) / 2, (yA + yB) / 2, offset, Math.abs(a1 - a0), yB - yA, depth, color);
+      const doorwayIntervals=ctx.layout.entrances.filter(en=>en.level===lv.id).flatMap(en=>{
+        const a=toL(e.F,en.seg.x0,en.seg.z0),b=toL(e.F,en.seg.x1,en.seg.z1);
+        return Math.abs(a[1])<=.15&&Math.abs(b[1])<=.15?[[Math.min(a[0],b[0]),Math.max(a[0],b[0])]]:[];
+      });
+      const rawPlace=(a0,a1,yA,yB,depth,offset,key,color)=>{if(a1-a0>.008&&yB-yA>.008)FB.get(key).box((a0+a1)/2,(yA+yB)/2,offset,a1-a0,yB-yA,depth,color);};
+      // A doorway may sit between facade-module centres. Clip every real low
+      // facade piece at its surveyed jambs; a bay label alone is insufficient.
+      const place=(a0,a1,yA,yB,depth,offset,key,color)=>{
+        const head=y0+3.2;
+        if(!doorwayIntervals.length||yA>=head)return rawPlace(a0,a1,yA,yB,depth,offset,key,color);
+        const spans=doorwayIntervals.reduce((ivs,gap)=>subtractInterval(ivs,gap),[[a0,a1]]);
+        for(const [a,b] of spans)rawPlace(a,b,yA,Math.min(yB,head),depth,offset,key,color);
+        if(yB>head)rawPlace(a0,a1,head,yB,depth,offset,key,color);
+      };
       const clad = (a, b, ya, yb) => {
         place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'extSatin' : 'stone', pal.stone);
         // 石板横向接缝跟随楼层标高；平整贴图之外仍能读到板块尺度。

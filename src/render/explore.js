@@ -168,7 +168,8 @@ export function attachExplore(app, ui) {
       const b = layout.buildings.find((q) => q.kind !== 'metro' && pointInPoly([x, z], q.outline));
       building = b ? b.id : null;
     }
-    let metro = !!F && (F.building === 'M' || METRO_LINKED.has(F.id) || (F.building && ctx.bById[F.building]?.kind === 'tower' && F.y < 0));
+    const sourceLevel = F?.parentFloor || F?.level?.id || F?.id;
+    let metro = !!F && (F.building === 'M' || METRO_LINKED.has(sourceLevel) || (F.building && ctx.bById[F.building]?.kind === 'tower' && F.y < 0));
     if (flying) metro = camera.position.y < -1 && Math.abs(x) < 120 && Math.abs(z) < 120;
     let nearB = null;
     if (!building || building === 'P3') {
@@ -181,7 +182,7 @@ export function attachExplore(app, ui) {
       }
     }
     const under = flying ? camera.position.y < 0 : !!F && F.y < 0;
-    const level = F?.level?.id || (building && ctx.bById[building]?.kind === 'tower'
+    const level = F?.parentFloor || F?.level?.id || (building && ctx.bById[building]?.kind === 'tower'
       ? ctx.buildings[building].levels.filter(L => L.lv.elev <= camera.position.y - 0.8).at(-1)?.lv.id : null);
     const ex = app.state.explore;
     if (force || !ex || ex.building !== building || ex.metro !== metro || ex.near !== nearB || ex.under !== under || ex.level !== level) {

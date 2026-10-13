@@ -349,12 +349,15 @@ function wingRetail(ctx, lv, w, wc) {
     });
     if (s1 - x > 0.5) lv.walk.push(walkL(F, `${w.id}-streetE`, 'street', rect(x, -SW, s1, SW)));
   }
+  // Side connections reserve actual shop-band floor area, with the same
+  // rectangles used for the walk graph and retail subdivision.
+  for (const [i, hall] of (wc.sideHalls || []).entries()) lv.walk.push(walkL(F, `${w.id}-side-hall-${i}`, 'passage', band(hall.u0, hall.u1, hall.band, SW, HW)));
   // 店铺带
   const pattern = wc.widths || lv.cfg.widths || [9, 8, 10, 7];
   const st = (ctx.state[`split-${lv.id}`] = ctx.state[`split-${lv.id}`] || { k: 0 });
   const style = wc.style || 'glass';
   for (const s of [1, -1]) {
-    const reserved = [];
+    const reserved = (wc.sideHalls || []).filter(h => h.band === s).map(h => [h.u0, h.u1]);
     if (w.core && w.core.band === s) reserved.push([w.core.u, w.core.u + CORE]);
     for (const a of wc.anchors || []) if (a.band === s || a.band === 0) reserved.push([a.u0, a.u1]);
     reserved.sort((p, q) => p[0] - q[0]);
@@ -415,6 +418,7 @@ function parkingLevel(ctx, lv) {
       lv.rooms.push({ id: `${w.id}-pwc`, type: 'wc', label: '洗手间', frame: F, rects: [rect(pw, -SW, pw + 8, 3)], doors: [{ x0: pw + 2.5, z0: 3, x1: pw + 5.5, z1: 3, side: 'S' }] });
     }
     if (wc.eschall) lv.walk.push(walkL(F, `${w.id}-eschall`, 'eschall', rect(wc.eschall[0], -SW, wc.eschall[1], SW)));
+    for (const [i, hall] of (wc.sideHalls || []).entries()) lv.walk.push(walkL(F, `${w.id}-side-hall-${i}`, 'aisle', band(hall.u0,hall.u1,hall.band,SW,HW)));
     if (wc.throat) lv.walk.push(walkL(F, `${w.id}-throat`, 'aisle', wc.throat));
     ctx.state[`rows-${lv.id}`].push({
       F, zone: w.zone || w.id, rows: [

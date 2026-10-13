@@ -1,4 +1,4 @@
-// 西侧酒店、公寓与星湾后区住宅。所有坐标以米计；套内几何均在各自 unit.frame 内。
+// 一期东西两侧酒店、公寓与星湾后区住宅。所有坐标以米计；套内几何均在各自 unit.frame 内。
 // 私卫属于 residence，不放进 lv.rooms（后者只表示独立公共核心筒）。
 import { frame, IDENTITY, rect, rectPoly, lrectPoly, lseg, toW, polyBounds, convexOverlap } from './geom.js';
 import { lift } from './mall.js';
@@ -8,11 +8,12 @@ import { createSuitePlan, createSuiteMezzanine, suiteAdditionObstacles } from '.
 import { createResidentialPlan, RESIDENTIAL_SLOTS } from './residential-plan.js';
 
 export const HOSPITALITY = {
-  west: rect(-485, -250, -310, -30),
+  west: rect(-391, -238, -301, -134),
+  east: rect(-60, -253, -16, -136),
   residential: rect(16, -256, 286, -176),
   towers: [
-    { id: 'H', usage: 'hotel', name: '云澜酒店', short: '酒店', en: 'YUNLAN HOTEL', x: -432, z: -207, w: 74, d: 38, storeys: 20, floorHeight: 3.4, lobbyHeight: 6.5, accent: '#a27d49' },
-    { id: 'A', usage: 'apartment', name: '云澜服务公寓', short: '公寓', en: 'YUNLAN RESIDENCES', x: -432, z: -82, w: 74, d: 38, storeys: 20, floorHeight: 3.4, lobbyHeight: 6.5, accent: '#537b78' },
+    { id: 'H', usage: 'hotel', name: '云澜酒店', short: '酒店', en: 'YUNLAN HOTEL', x: -342, z: -200, rotation: 0, w: 74, d: 38, storeys: 20, floorHeight: 3.4, lobbyHeight: 6.5, accent: '#a27d49' },
+    { id: 'A', usage: 'apartment', name: '云澜服务公寓', short: '公寓', en: 'YUNLAN RESIDENCES', x: -35, z: -214, rotation: 90, w: 74, d: 38, storeys: 20, floorHeight: 3.4, lobbyHeight: 6.5, accent: '#537b78' },
     ...[49, 115, 181, 247].map((x, i) => ({ id: `R${i + 1}`, usage: 'residential', name: `云澜汇楼盘 ${i + 1} 号楼`, short: `住宅${i + 1}`, en: `YUNLAN RESIDENTIAL TOWER ${i + 1}`, x, z: -218, w: 42, d: 33.2, storeys: 30, floorHeight: 3.4, lobbyHeight: 4.8, accent: ['#7b8470', '#9b795f', '#637e91', '#867c96'][i] })),
   ],
 };
@@ -97,13 +98,14 @@ function residentialLobby(F) {
 }
 
 function tower(spec) {
-  const F = frame(spec.x, spec.z, 0, spec.id), footprint = rect(-spec.w / 2, -spec.d / 2, spec.w / 2, spec.d / 2), outline = lrectPoly(F, footprint);
+  const F = frame(spec.x, spec.z, spec.rotation || 0, spec.id), footprint = rect(-spec.w / 2, -spec.d / 2, spec.w / 2, spec.d / 2), outline = lrectPoly(F, footprint);
   const residential = spec.usage === 'residential';
-  const basement = residential ? [{ short: 'B1', elev: -4.2, height: 4.2, kind: 'parking' }] : [{ short: 'B2', elev: -8.4, height: 3.9, kind: 'parking' }, { short: 'B1', elev: -4.5, height: 4.5, kind: 'concourse' }];
+  const basement = residential ? [{ short: 'B1', elev: -4.2, height: 4.2, kind: 'parking' }] : [{ short: 'B2', elev: -8.4, height: 3.9, kind: 'parking' }, { short: 'B1', elev: -4.5, height: 4.5, kind: 'parking' }];
   const defs = [...basement, ...Array.from({ length: spec.storeys }, (_, i) => ({ short: `${i + 1}F`, levelNumber: i + 1, elev: i === 0 ? 0 : +(spec.lobbyHeight + (i - 1) * spec.floorHeight).toFixed(3), height: i === 0 ? spec.lobbyHeight : spec.floorHeight, kind: spec.usage }))];
   const top = +(spec.lobbyHeight + (spec.storeys - 1) * spec.floorHeight).toFixed(3);
   defs.push({ short: 'RF', elev: top, height: 3.2, kind: 'roof' });
   const levels = defs.map(c => ({ ...c, id: `${spec.id}-${c.short}`, building: spec.id, name: c.kind === 'parking' ? `${c.short} 住客车库` : c.kind === 'concourse' ? 'B1 商场与地铁连廊' : c.kind === 'roof' ? 'RF 屋顶花园' : `${c.short} ${residential ? '三户住宅' : '十间套房'}`, theme: { key: residential ? 'loft' : 'lux', floor: c.kind === 'parking' ? 'concrete-blue' : c.kind === 'roof' ? 'terrace-stone' : 'terrazzo', accent: spec.accent, label: c.kind === 'parking' ? '住客车库 · 独立进出' : c.kind === 'roof' ? '屋顶花园 · 电梯直达' : c.kind === 'concourse' ? '商场连廊 · 地铁换乘' : `${residential ? '三种户型' : '独卫套房'} · ${spec.name}` }, outline, units: [], rooms: [], walk: [], voids: [], features: [], slab: { pieces: [{ outer: outline, holes: [] }] } }));
+  if (!residential) { const b1 = levels.find(l => l.short === 'B1'); b1.name = 'B1 住客车库与地铁连廊'; b1.theme.label = '独立车库出入口 · 商场与地铁连通'; }
   if (residential) for (const lv of levels) {
     if (lv.levelNumber === 1) {
       lv.kind = 'lobby'; lv.name = '1F 迎宾与社区大堂';
@@ -177,24 +179,25 @@ function tower(spec) {
         for (let i = 0; i < 5; i++) {
           const x0 = -27.5 + i * 11;
           const north = toW(F, x0 + 11, -2.5), south = toW(F, x0, 2.5);
-          addUnit(lv, spec, i + 1, frame(...north, 180, `${lv.id}-N${i}`), 11, 15, spec.usage === 'apartment' ? 'serviced-suite' : 'king-suite');
-          addUnit(lv, spec, i + 6, frame(...south, 0, `${lv.id}-S${i}`), 11, 15, spec.usage === 'apartment' ? 'serviced-suite' : 'king-suite');
+          addUnit(lv, spec, i + 1, frame(...north, F.deg + 180, `${lv.id}-N${i}`), 11, 15, spec.usage === 'apartment' ? 'serviced-suite' : 'king-suite');
+          addUnit(lv, spec, i + 6, frame(...south, F.deg, `${lv.id}-S${i}`), 11, 15, spec.usage === 'apartment' ? 'serviced-suite' : 'king-suite');
         }
       } else if (lv.levelNumber > 1) {
         for (const slot of RESIDENTIAL_SLOTS) {
           const plan = createResidentialPlan(slot.prototype);
-          addUnit(lv, spec, slot.slot, frame(...toW(F, slot.x, slot.z), slot.rotation, `${lv.id}-${slot.prototype}`), plan.width, plan.depth, plan.type, slot.prototype);
+          addUnit(lv, spec, slot.slot, frame(...toW(F, slot.x, slot.z), F.deg + slot.rotation, `${lv.id}-${slot.prototype}`), plan.width, plan.depth, plan.type, slot.prototype);
         }
       }
-    } else if (lv.kind === 'parking') {
+    } else if (lv.kind === 'parking' || (!residential && lv.short === 'B1')) {
       const rows = [{ id: `${spec.id}-north`, u0: -spec.w / 2 + 1, u1: spec.w / 2 - 1, v0: -8, v1: -3, face: 'S' }, { id: `${spec.id}-south`, u0: -spec.w / 2 + 1, u1: spec.w / 2 - 1, v0: 3, v1: 8, face: 'N' }];
       const filled = fillRows(F, rows, [...lv.rooms.flatMap(r => r.polys), ...lv.walk.map(w => w.poly)], spec.id);
       markSpecial(filled.stalls, elevators.map(e => [e.x, e.z]), `${spec.id}-south`, 3);
       lv.parking = { ...filled, aisles: lv.walk.filter(w => w.kind === 'aisle'), zone: spec.id };
     }
   }
-  const b = { id: spec.id, code: spec.id, name: spec.name, short: spec.short, en: spec.en, kind: 'tower', usage: spec.usage, frame: F, footprint, bounds: polyBounds(outline), outline, center: [spec.x, spec.z], radius: Math.hypot(spec.w, spec.d) / 2, height: top, storeys: spec.storeys, levels: ids, rotundas: [], wings: [], plot: residential ? HOSPITALITY.residential : HOSPITALITY.west, massing: { width: spec.w, depth: spec.d, top, podiumHeight: spec.lobbyHeight, facadeModule: residential ? 3.2 : 2.75 } };
-  const entrance = residential ? { seg: { x0: spec.x - 2, z0: spec.z + spec.d/2, x1: spec.x + 2, z1: spec.z + spec.d/2 }, nx: 0, nz: 1 } : { seg: { x0: spec.x + 37, z0: spec.z - 2.2, x1: spec.x + 37, z1: spec.z + 2.2 }, nx: 1, nz: 0 };
+  const b = { id: spec.id, code: spec.id, name: spec.name, short: spec.short, en: spec.en, kind: 'tower', usage: spec.usage, frame: F, footprint, bounds: polyBounds(outline), outline, center: [spec.x, spec.z], radius: Math.hypot(spec.w, spec.d) / 2, height: top, storeys: spec.storeys, levels: ids, rotundas: [], wings: [], plot: residential ? HOSPITALITY.residential : spec.id === 'A' ? HOSPITALITY.east : HOSPITALITY.west, massing: { width: spec.w, depth: spec.d, top, podiumHeight: spec.lobbyHeight, facadeModule: residential ? 3.2 : 2.75 } };
+  const entry = lseg(F, residential ? { x0: -2, z0: spec.d/2, x1: 2, z1: spec.d/2, side: 'S' } : { x0: 37, z0: -2.2, x1: 37, z1: 2.2, side: 'E' });
+  const entrance = { seg: entry, nx: entry.nx, nz: entry.nz };
   return { building: b, levels, stairs, elevators, escalators: [], ramps: [], entrances: [{ ...entrance, id: `${spec.id}-MAIN`, building: spec.id, level: `${spec.id}-1F`, name: `${spec.name}主入口`, width: residential ? 4 : 4.4, main: true, to: 'site' }] };
 }
 
@@ -215,13 +218,53 @@ function appendPath(extensions, owner, id, kind, name, points, width, to) {
   return path;
 }
 
+/** Two real ramp lanes per tower connect the two basement levels. Arrival
+ * pads, structural voids and parking reservations all use these same rectangles. */
+function addTowerGarageRamps(part, site, extensions) {
+  const b = part.building, F = b.frame, B1 = part.levels.find(l => l.short === 'B1'), B2 = part.levels.find(l => l.short === 'B2');
+  const reserve = (lv, id, r) => {
+    const poly = lrectPoly(F, r);
+    lv.walk.push(localWalk(F, id, 'aisle', r));
+    if (lv.parking) {
+      lv.parking.stalls = lv.parking.stalls.filter(s => !convexOverlap(s.poly, poly));
+      lv.parking.columns = lv.parking.columns.filter(c => !convexOverlap(lrectPoly(c.frame, rect(c.lx-.25,c.lz-.25,c.lx+.25,c.lz+.25)),poly));
+    }
+  };
+  for (const lv of [B1, B2]) {
+    reserve(lv, `${b.id}-garage-west-turn`, rect(-29, -18, -25, 2.5));
+    reserve(lv, `${b.id}-garage-east-turn`, rect(5, -18, 13, 2.5));
+    reserve(lv, `${b.id}-garage-main-cross`, rect(-29, -3, 29, 3));
+    reserve(lv, `${b.id}-garage-arrival-cross`, b.id === 'H' ? rect(-26, -2, -8, 19) : rect(28, -18, 37, 2.5));
+  }
+  for (const [i, z] of [-14.5, -7.5].entries()) {
+    const lane = rect(-25, z-2.5, 5, z+2.5), poly = lrectPoly(F, lane);
+    const lowW = toW(F, -25, z), highW = toW(F, 5, z);
+    const low = { x: lowW[0], z: lowW[1], y: B2.elev, level: B2.id }, high = { x: highW[0], z: highW[1], y: B1.elev, level: B1.id };
+    part.ramps.push({ id: `${b.id}-${i ? 'UP' : 'DN'}`, building: b.id, type: i ? 'up' : 'down', name: `${b.short} ${i ? 'B2 → B1' : 'B1 → B2'}`, frame: F, lane, poly, width: 5, from: i ? low : high, to: i ? high : low });
+    B1.voids.push({ id: `${b.id}-ramp-void-${i}`, kind: 'ramp', frame: F, rect: lane, poly });
+    B1.slab.pieces[0].holes.push(poly);
+    for (const lv of [B1,B2]) if (lv.parking) {
+      lv.parking.stalls = lv.parking.stalls.filter(s => !convexOverlap(s.poly, poly));
+      lv.parking.columns = lv.parking.columns.filter(c => !convexOverlap(lrectPoly(c.frame, rect(c.lx-.25,c.lz-.25,c.lx+.25,c.lz+.25)),poly));
+    }
+  }
+  const street = b.id === 'H' ? { xs: [-363, -355], highZ: -144, lowZ: -174, wallZ: -181 } : { xs: [-28, -21], highZ: -143, lowZ: -173, wallZ: -177 };
+  for (const [i,x] of street.xs.entries()) {
+    const G = frame(x, street.highZ, -90, `${b.id}-street-${i}`), lane = rect(0,-2.5,30,2.5), poly = lrectPoly(G,lane);
+    const high = {x,z:street.highZ,y:0,level:'street'}, low = {x,z:street.lowZ,y:B1.elev,level:B1.id};
+    part.ramps.push({id:`${b.id}-${i?'OUT':'IN'}`,building:b.id,type:i?'street-out':'street-in',name:`${b.short}独立车库${i?'出口':'入口'}`,frame:G,lane,poly,width:5,from:i?low:high,to:i?high:low});
+    site.trenches.push(poly);site.driveways.push(rectPoly(rect(x-2.5,street.highZ,x+2.5,street.highZ+5)));
+    appendPath(extensions,{...part,level:B1},`${b.id}-street-arrival-${i}`,'garage',`${b.short}地库进出口接驳`,[[x,B1.elev,street.wallZ],[x,B1.elev,street.lowZ]],5,B1.id);
+  }
+}
+
 /** 返回新的 parts；同时在原商场的已验证走道端头登记真实门户，保持原主体布局不动。 */
 export function buildHospitality(existing, site) {
   site.bounds = rect(-495, -298, 298, 298);
   const parts = HOSPITALITY.towers.map(tower);
   const all = [...existing, ...parts], by = Object.fromEntries(all.map(p => [p.building.id, p]));
   const at = (bid, short) => ({ ...by[bid], level: by[bid].levels.find(l => l.short === short) });
-  const extensions = { districts: [{ id: 'west-residences', name: '云澜酒店公寓区', rect: HOSPITALITY.west, poly: rectPoly(HOSPITALITY.west), buildingIds: ['H', 'A'] }, { id: 'xingwan-residences', name: '云澜汇楼盘 · 星湾后区', rect: HOSPITALITY.residential, poly: rectPoly(HOSPITALITY.residential), buildingIds: ['R1', 'R2', 'R3', 'R4'] }], paths: [], roads: [], connections: [] };
+  const extensions = { districts: [{ id: 'west-residences', name: '一期西侧酒店庭院', rect: HOSPITALITY.west, poly: rectPoly(HOSPITALITY.west), buildingIds: ['H'] }, { id: 'east-residences', name: '一期东侧公寓庭院', rect: HOSPITALITY.east, poly: rectPoly(HOSPITALITY.east), buildingIds: ['A'] }, { id: 'xingwan-residences', name: '云澜汇楼盘 · 星湾后区', rect: HOSPITALITY.residential, poly: rectPoly(HOSPITALITY.residential), buildingIds: ['R1', 'R2', 'R3', 'R4'] }], paths: [], roads: [], connections: [], surfaceParking: [], gateways: [] };
   for (const d of extensions.districts) {
     if (!site.plots.some(p => p.id === d.id)) site.plots.push({ id: d.id, name: d.name, rect: d.rect, poly: d.poly });
     addPlaza(site, `${d.id}-plaza`, d.poly, d.buildingIds[0]);
@@ -231,33 +274,79 @@ export function buildHospitality(existing, site) {
     extensions.paths.push({ id, kind: 'ground', name: id, width, points, polys });
     polys.forEach((poly, i) => addPlaza(site, `${id}-${i}`, poly, null));
   };
-  surface('酒店公寓步行轴', [[-395, 0, -207], [-370, 0, -207], [-370, 0, -82], [-395, 0, -82]]);
-  surface('酒店至方庭西门', [[-370, 0, -207], [-370, 0, -200], [-280, 0, -200]], 6);
+  surface('酒店至方庭西门', [[-305, 0, -200], [-280, 0, -200]], 6);
+  const hotelCrossing=rect(-300,-203,-284,-197);
+  site.crossings.push({id:'hotel-square-crossing',rect:hotelCrossing,poly:rectPoly(hotelCrossing),axis:'x'});
+  site.walk.push({id:'hotel-square-crossing',kind:'crossing',poly:rectPoly(hotelCrossing),outdoor:true});
+  surface('公寓南侧共享到达广场', [[-35, 0, -177], [-35, 0, -135], [-16, 0, -135]], 6);
   const residentialSpecs = HOSPITALITY.towers.filter(t => t.usage === 'residential');
   const residentialFront = residentialSpecs[0].z + residentialSpecs[0].d / 2;
   surface('住宅至星湾北门', [[49, 0, residentialFront], [49, 0, -193], [250, 0, -193]], 5);
   for (const t of residentialSpecs.slice(1)) surface(`住宅支路-${t.x}`, [[t.x, 0, t.z+t.d/2], [t.x, 0, -193]], 5);
   surface('住宅过街通廊', [[106.066, 0, -193], [106.066, 0, -135.902]], 6);
   const road = (id, name, points, width) => extensions.roads.push({ id, name, width, points, polys: strips(points, width).map(rectPoly) });
-  road('west-access', '酒店公寓落客环路', [[-480, 0, -250], [-320, 0, -250], [-320, 0, -24], [-480, 0, -24], [-480, 0, -250]], 7);
-  road('west-to-ring', '西外环连接路', [[-320, 0, -145], [-292, 0, -145]], 7);
+  road('hotel-arrival', '一期西侧酒店落客环路', [[-387, 0, -230], [-301, 0, -230], [-301, 0, -137], [-387, 0, -137], [-387, 0, -230]], 6);
+  road('hotel-ring-north', '酒店北侧外环接口', [[-301, 0, -230], [-292, 0, -230]], 6);
+  road('hotel-ring-south', '酒店南侧外环接口', [[-301, 0, -137], [-292, 0, -137]], 6);
+  road('apartment-arrival', '一期东侧公寓落客入口', [[-13, 0, -132], [-35, 0, -132], [-35, 0, -172]], 6);
+  const lots = [
+    { id: 'hotel-shared-parking', name: '酒店 · 一期共享地面停车', rect: rect(-349,-175,-314,-152), rows: [
+      {id:'H-surface-north',u0:-347,u1:-316,v0:-171,v1:-166,face:'S'},
+      {id:'H-surface-south',u0:-347,u1:-316,v0:-160,v1:-155,face:'N'}], aisle: rect(-349,-166,-310,-160) },
+    { id: 'hotel-garden-parking', name: '酒店庭院停车', rect: rect(-382,-176,-369,-147), rows: [
+      {id:'H-surface-west',u0:-381,u1:-376,v0:-175,v1:-149,face:'E'}], aisle: rect(-376,-177,-370,-139) },
+    { id: 'apartment-shared-parking', name: '公寓 · 一期共享地面停车', rect: rect(-54,-172,-40,-138), rows: [
+      {id:'A-surface-west',u0:-52,u1:-47,v0:-170,v1:-143,face:'E'}], aisle: rect(-47,-172,-41,-137) },
+  ];
+  for (const lot of lots) {
+    const filled=fillRows(IDENTITY,lot.rows,[],lot.id);
+    markSpecial(filled.stalls,lot.id.startsWith('hotel')?[[-305,-200]]:[[-35,-177]],lot.rows[0].id,2);
+    extensions.surfaceParking.push({...lot,...filled,poly:rectPoly(lot.rect),aislePoly:rectPoly(lot.aisle)});
+    addPlaza(site,lot.id,rectPoly(lot.rect),null);
+  }
+  road('hotel-parking-access','酒店共享停车接落客环路',[[-330,0,-163],[-301,0,-163]],6);
+  road('apartment-parking-access','公寓共享停车接落客庭院',[[-44,0,-137],[-35,0,-137]],6);
+
   road('residential-loop', '住宅消防与落客环路', [[20, 0, -250], [278, 0, -250], [278, 0, -184], [20, 0, -184], [20, 0, -250]], 6);
   const H1 = at('H', 'B1'), A1 = at('A', 'B1'), P1 = at('P1', 'B1M');
-  appendPath(extensions, H1, 'hotel-mall-metro', 'underground', '酒店 · 方庭 · 地铁连廊', [[-395, -4.5, -207], [-370, -4.5, -207], [-370, -4.5, -200], [-280, -4.5, -200]], 5, P1.level.id);
+  appendPath(extensions, H1, 'hotel-mall-metro', 'underground', '酒店 · 方庭 · 地铁连廊', [[-305, -4.5, -200], [-280, -4.5, -200]], 5, P1.level.id);
   connect(H1, P1, 'hotel-mall-metro', { x0: -280, z0: -202.5, x1: -280, z1: -197.5 }, 1, 0, '酒店地下连廊');
-  appendPath(extensions, A1, 'apartment-hotel-metro', 'underground', '公寓至酒店地铁连廊', [[-395, -4.5, -82], [-370, -4.5, -82], [-370, -4.5, -197.5]], 5, H1.level.id);
-  connect(A1, H1, 'apartment-hotel-metro', { x0: -372.5, z0: -197.5, x1: -367.5, z1: -197.5 }, 0, -1, '公寓酒店地下连廊');
   const H2 = at('H', '2F'), P12 = at('P1', '2F');
-  appendPath(extensions, H2, 'hotel-skybridge', 'skybridge', '酒店至方庭空中连廊', [[-395, 6.5, -207], [-370, 6.5, -207], [-370, 6.5, -200], [-280, 6.5, -200]], 5, P12.level.id);
+  appendPath(extensions, H2, 'hotel-skybridge', 'skybridge', '酒店至方庭空中连廊', [[-305, 6.5, -200], [-280, 6.5, -200]], 5, P12.level.id);
   connect(H2, P12, 'hotel-skybridge', { x0: -280, z0: -202.5, x1: -280, z1: -197.5 }, 1, 0, '酒店空中连廊');
-  const HB = at('H', 'B2'), AB = at('A', 'B2'), PB = at('P1', 'B1');
-  appendPath(extensions, HB, 'hotel-garage', 'garage', '酒店与一期地库连接道', [[-395, -8.4, -207], [-380, -8.4, -207], [-380, -8.4, -221], [-280, -8.4, -221]], 6, PB.level.id);
-  const threshold = rect(-280, -224, -269, -218);
+  const HB = at('H', 'B2'), PB = at('P1', 'B1');
+  // The hotel basement-to-mall link uses the southern parking cross aisle,
+  // clear of the two new internal ramps and the tower's protected stairs.
+  const hotelGaragePoints = [[-305, -8.4, -200], [-301, -8.4, -200], [-301, -8.4, -179], [-280, -8.4, -179]];
+  appendPath(extensions, HB, 'hotel-garage', 'garage', '酒店与一期地库连接道', hotelGaragePoints, 6, PB.level.id);
+  const threshold = rect(-280, -182, -269, -176);
   PB.level.walk.push(localWalk(IDENTITY, 'hotel-garage-threshold', 'aisle', threshold));
   PB.level.parking.stalls = PB.level.parking.stalls.filter(s => !convexOverlap(s.poly, rectPoly(threshold)));
-  connect(HB, PB, 'hotel-garage', { x0: -280, z0: -224, x1: -280, z1: -218 }, 1, 0, '酒店一期地库互通');
-  appendPath(extensions, AB, 'apartment-garage', 'garage', '公寓与酒店地库连接道', [[-395, -8.4, -82], [-355, -8.4, -82], [-355, -8.4, -218]], 6, HB.level.id);
-  connect(AB, HB, 'apartment-garage', { x0: -358, z0: -218, x1: -352, z1: -218 }, 0, -1, '公寓酒店地库互通');
+  PB.level.parking.columns = PB.level.parking.columns.filter(c => !convexOverlap(lrectPoly(c.frame, rect(c.lx-.25,c.lz-.25,c.lx+.25,c.lz+.25)),rectPoly(threshold)));
+  connect(HB, PB, 'hotel-garage', { x0: -280, z0: -182, x1: -280, z1: -176 }, 1, 0, '酒店一期地库互通');
+  for (const bid of ['H', 'A']) addTowerGarageRamps(by[bid], site, extensions);
+  // The north wing's angled facade meets an orthogonal docking lobby. This
+  // surveyed trapezoid is real slab/walk geometry, never its rectangular AABB.
+  const NF=by.P1.building.wings.find(w=>w.id==='N').F, innerA=toW(NF,72,23), innerB=toW(NF,80,23);
+  const dockX=-57, dockZ=(innerA[1]+innerB[1])/2;
+  const gatewayPoly=[innerA,innerB,[dockX,innerB[1]],[dockX,innerA[1]]];
+  for(const [pShort,aShort,kind,name] of [['1F','1F','ground','公寓与一期迎宾连廊'],['2F','2F','skybridge','公寓与一期空中连廊'],['B1M','B1','underground','公寓 · 一期 · 地铁连廊'],['B1','B2','garage','公寓与一期地库车行连廊']]) {
+    const owner=at('A',aShort),target=at('P1',pShort),width=kind==='garage'||kind==='ground'?6:5,y=target.level.elev;
+    const innerSeg={x0:innerA[0],z0:innerA[1],x1:innerB[0],z1:innerB[1]},outerSeg={x0:dockX,z0:dockZ-width/2,x1:dockX,z1:dockZ+width/2};
+    target.level.slab.pieces.push({outer:gatewayPoly,holes:[]});
+    target.level.walk.push({id:`P1-apartment-dock-${pShort}`,kind:kind==='garage'?'aisle':'passage',frame:IDENTITY,poly:gatewayPoly});
+    target.entrances.push({id:`P1-apartment-inner-${pShort}`,building:'P1',level:target.level.id,to:target.level.id,name:'公寓接驳内门',seg:innerSeg,nx:-NF.s,nz:NF.c,width:8,architecturalOpening:true});
+    extensions.gateways.push({id:`P1-apartment-dock-${pShort}`,building:'P1',level:target.level.id,elev:y,kind,poly:gatewayPoly,innerSeg,outerSeg,name});
+    const points=[[-35,y,-177],[-35,y,dockZ],[dockX,y,dockZ]];
+    if(kind==='ground') {
+      surface(name,points,width);
+      target.entrances.push({id:'P1-apartment-ground',building:'P1',level:target.level.id,to:'site',name,seg:outerSeg,nx:1,nz:0,width,main:false});
+    } else {
+      const id=kind==='skybridge'?'apartment-skybridge':kind==='garage'?'apartment-garage':'apartment-mall-metro';
+      appendPath(extensions,owner,id,kind,name,points,width,target.level.id);
+      connect(owner,target,id,outerSeg,-1,0,name);
+    }
+  }
   const R = at('R1', 'B1'), P2 = at('P2', 'B1');
   // The southern drive aisle sits east of both lift shafts, with six metres of
   // real width; it never relies on the narrow pedestrian gap between cabins.

@@ -3,6 +3,27 @@ import * as THREE from 'three';
 import { COLORS } from '../theme.js';
 import { rng } from '../textures.js';
 
+// 细支腿的上下端都嵌入座垫 / 地面，只保留四个可见侧面。
+// 外轮廓和全部四条腿不变，单根由 36 顶点降到 24 顶点。
+const postGeometry = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
+const postPos = [], postNor = [];
+for (let i = 0; i < postGeometry.attributes.position.count; i++) {
+  if (Math.abs(postGeometry.attributes.normal.getY(i)) > .99) continue;
+  postPos.push(postGeometry.attributes.position.getX(i), postGeometry.attributes.position.getY(i), postGeometry.attributes.position.getZ(i));
+  postNor.push(postGeometry.attributes.normal.getX(i), postGeometry.attributes.normal.getY(i), postGeometry.attributes.normal.getZ(i));
+}
+const OPEN_POST = { pos: postPos, nor: postNor, count: postPos.length / 3 };
+postGeometry.dispose();
+const postMatrix = new THREE.Matrix4(), postRotation = new THREE.Quaternion();
+const postPosition = new THREE.Vector3(), postScale = new THREE.Vector3(), postAxis = new THREE.Vector3(), postUp = new THREE.Vector3(0, 1, 0);
+function support(B, a, b, thick, color) {
+  const len = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+  postPosition.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  postRotation.setFromUnitVectors(postUp, postAxis.set((b.x - a.x) / len, (b.y - a.y) / len, (b.z - a.z) / len));
+  postScale.set(thick, len, thick); postMatrix.compose(postPosition, postRotation, postScale);
+  B.get('metal').push(OPEN_POST, postMatrix, color);
+}
+
 /** 实例化树木：每棵 { x, y, z, s(缩放), kind('round'|'cone'|'palm') } */
 export function addTrees(group, mats, list, seed = 7) {
   if (!list.length) return null;
@@ -74,17 +95,26 @@ export function bollard(B, x, z, y0 = 0) {
 
 export function bench(B, x, y, z, ry = 0, key = 'ext') {
   const c = Math.cos(ry), s = Math.sin(ry);
-  B.get(key).box(x, y + 0.45, z, 1.8, 0.08, 0.5, COLORS.wood, ry);
-  B.get(key).box(x - s * 0.22, y + 0.75, z - c * 0.22, 1.8, 0.45, 0.06, COLORS.wood, ry);
+  for (let i = 0; i < 5; i++) {
+    const dz = -.20 + i * .10;
+    B.get(key).box(x + s * dz, y + .45, z + c * dz, 1.8, .075, .083, COLORS.wood, ry);
+  }
+  for (let i = 0; i < 3; i++) B.get(key).box(x - s * .22, y + .6 + i * .14, z - c * .22, 1.8, .11, .06, COLORS.wood, ry);
   for (const k of [-0.75, 0.75]) B.get('extMetal').box(x + c * k, y + 0.22, z - s * k, 0.06, 0.44, 0.46, '#3d4146', ry);
+  for (const k of [-.81, .81]) {
+    B.get('extMetal').box(x + c * k, y + .59, z - s * k, .035, .25, .035, '#3d4146', ry);
+    B.get('extMetal').box(x + c * k, y + .72, z - s * k, .05, .045, .38, '#3d4146', ry);
+  }
 }
 
 /** 花坛（矩形石边 + 土 + 灌木球） */
 export function planter(B, x0, z0, x1, z1, y = 0, seed = 3, flowers = true, key = 'ext') {
   const rand = rng(seed);
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0;
-  B.get(key).box(cx, y + 0.3, cz, w, 0.6, d, COLORS.stoneDark);
-  B.get(key).box(cx, y + 0.62, cz, w - 0.3, 0.06, d - 0.3, '#5b4532');
+  // 真正的种植槽：石材围边低于花叶，土壤内退，不用整块实心顶面盖住植物根部。
+  for (const x of [x0 + .09, x1 - .09]) B.get(key).box(x, y + .3, cz, .18, .6, d, COLORS.stoneDark);
+  for (const z of [z0 + .09, z1 - .09]) B.get(key).box(cx, y + .3, z, Math.max(.1, w - .36), .6, .18, COLORS.stoneDark);
+  B.get(key).box(cx, y + .54, cz, Math.max(.1, w - .3), .04, Math.max(.1, d - .3), '#5b4532');
   const n = Math.max(2, Math.round((w * d) / 1.6));
   const fl = ['#e85d75', '#f2b134', '#f6f1e7', '#b06ad9', '#ff8c5a'];
   for (let i = 0; i < n; i++) {
@@ -140,12 +170,17 @@ export function tableSet(B, x, y, z, ry, colors = {}, key = 'matte') {
   const top = colors.top || '#e9e2d6', chair = colors.chair || '#d0612d', leg = colors.leg || '#3a3f45';
   B.get(key).box(x, y + 0.74, z, 1.1, 0.05, 0.75, top, ry);
   B.get('metal').box(x, y + 0.36, z, 0.08, 0.72, 0.08, leg, ry);
+  B.get('metal').box(x, y + .035, z, .58, .06, .43, leg, ry);
   const c = Math.cos(ry), s = Math.sin(ry);
   for (const [lx, lz, r] of [[-0.35, 0.62, 0], [0.35, 0.62, 0], [-0.35, -0.62, Math.PI], [0.35, -0.62, Math.PI]]) {
     const wx = x + lx * c + lz * s, wz = z - lx * s + lz * c;
     B.get(key).box(wx, y + 0.45, wz, 0.42, 0.06, 0.42, chair, ry + r);
     const bx = wx + Math.sin(ry + r) * 0.19, bz = wz + Math.cos(ry + r) * 0.19;
     B.get(key).box(bx, y + 0.7, bz, 0.42, 0.45, 0.05, chair, ry + r);
+    for (const da of [-.15, .15]) for (const db of [-.14, .14]) {
+      const x = wx + c * da + s * db, z = wz - s * da + c * db;
+      support(B, {x, y, z}, {x, y: y + .43, z}, .027, leg);
+    }
   }
 }
 
@@ -154,11 +189,16 @@ export function roundTable(B, x, y, z, n = 4, colors = {}, key = 'matte') {
   const top = colors.top || '#f3efe7', chair = colors.chair || '#2f86b0';
   B.get(key).cyl(x, y + 0.72, z, 0.45, 0.05, top, 16);
   B.get('metal').cyl(x, y, z, 0.05, 0.72, '#3a3f45', 8);
+  B.get('metal').cyl(x, y + .015, z, .25, .04, '#3a3f45', 12);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
     const cx = x + Math.cos(a) * 0.82, cz = z + Math.sin(a) * 0.82;
     B.get(key).cyl(cx, y + 0.42, cz, 0.22, 0.06, chair, 8);
     B.get(key).box(cx + Math.cos(a) * 0.2, y + 0.68, cz + Math.sin(a) * 0.2, 0.06, 0.45, 0.4, chair, -a);
+    for (const s of [-1, 1]) {
+      const dx = Math.cos(a + Math.PI / 2) * .13 * s, dz = Math.sin(a + Math.PI / 2) * .13 * s;
+      support(B, {x: cx + dx, y: y + .42, z: cz + dz}, {x: cx + dx * 1.15, y, z: cz + dz * 1.15}, .027, '#3a3f45');
+    }
   }
 }
 

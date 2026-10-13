@@ -43,7 +43,7 @@ test('一期 Y 形部分（圆厅与三翼）垂直交通：观光梯 2 部；�
 });
 
 test('一期入口：≥4 个、朝向 ≥3 个方向、1 个主入口；内侧是走道，外侧在楼外广场或天桥', () => {
-  const ents = L.entrances.filter((e) => e.building === 'P1' && e.level === 'P1-1F');
+  const ents = L.entrances.filter((e) => e.building === 'P1' && e.level === 'P1-1F' && !e.architecturalOpening);
   assert.ok(ents.length >= 4, `只有 ${ents.length} 个人行入口`);
   assert.equal(ents.filter((e) => e.main).length, 1, '应有 1 个主入口');
   assert.ok(directionCount(ents) >= 3, '入口朝向少于 3 个方向');
@@ -52,6 +52,15 @@ test('一期入口：≥4 个、朝向 ≥3 个方向、1 个主入口；内侧�
     const [mx, mz] = midOf(e.seg);
     assert.ok(inWalk(lv, [mx - e.nx, mz - e.nz]), `${e.name} 内侧不是走道`);
     const out = [mx + e.nx, mz + e.nz];
+    if (e.architecturalOpening) {
+      assert.equal(e.to, e.level, '接驳内门必须保持同层');
+      assert.ok(inWalk(lv, out), `${e.name} 没有接到外伸大厅`);
+      for (let d=-1.2;d<=1.2;d+=.2) {
+        const p=[mx+e.nx*d,mz+e.nz*d];
+        assert.ok(lv.slab.pieces.some(s=>pointInPoly(p,s.outer)&&!s.holes.some(h=>pointInPoly(p,h))), `${e.name} 内门断板`);
+      }
+      continue;
+    }
     assert.ok(!lv.slab.pieces.some((s) => pointInPoly(out, s.outer)), `${e.name} 外侧仍在楼内`);
     if (e.to === 'site') assert.ok(inSite(out), `${e.name} 外侧不在场地步行区`);
     else if (e.to === 'bridge') { if (L.bridges) assert.ok(inBridge(out), `${e.name} 外侧不在天桥桥面上`); }

@@ -6,6 +6,7 @@ import { buildP3 } from './p3.js';
 import { buildBridges } from './bridges.js';
 import { buildMetro } from './metro.js';
 import { buildHospitality } from './hospitality.js';
+import { addForecourt } from './forecourt.js';
 import { P1 } from './p1.js';
 import { P2 } from './p2.js';
 import { CATEGORIES } from './constants.js';
@@ -18,6 +19,7 @@ export function buildLayout() {
   parts.push(buildMetro(parts, site, picker));
   const hospitality = buildHospitality(parts, site);
   parts.push(...hospitality.parts);
+  addForecourt(site);
   const all = (k) => parts.flatMap((p) => p[k]);
   const buildings = parts.map((p) => p.building);
   return {

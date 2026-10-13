@@ -1,5 +1,5 @@
 // 店内陈设：按业态生成（服饰、珠宝、美妆、数码、餐饮、档口、小吃、亲子、书店、影城、电玩、超市、家居）。
-import { NORMAL, OPPOSITE } from '../../layout/geom.js';
+import { NORMAL } from '../../layout/geom.js';
 import { rng } from '../textures.js';
 import { tableSet, roundTable } from './props.js';
 import { shade, storeStyle } from './storefronts.js';
@@ -62,6 +62,57 @@ function furnish(L, atlas, lv, u, rand) {
   const u0 = F.umin, u1 = F.umax;
   const mid = (u0 + u1) / 2;
   const detail = interiorDetail(B, F, P, y0);
+  const boutique = /^P[12]-/.test(lv.id) && (cat === 'jewelry' || cat === 'beauty');
+
+  // 壁龛贴在单矩形铺位的实墙上；转角门面所在段不装柜，保留原有侧入口。
+  const wallNiches = () => {
+    if (!boutique || u.rects.length !== 1 || D < 5) return;
+    const count = D > 10 ? 2 : 1;
+    const span = Math.min(3.6, (D - 3.2) / count - .5);
+    for (const edge of [u0, u1]) {
+      const inward = edge === u0 ? 1 : -1;
+      const a = edge + inward * .16;
+      const rot = Math.atan2(F.ux * inward, F.uz * inward) - Math.atan2(F.nx, F.nz);
+      for (const b of spread(count, 2.1 + span / 2, D - 1.7 - span / 2)) {
+        const opening = u.fronts.some(f => {
+          const along = [f.x0, f.z0, f.x1, f.z1];
+          const a0 = (along[0] - F.f.x0) * F.ux + (along[1] - F.f.z0) * F.uz;
+          const a1 = (along[2] - F.f.x0) * F.ux + (along[3] - F.f.z0) * F.uz;
+          const b0 = -((along[0] - F.f.x0) * F.nx + (along[1] - F.f.z0) * F.nz);
+          const b1 = -((along[2] - F.f.x0) * F.nx + (along[3] - F.f.z0) * F.nz);
+          return Math.abs(a0 - edge) < .08 && Math.abs(a1 - edge) < .08 && Math.max(b0, b1) > b - span / 2 - .2 && Math.min(b0, b1) < b + span / 2 + .2;
+        });
+        if (opening) continue;
+        detail.face('wood', a, b, 2.40, span, 2.16, cat === 'jewelry' ? '#b6a18a' : '#ddd0b8', rot);
+        for (const db of [-span / 2, span / 2]) P('metal', a + inward * .015, b + db, y0 + 2.40, .05, .055, 2.22, '#a28a62');
+        P('wood', edge + inward * .31, b, y0 + 1.48, .32, span, .045, '#b6a18a');
+        detail.face('glowSoft', a + inward * .007, b, 3.43, span - .13, .035, '#ebd7ad', rot);
+        if (cat === 'jewelry') {
+          const [x, z] = F.at(edge + inward * .32, b);
+          B.get('satin').sphere(x, y0 + 1.68, z, .13, '#77978a', .19, .13, 'ico0');
+          P('metal', edge + inward * .31, b, y0 + 1.525, .24, .40, .045, '#c5b085');
+        } else {
+          for (let k = 0; k < 3; k++) {
+            const db = (k - 1) * .28, h = .30 + k % 2 * .12;
+            P('satin', edge + inward * .30, b + db, y0 + 1.505 + h / 2, .16, .20, h, ['#869b91', '#dfc6b9', '#ae9671'][k]);
+            detail.face('matte', edge + inward * .386, b + db, 1.63, .12, .07, '#f4eee0', rot);
+          }
+        }
+      }
+    }
+  };
+
+  // 装修附在铺内既有侧墙上：踢脚线、金属收口和轨道射灯不占入口通道。
+  if (D > 3 && W > 2.4 && !['cinema', 'kids', 'supermarket'].includes(cat)) {
+    const warm = ['cafe', 'tea', 'books', 'home', 'restaurant', 'bakery'].includes(cat);
+    for (const a of [u0 + .13, u1 - .13]) {
+      P(warm ? 'wood' : 'metal', a, D / 2, y0 + .09, .035, D - .35, .18, warm ? '#b6a080' : '#9b9d91');
+      P('metal', a, D / 2, y0 + H - .36, .055, D - .6, .065, '#59615a');
+      for (let b = 1.3; b < D - .7; b += 3.3) {
+        detail.spotlight(a + (a < mid ? .21 : -.21), b, H - .59);
+      }
+    }
+  }
 
   // 地面（每个矩形一块）
   const floorCol = {
@@ -76,15 +127,27 @@ function furnish(L, atlas, lv, u, rand) {
   // 品牌背景墙（深度足够时）
   if (D >= 5 && !['cinema', 'supermarket', 'kids'].includes(cat)) {
     const bw = Math.min(W * 0.55, 6.5), bh = Math.min(2.6, H - 1.6);
-    P('satin', mid, D - 0.18, y0 + 1.3 + bh / 2, bw, 0.1, bh, u.brand.bg);
+    const base = boutique ? .12 : 1.3, tall = 1.3 + bh - base;
+    P('satin', mid, D - 0.18, y0 + base + tall / 2, bw, 0.1, tall, u.brand.bg);
     const [x, z] = F.at(mid, D - 0.25);
-    L.signs.place(x, y0 + 1.3 + bh / 2, z, Math.min(bw * 0.8, 4), Math.min(bw * 0.8, 4) / 4, OPPOSITE[F.f.side], atlas.cell(u.id));
+    const logoW = Math.min(bw * .8, 4);
+    L.signs.place(x, y0 + (boutique ? 1.3 + bh - .55 : 1.3 + bh / 2), z, logoW, logoW / 4, F.f.side, atlas.cell(u.id));
+    if (boutique) {
+      for (const a of [mid - bw / 2 + .05, mid + bw / 2 - .05]) P('metal', a, D - .245, y0 + base + tall / 2, .045, .035, tall, '#b8a178');
+      P('wood', mid, D - .247, y0 + .39, bw - .14, .035, .46, '#c6b699');
+    }
   }
 
   const counter = (a, b, len = 2.2) => {
     P('satin', a, b, y0 + 0.5, len, 0.7, 1.0, shade(u.brand.bg, 0.25));
     P('satin', a, b, y0 + 1.02, len + 0.1, 0.8, 0.04, '#f3f4f6');
     P('matte', a + len * 0.25, b - 0.05, y0 + 1.25, 0.35, 0.25, 0.35, '#1f2937');
+    // 收银屏、扫码器、票据及纸袋均落在原有柜台面内。
+    P('glowSoft', a + len * .25, b - .182, y0 + 1.30, .28, .01, .19, '#acc4b4');
+    detail.card(a - len * .29, b - .04, 1.04);
+    P('matte', a - len * .07, b + .02, y0 + 1.095, .23, .17, .11, '#d8d2bc');
+    P('satin', a - len * .07, b - .076, y0 + 1.126, .17, .009, .025, '#fff4db');
+    for (const db of [-.19, .19]) P('metal', a, b + db, y0 + .035, len - .08, .028, .07, '#8c7854');
   };
   const mannequin = (a, b, color) => {
     detail.cylinder('stone', a, b, .02, .31, .075, '#eeebe1', 12);
@@ -157,36 +220,56 @@ function furnish(L, atlas, lv, u, rand) {
       break;
     }
     case 'jewelry': {
+      wallNiches();
       for (const a of [u0 + 0.7, u1 - 0.7]) {
         for (let b = 1.8; b < D - 1.4; b += 1.6) {
           P('satin', a, b, y0 + 0.45, 0.8, 1.5, 0.9, '#2b2b31');
+          if (boutique) for (const h of [.105, .79]) detail.band(a, b, h, .803, 1.503, .035);
           P('glass', a, b, y0 + 1.07, 0.78, 1.48, 0.34, 0xffffff);
           P('glow', a, b, y0 + 0.93, 0.7, 1.4, 0.02, '#fff1cf');
+          for (let j = 0; j < 3; j++) detail.jewelry(a, b - .43 + j * .43, .943, j);
         }
       }
       if (W > 6) {
         for (const b of [D * 0.45, D * 0.45 + 1.7]) {
           P('satin', mid, b, y0 + 0.45, Math.min(4, W - 3.6), 0.8, 0.9, '#2b2b31');
+          if (boutique) for (const h of [.105, .79]) detail.band(mid, b, h, Math.min(4, W - 3.6) + .003, .803, .035);
           P('glass', mid, b, y0 + 1.07, Math.min(4, W - 3.6), 0.78, 0.34, 0xffffff);
           P('glow', mid, b, y0 + 0.93, Math.min(3.8, W - 3.8), 0.7, 0.02, '#fff1cf');
+          const len = Math.min(3.8, W - 3.8);
+          for (let j = 0; j < 4; j++) detail.jewelry(mid - len * .35 + j * len * .7 / 3, b, .943, j);
         }
       }
-      for (let k = 0; k < 6; k++) P('satin', mid - 1.2 + (k % 3) * 1.2, D - 0.45, y0 + 1.4 + Math.floor(k / 3) * 0.9, 1.0, 0.3, 0.6, '#3a2f2a');
+      for (let k = 0; k < 3; k++) {
+        const a = mid + (k - 1) * Math.min(1.2, W * .15);
+        P('wood', a, D - .29, y0 + 1.64, .94, .10, 1.38, '#aa9579');
+        detail.face('matte', a, D - .345, 1.64, .82, 1.26, '#31483e');
+        detail.face('metal', a, D - .346, 1.34, .44, .035, '#c9b07a');
+      }
       break;
     }
     case 'beauty': {
+      wallNiches();
       const ni = Math.max(1, Math.floor(W / 3.5));
       for (let i = 0; i < ni; i++) {
         const a = u0 + (i + 0.5) * (W / ni);
         for (const b of [D * 0.35, D * 0.65]) {
           if (b > D - 1.5) continue;
           P('satin', a, b, y0 + 0.45, 1.8, 0.9, 0.9, '#fafafa');
-          for (let k = 0; k < 6; k++) P('satin', a - 0.7 + k * 0.28, b, y0 + 0.98, 0.12, 0.12, 0.18, CLOTHES[(k + i) % CLOTHES.length]);
+          if (boutique) {
+            for (const h of [.105, .79]) detail.band(a, b, h, 1.803, .903, .035);
+            detail.face('wood', a, b - .452, .445, 1.64, .51, '#d7c4a7');
+            detail.face('wood', a, b + .452, .445, 1.64, .51, '#d7c4a7', Math.PI);
+          }
+          for (let k = 0; k < 6; k++) detail.bottle(a - .7 + k * .28, b, .9, ['#b99b73', '#84a295', '#d7b4aa'][(k + i) % 3], .18 + k % 3 * .045, k % 2 === 0);
+          detail.card(a, b - .30, .9);
+          P('metal', a, b + .25, y0 + 1.15, .55, .04, .46, '#d0b57d');
+          P('mirror', a, b + .221, y0 + 1.16, .48, .012, .37, '#d7e2df');
         }
       }
-      for (const a of [u0 + 0.3, u1 - 0.3]) {
-        P('satin', a, D / 2, y0 + 1.3, 0.35, D - 2, 2.4, '#ffffff');
-        P('glow', a, D / 2, y0 + 1.6, 0.4, D - 2.4, 0.8, shade(u.brand.bg, 0.5));
+      if (!boutique) for (const a of [u0 + .3, u1 - .3]) {
+        P('satin', a, D / 2, y0 + 1.3, .35, D - 2, 2.4, '#ffffff');
+        P('glow', a, D / 2, y0 + 1.6, .4, D - 2.4, .8, shade(u.brand.bg, .5));
       }
       counter(u1 - 1.6, D - 1.2, 1.8);
       break;
@@ -244,7 +327,10 @@ function furnish(L, atlas, lv, u, rand) {
         for (const a of spread(cols, u0 + 1.3, u1 - 1.3)) {
           const b = 1.8 + i * 2.4, [x, z] = F.at(a, b);
           roundTable(B, x, y0, z, 3, { chair: cat === 'tea' ? '#3f8f6d' : '#c08a5a' });
-          if (i < 2) detail.tableware(a, b, .77);
+          if (i < 2) {
+            detail.tableware(a, b, .77);
+            detail.menu(a, b + .23, .77, cat === 'tea' ? '#61705c' : '#725642');
+          }
         }
       }
       break;
@@ -267,7 +353,10 @@ function furnish(L, atlas, lv, u, rand) {
         for (const a of spread(cols, u0 + 1.4, u1 - 1.4)) {
           const b = 1.8 + i * 2.5, [x, z] = F.at(a, b);
           tableSet(B, x, y0, z, F.ang, tc);
-          if (i < 2) detail.tableware(a, b, .765);
+          if (i < 2) {
+            detail.tableware(a, b, .765);
+            detail.menu(a + .36, b + .19, .765, '#6d4c38');
+          }
         }
       }
       if (style === 'oldstreet') for (const a of spread(Math.min(3, cols), u0 + 1.5, u1 - 1.5)) detail.pendant(a, D * .5, Math.min(3.05, H - .65), H - .08, '#9e4939');
@@ -310,10 +399,26 @@ function furnish(L, atlas, lv, u, rand) {
     }
     case 'toys': {
       for (const a of [u0 + 0.4, u1 - 0.4]) for (let b = 1.8; b < D - 0.8; b += 0.6) {
-        P('matte', a, b, y0 + 1.0, 0.5, 0.5, 2.0, '#f3f4f6');
-        for (let k = 0; k < 4; k++) P('matte', a, b, y0 + 0.4 + k * 0.45, 0.35, 0.3, 0.25, NEON[Math.floor(rand() * NEON.length)]);
+        P('matte', a + (a < mid ? -.22 : .22), b, y0 + 1.0, .055, .5, 2.0, '#f3f4f6');
+        for (let k = 0; k < 4; k++) {
+          P('wood', a, b, y0 + .26 + k * .45, .48, .48, .035, '#ddd1b5');
+          if (k === 1) detail.toy(a, b, .28 + k * .45, '#d6a776');
+          else {
+            // 陈列样品配套盒装库存，避免每个储货格都复制高顶点公仔。
+            const color = ['#829f98', '#d6a776', '#dda7a0', '#e0c45e'][k];
+            P('matte', a, b, y0 + .43 + k * .45, .30, .31, .27, color);
+            detail.face('satin', a + (a < mid ? .156 : -.156), b, .43 + k * .45, .20, .14, '#ece4cf',
+              (a < mid ? 1 : -1) * Math.sign(F.ux * F.nz - F.uz * F.nx) * Math.PI / 2);
+          }
+        }
       }
-      for (let k = 0; k < 4; k++) P('glass', mid - 1.2 + (k % 2) * 2.4, D * 0.4 + Math.floor(k / 2) * 2, y0 + 1.0, 1.0, 1.0, 1.6, 0xffffff);
+      for (let k = 0; k < 4; k++) {
+        const a = mid - 1.2 + (k % 2) * 2.4, b = D * .4 + Math.floor(k / 2) * 2;
+        P('glass', a, b, y0 + 1, 1, 1, 1.6, 0xffffff);
+        P('wood', a, b, y0 + .50, .95, .95, .55, '#e8dfcc');
+        detail.toy(a - .18, b, .78, '#cd9c63'); detail.toy(a + .18, b, .78, '#7b9d94');
+        detail.card(a, b - .32, .78);
+      }
       break;
     }
     case 'books': {
@@ -378,13 +483,28 @@ function furnish(L, atlas, lv, u, rand) {
       for (let k = 0; k < 4; k++) {
         const a = u0 + (k % 2 + 1) * (W / 3), b = 2.2 + Math.floor(k / 2) * 2.6;
         if (b > D - 1.2) continue;
-        P('satin', a, b, y0 + 0.4, 1.5, 0.9, 0.8, '#d6c3a5');
-        for (let s = 0; s < 3; s++) {
-          const [x, z] = F.at(a - 0.45 + s * 0.45, b);
-          B.get('foliage').sphere(x, y0 + 1.05, z, 0.22, ['#5e9a44', '#e85d75', '#f2b134'][s]);
+        if (k % 2 === 0) {
+          const textile = k ? '#94a498' : '#cbb797';
+          P('wood', a, b, y0 + .17, 1.45, .85, .15, '#9c805f');
+          P('matte', a, b, y0 + .38, 1.25, .72, .25, textile);
+          P('matte', a, b + .34, y0 + .63, 1.45, .17, .34, textile);
+          for (const da of [-.68, .68]) P('matte', a + da, b, y0 + .46, .14, .89, .39, textile);
+          for (const da of [-.3, .3]) P('matte', a + da, b + .21, y0 + .64, .32, .12, .27, da < 0 ? '#e6dac2' : '#ae8064', da * .4);
+          P('matte', a + .40, b - .08, y0 + .518, .22, .43, .03, '#eee3ce');
+        } else {
+          P('stone', a, b, y0 + .74, 1.5, .9, .07, '#e7ddc8');
+          for (const da of [-.59, .59]) P('wood', a + da, b, y0 + .365, .09, .67, .73, '#8c7250');
+          detail.bouquet(a - .35, b, .78, '#9d785c');
+          detail.tableware(a + .22, b, .78);
         }
       }
-      for (const a of [u0 + 0.4, u1 - 0.4]) for (let b = 1.8; b < D - 0.8; b += 0.8) P('satin', a, b, y0 + 1.0, 0.45, 0.7, 2.0, '#efe7da');
+      for (const a of [u0 + 0.4, u1 - 0.4]) for (let b = 1.8; b < D - 0.8; b += 0.8) {
+        P('wood', a, b, y0 + 1.0, .45, .7, 2.0, '#e0d3b9');
+        const faceA = a + (a < mid ? .235 : -.235);
+        P('metal', faceA, b - .18, y0 + 1.1, .025, .03, .22, '#997e4e');
+        P('matte', faceA, b, y0 + .9, .012, .015, 1.78, '#a49478');
+        P('metal', a, b, y0 + .05, .46, .71, .06, '#7a6b55');
+      }
       break;
     }
     case 'auto': {

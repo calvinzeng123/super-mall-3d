@@ -1,0 +1,89 @@
+{
+  "levels": 195,
+  "shops": 456,
+  "residences": 748,
+  "forecourt": {
+    "zones": 5,
+    "items": 61,
+    "paths": 8
+  },
+  "ramps": 24,
+  "surfaceRamps": 14,
+  "surfaceParking": 41,
+  "p3": {
+    "blocks": 19,
+    "routes": 44
+  },
+  "parking": [
+    {
+      "id": "P1-B2",
+      "elev": -12,
+      "spaces": 493
+    },
+    {
+      "id": "P1-B1",
+      "elev": -8.4,
+      "spaces": 477
+    },
+    {
+      "id": "P2-B2",
+      "elev": -8.4,
+      "spaces": 156
+    },
+    {
+      "id": "P2-B1",
+      "elev": -4.2,
+      "spaces": 150
+    },
+    {
+      "id": "P3-B2",
+      "elev": -9,
+      "spaces": 1129
+    },
+    {
+      "id": "P3-B1",
+      "elev": -4.5,
+      "spaces": 1129
+    },
+    {
+      "id": "H-B2",
+      "elev": -8.4,
+      "spaces": 21
+    },
+    {
+      "id": "H-B1",
+      "elev": -4.5,
+      "spaces": 21
+    },
+    {
+      "id": "A-B2",
+      "elev": -8.4,
+      "spaces": 26
+    },
+    {
+      "id": "A-B1",
+      "elev": -4.5,
+      "spaces": 26
+    },
+    {
+      "id": "R1-B1",
+      "elev": -4.2,
+      "spaces": 16
+    },
+    {
+      "id": "R2-B1",
+      "elev": -4.2,
+      "spaces": 20
+    },
+    {
+      "id": "R3-B1",
+      "elev": -4.2,
+      "spaces": 20
+    },
+    {
+      "id": "R4-B1",
+      "elev": -4.2,
+      "spaces": 20
+    }
+  ]
+}

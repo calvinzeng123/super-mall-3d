@@ -1,9 +1,14 @@
 // 公共区域（数据驱动）：美食层圆厅用餐区与吊灯；云澜老街石板路、牌坊与灯笼串；1F 圆厅服务台、花池与长椅；
 // 口袋与端部休息区；2F 快闪店；圆厅"云朵"悬挂艺术装置。
 import * as THREE from 'three';
-import { pointInPoly, toW, frame } from '../../layout/geom.js';
+import { pointInPoly, toW, frame, NORMAL } from '../../layout/geom.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { tableSet, roundTable, bench, planter } from './props.js';
+import { interiorDetail } from './interior-detail.js';
+import { clearHeight } from './shell.js';
+
+const flatDetail = (B, y0) => interiorDetail(B, { at: (a, b) => [a, b], ang: 0, nx: 0, nz: -1 },
+  (key, a, b, y, w, d, h, color, rot = 0) => B.get(key).box(a, y, b, w, h, d, color, rot), y0);
 
 export function buildPublic(ctx) {
   for (const b of ctx.layout.buildings) {
@@ -18,6 +23,7 @@ export function buildPublic(ctx) {
       iceRinks(ctx, lv);
       if (lv.short === '1F') atrium1F(ctx, b, lv);
       if (lv.short === '2F') popups(ctx, b, lv);
+      if (b.id === 'P1' || b.id === 'P2') mallFinish(ctx, b, lv);
     }
     atriumArt(ctx, b, levels);
   }
@@ -68,12 +74,16 @@ function foodCourt(ctx, b, lv) {
       return pieces.some((p) => pointInPoly([wx, wz], p.poly));
     };
     B.frame(F, () => {
+      const detail = flatDetail(B, y0);
       for (let x = -r.R + 3; x <= r.R - 3; x += 3.1) {
         for (let z = -r.R + 3; z <= r.R - 3; z += 3.0) {
           if (!free(x, z, 1.4)) continue;
           const c = chairs[Math.floor(rand() * chairs.length)];
           if (rand() < 0.35) roundTable(B, x, y0, z, 4, { chair: c, top: '#f4efe6' });
           else tableSet(B, x, y0, z, rand() < 0.5 ? 0 : Math.PI / 2, { chair: c, top: '#e8dcc8' });
+          // 小品只放既有桌面，主十字动线与扶梯缓冲带保持净空。
+          detail.cup(x - .18, z, .77, '#e9dfce', false);
+          detail.menu(x + .16, z + .10, .77, '#657562');
         }
       }
       // 吊灯与十字引导色带
@@ -85,7 +95,9 @@ function foodCourt(ctx, b, lv) {
         }
       }
       B.get('satin').box(0, y0 + 0.012, 0, 3.2, 0.01, (r.R - 1) * 2, '#c9a77a');
-      B.get('satin').box(0, y0 + 0.012, 0, (r.R - 1) * 2, 0.01, 3.2, '#c9a77a');
+      // 横带拆成两半，避免十字中心两张共面顶面闪烁。
+      const half = r.R - 2.6;
+      for (const s of [-1, 1]) B.get('satin').box(s * (1.6 + half / 2), y0 + .012, 0, half, .01, 3.2, '#c9a77a');
     });
   }
 }
@@ -168,10 +180,19 @@ function atrium1F(ctx, b, lv) {
     if (!lv.walk.some((w) => w.rot === r.id)) continue;
     const F = r.kitF;
     B.frame(F, () => L.signs.frame(F, () => {
+      const detail = flatDetail(B, y0);
       const x = r.R - 12, z = -9.5;
       B.get('satin').box(x, y0 + 0.55, z, 1.1, 1.1, 5.2, '#f4f1ea');
       B.get('metal').box(x, y0 + 1.13, z, 1.3, 0.06, 5.4, '#b08d4f');
       B.get('glow').box(x + 0.57, y0 + 0.2, z, 0.02, 0.06, 5.0, '#ffe6b0');
+      for (const dz of [-1.55, .75]) {
+        B.get('metal').box(x, y0 + 1.20, z + dz, .3, .07, .46, '#696b60');
+        B.get('matte').box(x - .06, y0 + 1.43, z + dz, .055, .40, .53, '#313e37');
+        B.get('glowSoft').box(x - .095, y0 + 1.44, z + dz, .012, .32, .44, '#accabd');
+        detail.card(x + .22, z + dz + .45, 1.16, '#e9e1cf');
+      }
+      for (let k = 0; k < 18; k++) B.get('wood').box(x + .555, y0 + .63, z - 2.40 + k * .28, .035, .75, .052, '#c4b08b');
+      detail.bouquet(x, z + 2.17, 1.16, '#b59f79', .75);
       L.signs.place(x - 0.2, y0 + 3.3, z, 3.2, 0.8, 'E', atlas.cell('wf-info'));
       B.get('satin').box(x - 0.23, y0 + 3.3, z, 0.05, 0.9, 3.3, '#0f6f86');
       B.get('metal').box(x - 0.23, y0 + 4.05, z, 0.06, 0.7, 0.06, '#4a5056');
@@ -188,10 +209,16 @@ function popups(ctx, b, lv) {
   for (const r of b.rotundas) {
     if (!lv.voids.some((v) => v.kind === 'atrium' && v.frame === r.kitF)) continue;
     B.frame(r.kitF, () => {
+      const detail = flatDetail(B, y0);
       for (const k of [{ x: 15, z: -14.2, color: '#2f86b0' }, { x: -15, z: 14.2, color: '#e0567a' }]) {
         B.get('satin').box(k.x, y0 + 0.5, k.z, 3.2, 1.0, 1.6, '#f7f7f5');
         B.get('satin').box(k.x, y0 + 1.03, k.z, 3.3, 0.06, 1.7, k.color);
-        for (let i = 0; i < 5; i++) B.get('matte').box(k.x - 1.2 + i * 0.6, y0 + 1.2, k.z, 0.4, 0.3, 0.4, ['#f2c230', '#1f2937', '#e65f5c', '#19a39a', '#ffffff'][i]);
+        for (let i = 0; i < 5; i++) {
+          if (k.x > 0) detail.toy(k.x - 1.2 + i * .6, k.z, 1.06, ['#d4b280', '#92a99b', '#d7a99c', '#8ca5b1', '#e5dcc7'][i]);
+          else detail.bottle(k.x - 1.2 + i * .6, k.z, 1.06, ['#ae8e6e', '#b8a688', '#a4b2a0', '#b68989', '#e0ceaf'][i], .32, i % 2 === 0);
+        }
+        detail.card(k.x, k.z - .51, 1.06, '#eee7d6', .3);
+        for (let i = 0; i < 10; i++) B.get('wood').box(k.x - 1.4 + i * .31, y0 + .54, k.z - .81, .042, .86, .032, '#d7c39c');
         for (const dx of [-1.55, 1.55]) B.get('metal').box(k.x + dx, y0 + 1.6, k.z, 0.06, 3.2, 0.06, '#4a5056');
         B.get('glow').box(k.x, y0 + 3.1, k.z, 3.2, 0.5, 0.08, k.color);
       }
@@ -210,24 +237,96 @@ function lounges(ctx, b, lv) {
     const du = r.x1 - r.x0, dv = r.z1 - r.z0;
     if (du < 4 || dv < 4) continue;
     B.frame(w.frame, () => {
+      const detail = flatDetail(B, y0);
       if (w.kind === 'lounge') {
         B.get('satin').box(cu, y0 + 0.008, cv, du - 1.5, 0.016, Math.min(dv - 2, 8), '#d9cbb5');
         for (const dz of [-2.4, 2.4]) {
           B.get('matte').box(cu - 0.6, y0 + 0.25, cv + dz, 0.9, 0.5, 3.2, '#55707f');
           B.get('matte').box(cu - 0.98, y0 + 0.62, cv + dz, 0.18, 0.5, 3.2, '#55707f');
+          for (const sz of [-1, 0, 1]) {
+            B.get('matte').box(cu - .50, y0 + .52, cv + dz + sz, .66, .075, .92, lv.short === '3F' ? '#b1b89b' : '#859c9c');
+            B.get('matte').box(cu - .83, y0 + .70, cv + dz + sz, .10, .27, .55, sz ? '#d6c5a7' : '#b98876');
+          }
         }
         B.get('satin').cyl(cu + 0.8, y0, cv, 0.5, 0.45, '#e9e2d6', 16);
+        B.get('matte').box(cu + .73, y0 + .477, cv - .08, .30, .052, .37, '#8b9b8d');
+        B.get('satin').box(cu + .73, y0 + .506, cv - .08, .27, .006, .34, '#eee6d3');
+        detail.bouquet(cu + 1.03, cv + .19, .45, '#b49570', .58);
         for (const dz of [-dv / 2 + 1.2, dv / 2 - 1.2]) {
           B.get('matte').cyl(cu, y0, cv + dz, 0.45, 0.7, '#6b4426', 12);
           B.get('foliage').sphere(cu, y0 + 1.4, cv + dz, 0.7, '#4f8a3a');
         }
       } else {
         B.get('matte').box(cu, y0 + 0.25, cv, Math.min(du - 2, 3.2), 0.5, 0.9, '#7a6a5a');
+        for (const s of [-1, 1]) B.get('matte').box(cu + s * Math.min(.65, (du - 2) * .2), y0 + .53, cv, Math.min(1.15, (du - 2) * .35), .06, .78, lv.short === '2F' ? '#9bada7' : '#c6b697');
         B.get('matte').cyl(cu + du / 2 - 1.2, y0, cv, 0.45, 0.7, '#6b4426', 12);
         B.get('foliage').sphere(cu + du / 2 - 1.2, y0 + 1.4, cv, 0.75, '#4f8a3a');
       }
     });
   }
+}
+
+/** 一二期的楼层识别与装修层次：吊挂导视、连续灯槽、候梯无障碍提示。
+ * 仅增加天花悬挂物 / 贴地标记，不新增落地障碍，也不改变既有门洞。
+ */
+function mallFinish(ctx, b, lv) {
+  const L = ctx.levels[lv.id], B = L.batch, atlas = ctx.atlas[lv.id];
+  const y = lv.elev, H = clearHeight(lv), accent = lv.theme.accent || '#748b77';
+  if (lv.kind === 'parking') {
+    for (const e of ctx.layout.elevators.filter((e) => e.type === 'passenger' && e.serves.includes(lv.id))) {
+      const [nx, nz] = NORMAL[e.door], tx = -nz, tz = nx;
+      const extent = nx ? e.w / 2 : e.d / 2;
+      const x = e.lu + nx * (extent + .16), z = e.lv + nz * (extent + .16);
+      B.frame(e.frame, () => {
+        // 门的左右收口；不画封闭的整块门槛或在门前放立牌。
+        for (const s of [-1, 1]) {
+          B.get('metal').box(x + tx * s * .86, y + 1.23, z + tz * s * .86,
+            nx ? .028 : .06, 2.46, nx ? .06 : .028, '#bfc7bf');
+        }
+        B.get('glow').box(x, y + 2.51, z, nx ? .035 : 1.78, .045, nx ? 1.78 : .035, '#e4eed3');
+        // 0.009m 低凸点，位于电梯门外 .7m 的短提示带上。
+        for (let i = -3; i <= 3; i++) for (let j = 0; j < 2; j++) {
+          B.get('satin').cyl(x + nx * (.64 + j * .12) + tx * i * .15, y + .027,
+            z + nz * (.64 + j * .12) + tz * i * .15, .022, .009, '#cab76b', 6);
+        }
+      });
+    }
+    return;
+  }
+  if (!['retail', 'food'].includes(lv.kind)) return;
+  const avoid = keepOut(ctx, lv);
+  const seen = new Set();
+  for (const w of lv.walk) {
+    if (!w.rect || w.kind !== 'street' || seen.has(w.frame.id)) continue;
+    const r = w.rect, len = r.x1 - r.x0, width = r.z1 - r.z0;
+    if (len < 8 || width < 3) continue;
+    seen.add(w.frame.id);
+    const cv = (r.z0 + r.z1) / 2;
+    const candidates = [.25, .55, .78].map((t) => r.x0 + t * len);
+    const signU = candidates.find((u) => {
+      const p = toW(w.frame, u, cv);
+      return !avoid.some((a) => pointInPoly(p, a));
+    });
+    B.frame(w.frame, () => L.signs.frame(w.frame, () => {
+      // 双灯槽贴近天花边缘，用整段合批几何，主通道保持清楚。
+      for (const v of [r.z0 + .42, r.z1 - .42]) {
+        B.get('wood').box((r.x0 + r.x1) / 2, y + H - .17, v, len - .5, .12, .17, '#c4b28e');
+        B.get('glow').box((r.x0 + r.x1) / 2, y + H - .239, v, len - .6, .015, .085, '#f4d9aa');
+      }
+      if (signU !== undefined) {
+        const h = Math.min(H - .64, 3.7), span = Math.min(width - .5, 5.3);
+        B.get('metal').box(signU, y + h, cv, .12, .64, span, '#394b43');
+        B.get('satin').box(signU - .065, y + h + .25, cv, .016, .065, span - .12, accent);
+        for (const dv of [-span * .4, span * .4]) B.get('metal').box(signU, y + (h + .32 + H) / 2, cv + dv, .025, Math.max(.05, H - h - .32), .025, '#636c5d');
+        const c = lv.kind === 'food' ? 'wf-food' : 'wf-esc';
+        L.signs.place(signU - .074, y + h - .025, cv - span * .24, span * .43, .47, 'W', atlas.cell(c));
+        L.signs.place(signU - .074, y + h - .025, cv + span * .24, span * .43, .47, 'W', atlas.cell('wf-lift'));
+        L.signs.place(signU + .074, y + h - .025, cv - span * .24, span * .43, .47, 'E', atlas.cell(c));
+        L.signs.place(signU + .074, y + h - .025, cv + span * .24, span * .43, .47, 'E', atlas.cell('wf-lift'));
+      }
+    }));
+  }
+  void b;
 }
 
 /** 圆厅"云朵"悬挂艺术装置：挂在最高商业层，悬在中庭洞口上空 */

@@ -9,6 +9,10 @@ const B = { id: 'B', x: 150 / Math.SQRT2 + 104, z: -150 / Math.SQRT2, R: 30, kit
 const RINK = rect(-15, -9, 15, 9);
 const RINK_VOID = { rect: rect(-17, -11, 17, 11), r: 4 };
 const SLOTS = { W: [[34, 46], [52, 66]], M: [[34, 45], [62, 70]], E: [[34, 42]] };
+// A 圆厅的独立双车道：28m 斜坡消化 4.2m 层差，两道各净宽 6m。
+// 周边环道避开坡体；只有上层开结构洞，下层保留承接楼板。
+const PARK_RAMP_CLEAR = rect(-13.4, -6.8, 13.4, 6.8);
+const PARK_RAMP_VOID = rect(-14, -6.25, 14, 6.25);
 
 export const P2 = {
   id: 'P2', code: 'B', name: '二期 · 星湾', short: '二期', en: 'XINGWAN', plot: rect(16, -164, 286, -20),
@@ -21,8 +25,15 @@ export const P2 = {
   pocketStairs: [{ wing: 'W', band: 1 }, { wing: 'M', band: 1 }, { wing: 'M', band: -1, far: true }, { wing: 'E', band: 1 }],
   levels: [
     {
+      short: 'B2', name: 'B2 停车场', kind: 'parking', elev: -8.4, height: 4.2,
+      theme: { key: 'park-jade', floor: 'concrete-green', accent: '#3a8c75', label: '停车场 · 翡翠区 · 接 B1 双车道坡道' },
+      rot: { A: { hole: PARK_RAMP_CLEAR } },
+      parkWc: { wing: 'W', u: 48 }, evRow: 'W-r1',
+    },
+    {
       short: 'B1', name: 'B1 停车场', kind: 'parking', elev: -4.2, height: 4.2,
       theme: { key: 'park-amber', floor: 'concrete-blue', accent: '#d9a21b', label: '停车场 · 琥珀区 · 车库出入口' },
+      rot: { A: { hole: PARK_RAMP_CLEAR, rampVoid: PARK_RAMP_VOID } },
       wings: { M: { throat: rect(48, -23, 60, -12) } },
       parkWc: { wing: 'W', u: 48 }, evRow: 'W-r1',
     },
@@ -107,6 +118,8 @@ export const P2 = {
   ramps: [
     { id: 'IN', type: 'street-in', name: '车库入口', wing: 'M', lane: rect(48.5, -50, 53.5, -22), from: [51, -50, 'street'], to: [51, -22, 'B1'] },
     { id: 'OUT', type: 'street-out', name: '车库出口', wing: 'M', lane: rect(54.5, -50, 59.5, -22), from: [57, -22, 'B1'], to: [57, -50, 'street'] },
+    { id: 'DN', type: 'down', name: 'B1→B2 下行坡道', rot: 'A', lane: rect(-14, -6.15, 14, -.15), from: [14, -3.15, 'B1'], to: [-14, -3.15, 'B2'] },
+    { id: 'UP', type: 'up', name: 'B2→B1 上行坡道', rot: 'A', lane: rect(-14, .15, 14, 6.15), from: [-14, 3.15, 'B2'], to: [14, 3.15, 'B1'] },
   ],
   driveways: [{ wing: 'M', rect: rect(46, -62, 62, -48) }],
   trenches: [{ wing: 'M', rect: rect(48, -50, 60, -41.5) }],

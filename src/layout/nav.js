@@ -46,6 +46,15 @@ export function buildNav(layout) {
       M.pieces.push(piece(lrectPoly(u.frame, d.surface.rect), (d.surface.holes || []).map(r => lrectPoly(u.frame, r))));
     }
   }
+  // 街区外挂楼梯的半层平台是独立支撑面。它们复用下层显示组，
+  // 不新增目录楼层；两个梯段必须经过实体平台，不能传送跳层。
+  for (const b of layout.buildings) for (const surface of b.access?.surfaces || []) {
+    const level = layout.levels.find(l => l.id === surface.parentFloor);
+    const F = mk(surface.id, surface.elev, 'mezzanine', {
+      building: b.id, level, parentFloor: surface.parentFloor, stairLanding: true,
+    });
+    F.pieces.push(piece(surface.poly));
+  }
   // 新区地下联廊与空桥由独立结构板支撑，仍属于其起点楼面；
   // 到终点的门线后再切换到商场/另一栋楼，整条通道可实际步行。
   for (const path of layout.extensions?.paths || []) {
@@ -59,6 +68,7 @@ export function buildNav(layout) {
   const ground = mk('ground', 0, 'ground');
   const groundHoles = [
     ...layout.buildings.filter((b) => b.kind === 'mall' || b.kind === 'tower').map((b) => b.outline),
+    ...(layout.extensions?.gateways || []).filter(g => Math.abs(g.elev) < .01).map(g => g.poly),
     ...(district ? [district] : []),
     ...(S.park ? [S.park.lake] : []),
     ...S.trenches,
@@ -92,6 +102,15 @@ export function buildNav(layout) {
     for (const P of [outer, ...holes]) for (let i = 0; i < P.length; i++) wall(F, ...P[i], ...P[(i + 1) % P.length]);
     F.obstacles.push(piece(outer, holes));
   };
+  for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  for (const lot of layout.extensions?.surfaceParking || []) {
+    for (const [i, s] of lot.stalls.entries()) {
+      if (i % 4 === 0) continue;
+      const sideways = s.face === 'E' || s.face === 'W';
+      const hx = sideways ? 2.2 : .9, hz = sideways ? .9 : 2.2;
+      obstacle(ground, frame(0, 0, 0), rect(s.x-hx,s.z-hz,s.x+hx,s.z+hz));
+    }
+  }
   // All 29 residential floors reuse the same three plans at identical world
   // X/Z frames. Collision vertices and wall records are immutable; share them
   // instead of allocating another complete model projection on every storey.
@@ -157,6 +176,11 @@ export function buildNav(layout) {
       }
     }
     for (const m of lv.rooms) {
+      // 开放式钢梯的实体侧护栏由布局登记，入口和两跑之间不封墙。
+      if (m.openStair) {
+        for (const s of m.navigationWalls || []) wallL(F, m.frame, s);
+        continue;
+      }
       const outline = mergeSegments(unionOutline(m.rects));
       // Protected residential stair rooms have a real doorway and a solid
       // landing before the shaft. Their floor-change interaction is retained.
@@ -171,6 +195,8 @@ export function buildNav(layout) {
       if (f.type === 'gates') {
         const n = Math.max(2, Math.round((f.z1 - f.z0) / 0.95));
         for (let i = 0; i <= n; i++) { const z = f.z0 + ((f.z1 - f.z0) * i) / n; wall(F, f.x - 0.85, z, f.x + 0.85, z); }
+      } else if (f.type === 'market-stall') {
+        obstacle(F, frame(0, 0, 0), rect(f.x - f.w / 2, f.z - f.d / 2, f.x + f.w / 2, f.z + f.d / 2));
       } else if (f.type === 'fence') wall(F, f.x0, f.z, f.x1, f.z);
       else if (f.type === 'psd') wall(F, f.x0, f.z, f.x1, f.z);
       else if (f.type === 'tvm') {
@@ -256,6 +282,11 @@ export function buildNav(layout) {
     lane(s.id, 'interior-stair', bx, bz, lv.elev, tx, tz, lv.elev + d.height, s.width / 2, lv.id, d.surface.id, 0);
   }
 
+  for (const b of layout.buildings) for (const f of b.access?.flights || []) {
+    lane(f.id, 'exterior-stair', f.bottom.x, f.bottom.z, f.bottom.y,
+      f.top.x, f.top.z, f.top.y, f.width / 2, f.from, f.to, 0);
+  }
+
   // ---------- 传送边与门口区 ----------
   const portals = [];
   const portal = (a, b, seg, kind) => {
@@ -268,7 +299,7 @@ export function buildNav(layout) {
     for (const id of [a, b]) { const F = floors.get(id); if (F) { F.portals.push(p); F.zones.push(zone); } }
   };
   for (const e of layout.entrances) {
-    if (e.kiosk) continue;
+    if (e.kiosk || e.architecturalOpening) continue;
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     const to = e.to === 'bridge' ? 'bridge' : e.to === 'site' ? groundAt(mx + e.nx, mz + e.nz) : e.to;
     if (floors.has(e.level) && floors.has(to)) portal(e.level, to, e.seg, 'entrance');
@@ -518,7 +549,7 @@ export function landAt(nav, x, z, yMax) {
   }
   let result = best ? { floor: best.id, x, z, y: best.y, slope: null } : null;
   for (const sl of nav.slopes) {
-    if (sl.kind !== 'interior-stair') continue;
+    if (sl.kind !== 'interior-stair' && sl.kind !== 'exterior-stair') continue;
     const [u, v] = toL(sl.F, x, z);
     if (u < 0 || u > sl.len || Math.abs(v) > sl.hw - NAV.r) continue;
     const y = sl.y0 + (sl.y1 - sl.y0) * u / sl.len;
@@ -605,13 +636,14 @@ function levelSpawn(nav, layout, levelId, prefer = null) {
 export function floorLabel(nav, layout, s) {
   if (s.slope) {
     const sl = nav.slopeById.get(s.slope.id);
-    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道', 'interior-stair': '套内复式楼梯' }[sl && sl.kind] || '';
+    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道', 'interior-stair': '套内复式楼梯', 'exterior-stair': '街区楼梯' }[sl && sl.kind] || '';
   }
   const F = nav.floors.get(s.floor);
   if (!F) return '';
   if (F.kind === 'level' || F.kind === 'mezzanine') {
     const b = layout.buildings.find((x) => x.id === F.building);
-    return `${b.short} · ${F.level.name}${F.kind === 'mezzanine' ? ` · ${F.unit.code} 夹层` : ''}`;
+    const suffix = F.kind === 'mezzanine' ? (F.unit ? ` · ${F.unit.code} 夹层` : ' · 楼梯中间平台') : '';
+    return `${b.short} · ${F.level.name}${suffix}`;
   }
   if (F.kind === 'bridge') return '云环天桥';
   const plot = layout.site.plots.find((p) => pointInPoly([s.x, s.z], p.poly));

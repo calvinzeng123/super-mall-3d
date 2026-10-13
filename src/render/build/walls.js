@@ -25,6 +25,7 @@ export function buildWalls(ctx) {
       g.openings.push(...u.fronts);
     }
     for (const r of lv.rooms) {
+      if (r.openStair) continue; // 连续外挂梯由street.js绘制，避免重复封墙。
       if (SKIP_ROOMS.has(r.type) || (street && r.type === 'stair')) continue;
       const g = group(r.frame);
       g.segs.push(...unionOutline(r.rects));

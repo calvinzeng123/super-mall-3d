@@ -31,7 +31,8 @@ test('模型套房覆盖酒店公寓400户和10套夹层，住宅大堂改造后
   assert.equal(L.levels.filter(l => l.building === 'H' && l.levelNumber).length, 20);
   assert.equal(L.levels.filter(l => l.building === 'A' && l.levelNumber).length, 20);
   assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 748);
-  assert.equal(nav.floors.size, L.levels.length + 2 + 10);
+  const streetLandings = L.buildings.reduce((n, b) => n + (b.access?.surfaces.length || 0), 0);
+  assert.equal(nav.floors.size, L.levels.length + 2 + 10 + streetLandings);
 });
 
 test('10套复式从入户经新侧门逐步上下楼，可达夹层床侧和书桌，再回到原层', () => {

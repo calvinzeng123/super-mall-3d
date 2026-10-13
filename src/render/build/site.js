@@ -7,6 +7,7 @@ import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
 import { COLORS } from '../theme.js';
 import { windowTextures, rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+import { buildForecourt } from './forecourt.js';
 
 const DEG = 180 / Math.PI;
 /** 各期围合的铺装广场（椭圆）：渲染铺装与水景，并让草坪树阵避开 */
@@ -54,6 +55,7 @@ export function buildSite(ctx) {
   hoardings(ctx, S, B, G);
   context(ctx, G);
   greenery(ctx, S, B, G);
+  buildForecourt(ctx);
 }
 
 /** 商场地块景观：与建筑同形的外扩铺装带（裁到地块内）、入口步道（直通人行道或地块边）、草坪上的树阵与路灯 */
@@ -103,13 +105,15 @@ function landscape(ctx, b, holes, G, B) {
   const kiosks = ctx.layout.entrances.filter((e) => e.kiosk).map((e) => e.kiosk.poly);
   const rand = rng(b.id.length * 97 + 5);
   const trees = [];
+  const otherBuildings = ctx.layout.buildings.filter((other) => other.id !== b.id && other.kind !== 'metro').map((other) => other.outline);
   const r = inset(b.plot, 6);
   const near = (p, poly) => pointInPoly(p, poly);
   for (let x = r.x0; x < r.x1; x += 10) {
     for (let z = r.z0; z < r.z1; z += 10) {
       if (rand() < 0.35) continue;
       const p = [x + (rand() - 0.5) * 6, z + (rand() - 0.5) * 6];
-      if (near(p, band) || near(p, b.outline) || distToPolyEdge(p, b.outline) < 4 || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d)) || kiosks.some((k) => near(p, k) || distToPolyEdge(p, k) < 3)) continue;
+      const activities = [...(S.activityExclusions || []), ...(ctx.layout.extensions?.surfaceParking || []).map(p => p.poly)];
+      if (near(p, band) || near(p, b.outline) || distToPolyEdge(p, b.outline) < 4 || otherBuildings.some((q) => near(p, q) || distToPolyEdge(p, q) < 3) || inCourtyard(b.id, p) || paths.some((q) => near(p, q)) || S.trenches.some((t) => near(p, t)) || S.driveways.some((d) => near(p, d)) || activities.some(q => near(p,q) || distToPolyEdge(p,q)<2) || kiosks.some((k) => near(p, k) || distToPolyEdge(p, k) < 3)) continue;
       const k = 3;
       if ([[k, 0], [-k, 0], [0, k], [0, -k]].some(([dx, dz]) => near([p[0] + dx, p[1] + dz], band) || paths.some((q) => near([p[0] + dx, p[1] + dz], q)))) continue;
       trees.push({ x: p[0], y: -0.3, z: p[1], s: 0.85 + rand() * 0.5, kind: rand() < 0.3 ? 'cone' : 'round' });

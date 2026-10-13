@@ -27,7 +27,7 @@ test('酒店公寓各20层10套，四栋30层住宅首层独立大堂、2至30�
       }
     }
     const bounds = polyBounds(b.outline);
-    assert.ok(within(b.usage === 'residential' ? HOSPITALITY.residential : HOSPITALITY.west, bounds));
+    assert.ok(within(b.usage === 'residential' ? HOSPITALITY.residential : b.id === 'A' ? HOSPITALITY.east : HOSPITALITY.west, bounds));
     for (const old of L.buildings.filter(q => q.kind === 'mall' || q.kind === 'street')) assert.ok(!convexOverlap(b.outline, old.outline), `${b.id} 不应改占原商场`);
   }
   assert.equal(towers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 748);
@@ -110,7 +110,7 @@ test('住宅独立双坡道连接住客停车层，酒店公寓地库通过既�
     assert.ok(park && park.parking.stalls.length >= 6, `${b.id} 缺真实停车位`);
   }
   assert.ok(L.entrances.some(e => e.level === 'H-B2' && e.to === 'P1-B1'));
-  assert.ok(L.entrances.some(e => e.level === 'A-B2' && e.to === 'H-B2'));
+  assert.ok(L.entrances.some(e => e.level === 'A-B2' && e.to === 'P1-B1'));
 });
 
 test('地下车行连廊和空桥整条中心线可实际步行，转角平台没有掉落缺口', async () => {
@@ -169,12 +169,13 @@ test('住宅两条独立坡道均可从地面步行下库及反向上行，标�
   }
 });
 
-test('住宅→二期→地铁→一期→酒店→公寓完整地下链路可连续双向步行', async () => {
+test('住宅→二期→地铁→一期→西侧酒店完整地下链路可连续双向步行', async () => {
   const { buildNav, clear, step } = await import('../src/layout/nav.js');
   const nav = buildNav(L);
-  // 实际走道内的转点：避开原商场核心筒和站厅设施，不穿墙或借助传送/飞行。
-  const route = [[49, -218], [57.5, -218], [57.5, -190], [106.066, -190], [106.066, -134.402], [106.066, -106.066], [69.266, -74.066], [50.066, -54.866], [46.668, -46.668], [43.84, -43.84], [5.44, -10.24], [-5.76, -10.24], [-45.19, -45.19], [-48.02, -48.02], [-109.62, -97.62], [-152.82, -144.02], [-180.82, -172.02], [-250.42, -194.42], [-278.5, -200], [-281.5, -200], [-370, -200], [-370, -196], [-370, -82], [-395, -82], [-432, -82]];
-  const order = ['R1-B1', 'P2-B1', 'M-B1', 'P1-B1M', 'H-B1', 'A-B1'];
+  // 实际走道内的转点：绕 A 圆厅西侧环道避开新 B1/B2 双车坡，
+  // 再避开原商场核心筒和站厅设施，不穿墙或借助传送/飞行。
+  const route = [[49, -218], [57.5, -218], [57.5, -190], [106.066, -190], [106.066, -134.402], [90.066, -124.066], [90.066, -106.066], [69.266, -74.066], [50.066, -54.866], [46.668, -46.668], [43.84, -43.84], [5.44, -10.24], [-5.76, -10.24], [-45.19, -45.19], [-48.02, -48.02], [-109.62, -97.62], [-149.62, -141.62], [-152.82, -144.02], [-180.82, -172.02], [-250.42, -194.42], [-278.5, -200], [-281.5, -200], [-304, -200], [-342, -200]];
+  const order = ['R1-B1', 'P2-B1', 'M-B1', 'P1-B1M', 'H-B1'];
   for (const reverse of [false, true]) {
     const points = reverse ? [...route].reverse() : route, expected = reverse ? [...order].reverse() : order;
     let s = { floor: expected[0], x: points[0][0], z: points[0][1], y: nav.floors.get(expected[0]).y, slope: null };

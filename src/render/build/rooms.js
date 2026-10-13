@@ -35,6 +35,7 @@ export function buildRooms(ctx) {
     // 三期地上层：楼梯为外挂钢梯、客梯为室外玻璃梯，由 street.js / elevators.js 绘制
     const street = ctx.bById[lv.building].kind === 'street' && lv.kind !== 'parking';
     for (const r of lv.rooms) {
+      if (r.openStair) continue; // 连续开放双跑钢梯由 street.js 按导航同源坐标绘制。
       if (street && (r.type === 'core' || r.type === 'stair')) continue;
       B.frame(r.frame, () => L.signs.frame(r.frame, () => {
         if (r.type === 'core') coreShafts(B, lv, r, y0, hh, lifts.filter((e) => e.frame.id === r.frame.id));

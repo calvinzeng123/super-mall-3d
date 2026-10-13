@@ -6,11 +6,11 @@ import { convexOverlap, pointInPoly } from '../src/layout/geom.js';
 
 const P = (s) => lvl(`P2-${s}`);
 
-test('二期：六个楼层，标高与规格一致，各层主题不同', () => {
+test('二期：七个楼层，标高与规格一致，各层主题不同', () => {
   const ls = levelsOf('P2');
-  assert.deepEqual(ls.map((l) => l.short), ['B1', '1F', '2F', '3F', '4F', 'RF']);
-  assert.deepEqual(Object.fromEntries(ls.map((l) => [l.short, l.elev])), { B1: -4.2, '1F': 0, '2F': 6.5, '3F': 12, '4F': 17.5, RF: 23 });
-  assert.equal(new Set(ls.map((l) => l.theme.key)).size, 6, '每层场景主题应不同');
+  assert.deepEqual(ls.map((l) => l.short), ['B2', 'B1', '1F', '2F', '3F', '4F', 'RF']);
+  assert.deepEqual(Object.fromEntries(ls.map((l) => [l.short, l.elev])), { B2: -8.4, B1: -4.2, '1F': 0, '2F': 6.5, '3F': 12, '4F': 17.5, RF: 23 });
+  assert.equal(new Set(ls.map((l) => l.theme.key)).size, 7, '每层场景主题应不同');
 });
 
 test('二期铺位：1F–4F 每层 ≥20；1F 有汽车展厅与真冰场，4F 有影城', () => {
@@ -20,10 +20,10 @@ test('二期铺位：1F–4F 每层 ≥20；1F 有汽车展厅与真冰场，4F 
   assert.ok(P('4F').units.some((u) => u.brand.cat === 'cinema'), '4F 缺少影城');
 });
 
-test('二期卫生间：1F–4F 每层 ≥2 组，B1/RF ≥1 组，门口通走道', () => {
+test('二期卫生间：1F–4F 每层 ≥2 组，B2/B1/RF ≥1 组，门口通走道', () => {
   const wc = (s) => P(s).rooms.filter((m) => m.type === 'wc');
   for (const s of ['1F', '2F', '3F', '4F']) assert.ok(wc(s).length >= 2, `${s} 卫生间不足 2 组`);
-  for (const s of ['B1', 'RF']) assert.ok(wc(s).length >= 1, `${s} 没有卫生间`);
+  for (const s of ['B2', 'B1', 'RF']) assert.ok(wc(s).length >= 1, `${s} 没有卫生间`);
   for (const lv of levelsOf('P2')) {
     for (const m of lv.rooms.filter((r) => r.type === 'wc')) {
       assert.ok(m.wdoors.some((d) => segProbes(d, 0.5).some((p) => inWalk(lv, p))), `${lv.id} ${m.id} 的门不通走道`);

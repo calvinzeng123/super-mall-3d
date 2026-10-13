@@ -3,12 +3,13 @@
 // 1F 街巷小品（中心广场旱喷与舞台、梧桐小广场、行道树、庭院灯、长椅、外摆、跨巷串灯）与街区外围绿化。
 // 楼栋内容按楼层放进各层的 base（街区在园区视角也显示 base），三层楼栋的屋面放进 3F 的 facade（聚焦 3F 时隐藏）。
 import * as THREE from 'three';
-import { toW, frame, pointInPoly, distToPolyEdge, toL, subtractInterval } from '../../layout/geom.js';
+import { toW, frame, pointInPoly, distToPolyEdge, toL, subtractInterval, rect, rectPoly, convexOverlap } from '../../layout/geom.js';
 import { COLORS } from '../theme.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bench, planter, umbrella, tableSet } from './props.js';
 import { shade } from './storefronts.js';
 import { streetDoor } from '../../layout/frontage.js';
+import { buildHeritageDetail, heritageRoof, buildStreetMarket } from './street-heritage.js';
 
 const GAL = 2.5;
 const BAY = 4;
@@ -59,7 +60,10 @@ export function buildStreet(ctx) {
     kiosks(ctx, b, lvs['1F']);
     streetscape(ctx, b, lvs['1F']);
     surroundings(ctx, b);
-    basement(ctx, b, lvs.B1);
+    for (const lv of [lvs.B2, lvs.B1]) basement(ctx, b, lv);
+    buildStreetMarket(ctx, b, lvs);
+    for (const k of b.blocks.filter(k => k.lift)) for (const lv of [lvs.B2, lvs.B1])
+      ctx.levels[lv.id].batch.frame(k.F, () => stairFlight(ctx.levels[lv.id].batch, lv, k, false));
   }
 }
 
@@ -76,6 +80,7 @@ function block(ctx, b, k, lvs) {
     const top = lv.elev + lv.height - 0.4;
     L.batch.frame(k.F, () => L.signs.frame(k.F, () => {
       storey(L.batch, L.signs, atlas, lv, k, skin, sides, i, top);
+      if (k.heritage) buildHeritageDetail(L.batch, L.signs, atlas, lv, k);
       columns(L.batch, lv, k, lv.elev, top);
       if (i < 2) stairFlight(L.batch, lv, k, i === 0);
     }));
@@ -85,7 +90,7 @@ function block(ctx, b, k, lvs) {
   const L3 = ctx.levels[lvs['3F'].id];
   if (k.floors === 2) L3.batch.frame(k.F, () => L3.signs.frame(k.F, () => terrace(ctx, L3, lvs['3F'], k, skin)));
   else {
-    L3.facadeBatch.frame(k.F, () => roof(L3.facadeBatch, k, skin));
+    L3.facadeBatch.frame(k.F, () => k.heritage ? heritageRoof(L3.facadeBatch, k) : roof(L3.facadeBatch, k, skin));
     L3.batch.frame(k.F, () => L3.batch.get('extMetal').box(k.h + GAL + BAY / 2, k.top - 0.12, k.w - 2.25, BAY + 0.4, 0.16, 9.9, STEEL));
   }
   // 顶层楼梯口护栏（楼梯通到 3F 为止）
@@ -287,7 +292,7 @@ function gallery(B, lv, k, skin) {
     [[h, -w], [h + GAL, -w]],
   ];
   for (const [p, q] of edges) {
-    rail(B, p, q, y0);
+    if (!(k.heritage && p[1] === w + GAL && q[1] === w + GAL)) rail(B, p, q, y0);
     band(B, p, q, y0 - 0.4, y0, skin.trim);
   }
   // 服务区外缘封边
@@ -358,7 +363,8 @@ function wellGuard(B, y0, k) {
   const { h, w } = k;
   const u0 = h + GAL, u1 = u0 + BAY;
   rail(B, [u0, w - 4.8], [u0, w + GAL], y0);
-  rail(B, [u0 + 2, w - 4.8], [u1, w - 4.8], y0);
+  // 两跑在北端出入，上层落脚平台净开口不能再用横栏杆封死。
+  rail(B, [u1, w - 4.8], [u1, w + GAL], y0);
 }
 
 /** 三层楼栋屋面：屋面板、檐口、女儿墙、设备与太阳能板；连廊雨棚 */
@@ -407,7 +413,7 @@ function terrace(ctx, L, lv, k, skin) {
   for (const z of [-w + 0.12, w - 0.12]) B.get('extMetal').box(0, y0 + 0.055, z, k.L - 0.24, 0.03, 0.045, '#655b4b');
   for (let i = 0; i < D.length; i++) {
     const p = D[i], q = D[(i + 1) % D.length];
-    rail(B, p, q, y0);
+    if (!(k.heritage && p[1] === w + GAL && q[1] === w + GAL)) rail(B, p, q, y0);
     band(B, p, q, y0 - 0.4, y0, skin.trim);
   }
   const bar = lv.units.find((u) => u.block === k.n && u.style === 'pavilion');
@@ -675,7 +681,8 @@ function surroundings(ctx, b) {
   const B = ctx.site.batch;
   const bb = { x0: Math.min(...district.map((p) => p[0])), x1: Math.max(...district.map((p) => p[0])), z0: Math.min(...district.map((p) => p[1])), z1: Math.max(...district.map((p) => p[1])) };
   for (let z = bb.z0 + 2; z < bb.z1 - 1; z += 4) {
-    if (z > 92 && z < 118) continue;
+    const hedge=rect(bb.x0-1.8,z-.3,bb.x0-.6,z+3.3);
+    if(S.trenches.some(t=>convexOverlap(rectPoly(hedge),t))||S.driveways.some(t=>convexOverlap(rectPoly(hedge),t)))continue;
     B.get('foliage').box(bb.x0 - 1.2, 0.2, z + 1.5, 1.2, 0.9, 3.6, '#4f7f3a');
   }
   for (let x = bb.x0; x < bb.x1 - 4; x += 4) B.get('foliage').box(x + 2, 0.2, bb.z1 + 1.2, 3.6, 0.9, 1.2, '#4f7f3a');
@@ -696,6 +703,11 @@ function basement(ctx, b, lv) {
     for (const e of ents) {
       const [u0, v0] = toL(F, e.seg.x0, e.seg.z0), [u1, v1] = toL(F, e.seg.x1, e.seg.z1);
       if (Math.abs(v0) < 0.15 && Math.abs(v1) < 0.15) ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]);
+    }
+    for (const r of ctx.layout.ramps.filter(r => r.building === b.id && [r.from.level, r.to.level].includes(lv.id))) {
+      const points = r.poly.map(p => toL(F, ...p));
+      if (Math.min(...points.map(p => p[1])) <= .05 && Math.max(...points.map(p => p[1])) >= -.05)
+        ivs = subtractInterval(ivs, [Math.min(...points.map(p => p[0])) - .15, Math.max(...points.map(p => p[0])) + .15]);
     }
     for (const [a, b] of ivs) {
       const a2 = a < 0.01 ? -0.2 : a, b2 = b > len - 0.01 ? len + 0.2 : b;

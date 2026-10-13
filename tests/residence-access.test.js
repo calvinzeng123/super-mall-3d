@@ -84,7 +84,7 @@ test('全部酒店、公寓及三种住宅模板从入户点经套内走道可�
     }
     // The surveyed suite foyer turns between a console and bench (0.623m
     // minimum gap). Its valid centre line is x5.46, off the old 0.25m grid.
-    const spacing = u.residence.suitePlan ? .1 : .25;
+    const spacing = u.residence.suitePlan ? .05 : .25;
     const originX = u.residence.suitePlan ? 5.46 : u.residence.entryDoor.at, originZ = .8;
     const bounds = u.rects[0];
     const balcony = u.residence.rooms.find((r) => r.kind === 'balcony');

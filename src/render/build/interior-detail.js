@@ -7,9 +7,45 @@ const position = new THREE.Vector3();
 const scale = new THREE.Vector3();
 const rotation = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
+const FORWARD = new THREE.Vector3(0, 0, 1);
+const faceRotation = new THREE.Quaternion();
 const circleGeometry = new THREE.CircleGeometry(.5, 8).rotateX(-Math.PI / 2).toNonIndexed();
 const CIRCLE = { pos: circleGeometry.attributes.position.array, nor: circleGeometry.attributes.normal.array, count: circleGeometry.attributes.position.count };
 circleGeometry.dispose();
+const CYLINDERS = {};
+function cylinderShape(segments, openTop = false) {
+  const id = `${segments}:${openTop}`;
+  if (CYLINDERS[id]) return CYLINDERS[id];
+  // 圆器皿底部贴在台面 / 柜板上，不复制不可见的底盖；筒灯上下端都由邻接构件遮住。
+  const g = new THREE.CylinderGeometry(1, 1, 1, segments, 1, false).translate(0, .5, 0).toNonIndexed();
+  const pos = [], nor = [];
+  for (let i = 0; i < g.attributes.position.count; i += 3) {
+    const ny = g.attributes.normal.getY(i);
+    if (ny < -.99 || (openTop && ny > .99)) continue;
+    for (let j = i; j < i + 3; j++) {
+      pos.push(g.attributes.position.getX(j), g.attributes.position.getY(j), g.attributes.position.getZ(j));
+      nor.push(g.attributes.normal.getX(j), g.attributes.normal.getY(j), g.attributes.normal.getZ(j));
+    }
+  }
+  g.dispose();
+  return CYLINDERS[id] = { pos, nor, count: pos.length / 3 };
+}
+const octaGeometry = new THREE.OctahedronGeometry(.5, 0);
+const OCTA = { pos: octaGeometry.attributes.position.array, nor: octaGeometry.attributes.normal.array, count: octaGeometry.attributes.position.count };
+octaGeometry.dispose();
+const leafPositions = [0, 0, -.5, -.5, 0, 0, 0, 0, .5, 0, 0, -.5, 0, 0, .5, .5, 0, 0];
+const leafBack = [];
+for (let i = 0; i < leafPositions.length; i += 9) leafBack.push(...leafPositions.slice(i + 6, i + 9), ...leafPositions.slice(i + 3, i + 6), ...leafPositions.slice(i, i + 3));
+const LEAF = { pos: [...leafPositions, ...leafBack], nor: [...Array.from({ length: 6 }, () => [0, 1, 0]).flat(), ...Array.from({ length: 6 }, () => [0, -1, 0]).flat()], count: 12 };
+// 贴合柜体的金属腰线只保留四个外立面，顶底面被原柜体包住。
+const bandGeometry = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
+const BAND = { pos: [], nor: [], count: 24 };
+for (let i = 0; i < bandGeometry.attributes.position.count; i++) {
+  if (Math.abs(bandGeometry.attributes.normal.getY(i)) > .5) continue;
+  BAND.pos.push(bandGeometry.attributes.position.getX(i), bandGeometry.attributes.position.getY(i), bandGeometry.attributes.position.getZ(i));
+  BAND.nor.push(bandGeometry.attributes.normal.getX(i), bandGeometry.attributes.normal.getY(i), bandGeometry.attributes.normal.getZ(i));
+}
+bandGeometry.dispose();
 
 function profile(name) {
   if (SHAPES[name]) return SHAPES[name];
@@ -28,14 +64,16 @@ function profile(name) {
 /** 坐标仍是店面的 a / 店内的 b，h 是相对本层地面的高度。 */
 export function interiorDetail(B, F, P, y0) {
   const box = (key, a, b, h, w, d, tall, color, rot = 0) => P(key, a, b, y0 + h, w, d, tall, color, rot);
-  const cylinder = (key, a, b, h, radius, tall, color, segments = 8) => {
+  const cylinder = (key, a, b, h, radius, tall, color, segments = 6, openTop = false) => {
     const [x, z] = F.at(a, b);
-    B.get(key).cyl(x, y0 + h, z, radius, tall, color, segments);
+    position.set(x, y0 + h, z); rotation.identity(); scale.set(radius, tall, radius);
+    matrix.compose(position, rotation, scale);
+    B.get(key).push(cylinderShape(segments, openTop), matrix, color);
   };
-  const face = (key, a, b, h, w, tall, color) => {
+  const face = (key, a, b, h, w, tall, color, rot = 0) => {
     const [x, z] = F.at(a, b);
     position.set(x, y0 + h, z);
-    rotation.setFromAxisAngle(UP, Math.atan2(F.nx, F.nz));
+    rotation.setFromAxisAngle(UP, Math.atan2(F.nx, F.nz) + rot);
     scale.set(w, tall, 1);
     B.get(key).shape('plane', position, rotation, scale, color);
   };
@@ -48,9 +86,23 @@ export function interiorDetail(B, F, P, y0) {
     matrix.compose(position, rotation, scale);
     B.get(key).push(CIRCLE, matrix, color);
   };
+  const flat = (key, a, b, h, w, depth, color) => {
+    const [x, z] = F.at(a, b);
+    position.set(x, y0 + h, z); rotation.setFromAxisAngle(UP, F.ang); scale.set(w, 1, depth);
+    B.get(key).shape('planeUp', position, rotation, scale, color);
+  };
   const line = (key, a, b, h, a1, b1, h1, thick, color) => {
     const [x, z] = F.at(a, b), [x1, z1] = F.at(a1, b1);
     B.get(key).bar({ x, y: y0 + h, z }, { x: x1, y: y0 + h1, z: z1 }, thick, color);
+  };
+  const faceLine = (key, a, b, h, a1, h1, thick, color) => {
+    // 贴在绒面展托上的细金链，只需朝观众的实际可见面；背面全部被托板遮住。
+    const [x, z] = F.at((a + a1) / 2, b), yaw = Math.atan2(F.nx, F.nz);
+    const handedness = F.ux * Math.cos(yaw) - F.uz * Math.sin(yaw);
+    position.set(x, y0 + (h + h1) / 2, z);
+    rotation.setFromAxisAngle(UP, yaw).multiply(faceRotation.setFromAxisAngle(FORWARD, Math.atan2(h1 - h, (a1 - a) * handedness)));
+    scale.set(Math.hypot(a1 - a, h1 - h), thick, 1);
+    B.get(key).shape('plane', position, rotation, scale, color);
   };
   const solid = (name, key, a, b, h, w, d, tall, color, rot = 0) => {
     const [x, z] = F.at(a, b);
@@ -73,8 +125,96 @@ export function interiorDetail(B, F, P, y0) {
     box('matte', a, b, h + tall / 2, w, .26, tall, color);
     face('satin', a, b - .134, h + tall * .73, w * .68, .024, '#efe4c8');
   };
+  const card = (a, b, h, color = '#eee9da', width = .20) => {
+    box('metal', a, b, h + .012, width + .03, .12, .024, '#b39a6b');
+    // 卡纸保留正反两面，省去 1.2cm 薄边的四个不可分辨侧面。
+    face('matte', a, b + .018, h + .105, width, .18, color);
+    face('matte', a, b + .032, h + .105, width, .18, color, Math.PI);
+    for (let i = 0; i < 3; i++) face('satin', a, b + .017, h + .15 - i * .042, width * (i ? .67 : .83), .009, '#5e635d');
+  };
   return {
-    box, cylinder, line, cup, book,
+    box, cylinder, line, cup, book, card, face, flat, disc,
+    band(a, b, h, w, d, tall, color = '#b69c70') {
+      const [x, z] = F.at(a, b);
+      position.set(x, y0 + h, z); rotation.setFromAxisAngle(UP, F.ang); scale.set(w, tall, d);
+      matrix.compose(position, rotation, scale);
+      B.get('metal').push(BAND, matrix, color);
+    },
+    spotlight(a, b, h) {
+      cylinder('matte', a, b, h, .085, .23, '#414c46', 6, true);
+      // 下向发光面为一个平面，保留 8 边圆轮廓，取消六个隐藏面。
+      const [x, z] = F.at(a, b);
+      position.set(x, y0 + h - .001, z);
+      rotation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+      scale.set(.126, 1, .126); matrix.compose(position, rotation, scale);
+      B.get('glow').push(CIRCLE, matrix, '#ffdfac');
+    },
+    bottle(a, b, h, color = '#c09b74', tall = .23, pump = false) {
+      cylinder('satin', a, b, h, .058, tall * .72, color);
+      cylinder('metal', a, b, h + tall * .72, .031, tall * .2, '#ae956a', 6);
+      cylinder('matte', a, b, h + tall * .92, .035, tall * .08, '#2f3834', 6);
+      face('matte', a, b - .059, h + tall * .43, .063, tall * .32, '#f3eee0');
+      if (pump) line('metal', a, b, h + tall, a, b - .09, h + tall, .025, '#b6b3a1');
+    },
+    bouquet(a, b, h, color = '#d5c7af', size = 1) {
+      cylinder('satin', a, b, h, .10 * size, .22 * size, color);
+      for (let i = 0; i < 5; i++) {
+        const t = i * 2.4, da = Math.cos(t) * .11 * size, db = Math.sin(t) * .10 * size;
+        const hh = (.42 + (i % 3) * .07) * size;
+        line('foliage', a, b, h + .1 * size, a + da, b + db, h + hh, .016 * size, '#56765b');
+        const [x, z] = F.at(a + da, b + db);
+        position.set(x, y0 + h + hh - .08 * size, z);
+        rotation.setFromEuler(new THREE.Euler(-.35, F.ang + t, .2));
+        scale.set(.15 * size, 1, .26 * size); matrix.compose(position, rotation, scale);
+        B.get('foliage').push(LEAF, matrix, '#648773');
+        B.get('matte').sphere(x, y0 + h + hh, z, .065 * size, i % 2 ? '#e7baa6' : '#e7dfc7', .06 * size, .065 * size, 'ico0');
+      }
+    },
+    jewelry(a, b, h, variant = 0) {
+      box('matte', a, b, h + .023, .33, .30, .046, '#eee6d6');
+      if (variant % 3 === 0) {
+        // 开放的项链链条绕过绒面颈托，保留可读的负空间。
+        box('matte', a, b + .04, h + .14, .22, .12, .22, '#435b54');
+        for (let i = 0; i < 8; i++) {
+          const t0 = Math.PI + i * Math.PI / 8, t1 = Math.PI + (i + 1) * Math.PI / 8;
+          faceLine('metal', a + Math.cos(t0) * .115, b - .032, h + .23 + Math.sin(t0) * .14,
+            a + Math.cos(t1) * .115, h + .23 + Math.sin(t1) * .14, .012, '#d8b967');
+        }
+        const [x, z] = F.at(a, b - .026);
+        B.get('satin').sphere(x, y0 + h + .083, z, .027, '#b0c8c2', .034, .022, 'ico0');
+      } else if (variant % 3 === 1) {
+        box('matte', a, b, h + .07, .10, .25, .07, '#c59d75');
+        cylinder('metal', a, b, h + .108, .064, .014, '#c0aa71', 12);
+        disc('matte', a, b, h + .123, .052, '#263e39');
+        line('metal', a, b, h + .126, a + .027, b - .02, h + .126, .008, '#eee6ca');
+      } else {
+        for (const da of [-.08, .08]) {
+          cylinder('matte', a + da, b, h + .046, .047, .025, '#516056');
+          const [x, z] = F.at(a + da, b);
+          B.get('satin').sphere(x, y0 + h + .095, z, .029, da < 0 ? '#d6b15d' : '#cadce0', .025, .032, 'ico0');
+        }
+      }
+    },
+    menu(a, b, h, color = '#365c4d') {
+      card(a, b, h, color, .25);
+      box('matte', a, b - .075, h + .006, .29, .22, .012, '#e9dfcc');
+      for (let i = 0; i < 3; i++) flat('satin', a, b - .085 + i * .04, h + .014, .21, .008, '#947c59');
+    },
+    toy(a, b, h, color = '#d8aa72') {
+      const ball = (da, db, dh, rx, ry, rz, c = color, tiny = false) => {
+        const [x, z] = F.at(a + da, b + db);
+        if (tiny) {
+          position.set(x, y0 + h + dh, z); rotation.identity(); scale.set(rx * 2, ry * 2, rz * 2);
+          matrix.compose(position, rotation, scale); B.get('matte').push(OCTA, matrix, c);
+        } else B.get('matte').sphere(x, y0 + h + dh, z, rx, c, ry, rz, 'ico0');
+      };
+      ball(0, 0, .12, .12, .14, .09); ball(0, 0, .30, .13, .12, .10);
+      for (const s of [-1, 1]) {
+        ball(s * .09, 0, .40, .052, .052, .035, color, true); ball(s * .075, -.04, .035, .07, .04, .08, color, true);
+        face('matte', a + s * .047, b - .102, h + .32, .024, .026, '#263f38');
+      }
+      box('matte', a, b - .095, h + .22, .11, .025, .038, '#e7dcca');
+    },
     shirt(a, b, h, color, rot = 0, size = 1) {
       solid('shirt', 'matte', a, b, h - .39 * size, .58 * size, .085, .74 * size, color, rot);
       // 衣服肩部承接细金属挂钩，轮廓与挂杆之间保留负空间。

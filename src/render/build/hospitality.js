@@ -2,6 +2,7 @@
 // 客房和户内陈设由 residence.js 按当前楼层另行加载。
 import * as THREE from 'three';
 import { BatchSet } from '../batch.js';
+import { carGeometry } from './parking.js';
 import { toW, toL, subtractInterval, pointInPoly, polyBounds, unionOutline, mergeSegments, subtractOpenings } from '../../layout/geom.js';
 import { shapeFromPoly } from './shell.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
@@ -109,6 +110,8 @@ export function buildHospitality(ctx) {
   }
   landscape(ctx,towers);
   connections(ctx);
+  sharedSurfaceParking(ctx);
+  apartmentDockLobbies(ctx);
   return ctx.hospitality;
 }
 
@@ -355,7 +358,7 @@ function landscape(ctx,towers) {
   const group=new THREE.Group();group.name='hospitality-landscape';
   const B=new BatchSet(ctx.mats.base),trees=[];
   // 道路和地块由布局提供，景观只落在楼边已有plot内，避开全部建筑轮廓。
-  const occupied=p=>towers.some(b=>pointInPoly(p,b.outline));
+  const occupied=p=>ctx.layout.buildings.some(b=>pointInPoly(p,b.outline))||ctx.layout.site.trenches.some(q=>pointInPoly(p,q))||(ctx.layout.extensions.roads||[]).some(r=>r.polys.some(q=>pointInPoly(p,q)))||(ctx.layout.extensions.surfaceParking||[]).some(r=>pointInPoly(p,r.poly));
   for(const b of towers) {
     const r=b.footprint,F=b.frame;
     B.frame(F,()=>{
@@ -364,7 +367,9 @@ function landscape(ctx,towers) {
       sideBox(B,edge,'wood',middle-half+0.12,middle+half-0.12,canopyY-0.065,canopyY-0.01,1.6,3.25,'#eadbc2');
       for(const t of [middle-half+0.2,middle+half-0.2]) {
         const [x,z]=edge.p(t);
-        B.get('extMetal').box(x+edge.n[0]*2.9,canopyY/2,z+edge.n[1]*2.9,0.12,canopyY,0.12,PALETTES[b.usage].metal);
+        // The hotel's narrow shared drop-off lane stays free of support posts;
+        // its entrance canopy cantilevers from the facade instead.
+        if(b.id!=='H')B.get('extMetal').box(x+edge.n[0]*2.9,canopyY/2,z+edge.n[1]*2.9,0.12,canopyY,0.12,PALETTES[b.usage].metal);
         B.get('glowSoft').cyl(x+edge.n[0]*1.6,canopyY-0.095,z+edge.n[1]*1.6,0.14,0.025,'#f4e4bc',8);
       }
       for(const side of [-1,1]) {
@@ -397,17 +402,13 @@ function districtGarden(ctx,B,group,trees) {
     for(const zz of [z-d/2,z+d/2])B.get('stone').box(x,0.06,zz,w+0.2,0.12,0.16,'#d9d4c7');
     for(const xx of [x-w/2,x+w/2])B.get('stone').box(xx,0.06,z,0.16,0.12,d,'#d9d4c7');
   };
-  // 西侧两栋楼之间形成有路径分区的中央庭院，沿原步行轴留通畅连接。
-  lawn(-439,-168,42,20);lawn(-439,-123,42,18);lawn(-410,-145,12,24);
-  B.get('stone').box(-442,0.18,-145,22,0.36,8,'#c7c2b7');
-  B.get('water').box(-442,0.37,-145,21.3,0.035,7.3,'#ffffff');
-  for(const x of [-448,-442,-436]) {
-    B.get('glass').cyl(x,0.39,-145,0.045,0.7,'#ffffff',6);
-    B.get('glowSoft').cyl(x,0.38,-145,0.12,0.025,'#d9edf1',8);
+  // The former remote hotel/apartment island has been vacated. Planting now
+  // follows the attached tower forecourts, outside traffic and garage openings.
+  for(const [x,z] of [[-382,-223],[-382,-178],[-319,-222],[-306,-221],[-57,-250],[-57,-228]]) {
+    planter(B,x-1.25,z-.7,x+1.25,z+.7,0,x+z,true,'stone');
+    trees.push({x,y:.65,z,s:1.2,kind:'round'});
   }
-  for(const z of [-157,-134])for(const x of [-452,-436])bench(B,x,0,z,z<-145?0:Math.PI);
-  for(const x of [-457,-421])for(const z of [-174,-164,-127,-118])trees.push({x,y:0,z,s:1.3,kind:'round'});
-  for(const z of [-176,-165,-126,-115])bollard(B,-417,z);
+  for(const [x,z] of [[-340,-177],[-326,-177],[-43,-174]])bench(B,x,0,z,Math.PI);
   // 四栋住宅之间的口袋花园：不占南侧主入口轴线、消防路或地库坡道。
   for(const x of [82,148,214]) {
     lawn(x,-219,17,15);
@@ -478,9 +479,12 @@ function connections(ctx) {
         segmentBox(PB,'extSatin',a,b,0.22,0.12,0.42,'#406c79');
         segmentBox(PB,'glowSoft',a,b,0.23,0.045,2.93,'#ecf4ef');
       } else if(sky) {
-        segmentBox(PB,'glass',a,b,0.035,1.05,0.65,'#ffffff');
+        segmentBox(PB,'glass',a,b,0.035,3.02,1.72,'#ffffff');
+        segmentBox(PB,'glowSoft',a,b,0.11,0.035,3.16,'#f4e6c8');
         segmentBox(PB,'extMetal',a,b,0.1,0.07,1.2,'#707d81');
         segmentBox(PB,'extMetal',a,b,0.2,0.18,-0.07,'#555f63');
+        const span=Math.hypot(b[0]-a[0],b[2]-a[2]),n=Math.max(1,Math.ceil(span/7));
+        for(let i=0;i<n;i++){const p=a.map((v,k)=>v+(b[k]-v)*i/n),q=a.map((v,k)=>v+(b[k]-v)*(i+1)/n);p[1]+=i%2?.28:3.08;q[1]+=i%2?3.08:.28;segmentBox(PB,'extMetal',p,q,.075,.11,0,'#849185');}
       } else segmentBox(PB,'concrete',a,b,0.14,0.1,0.015,'#c4c3ba');
     }
     if(sky)for(const path of paths)for(let i=1;i<path.points.length;i++) {
@@ -499,7 +503,9 @@ function connections(ctx) {
           if(onBoundary)PB.get('extMetal').box(px,y+1.7,pz,0.1,3.4,0.1,'#747f83');
         }
         segmentBox(PB,'extMetal',[x-nx*path.width/2,y,z-nz*path.width/2],[x+nx*path.width/2,y,z+nz*path.width/2],0.12,0.15,3.4,'#747f83');
-        if(k>0&&k<count&&k%3===0)for(const side of [-1,1]) {
+        segmentBox(PB,'wood',[x-nx*(path.width/2-.18),y,z-nz*(path.width/2-.18)],[x+nx*(path.width/2-.18),y,z+nz*(path.width/2-.18)],0.16,0.09,3.24,'#e1ccb0');
+        if(k>0&&k<count)segmentBox(PB,'extMetal',[x-nx*path.width/2,y,z-nz*path.width/2],[x+nx*path.width/2,y,z+nz*path.width/2],0.12,0.035,.025,'#b1a997');
+        if(k>0&&k<count&&k%2===0)for(const side of [-1,1]) {
           const px=x+nx*side*(path.width/2+0.9),pz=z+nz*side*(path.width/2+0.9);
           if(ctx.layout.buildings.some(b=>pointInPoly([px,pz],b.outline))||trafficPolys.some(p=>pointInPoly([px,pz],p))||groundPaths.some(r=>px>r.x0-0.6&&px<r.x1+0.6&&pz>r.z0-0.6&&pz<r.z1+0.6))continue;
           PB.get('concrete').cyl(px,0,pz,0.42,y-0.32,'#c7c6be',10);
@@ -526,4 +532,87 @@ function connections(ctx) {
   ctx.hospitality.connections=group;ctx.hospitality.underground=underground;
   ctx.hospitality.connectionNetworks=[...networks.values()];
   ctx.dynamic.push({name:'hospitality-ceilings',update(){for(const x of underground)x.ceiling.visible=ctx.camera.position.y<x.elevation+3.0;}});
+}
+
+
+/** Shared surface lots use the same surveyed stall records as navigation and
+ * counts. Geometry is instanced; charging pedestals sit behind each stall. */
+function sharedSurfaceParking(ctx) {
+  const lots=ctx.layout.extensions?.surfaceParking||[];if(!lots.length)return;
+  const group=new THREE.Group();group.name='P1-hotel-apartment-shared-parking';
+  const B=new BatchSet(ctx.mats.base),cars=[];
+  for(const lot of lots) {
+    const r=lot.rect,a=lot.aisle;
+    B.get('ext').box((r.x0+r.x1)/2,.015,(r.z0+r.z1)/2,r.x1-r.x0,.045,r.z1-r.z0,'#696d6b');
+    B.get('ext').box((a.x0+a.x1)/2,.018,(a.z0+a.z1)/2,a.x1-a.x0,.05,a.z1-a.z0,'#626865');
+    for(const [i,s] of lot.stalls.entries()) {
+      const side=s.face==='E'||s.face==='W',color=s.type==='ev'?'#718d7e':s.type==='accessible'?'#608ca0':'#b7b6a9';
+      B.get('ext').box(s.x,.045,s.z,s.w-.08,.012,s.d-.08,color);
+      for(const dx of [-s.w/2,s.w/2])B.get('ext').box(s.x+dx,.058,s.z,.075,.015,s.d,'#efefe1');
+      for(const dz of [-s.d/2,s.d/2])B.get('ext').box(s.x,.058,s.z+dz,s.w,.015,.075,'#efefe1');
+      const back={N:[0,1],S:[0,-1],E:[-1,0],W:[1,0]}[s.face],bx=s.x+back[0]*2.08,bz=s.z+back[1]*2.08;
+      B.get('extSatin').box(bx,.13,bz,side?.16:1.6,.2,side?1.6:.16,'#d2c698');
+      if(s.type==='ev') {
+        const px=s.x+back[0]*2.68,pz=s.z+back[1]*2.68;
+        B.get('extMetal').box(px,.7,pz,side?.22:.42,1.4,side?.42:.22,'#3b554d');
+        B.get('glowSoft').box(px-back[0]*.12,1.02,pz-back[1]*.12,side?.035:.24,.25,side?.24:.035,'#a9e0c8');
+      }
+      if(i%4!==0)cars.push({s,rotation:{N:Math.PI,S:0,E:Math.PI/2,W:-Math.PI/2}[s.face],color:['#e0dfd8','#4e6976','#8f5145','#adb6b7','#3a4346'][i%5]});
+    }
+    for(const x of [r.x0+.5,r.x1-.5])for(const z of [r.z0+.5,r.z1-.5]) {
+      B.get('extMetal').cyl(x,0,z,.045,3.3,'#4f5d57',8);
+      B.get('glowSoft').box(x,3.3,z,.55,.06,.3,'#ffeaca');
+    }
+    const c=makeCanvas(768,160),g=c.getContext('2d');g.fillStyle='#2f4944';g.fillRect(0,0,768,160);g.fillStyle='#f3ecdc';g.textAlign='center';g.font=`600 44px ${FONT_CN}`;g.fillText(lot.name,384,65,720);g.font=`28px ${FONT_EN}`;g.fillText(`P · ${lot.stalls.length} SPACES · EV`,384,124);
+    const sign=new THREE.Mesh(new THREE.PlaneGeometry(4.5,.95),ctx.mats.sign(canvasTexture(c,{clamp:true})));sign.position.set(r.x1-2.5,2.7,r.z1+.12);group.add(sign);
+  }
+  for(const ramp of ctx.layout.ramps.filter(r=>['H','A'].includes(r.building)&&r.type.startsWith('street'))) {
+    const high=ramp.from.level==='street'?ramp.from:ramp.to;
+    for(const side of [-1,1]) {
+      const x=high.x+side*(ramp.width/2+.35),z=high.z+1.5;
+      B.get('extMetal').box(x,.7,z,.34,1.4,.48,'#445c58');
+      B.get('extMetal').box(x,2.8,z,.12,2.8,.12,'#64756e');
+      B.get('glowSoft').box(x,1.05,z+.25,.17,.15,.025,'#b3e6d0');
+    }
+    B.get('extMetal').box(high.x,4.18,high.z+1.5,ramp.width+.85,.14,.25,'#596b64');
+    B.get('glowSoft').box(high.x,4.08,high.z+1.5,ramp.width,.04,.2,'#f0e6c8');
+    const c=makeCanvas(512,144),g=c.getContext('2d');g.fillStyle='#284e44';g.fillRect(0,0,512,144);g.fillStyle='#f4ecd6';g.textAlign='center';g.font=`600 45px ${FONT_CN}`;g.fillText(ramp.type==='street-in'?'住客车库入口':'住客车库出口',256,56);g.font=`31px ${FONT_EN}`;g.fillText('B1  /  B2 · 2.6 m',256,113);
+    const sign=new THREE.Mesh(new THREE.PlaneGeometry(4.4,1.15),ctx.mats.sign(canvasTexture(c,{clamp:true})));sign.position.set(high.x,3.54,high.z+1.67);group.add(sign);
+  }
+  B.flush(group);
+  const geo=ctx.carGeo||carGeometry(),mat=ctx.carMat||new THREE.MeshStandardMaterial({vertexColors:true,roughness:.35,metalness:.45});
+  const inst=new THREE.InstancedMesh(geo,mat,cars.length),o=new THREE.Object3D();
+  cars.forEach((c,i)=>{o.position.set(c.s.x,.08,c.s.z);o.rotation.y=c.rotation;o.updateMatrix();inst.setMatrixAt(i,o.matrix);inst.setColorAt(i,new THREE.Color(c.color));});
+  inst.castShadow=true;inst.receiveShadow=true;group.add(inst);ctx.site.group.add(group);
+  ctx.hospitality.surfaceParking=group;
+}
+
+
+/** A small trapezoid joins the oblique mall wall to the orthogonal bridge.
+ * Its slab is generated by buildShell from the exact layout polygon. */
+function apartmentDockLobbies(ctx) {
+  for(const dock of ctx.layout.extensions?.gateways||[]) {
+    const group=new THREE.Group();group.name=dock.id;
+    const B=new BatchSet(ctx.mats.base),y=dock.elev,p=dock.poly,below=y<0;
+    const sides=[[p[1],p[2]],[p[3],p[0]]];
+    const x=dock.outerSeg.x0;
+    for(const [lo,hi] of [[p[2][1],dock.outerSeg.z0],[dock.outerSeg.z1,p[3][1]]])if(hi-lo>.01)sides.push([[x,lo],[x,hi]]);
+    for(const [a,b] of sides) {
+      const aa=[a[0],y,a[1]],bb=[b[0],y,b[1]];
+      segmentBox(B,below?'concrete':'glass',aa,bb,below?.22:.035,3.1,1.6,below?'#d3d7d1':'#ffffff');
+      segmentBox(B,'extMetal',aa,bb,.15,.12,3.18,'#6b766e');
+      segmentBox(B,'glowSoft',aa,bb,.1,.035,3.08,'#f1e6c8');
+      if(!below)segmentBox(B,'extMetal',aa,bb,.12,.07,1.13,'#8f998c');
+    }
+    for(const a of p)B.get('extMetal').box(a[0],y+1.65,a[1],.12,3.3,.12,'#778378');
+    const e=dock.outerSeg;
+    segmentBox(B,'wood',[e.x0,y,e.z0],[e.x1,y,e.z1],.35,.18,3.25,'#d3b993');
+    B.flush(group);
+    const roof=new THREE.ShapeGeometry(shapeFromPoly(dock.poly,[]));roof.rotateX(-Math.PI/2);roof.translate(0,y+3.35,0);
+    const ceiling=new THREE.Mesh(roof,ctx.mats.base[below?'concrete':'glassTint']);ceiling.name='dock-camera-aware-ceiling';group.add(ceiling);
+    // This is an exterior docking structure: it remains present when the
+    // neighbouring apartment is selected and P1's interior base is hidden.
+    ctx.levels[dock.level].shell.add(group);
+    ctx.dynamic.push({name:`${dock.id}-ceiling`,update(){ceiling.visible=ctx.camera.position.y<y+3.2;}});
+  }
 }

@@ -14,6 +14,7 @@ const NECK = (() => {
 })();
 
 const HOLE_RAMP = rect(-11.5, -5.25, 11.5, 5.25);
+const APARTMENT_SIDE_HALL = [{ u0: 72, u1: 80, band: 1 }];
 const SLOTS_2F = { SE: [[40, 52], [58, 72]], W: [[40, 52], [58, 70], [76, 86]], N: [[40, 52], [58, 72]] };
 
 const V1 = {
@@ -44,7 +45,7 @@ export const P1 = {
       short: 'B1', name: 'B1 停车场', kind: 'parking', elev: -8.4, height: 3.9,
       theme: { key: 'park-blue', floor: 'concrete-blue', accent: '#2f6fd6', label: '停车场 · 蓝区 · 车库出入口' },
       rot: { C: { hole: HOLE_RAMP, rampVoid: rect(-12, -4.75, 12, 4.75) } },
-      wings: { N: { end: 'aisle' }, W: { eschall: [42, 60] } },
+      wings: { N: { end: 'aisle', sideHalls: APARTMENT_SIDE_HALL }, W: { eschall: [42, 60] } },
       parkWc: { wing: 'SE', u: 59 }, evRow: 'SE-r1',
     },
     {
@@ -55,7 +56,7 @@ export const P1 = {
       wings: {
         SE: { brands: ['B1M', 'N1', 'N3', 'S1', 'N4', 'S2', 'N5', 'S3', 'N6', 'S5', 'N7', 'S6', 'NE', 'SE', 'S4a', 'S4b'], cats: ['food', 'restaurant'] },
         W: { style: 'oldstreet', widths: [6, 7, 6, 8], brands: ['B1M', 'NW', 'W1', 'W2', 'W3', 'SW', 'INW-a', 'INW-b', 'ISW-a', 'ISW-b'], cats: ['snack', 'tea', 'restaurant'] },
-        N: { anchors: [{ slot: 'market', band: 0, u0: 51, u1: 82, v1: ['B1M', 'market'], style: 'market' }], end: 'service', streetEnd: 51 },
+        N: { anchors: [{ slot: 'market', band: -1, u0: 51, u1: 70, v1: ['B1M', 'market'], style: 'market' }], end: 'service', streetEnd: 82, sideHalls: APARTMENT_SIDE_HALL },
         NW: { cats: ['food', 'snack', 'tea'] },
       },
     },
@@ -64,14 +65,14 @@ export const P1 = {
       theme: { key: 'lux', floor: 'marble-white', accent: '#b08d4f', label: '国际精品 · 珠宝腕表 · 美妆' },
       rot: { C: { void: KIT.void1F, shafts: true } },
       widths: [8, 7, 9, 8, 10, 7], brands: ['1F', ...V1['1F']], cats: ['beauty', 'jewelry', 'luxury', 'accessory', 'cafe'],
-      wings: { SE: { end: 'entrance' }, W: { end: 'entrance' }, N: { end: 'service' } },
+      wings: { SE: { end: 'entrance' }, W: { end: 'entrance' }, N: { end: 'service', sideHalls: APARTMENT_SIDE_HALL } },
     },
     {
       short: '2F', name: '2F 潮流服饰', kind: 'retail', elev: 6.5, height: 5.5,
       theme: { key: 'fashion', floor: 'terrazzo-cool', accent: '#2f86b0', label: '潮流服饰 · 运动户外 · 潮玩' },
       rot: { C: { void: KIT.voidUp } },
       widths: [9, 8, 10, 7, 11, 8], brands: ['2F', ...V1['2F']], cats: ['fashion', 'sports', 'shoes', 'toys'],
-      wings: { SE: { end: 'bridge', slots: SLOTS_2F.SE }, W: { slots: SLOTS_2F.W }, N: { slots: SLOTS_2F.N }, NW: { slots: [[59, 67]] } },
+      wings: { SE: { end: 'bridge', slots: SLOTS_2F.SE }, W: { slots: SLOTS_2F.W }, N: { slots: SLOTS_2F.N, sideHalls: APARTMENT_SIDE_HALL }, NW: { slots: [[59, 67]] } },
     },
     {
       short: '3F', name: '3F 亲子娱乐', kind: 'retail', elev: 12, height: 5.5,
