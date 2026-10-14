@@ -7,6 +7,7 @@ import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
 import { COLORS } from '../theme.js';
 import { windowTextures, rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+import { buildUrbanDistrict } from './urban.js';
 import { buildForecourt } from './forecourt.js';
 import { buildWestParkingDetails } from './west-parking.js';
 
@@ -115,6 +116,7 @@ export function buildSite(ctx) {
   }
 
   roads(ctx, S, B, G);
+  buildUrbanDistrict(ctx);
   entrances(ctx);
   garageGates(ctx, S, B);
   plazaFeatures(ctx, B);
@@ -541,6 +543,7 @@ function greenery(ctx, S, B, G) {
 
 /** 每座背景楼固定抽取尺寸和配色，避让改动不会重排其他楼的几何。 */
 export function siteContextBuildings(layout) {
+  if (layout.site.urban) return layout.site.urban.buildings;
   const rand = rng(42);
   const reserved = [...siteActivityFootprints(layout), ...raisedConnections(layout),
     ...layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline),

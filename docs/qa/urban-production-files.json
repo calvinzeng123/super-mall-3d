@@ -1,0 +1,226 @@
+{
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "deployId": "6acf53f32f389084458079d4",
+  "checkedAt": "2026-10-14T10:10:21.462190+00:00",
+  "payloads": 24,
+  "bytes": 45454940,
+  "allBytesMatch": true,
+  "files": [
+    {
+      "path": "assets/marble_01-color.402d3d2f8781e21f.jpg",
+      "status": 200,
+      "bytes": 270770,
+      "sha256": "402d3d2f8781e21f2752455416aa913be342a519864b807f32f8c08045966134",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/marble_01-normal.8ae668e3badd5d38.jpg",
+      "status": 200,
+      "bytes": 120121,
+      "sha256": "8ae668e3badd5d386dbb5be3228a8dc2f7eb4a6704f7847dd0858c6546cc8ecd",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/marble_01-roughness.6edf2daf5b864534.jpg",
+      "status": 200,
+      "bytes": 76297,
+      "sha256": "6edf2daf5b8645341c7f8e047bb1db11605a9f6ff6bcd3a7d56373a23f087857",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/concrete_pavement_02-color.3fbaf294fd7e535a.jpg",
+      "status": 200,
+      "bytes": 501967,
+      "sha256": "3fbaf294fd7e535a49558d266d6275290c6f116571b8bb323c9df9642eed69ba",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/concrete_pavement_02-normal.02430189a96f108a.jpg",
+      "status": 200,
+      "bytes": 632817,
+      "sha256": "02430189a96f108ae1473ce4a920500c5df74f61cf9e1169fa53505672a28d82",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/concrete_pavement_02-roughness.6d7ec0b23daa4e80.jpg",
+      "status": 200,
+      "bytes": 242721,
+      "sha256": "6d7ec0b23daa4e80521744cc01fabc6675763c2a218289ce4bbe51776cdf7c31",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/oak_wood_planks-color.a188de42bf9198bb.jpg",
+      "status": 200,
+      "bytes": 286752,
+      "sha256": "a188de42bf9198bb3c49b560f0c726a3ebddadc315ff0b293c208f632fe270b4",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/oak_wood_planks-normal.63f52712f3b94bb9.jpg",
+      "status": 200,
+      "bytes": 135866,
+      "sha256": "63f52712f3b94bb9d266496da7a578972a0398ed5fa9f6fa5700d93d97d69245",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/oak_wood_planks-roughness.7fd2de468f186a17.jpg",
+      "status": 200,
+      "bytes": 475429,
+      "sha256": "7fd2de468f186a17e78d65fdeec9da6e870fdd61ca11d9549f4e0d30f43da998",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/brick_wall_09-color.4b05ac9c45cb2ea9.jpg",
+      "status": 200,
+      "bytes": 336310,
+      "sha256": "4b05ac9c45cb2ea9c68eaccf4221db7821ec6b73349b54becadaa6a77db7c8a8",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/brick_wall_09-normal.1848e73816802e95.jpg",
+      "status": 200,
+      "bytes": 534605,
+      "sha256": "1848e73816802e95356795d967dd12f146643e8169677846ce1bf6023210f95c",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/brick_wall_09-roughness.0ecbbc52c5bfea9c.jpg",
+      "status": 200,
+      "bytes": 164362,
+      "sha256": "0ecbbc52c5bfea9cc865f0def42deca02bb7bb6231d358a3a68cb8aa12b67084",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/clean_asphalt-color.216d473cd81362a7.jpg",
+      "status": 200,
+      "bytes": 339275,
+      "sha256": "216d473cd81362a7b975ee538e49f85fe0d13b222dd659cdad22e1a761466819",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/clean_asphalt-normal.744aa64e65425ae2.jpg",
+      "status": 200,
+      "bytes": 364957,
+      "sha256": "744aa64e65425ae2e953f98e461c7bc683f29ce9318e43d390539c3dd6aec21c",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/clean_asphalt-roughness.c9216e94586cb9fc.jpg",
+      "status": 200,
+      "bytes": 334508,
+      "sha256": "c9216e94586cb9fc8b179c035dece1cbe1489642d3eaec1dee9a591bd4bec9bb",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/grass_ground-color.bd4f8524889bf2a3.jpg",
+      "status": 200,
+      "bytes": 405955,
+      "sha256": "bd4f8524889bf2a3f3a5f4a6cd56154cecf71f1f6ae2da16598452e00137dcf0",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/grass_ground-normal.316ba72f9809e5d2.jpg",
+      "status": 200,
+      "bytes": 704408,
+      "sha256": "316ba72f9809e5d29977c17f0214cf4233fae72bb90c3096609ccf489c2d8503",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/grass_ground-roughness.dc99159a3abad2d6.jpg",
+      "status": 200,
+      "bytes": 87775,
+      "sha256": "dc99159a3abad2d6825c18dc749c5230328b8a12bec50588c15ee0fa42c0e2bc",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "image/jpeg",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/suite.a7f99bf01d3ad6e3.glb",
+      "status": 200,
+      "bytes": 8977040,
+      "sha256": "a7f99bf01d3ad6e3545102329ecd6ee8269c7cad6d41816dbdcb313a003da80e",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "application/octet-stream",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/residence-01.d7c68cf855216de9.bin",
+      "status": 200,
+      "bytes": 8874062,
+      "sha256": "d7c68cf855216de9bca23a5dcf8215855efc7dafbd098875adad5f9ae857a89c",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "application/octet-stream",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/residence-02.80b8dd6722294589.bin",
+      "status": 200,
+      "bytes": 10131573,
+      "sha256": "80b8dd6722294589e20988195426130078f9db4c683e2ad2d6f655269dab8fc2",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "application/octet-stream",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/residence-03.81f09c875fb2b416.bin",
+      "status": 200,
+      "bytes": 9878943,
+      "sha256": "81f09c875fb2b41663d425483a5d2bfd954eb8116e31c0a686048cd9d3e86e88",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "application/octet-stream",
+      "contentEncoding": null
+    },
+    {
+      "path": "assets/app.5733e6b775c228eb.js",
+      "status": 200,
+      "bytes": 1547707,
+      "sha256": "5733e6b775c228eb66666c2fa53eaf00d24c5c7a314df516ea9e82dd910fcb2d",
+      "cacheControl": "public,max-age=31536000,immutable",
+      "contentType": "application/javascript; charset=UTF-8",
+      "contentEncoding": null
+    },
+    {
+      "path": "index.html",
+      "status": 200,
+      "bytes": 30720,
+      "sha256": "73c80e1831d234ff9343b8b7d70fb45bce5bc463c92c612b4ebe130fd234843e",
+      "cacheControl": "public,max-age=0,must-revalidate",
+      "contentType": "text/html; charset=UTF-8",
+      "contentEncoding": null
+    }
+  ]
+}

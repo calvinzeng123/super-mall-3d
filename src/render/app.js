@@ -76,14 +76,14 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(42, canvas.clientWidth / canvas.clientHeight, 0.3, 7000);
+  const camera = new THREE.PerspectiveCamera(42, canvas.clientWidth / canvas.clientHeight, 0.3, 12000);
   camera.position.copy(OVERVIEW[0]);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.495;
   controls.minDistance = 3;
-  controls.maxDistance = 1400;
+  controls.maxDistance = 3600;
   controls.target.copy(OVERVIEW[1]);
   controls.screenSpacePanning = true;
 
@@ -404,6 +404,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   // 竖屏时总览再拉远一些，让四个地块都在画面里（flyTo 自身还会按竖屏放大 1.22 倍）
   const overview = () => [OVERVIEW[0].clone().sub(OVERVIEW[1]).multiplyScalar(camera.aspect < 1 ? 1.2 : 1).add(OVERVIEW[1]), OVERVIEW[1], 380];
 
+  const flyView = ([position, target, radius], duration = 1.4) => flyTo(position, target, duration, radius);
+
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
     ensureTowerFloor,
@@ -426,17 +428,18 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       state.exploded = false;
       state.selected = null;
       applyVisibility();
-      flyTo(...(state.focus ? levelView(state.focus) : bid ? buildingView(bid) : overview()), 1.6);
+      flyView(state.focus ? levelView(state.focus) : bid ? buildingView(bid) : overview(), 1.6);
       emit();
     },
+    viewCity() { app.setBuilding(null); flyTo(V(0, 2450, 1500), V(0, 0, 0), 1.6, 850); },
     setFocus(id) {
       if (state.touring) app.stopTour();
       if (id) state.building = ctx.levels[id].building;
       state.focus = id || (ctx.bById[state.building]?.undergroundOnly ? ctx.buildings[state.building].levels.find(L => L.lv.short === 'B1').lv.id : null);
       if (!id || (state.selected && findUnit(state.selected)?.level !== id)) state.selected = null;
       applyVisibility();
-      if (state.focus) flyTo(...levelView(state.focus));
-      else flyTo(...(state.building ? (state.exploded ? explodedView(state.building) : buildingView(state.building)) : overview()));
+      if (state.focus) flyView(levelView(state.focus));
+      else flyView(state.building ? (state.exploded ? explodedView(state.building) : buildingView(state.building)) : overview());
       emit();
     },
     setExploded(on) {
@@ -447,7 +450,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       state.focus = !on && ctx.bById[state.building]?.undergroundOnly ? ctx.buildings[state.building].levels.find(L => L.lv.short === 'B1').lv.id : null;
       state.selected = null;
       applyVisibility();
-      flyTo(...(on ? explodedView(state.building) : state.focus ? levelView(state.focus) : buildingView(state.building)), 1.6);
+      flyView(on ? explodedView(state.building) : state.focus ? levelView(state.focus) : buildingView(state.building), 1.6);
       emit();
     },
     setNight(on) { state.night = on; env.setNight(on); emit(); },
@@ -459,7 +462,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       state.exploded = false;
       state.selected = null;
       applyVisibility();
-      if (!noFly) flyTo(...overview());
+      if (!noFly) flyView(overview());
       emit();
     },
     flyTo,

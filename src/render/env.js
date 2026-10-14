@@ -39,7 +39,7 @@ export class Environment {
       bottomColor: { value: DAY.bottom.clone() },
     };
     this.sky = new THREE.Mesh(
-      new THREE.SphereGeometry(3200, 32, 16),
+      new THREE.SphereGeometry(6000, 32, 16),
       new THREE.ShaderMaterial({
         side: THREE.BackSide,
         depthWrite: false,
@@ -129,6 +129,10 @@ export class Environment {
   }
 
   update(dt) {
+    // Keep aerial city views clear while retaining street-level atmospheric depth.
+    const altitude = Math.max(0, this.camera.position.y - 500);
+    this.scene.fog.near = 900 + altitude;
+    this.scene.fog.far = 3000 + altitude * 1.5;
     this.sky.position.copy(this.camera.position);
     this.stars.position.copy(this.camera.position);
     if (Math.abs(this.night - this.target) > 1e-3) {

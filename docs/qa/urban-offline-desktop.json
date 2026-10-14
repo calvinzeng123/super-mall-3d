@@ -1,0 +1,100 @@
+{
+  "url": "file:///Users/calvin/Downloads/%E7%9B%B8%E5%86%8C%E5%8E%BB%E5%9B%BE%E6%A0%87/super-mall-3d/dist/mall.html",
+  "checks": [
+    "desktop directory opens initially",
+    "desktop directory closes",
+    "desktop directory reopens",
+    "H hides desktop UI",
+    "Escape restores desktop UI",
+    "four tower floors load and complete camera flights",
+    "walking works beyond original campus boundary",
+    "city overview completes",
+    "offline has zero page errors and HTTP requests"
+  ],
+  "errors": [],
+  "requests": [],
+  "visits": [
+    {
+      "focus": "H-20F",
+      "cache": [
+        "H-20F"
+      ],
+      "position": [
+        -224.6114429917992,
+        138.59709719263583,
+        -43.83911001966534
+      ]
+    },
+    {
+      "focus": "A-1F",
+      "cache": [
+        "H-20F",
+        "A-1F"
+      ],
+      "position": [
+        -12.611442991799219,
+        70.89709719263583,
+        -176.68573831966535
+      ]
+    },
+    {
+      "focus": "R1-2F",
+      "cache": [
+        "H-20F",
+        "A-1F",
+        "R1-2F"
+      ],
+      "position": [
+        63.40885039893584,
+        50.428026263296815,
+        -193.98524933510694
+      ]
+    },
+    {
+      "focus": "R4-30F",
+      "cache": [
+        "A-1F",
+        "R1-2F",
+        "R4-30F"
+      ],
+      "position": [
+        261.40885039893584,
+        145.62802626329682,
+        -193.98524933510694
+      ]
+    }
+  ],
+  "walk": {
+    "before": {
+      "floor": "ground",
+      "x": 5,
+      "z": -310,
+      "y": 0,
+      "slope": null,
+      "yaw": 0,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 1.62,
+      "riding": null
+    },
+    "after": {
+      "floor": "ground",
+      "x": 5,
+      "z": -312.0999999999998,
+      "y": 0,
+      "slope": null,
+      "yaw": 0,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 1.62,
+      "riding": null
+    },
+    "distance": 2.0999999999997954
+  },
+  "city": {
+    "distance": 2872.716484444645,
+    "buildings": 84,
+    "blocks": 43,
+    "roads": 24
+  }
+}

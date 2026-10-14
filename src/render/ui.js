@@ -1,3 +1,4 @@
+import { attachViewportUI } from './viewport-ui.js';
 // 界面：分期切换（园区 / 一期 / 二期 / 三期 / 地铁）、所选期的楼层牌、工具条、全园区店铺目录与搜索、悬停提示。
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -46,10 +47,12 @@ export function createUI(app, layout) {
     const b = e.target.closest('.floor');
     if (!b) return;
     app.setFocus(b.dataset.level || null);
+    viewport.closePanel();
   });
 
   const toolbar = $('toolbar');
   const directory = $('directory');
+  const viewport = attachViewportUI(app);
   toolbar.addEventListener('click', (e) => {
     const b = e.target.closest('.tool');
     if (!b) return;
@@ -62,12 +65,13 @@ export function createUI(app, layout) {
     else if (act === 'tour') { if (s.touring) app.stopTour(); else app.startTour(); }
     else if (act === 'explore') app.enterExplore();
     else if (act === 'reset') app.reset();
+    else if (act === 'city') { app.viewCity(); viewport.closePanel(); }
     else if (act === 'directory') {
       directory.classList.toggle('collapsed');
       b.setAttribute('aria-pressed', String(!directory.classList.contains('collapsed')));
     }
   });
-  if (window.matchMedia('(min-width: 761px)').matches) directory.classList.remove('collapsed');
+  if (!viewport.compact.matches) directory.classList.remove('collapsed');
 
   // ---------- 目录 ----------
   const list = $('dirList');
@@ -147,12 +151,7 @@ export function createUI(app, layout) {
     list.innerHTML = html;
   }
   // 手机上目录面板盖住画面中部：从目录里选了分期 / 楼层 / 店铺后自动收起，否则触摸落在面板上，3D 视角转不动
-  const narrow = window.matchMedia('(max-width: 760px)');
-  const collapseOnPhone = () => {
-    if (!narrow.matches) return;
-    directory.classList.add('collapsed');
-    toolbar.querySelector('[data-act="directory"]')?.setAttribute('aria-pressed', 'false');
-  };
+  const collapseOnPhone = () => viewport.closePanel();
   list.addEventListener('click', (e) => {
     const b = e.target.closest('.shop');
     if (!b || b.disabled) return;
@@ -185,12 +184,14 @@ export function createUI(app, layout) {
 
   // ---------- 状态同步 ----------
   function sync(s) {
+    viewport.sync(s);
     for (const t of phaseTabs.querySelectorAll('.phase')) t.setAttribute('aria-pressed', String((t.dataset.building || null) === s.building));
     renderFloors(s.building);
     for (const f of floorList.querySelectorAll('.floor')) f.setAttribute('aria-pressed', String((f.dataset.level || null) === s.focus && !s.exploded));
     const activeFloor = floorList.querySelector('[aria-pressed="true"]');
     if (activeFloor && s.focus) activeFloor.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     const press = (act, on) => toolbar.querySelector(`[data-act="${act}"]`)?.setAttribute('aria-pressed', String(!!on));
+    press('directory', !directory.classList.contains('collapsed'));
     press('explode', s.exploded);
     const explode = toolbar.querySelector('[data-act="explode"]');
     if (explode) { explode.disabled = bById[s.building]?.kind === 'tower'; explode.title = explode.disabled ? '选择楼层查看室内' : '爆炸视图'; }
@@ -212,7 +213,7 @@ export function createUI(app, layout) {
   const canvas = app.renderer.domElement;
   let downAt = null;
   canvas.addEventListener('pointermove', (e) => {
-    if (!app.pick || app.state.explore) { tip.hidden = true; return; }
+    if (document.body.classList.contains('ui-hidden') || !app.pick || app.state.explore) { tip.hidden = true; return; }
     const hit = app.pick(e.clientX, e.clientY);
     if (!hit) { tip.hidden = true; canvas.style.cursor = ''; return; }
     tip.innerHTML = hit.html;

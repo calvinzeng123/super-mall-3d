@@ -218,7 +218,7 @@ export function attachExplore(app, ui) {
   canvas.addEventListener('pointerdown', (e) => {
     if (!on || e.pointerType !== 'mouse') return;
     hud.help.hidden = true;
-    if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
+    if (!document.body.classList.contains('ui-hidden') && document.pointerLockElement !== canvas && canvas.requestPointerLock) {
       try {
         const r = canvas.requestPointerLock();
         if (r && r.catch) r.catch(() => {});
@@ -293,6 +293,7 @@ export function attachExplore(app, ui) {
     hud.knob.style.transform = '';
     Object.assign(hud.stick.style, { left: '', top: '', bottom: '' });
   }
+  window.addEventListener('mall-ui-visibility', () => { keys.clear(); endStick(); lookTouch = null; dragging = null; Object.assign(input, { up: false, down: false, jump: false }); });
   /** 按住型按钮（▲ ▼）：按下 on、松开 off */
   const hold = (el, down, up) => {
     el.addEventListener('pointerdown', (e) => {

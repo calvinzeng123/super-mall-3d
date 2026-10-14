@@ -6,6 +6,7 @@ import { buildP3 } from './p3.js';
 import { buildBridges } from './bridges.js';
 import { buildMetro } from './metro.js';
 import { buildHospitality } from './hospitality.js';
+import { addUrbanDistrict } from './urban.js';
 import { addForecourt } from './forecourt.js';
 import { P1 } from './p1.js';
 import { P2 } from './p2.js';
@@ -20,6 +21,7 @@ export function buildLayout() {
   const hospitality = buildHospitality(parts, site);
   parts.push(...hospitality.parts);
   addForecourt(site);
+  addUrbanDistrict(site);
   const all = (k) => parts.flatMap((p) => p[k]);
   const buildings = parts.map((p) => p.building);
   return {
