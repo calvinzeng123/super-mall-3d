@@ -5,10 +5,20 @@ export function attachViewportUI(app) {
   const dock = document.getElementById('mobileDock'), directory = document.getElementById('directory');
   let panel = null, hidden = false, previousLabels = false, exploring = false, hintTimer;
   const hint = document.getElementById('cleanHint');
+  const lens = dock.querySelector('.dock-lens');
+  function placeLens() {
+    const button = dock.querySelector('[aria-expanded="true"]');
+    dock.classList.toggle('has-selection', !!button);
+    if (!button) return;
+    lens.style.width = `${button.offsetWidth}px`;
+    lens.style.transform = `translateX(${button.offsetLeft}px)`;
+  }
+  new ResizeObserver(placeLens).observe(dock);
   function setPanel(next) {
     panel = next;
     for (const name of ['floors', 'tools', 'directory']) body.classList.toggle(`mobile-${name}`, name === panel);
     for (const b of dock.querySelectorAll('[data-panel]')) b.setAttribute('aria-expanded', String(b.dataset.panel === panel));
+    placeLens();
     if (compact.matches) directory.classList.toggle('collapsed', panel !== 'directory');
     document.querySelector('[data-act="directory"]')?.setAttribute('aria-pressed', String(!directory.classList.contains('collapsed')));
   }
@@ -67,6 +77,6 @@ export function attachViewportUI(app) {
   return { compact, closePanel, sync(s) {
     if (!!s.explore !== exploring) { exploring = !!s.explore; closePanel(); }
     const current = s.focus ? app.ctx.lvById[s.focus]?.short : s.building ? app.ctx.bById[s.building]?.short : '园区';
-    dock.querySelector('[data-panel="floors"]').textContent = current ? `${current} ▴` : '楼层';
+    dock.querySelector('[data-panel="floors"] span').textContent = current ? `${current} ▴` : '楼层';
   } };
 }

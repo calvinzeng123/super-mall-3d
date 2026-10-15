@@ -1,0 +1,29 @@
+{
+  "checks": [
+    "all five icons preserved after state update",
+    "selection lens slides to tools",
+    "glass panels remain mutually exclusive",
+    "dark glass has light text and backdrop blur",
+    "reduced motion removes sliding animation",
+    "landscape dock remains compact"
+  ],
+  "colors": {
+    "color": "rgb(244, 248, 255)",
+    "background": "rgba(25, 35, 50, 0.67)",
+    "filter": "blur(22px) saturate(1.55)"
+  },
+  "floorLens": {
+    "x": 14,
+    "w": 71
+  },
+  "toolLens": {
+    "x": 87,
+    "w": 71
+  },
+  "landscapeDock": {
+    "x": 231,
+    "y": 326,
+    "width": 382,
+    "height": 56
+  }
+}
