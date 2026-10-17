@@ -1,0 +1,553 @@
+{
+  "checks": [
+    "all ten ancillary stairways complete 32 bidirectional keyboard routes",
+    "zero JavaScript errors"
+  ],
+  "errors": [],
+  "walking": [
+    {
+      "id": "P3-KS1-B2-B1-up",
+      "end": {
+        "floor": "P3-B1",
+        "x": -221.9999999999998,
+        "z": 77.65000000000005,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -3.1415926535894654,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8800000003490815,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS1-B2-B1-down",
+      "end": {
+        "floor": "P3-B2",
+        "x": -222.0000000000002,
+        "z": 77.65000000000005,
+        "y": -9,
+        "slope": null,
+        "yaw": 3.1415926535894654,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -7.379999999650919,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS1-B1-1F-up",
+      "end": {
+        "floor": "P3-1F",
+        "x": -221.9999999999998,
+        "z": 77.65000000000005,
+        "y": 0,
+        "slope": null,
+        "yaw": -3.1415926535894654,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.6199999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS1-B1-1F-down",
+      "end": {
+        "floor": "P3-B1",
+        "x": -222.0000000000002,
+        "z": 77.65000000000005,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 3.1415926535894654,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8799999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS2-B2-B1-up",
+      "end": {
+        "floor": "P3-B1",
+        "x": -227.9999999999998,
+        "z": 162.34999999999997,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -3.2795988147427124e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8800000003490815,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS2-B2-B1-down",
+      "end": {
+        "floor": "P3-B2",
+        "x": -228.0000000000002,
+        "z": 162.34999999999997,
+        "y": -9,
+        "slope": null,
+        "yaw": 3.2795988147427124e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -7.379999999650919,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS2-B1-1F-up",
+      "end": {
+        "floor": "P3-1F",
+        "x": -227.9999999999998,
+        "z": 162.34999999999997,
+        "y": 0,
+        "slope": null,
+        "yaw": -3.2795988147427124e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.6199999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS2-B1-1F-down",
+      "end": {
+        "floor": "P3-B1",
+        "x": -228.0000000000002,
+        "z": 162.34999999999997,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 3.2795988147427124e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8799999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS3-B2-B1-up",
+      "end": {
+        "floor": "P3-B1",
+        "x": -54.000000000000036,
+        "z": 82.34999999999995,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -1.474376176702208e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8800000003490815,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS3-B2-B1-down",
+      "end": {
+        "floor": "P3-B2",
+        "x": -53.999999999999964,
+        "z": 82.34999999999995,
+        "y": -9,
+        "slope": null,
+        "yaw": 1.474376176702208e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -7.379999999650919,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS3-B1-1F-up",
+      "end": {
+        "floor": "P3-1F",
+        "x": -54.000000000000036,
+        "z": 82.34999999999995,
+        "y": 0,
+        "slope": null,
+        "yaw": -1.474376176702208e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.6199999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS3-B1-1F-down",
+      "end": {
+        "floor": "P3-B1",
+        "x": -53.999999999999964,
+        "z": 82.34999999999995,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 1.474376176702208e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8799999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS4-B2-B1-up",
+      "end": {
+        "floor": "P3-B1",
+        "x": -54.000000000000036,
+        "z": 146.34999999999997,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -1.4765966227514582e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8800000003490815,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS4-B2-B1-down",
+      "end": {
+        "floor": "P3-B2",
+        "x": -53.999999999999964,
+        "z": 146.34999999999997,
+        "y": -9,
+        "slope": null,
+        "yaw": 1.4765966227514582e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -7.379999999650919,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS4-B1-1F-up",
+      "end": {
+        "floor": "P3-1F",
+        "x": -54.000000000000036,
+        "z": 146.34999999999997,
+        "y": 0,
+        "slope": null,
+        "yaw": -1.4765966227514582e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.6199999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "P3-KS4-B1-1F-down",
+      "end": {
+        "floor": "P3-B1",
+        "x": -53.999999999999964,
+        "z": 146.34999999999997,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 1.4765966227514582e-13,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8799999996509182,
+        "riding": null
+      },
+      "steps": 781,
+      "half": true
+    },
+    {
+      "id": "M-STW-B2-B1-up",
+      "end": {
+        "floor": "M-B1",
+        "x": -45.35000000000003,
+        "z": 7.582918150296108e-17,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -1.5707963267948963,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.880000472491723,
+        "riding": null
+      },
+      "steps": 636,
+      "half": true
+    },
+    {
+      "id": "M-STW-B2-B1-down",
+      "end": {
+        "floor": "M-B2",
+        "x": -45.35000000000003,
+        "z": 1.840759264039002e-16,
+        "y": -12,
+        "slope": null,
+        "yaw": -1.5707963267948966,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -10.379999527508277,
+        "riding": null
+      },
+      "steps": 636,
+      "half": true
+    },
+    {
+      "id": "M-STE-B2-B1-up",
+      "end": {
+        "floor": "M-B1",
+        "x": 45.35000000000003,
+        "z": 7.582918150296108e-17,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 1.5707963267948963,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.880000472491723,
+        "riding": null
+      },
+      "steps": 636,
+      "half": true
+    },
+    {
+      "id": "M-STE-B2-B1-down",
+      "end": {
+        "floor": "M-B2",
+        "x": 45.35000000000003,
+        "z": 1.840759264039002e-16,
+        "y": -12,
+        "slope": null,
+        "yaw": 1.5707963267948966,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -10.379999527508277,
+        "riding": null
+      },
+      "steps": 636,
+      "half": true
+    },
+    {
+      "id": "WPG-ST1-B2-B1-up",
+      "end": {
+        "floor": "WPG-B1",
+        "x": -337.9999999999996,
+        "z": -187.34999999999968,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8800000098165266,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "WPG-ST1-B2-B1-down",
+      "end": {
+        "floor": "WPG-B2",
+        "x": -338.0000000000004,
+        "z": -187.34999999999968,
+        "y": -8.4,
+        "slope": null,
+        "yaw": -3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -6.779999990183473,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "WPG-ST1-B1-G-up",
+      "end": {
+        "floor": "WPG-G",
+        "x": -337.9999999999996,
+        "z": -187.34999999999968,
+        "y": 0,
+        "slope": null,
+        "yaw": 3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.6199999886732384,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "WPG-ST1-B1-G-down",
+      "end": {
+        "floor": "WPG-B1",
+        "x": -338.0000000000004,
+        "z": -187.34999999999968,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8799999886732386,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "WPG-ST2-B2-B1-up",
+      "end": {
+        "floor": "WPG-B1",
+        "x": -315.9999999999996,
+        "z": -187.34999999999968,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8800000098165266,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "WPG-ST2-B2-B1-down",
+      "end": {
+        "floor": "WPG-B2",
+        "x": -316.0000000000004,
+        "z": -187.34999999999968,
+        "y": -8.4,
+        "slope": null,
+        "yaw": -3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -6.779999990183473,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "WPG-ST2-B1-G-up",
+      "end": {
+        "floor": "WPG-G",
+        "x": -315.9999999999996,
+        "z": -187.34999999999968,
+        "y": 0,
+        "slope": null,
+        "yaw": 3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.6199999886732384,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "WPG-ST2-B1-G-down",
+      "end": {
+        "floor": "WPG-B1",
+        "x": -316.0000000000004,
+        "z": -187.34999999999968,
+        "y": -4.5,
+        "slope": null,
+        "yaw": -3.1415926535894867,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.8799999886732386,
+        "riding": null
+      },
+      "steps": 479,
+      "half": true
+    },
+    {
+      "id": "T-P3-ST-G-2F-up",
+      "end": {
+        "floor": "bridge",
+        "x": -36.00484668629597,
+        "z": 36.00484668629596,
+        "y": 6.5,
+        "slope": null,
+        "yaw": -0.7853981633973692,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 8.119999999999997,
+        "riding": null
+      },
+      "steps": 651,
+      "half": true
+    },
+    {
+      "id": "T-P3-ST-G-2F-down",
+      "end": {
+        "floor": "P3-1F",
+        "x": -36.00484668629595,
+        "z": 36.00484668629597,
+        "y": 0,
+        "slope": null,
+        "yaw": -0.7853981633973569,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.620000000000005,
+        "riding": null
+      },
+      "steps": 651,
+      "half": true
+    },
+    {
+      "id": "T-PK-ST-G-2F-up",
+      "end": {
+        "floor": "bridge",
+        "x": 36.00484668629596,
+        "z": 36.00484668629597,
+        "y": 6.5,
+        "slope": null,
+        "yaw": 0.7853981633973569,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 8.119999999999997,
+        "riding": null
+      },
+      "steps": 651,
+      "half": true
+    },
+    {
+      "id": "T-PK-ST-G-2F-down",
+      "end": {
+        "floor": "ground",
+        "x": 36.00484668629597,
+        "z": 36.00484668629595,
+        "y": 0,
+        "slope": null,
+        "yaw": 0.7853981633973691,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 1.620000000000005,
+        "riding": null
+      },
+      "steps": 651,
+      "half": true
+    }
+  ]
+}

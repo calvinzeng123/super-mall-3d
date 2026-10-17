@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "complete scene recovers after first two downloads fail for each of suite, residence-01 and female-person"
+  ],
+  "counts": {
+    "suite.a7f99bf01d3ad6e3.glb": 3,
+    "residence-01.d7c68cf855216de9.bin": 3,
+    "person-f.a1ec332b8f429022.glb": 3
+  },
+  "errors": []
+}
