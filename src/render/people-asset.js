@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PEOPLE_ASSETS } from './people-data.js';
 import { MOBILE } from './device.js';
+import { fetchBinary } from './fetch-binary.js';
 
 let pending;
 /** Two locally bundled, MIT-licensed humanoids; geometry/texture/morph poses are
@@ -14,7 +15,7 @@ export function loadPeopleAssets(anisotropy = 4) {
       const binary = atob(record.url.slice(record.url.indexOf(',') + 1));
       const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
       gltf = await loader.parseAsync(bytes.buffer, '');
-    } else gltf = await loader.loadAsync(record.url);
+    } else gltf = await loader.parseAsync(await fetchBinary(record.url, { label: '人物模型' }), THREE.LoaderUtils.extractUrlBase(record.url));
     const parts = [];
     gltf.scene.updateMatrixWorld(true);
     gltf.scene.traverse(object => {

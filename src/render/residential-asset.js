@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MOBILE } from './device.js';
+import { fetchBinary } from './fetch-binary.js';
 
 const roofPattern = /roof|ceiling|屋顶|天花|顶盖|顶板/i;
 const structuralSlab = /^(Structure main floor slab|Balcony structural slab)$/;
@@ -15,9 +16,7 @@ export async function decodeResidentialAsset(record) {
   if (typeof DecompressionStream !== 'function') throw new Error('当前浏览器不支持住宅模型解压，请使用新版 Chrome、Edge 或 Safari。');
   let bytes;
   if (record.url) {
-    const response = await fetch(record.url);
-    if (!response.ok) throw new Error(`住宅${record.unit}模型下载失败：HTTP ${response.status}`);
-    bytes = new Uint8Array(await response.arrayBuffer());
+    bytes = new Uint8Array(await fetchBinary(record.url, { label: `住宅${record.unit}模型` }));
   } else {
     const binary = atob(record.data);
     bytes = new Uint8Array(binary.length);

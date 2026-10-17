@@ -8,6 +8,7 @@ import { buildWestParking } from './west-parking.js';
 import { createSuitePlan, createSuiteMezzanine, suiteAdditionObstacles } from './suite-plan.js';
 import { createResidentialPlan, RESIDENTIAL_SLOTS } from './residential-plan.js';
 import { towerStairPlan, buildTowerStairAccess } from './tower-stairs.js';
+import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 
 export const HOSPITALITY = {
   west: rect(-286, -151, -203, -27),
@@ -234,8 +235,10 @@ function publicWestGarage() {
   Object.assign(part.building,{kind:'garage',usage:'parking',undergroundOnly:true,height:0,storeys:0,plot:null,levels:ids,accessKiosks:kiosks});
   part.stairs=kiosks.map((r,i)=>{
     const stairRect=rect(r.x0,r.z0,r.x0+6,r.z0+10),door={x0:r.x0+1.1,z0:r.z0+10,x1:r.x0+4.9,z1:r.z0+10,side:'S'};
-    return {id:`WPG-ST${i+1}`,building:'WPG',frame:F,rect:stairRect,poly:lrectPoly(F,stairRect),door,wdoor:lseg(F,door),wdoorByLevel:{},serves:ids};
+    return {id:`WPG-ST${i+1}`,building:'WPG',frame:F,rect:stairRect,poly:lrectPoly(F,stairRect),door,doorByLevel:{},wdoor:lseg(F,door),wdoorByLevel:{},serves:ids};
   });
+  prepareMallStairs(part.stairs);
+  for(const stair of part.stairs)stair.wdoor=lseg(F,stair.door);
   part.elevators=kiosks.map((r,i)=>lift(`WPG-L${i+1}`,'WPG','passenger',F,r.x0+9,r.z0+6,3,3,'S',ids));
   part.entrances=kiosks.map((r,i)=>{const seg=lseg(F,{x0:r.x0+6,z0:r.z1,x1:r.x0+11,z1:r.z1,side:'S'});return{id:`WPG-ENTRY${i+1}`,building:'WPG',level:'WPG-G',name:`西侧公共车库行人入口 ${i+1}`,seg,nx:0,nz:1,width:5,main:false,to:'site',coveredConnection:true};});
   for(const lv of part.levels) {
@@ -249,7 +252,7 @@ function publicWestGarage() {
       const inner=rect(er.x0+.1,er.z0+.1,er.x1-.1,er.z1-.1),core=room(`${e.id}-shaft`,'core',F,er);
       core.rects=[rect(er.x0,er.z0,er.x1,inner.z0),rect(er.x0,inner.z1,er.x1,er.z1),rect(er.x0,inner.z0,inner.x0,inner.z1),rect(inner.x1,inner.z0,er.x1,inner.z1)];
       core.polys=core.rects.map(r=>lrectPoly(F,r));core.garageLift=e.id;lv.rooms.push(core);
-      const holes=[{id:`${e.id}-void`,kind:'shaft',rect:rect(er.x0+.1,er.z0+.1,er.x1-.1,er.z1-.1),elevator:e.id},{id:`${stair.id}-void`,kind:'stair',rect:rect(stair.rect.x0+.4,stair.rect.z0+.7,stair.rect.x1-.4,stair.rect.z1-2),stair:stair.id}];
+      const holes=[{id:`${e.id}-void`,kind:'shaft',rect:rect(er.x0+.1,er.z0+.1,er.x1-.1,er.z1-.1),elevator:e.id}];
       for(const hole of holes) {const poly=lrectPoly(F,hole.rect);lv.voids.push({...hole,frame:F,poly});lv.slab.pieces[lv.kind==='parking'?0:i].holes.push(poly);}
     }
     if(lv.kind==='parking') {
@@ -257,6 +260,7 @@ function publicWestGarage() {
       lv.parking={...fillRows(F,[{id:'WPG-north',u0:-36,u1:36,v0:-8,v1:-3,face:'S'},{id:'WPG-south',u0:-36,u1:36,v0:3,v1:8,face:'N'}],blocked,'WPG'),aisles:lv.walk.filter(w=>w.kind==='aisle'),zone:'WPG'};
     }
   }
+  part.building.access=buildMallStairAccess(part.building,part.levels,part.stairs);
   return part;
 }
 

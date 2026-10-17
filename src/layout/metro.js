@@ -6,6 +6,7 @@ import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, toW, polyBound
 import { ESC, CATEGORIES } from './constants.js';
 import { lift } from './mall.js';
 import { PORTAL_U } from './p3.js';
+import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 
 export const METRO = {
   box: rect(-66, -11, 66, 11),
@@ -117,6 +118,7 @@ export function buildMetro(parts, site, picker) {
     { id: 'M-STW', building: bid, kind: 'metro', frame: IDENTITY, rect: rect(-54, -2, -46, 2), door: { x0: -46, z0: -1.2, x1: -46, z1: 1.2, side: 'E' }, doorByLevel: {}, serves },
     { id: 'M-STE', building: bid, kind: 'metro', frame: IDENTITY, rect: rect(46, -2, 54, 2), door: { x0: 46, z0: -1.2, x1: 46, z1: 1.2, side: 'W' }, doorByLevel: {}, serves },
   ];
+  prepareMallStairs(stairs);
   for (const s of stairs) {
     s.poly = lrectPoly(s.frame, s.rect);
     s.wdoor = lseg(s.frame, s.door);
@@ -220,5 +222,6 @@ export function buildMetro(parts, site, picker) {
     box: METRO.box, platform: METRO.platform, track: METRO.track, train: METRO.train, gate: METRO.gate, line: METRO.line,
     passages, exits: exits.map((e) => ({ id: e.exit, name: e.name, passage: e.passage, entrance: e.id, kiosk: e.kiosk })),
   };
+  building.access = buildMallStairAccess(building, levels, stairs);
   return { building, levels, escalators, elevators, stairs, entrances: exits, ramps: [] };
 }

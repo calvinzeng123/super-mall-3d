@@ -3,7 +3,8 @@
 // 各期地下层的地铁连接口（门框 + 灯箱）。吊顶只在相机进入地下时显示，俯视时露出站内；列车在隧道口用裁剪平面截断。
 import * as THREE from 'three';
 import { frame, toW, toL, subtractInterval } from '../../layout/geom.js';
-import { EXIT } from '../../layout/metro.js';
+import { EXIT, carve } from '../../layout/metro.js';
+import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 import { BatchSet, SignBatch } from '../batch.js';
 import { drawEscalator, stripGeometry } from './escalators.js';
 import { makeCanvas, canvasTexture, scaled, releaseAfterUpload, FONT_CN, FONT_EN } from '../textures.js';
@@ -267,6 +268,9 @@ export function buildMetro(ctx) {
   const atlas = makeAtlas(signEntries(b));
   const signMat = ctx.mats.screen(atlas.texture, 0.92, 1.3);
   const signs = { b1: new SignBatch(), b2: new SignBatch(), shell: new SignBatch() };
+  const stairs = ctx.layout.stairs.filter(s => s.building === b.id);
+  for (const lv of [lv2, lv1]) buildMallStairLevel(ctx.levels[lv.id].batch, lv, stairs, b.access, { flights: true });
+  buildStairApproach(ctx, lv1.id, lv2.id, stairs, b.access);
   ctx.renderer.localClippingEnabled = true;
 
   concourse(ctx, b, lv1, L1, atlas, signs.b1);
@@ -586,19 +590,31 @@ function platform(ctx, b, lv, L, atlas, S) {
 }
 
 /** 站台吊顶：灯带沿站台纵向 */
-function platformCeiling(ctx, b, lv, L) {
+export function platformCeiling(ctx, b, lv, L) {
   const group = new THREE.Group();
   const B = new BatchSet(ctx.mats.base);
   const y = lv.elev + 4.6;
   const P = b.platform;
   const { x0, z0, x1, z1 } = b.box;
-  B.get('glowSoft').box(0, y + 0.03, 0, P.x1 - P.x0, 0.06, P.z1 - P.z0, '#dde2e6');
+  // The suspended ceiling sits between B2 and B1, so every continuous
+  // stair and escalator must keep a real opening through it.
+  const holes = [
+    ...lv.rooms.filter(r => r.openStair).flatMap(r => r.rects),
+    ...ctx.lvById['M-B1'].voids.filter(v => ['escalator', 'shaft'].includes(v.kind)).map(v => v.rect),
+  ];
+  for (const r of carve(P, holes)) B.get('glowSoft').box((r.x0+r.x1)/2, y+.03, (r.z0+r.z1)/2, r.x1-r.x0, .06, r.z1-r.z0, '#dde2e6');
   // 轨行区上方为深色结构顶板
   for (const s of [-1, 1]) B.get('satin').box((x0 + x1) / 2, y + 0.03, s * (P.z1 + z1) / 2, x1 - x0, 0.06, z1 - P.z1, '#4e545a');
   B.get('satin').box((x0 + P.x0) / 2, y + 0.03, 0, P.x0 - x0, 0.06, P.z1 - P.z0, '#4e545a');
   B.get('satin').box((P.x1 + x1) / 2, y + 0.03, 0, x1 - P.x1, 0.06, P.z1 - P.z0, '#4e545a');
   for (const z of [-4.5, -1.5, 1.5, 4.5]) {
-    for (let x = P.x0 + 2; x < P.x1 - 2; x += 6) B.get('glow').box(x + 2.7, y - 0.01, z, 5.2, 0.03, 0.16, '#f2f8ff');
+    for (let x = P.x0 + 2; x < P.x1 - 2; x += 6) {
+      // Keep the narrow light strips: carve's general paving helper omits
+      // sub-30cm rectangles, so split each strip by its crossing voids here.
+      let spans = [[x+.1, x+5.3]];
+      for (const r of holes) if (r.z0 < z+.08 && r.z1 > z-.08) spans = subtractInterval(spans, [r.x0,r.x1]);
+      for (const [a,c] of spans) if(c-a>.03) B.get('glow').box((a+c)/2, y-.01, z, c-a, .03, .16, '#f2f8ff');
+    }
   }
   B.flush(group);
   group.visible = false;

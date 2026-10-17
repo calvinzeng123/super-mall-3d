@@ -140,7 +140,7 @@ test('西侧公共附库只保留两个停车层，停车场地面连续且旧�
   assert.equal(L.levels.filter(l=>l.building==='WPG').flatMap(l=>l.units).length,0);
   assert.equal(L.elevators.filter(e=>e.building==='WPG').length,2);
   assert.equal(L.stairs.filter(e=>e.building==='WPG').length,2);
-  const entry=L.levels.find(l=>l.id==='WPG-G');assert.equal(entry.slab.pieces.length,2);assert.equal(entry.kind,'lobby');
+  const entry=L.levels.find(l=>l.id==='WPG-G');assert.equal(entry.slab.pieces.filter(p=>!p.stair).length,2);assert.equal(entry.kind,'lobby');
   for(const [x,z] of [[-344.5,-200],[-344.5,-215],[-377,-200]])assert.ok(clear(nav,{floor:'ground',x,z,y:0,slope:null}),'不能把公共停车地面挖掉');
   for(const [floor,target,route] of [
     ['WPG-B1','P1-B1M',[[-310,-200],[-282,-200],[-278,-200]]],

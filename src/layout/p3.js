@@ -7,6 +7,7 @@ import { fillRows, markSpecial } from './parking.js';
 import { split, lift } from './mall.js';
 import { addDriveway, addTrench } from './campus.js';
 import { CATEGORIES } from './constants.js';
+import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 
 /** [编号, 中心 x, 中心 z, 长 L, 宽 W, 角度, 层数] */
 export const BLOCKS = [
@@ -127,8 +128,9 @@ export function buildP3(site, picker) {
   for (const k of KIOSKS) {
     const r = k.r;
     const z = k.side === 'S' ? r.z1 : r.z0;
-    stairs.push({ id: `${bid}-${k.id}`, building: bid, kind: 'kiosk', frame: IDENTITY, rect: r, door: { x0: r.x0 + 2, z0: z, x1: r.x1 - 2, z1: z, side: k.side }, doorByLevel: {}, serves: ids('B2', 'B1', '1F') });
+    stairs.push({ id: `${bid}-${k.id}`, building: bid, kind: 'kiosk', axis: 'z', frame: IDENTITY, rect: r, door: { x0: r.x0 + 2, z0: z, x1: r.x1 - 2, z1: z, side: k.side }, doorByLevel: {}, serves: ids('B2', 'B1', '1F') });
   }
+  prepareMallStairs(stairs.filter(s=>s.kind==='kiosk'));
   for (const lv of levels) {
     for (const s of stairs) {
       if (!s.serves.includes(lv.id)) continue;
@@ -305,6 +307,9 @@ export function buildP3(site, picker) {
     })),
     kiosks: KIOSKS.map((k) => ({ ...k, poly: rectPoly(k.r) })),
   };
+  building.ancillaryAccess=buildMallStairAccess(building,levels,stairs.filter(s=>s.kind==='kiosk'));
+  for(const flight of building.ancillaryAccess.flights)flight.protected=true;
+  for(const key of ['surfaces','flights','routes'])access[key].push(...building.ancillaryAccess[key]);
   for (const lv of levels) delete lv.cfg;
   // 地铁三期通道口：切面中段 8m，外法线指向路口
   const PF = frame(0, 0, 135, 'P3-metro');

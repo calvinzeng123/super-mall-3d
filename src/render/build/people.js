@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { polyline } from '../paths.js';
 import { rng } from '../textures.js';
 import { loadPeopleAssets } from '../people-asset.js';
+import { createPeopleSupport } from '../people-support.js';
 
 const COUNT = { parking: 12, food: 70, retail: 75, roof: 45, street: 40, concourse: 80, platform: 56 };
 
@@ -48,7 +49,10 @@ export async function buildPeople(ctx) {
         rank: (i + .5) / count,
       });
     }
-    walkers.push({ lv, variants, list, group: ctx.levels[lv.id].people });
+    const extraPieces = (ctx.layout.extensions?.paths || []).filter(path => path.level === lv.id)
+      .flatMap(path => path.slab?.pieces || []);
+    const support = createPeopleSupport(lv, extraPieces);
+    walkers.push({ lv, variants, list, support, group: ctx.levels[lv.id].people });
     stats.capacity += count;
   }
 
@@ -70,6 +74,9 @@ export async function buildPeople(ctx) {
       const distanceSq = (position.x - ctx.camera.position.x) ** 2 +
         (position.y + offset - ctx.camera.position.y) ** 2 + (position.z - ctx.camera.position.z) ** 2;
       if (distanceSq > maxDistance ** 2) continue;
+      // Test the actual laterally shifted position. The path clock above keeps
+      // running while an actor crosses an opening, so it reappears on solid floor.
+      if (!walker.support(position.x, position.z, actor.escalator)) continue;
       const variant = walker.variants[actor.variant], { mesh, asset } = variant;
       rotation.setFromAxisAngle(up, Math.atan2(dir[0] * actor.dir, dir[2] * actor.dir));
       scale.setScalar(actor.size);

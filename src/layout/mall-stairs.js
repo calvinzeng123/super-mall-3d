@@ -1,12 +1,12 @@
 // Compact protected stairs share one measured plan with navigation and rendering.
 // Tall mall storeys use four flights in two stacked switchbacks; ordinary
 // basement storeys use two. Every turn has a separate physical landing.
-import { rect, toW, lrectPoly, NORMAL, unionOutline, subtractOpenings } from './geom.js';
+import { rect, toW, lrectPoly, NORMAL, unionOutline, subtractOpenings, pointInPoly } from './geom.js';
 
 const WALL = .15, START = 1.35, WIDTH = 1.2, TREAD = .27, RISER = .175;
 
 export function mallStairPlan(stair) {
-  const r = stair.rect, axis = r.x1-r.x0 >= r.z1-r.z0 ? 'x' : 'z';
+  const r = stair.rect, axis = stair.axis || (r.x1-r.x0 >= r.z1-r.z0 ? 'x' : 'z');
   const depth = axis==='x' ? r.x1-r.x0 : r.z1-r.z0;
   const span = axis==='x' ? r.z1-r.z0 : r.x1-r.x0;
   const doors = [stair.originalDoor || stair.door, ...Object.values(stair.originalDoorByLevel || stair.doorByLevel || {})];
@@ -67,7 +67,10 @@ export function buildMallStairAccess(building,levels,stairs) {
       // Thin independent entry platforms prevent thick retail slabs from
       // intruding into the headroom of a stacked intermediate landing.
       lv.voids.push({id:`${stair.id}-${lv.short}-shaft`,kind:'stair',stair:stair.id,frame:stair.frame,rect:p.shaftRect,poly});
-      lv.slab.pieces[0].holes.push(cut);
+      const center=toW(stair.frame,...p.point(p.span/2,p.depth/2));
+      const plate=lv.slab.pieces.find(piece=>pointInPoly(center,piece.outer));
+      if(!plate)throw new Error(`${stair.id}/${lv.id}: no supporting slab for stair shaft`);
+      plate.holes.push(cut);
       lv.slab.pieces.push({outer:lrectPoly(stair.frame,p.landingRect),holes:[],thickness:.12,stair:stair.id});
     }
     for(let i=0;i<served.length-1;i++) {

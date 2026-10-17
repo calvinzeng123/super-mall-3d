@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MOBILE } from './device.js';
+import { fetchBinary } from './fetch-binary.js';
 
 let cachedPromise = null;
 let cachedSource = null;
@@ -30,7 +31,7 @@ async function prepare(dataUrl, anisotropy) {
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     gltf = await loader.parseAsync(bytes.buffer, '');
   } else if (dataUrl instanceof ArrayBuffer) gltf = await loader.parseAsync(dataUrl, '');
-  else gltf = await loader.loadAsync(dataUrl);
+  else gltf = await loader.parseAsync(await fetchBinary(dataUrl, { label: '酒店套房模型' }), THREE.LoaderUtils.extractUrlBase(dataUrl));
   const scene = gltf.scene;
   scene.updateMatrixWorld(true);
   const primitives = [], geometries = new Set(), materials = new Set(), textures = new Set();

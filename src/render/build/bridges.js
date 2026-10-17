@@ -8,6 +8,7 @@ import { drawEscalator, stripGeometry } from './escalators.js';
 import { bridgePaths, polyline } from '../paths.js';
 import { rng } from '../textures.js';
 import { BatchSet } from '../batch.js';
+import { buildBridgeStairGeometry } from './bridge-stairs.js';
 
 const WHITE = '#eef1f3';
 const STEEL = '#3a4047';
@@ -136,28 +137,21 @@ export function buildBridges(ctx) {
 }
 
 /** 落地塔：钢框玻璃盒、楼板（留楼梯井与电梯井）、屋顶、折返楼梯、玻璃电梯（动画）、户外扶梯 */
-function tower(ctx, B, G, br, T, strips) {
+export function tower(ctx, B, G, br, T, strips) {
   const F = T.frame;
   const { y } = br;
   const r = T.rect;
   const tc = (r.x0 + r.x1) / 2;
   const s = T.side;
   const H = y + 4.1;
-  const vs = (a, b) => [Math.min(s * a, s * b), Math.max(s * a, s * b)];
   B.frame(F, () => {
     // 地面铺装与楼板
     B.get('extSatin').box(tc, 0.04, 0, r.x1 - r.x0 + 1.2, 0.08, r.z1 - r.z0 + 1.2, '#cfc8bb');
-    const floor = (u0, u1, va, vb) => {
-      const [v0, v1] = [Math.min(va, vb), Math.max(va, vb)];
-      B.get('extSatin').box((u0 + u1) / 2, y - 0.5, (v0 + v1) / 2, u1 - u0, 1.0, v1 - v0, WHITE);
-      B.get('ext').box((u0 + u1) / 2, y + 0.015, (v0 + v1) / 2, u1 - u0, 0.03, v1 - v0, '#9c6a43');
-    };
-    floor(r.x0, tc - 0.5, r.z0, r.z1);
-    floor(tc - 0.5, tc + 2.0, 0, s * r.z1);
-    floor(tc + 2.0, tc + 4.8, 0, s * 1.1);
-    floor(tc + 2.0, tc + 4.8, s * 3.9, s * r.z1);
-    floor(tc + 4.8, r.x1, r.z0, r.z1);
-    floor(tc - 0.5, tc + 4.8, 0, -s * 1.1);
+    for (const piece of T.deckPieces) {
+      const r=piece.rect,t=piece.thickness;
+      B.get('extSatin').box((r.x0+r.x1)/2,y-t/2,(r.z0+r.z1)/2,r.x1-r.x0,t,r.z1-r.z0,WHITE);
+      B.get('ext').box((r.x0+r.x1)/2,y+.015,(r.z0+r.z1)/2,r.x1-r.x0,.03,r.z1-r.z0,'#9c6a43');
+    }
     // 钢框
     for (const [u, v] of [[r.x0, r.z0], [r.x0, r.z1], [r.x1, r.z0], [r.x1, r.z1], [r.x1, 0], [tc, r.z0], [tc, r.z1]]) B.get('extMetal').box(u, H / 2, v, 0.3, H, 0.3, STEEL);
     for (const yy of [3.4, y - 0.5, H]) {
@@ -189,26 +183,12 @@ function tower(ctx, B, G, br, T, strips) {
     // 屋顶 + 灯带
     B.get('ext').box(tc, H + 0.2, 0, r.x1 - r.x0 + 0.8, 0.4, r.z1 - r.z0 + 0.8, WHITE);
     for (const v of [r.z0 - 0.42, r.z1 + 0.42]) B.get('glow').box(tc, H + 0.12, v, r.x1 - r.x0 + 0.8, 0.06, 0.04, LED);
-    // 折返楼梯：两条梯道、四跑（每跑 1.625m）
-    const laneA = vs(-1.2, -2.9), laneB = vs(-3.1, -4.8);
-    const q = y / 4;
-    const runs = [[laneA, tc + 0.2, tc + 4.2, 0, q], [laneB, tc + 4.2, tc + 0.2, q, 2 * q], [laneA, tc + 0.2, tc + 4.2, 2 * q, 3 * q], [laneB, tc + 4.2, tc + 0.2, 3 * q, y]];
-    for (const [[va, vb], ua, ub, ya, yb2] of runs) {
-      const n = 10;
-      for (let i = 0; i < n; i++) {
-        const u = ua + ((ub - ua) * (i + 0.5)) / n;
-        B.get('extSatin').box(u, ya + ((yb2 - ya) * (i + 1)) / n - 0.03, (va + vb) / 2, Math.abs(ub - ua) / n + 0.02, 0.06, vb - va, '#c9c4bb');
-      }
-      for (const v of [va, vb]) B.get('extMetal').bar({ x: ua, y: ya + 0.95, z: v }, { x: ub, y: yb2 + 0.95, z: v }, 0.05, STEEL);
-    }
-    for (const yy of [q, 3 * q]) B.get('extSatin').box(tc + 4.45, yy - 0.06, -s * 3.0, 0.5, 0.12, 3.6, '#c9c4bb');
-    B.get('extSatin').box(tc - 0.15, 2 * q - 0.06, -s * 3.0, 0.7, 0.12, 3.6, '#c9c4bb');
-    B.get('extSatin').box(tc - 0.15, y - 0.06, -s * 3.95, 0.7, 0.12, 1.7, '#c9c4bb');
     // 电梯井
     const lu = tc + 3.4, lv = s * 2.5;
     for (const [du, dv] of [[-1.3, -1.3], [1.3, -1.3], [1.3, 1.3], [-1.3, 1.3]]) B.get('extMetal').box(lu + du, H / 2, lv + dv, 0.12, H, 0.12, STEEL);
     for (const [su, sv, ou, ov] of [[2.6, 0.03, 0, -1.3], [2.6, 0.03, 0, 1.3], [0.03, 2.6, 1.3, 0]]) B.get('glass').box(lu + ou, H / 2, lv + ov, su, H - 0.2, sv, 0xffffff);
   });
+  buildBridgeStairGeometry(B,br,T);
   // 电梯轿厢
   const car = liftCar(ctx);
   const [lx, lz] = toW(F, tc + 3.4, s * 2.5);

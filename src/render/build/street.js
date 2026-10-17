@@ -10,6 +10,7 @@ import { addTrees, bench, planter, umbrella, tableSet } from './props.js';
 import { shade } from './storefronts.js';
 import { streetDoor } from '../../layout/frontage.js';
 import { buildHeritageDetail, heritageRoof, buildStreetMarket } from './street-heritage.js';
+import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 
 const GAL = 2.5;
 const BAY = 4;
@@ -56,6 +57,11 @@ function remainder(len, openings) {
 export function buildStreet(ctx) {
   for (const b of ctx.layout.buildings.filter((x) => x.kind === 'street')) {
     const lvs = Object.fromEntries(ctx.layout.levels.filter((l) => l.building === b.id).map((l) => [l.short, l]));
+    if(b.ancillaryAccess)for(const lv of [lvs.B2,lvs.B1,lvs['1F']])
+      buildMallStairLevel(ctx.levels[lv.id].batch,lv.ground?{...lv,height:3.2}:lv,
+        ctx.layout.stairs.filter(s=>s.building===b.id&&s.kind==='kiosk'),b.ancillaryAccess,{flights:true});
+    if(b.ancillaryAccess)buildStairApproach(ctx,lvs['1F'].id,lvs.B1.id,
+      ctx.layout.stairs.filter(s=>s.building===b.id&&s.kind==='kiosk'),b.ancillaryAccess);
     for (const k of b.blocks) block(ctx, b, k, lvs);
     kiosks(ctx, b, lvs['1F']);
     streetscape(ctx, b, lvs['1F']);
@@ -473,7 +479,7 @@ function catenary(B, a, b, sag, step = 0.9) {
 // ---------------------------------------------------------------------------
 // 地库楼梯口、街巷景观、外围绿化、地库外墙
 
-/** 地库楼梯口：玻璃亭（白色挑檐屋顶、P 标识）；B1 一段由 rooms.js 绘制 */
+/** 地库楼梯口：实体消防梯间共用同源围护，亭顶、照明和停车标识单独保留。 */
 function kiosks(ctx, b, lv) {
   const L = ctx.levels[lv.id];
   const B = L.batch;
@@ -485,15 +491,8 @@ function kiosks(ctx, b, lv) {
     const doorZ = k.side === 'S' ? r.z1 : r.z0;
     const s = k.side === 'S' ? 1 : -1;
     for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]]) B.get('extMetal').box(x, H / 2, z, 0.18, H, 0.18, STEEL);
-    B.get('glass').box(cx, H / 2, r.z0 + r.z1 - doorZ, W, H, 0.04, 0xffffff);
-    B.get('glass').box(r.x0, H / 2, cz, 0.04, H, D, 0xffffff);
-    B.get('glass').box(r.x1, H / 2, cz, 0.04, H, D, 0xffffff);
-    for (const x of [r.x0 + 1, r.x1 - 1]) B.get('glass').box(x, H / 2, doorZ, 2, H, 0.04, 0xffffff);
     B.get('ext').box(cx, H + 0.15, cz + s * 0.6, W + 0.8, 0.3, D + 1.6, '#f2f2ee');
     B.get('glow').box(cx, H - 0.02, doorZ + s * 1.1, W - 0.4, 0.04, 0.08, '#eaf6ff');
-    // 下行梯口（深色）与护栏
-    B.get('ext').box(cx, 0.02, cz - s * 0.4, W - 2.4, 0.04, D - 2.4, '#2a2d31');
-    for (const x of [r.x0 + 1.2, r.x1 - 1.2]) B.get('extMetal').box(x, 0.55, cz - s * 0.4, 0.05, 1.1, D - 2.4, STEEL);
     B.get('extSatin').box(cx, H - 0.45, doorZ + s * 0.08, 3.4, 0.7, 0.1, '#1d4ed8');
     L.signs.place(cx, H - 0.45, doorZ + s * 0.14, 2.6, 0.65, k.side, atlas.cell('wf-park'));
   }

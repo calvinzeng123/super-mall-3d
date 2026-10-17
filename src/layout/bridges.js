@@ -3,6 +3,7 @@
 // 三期与公园两条落在 10×10m 落地塔上，塔内楼梯、扶梯、电梯把桥面与地面步行区连起来。
 import { frame, toW, rect, lrectPoly } from './geom.js';
 import { ESC } from './constants.js';
+import { buildBridgeStairAccess } from './bridge-stairs.js';
 
 export const BRIDGE = { y: 6.5, thick: 1.0, R: 34, width: 6, linkWidth: 5, tower: 10, segments: 24 };
 
@@ -71,9 +72,9 @@ export function buildBridges(buildings) {
         });
       }
       // 楼梯（折返跑）占塔内 −side 半边远端，门朝连廊；电梯在 side 半边远端
-      const st = rect(tc - 0.5, Math.min(-s * 1.2, -s * 4.8), tc + 4.7, Math.max(-s * 1.2, -s * 4.8));
-      const sp = toW(F, tc - 1.1, -s * 3);
-      verticals.push({ id: `${d.tower}-ST`, type: 'stair', tower: d.tower, frame: F, rect: st, door: { x0: tc - 0.5, z0: st.z0 + 0.6, x1: tc - 0.5, z1: st.z1 - 0.6, side: 'W' }, deck: sp, ground: sp });
+      const st = rect(tc - 1.0, Math.min(-s * 1.2, -s * 4.8), tc + 4.7, Math.max(-s * 1.2, -s * 4.8));
+      const sp = toW(F, tc - 1.65, -s * 3);
+      verticals.push({ id: `${d.tower}-ST`, type: 'stair', tower: d.tower, frame: F, rect: st, door: { x0: tc - 1.0, z0: st.z0 + 0.6, x1: tc - 1.0, z1: st.z1 - 0.6, side: 'W' }, deck: sp, ground: sp });
       const lp = toW(F, tc + 1.5, s * 2.5);
       verticals.push({ id: `${d.tower}-L`, type: 'lift', tower: d.tower, frame: F, lu: tc + 3.4, lv: s * 2.5, w: 2.6, d: 2.6, door: 'W', deck: lp, ground: lp });
     }
@@ -86,5 +87,7 @@ export function buildBridges(buildings) {
     const a = (deg * Math.PI) / 180;
     supports.push({ id: `S${deg}`, x: R * Math.cos(a), z: R * Math.sin(a), deg, kind: 'ring' });
   }
-  return { y, thick, R, width, linkWidth, walk, ring, links, towers, verticals, supports };
+  const bridge = { y, thick, R, width, linkWidth, walk, ring, links, towers, verticals, supports };
+  bridge.access = buildBridgeStairAccess(bridge);
+  return bridge;
 }

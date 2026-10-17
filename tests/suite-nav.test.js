@@ -31,7 +31,7 @@ test('模型套房覆盖酒店公寓400户和30套夹层，住宅大堂改造后
   assert.equal(L.levels.filter(l => l.building === 'H' && l.levelNumber).length, 20);
   assert.equal(L.levels.filter(l => l.building === 'A' && l.levelNumber).length, 20);
   assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 748);
-  const streetLandings = L.buildings.reduce((n, b) => n + (b.access?.surfaces.length || 0), 0);
+  const streetLandings = L.buildings.reduce((n, b) => n + (b.access?.surfaces.length || 0), 0) + (L.bridges?.access?.surfaces.length || 0);
   assert.equal(nav.floors.size, L.levels.length + 2 + 30 + streetLandings);
 });
 

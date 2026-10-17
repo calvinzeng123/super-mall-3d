@@ -59,6 +59,33 @@ export function buildMallStairLevel(B,level,stairs,access,{flights=false}={}) {
   if(flights)for(const f of access.flights.filter(f=>f.parentFloor===level.id))B.frame(f.frame,()=>buildMallFlightGeometry(B,f));
 }
 
+/** A hidden basement still needs a complete stair shaft below its opening.
+ * Limit the preview to the selected stairs, including their deeper flights,
+ * walls and entry platforms, so the visible well never opens onto the sky.
+ * The preview switches off as soon as the complete lower floor is displayed. */
+export function buildStairApproach(ctx,upperId,lowerId,stairs,access) {
+  const lower=ctx.levels[lowerId],upper=ctx.levels[upperId];
+  const level=ctx.layout.levels.find(l=>l.id===lowerId),batch=new BatchSet(ctx.mats.base),group=new THREE.Group();
+  group.name=`${upperId}-descending-stair-preview`;
+  const selected=stairs.filter(s=>s.serves.includes(upperId)&&s.serves.includes(lowerId));
+  const ids=new Set(selected.map(s=>s.id));
+  const selectedAccess={...access,surfaces:access.surfaces.filter(s=>ids.has(s.stair)),flights:access.flights.filter(f=>ids.has(f.stair))};
+  const levels=ctx.layout.levels.filter(l=>l.elev<=level.elev&&selected.some(s=>s.serves.includes(l.id)));
+  for(const lv of levels) {
+    buildMallStairLevel(batch,lv,selected,selectedAccess,{flights:true});
+    for(const stair of selected.filter(s=>s.serves.includes(lv.id)))batch.frame(stair.frame,()=>{
+      const p=mallStairPlan(stair);
+      box(batch,'concrete',p.landingRect,lv.elev-.15,.15,STEP);
+      if(!levels.some(l=>l.elev<lv.elev&&stair.serves.includes(l.id)))
+        box(batch,'concrete',p.shaftRect,lv.elev-.15,.15,STEP);
+    });
+  }
+  batch.flush(group);upper.base.add(group);
+  const update=()=>{group.visible=!(lower.group.visible&&lower.base.visible);};
+  update();ctx.dynamic.push({name:group.name,update});
+  return group;
+}
+
 /** Shared flight buffers are reused across every rotated wing and storey.
  * Instances live with the originating floor, so half-landings stay visible. */
 export function buildMallStairs(ctx) {

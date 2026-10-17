@@ -6,6 +6,7 @@ import { buildNav, step, clear, landAt, floorLabel } from '../src/layout/nav.js'
 import { dist, toW, pointInPoly, lrectPoly, polySamples } from '../src/layout/geom.js';
 
 const nav=buildNav(L), b=L.buildings.find(b=>b.id==='P3');
+const blockRoutes=b.access.routes.filter(r=>r.block);
 const at=p=>({floor:p.floor,x:p.x,z:p.z,y:p.y,slope:null});
 const move=(s,p)=>{
   const dx=p.x-s.x,dz=p.z-s.z,n=Math.ceil(Math.hypot(dx,dz)/.075);
@@ -17,9 +18,9 @@ const move=(s,p)=>{
 };
 
 test('三期44组双跑楼梯双向连续步行，覆盖全部楼栋以及B2/B1',()=>{
-  assert.equal(b.access.routes.length,44);
-  assert.equal(b.access.flights.length,88);
-  for(const r of b.access.routes)for(const points of [r.waypoints,[...r.waypoints].reverse()]){
+  assert.equal(blockRoutes.length,44);
+  assert.equal(b.access.flights.filter(f=>!f.protected).length,88);
+  for(const r of blockRoutes)for(const points of [r.waypoints,[...r.waypoints].reverse()]){
     let s=at(points[0]);
     assert.ok(clear(nav,s),`${r.id} 起点无支撑`);
     for(const p of points.slice(1))s=move(s,p);
@@ -28,7 +29,7 @@ test('三期44组双跑楼梯双向连续步行，覆盖全部楼栋以及B2/B1'
 });
 
 test('三期楼梯上层挖空，半层平台有实体支撑，降落可回到梯面',()=>{
-  for(const r of b.access.routes){
+  for(const r of blockRoutes){
     const block=b.blocks.find(k=>k.n===r.block),lv=lvl(r.to);
     const hole=lrectPoly(block.F,block.stairShaft);
     for(const p of polySamples(hole,.8,.16))assert.ok(!onSlab(lv,p),`${r.id} 楼梯仍被上层板封死`);

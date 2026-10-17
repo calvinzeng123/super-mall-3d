@@ -77,10 +77,19 @@ export function buildNav(layout) {
   ground.pieces.push(piece(rectPoly(S.bounds || CAMPUS), groundHoles));
   const br = layout.bridges;
   const bridge = br ? mk('bridge', br.y, 'bridge') : null;
-  if (bridge) for (const w of br.walk) bridge.pieces.push(piece(w.poly));
+  if (bridge) for (const w of br.walk) bridge.pieces.push(piece(w.poly,w.holes||[]));
   // 三期街区内的地面就是三期 1F 街巷楼层
   const street = p3 ? p3.levels.find((id) => floors.get(id).level.ground) : null;
   const groundAt = (x, z) => (street && pointInPoly([x, z], district) ? street : 'ground');
+  for(const surface of br?.access?.surfaces||[]) {
+    const F=mk(surface.id,surface.elev,'bridge',{parentFloor:'bridge',stairLanding:true});
+    F.pieces.push(piece(surface.poly));
+  }
+  for(const record of br?.access?.navigationCuts||[]) {
+    const r=record.rect,poly=lrectPoly(record.frame,r);
+    const floor=record.floor==='street'?groundAt(...toW(record.frame,(r.x0+r.x1)/2,(r.z0+r.z1)/2)):record.floor;
+    for(const plate of floors.get(floor)?.pieces||[])plate.holes.push({poly,bb:polyBounds(poly)});
+  }
 
   // ---------- 墙 ----------
   const wall = (F, x0, z0, x1, z1) => { if (F && Math.hypot(x1 - x0, z1 - z0) > 0.02) F.walls.push({ x0, z0, x1, z1 }); };
@@ -102,6 +111,16 @@ export function buildNav(layout) {
     for (const P of [outer, ...holes]) for (let i = 0; i < P.length; i++) wall(F, ...P[i], ...P[(i + 1) % P.length]);
     F.obstacles.push(piece(outer, holes));
   };
+  for(const record of br?.access?.navigationWalls||[]) {
+    const first=record.segments[0];if(!first)continue;
+    const floor=record.floor==='street'?groundAt(...toW(record.frame,first.x0,first.z0)):record.floor;
+    for(const segment of record.segments)wallL(floors.get(floor),record.frame,segment);
+  }
+  for(const record of br?.access?.navigationObstacles||[]) {
+    const r=record.rect;
+    const floor=record.floor==='street'?groundAt(...toW(record.frame,(r.x0+r.x1)/2,(r.z0+r.z1)/2)):record.floor;
+    obstacle(floors.get(floor),record.frame,r);
+  }
   for (const o of S.urban?.buildings || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.westParking?.islands || []) polygonObstacle(ground, frame(0, 0, 0), o);
@@ -285,8 +304,13 @@ export function buildNav(layout) {
   }
 
   for (const b of layout.buildings) for (const f of b.access?.flights || []) {
-    lane(f.id, b.access.protected ? 'protected-stair' : 'exterior-stair', f.bottom.x, f.bottom.z, f.bottom.y,
+    lane(f.id, b.access.protected || f.protected ? 'protected-stair' : 'exterior-stair', f.bottom.x, f.bottom.z, f.bottom.y,
       f.top.x, f.top.z, f.top.y, f.width / 2, f.from, f.to, 0);
+  }
+  for(const f of br?.access?.flights||[]) {
+    const from=f.from==='street'?groundAt(f.bottom.x,f.bottom.z):f.from;
+    const to=f.to==='street'?groundAt(f.top.x,f.top.z):f.to;
+    lane(f.id,'protected-stair',f.bottom.x,f.bottom.z,f.bottom.y,f.top.x,f.top.z,f.top.y,f.width/2,from,to,0);
   }
 
   // ---------- 传送边与门口区 ----------

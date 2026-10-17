@@ -9,6 +9,7 @@ import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bollard, bench, planter } from './props.js';
 import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden } from './residential-shell.js';
 import { buildTowerStairGeometry, buildTowerStairInstances } from './tower-stairs.js';
+import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -654,7 +655,11 @@ function attachedDockLobbies(ctx) {
  * shell and opaque park-support roof are added here. */
 function buildPublicGarageShells(ctx) {
   for(const b of ctx.layout.buildings.filter(b=>b.undergroundOnly)) {
+    if(b.access?.protected)buildStairApproach(ctx,`${b.id}-G`,`${b.id}-B1`,
+      ctx.layout.stairs.filter(s=>s.building===b.id),b.access);
     for(const lv of ctx.layout.levels.filter(l=>l.building===b.id)) {
+      if(b.access?.protected)buildMallStairLevel(ctx.levels[lv.id].batch,lv,
+        ctx.layout.stairs.filter(s=>s.building===b.id),b.access,{flights:true});
       const group=new THREE.Group();group.name=`${lv.id}-retaining-shell`;
       const B=new BatchSet(ctx.mats.base);
       B.frame(b.frame,()=>{

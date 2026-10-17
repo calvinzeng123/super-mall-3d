@@ -54,12 +54,19 @@ test('天桥：支柱不压车行道（大道隔离带除外）；落地塔把�
     const road = L.site.roads.find((r) => pointInPoly([s.x, s.z], r.poly));
     assert.ok(!road || (road.id === 'avenue' && median([s.x, s.z])), `支柱 (${s.x.toFixed(1)}, ${s.z.toFixed(1)}) 压在 ${road && road.id} 上`);
   }
-  const towers = L.bridges.walk.filter((w) => w.kind === 'tower');
+  // A tower now has a cut main deck plus a separate thin stair-entry slab.
+  // Count the physical towers, then check their complete supporting surface.
+  const towers = L.bridges.towers;
   assert.equal(towers.length, 2);
   for (const t of towers) {
-    const vs = L.bridges.verticals.filter((v) => pointInPoly(v.deck, t.poly));
+    assert.ok(L.bridges.walk.some(w => w.id === t.id && w.kind === 'tower'));
+    const vs = L.bridges.verticals.filter(v => v.tower === t.id);
     assert.ok(vs.length >= 2, `${t.id} 的上下交通不足（楼梯 + 扶梯 / 电梯）`);
-    for (const v of vs) assert.ok(L.site.walk.some((w) => pointInPoly(v.ground, w.poly)), `${t.id} 的 ${v.type} 地面端不在场地步行区`);
+    for (const v of vs) {
+      assert.ok(pointInPoly(v.deck, t.poly), `${t.id} 的 ${v.type} 桥面端不在塔内`);
+      assert.ok(L.bridges.walk.some(w => pointInPoly(v.deck, w.poly) && !(w.holes || []).some(h => pointInPoly(v.deck, h))), `${t.id} 的 ${v.type} 桥面端缺少实际楼板`);
+      assert.ok(L.site.walk.some((w) => pointInPoly(v.ground, w.poly)), `${t.id} 的 ${v.type} 地面端不在场地步行区`);
+    }
   }
 });
 
