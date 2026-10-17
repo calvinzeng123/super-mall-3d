@@ -1,0 +1,49 @@
+{
+  "initial": {
+    "stats": {
+      "models": 2,
+      "textured": true,
+      "morphPoses": 8,
+      "capacity": 12,
+      "visible": 12,
+      "density": 1
+    },
+    "draw": {
+      "frame": 91,
+      "calls": 4,
+      "triangles": 46568,
+      "points": 0,
+      "lines": 82
+    },
+    "geometries": 4,
+    "meshes": [
+      {
+        "count": 6,
+        "capacity": 12,
+        "morphHeight": 12,
+        "morphFrames": 8,
+        "texture": [
+          512,
+          512
+        ]
+      },
+      {
+        "count": 6,
+        "capacity": 12,
+        "morphHeight": 12,
+        "morphFrames": 8,
+        "texture": [
+          512,
+          512
+        ]
+      }
+    ]
+  },
+  "density": {
+    "none": 0,
+    "low": 3,
+    "high": 12
+  },
+  "animationChanged": true,
+  "errors": []
+}

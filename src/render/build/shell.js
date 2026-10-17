@@ -94,7 +94,7 @@ export function buildShell(ctx) {
       const shape = shapeFromPoly(piece.outer, piece.holes);
       tops.push(flatShapeGeometry(shape, lv.elev));
       // 楼板体顶面比地面低 3cm：远景时两者不会深度冲突
-      bodies.push(slabGeometry(shape, lv.elev - 0.03, t));
+      bodies.push(slabGeometry(shape, lv.elev - 0.03, piece.thickness ?? t));
     }
     if (tops.length) {
       const top = new THREE.Mesh(tops.length > 1 ? mergeGeometries(tops) : tops[0], floorMat);
@@ -220,7 +220,7 @@ function railings(ctx, lv) {
   }
   const th = themeOf(lv);
   for (const v of lv.voids) {
-    if (v.kind === 'shaft' || v.kind === 'skylight' || v.kind === 'ramp') continue;
+    if (v.kind === 'shaft' || v.kind === 'skylight' || v.kind === 'ramp' || v.kind === 'stair') continue;
     const P = v.poly;
     for (let i = 0; i < P.length; i++) {
       const [x0, z0] = P[i];
@@ -243,12 +243,12 @@ function railings(ctx, lv) {
 }
 
 /** 楼层外墙在剖切状态下的矮墙轮廓（立面隐藏时仍能看出边界） */
-function sill(ctx, lv) {
+export function sill(ctx, lv) {
   const B = ctx.levels[lv.id].batch;
   const c = lv.kind === 'parking' || lv.kind === 'food' ? COLORS.concrete : COLORS.stone;
   const h = lv.kind === 'roof' ? 0.3 : 0.9;
   const key = lv.kind === 'roof' ? 'satin' : 'matte';
-  const ents = ctx.layout.entrances.filter((x) => x.level === lv.id && x.to !== 'site' && x.to !== 'bridge');
+  const ents = ctx.layout.entrances.filter((x) => x.level === lv.id);
   for (const e of ctx.outlineEdges(lv)) {
     for (const [a, b] of edgeSpans(e, ents, 0.01)) B.frame(e.F, () => B.get(key).box((a + b) / 2, lv.elev + h / 2, -0.15, b - a, h, 0.3, c));
   }
@@ -319,7 +319,7 @@ function facade(ctx, lv) {
         if(yB>head)rawPlace(a0,a1,head,yB,depth,offset,key,color);
       };
       const clad = (a, b, ya, yb) => {
-        place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'extSatin' : 'stone', pal.stone);
+        place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'facadeConcrete' : 'facadeStone', pal.stone);
         // 石板横向接缝跟随楼层标高；平整贴图之外仍能读到板块尺度。
         if (!pal.fin) for (let y = ya + 1.35; y < yb - 0.3; y += 1.35) place(a, b, y, y + 0.022, 0.012, 0.325, 'ext', '#8f887b');
       };

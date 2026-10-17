@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { L, lvl, inWalk, inVoid, onSlab, stairDoor, midOf, liftProbe, insetPts, segProbes } from './helpers.js';
-import { convexOverlap, polySamples, dist, pointInPoly, lrectPoly } from '../src/layout/geom.js';
+import { convexOverlap, polySamples, dist, pointInPoly, lrectPoly, distToPolyEdge } from '../src/layout/geom.js';
 import { buildWalkGraph, components } from '../src/layout/walk.js';
 
 test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', () => {
@@ -20,7 +20,7 @@ test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', ()
         const ownShaft = items[i].room?.type === 'stair' && lv.voids.find(v =>
           v.kind === 'stair' && v.stair === items[i].id && pointInPoly(q, v.poly));
         const cutShaft = ownShaft && lv.slab.pieces.some(s => s.holes.some(h =>
-          h.length === ownShaft.poly.length && ownShaft.poly.every(p => h.some(v => dist(p, v) < 1e-6)) && pointInPoly(q, h)));
+          ownShaft.poly.every(p => pointInPoly(p, h) || distToPolyEdge(p, h) < 1e-6) && pointInPoly(q, h)));
         if (!onSlab(lv, q) && !cutShaft) assert.fail(`${lv.id}: ${items[i].id} 在 (${q[0].toFixed(1)}, ${q[1].toFixed(1)}) 处不在楼板上或落入无关洞口`);
       }
       const room = items[i].room;

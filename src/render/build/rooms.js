@@ -3,6 +3,7 @@
 import { NORMAL, rw, rd, rcx, rcz } from '../../layout/geom.js';
 import { themeOf, COLORS } from '../theme.js';
 import { clearHeight } from './shell.js';
+import { buildMallStairs } from './mall-stairs.js';
 
 /** 以一段门（或墙）为基准的局部坐标：u 沿门所在墙，v 向房间内部 */
 function wallFrame(rect, side) {
@@ -23,6 +24,7 @@ function wallFrame(rect, side) {
 
 export function buildRooms(ctx) {
   const { layout } = ctx;
+  buildMallStairs(ctx);
   for (const lv of layout.levels) {
     const L = ctx.levels[lv.id];
     const B = L.batch;
@@ -35,7 +37,7 @@ export function buildRooms(ctx) {
     // 三期地上层：楼梯为外挂钢梯、客梯为室外玻璃梯，由 street.js / elevators.js 绘制
     const street = ctx.bById[lv.building].kind === 'street' && lv.kind !== 'parking';
     for (const r of lv.rooms) {
-      if (r.openStair) continue; // 连续开放双跑钢梯由 street.js 按导航同源坐标绘制。
+      if (r.openStair) continue; // 连续消防梯/外挂梯由专用渲染器按导航同源坐标绘制。
       if (street && (r.type === 'core' || r.type === 'stair')) continue;
       B.frame(r.frame, () => L.signs.frame(r.frame, () => {
         if (r.type === 'core') coreShafts(B, lv, r, y0, hh, lifts.filter((e) => e.frame.id === r.frame.id));

@@ -15,6 +15,7 @@ export function attachViewportUI(app) {
   }
   new ResizeObserver(placeLens).observe(dock);
   function setPanel(next) {
+    window.dispatchEvent(new Event('mall-panel-change'));
     panel = next;
     for (const name of ['floors', 'tools', 'directory']) body.classList.toggle(`mobile-${name}`, name === panel);
     for (const b of dock.querySelectorAll('[data-panel]')) b.setAttribute('aria-expanded', String(b.dataset.panel === panel));

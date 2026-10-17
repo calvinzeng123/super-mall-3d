@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { floorTexture, stepTexture, chevronTexture } from './textures.js';
 import { FLOOR_SURFACES, pbrOptions, metricFloor } from './pbr.js';
+import { createFacadeMaterials } from './facade-materials.js';
 
 /** 让 emissive 乘以顶点色：夜间每个表面按自身颜色"亮起来" */
 function patchVertexEmissive(mat) {
@@ -43,6 +44,7 @@ export class MaterialLib {
       water: std({ color: 0x356f8f, roughness: 0.04, metalness: 0.65, transparent: true, opacity: 0.9, envMapIntensity: 2.2 }),
       mirror: std({ color: 0x8fb4c8, roughness: 0.02, metalness: 0.95, envMapIntensity: 2.4 }),
     };
+    Object.assign(this.base, createFacadeMaterials(surfaces, fn => this.onNight(fn)));
     for (const [key, id, strength] of [
       ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22],
       ['concrete', 'concrete_pavement_02', 0.3], ['brick', 'brick_wall_09', 0.55],

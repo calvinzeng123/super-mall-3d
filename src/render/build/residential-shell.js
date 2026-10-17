@@ -55,7 +55,7 @@ function rectFinish(B,r,y,key='stone',color=C.stone) {
   B.get(key).box((r.x0+r.x1)/2,y-.02,(r.z0+r.z1)/2,r.x1-r.x0,.04,r.z1-r.z0,color);
 }
 function stairShell(B,core,height) {
-  for(const s of core.stairs)for(const [a,z] of edges(s.rect)) {
+  for(const s of core.stairs.filter(s=>!s.continuous))for(const [a,z] of edges(s.rect)) {
     const south=Math.abs(a[1]-s.rect.z1)<.01&&Math.abs(z[1]-s.rect.z1)<.01;
     const openings=south?[{at:Math.abs((s.door.x0+s.door.x1)/2-a[0]),width:s.door.x1-s.door.x0,type:'door',bottom:0,top:2.5}]:[];
     openingWall(B,{a,b:z,thickness:.2,openings},0,height-.04,false);

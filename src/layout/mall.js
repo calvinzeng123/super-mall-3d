@@ -5,6 +5,7 @@ import { HW, SW, END, CORE, SLOT_HW, KIT, ESC, CATEGORIES } from './constants.js
 import { hubOutline, ringPieces } from './hub.js';
 import { fillRows, markSpecial } from './parking.js';
 import { addDriveway, addTrench, addPlaza } from './campus.js';
+import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 
 const toward = (s) => (s > 0 ? 'N' : 'S');
 /** 店铺带矩形：u∈[u0,u1]，v∈[a,b]（s<0 时取镜像 [−b,−a]） */
@@ -134,6 +135,7 @@ export function buildMall(spec, site, picker) {
     elevators.push(...sq.elevators);
     stairs.push(...sq.stairs);
   }
+  prepareMallStairs(stairs);
   ctx.stairs = stairs;
 
   // ---------- 各层 ----------
@@ -183,6 +185,7 @@ export function buildMall(spec, site, picker) {
     square: spec.square ? spec.square.info : null,
     wings: wings.map((w) => ({ id: w.id, rot: w.rot, to: w.to || null, deg: w.deg, F: w.F, ua: w.ua, u0: w.u0, uEnd: w.uEnd, bandEnd: w.bandEnd, link: w.link, len: w.len, core: w.core, zone: w.zone, R: w.r.R, start: w.start || null, annex: !!w.annex })),
   };
+  building.access = buildMallStairAccess(building, levels, stairs);
   for (const lv of levels) delete lv.cfg;
   return { building, levels, escalators, elevators, stairs, entrances, ramps };
 }

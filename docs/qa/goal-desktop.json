@@ -1,0 +1,286 @@
+{
+  "checks": [
+    "settings open from toolbar",
+    "low changes renderer and releases expensive effects",
+    "night postprocessing released when low selected",
+    "textured human models integrated",
+    "facades and stairs loaded",
+    "hotel first floor and apartment top floor contain ten duplexes each",
+    "detailed floor cache remains bounded",
+    "actual keyboard movement climbs four mall and tower stairways through half landings",
+    "all six mall glass elevators continuously carry player to roof",
+    "full desktop scene has zero JavaScript errors"
+  ],
+  "errors": [],
+  "low": {
+    "q": {
+      "label": "流畅",
+      "resolution": 0.85,
+      "shadows": false,
+      "shadowSize": 1024,
+      "bloom": false,
+      "crowdDensity": 0.22,
+      "maxFps": 30,
+      "preset": "low",
+      "tier": "low",
+      "pixelRatio": 0.85,
+      "custom": false,
+      "automatic": false,
+      "autoReduced": false
+    },
+    "pixel": 0.85,
+    "shadows": false,
+    "bloom": false,
+    "composer": false
+  },
+  "stats": {
+    "people": {
+      "models": 2,
+      "textured": true,
+      "morphPoses": 8,
+      "capacity": 1093,
+      "visible": 0,
+      "density": 0.22
+    },
+    "facades": {
+      "buildings": 84,
+      "windows": 34098,
+      "occupiedWindows": 11371,
+      "batches": 110,
+      "vertices": 752544,
+      "bufferBytes": 17905248,
+      "exteriorOnly": true
+    },
+    "stairs": {
+      "templates": 12,
+      "storedVertices": 21924
+    },
+    "glassCars": [
+      "P1-C-GW",
+      "P1-C-GE",
+      "P1-SQ-GW",
+      "P1-SQ-GE",
+      "P2-A-GW",
+      "P2-A-GE",
+      "H-L1",
+      "H-L2",
+      "A-L1",
+      "A-L2",
+      "R1-L1",
+      "R1-L2",
+      "R2-L1",
+      "R2-L2",
+      "R3-L1",
+      "R3-L2",
+      "R4-L1",
+      "R4-L2"
+    ],
+    "shops": 475
+  },
+  "visit": [
+    {
+      "floor": "H-1F",
+      "cache": [
+        "H-1F"
+      ],
+      "duplex": 10
+    },
+    {
+      "floor": "A-20F",
+      "cache": [
+        "H-1F",
+        "A-20F"
+      ],
+      "duplex": 10
+    },
+    {
+      "floor": "R1-2F",
+      "cache": [
+        "H-1F",
+        "A-20F",
+        "R1-2F"
+      ],
+      "duplex": 0
+    }
+  ],
+  "walking": [
+    {
+      "id": "P1-SE-STL-1F-2F",
+      "end": {
+        "floor": "P1-2F",
+        "x": -61.87653685395939,
+        "z": -38.754145109159325,
+        "y": 6.5,
+        "slope": null,
+        "yaw": -0.7853981633972473,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 8.119999999995759,
+        "riding": null
+      },
+      "steps": 648,
+      "half": true
+    },
+    {
+      "id": "P2-E-STL-1F-2F",
+      "end": {
+        "floor": "P2-2F",
+        "x": 245.70419894978386,
+        "z": -47.30544366137995,
+        "y": 6.5,
+        "slope": null,
+        "yaw": -0.7853981633978193,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 8.119999999995915,
+        "riding": null
+      },
+      "steps": 651,
+      "half": true
+    },
+    {
+      "id": "A-ST1-1F-2F",
+      "end": {
+        "floor": "A-2F",
+        "x": -31.79999999999998,
+        "z": -247.0000000000001,
+        "y": 6.5,
+        "slope": null,
+        "yaw": 1.5707963267949618,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 8.119999995163797,
+        "riding": null
+      },
+      "steps": 422,
+      "half": true
+    },
+    {
+      "id": "R1-ST1-1F-2F",
+      "end": {
+        "floor": "R1-2F",
+        "x": 31.299999999999983,
+        "z": -220.29999999999984,
+        "y": 4.8,
+        "slope": null,
+        "yaw": -3.1415926535897833,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 6.419999978955309,
+        "riding": null
+      },
+      "steps": 354,
+      "half": true
+    }
+  ],
+  "lifts": [
+    {
+      "id": "P1-C-GW",
+      "end": {
+        "floor": "P1-RF",
+        "x": -118.58650070512056,
+        "z": -118.58650070512056,
+        "y": 17.5,
+        "slope": null,
+        "yaw": 0.7853981633974484,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 19.12,
+        "riding": null
+      },
+      "intermediate": true,
+      "car": 17.5,
+      "target": 17.5
+    },
+    {
+      "id": "P1-C-GE",
+      "end": {
+        "floor": "P1-RF",
+        "x": -93.41349929487944,
+        "z": -93.41349929487944,
+        "y": 17.5,
+        "slope": null,
+        "yaw": -2.356194490192345,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 19.12,
+        "riding": null
+      },
+      "intermediate": true,
+      "car": 17.5,
+      "target": 17.5
+    },
+    {
+      "id": "P1-SQ-GW",
+      "end": {
+        "floor": "P1-RF",
+        "x": -237.8,
+        "z": -200,
+        "y": 17.5,
+        "slope": null,
+        "yaw": 1.5707963267948966,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 19.12,
+        "riding": null
+      },
+      "intermediate": true,
+      "car": 17.5,
+      "target": 17.5
+    },
+    {
+      "id": "P1-SQ-GE",
+      "end": {
+        "floor": "P1-RF",
+        "x": -202.2,
+        "z": -200,
+        "y": 17.5,
+        "slope": null,
+        "yaw": -1.5707963267948966,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 19.12,
+        "riding": null
+      },
+      "intermediate": true,
+      "car": 17.5,
+      "target": 17.5
+    },
+    {
+      "id": "P2-A-GW",
+      "end": {
+        "floor": "P2-RF",
+        "x": 88.26601717798212,
+        "z": -106.06601717798212,
+        "y": 23,
+        "slope": null,
+        "yaw": 1.5707963267948966,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 24.62,
+        "riding": null
+      },
+      "intermediate": true,
+      "car": 23,
+      "target": 23
+    },
+    {
+      "id": "P2-A-GE",
+      "end": {
+        "floor": "P2-RF",
+        "x": 123.86601717798212,
+        "z": -106.06601717798212,
+        "y": 23,
+        "slope": null,
+        "yaw": -1.5707963267948966,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": 24.62,
+        "riding": null
+      },
+      "intermediate": true,
+      "car": 23,
+      "target": 23
+    }
+  ]
+}

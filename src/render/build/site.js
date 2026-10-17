@@ -6,8 +6,9 @@ import { rect, rectPoly, frame, toW, toL, lrectPoly, pointInPoly, clipConvex, di
 import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
 import { COLORS } from '../theme.js';
-import { windowTextures, rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+import { rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { buildUrbanDistrict } from './urban.js';
+import { buildContextBuildings } from './context-buildings.js';
 import { buildForecourt } from './forecourt.js';
 import { buildWestParkingDetails } from './west-parking.js';
 
@@ -564,23 +565,7 @@ export function siteContextBuildings(layout) {
     });
 }
 
-/** 园区外周边楼宇（带窗格贴图，夜间窗户发光） */
+/** 周边外景楼：实体墙肢、凹窗、窗框与共享 CC0 外墙，保留原导航占地。 */
 function context(ctx, G) {
-  const tints = ['#8fa6b8', '#a9b8c0', '#7f95a8', '#b9a98f', '#9aa79a', '#6f8296'];
-  const mats = [];
-  for (let k = 0; k < tints.length; k++) {
-    const tx = windowTextures(100 + k, { tint: tints[k] });
-    const m = new THREE.MeshStandardMaterial({ map: tx.map, emissiveMap: tx.emissive, emissive: 0x000000, roughness: 0.55, metalness: 0.2 });
-    ctx.mats.onNight((t) => m.emissive.setScalar(t * 0.5));
-    mats.push(m);
-  }
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  for (const { x, z, w, d, h, tint } of siteContextBuildings(ctx.layout)) {
-    const mesh = new THREE.Mesh(geo, mats[tint]);
-    mesh.scale.set(w, h, d);
-    mesh.position.set(x, h / 2 - 0.3, z);
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    G.add(mesh);
-  }
+  buildContextBuildings(ctx, siteContextBuildings(ctx.layout));
 }

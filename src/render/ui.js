@@ -1,4 +1,5 @@
 import { attachViewportUI } from './viewport-ui.js';
+import { attachQualityUI } from './quality-ui.js';
 // 界面：分期切换（园区 / 一期 / 二期 / 三期 / 地铁）、所选期的楼层牌、工具条、全园区店铺目录与搜索、悬停提示。
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -53,6 +54,7 @@ export function createUI(app, layout) {
   const toolbar = $('toolbar');
   const directory = $('directory');
   const viewport = attachViewportUI(app);
+  attachQualityUI(app, viewport);
   toolbar.addEventListener('click', (e) => {
     const b = e.target.closest('.tool');
     if (!b) return;

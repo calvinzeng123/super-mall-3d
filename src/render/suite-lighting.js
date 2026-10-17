@@ -89,8 +89,7 @@ export function createSuiteLighting(ctx) {
       const inside = !!local && local[0] >= 0 && local[0] <= 11 && local[1] >= 0 && local[1] <= 15
         && camera.position.y >= activeLevel.elev && camera.position.y < activeLevel.elev + activeLevel.height;
       const night = app.env.night;
-      app.env.bloom.strength = (inside ? .10 : .85) * night;
-      app.env.bloom.threshold = inside ? 1.25 : .8;
+      app.env.setBloomProfile((inside ? .10 : .85) * night, inside ? 1.25 : .8);
       renderer.toneMappingExposure = inside ? .94 : .92 + .2 * night;
       // 环境反射保留暖白底色，近景主照明来自真实灯池。
       if (ctx.suiteAsset) {

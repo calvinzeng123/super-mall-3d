@@ -22,12 +22,23 @@ export function buildElevators(ctx) {
           B.get('metal').box(e.lu + dx, yA + h / 2, e.lv + dz, 0.14, h, 0.14, frameCol);
         }
         for (const [sx, sz, ox, oz] of [[e.w, 0.03, 0, -half], [e.w, 0.03, 0, half], [0.03, e.d, -half, 0], [0.03, e.d, half, 0]]) {
-          B.get('glass').box(e.lu + ox, yA + h / 2, e.lv + oz, sx, h - 0.1, sz, 0xffffff);
+          const doorFace = (e.door === 'N' && oz < 0) || (e.door === 'S' && oz > 0) || (e.door === 'W' && ox < 0) || (e.door === 'E' && ox > 0);
+          // The landing has a real open doorway. Moving cabin doors are built
+          // by the shared rideable-car builder, not a full-height shaft pane.
+          const bottom = e.type === 'glass' && doorFace ? yA + 2.9 : yA + .05;
+          if (yB > bottom) B.get('glass').box(e.lu + ox, (bottom + yB) / 2, e.lv + oz, sx, yB - bottom, sz, 0xffffff);
         }
-        B.get('metal').box(e.lu, yA - 0.2, e.lv, e.w + 0.2, 0.4, e.d + 0.2, frameCol);
+        if (e.type === 'glass') {
+          // A perimeter ring leaves the cabin shaft open between floors.
+          for (const sign of [-1, 1]) {
+            B.get('metal').box(e.lu + sign * (e.w / 2 + .05), yA - .2, e.lv, .1, .4, e.d + .2, frameCol);
+            B.get('metal').box(e.lu, yA - .2, e.lv + sign * (e.d / 2 + .05), e.w, .4, .1, frameCol);
+          }
+        } else B.get('metal').box(e.lu, yA - 0.2, e.lv, e.w + 0.2, 0.4, e.d + 0.2, frameCol);
         if (id === topId) B.get('metal').box(e.lu, yB, e.lv, e.w + 0.3, 0.5, e.d + 0.3, frameCol);
       });
     }
+    if (e.type === 'glass') continue; // shared interactive cars in tower-elevators.js
     // 轿厢
     const car = new THREE.Group();
     const cb = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 2.2), new THREE.MeshStandardMaterial({ color: 0xd8d2c6, roughness: 0.4, metalness: 0.4 }));

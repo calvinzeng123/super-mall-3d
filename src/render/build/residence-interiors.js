@@ -81,6 +81,7 @@ export function buildResidenceFloor(ctx, L) {
 
   // 公共楼梯间与套内一起惰性加载。电梯玻璃井由塔楼外壳构建器负责。
   for (const core of (lv.rooms || []).filter((r) => r.type === 'stair')) {
+    if (core.continuous) continue; // Permanent shared flight/landing geometry lives in the tower shell.
     B.frame(core.frame, () => {
       const r = core.rects[0];
       const edges = [

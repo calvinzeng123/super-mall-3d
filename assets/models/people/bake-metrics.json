@@ -1,0 +1,22 @@
+[
+  {
+    "id": "m",
+    "name": "Male_Adult_01",
+    "vertices": 2078,
+    "triangles": 3571,
+    "height": 1.8,
+    "poses": 8,
+    "cycleSeconds": 1.0666666666666667,
+    "file": "rocketbox-m.glb"
+  },
+  {
+    "id": "f",
+    "name": "Female_Adult_01",
+    "vertices": 2428,
+    "triangles": 4190,
+    "height": 1.69,
+    "poses": 8,
+    "cycleSeconds": 1.0666666666666667,
+    "file": "rocketbox-f.glb"
+  }
+]

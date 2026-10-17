@@ -4,7 +4,7 @@ import { rect, rectPoly } from './geom.js';
 import { KIT } from './constants.js';
 import { hubOutline } from './hub.js';
 
-const A = { id: 'A', x: 150 / Math.SQRT2, z: -150 / Math.SQRT2, R: 30, kitDeg: 0, glass: ['1F', '2F', '3F', '4F'] };
+const A = { id: 'A', x: 150 / Math.SQRT2, z: -150 / Math.SQRT2, R: 30, kitDeg: 0, glass: ['1F', '2F', '3F', '4F', 'RF'] };
 const B = { id: 'B', x: 150 / Math.SQRT2 + 104, z: -150 / Math.SQRT2, R: 30, kitDeg: 0 };
 const RINK = rect(-15, -9, 15, 9);
 const RINK_VOID = { rect: rect(-17, -11, 17, 11), r: 4 };
@@ -52,10 +52,10 @@ export const P2 = {
           }],
         },
       },
-      widths: [8, 7, 9, 8, 7, 10], cats: ['fashion', 'beauty', 'tea', 'accessory', 'cafe', 'jewelry'],
+      widths: [6, 6.5, 7, 6, 7, 6.5], cats: ['fashion', 'beauty', 'tea', 'accessory', 'cafe', 'jewelry'],
       wings: {
         W: { end: 'entrance' },
-        M: { anchors: [{ slot: 'auto', band: 1, u0: 31, u1: 73, cat: 'auto', style: 'showroom' }] },
+        M: { anchors: [{ slot: 'auto', band: 1, u0: 31, u1: 55, cat: 'auto', style: 'showroom' }] },
         E: { end: 'entrance' },
       },
     },
@@ -63,16 +63,16 @@ export const P2 = {
       short: '2F', name: '2F 运动户外', kind: 'retail', elev: 6.5, height: 5.5,
       theme: { key: 'sport', floor: 'terrazzo-cool', accent: '#1f9d6b', label: '运动户外 · 球鞋 · 潮流' },
       rot: { A: { void: KIT.voidUp }, B: { void: RINK_VOID } },
-      widths: [9, 7, 8, 10, 7, 8], cats: ['sports', 'shoes', 'sports', 'fashion', 'accessory'],
+      widths: [6, 6.5, 7, 6, 7, 6.5], cats: ['sports', 'shoes', 'sports', 'fashion', 'accessory'],
       wings: { W: { end: 'bridge', slots: SLOTS.W }, M: { slots: [[34, 46], [52, 66]] }, E: { slots: SLOTS.E } },
     },
     {
       short: '3F', name: '3F 亲子教育', kind: 'retail', elev: 12, height: 5.5,
       theme: { key: 'edu', floor: 'wood-warm', accent: '#6d5bd0', label: '亲子教育 · 科技潮玩 · 书店' },
       rot: { A: { void: KIT.voidUp }, B: { void: RINK_VOID } },
-      widths: [8, 9, 7, 10, 8], cats: ['edu', 'kids', 'toys', 'tech', 'books'],
+      widths: [6, 6.5, 7, 6, 7, 6.5], cats: ['edu', 'kids', 'toys', 'tech', 'books'],
       wings: {
-        W: { slots: SLOTS.W, anchors: [{ slot: 'kidsclub', band: -1, u0: 58, u1: 80, cat: 'kids' }] },
+        W: { slots: SLOTS.W, anchors: [{ slot: 'kidsclub', band: -1, u0: 58, u1: 74, cat: 'kids' }] },
         M: { slots: SLOTS.M },
         E: {},
       },
@@ -81,7 +81,7 @@ export const P2 = {
       short: '4F', name: '4F 餐饮影城', kind: 'retail', elev: 17.5, height: 5.5,
       theme: { key: 'dining', floor: 'terrazzo-warm', accent: '#b5651d', label: '餐饮 · IMAX 影城 · 观景餐厅' },
       rot: { A: { void: KIT.voidUp }, B: { void: RINK_VOID } },
-      widths: [9, 8, 10, 8, 7], cats: ['restaurant', 'restaurant', 'cafe', 'tea', 'restaurant', 'bar'],
+      widths: [6, 6.5, 7, 6, 7, 6.5], cats: ['restaurant', 'restaurant', 'cafe', 'tea', 'restaurant', 'bar'],
       wings: {
         W: { slots: SLOTS.W },
         M: { slots: [[34, 45]] },
@@ -91,12 +91,14 @@ export const P2 = {
     {
       short: 'RF', name: 'RF 天空跑道', kind: 'roof', elev: 23, height: 6,
       theme: { key: 'track', floor: 'deck-garden', accent: '#d9482b', label: '天空跑道 · 篮球场 · 屋顶花园' },
-      rot: { A: { void: KIT.voidUp, voidKind: 'skylight' }, B: { void: RINK_VOID, voidKind: 'skylight' } },
+      rot: { A: { void: { rect: rect(-12, -10, 12, 10), r: 4 }, voidKind: 'skylight', shafts: true }, B: { void: RINK_VOID, voidKind: 'skylight' } },
       wings: { W: { skylights: SLOTS.W } },
       roof: p2Roof,
     },
   ],
   escalators: [
+    { pair: 'ROOF1', rot: 'A', from: '4F', to: 'RF', axis: 'x', sign: 1, cross: 21, slot: true, label: '4F ↔ 天台花园' },
+    { pair: 'ROOF2', rot: 'A', from: '4F', to: 'RF', axis: 'x', sign: -1, cross: -21, slot: true, label: '4F ↔ 天台花园' },
     { pair: 'KA3', rot: 'A', from: '1F', to: '2F', axis: 'z', sign: -1, top: -10, cross: -10.65, label: '1F ↔ 2F' },
     { pair: 'KA4', rot: 'A', from: '1F', to: '2F', axis: 'z', sign: 1, top: 10, cross: 10.65, label: '1F ↔ 2F' },
     { pair: 'KA5', rot: 'A', from: '2F', to: '3F', axis: 'x', sign: 1, cross: -15.15, slot: true, label: '2F ↔ 3F' },

@@ -4,7 +4,7 @@ import { canvasTexture, FONT_CN } from '../textures.js';
 
 export function buildTowerElevators(ctx) {
   ctx.elevatorCars = new Map();
-  for (const e of ctx.layout.elevators.filter(e => ctx.bById[e.building]?.kind === 'tower')) {
+  for (const e of ctx.layout.elevators.filter(e => ctx.bById[e.building]?.kind === 'tower' || e.type === 'glass')) {
     const group = new THREE.Group();
     group.name = `玻璃轿厢 ${e.id}`;
     group.position.set(e.x, 0, e.z);
@@ -50,8 +50,13 @@ export function buildTowerElevators(ctx) {
         }
       },
     };
-    car.set(0, 1);
+    const initial = e.serves.find(id => ctx.lvById[id].short === '1F') || e.serves[0];
+    car.set(ctx.lvById[initial].elev, 1, ctx.lvById[initial].short);
     ctx.buildings[e.building].group.add(group);
     ctx.elevatorCars.set(e.id, car);
+    if (ctx.bById[e.building]?.kind !== 'tower') ctx.dynamic.push({ update(dt,time,app) {
+      const focus = ctx.lvById[app.state.focus];
+      group.visible = !focus || focus.building !== e.building || !!app.state.explore || group.position.y <= focus.elev + .1;
+    } });
   }
 }

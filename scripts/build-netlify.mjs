@@ -42,6 +42,8 @@ for (const surface of surfaces) for (const [kind, url] of Object.entries(surface
   surface.maps[kind] = await emitAsset(`${surface.id}-${kind}`, 'jpg', dataBytes(url, 'image/jpeg'), 'texture');
 }
 const suiteURL = await emitAsset('suite', 'glb', dataBytes(await generatedData('suite-data.js', 'SUITE_MODEL_URL'), 'model/gltf-binary'), 'suite');
+const people = await generatedData('people-data.js', 'PEOPLE_ASSETS');
+for (const person of people) person.url = await emitAsset(`person-${person.id}`, 'glb', dataBytes(person.url, 'model/gltf-binary'), 'textured-person');
 const residences = await generatedData('residential-data.js', 'RESIDENTIAL_ASSETS');
 for (const record of residences) {
   const bytes = Buffer.from(record.data, 'base64');
@@ -54,6 +56,7 @@ for (const record of residences) {
 }
 
 const replacements = new Map([
+  ['people-data.js', `export const PEOPLE_ASSETS = ${JSON.stringify(people)};`],
   ['pbr-data.js', `export const SURFACE_ASSETS = ${JSON.stringify(surfaces)};`],
   ['suite-data.js', `export const SUITE_MODEL_URL = ${JSON.stringify(suiteURL)};`],
   ['residential-data.js', `export const RESIDENTIAL_ASSETS = ${JSON.stringify(residences)};`],
@@ -62,18 +65,19 @@ const bundled = await build({
   entryPoints: ['src/main.js'], bundle: true, format: 'esm', minify: true,
   target: 'es2022', write: false, legalComments: 'none',
   plugins: [{ name: 'local-runtime-assets', setup(builder) {
-    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential)-data\.js$/ }, args => ({
+    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people)-data\.js$/ }, args => ({
       contents: replacements.get(path.basename(args.path)), loader: 'js',
     }));
   } }],
 });
 const script = await emitAsset('app', 'js', bundled.outputFiles[0].contents, 'application');
 const license = await readFile('node_modules/three/LICENSE', 'utf8');
+const peopleLicense = await readFile('assets/models/people/LICENSE.txt', 'utf8');
 const shell = (await readFile('src/shell.html', 'utf8'))
   .replace(/<link[^>]*https:\/\/fonts\.[^>]+>\s*/g, '')
   .replace(/<script type="importmap">[\s\S]*?<\/script>/, '');
 if (!shell.includes('<!--APP-->')) throw new Error('src/shell.html 缺少 <!--APP--> 占位');
-const body = shell.replace('<!--APP-->', () => `<!-- Three.js license\n${license}\n-->\n<script type="module" src="${script}"></script>`);
+const body = shell.replace('<!--APP-->', () => `<!-- Three.js license\n${license}\n-->\n<!-- Microsoft Rocketbox avatar license\n${peopleLicense}\n-->\n<script type="module" src="${script}"></script>`);
 const html = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n' +
   '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
   '</head>\n<body>\n' + body + '\n</body>\n</html>\n';

@@ -267,7 +267,8 @@ export class BatchSet {
   }
   get(key) {
     if (!this.sets[key]) {
-      const textured = !!this.materials[key]?.map;
+      const mat = this.materials[key];
+      const textured = !!(mat?.map || mat?.normalMap || mat?.roughnessMap);
       this.sets[key] = new Batcher(this, textured, textured);
     }
     return this.sets[key];

@@ -1,0 +1,71 @@
+{
+  "checks": [
+    "phone starts automatic low before renderer allocation",
+    "mobile settings opens",
+    "opening settings closes tool panel",
+    "balanced applies renderer settings",
+    "crowd slider removes people immediately",
+    "quality and crowd persist after reload",
+    "settings fits 390 viewport",
+    "clean view hides every overlay 390",
+    "settings fits 844 viewport",
+    "clean view hides every overlay 844",
+    "zero mobile page errors"
+  ],
+  "errors": [],
+  "initial": {
+    "q": {
+      "label": "流畅",
+      "resolution": 0.85,
+      "shadows": false,
+      "shadowSize": 1024,
+      "bloom": false,
+      "crowdDensity": 0.22,
+      "maxFps": 30,
+      "preset": "auto",
+      "tier": "low",
+      "pixelRatio": 0.85,
+      "custom": false,
+      "automatic": true,
+      "autoReduced": false
+    },
+    "ratio": 0.85,
+    "shadows": false,
+    "composer": false,
+    "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+    "touch": 1
+  },
+  "balanced": {
+    "q": {
+      "label": "均衡",
+      "resolution": 1.25,
+      "shadows": true,
+      "shadowSize": 2048,
+      "bloom": false,
+      "crowdDensity": 0.55,
+      "maxFps": 45,
+      "preset": "balanced",
+      "tier": "balanced",
+      "pixelRatio": 1.25,
+      "custom": false,
+      "automatic": false,
+      "autoReduced": false
+    },
+    "ratio": 1.25,
+    "shadows": true
+  },
+  "dimensions": [
+    {
+      "x": 8,
+      "y": 339,
+      "width": 374,
+      "height": 429
+    },
+    {
+      "x": 227,
+      "y": 60.5,
+      "width": 390,
+      "height": 253.5
+    }
+  ]
+}

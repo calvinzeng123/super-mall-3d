@@ -204,13 +204,15 @@ test('西侧公共车库两组行人小厅均可实际走入、候梯和到达�
 });
 
 
-test('位置互换保留酒店200套和公寓200套用途，10套复式只随公寓首层迁移',()=>{
+test('位置互换保留酒店200套和公寓200套用途，双层酒店及公寓首层与顶层LOFT不改变原位置',()=>{
   const hotel=L.levels.filter(l=>l.building==='H').flatMap(l=>l.units),apartment=L.levels.filter(l=>l.building==='A').flatMap(l=>l.units);
   assert.equal(hotel.length,200);assert.equal(apartment.length,200);
-  assert.ok(hotel.every(u=>u.residence.kind==='hotel'&&!u.residence.duplex));
+  assert.ok(hotel.every(u=>u.residence.kind==='hotel'));
   assert.ok(apartment.every(u=>u.residence.kind==='apartment'));
-  const duplexes=apartment.filter(u=>u.residence.duplex);assert.equal(duplexes.length,10);
-  assert.ok(duplexes.every(u=>u.level==='A-1F'&&[90,270].includes(u.frame.deg)));
+  assert.equal(hotel.filter(u=>u.residence.duplex).length,10);
+  assert.ok(hotel.filter(u=>u.residence.duplex).every(u=>u.level==='H-1F'));
+  const duplexes=apartment.filter(u=>u.residence.duplex);assert.equal(duplexes.length,20);
+  assert.ok(duplexes.every(u=>['A-1F','A-20F'].includes(u.level)&&[90,270].includes(u.frame.deg)));
   for(const [bid,wing,prefix] of [['H','west-wing','hotel'],['A','north-wing','apartment']]) {
     assert.equal(L.buildings.find(b=>b.id===bid).attachment,wing);
     for(const kind of ['skybridge','mall-metro','garage'])assert.equal(L.extensions.paths.find(p=>p.id===`${prefix}-${kind}`).building,bid);

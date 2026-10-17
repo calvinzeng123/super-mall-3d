@@ -8,6 +8,7 @@ import { shapeFromPoly } from './shell.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bollard, bench, planter } from './props.js';
 import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden } from './residential-shell.js';
+import { buildTowerStairGeometry, buildTowerStairInstances } from './tower-stairs.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -96,8 +97,16 @@ export function buildHospitality(ctx) {
       if(b.usage==='residential')residentialCrown(B,b,levels.at(-1));
       else crown(B,b,levels.at(-1),pal);
       liftEnclosures(ctx,B,b,levels,pal);
+      buildTowerStairGeometry(B,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),{flights:false});
+      for(const en of ctx.layout.entrances.filter(en=>en.building===b.id&&en.secondaryDoor)) {
+        const d=en.secondaryDoor,e=edges.find(e=>e.side===d.side);
+        const a=e.along==='x'?Math.min(d.x0,d.x1)-r.x0:Math.min(d.z0,d.z1)-r.z0;
+        sideBox(B,e,'extMetal',a-.3,a+en.width+.3,2.94,3.08,.55,1.1,pal.metal);
+        sideBox(B,e,'glowSoft',a+.1,a+en.width-.1,2.91,2.94,.65,.07,'#ffe7bf');
+      }
     });
     B.flush(group);
+    buildTowerStairInstances(ctx,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),materials,group);
     const residentialShells=b.usage==='residential'?buildResidentialLevelShells(ctx,b,levels,materials,group):null;
     ctx.buildings[b.id].group.add(group);
     ctx.buildings[b.id].exterior=group;
@@ -271,7 +280,7 @@ function buildRoofGarden(ctx,b,lv,pal) {
   B.frame(b.frame,()=>{
     for(const x of [r.x0+4,r.x1-4]) {
       planter(B,x-1.6,r.z1-3.5,x+1.6,r.z1-2.2,y,4+x,true,'stone');
-      bench(B,x,y,r.z1-5.3,Math.PI,'wood');
+      bench(B,x,y,r.z1-1.5,Math.PI,'wood'); // Clear the east fire stair enclosure.
     }
     const cx=(r.x0+r.x1)/2,cz=r.z1-6.5,w=b.usage==='residential'?5:9;
     B.get('wood').box(cx,y+0.025,cz,w+1,0.05,4.3,'#e8d6b7');
@@ -309,6 +318,12 @@ function corridorLights(B,b,lv) {
   for(let x=b.footprint.x0+3;x<b.footprint.x1-1;x+=5) {
     B.get('extMetal').box(x,y,0,1.4,0.07,0.23,'#5d6567');
     B.get('glowSoft').box(x,y-0.047,0,1.25,0.022,0.15,'#f8edce');
+  }
+  const side=lv.walk.find(w=>w.id==='A-east-entry-hall');
+  if(side) {
+    const r=side.rect,x=(r.x0+r.x1)/2;
+    B.get('stone').box(x,lv.elev+.015,(r.z0+r.z1)/2,r.x1-r.x0,.03,r.z1-r.z0,'#e9dfcf');
+    for(let z=r.z0+1.2;z<r.z1;z+=3.5)B.get('glowSoft').box(x,y,z,.7,.04,.25,'#f8edce');
   }
 }
 

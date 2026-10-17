@@ -79,12 +79,19 @@ export function buildSuiteAdditions(ctx, lv, units = lv.units, asset = null) {
       } else {
         // Hotel extension uses fitted tea service and luggage storage, avoiding
         // a second bedroom or bathroom that would contradict the supplied suite.
-        hospitalityPantry(T, 3.3);
-        wardrobe(T, 10.42, 6.55, 2.4, 2.54, 0);
-        luggageBench(T, 10.40, 8.90);
-        info.obstacles.push({ id: 'wing-pantry', rect: { x0: 10.02, x1: 10.8, z0: 2.23, z1: 4.37 } });
-        info.obstacles.push({ id: 'wing-wardrobe', rect: { x0: 10.08, x1: 10.78, z0: 5.35, z1: 7.75 } });
-        info.obstacles.push({ id: 'wing-luggage', rect: { x0: 10.03, x1: 10.77, z0: 8.18, z1: 9.62 } });
+        if (duplex) {
+          hospitalityPantry(T, 8.2);
+          luggageBench(T, 7.67, 8.8);
+          info.obstacles.push({ id: 'wing-pantry', rect: { x0: 10.02, x1: 10.8, z0: 7.13, z1: 9.27 } },
+            { id: 'wing-luggage', rect: { x0: 7.30, x1: 8.04, z0: 8.08, z1: 9.52 } });
+        } else {
+          hospitalityPantry(T, 3.3);
+          wardrobe(T, 10.42, 6.55, 2.4, 2.54, 0);
+          luggageBench(T, 10.40, 8.90);
+          info.obstacles.push({ id: 'wing-pantry', rect: { x0: 10.02, x1: 10.8, z0: 2.23, z1: 4.37 } });
+          info.obstacles.push({ id: 'wing-wardrobe', rect: { x0: 10.08, x1: 10.78, z0: 5.35, z1: 7.75 } });
+          info.obstacles.push({ id: 'wing-luggage', rect: { x0: 10.03, x1: 10.77, z0: 8.18, z1: 9.62 } });
+        }
       }
       terrace(T);
       info.obstacles.push({ id: 'terrace-sofa', rect: { x0: 2.40, x1: 4.80, z0: 12.84, z1: 13.93 } });

@@ -76,7 +76,7 @@ export function createSuitePlan() {
   };
 }
 
-/** Within the existing A1F 6.5m volume: no additional building storey/unit. */
+/** A real upper room within a 6.5m suite volume; no extra catalogue storey/unit. */
 export function createSuiteMezzanine(unitId) {
   const r = rect(1.3, 6.4, 10.8, 14.8);
   const bed = { x: 3.4, z: 11.8, w: BED_RECT.x1 - BED_RECT.x0, d: BED_RECT.z1 - BED_RECT.z0, room: 'upper-bedroom' };
@@ -109,7 +109,9 @@ export function createSuiteMezzanine(unitId) {
 
 /** Added furniture uses the same surveyed footprints as suite-interiors.js. */
 export function suiteAdditionObstacles(kind, duplex = false) {
-  const definitions = kind === 'hotel' ? [
+  const definitions = kind === 'hotel' && duplex ? [
+    ['pantry', 10.02, 7.13, 10.8, 9.27], ['luggage', 7.30, 8.08, 8.04, 9.52],
+  ] : kind === 'hotel' ? [
     ['pantry', 10.02, 2.23, 10.8, 4.37], ['wardrobe', 10.08, 5.35, 10.78, 7.75], ['luggage', 10.03, 8.18, 10.77, 9.62],
   ] : duplex ? [
     ['kitchen', 10.02, 7.12, 10.8, 10.28], ['laundry', 7.31, 8.33, 8.03, 9.07],

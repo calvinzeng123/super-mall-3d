@@ -1,92 +1,127 @@
-// 行人：沿各层动线行走（含乘扶梯），实例化身体 + 头部；停车层少量、天台与美食广场较多。
+// Textured Rocketbox humanoids with eight native-rig walking poses, instanced
+// per level/model. Atlas and morph geometry are shared across the whole mall.
 import * as THREE from 'three';
 import { polyline } from '../paths.js';
 import { rng } from '../textures.js';
+import { loadPeopleAssets } from '../people-asset.js';
 
-const CLOTHES = ['#2f3a45', '#c0392b', '#2f6fd6', '#f2f2f0', '#e0a526', '#2e9c6a', '#7b4fd6', '#d1495b', '#8a6a4a', '#1f2328', '#f08a24', '#5bb4d6'];
-const SKIN = ['#f1d3b8', '#e8c1a0', '#d9a77f', '#c68e63'];
 const COUNT = { parking: 12, food: 70, retail: 75, roof: 45, street: 40, concourse: 80, platform: 56 };
 
-export function buildPeople(ctx) {
-  const bodyGeo = new THREE.CapsuleGeometry(0.21, 0.92, 3, 8).translate(0, 0.67, 0);
-  const headGeo = new THREE.SphereGeometry(0.125, 10, 8).translate(0, 1.5, 0);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
-  const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
-  const rand = rng(99);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const s = new THREE.Vector3(1, 1, 1);
-  const p = new THREE.Vector3();
-  const up = new THREE.Vector3(0, 1, 0);
-  const c = new THREE.Color();
-  const walkers = [];
+export async function buildPeople(ctx) {
+  const assets = await loadPeopleAssets(ctx.renderer.capabilities.getMaxAnisotropy());
+  const rand = rng(99), matrix = new THREE.Matrix4(), rotation = new THREE.Quaternion();
+  const scale = new THREE.Vector3(), position = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const walkers = [], pos = [0, 0, 0], dir = [0, 0, 1];
+  let density = ctx.quality?.crowdDensity ?? 1;
+  const stats = { models: assets.length, textured: true, morphPoses: 8, capacity: 0, visible: 0, density };
 
   for (const lv of ctx.layout.levels) {
     const paths = (ctx.paths.levels[lv.id] || {}).people || [];
     if (!paths.length) continue;
-    const n = lv.kind === 'street' && lv.ground ? 120 : COUNT[lv.kind] || 20;
-    const bodies = new THREE.InstancedMesh(bodyGeo, bodyMat, n);
-    const heads = new THREE.InstancedMesh(headGeo, headMat, n);
-    bodies.castShadow = false;
-    heads.castShadow = false;
-    bodies.frustumCulled = false;
-    heads.frustumCulled = false;
+    const count = lv.kind === 'street' && lv.ground ? 120 : COUNT[lv.kind] || 20;
+    const variants = assets.map(asset => {
+      const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, count);
+      mesh.name = `textured-people-${lv.id}-${asset.id}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Allocate morph texture at full capacity before distance/density culling
+      // reduces draw count; later quality increases must not overflow it.
+      mesh.setMorphAt(0, asset.source);
+      ctx.levels[lv.id].people.add(mesh);
+      return { mesh, asset, visible: 0 };
+    });
     const list = [];
-    for (let i = 0; i < n; i++) {
-      // 扶梯路径上分配少量乘客
-      const onEsc = rand() < 0.16;
-      const pool = paths.filter((x) => !!x.escalator === onEsc);
-      const path = (pool.length ? pool : paths)[Math.floor(rand() * (pool.length ? pool.length : paths.length))];
+    for (let i = 0; i < count; i++) {
+      const onEsc = rand() < .16;
+      const pool = paths.filter(path => !!path.escalator === onEsc);
+      const available = pool.length ? pool : paths;
+      const path = available[Math.floor(rand() * available.length)];
       const pl = polyline(path.pts, path.loop);
-      const lateral = path.escalator ? (rand() - 0.5) * 0.25 : (rand() - 0.5) * (lv.kind === 'parking' ? 0.6 : 3.2);
-      list.push({
-        pl, loop: path.loop, escalator: !!path.escalator,
-        d: rand() * pl.total, speed: path.escalator ? 0.5 : 0.85 + rand() * 0.55,
-        dir: path.loop && rand() < 0.5 ? -1 : 1, lateral, phase: rand() * 10,
-        pause: 0,
+      list.push({ pl, loop: path.loop, escalator: !!path.escalator,
+        d: rand() * pl.total, speed: path.escalator ? .5 : .85 + rand() * .55,
+        dir: path.loop && rand() < .5 ? -1 : 1,
+        lateral: path.escalator ? (rand() - .5) * .25 : (rand() - .5) * (lv.kind === 'parking' ? .6 : 2.4),
+        phase: rand(), size: .94 + rand() * .1, variant: i % assets.length,
+        // A deterministic rank keeps the same population while changing quality.
+        rank: (i + .5) / count,
       });
-      bodies.setColorAt(i, c.set(CLOTHES[Math.floor(rand() * CLOTHES.length)]));
-      heads.setColorAt(i, c.set(SKIN[Math.floor(rand() * SKIN.length)]));
     }
-    bodies.instanceColor.needsUpdate = true;
-    heads.instanceColor.needsUpdate = true;
-    ctx.levels[lv.id].people.add(bodies, heads);
-    walkers.push({ lv, bodies, heads, list });
+    walkers.push({ lv, variants, list, group: ctx.levels[lv.id].people });
+    stats.capacity += count;
   }
 
-  const pos = [0, 0, 0];
-  const dir = [0, 0, 1];
-  let acc = 0;
-  const place = (w, step, time) => {
-    w.list.forEach((a, i) => {
-      a.d += a.speed * a.dir * step;
-      if (!a.loop && (a.d > a.pl.total || a.d < 0)) a.d = a.dir > 0 ? 0 : a.pl.total;
-      a.pl.at(a.d, pos, dir);
-      const nx = -dir[2], nz = dir[0];
-      const ln = Math.hypot(nx, nz) || 1;
-      const bob = a.escalator ? 0 : Math.abs(Math.sin((time + a.phase) * 7)) * 0.035;
-      p.set(pos[0] + (nx / ln) * a.lateral, pos[1] - (a.escalator ? 1.32 : 0.07) + bob, pos[2] + (nz / ln) * a.lateral);
-      q.setFromAxisAngle(up, Math.atan2(dir[0] * a.dir, dir[2] * a.dir));
-      m.compose(p, q, s);
-      w.bodies.setMatrixAt(i, m);
-      w.heads.setMatrixAt(i, m);
-    });
-    w.bodies.instanceMatrix.needsUpdate = true;
-    w.heads.instanceMatrix.needsUpdate = true;
-  };
-  // 建好就先摆一次位置：避免首帧（或页面在后台时）所有人叠在原点
-  for (const w of walkers) place(w, 0, 0);
-  ctx.dynamic.push({
-    update(dt, time) {
-      acc += dt;
-      if (acc < 1 / 40) return;
-      const step = acc;
-      acc = 0;
-      for (const w of walkers) {
-        const grp = w.bodies.parent;
-        if (!grp || !grp.visible || !grp.parent || !grp.parent.visible || !grp.parent.parent.visible) continue;
-        place(w, step, time);
+  const place = (walker, step, time) => {
+    const maxDistance = density <= .3 ? 95 : density < .8 ? 155 : 230;
+    for (const variant of walker.variants) variant.visible = 0;
+    for (const actor of walker.list) {
+      actor.d += actor.speed * actor.dir * step;
+      if (!actor.loop && (actor.d > actor.pl.total || actor.d < 0)) {
+        actor.d = Math.max(0, Math.min(actor.pl.total, actor.d));
+        actor.dir *= -1;
       }
+      if (actor.rank > density) continue;
+      actor.pl.at(actor.d, pos, dir);
+      const nx = -dir[2], nz = dir[0], length = Math.hypot(nx, nz) || 1;
+      position.set(pos[0] + nx / length * actor.lateral,
+        pos[1] - (actor.escalator ? 1.32 : .015), pos[2] + nz / length * actor.lateral);
+      const offset = ctx.levels[walker.lv.id].offset || 0;
+      const distanceSq = (position.x - ctx.camera.position.x) ** 2 +
+        (position.y + offset - ctx.camera.position.y) ** 2 + (position.z - ctx.camera.position.z) ** 2;
+      if (distanceSq > maxDistance ** 2) continue;
+      const variant = walker.variants[actor.variant], { mesh, asset } = variant;
+      rotation.setFromAxisAngle(up, Math.atan2(dir[0] * actor.dir, dir[2] * actor.dir));
+      scale.setScalar(actor.size);
+      matrix.compose(position, rotation, scale);
+      mesh.setMatrixAt(variant.visible, matrix);
+      const weights = asset.source.morphTargetInfluences;
+      weights.fill(0);
+      // Standing pose on escalators. Distant pedestrians update at the same
+      // bounded cadence, with no bone matrices or CPU vertex skinning.
+      const phase = actor.escalator ? 0 : ((time * actor.speed / 1.1 / asset.cycleSeconds + actor.phase) % 1) * asset.poses;
+      const frame = Math.floor(phase), blend = phase - frame;
+      weights[frame] = 1 - blend;
+      weights[(frame + 1) % asset.poses] += blend;
+      mesh.setMorphAt(variant.visible++, asset.source);
+    }
+    for (const { mesh, visible } of walker.variants) {
+      mesh.count = visible;
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.morphTexture.needsUpdate = true;
+      stats.visible += visible;
+    }
+  };
+  const visibleInTree = group => {
+    for (let node = group; node; node = node.parent) if (!node.visible) return false;
+    return true;
+  };
+  let accumulated = 0, lastTime = 0;
+  const refresh = (step, time) => {
+    stats.visible = 0;
+    for (const walker of walkers) {
+      if (!visibleInTree(walker.group)) {
+        for (const variant of walker.variants) variant.mesh.count = 0;
+        continue;
+      }
+      place(walker, step, time);
+    }
+  };
+  ctx.peopleQuality = {
+    stats,
+    setDensity(value) {
+      density = Math.max(0, Math.min(1, Number(value) || 0));
+      stats.density = density;
+      refresh(0, lastTime);
     },
-  });
+  };
+  // Never leave newly instantiated people stacked at the origin.
+  refresh(0, 0);
+  ctx.dynamic.push({ update(dt, time) {
+    accumulated += dt;
+    if (accumulated < (density <= .3 ? 1 / 20 : 1 / 30)) return;
+    const step = accumulated;
+    accumulated = 0; lastTime = time;
+    refresh(step, time);
+  } });
 }

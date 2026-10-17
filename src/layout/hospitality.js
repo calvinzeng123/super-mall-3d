@@ -7,6 +7,7 @@ import { addPlaza } from './campus.js';
 import { buildWestParking } from './west-parking.js';
 import { createSuitePlan, createSuiteMezzanine, suiteAdditionObstacles } from './suite-plan.js';
 import { createResidentialPlan, RESIDENTIAL_SLOTS } from './residential-plan.js';
+import { towerStairPlan, buildTowerStairAccess } from './tower-stairs.js';
 
 export const HOSPITALITY = {
   west: rect(-286, -151, -203, -27),
@@ -41,7 +42,11 @@ function addUnit(lv, spec, slot, F, w, d, type, prototype) {
   const fronts = [{ x0: 0, z0: 0, x1: w, z1: 0, side: 'N' }];
   const r = rect(0, 0, w, d);
   const u = { id: `${lv.id}-U${slot}`, code: `${spec.id}-${number}`, slot: String(slot), building: spec.id, level: lv.id, frame: F, rects: [r], polys: [lrectPoly(F, r)], fronts, wfronts: fronts.map(f => lseg(F, f)), style: 'residence', brand: { name: `${spec.name} ${number}`, en: `${spec.en} ${number}`, cat: spec.usage, catLabel, bg: spec.accent, fg: '#ffffff', logo: 'diamond' }, residence: residence(spec.usage, type, w, d, prototype) };
-  if (spec.usage === 'apartment' && lv.levelNumber === 1) u.residence.duplex = createSuiteMezzanine(u.id);
+  if (['hotel', 'apartment'].includes(spec.usage) && lv.height >= 6.5) {
+    u.residence.duplex = createSuiteMezzanine(u.id);
+    u.residence.type = spec.usage === 'hotel' ? 'duplex-hotel-suite' : 'loft-apartment';
+    u.brand.catLabel = spec.usage === 'hotel' ? '双层酒店套房' : 'LOFT 复式公寓';
+  }
   if (u.residence.suitePlan) u.residence.obstacles = [...u.residence.obstacles, ...suiteAdditionObstacles(spec.usage, !!u.residence.duplex)];
   lv.units.push(u);
 }
@@ -104,7 +109,9 @@ function tower(spec) {
   const residential = spec.usage === 'residential';
   const basement = residential ? [{ short: 'B1', elev: -4.2, height: 4.2, kind: 'parking' }] : [{ short: 'B2', elev: -8.4, height: 3.9, kind: 'parking' }, { short: 'B1', elev: -4.5, height: 4.5, kind: 'parking' }];
   const defs = [...basement, ...Array.from({ length: spec.storeys }, (_, i) => ({ short: `${i + 1}F`, levelNumber: i + 1, elev: i === 0 ? 0 : +(spec.lobbyHeight + (i - 1) * spec.floorHeight).toFixed(3), height: i === 0 ? spec.lobbyHeight : spec.floorHeight, kind: spec.usage }))];
-  const top = +(spec.lobbyHeight + (spec.storeys - 1) * spec.floorHeight).toFixed(3);
+  if (spec.usage === 'apartment') defs.find(l => l.levelNumber === spec.storeys).height = 6.5;
+  const last = defs.at(-1);
+  const top = spec.storeys ? +(last.elev + last.height).toFixed(3) : 0;
   defs.push({ short: 'RF', elev: top, height: 3.2, kind: 'roof' });
   const levels = defs.map(c => ({ ...c, id: `${spec.id}-${c.short}`, building: spec.id, name: c.kind === 'parking' ? `${c.short} 住客车库` : c.kind === 'concourse' ? 'B1 商场与地铁连廊' : c.kind === 'roof' ? 'RF 屋顶花园' : `${c.short} ${residential ? '三户住宅' : '十间套房'}`, theme: { key: residential ? 'loft' : 'lux', floor: c.kind === 'parking' ? 'concrete-blue' : c.kind === 'roof' ? 'terrace-stone' : 'terrazzo', accent: spec.accent, label: c.kind === 'parking' ? '住客车库 · 独立进出' : c.kind === 'roof' ? '屋顶花园 · 电梯直达' : c.kind === 'concourse' ? '商场连廊 · 地铁换乘' : `${residential ? '三种户型' : '独卫套房'} · ${spec.name}` }, outline, units: [], rooms: [], walk: [], voids: [], features: [], slab: { pieces: [{ outer: outline, holes: [] }] } }));
   if (!residential) { const b1 = levels.find(l => l.short === 'B1'); b1.name = 'B1 住客车库与地铁连廊'; b1.theme.label = '独立车库出入口 · 商场与地铁连通'; }
@@ -129,10 +136,8 @@ function tower(spec) {
     const side = residential || i === 0 ? 'S' : 'N', z = side === 'S' ? r.z1 : r.z0;
     const door = { x0: residential ? (r.x0+r.x1)/2-.7 : r.x0 + 1.1, z0: z, x1: residential ? (r.x0+r.x1)/2+.7 : r.x1 - 1.1, z1: z, side };
     const s = { id: `${spec.id}-ST${i + 1}`, building: spec.id, frame: F, rect: r, poly: lrectPoly(F, r), door, wdoor: lseg(F, door), wdoorByLevel: {}, serves: ids };
-    if (residential) {
-      s.shaftRect = rect(r.x0+.4, r.z0+.7, r.x1-.4, r.z1-2);
-      s.landingRect = rect(r.x0+.2, r.z1-2, r.x1-.2, r.z1-.2);
-    }
+    const plan = towerStairPlan(s);
+    Object.assign(s, { continuous: true, shaftRect: plan.shaftRect, landingRect: plan.landingRect });
     return s;
   });
   const elevators = residential ? [-1.7, 1.7].map((x, i) => ({ ...lift(`${spec.id}-L${i + 1}`, spec.id, 'passenger', F, x, 5.1, 2.7, 3, 'N', ids), exterior: true, tower: true })) : [-34.25, -30.75].map((x, i) => ({ ...lift(`${spec.id}-L${i + 1}`, spec.id, 'passenger', F, x, 4.5, 2.8, 3, 'N', ids), exterior: true, tower: true }));
@@ -150,15 +155,15 @@ function tower(spec) {
     else lv.walk.push(localWalk(F, `${spec.id}-lobby`, 'lobby', rect(28, -3, 37, 3)), localWalk(F, `${spec.id}-lift-hall`, 'lobby', rect(-37, -2.5, -28, 3)));
     for (const s of stairs) {
       const stairRoom = room(s.id, 'stair', F, s.rect, [s.door]);
-      if (residential) { stairRoom.shaftRect=s.shaftRect; stairRoom.landingRect=s.landingRect; }
+      Object.assign(stairRoom, { continuous: true, shaftRect: s.shaftRect, landingRect: s.landingRect });
       lv.rooms.push(stairRoom);
       const d = s.door;
       lv.walk.push(localWalk(F, `${s.id}-approach`, 'lobby', rect(d.x0, Math.min(d.z0, -2), d.x1, Math.max(d.z0, 2))));
+      const poly = lrectPoly(F, s.shaftRect);
+      lv.voids.push({ id: `${s.id}-void`, kind: 'stair', frame: F, rect: s.shaftRect, poly, stair: s.id });
+      for (const piece of lv.slab.pieces) if (containsRect(piece.localRect || footprint, s.shaftRect)) piece.holes.push(poly);
       if (residential) {
-        const poly = lrectPoly(F, s.shaftRect);
-        lv.voids.push({ id: `${s.id}-void`, kind: 'stair', frame: F, rect: s.shaftRect, poly, stair: s.id });
-        for (const piece of lv.slab.pieces) if (containsRect(piece.localRect, s.shaftRect)) piece.holes.push(poly);
-        lv.corePlan.stairs.push({ id: s.id, rect: s.rect, door: s.door, shaftRect: s.shaftRect, landingRect: s.landingRect });
+        lv.corePlan.stairs.push({ id: s.id, continuous: true, rect: s.rect, door: s.door, shaftRect: s.shaftRect, landingRect: s.landingRect });
         lv.walk.push(localWalk(F, `${s.id}-vestibule`, 'lobby', lv.corePlan.stairVestibules[stairs.indexOf(s)]));
       }
     }
@@ -197,10 +202,26 @@ function tower(spec) {
       lv.parking = { ...filled, aisles: lv.walk.filter(w => w.kind === 'aisle'), zone: spec.id };
     }
   }
+  for (const lv of levels.filter(l=>l.units.some(u=>u.residence.duplex))) {
+    const label=spec.usage==='hotel'?'双层酒店套房':'LOFT 复式公寓';
+    lv.name=`${lv.short} ${label}`;lv.theme.label=`十套${label} · 套内楼梯 · 上层卧室`;
+  }
   const b = { id: spec.id, code: spec.id, name: spec.name, short: spec.short, en: spec.en, kind: 'tower', usage: spec.usage, attachment: spec.attachment, frame: F, footprint, bounds: polyBounds(outline), outline, center: [spec.x, spec.z], radius: Math.hypot(spec.w, spec.d) / 2, height: top, storeys: spec.storeys, levels: ids, rotundas: [], wings: [], plot: residential ? HOSPITALITY.residential : spec.attachment === 'north-wing' ? HOSPITALITY.east : HOSPITALITY.west, massing: { width: spec.w, depth: spec.d, top, podiumHeight: spec.lobbyHeight, facadeModule: residential ? 3.2 : 2.75 } };
+  if (spec.storeys) b.access = buildTowerStairAccess(b, levels, stairs);
   const entry = lseg(F, residential ? { x0: -2, z0: spec.d/2, x1: 2, z1: spec.d/2, side: 'S' } : { x0: 37, z0: -2.2, x1: 37, z1: 2.2, side: 'E' });
   const entrance = { seg: entry, nx: entry.nx, nz: entry.nz };
-  return { building: b, levels, stairs, elevators, escalators: [], ramps: [], entrances: [{ ...entrance, id: `${spec.id}-MAIN`, building: spec.id, level: `${spec.id}-1F`, name: `${spec.name}主入口`, width: residential ? 4 : 4.4, main: true, to: 'site' }] };
+  const entrances = [{ ...entrance, id: `${spec.id}-MAIN`, building: spec.id, level: `${spec.id}-1F`, name: `${spec.name}主入口`, width: residential ? 4 : 4.4, main: true, to: 'site' }];
+  const secondary = spec.id === 'H' ? { x0: -37, z0: -2.2, x1: -37, z1: 2.2, side: 'W' }
+    : spec.id === 'A' ? { x0: 34.3, z0: -19, x1: 36.7, z1: -19, side: 'N' } : null;
+  if (secondary) {
+    const seg = lseg(F, secondary);
+    entrances.push({ id: `${spec.id}-SIDE`, building: spec.id, level: `${spec.id}-1F`,
+      name: spec.id === 'H' ? '酒店西门 · 地面停车场' : '公寓东门 · 星湾路',
+      seg, nx: seg.nx, nz: seg.nz, width: Math.hypot(seg.x1-seg.x0,seg.z1-seg.z0),
+      main: false, to: 'site', coveredConnection: true, secondaryDoor: secondary });
+    if (spec.id === 'A') levels.find(l=>l.short==='1F').walk.push(localWalk(F,'A-east-entry-hall','lobby',rect(34.2,-19,36.8,0)));
+  }
+  return { building: b, levels, stairs, elevators, escalators: [], ramps: [], entrances };
 }
 
 /** West public parking annex: two underground decks and two compact pedestrian
@@ -330,6 +351,10 @@ export function buildHospitality(existing, site) {
     extensions.paths.push({ id, kind: 'ground', name: id, width, points, polys });
     polys.forEach((poly, i) => addPlaza(site, `${id}-${i}`, poly, null));
   };
+  surface('酒店西门至停车场', [[-284,0,-81.1533717],[-303,0,-81.1533717]],4.4);
+  const hotelCrossing=rect(-298,-83.3533717,-286,-78.9533717);
+  site.crossings.push({id:'hotel-west-crossing',rect:hotelCrossing,poly:rectPoly(hotelCrossing),axis:'x'});
+  surface('公寓东门接星湾路步道',[[-16,0,-178.5],[-13,0,-178.5]],2.4);
   // The west parking module owns the surface parking approaches.
   for(const entry of by.WPG.entrances) {
     const x=(entry.seg.x0+entry.seg.x1)/2;surface(entry.name,[[x,0,-183],[x,0,-179]],4);

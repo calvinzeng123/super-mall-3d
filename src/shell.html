@@ -187,6 +187,30 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 .clean-hint { position: absolute; z-index: 8; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 8px 14px; background: rgba(20,26,32,.8); color: white; border-radius: 20px; pointer-events: none; white-space: nowrap; font-size: 13px; }
 .directory.collapsed { display: none; }
 .tool.dir-btn { display: inline-flex; }
+.quality-panel { position: absolute; z-index: 8; top: calc(66px + env(safe-area-inset-top,0px)); right: 16px; width: min(360px,calc(100% - 32px)); max-height: calc(100dvh - 90px - env(safe-area-inset-top,0px)); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 14px; border-radius: 24px; }
+.quality-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.quality-head h2 { margin: 0; font-size: 18px; }
+.quality-head p { margin: 0; color: var(--ink-2); font-size: 12px; }
+.quality-presets { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; padding: 4px; margin: 12px 0; border-radius: 20px; background: var(--chip); }
+.quality-presets button { border: 0; background: transparent; min-height: 44px; border-radius: 16px; cursor: pointer; }
+.quality-presets button[aria-pressed="true"] { background: var(--glass-selected,var(--panel-solid)); color: var(--accent); box-shadow: 0 2px 7px rgba(20,35,50,.12); font-weight: 700; }
+.quality-row { display: flex; align-items: center; justify-content: space-between; min-height: 48px; gap: 16px; border-top: 1px solid var(--line); }
+.quality-row small { display: block; color: var(--ink-2); font-size: 11px; }
+.quality-row input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 48px; height: 28px; border: 1px solid var(--line); border-radius: 20px; background: rgba(115,130,145,.3); position: relative; flex: none; cursor: pointer; }
+.quality-row input[type="checkbox"]::after { content: ''; position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #fff; left: 2px; top: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.15); transition: transform .18s; }
+.quality-row input[type="checkbox"]:checked { background: var(--accent); }
+.quality-row input[type="checkbox"]:checked::after { transform: translateX(20px); }
+.quality-slider { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding-top: 10px; }
+.quality-slider input { grid-column: 1 / -1; width: 100%; min-height: 32px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.quality-slider output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.quality-hint { color: var(--ink-2); margin: 10px 0 2px; font-size: 12px; }
+.quality-panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 900px), (pointer: coarse), (max-height: 520px) {
+  #app .quality-panel { top: auto; bottom: calc(76px + env(safe-area-inset-bottom,0px)); left: max(8px,env(safe-area-inset-left,0px)); right: max(8px,env(safe-area-inset-right,0px)); margin: 0 auto; width: auto; max-width: 390px; max-height: min(65dvh,450px); }
+  body.exploring #app .quality-panel { top: calc(60px + env(safe-area-inset-top,0px)); bottom: auto; max-height: calc(100dvh - 76px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)); }
+  body.quality-low #app .panel { backdrop-filter: blur(8px) saturate(1.15); -webkit-backdrop-filter: blur(8px) saturate(1.15); }
+}
+@media (prefers-reduced-motion: reduce) { .quality-row input[type="checkbox"]::after { transition: none; } }
 .dir-actions { display: flex; align-items: center; gap: 4px; }
 .dir-close { border: 0; background: var(--chip); border-radius: 7px; min-width: 44px; min-height: 44px; cursor: pointer; font-size: 21px; }
 .dir-head { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -305,6 +329,7 @@ body.ui-hidden #app > :not(#stage):not(.loading):not(.fatal):not(.clean-hint) { 
 @media (prefers-reduced-transparency: reduce) {
   #app { --glass: var(--glass-solid); }
   #app .panel, #app .ex-pbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  body.quality-low #app .panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { #app { --glass: var(--glass-solid); } }
 
@@ -331,6 +356,7 @@ body.ui-hidden #app > :not(#stage):not(.loading):not(.fatal):not(.clean-hint) { 
   </nav>
 
   <div class="toolbar panel" id="toolbar" role="toolbar" aria-label="视图工具">
+    <button type="button" class="tool" data-quality-open aria-controls="qualityPanel" aria-expanded="false" title="画质、阴影与人群设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></svg><span>设置</span></button>
     <button class="tool tool-explore" data-act="explore" title="第一人称漫游：走进每栋楼、每家店，可以飞">
       <svg viewBox="0 0 24 24"><circle cx="13.5" cy="4.5" r="1.9"/><path d="M8 21l2.6-6.2 2.9 2.4V21"/><path d="M7.5 11.5 11 8.2l3.2 1.2 2.6 3.1"/><path d="M11 8.2 9.6 14.8"/></svg><span>漫游</span>
     </button>
@@ -368,6 +394,18 @@ body.ui-hidden #app > :not(#stage):not(.loading):not(.fatal):not(.clean-hint) { 
     <button type="button" data-ui-hide title="隐藏所有界面，轻点画面恢复" aria-label="净览：隐藏所有界面，轻点画面恢复"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><path d="m9 12 2 2 4-4"/></svg><span>净览</span></button>
   </nav>
 
+  <section class="quality-panel panel" id="qualityPanel" role="dialog" aria-modal="false" aria-labelledby="qualityTitle" aria-describedby="qualityHint" hidden>
+    <div class="quality-head"><div><h2 id="qualityTitle">画面设置</h2><p id="qualityStatus" role="status"></p></div><button type="button" class="dir-close" id="qualityClose" aria-label="关闭画面设置">×</button></div>
+    <div class="quality-presets" role="group" aria-label="画质档位">
+      <button type="button" data-quality-preset="auto" aria-pressed="true">自动</button><button type="button" data-quality-preset="low" aria-pressed="false">流畅</button><button type="button" data-quality-preset="balanced" aria-pressed="false">均衡</button><button type="button" data-quality-preset="high" aria-pressed="false">精细</button>
+    </div>
+    <label class="quality-slider" for="qualityResolution"><span>画面清晰度</span><output id="qualityResolutionValue" for="qualityResolution">85%</output><input id="qualityResolution" type="range" min="0.65" max="2" step="0.05" value="0.85"></label>
+    <label class="quality-row" for="qualityShadows"><span>建筑与人物阴影<small>关闭可减轻手机负担</small></span><input type="checkbox" id="qualityShadows" role="switch"></label>
+    <label class="quality-row" for="qualityBloom"><span>夜景柔光<small>夜间灯光边缘泛光</small></span><input type="checkbox" id="qualityBloom" role="switch"></label>
+    <label class="quality-slider" for="qualityCrowd"><span>人群密度</span><output id="qualityCrowdValue" for="qualityCrowd">22%</output><input id="qualityCrowd" type="range" min="0" max="1" step="0.01" value="0.22"></label>
+    <p class="quality-hint" id="qualityHint"></p>
+  </section>
+
   <aside class="directory panel collapsed" id="directory" aria-label="店铺目录">
     <div class="dir-head">
       <div class="dir-badge" id="dirBadge">全</div>
@@ -392,6 +430,7 @@ body.ui-hidden #app > :not(#stage):not(.loading):not(.fatal):not(.clean-hint) { 
       <span class="ex-where" id="exWhere">漫游</span>
       <span class="ex-mode" id="exMode">步行</span>
       <button type="button" class="ex-btn" id="exPlaces">地点</button>
+      <button type="button" class="ex-btn" data-quality-open aria-controls="qualityPanel" aria-expanded="false">设置</button>
       <button type="button" class="ex-btn" data-ui-hide title="隐藏所有界面，轻点画面恢复">净览</button>
       <button type="button" class="ex-btn ex-exit" id="exExit">退出</button>
     </div>

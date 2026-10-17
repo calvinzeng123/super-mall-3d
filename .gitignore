@@ -4,6 +4,7 @@ shots/
 src/render/pbr-data.js
 src/render/suite-data.js
 src/render/residential-data.js
+src/render/people-data.js
 
 .playwright-cli/
 output/playwright/

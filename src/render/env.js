@@ -1,6 +1,5 @@
 // 环境：天空、雾、灯光、阴影、夜景泛光、性能降级。
 import * as THREE from 'three';
-import { SHADOW_SIZE } from './device.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -19,14 +18,17 @@ const NIGHT = {
 };
 
 export class Environment {
-  constructor(renderer, scene, camera, mats) {
+  constructor(renderer, scene, camera, mats, quality) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
     this.mats = mats;
     this.night = 0;
     this.target = 0;
-    this.bloomEnabled = true;
+    this.bloomEnabled = quality.bloom;
+    this.composer = null;
+    this.bloom = null;
+    this.bloomProfile = { strength: 0, threshold: .8 };
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -77,21 +79,51 @@ export class Environment {
     scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(DAY.sun.clone(), 2.1);
     this.sunDir = new THREE.Vector3(-0.55, 0.78, 0.62).normalize();
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE);
+    this.sun.castShadow = quality.shadows;
+    this.sun.shadow.mapSize.set(quality.shadowSize, quality.shadowSize);
     this.sun.shadow.bias = -0.00025;
     this.sun.shadow.normalBias = 0.035;
     scene.add(this.sun, this.sun.target);
     this.setShadowFocus(new THREE.Vector3(0, 0, 0), 150);
 
-    const size = renderer.getSize(new THREE.Vector2());
-    this.composer = new EffectComposer(renderer);
-    this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.0, 0.55, 0.8);
+    this.apply();
+  }
+
+  ensureComposer() {
+    if (this.composer) return;
+    const size = this.renderer.getSize(new THREE.Vector2());
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    const profile = this.bloomProfile || { strength: .85 * this.night, threshold: .8 };
+    this.bloom = new UnrealBloomPass(size, profile.strength, 0.55, profile.threshold);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+  }
 
-    this.apply();
+  /** Room lighting can update its profile before the first night render, and
+   * while low quality has released the postprocessing targets. */
+  setBloomProfile(strength, threshold = .8) {
+    this.bloomProfile = { strength, threshold };
+    if (this.bloom) Object.assign(this.bloom, this.bloomProfile);
+  }
+
+  setQuality(quality) {
+    this.bloomEnabled = quality.bloom;
+    this.renderer.shadowMap.enabled = quality.shadows;
+    this.sun.castShadow = quality.shadows;
+    if (!quality.shadows || this.sun.shadow.mapSize.x !== quality.shadowSize) {
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+      this.sun.shadow.mapPass?.dispose();
+      this.sun.shadow.mapPass = null;
+    }
+    this.sun.shadow.mapSize.set(quality.shadowSize, quality.shadowSize);
+    this.renderer.shadowMap.needsUpdate = true;
+    if (!quality.bloom && this.composer) {
+      for (const pass of this.composer.passes) pass.dispose?.();
+      this.composer.dispose();
+      this.composer = this.bloom = null;
+    }
   }
 
   setNight(on) { this.target = on ? 1 : 0; }
@@ -124,7 +156,7 @@ export class Environment {
     this.scene.environmentIntensity = 0.45 - 0.37 * t;
     this.renderer.toneMappingExposure = 0.92 + 0.2 * t;
     this.stars.material.opacity = Math.max(0, t * 1.2 - 0.2);
-    this.bloom.strength = 0.85 * t;
+    this.setBloomProfile(.85 * t);
     this.mats.setNight(t);
   }
 
@@ -145,7 +177,7 @@ export class Environment {
   render() {
     const { renderer, scene, camera } = this;
     camera.layers.set(0);
-    if (this.bloomEnabled && this.night > 0.02) this.composer.render();
+    if (this.bloomEnabled && this.night > 0.02) { this.ensureComposer(); this.composer.render(); }
     else renderer.render(scene, camera);
     // 第二遍：只画第 1 层（文字标注），不参与泛光
     const auto = renderer.autoClear;
@@ -157,7 +189,9 @@ export class Environment {
   }
 
   resize(w, h) {
-    this.composer.setSize(w, h);
-    this.bloom.setSize(w, h);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
   }
 }

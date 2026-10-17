@@ -285,7 +285,7 @@ export function buildNav(layout) {
   }
 
   for (const b of layout.buildings) for (const f of b.access?.flights || []) {
-    lane(f.id, 'exterior-stair', f.bottom.x, f.bottom.z, f.bottom.y,
+    lane(f.id, b.access.protected ? 'protected-stair' : 'exterior-stair', f.bottom.x, f.bottom.z, f.bottom.y,
       f.top.x, f.top.z, f.top.y, f.width / 2, f.from, f.to, 0);
   }
 
@@ -551,7 +551,7 @@ export function landAt(nav, x, z, yMax) {
   }
   let result = best ? { floor: best.id, x, z, y: best.y, slope: null } : null;
   for (const sl of nav.slopes) {
-    if (sl.kind !== 'interior-stair' && sl.kind !== 'exterior-stair') continue;
+    if (!['interior-stair', 'exterior-stair', 'protected-stair'].includes(sl.kind)) continue;
     const [u, v] = toL(sl.F, x, z);
     if (u < 0 || u > sl.len || Math.abs(v) > sl.hw - NAV.r) continue;
     const y = sl.y0 + (sl.y1 - sl.y0) * u / sl.len;
@@ -638,7 +638,7 @@ function levelSpawn(nav, layout, levelId, prefer = null) {
 export function floorLabel(nav, layout, s) {
   if (s.slope) {
     const sl = nav.slopeById.get(s.slope.id);
-    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道', 'interior-stair': '套内复式楼梯', 'exterior-stair': '街区楼梯' }[sl && sl.kind] || '';
+    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道', 'interior-stair': '套内复式楼梯', 'exterior-stair': '街区楼梯', 'protected-stair': '消防楼梯' }[sl && sl.kind] || '';
   }
   const F = nav.floors.get(s.floor);
   if (!F) return '';

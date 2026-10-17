@@ -112,7 +112,7 @@ export function squareSetup(bid, byShort, lift) {
   const elevators = [
     ...[-32.1, -29.5, -26.9].map((z, i) => lift(`${bid}-SQ-W-L${i + 1}`, bid, 'passenger', F_SQ, -34.5, z, 3, 2.6, 'E', all)),
     ...[25.5, 28.5, 31.5].map((z, i) => lift(`${bid}-SQ-E-L${i + 1}`, bid, 'passenger', F_SQ, 14.25, z, 3, 2.6, 'W', all)),
-    ...[['GW', -15.5, 'W'], ['GE', 15.5, 'E']].map(([id, x, door]) => lift(`${bid}-SQ-${id}`, bid, 'glass', F_SQ, x, 0, 2.6, 2.6, door, ids(['B1M', '1F', '2F', '3F']))),
+    ...[['GW', -15.5, 'W'], ['GE', 15.5, 'E']].map(([id, x, door]) => lift(`${bid}-SQ-${id}`, bid, 'glass', F_SQ, x, 0, 2.6, 2.6, door, ids(['B1M', '1F', '2F', '3F', 'RF']))),
     lift(`${bid}-SQ-F1`, bid, 'freight', F_SQ, 13.75, -29, 3.5, 4, 'E', ids(ABOVE)),
   ].map((e) => ({ ...e, square: true }));
   const park = (side, x0, z0, x1, z1) => ({ x0, z0, x1, z1, side });
@@ -210,6 +210,7 @@ function roof() {
     W('D4', 'deck', rect(21, -12, CH - 12, 12)), W('SKn', 'deck', rect(-21, -14, 21, -10)), W('SKs', 'deck', rect(-21, 10, 21, 14)),
     W('SKw', 'deck', rect(-21, -14, -17, 14)), W('SKe', 'deck', rect(17, -14, 21, 14)), W('NP', 'deck', rect(-20, -40, 12, -24)),
     W('NE', 'deck', rect(20, -40, 40, -24)), W('SD', 'deck', rect(-58, 24, 8, 38)), WP('hall', 'deck', HALL),
+    W('ST-S5-access', 'deck', rect(54.5, -4, 59, -2.3)),
   ];
   const features = [
     { type: 'pavilion', frame: F_SQ, rect: rect(-37, -5, -19, 5), name: '方庭扶梯玻璃亭', square: true },
@@ -249,10 +250,18 @@ export function squareLevel(lv, picker, state) {
     const r = roof();
     lv.walk.push(...r.walk);
     lv.features.push(...r.features);
-    lv.voids.push({ id: 'SQ-sky', kind: 'skylight', poly: lroundPoly(F_SQ, VOID_UP.rect, VOID_UP.r), frame: F_SQ, rect: VOID_UP.rect, radius: VOID_UP.r, square: true });
+    const sky = rect(-12, -10, 12, 10);
+    lv.voids.push({ id: 'SQ-sky', kind: 'skylight', poly: lroundPoly(F_SQ, sky, 4), frame: F_SQ, rect: sky, radius: 4, square: true });
+    for (const x of [-15.5,15.5]) { const shaft=rect(x-1.3,-1.3,x+1.3,1.3); lv.voids.push({id:`SQ-roof-shaft-${x}`,kind:'shaft',poly:lrectPoly(F_SQ,shaft),frame:F_SQ,rect:shaft}); }
   } else {
     lv.walk.push(...corridors(s));
-    if (s === '1F') lv.voids.push({ id: 'SQ-void', kind: 'atrium', poly: lroundPoly(F_SQ, VOID_1F.rect, VOID_1F.r), frame: F_SQ, rect: VOID_1F.rect, radius: VOID_1F.r, square: true });
+    if (s === '1F') {
+      lv.voids.push({ id: 'SQ-void', kind: 'atrium', poly: lroundPoly(F_SQ, VOID_1F.rect, VOID_1F.r), frame: F_SQ, rect: VOID_1F.rect, radius: VOID_1F.r, square: true });
+      for (const x of [-15.5, 15.5]) {
+        const shaft = rect(x - 1.3, -1.3, x + 1.3, 1.3);
+        lv.voids.push({ id: `SQ-ground-shaft-${x}`, kind: 'shaft', poly: lrectPoly(F_SQ, shaft), frame: F_SQ, rect: shaft });
+      }
+    }
     if (s === '2F' || s === '3F') lv.voids.push({ id: 'SQ-void', kind: 'atrium', poly: lroundPoly(F_SQ, VOID_UP.rect, VOID_UP.r), frame: F_SQ, rect: VOID_UP.rect, radius: VOID_UP.r, square: true });
     if (s === 'B1M') {
       lv.rooms.push({ id: 'SQ-store', type: 'equip', label: '超市仓储', frame: F_SQ, rects: [rect(49, -18, 55, 4)], doors: [] });

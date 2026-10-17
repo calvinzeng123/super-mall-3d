@@ -28,7 +28,7 @@ const V1 = {
 
 export const P1 = {
   id: 'P1', code: 'A', name: '一期 · 云澜汇', short: '一期', en: 'YUNLAN MALL', plot: rect(-286, -256, -16, -20),
-  rotundas: [{ id: 'C', x: -106, z: -106, R: 34, kitDeg: 45, glass: ['B1M', '1F', '2F', '3F'] }],
+  rotundas: [{ id: 'C', x: -106, z: -106, R: 34, kitDeg: 45, glass: ['B1M', '1F', '2F', '3F', 'RF'] }],
   wings: [
     { id: 'SE', rot: 'C', deg: 45, uEnd: 84, core: { band: -1, u: 51 }, zone: 'A', name: '东南翼' },
     { id: 'W', rot: 'C', deg: 165, uEnd: 96, core: { band: 1, u: 55 }, zone: 'B', name: '西翼' },
@@ -96,12 +96,14 @@ export const P1 = {
     {
       short: 'RF', name: 'RF 天台花园', kind: 'roof', elev: 17.5, height: 6,
       theme: { key: 'roof', floor: 'deck-garden', accent: '#4a9a50', label: '天台花园 · 餐吧 · 摩天轮' },
-      rot: { C: { void: KIT.voidUp, voidKind: 'skylight' } },
+      rot: { C: { void: { rect: rect(-12, -10, 12, 10), r: 4 }, voidKind: 'skylight', shafts: true } },
       wings: { SE: { skylights: [[40, 52], [58, 72]] }, W: { skylights: [[58, 70]] }, NW: { skylights: [[44, 56]] } },
       roof: p1Roof,
     },
   ],
   escalators: [
+    { pair: 'ROOF1', rot: 'C', from: '3F', to: 'RF', axis: 'x', sign: 1, cross: 21, slot: true, label: '3F ↔ 天台花园' },
+    { pair: 'ROOF2', rot: 'C', from: '3F', to: 'RF', axis: 'x', sign: -1, cross: -21, slot: true, label: '3F ↔ 天台花园' },
     { pair: 'K1', rot: 'C', from: 'B1M', to: '1F', axis: 'z', sign: -1, top: -8, cross: -2.55, label: '美食广场 ↔ 1F' },
     { pair: 'K2', rot: 'C', from: 'B1M', to: '1F', axis: 'z', sign: 1, top: 8, cross: 2.55, label: '美食广场 ↔ 1F' },
     { pair: 'K3', rot: 'C', from: '1F', to: '2F', axis: 'z', sign: -1, top: -10, cross: -10.65, label: '1F ↔ 2F' },

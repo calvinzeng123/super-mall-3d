@@ -28,7 +28,8 @@ import { buildPark } from './build/park.js';
 import { buildSquare } from './build/square.js';
 import { buildMetro } from './build/metro.js';
 import { createPerfMonitor } from './perf.js';
-import { MAX_PIXEL_RATIO } from './device.js';
+import { MOBILE } from './device.js';
+import { createQualityManager } from './quality.js';
 import { loadSurfaceTextures } from './pbr.js';
 import { buildHospitality, setHospitalityCut, setResidentialDetailLevel } from './build/hospitality.js';
 import { buildResidenceFloor } from './build/residence-interiors.js';
@@ -65,12 +66,16 @@ const WAYFINDING = [
 const OVERVIEW = [V(125, 480, 590), V(-90, 30, -35)];
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
+  let storage;
+  try { storage = window.localStorage; } catch { /* Storage can be blocked in an embedded preview. */ }
+  const qualityManager = createQualityManager({ mobile: MOBILE, pixelRatio: window.devicePixelRatio, storage });
+  const initialQuality = qualityManager.current;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
+  renderer.setPixelRatio(initialQuality.pixelRatio);
   renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = initialQuality.shadows;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false;
   setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
@@ -90,11 +95,11 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   onProgress('加载石材、木纹与街区铺装', 0);
   const surfaces = await loadSurfaceTextures(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
   const mats = new MaterialLib(surfaces);
-  const env = new Environment(renderer, scene, camera, mats);
+  const env = new Environment(renderer, scene, camera, mats, initialQuality);
   const root = new THREE.Group();
   scene.add(root);
 
-  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], site: null };
+  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], site: null, quality: initialQuality };
   onProgress('载入你的套房家具、材质与灯具', .015);
   ctx.suiteAsset = await loadSuiteAsset(SUITE_MODEL_URL, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
   ctx.suiteLighting = createSuiteLighting(ctx);
@@ -171,9 +176,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     onProgress(steps[i][0], i / steps.length);
     await nextFrame();
     const currentCtx = steps[i][1] === buildSite ? ctx : legacyCtx;
-    steps[i][1](currentCtx);
+    await steps[i][1](currentCtx);
     // 构建器注册的动态接口（outlineEdges、metroSync等）回传给完整场景。
-    if (currentCtx === legacyCtx) for (const key of ['outlineEdges', 'metroSync', 'bridgeGroup', 'paths', 'ferris', 'carGeo', 'carMat']) if (legacyCtx[key]) ctx[key] = legacyCtx[key];
+    if (currentCtx === legacyCtx) for (const key of ['outlineEdges', 'metroSync', 'bridgeGroup', 'paths', 'ferris', 'carGeo', 'carMat', 'peopleQuality', 'mallStairStats']) if (legacyCtx[key]) ctx[key] = legacyCtx[key];
   }
   onProgress('建造云澜汇酒店、公寓与住宅', 0.96);
   await nextFrame();
@@ -408,6 +413,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
+    get quality() { return qualityManager.current; },
+    setQuality(preset) { return qualityManager.select(preset); },
+    customizeQuality(patch) { return qualityManager.customize(patch); },
+    onQuality(fn) { return qualityManager.subscribe(fn); },
     ensureTowerFloor,
     get residenceCache() { return [...residenceCache.keys()]; },
     get residentialStats() { return ctx.residentialAssets.stats; },
@@ -553,8 +562,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   // ---------- 主循环 ----------
   const clock = new THREE.Clock();
   let elapsed = 0;
-  let degraded = false;
-  const perfMon = createPerfMonitor(performance.now());
+  let perfMon = createPerfMonitor(performance.now());
+  let lastFrame = -Infinity;
   /** 垂直视场角：俯瞰 42°，第一人称 60°（横屏时横向约 90°）；竖屏时加大，保证横向能放下 */
   function fitFov() {
     const [base, max, k] = state.explore ? [60, 85, 0.35] : [42, 72, 0.62];
@@ -572,7 +581,26 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   window.addEventListener('resize', resize);
   new ResizeObserver(resize).observe(canvas);
 
+  qualityManager.subscribe(quality => {
+    const shadowsChanged = ctx.quality.shadows !== quality.shadows;
+    ctx.quality = quality;
+    renderer.setPixelRatio(quality.pixelRatio);
+    env.setQuality(quality);
+    ctx.peopleQuality?.setDensity(quality.crowdDensity);
+    if (shadowsChanged) scene.traverse(o => {
+      if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true;
+    });
+    perfMon = createPerfMonitor(performance.now());
+    lastFrame = -Infinity;
+    resize();
+  });
+
   renderer.setAnimationLoop(() => {
+    const now = performance.now();
+    const interval = 1000 / ctx.quality.maxFps;
+    if (now - lastFrame < interval - 1) return;
+    lastFrame = now - ((now - lastFrame) % interval || 0);
+    if (!Number.isFinite(lastFrame)) lastFrame = now;
     const dt = Math.min(clock.getDelta(), 0.1);
     elapsed += dt;
     if (flight) {
@@ -597,16 +625,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
     highlight.update(elapsed, ctx);
     env.render();
-    // 帧率持续过低时自动降级：关阴影、泛光，降低像素比（规则见 perf.js：极慢设备也能触发，单次卡顿与后台节流不触发）
-    if (!degraded && perfMon.tick(performance.now(), document.hidden)) {
-      degraded = true;
-      renderer.setPixelRatio(1);
-      renderer.shadowMap.enabled = false;
-      env.bloomEnabled = false;
-      scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
-      resize();
-      console.info(`性能降级：平均 ${perfMon.fps.toFixed(1)} fps，已关闭阴影与泛光`);
-    }
+    // Only automatic mode changes itself; a manual choice remains in effect.
+    if (perfMon.tick(now, document.hidden)) qualityManager.degrade();
   });
 
   applyVisibility();

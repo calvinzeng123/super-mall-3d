@@ -52,10 +52,12 @@ export function buildUrbanDistrict(ctx) {
   }
   // Ground-level plinths and entrance aprons tie the context buildings to their parcels.
   for(const b of U.buildings) {
-    ext.box(b.x,.16,b.z,b.w+3,.32,b.d+3,'#b5b2a7');
-    ext.box(b.x,1.8,b.z+b.d/2+.2,5,3.2,.25,'#435d65');
-    ext.box(b.x,3.5,b.z+b.d/2+1.6,7,.2,3.2,'#d0c4a8');
-    ext.box(b.x,b.h+.4,b.z,Math.max(4,b.w*.35),.9,Math.max(3,b.d*.22),'#7e8c90');
+    B.get('facadeStone').box(b.x,.16,b.z,b.w+3,.32,b.d+3,'#d4cec0');
+    B.get('facadeWindow').box(b.x,1.8,b.z+b.d/2+.2,5,3.2,.25,'#435d65');
+    for(const dx of [-2.55,0,2.55])B.get('facadeFrame').box(b.x+dx,1.8,b.z+b.d/2+.35,.1,3.2,.12,'#3f5055');
+    B.get('facadeTimber').box(b.x,3.5,b.z+b.d/2+1.6,7,.2,3.2,'#d9c5a2');
+    B.get('facadeFrame').box(b.x,3.63,b.z+b.d/2+1.6,7.08,.06,3.26,'#586a6b');
+    B.get('facadeFrame').box(b.x,b.h+.4,b.z,Math.max(4,b.w*.35),.9,Math.max(3,b.d*.22),'#87969a');
   }
   for(const l of U.lamps)streetLamp(B,l.x,l.z,0,[0,1],7);
   addTrees(G,ctx.mats,U.trees,103);

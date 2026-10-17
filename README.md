@@ -4,6 +4,18 @@
 
 ![最新总图：左下酒店、右上公寓，西侧大型停车场与二期北侧乐园食集](docs/images/west-parking-overview.jpg)
 
+## 2026-10-17 · 真人行人、复式与连续楼梯
+
+- 两套带脸部、服装和头发贴图的 Microsoft Rocketbox 人物，MIT 许可随资源保留；原有建筑增加 PBR 表面与实体窗框。
+- 一、二期及六栋塔楼新增 41 座连续消防梯间、508 条层间线路。六部商场玻璃梯通往天台，新增八条屋顶扶梯；二楼天桥门口矮墙已切开。
+- 酒店首层 10 套双层套房、公寓顶层 10 套 LOFT，连同原公寓首层共 30 套复式；原模型和 748 户数量不变。酒店西门、公寓东门分别接入既有步道。
+- 二期铺位 88 → 107，全园 475。手机新增玻璃画质面板，自动优先流畅，可调清晰度、阴影、泛光和人群。
+- 175 项自动测试、桌面及手机模拟、断网离线加载通过。另有 10 座停车小厅、地铁及桥塔楼梯仍待接成连续步行，目标继续推进；实体手机性能尚未验收。
+
+[完整验证与进度](docs/qa-2026-10-17-details.md) · [人物来源](docs/people-models.md)
+
+![手机画面设置](docs/images/goal-quality-phone.png)
+
 ## 手机玻璃界面 · 2026-10-15
 
 手机采用透明悬浮底栏、图标与滑动胶囊高亮，楼层与工具面板统一玻璃质感，支持深色和减少动态效果。点「净览」完全隐藏界面，轻点画面恢复；横屏仍保持紧凑。详见 [本轮检查](docs/qa-2026-10-15-glass-ui.md)。
@@ -19,7 +31,7 @@
 
 ## 快速打开
 
-**在线浏览：** [打开云澜汇 3D 园区](https://yunlan-mall-calvin.netlify.app)。这是已正式发布的 Netlify 站点，公开访问，无需登录。完整模型约 43 MiB，首次加载可能需要一两分钟，后续可使用浏览器缓存。
+**在线浏览：** [打开云澜汇 3D 园区](https://yunlan-mall-calvin.netlify.app)。这是已正式发布的 Netlify 站点，公开访问，无需登录。完整模型约 46.4 MiB，首次加载可能需要一两分钟，后续可使用浏览器缓存。
 
 **离线浏览：** 下载仓库 ZIP 并解压，使用新版 Chrome、Edge 或 Safari 打开 [`dist/mall.html`](dist/mall.html)。Three.js、贴图及三套住宅模型已内嵌，打开后无需联网，也不需要安装依赖。住宅模型解压需要浏览器支持 `DecompressionStream`。GitHub 文件页本身不会运行这个 HTML。
 
@@ -37,7 +49,7 @@ npm run serve
 
 ## Netlify 构建与发布
 
-线上专用构建由 [`scripts/build-netlify.mjs`](scripts/build-netlify.mjs) 生成 `dist/netlify/`。本次产物共 25 个文件、约 43.34 MiB：约 1.5 MiB 的应用 JS、18 张 JPEG 贴图、套房 GLB、3 份住宅 gzip 二进制资源，以及入口 HTML 和资源清单。素材从同站点加载，带内容哈希的资源文件使用长期不可变缓存，首页每次校验更新。`dist/mall.html` 继续作为资源全部内嵌的单文件离线版。
+线上专用构建由 [`scripts/build-netlify.mjs`](scripts/build-netlify.mjs) 生成 `dist/netlify/`。本次产物共 27 个文件、约 46.44 MiB：约 1.5 MiB 的应用 JS、18 张 JPEG 贴图、套房 GLB、2 份人物 GLB、3 份住宅 gzip 二进制资源，以及入口 HTML 和资源清单。素材从同站点加载，带内容哈希的资源文件使用长期不可变缓存，首页每次校验更新。`dist/mall.html` 继续作为资源全部内嵌的单文件离线版。
 
 使用已登录的 Netlify CLI，先构建再手动发布：
 

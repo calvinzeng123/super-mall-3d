@@ -115,7 +115,7 @@ export function createResidentialLighting(ctx) {
         ownedEnvironment = true;
         ctx.scene.environmentIntensity = .88 - .53 * night;
         app.env.hemi.intensity = .9 - .62 * night;
-        app.env.bloom.strength = .10 * night; app.env.bloom.threshold = 1.25;
+        app.env.setBloomProfile(.10 * night, 1.25);
         ctx.renderer.toneMappingExposure = .96 + .09 * night;
       } else if (ownedEnvironment) {
         ownedEnvironment = false;
