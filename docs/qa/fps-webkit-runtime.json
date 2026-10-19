@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-19",
+  "environment": "Playwright WebKit 26.6, iPhone 13 device emulation on macOS; not physical iPhone",
+  "passed": 8,
+  "checks": [
+    {
+      "name": "WebKit iPhone loads complete FPS",
+      "ok": true
+    },
+    {
+      "name": "renderer is WebGL2",
+      "ok": true
+    },
+    {
+      "name": "WebKit textured pistol switch",
+      "ok": true
+    },
+    {
+      "name": "WebKit held fire changes ammunition",
+      "ok": true
+    },
+    {
+      "name": "WebKit reload completes",
+      "ok": true
+    },
+    {
+      "name": "WebKit landscape safe bounds",
+      "ok": true
+    },
+    {
+      "name": "WebKit has no page exceptions",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "return to cover releases runtime",
+      "ok": true
+    }
+  ],
+  "metrics": {
+    "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+    "canvas": [
+      759,
+      351
+    ],
+    "renderer": {
+      "geometries": 385,
+      "textures": 65
+    },
+    "draw": {
+      "frame": 440,
+      "calls": 294,
+      "triangles": 1391776,
+      "points": 900,
+      "lines": 0
+    },
+    "quality": {
+      "label": "流畅",
+      "resolution": 0.9,
+      "shadows": false,
+      "shadowSize": 1024,
+      "bloom": false,
+      "crowdDensity": 0,
+      "maxFps": 30,
+      "preset": "low",
+      "tier": "low",
+      "pixelRatio": 0.9,
+      "custom": true,
+      "automatic": false,
+      "autoReduced": false
+    }
+  }
+}

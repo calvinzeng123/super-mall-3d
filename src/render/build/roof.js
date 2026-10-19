@@ -8,6 +8,9 @@ import { frame, toW, rect } from '../../layout/geom.js';
 
 export function buildRoof(ctx) {
   for (const lv of ctx.layout.levels.filter((l) => l.kind === 'roof')) {
+    // The FPS slice closes upper floors with a solid lightweight cap. It has
+    // no roof access, garden, elevator pavilion or decorative furniture.
+    if (lv.playableCap) continue;
     const L = ctx.levels[lv.id];
     const B = L.batch;
     const y0 = lv.elev;

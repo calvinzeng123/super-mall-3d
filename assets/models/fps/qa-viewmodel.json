@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-19",
+  "viewports": [
+    {
+      "width": 852,
+      "height": 393
+    },
+    {
+      "width": 393,
+      "height": 852
+    }
+  ],
+  "stats": {
+    "loaded": true,
+    "assets": [
+      {
+        "id": "rifle",
+        "label": "SMG-45",
+        "bytes": 2895736,
+        "license": "CC-BY-4.0",
+        "author": "DJMaesen"
+      },
+      {
+        "id": "pistolHands",
+        "label": "第一人称手套",
+        "bytes": 1105828,
+        "license": "CC-BY-4.0",
+        "author": "DJMaesen"
+      },
+      {
+        "id": "pistol",
+        "label": "Desert Eagle",
+        "bytes": 2025036,
+        "license": "CC-BY-4.0",
+        "author": "ELIZION"
+      }
+    ],
+    "downloadBytes": 6026600,
+    "geometries": 40,
+    "materials": 8,
+    "textures": 19,
+    "rifleTriangles": 21425,
+    "pistolTriangles": 26983,
+    "reloadClips": [
+      "reload"
+    ],
+    "realTexturedMeshes": true,
+    "activeWeapon": "rifle",
+    "disposed": false
+  },
+  "worldWeapons": {
+    "rifle": {
+      "meshes": 5,
+      "extent": [
+        0.08903519477197228,
+        0.3082488273702064,
+        0.65
+      ],
+      "finite": true,
+      "allGeometryShared": true,
+      "allMaterialsShared": true
+    },
+    "pistol": {
+      "meshes": 25,
+      "extent": [
+        0.056942378144271874,
+        0.18823098064931748,
+        0.3210357286355261
+      ],
+      "finite": true,
+      "allGeometryShared": true,
+      "allMaterialsShared": true
+    }
+  },
+  "updateAndRender": true,
+  "disposeCheck": {
+    "sharedWorldGeometriesChecked": 30,
+    "sharedWorldMaterialsChecked": 4,
+    "geometryDisposedExactlyOnce": true,
+    "materialDisposedExactlyOnce": true,
+    "rejectsAfterDispose": true,
+    "disposed": true
+  },
+  "presentationRegression": {
+    "swaps": [
+      {
+        "from": "rifle",
+        "to": "pistol",
+        "samples": [
+          {
+            "progress": 0,
+            "displayed": "rifle"
+          },
+          {
+            "progress": 0.25,
+            "displayed": "rifle"
+          },
+          {
+            "progress": 0.25,
+            "displayed": "rifle"
+          },
+          {
+            "progress": 0.49,
+            "displayed": "rifle"
+          },
+          {
+            "progress": 0.5,
+            "displayed": "pistol"
+          },
+          {
+            "progress": 0.75,
+            "displayed": "pistol"
+          },
+          {
+            "progress": 1,
+            "displayed": "pistol"
+          }
+        ]
+      },
+      {
+        "from": "pistol",
+        "to": "rifle",
+        "samples": [
+          {
+            "progress": 0,
+            "displayed": "pistol"
+          },
+          {
+            "progress": 0.25,
+            "displayed": "pistol"
+          },
+          {
+            "progress": 0.25,
+            "displayed": "pistol"
+          },
+          {
+            "progress": 0.49,
+            "displayed": "pistol"
+          },
+          {
+            "progress": 0.5,
+            "displayed": "rifle"
+          },
+          {
+            "progress": 0.75,
+            "displayed": "rifle"
+          },
+          {
+            "progress": 1,
+            "displayed": "rifle"
+          }
+        ]
+      }
+    ],
+    "fallbackClockPassed": true,
+    "pausedSwitchPassed": true,
+    "flashes": [
+      {
+        "dt": 0.06,
+        "updatesBeforeFirstRender": 2,
+        "visibleOnFirstRender": true,
+        "visibleOnNextRender": false
+      },
+      {
+        "dt": 0.1,
+        "updatesBeforeFirstRender": 2,
+        "visibleOnFirstRender": true,
+        "visibleOnNextRender": false
+      }
+    ],
+    "cancelReloadAndSwitchPassed": true
+  }
+}

@@ -19,7 +19,7 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
   if (!building.access?.protected) return;
   if (enclosures) for (const s of stairs) {
     const p=towerStairPlan(s),r=s.rect;
-    for(const lv of levels) {
+    for(const lv of levels.filter(l=>!l.playableCap&&s.serves.includes(l.id))) {
       const y=lv.elev,h=lv.kind==='roof'?2.9:lv.height, dz=s.door.z0;
       box(B,'concrete',{x0:r.x0,z0:r.z0,x1:r.x0+.2,z1:r.z1},y,h,WALL);
       box(B,'concrete',{x0:r.x1-.2,z0:r.z0,x1:r.x1,z1:r.z1},y,h,WALL);
@@ -71,7 +71,7 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
 export function buildTowerStairInstances(ctx, building, levels, stairs, materials, exterior) {
   if (!building.access?.protected) return;
   const buckets=new Map(),records=[];
-  for(const lv of levels.slice(0,-1)) {
+  for(const lv of levels.filter(l=>building.access.flights.some(f=>f.parentFloor===l.id))) {
     const key=lv.height.toFixed(4);
     if(!buckets.has(key))buckets.set(key,[]);
     buckets.get(key).push(lv);

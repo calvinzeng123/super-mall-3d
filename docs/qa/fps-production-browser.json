@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-19",
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "deployId": "6ad5f9fae6f970c5110ecda2",
+  "environment": "WebKit iPhone emulation; public HTTPS",
+  "passed": 9,
+  "checks": [
+    {
+      "name": "production cover exposes both modes",
+      "ok": true
+    },
+    {
+      "name": "production cover loads no game or GLB",
+      "ok": true
+    },
+    {
+      "name": "production FPS loads real textured weapons",
+      "ok": true
+    },
+    {
+      "name": "production FPS only retained buildings and mission floors",
+      "ok": true
+    },
+    {
+      "name": "hosting badge cannot block FPS controls",
+      "ok": true
+    },
+    {
+      "name": "production swap works",
+      "ok": true
+    },
+    {
+      "name": "production tour has original 53 floors and no FPS instance",
+      "ok": true
+    },
+    {
+      "name": "production tour never downloads guns or removed residences",
+      "ok": true,
+      "detail": [
+        "https://yunlan-mall-calvin.netlify.app/assets/suite.a7f99bf01d3ad6e3.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-m.5da2da91839f374d.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-f.a1ec332b8f429022.glb"
+      ]
+    },
+    {
+      "name": "production has no page exceptions",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

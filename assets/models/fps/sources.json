@@ -1,0 +1,60 @@
+{
+  "acquired": "2026-10-19",
+  "upstreamRepository": "https://github.com/AetherRadar/operation-steel-tide",
+  "upstreamCommit": "d6a33b932e00fb9016dea407eca3f909aeaf2dcb",
+  "downloads": [
+    {
+      "sourceFile": "smg.glb",
+      "url": "https://raw.githubusercontent.com/AetherRadar/operation-steel-tide/d6a33b932e00fb9016dea407eca3f909aeaf2dcb/assets/models/djmaesen_smg45/smg45_first_person.glb",
+      "bytes": 21652620,
+      "sha256": "234da8daae47bb5a96af7312d77cd56d92f098ec06403e5155ce66a9a49a4562"
+    },
+    {
+      "sourceFile": "pistol-hands.glb",
+      "url": "https://raw.githubusercontent.com/AetherRadar/operation-steel-tide/d6a33b932e00fb9016dea407eca3f909aeaf2dcb/assets/models/djmaesen_smg45/smg45_pistol_service_arms.glb",
+      "bytes": 9450020,
+      "sha256": "790b173064fa40f8a14547c69cdc279223d1f4a58bd05dab19d9a44fcd5b507f"
+    },
+    {
+      "sourceFile": "desert-eagle.glb",
+      "url": "https://raw.githubusercontent.com/AetherRadar/operation-steel-tide/d6a33b932e00fb9016dea407eca3f909aeaf2dcb/assets/models/elizion_desert_eagle/desert_eagle.glb",
+      "bytes": 11502692,
+      "sha256": "87b22c44a9b58d0a3aaee72232480de35008d95534f11ad84c8ae9a2cf4f9063"
+    }
+  ],
+  "primarySourceEvidence": [
+    {
+      "uid": "ea3dad7478624495a5a46f40127b0579",
+      "title": "fps animated smg",
+      "author": "DJMaesen",
+      "authorUrl": "https://sketchfab.com/bumstrum",
+      "sourceUrl": "https://sketchfab.com/3d-models/fps-animated-smg-ea3dad7478624495a5a46f40127b0579",
+      "isDownloadable": true,
+      "license": {
+        "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+        "label": "CC Attribution",
+        "fullName": "Creative Commons Attribution",
+        "requirements": "Author must be credited. Commercial use is allowed.",
+        "url": "http://creativecommons.org/licenses/by/4.0/",
+        "slug": "by"
+      }
+    },
+    {
+      "uid": "cabde59f5cf24effaf80536e35d04e95",
+      "title": "Desert Eagle",
+      "author": "ELIZION",
+      "authorUrl": "https://sketchfab.com/ELIZION",
+      "sourceUrl": "https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95",
+      "isDownloadable": true,
+      "license": {
+        "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+        "label": "CC Attribution",
+        "fullName": "Creative Commons Attribution",
+        "requirements": "Author must be credited. Commercial use is allowed.",
+        "url": "http://creativecommons.org/licenses/by/4.0/",
+        "slug": "by"
+      }
+    }
+  ],
+  "changes": "1024px maximum hand/SMG maps; 512px pistol maps; JPEG quality 92; unchanged original mesh topology, skin and SMG reload animation. Runtime presentation, recoil, pistol reload and weapon switching by Yunlan."
+}

@@ -1,0 +1,250 @@
+{
+  "date": "2026-10-19",
+  "environment": "Chrome iPhone 13 emulation; real 3D runtime; not physical device",
+  "passed": 10,
+  "checks": [
+    {
+      "name": "cover creates no WebGL or model requests",
+      "ok": true,
+      "detail": {
+        "contexts": 0,
+        "models": 0,
+        "resources": [
+          "http://127.0.0.1:5176/assets/main.OZUD4OZE.js",
+          "http://127.0.0.1:5176/assets/cover.27284425db21785b.jpg"
+        ]
+      }
+    },
+    {
+      "name": "only one WebGL canvas",
+      "ok": true
+    },
+    {
+      "name": "runtime contains only P1 hotel apartment",
+      "ok": true
+    },
+    {
+      "name": "three fingers drive real movement view and firing",
+      "ok": true,
+      "detail": {
+        "before": {
+          "p": {
+            "floor": "P1-1F",
+            "x": -135,
+            "z": -98,
+            "y": 0,
+            "slope": null,
+            "yaw": 1.8018869939907938,
+            "pitch": 0
+          },
+          "shots": 0
+        },
+        "after": {
+          "p": {
+            "floor": "P1-1F",
+            "x": -136.11441784732853,
+            "z": -97.82119546490014,
+            "y": 0,
+            "slope": null,
+            "yaw": 1.7298869939907937,
+            "pitch": 0.036
+          },
+          "shots": 4
+        }
+      }
+    },
+    {
+      "name": "release stops movement and firing",
+      "ok": true,
+      "detail": {
+        "after": {
+          "p": {
+            "floor": "P1-1F",
+            "x": -136.11441784732853,
+            "z": -97.82119546490014,
+            "y": 0,
+            "slope": null,
+            "yaw": 1.7298869939907937,
+            "pitch": 0.036
+          },
+          "shots": 4
+        },
+        "released": {
+          "p": {
+            "floor": "P1-1F",
+            "x": -136.11441784732853,
+            "z": -97.82119546490014,
+            "y": 0,
+            "slope": null,
+            "yaw": 1.7298869939907937,
+            "pitch": 0.036
+          },
+          "shots": 4
+        }
+      }
+    },
+    {
+      "name": "weapon changes to real pistol",
+      "ok": true
+    },
+    {
+      "name": "pause freezes simulation",
+      "ok": true
+    },
+    {
+      "name": "custom control position persists",
+      "ok": true
+    },
+    {
+      "name": "landscape real HUD stays in viewport",
+      "ok": true,
+      "detail": [
+        {
+          "id": "move",
+          "x": 54.203125,
+          "y": 221.40625,
+          "w": 117.59375,
+          "h": 117.59375
+        },
+        {
+          "id": "fire",
+          "x": 708.3984375,
+          "y": 172.9140625,
+          "w": 86.390625,
+          "h": 86.390625
+        },
+        {
+          "id": "ads",
+          "x": 627.0546875,
+          "y": 188.6796875,
+          "w": 62.390625,
+          "h": 62.390625
+        },
+        {
+          "id": "reload",
+          "x": 720.3984375,
+          "y": 286.7109375,
+          "w": 62.390625,
+          "h": 62.390625
+        },
+        {
+          "id": "swap",
+          "x": 572.0703125,
+          "y": 290.4765625,
+          "w": 62.390625,
+          "h": 62.390625
+        },
+        {
+          "id": "interact",
+          "x": 532.21875,
+          "y": 194.421875,
+          "w": 66,
+          "h": 66
+        },
+        {
+          "id": "sprint",
+          "x": 81.8046875,
+          "y": 124.6015625,
+          "w": 62.390625,
+          "h": 62.390625
+        },
+        {
+          "id": "crouch",
+          "x": 646.2421875,
+          "y": 290.4765625,
+          "w": 62.390625,
+          "h": 62.390625
+        },
+        {
+          "id": "heal",
+          "x": 188.9140625,
+          "y": 290.4765625,
+          "w": 62.390625,
+          "h": 62.390625
+        }
+      ]
+    },
+    {
+      "name": "no page exceptions",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "state": {
+    "buildings": [
+      "P1",
+      "H",
+      "A"
+    ],
+    "levels": 18,
+    "renderer": {
+      "geometries": 382,
+      "textures": 65
+    },
+    "quality": {
+      "label": "流畅",
+      "resolution": 0.9,
+      "shadows": false,
+      "shadowSize": 1024,
+      "bloom": false,
+      "crowdDensity": 0,
+      "maxFps": 30,
+      "preset": "low",
+      "tier": "low",
+      "pixelRatio": 0.9,
+      "custom": true,
+      "automatic": false,
+      "autoReduced": false
+    },
+    "run": {
+      "hp": 100,
+      "shots": 4
+    },
+    "viewmodel": {
+      "loaded": true,
+      "assets": [
+        {
+          "id": "rifle",
+          "label": "SMG-45",
+          "bytes": 2895736,
+          "license": "CC-BY-4.0",
+          "author": "DJMaesen"
+        },
+        {
+          "id": "pistolHands",
+          "label": "第一人称手套",
+          "bytes": 1105828,
+          "license": "CC-BY-4.0",
+          "author": "DJMaesen"
+        },
+        {
+          "id": "pistol",
+          "label": "Desert Eagle",
+          "bytes": 2025036,
+          "license": "CC-BY-4.0",
+          "author": "ELIZION"
+        }
+      ],
+      "downloadBytes": 6026600,
+      "geometries": 40,
+      "materials": 8,
+      "textures": 19,
+      "rifleTriangles": 21425,
+      "pistolTriangles": 26983,
+      "reloadClips": [
+        "reload"
+      ],
+      "realTexturedMeshes": true,
+      "activeWeapon": "pistol",
+      "disposed": false
+    },
+    "requests": [
+      "http://127.0.0.1:5176/assets/suite.a7f99bf01d3ad6e3.glb",
+      "http://127.0.0.1:5176/assets/smg45.986342e386b174d5.glb",
+      "http://127.0.0.1:5176/assets/fps-hands.94614904f4d82efd.glb",
+      "http://127.0.0.1:5176/assets/deagle.77ed676903ec101b.glb",
+      "http://127.0.0.1:5176/assets/person-m.5da2da91839f374d.glb",
+      "http://127.0.0.1:5176/assets/person-f.a1ec332b8f429022.glb"
+    ]
+  }
+}

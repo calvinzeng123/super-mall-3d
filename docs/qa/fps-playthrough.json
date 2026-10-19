@@ -1,0 +1,372 @@
+{
+  "started": 1792407489437,
+  "stages": [
+    {
+      "stage": 0,
+      "at": 0.09039999997615814,
+      "player": {
+        "floor": "P1-1F",
+        "x": -135,
+        "z": -98,
+        "y": 0,
+        "slope": null,
+        "yaw": 1.8018869939907938,
+        "pitch": 0
+      }
+    },
+    {
+      "stage": 1,
+      "at": 8.205899999976154,
+      "player": {
+        "floor": "P1-1F",
+        "x": -167.68174162932036,
+        "z": -90.3101784401599,
+        "y": 0,
+        "slope": null,
+        "yaw": 1.8018869939907836,
+        "pitch": 0
+      }
+    },
+    {
+      "stage": 2,
+      "at": 27.880999999880782,
+      "player": {
+        "floor": "H-2F",
+        "x": -243.75967878556816,
+        "z": -80.97298964273385,
+        "y": 6.5,
+        "slope": null,
+        "yaw": 7.709562400556135,
+        "pitch": 0
+      }
+    }
+  ],
+  "path": [
+    {
+      "at": 4.005599999904634,
+      "stage": 0,
+      "index": 1,
+      "floor": "P1-1F",
+      "x": -157.42132115629624,
+      "z": -92.72439502204783,
+      "health": 100,
+      "kills": 1,
+      "allyFloor": "P1-1F",
+      "allyDistance": 6.38906000008577
+    },
+    {
+      "at": 8.00569999992847,
+      "stage": 0,
+      "index": 1,
+      "floor": "P1-1F",
+      "x": -167.68174162932036,
+      "z": -90.3101784401599,
+      "health": 100,
+      "kills": 1,
+      "allyFloor": "P1-1F",
+      "allyDistance": 2.6864599997044096
+    },
+    {
+      "at": 12.00769999992847,
+      "stage": 1,
+      "index": 1,
+      "floor": "P1-1F",
+      "x": -190.61540638251535,
+      "z": -84.8653088623142,
+      "health": 100,
+      "kills": 1,
+      "allyFloor": "P1-1F",
+      "allyDistance": 6.442059999228049
+    },
+    {
+      "at": 16.05799999988078,
+      "stage": 1,
+      "index": 5,
+      "floor": "H-1F",
+      "x": -213.18026406804753,
+      "z": -78.30371583109066,
+      "health": 100,
+      "kills": 2,
+      "allyFloor": "ground",
+      "allyDistance": 6.013210822594562
+    },
+    {
+      "at": 20.082799999833096,
+      "stage": 1,
+      "index": 9,
+      "floor": "H-2F",
+      "x": -216.6586110451761,
+      "z": -77.90348312135465,
+      "health": 100,
+      "kills": 2,
+      "allyFloor": "H-ST2-1F-2F-landing",
+      "allyDistance": 5.700103307409836
+    },
+    {
+      "at": 24.08299999988077,
+      "stage": 1,
+      "index": 12,
+      "floor": "H-2F",
+      "x": -239.0685092323614,
+      "z": -80.29074474911623,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "H-2F",
+      "allyDistance": 6.427034250210175
+    },
+    {
+      "at": 28.11409999990463,
+      "stage": 2,
+      "index": 1,
+      "floor": "H-2F",
+      "x": -242.31447691734178,
+      "z": -80.98022904202367,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "H-2F",
+      "allyDistance": 0.35228068527022305
+    },
+    {
+      "at": 32.1142999998331,
+      "stage": 2,
+      "index": 1,
+      "floor": "H-2F",
+      "x": -217.51354807742445,
+      "z": -81.10446346946156,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "H-2F",
+      "allyDistance": 6.460880000496033
+    },
+    {
+      "at": 36.18009999978548,
+      "stage": 2,
+      "index": 4,
+      "floor": "P1-2F",
+      "x": -193.54909536903563,
+      "z": -86.95221238610227,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-2F",
+      "allyDistance": 6.457759999561689
+    },
+    {
+      "at": 40.24559999978553,
+      "stage": 2,
+      "index": 6,
+      "floor": "P1-2F",
+      "x": -169.6791890821329,
+      "z": -94.9734202916587,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-2F",
+      "allyDistance": 6.465651186620572
+    },
+    {
+      "at": 44.27869999980945,
+      "stage": 2,
+      "index": 9,
+      "floor": "P1-2F",
+      "x": -146.9607163925767,
+      "z": -102.38662501655408,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-2F",
+      "allyDistance": 5.822006205385635
+    },
+    {
+      "at": 48.27929999983337,
+      "stage": 2,
+      "index": 11,
+      "floor": "P1-2F",
+      "x": -144.0864340339154,
+      "z": -126.70638751504097,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-2F",
+      "allyDistance": 6.4523108841777725
+    },
+    {
+      "at": 52.297399999857305,
+      "stage": 2,
+      "index": 14,
+      "floor": "P1-2F",
+      "x": -142.1691678122684,
+      "z": -140.43255392685978,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-2F",
+      "allyDistance": 5.416080402831574
+    },
+    {
+      "at": 56.330099999785794,
+      "stage": 2,
+      "index": 16,
+      "floor": "P1-1F",
+      "x": -119.47669228194846,
+      "z": -137.832676445061,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-1F",
+      "allyDistance": 6.440465128750455
+    },
+    {
+      "at": 60.330999999881215,
+      "stage": 2,
+      "index": 22,
+      "floor": "P1-N-ST-B1M-1F-landing-1",
+      "x": -117.20617172307162,
+      "z": -149.6697163701247,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-1F",
+      "allyDistance": 3.9404749455830665
+    },
+    {
+      "at": 64.39679999983356,
+      "stage": 2,
+      "index": 26,
+      "floor": "P1-B1M",
+      "x": -99.1900514494353,
+      "z": -152.50031809671006,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-B1M",
+      "allyDistance": 5.98001802167105
+    },
+    {
+      "at": 68.43019999980966,
+      "stage": 2,
+      "index": 27,
+      "floor": "P1-B1M",
+      "x": -83.15576504424534,
+      "z": -171.55904747370428,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-B1M",
+      "allyDistance": 6.418839586121356
+    },
+    {
+      "at": 72.4306999998097,
+      "stage": 2,
+      "index": 29,
+      "floor": "P1-B1M",
+      "x": -59.44769426637175,
+      "z": -173.5772748333409,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "P1-B1M",
+      "allyDistance": 6.421439586502952
+    },
+    {
+      "at": 76.49689999985746,
+      "stage": 2,
+      "index": 33,
+      "floor": "A-B1",
+      "x": -37.17961540947361,
+      "z": -176.92494690303155,
+      "health": 100,
+      "kills": 3,
+      "allyFloor": "A-B1",
+      "allyDistance": 4.6269974938882985
+    },
+    {
+      "at": 80.53019999980978,
+      "stage": 2,
+      "index": 35,
+      "floor": "A-B1",
+      "x": -37.10091619702351,
+      "z": -201.31116063162662,
+      "health": 100,
+      "kills": 4,
+      "allyFloor": "A-B1",
+      "allyDistance": 6.463402218076455
+    },
+    {
+      "at": 84.56349999988134,
+      "stage": 2,
+      "index": 36,
+      "floor": "A-B1",
+      "x": -35.47563037075612,
+      "z": -218.24810445178306,
+      "health": 100,
+      "kills": 4,
+      "allyFloor": "A-B1",
+      "allyDistance": 2.676540000295593
+    },
+    {
+      "at": 88.56459999978593,
+      "stage": 2,
+      "index": 36,
+      "floor": "A-B1",
+      "x": -35.47563037075612,
+      "z": -218.24810445178306,
+      "health": 100,
+      "kills": 4,
+      "allyFloor": "A-B1",
+      "allyDistance": 2.676540000295593
+    }
+  ],
+  "done": true,
+  "errors": [],
+  "shotsBefore": 0,
+  "inputSource": "HUD guide + ordinary input/look/action; no position/health/stage changes",
+  "viewport": {
+    "width": 844,
+    "height": 390
+  },
+  "maxAllyDistance": 6.506382235556632,
+  "result": {
+    "success": true,
+    "title": "行动完成",
+    "subtitle": "情报已带出，撤离成功。",
+    "kills": 4,
+    "shots": 10,
+    "accuracy": 100,
+    "time": 91,
+    "intel": 2,
+    "teammate": true
+  },
+  "player": {
+    "floor": "A-B1",
+    "x": -35.47563037075612,
+    "z": -218.24810445178306,
+    "y": -4.5,
+    "slope": null,
+    "yaw": 12.30126615685098,
+    "pitch": 0
+  },
+  "ally": {
+    "floor": "A-B1",
+    "x": -36.17691082467789,
+    "z": -215.66506900910528,
+    "hp": 100
+  },
+  "duration": 92101,
+  "finalAllyDistance": 2.676540000295593,
+  "sameFinalFloor": true,
+  "checkedAt": "2026-10-19T11:00:43.311Z",
+  "url": "http://127.0.0.1:5176/",
+  "entry": "http://127.0.0.1:5176/assets/main.OZUD4OZE.js",
+  "quality": {
+    "label": "流畅",
+    "resolution": 0.9,
+    "shadows": false,
+    "shadowSize": 1024,
+    "bloom": false,
+    "crowdDensity": 0,
+    "maxFps": 30,
+    "preset": "low",
+    "tier": "low",
+    "pixelRatio": 0.9,
+    "custom": true,
+    "automatic": false,
+    "autoReduced": false
+  },
+  "consoleErrors": 0,
+  "notes": [
+    "Chrome desktop browser at 844x390 CSS px; not a physical iPhone acceptance test",
+    "Driven by ordinary input/look/action using live HUD guide only; no direct health, position or mission-state changes",
+    "All runtime ally and player movement uses nav.step; 20/30/60 fps continuous-navigation tests verify support and per-step displacement limits"
+  ]
+}

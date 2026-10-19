@@ -1,46 +1,23 @@
-// 入口：检查 WebGL → 生成布局模型 → 搭建 3D 场景 → 绑定界面
-import { buildLayout } from './layout/layout.js';
-import { createApp } from './render/app.js';
-import { createUI } from './render/ui.js';
-import { attachTour } from './render/tour.js';
-import { attachExplore } from './render/explore.js';
-
+// The title screen is deliberately independent of Three.js and world assets.
+// The online build splits the dynamic import: opening the cover creates no GL
+// context, downloads no GLB and allocates no map geometry.
+import { mountLauncher } from './launcher.js';
+import { COVER_URL } from './cover-data.js';
 window.__mallBooted = true;
-const $ = (id) => document.getElementById(id);
-
-function webglAvailable() {
+document.body.dataset.mode = 'launch';
+document.getElementById('loading').hidden = true;
+let failed = false;
+const launcher = mountLauncher({ backgroundUrl:COVER_URL, async onSelect(mode) {
+  if (failed) { location.reload(); return; }
+  launcher.setLoading('准备进入云澜汇',0);
   try {
-    const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2') || c.getContext('webgl'));
-  } catch {
-    return false;
+    const { startRuntime } = await import('./runtime.js');
+    await startRuntime(mode,(label,p)=>launcher.setLoading(label,p));
+    launcher.dispose();
+  } catch(error) {
+    failed = true;
+    console.error(error);
+    // Retry creates a fresh document, releasing any partially built GPU scene.
+    launcher.showError(`加载未完成：${error.message || error}。点击任一模式刷新后重试。`);
   }
-}
-
-async function main() {
-  if (!webglAvailable()) {
-    window.__mallFail('浏览器不支持 WebGL', '请用最新版 Chrome、Edge 或 Safari 打开这个页面。');
-    return;
-  }
-  const bar = $('loadingBar');
-  const text = $('loadingText');
-  const layout = buildLayout();
-  const app = await createApp(layout, $('stage'), {
-    onProgress(label, p) {
-      text.textContent = `${label}…`;
-      bar.style.width = `${Math.round(p * 100)}%`;
-    },
-  });
-  const ui = createUI(app, layout);
-  attachTour(app, ui);
-  attachExplore(app, ui);
-  bar.style.width = '100%';
-  $('loading').classList.add('done');
-  setTimeout(() => { $('loading').hidden = true; }, 700);
-  window.__mall = app;
-}
-
-main().catch((err) => {
-  console.error(err);
-  window.__mallFail('场景搭建出错', String((err && err.message) || err));
-});
+} });

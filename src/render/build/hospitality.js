@@ -127,7 +127,7 @@ export function buildHospitality(ctx) {
 }
 
 function slab(ctx,B,b,lv,pal) {
-  const shaftHoles=ctx.layout.elevators.filter(e=>e.building===b.id).map(e=>[
+  const shaftHoles=lv.playableCap?[]:ctx.layout.elevators.filter(e=>e.building===b.id).map(e=>[
     toW(e.frame,e.lu-e.w/2,e.lv-e.d/2),toW(e.frame,e.lu+e.w/2,e.lv-e.d/2),
     toW(e.frame,e.lu+e.w/2,e.lv+e.d/2),toW(e.frame,e.lu-e.w/2,e.lv+e.d/2),
   ]);
@@ -276,7 +276,7 @@ function crown(B,b,lv,pal) {
 
 function buildRoofGarden(ctx,b,lv,pal) {
   const group=new THREE.Group();group.name=`${b.id}-roof-garden`;
-  if(!lv)return group;
+  if(!lv||lv.playableCap)return group;
   const B=new BatchSet(ctx.mats.base),r=b.footprint,y=lv.elev;
   B.frame(b.frame,()=>{
     for(const x of [r.x0+4,r.x1-4]) {
@@ -296,14 +296,16 @@ function buildRoofGarden(ctx,b,lv,pal) {
 
 function liftEnclosures(ctx,B,b,levels,pal) {
   for(const e of ctx.layout.elevators.filter(e=>e.building===b.id&&e.exterior)) {
+    const served=levels.filter(l=>e.serves.includes(l.id));
+    if(!served.length)continue;
     const world=toW(e.frame,e.lu,e.lv),[x,z]=toL(b.frame,...world);
-    const halfW=e.w/2,halfD=e.d/2,bottom=levels[0].elev,top=levels.at(-1).elev+levels.at(-1).height+0.3;
+    const halfW=e.w/2,halfD=e.d/2,bottom=served[0].elev,top=served.at(-1).elev+served.at(-1).height+0.3;
     const shaftEdges=rectEdges({x0:x-halfW,x1:x+halfW,z0:z-halfD,z1:z+halfD});
     // door是电梯自身局部朝向，不等同于建筑外侧方向。实际井道在建筑内部。
     for(const edge of shaftEdges)if(edge.side!==e.door)sideBox(B,edge,'glass',0,edge.len,bottom,top,0,0.045,'#ffffff');
     for(const dx of [-halfW,halfW])for(const dz of [-halfD,halfD])B.get('extMetal').box(x+dx,(bottom+top)/2,z+dz,0.085,top-bottom,0.085,pal.metal);
     const front=shaftEdges.find(s=>s.side===e.door),doorW=Math.min(1.9,front.len-0.3),m=front.len/2;
-    for(const lv of levels) {
+    for(const lv of served) {
       for(const edge of shaftEdges)sideBox(B,edge,'extMetal',0,edge.len,lv.elev-0.1,lv.elev-0.03,0,0.075,pal.metal);
       for(const [a,q] of [[0,m-doorW/2],[m+doorW/2,front.len]])sideBox(B,front,'glass',a,q,lv.elev,lv.elev+2.7,0,0.035,'#ffffff');
       for(const t of [m-doorW/2-0.035,m+doorW/2+0.035])sideBox(B,front,'extMetal',t-0.028,t+0.028,lv.elev,lv.elev+2.75,0.025,0.09,pal.metal);

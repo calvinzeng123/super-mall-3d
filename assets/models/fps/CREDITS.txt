@@ -1,0 +1,24 @@
+Yunlan FPS model credits
+
+“fps animated smg” by DJMaesen
+https://sketchfab.com/3d-models/fps-animated-smg-ea3dad7478624495a5a46f40127b0579
+https://sketchfab.com/bumstrum
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+Used for SMG-45, textured gloves/sleeves, and native SMG reload animation.
+Adapted first-person and pistol poses by Operation Steel Tide, AetherRadar.
+See UPSTREAM-SMG-LICENSE.md for inherited modification notices.
+Yunlan adaptation: mobile texture resizing and JPEG recompression; viewmodel placement,
+recoil, swap animation and pistol reload presentation. Source geometry retained.
+
+“Desert Eagle” by ELIZION
+https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95
+https://sketchfab.com/ELIZION
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+Yunlan adaptation: texture resizing and JPEG recompression; uniform presentation scale,
+authored component-based slide/magazine movement. Source geometry retained.
+
+The art above remains under CC BY 4.0, not the software repository's code license.
+Retrieved from a pinned Operation Steel Tide commit; exact URLs and hashes: sources.json.
+Both original author pages were verified through Sketchfab's public model API on 2026-10-19.

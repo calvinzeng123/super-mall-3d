@@ -11,6 +11,7 @@ import { buildUrbanDistrict } from './urban.js';
 import { buildContextBuildings } from './context-buildings.js';
 import { buildForecourt } from './forecourt.js';
 import { buildWestParkingDetails } from './west-parking.js';
+import { buildPlayableSite } from './playable-site.js';
 
 const DEG = 180 / Math.PI;
 /** 各期围合的铺装广场（椭圆）：渲染铺装与水景，并让草坪树阵避开 */
@@ -95,6 +96,7 @@ export function buildSite(ctx) {
   const G = ctx.site.group;
   const B = ctx.site.batch;
   const holes = siteGroundHoles(layout);
+  if (layout.playable) { buildPlayableSite(ctx, holes); return; }
 
   // 草地
   const ground = new THREE.Mesh(flatShapeGeometry(shapeFromPoly([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], holes), -0.32), mats.floor('grass', 0.95));

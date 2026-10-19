@@ -13,7 +13,7 @@ const PHASES = [
 ];
 
 export function createUI(app, layout) {
-  const phases = [...PHASES, ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' })),
+  const phases = [...PHASES.filter(p=>!layout.playable||!p.id||layout.buildings.some(b=>b.id===p.id)), ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' })),
     ...layout.buildings.filter(b => b.undergroundOnly).map(b => ({ id: b.id, label: b.short, sub: '地下公共停车' }))];
   const built = new Set(layout.buildings.map((b) => b.id));
   const bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
@@ -101,7 +101,7 @@ export function createUI(app, layout) {
     const units = levels.reduce((n, l) => n + l.units.length, 0);
     const out = [[bid && bById[bid]?.kind === 'tower' ? '房间 / 户' : bid ? '店铺' : '店铺 / 房间', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', layout.elevators.filter((e) => ids.has(e.serves[0])).length],
       ['人行入口', layout.entrances.filter((e) => ids.has(e.level) && e.to === 'site').length], ['车位', stallsOf(levels)]];
-    if (!bid) out.unshift(['园区', '商场 · 酒店 · 公寓 · 住宅 · 地铁']);
+    if (!bid) out.unshift(['园区', layout.playable ? '一期商场 · 酒店 · 公寓' : '商场 · 酒店 · 公寓 · 住宅 · 地铁']);
     return out;
   };
   function renderDirectory() {

@@ -9,6 +9,19 @@ const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 function steps(layout) {
+  if (layout.playable) {
+    const r = layout.site.bounds;
+    const c = V((r.x0+r.x1)/2, 12, (r.z0+r.z1)/2);
+    return [
+      { caption: '云澜汇 · 一期商场、酒店与公寓', pos: c.clone().add(V(180,240,220)), target:c, dur:5 },
+      ...layout.buildings.flatMap(b => {
+        const x=b.center?.x ?? b.frame?.x ?? (b.outline.reduce((s,p)=>s+p[0],0)/b.outline.length);
+        const z=b.center?.z ?? b.frame?.z ?? (b.outline.reduce((s,p)=>s+p[1],0)/b.outline.length);
+        return [{ caption:b.name, building:b.id, pos:V(x+65,65,z+75), target:V(x,8,z), dur:5 }];
+      }),
+      { caption:'一期园区全景', pos:c.clone().add(V(-180,210,180)),target:c,dur:5 },
+    ];
+  }
   const B = (id) => layout.buildings.find((x) => x.id === id);
   const lv = (id) => layout.levels.find((l) => l.id === id);
   const p1 = B('P1'), p2 = B('P2'), p3 = B('P3');

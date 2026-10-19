@@ -11,8 +11,8 @@ export function buildSquare(ctx) {
   for (const b of ctx.layout.buildings.filter((x) => x.square)) {
     const F = b.square.F;
     const lv = (s) => ctx.layout.levels.find((l) => l.building === b.id && l.short === s);
-    atrium(ctx, F, lv('1F'), lv('2F'));
     const rf = lv('RF');
+    atrium(ctx, F, lv('1F'), lv('2F'), rf?.playableCap ? rf.elev - .75 : null);
     if (!rf) continue;
     const L = ctx.levels[rf.id];
     for (const f of rf.features) {
@@ -24,7 +24,7 @@ export function buildSquare(ctx) {
 }
 
 /** 1F 中庭服务台（主轴东侧）+ 2F/3F 中庭上空悬挂的云朵灯组 */
-function atrium(ctx, F, lv1, lv2) {
+function atrium(ctx, F, lv1, lv2, ceiling = null) {
   if (lv1) {
     const B = ctx.levels[lv1.id].batch;
     const y = lv1.elev;
@@ -41,10 +41,12 @@ function atrium(ctx, F, lv1, lv2) {
   if (lv2) {
     const B = ctx.levels[lv2.id].batch;
     const rand = rng(77);
+    const anchor = ceiling ?? lv2.elev + 10.6;
     B.frame(F, () => {
-      for (let k = 0; k < 14; k++) {
-        const x = -13 + rand() * 26, z = -6 + rand() * 12, y = lv2.elev + 4.5 + rand() * 4.5;
-        B.get('metal').box(x, (y + lv2.elev + 10.6) / 2, z, 0.02, lv2.elev + 10.6 - y, 0.02, '#9aa0a6');
+      for (let k = 0; k < (ceiling == null ? 14 : 8); k++) {
+        const x = -13 + rand() * 26, z = -6 + rand() * 12;
+        const y = ceiling == null ? lv2.elev + 4.5 + rand() * 4.5 : anchor - 1.35 + rand() * .35;
+        B.get('metal').box(x, (y + anchor) / 2, z, 0.02, anchor - y, 0.02, '#9aa0a6');
         for (let j = 0; j < 4; j++) B.get('glowSoft').sphere(x + (rand() - 0.5) * 1.6, y + (rand() - 0.5) * 0.5, z + (rand() - 0.5) * 1.2, 0.5 + rand() * 0.35, '#ffffff', 0.38, 0.45, 'ico');
       }
     });

@@ -524,9 +524,13 @@ const SIGNAGE = {
 function signage(ctx, b) {
   const cfg = SIGNAGE[b.id];
   if (!cfg) return;
-  const lv = (s) => ctx.layout.levels.find((l) => l.building === b.id && l.short === s);
+  // A small playable district may end below the authoring sign's original
+  // storey. Attach it to the highest retained retail facade instead.
+  const owned = ctx.layout.levels.filter(l => l.building === b.id);
+  const fallback = owned.filter(l => l.kind === 'retail').sort((a, z) => z.elev - a.elev)[0];
+  const lv = (s) => owned.find(l => l.short === s) || fallback;
   // 楼名：贴在圆厅弧面幕墙外
-  if (cfg.name) {
+  if (cfg.name && lv(cfg.name.level)) {
     const r = b.rotundas.find((x) => x.id === cfg.name.rot);
     const L = ctx.levels[lv(cfg.name.level).id];
     const a = (cfg.name.deg * Math.PI) / 180;
@@ -550,7 +554,7 @@ function signage(ctx, b) {
     L.facade.add(mesh);
   }
   // LED 屏：东南翼末端立面（主入口与天桥入口上方）
-  if (cfg.led) {
+  if (cfg.led && lv(cfg.led.level)) {
     const w = b.wings.find((x) => x.id === cfg.led.wing);
     const L = ctx.levels[lv(cfg.led.level).id];
     const c = makeCanvas(1024, 384);
@@ -564,7 +568,12 @@ function signage(ctx, b) {
     mesh.rotation.y = -w.F.a + Math.PI / 2;
     L.facade.add(mesh);
     L.facadeBatch.frame(w.F, () => L.facadeBatch.get('extMetal').box(w.uEnd + 0.42, L.lv.elev + 2.7, 0, 0.2, H + 0.6, W + 0.6, COLORS.black));
-    const slides = cfg.slides;
+    const slides = ctx.layout.playable ? [
+      { t: '云澜汇 · 一期园区', s: 'YUNLAN MALL · HOTEL · RESIDENCES', a: '#0f6f86', b: '#43b6cd' },
+      { t: '云澜酒店 · 连廊直达', s: 'HOTEL · CONNECTED WALKWAYS', a: '#3b1d2e', b: '#b59a6b' },
+      { t: 'B1M 美食广场', s: 'FOOD COURT · LOWER CONCOURSE', a: '#8a2c10', b: '#f59e0b' },
+      { t: '云澜公寓 · 地库互通', s: 'RESIDENCES · CONNECTED PARKING', a: '#111827', b: '#2f86b0' },
+    ] : cfg.slides;
     let last = -1;
     ctx.dynamic.push({
       update(dt, time) {

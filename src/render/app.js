@@ -38,7 +38,6 @@ import { loadSuiteAsset } from './suite-asset.js';
 import { SUITE_MODEL_URL } from './suite-data.js';
 import { createSuiteLighting } from './suite-lighting.js';
 import { loadResidentialAssets } from './residential-asset.js';
-import { RESIDENTIAL_ASSETS } from './residential-data.js';
 import { createResidentialLighting } from './residential-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 
@@ -66,9 +65,13 @@ const WAYFINDING = [
 const OVERVIEW = [V(125, 480, 590), V(-90, 30, -35)];
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
+  const fps = layout.playable?.mode === 'fps';
   let storage;
   try { storage = window.localStorage; } catch { /* Storage can be blocked in an embedded preview. */ }
-  const qualityManager = createQualityManager({ mobile: MOBILE, pixelRatio: window.devicePixelRatio, storage });
+  const qualityManager = createQualityManager({ mobile: MOBILE, pixelRatio: window.devicePixelRatio, storage: fps ? undefined : storage });
+  // FPS has its own controls. Always begin inside the phone budget, even when
+  // a previous sightseeing session saved high quality on this device.
+  if (fps) { qualityManager.select('low'); qualityManager.customize({ resolution: .9, shadows: false, bloom: false, crowdDensity: 0 }); }
   const initialQuality = qualityManager.current;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(initialQuality.pixelRatio);
@@ -78,6 +81,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   renderer.shadowMap.enabled = initialQuality.shadows;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false;
+  if (fps) renderer.info.autoReset = false;
   setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
 
   const scene = new THREE.Scene();
@@ -99,13 +103,15 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const root = new THREE.Group();
   scene.add(root);
 
-  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], site: null, quality: initialQuality };
+  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality };
   onProgress('载入你的套房家具、材质与灯具', .015);
   ctx.suiteAsset = await loadSuiteAsset(SUITE_MODEL_URL, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
   ctx.suiteLighting = createSuiteLighting(ctx);
-  ctx.residentialAssets = await loadResidentialAssets(RESIDENTIAL_ASSETS,
-    Math.min(8, renderer.capabilities.getMaxAnisotropy()), unit => onProgress(`展开住宅${unit}精细户型与共享材质`, .02));
-  ctx.residentialLighting = createResidentialLighting(ctx);
+  ctx.residentialAssets = layout.buildings.some(b => b.usage === 'residential')
+    ? await loadResidentialAssets((await import('./residential-data.js')).RESIDENTIAL_ASSETS,
+      Math.min(8, renderer.capabilities.getMaxAnisotropy()), unit => onProgress(`展开住宅${unit}精细户型与共享材质`, .02))
+    : { stats: { models: 0 }, templates: new Map() };
+  ctx.residentialLighting = ctx.residentialAssets.templates.size ? createResidentialLighting(ctx) : null;
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
   for (const b of layout.buildings) {
@@ -173,6 +179,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   for (const key of ['elevators', 'stairs', 'entrances', 'ramps']) legacyLayout[key] = layout[key].filter(v => originalIds.has(v.building));
   const legacyCtx = { ...ctx, layout: legacyLayout };
   for (let i = 0; i < steps.length; i++) {
+    if (layout.playable && steps[i][1] === buildTraffic) continue;
+    if (fps && [buildPeople, buildTraffic, buildFlows, buildLabels].includes(steps[i][1])) continue;
     onProgress(steps[i][0], i / steps.length);
     await nextFrame();
     const currentCtx = steps[i][1] === buildSite ? ctx : legacyCtx;
@@ -407,7 +415,14 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     return [c.clone().add(V(0.3, 0.95, 0.5).normalize().multiplyScalar(b.radius * 2.0)), c, b.radius * 1.15];
   }
   // 竖屏时总览再拉远一些，让四个地块都在画面里（flyTo 自身还会按竖屏放大 1.22 倍）
-  const overview = () => [OVERVIEW[0].clone().sub(OVERVIEW[1]).multiplyScalar(camera.aspect < 1 ? 1.2 : 1).add(OVERVIEW[1]), OVERVIEW[1], 380];
+  const overview = () => {
+    if (layout.playable) {
+      const r = layout.site.bounds, c = V((r.x0+r.x1)/2, 14, (r.z0+r.z1)/2);
+      const size = Math.max(r.x1-r.x0, r.z1-r.z0);
+      return [c.clone().add(V(size*.46, size*(camera.aspect<1?1.35:.86), size*.92)), c, size];
+    }
+    return [OVERVIEW[0].clone().sub(OVERVIEW[1]).multiplyScalar(camera.aspect < 1 ? 1.2 : 1).add(OVERVIEW[1]), OVERVIEW[1], 380];
+  };
 
   const flyView = ([position, target, radius], duration = 1.4) => flyTo(position, target, duration, radius);
 
@@ -440,7 +455,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       flyView(state.focus ? levelView(state.focus) : bid ? buildingView(bid) : overview(), 1.6);
       emit();
     },
-    viewCity() { app.setBuilding(null); flyTo(V(0, 2450, 1500), V(0, 0, 0), 1.6, 850); },
+    viewCity() { app.setBuilding(null); if (!layout.playable) flyTo(V(0, 2450, 1500), V(0, 0, 0), 1.6, 850); },
     setFocus(id) {
       if (state.touring) app.stopTour();
       if (id) state.building = ctx.levels[id].building;
@@ -537,7 +552,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         for (const d of ctx.dynamic) d.update(dt, (elapsed += dt), app);
       }
       renderer.shadowMap.needsUpdate = true;
+      if (fps) renderer.info.reset();
       env.render();
+      for (const draw of ctx.afterRender) draw();
       const url = renderer.domElement.toDataURL('image/jpeg', 0.86);
       renderer.setSize(prev.x, prev.y, false);
       camera.aspect = prev.x / prev.y;
@@ -624,12 +641,15 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     env.update(dt);
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
     highlight.update(elapsed, ctx);
+    if (fps) renderer.info.reset();
     env.render();
+    for (const draw of ctx.afterRender) draw();
     // Only automatic mode changes itself; a manual choice remains in effect.
     if (perfMon.tick(now, document.hidden)) qualityManager.degrade();
   });
 
   applyVisibility();
+  if (layout.playable) { const [pos, target] = overview(); camera.position.copy(pos); controls.target.copy(target); controls.update(); }
   resize();
   if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22 * 1.2).add(controls.target);
   env.setShadowFocus(controls.target.clone(), 380);

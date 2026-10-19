@@ -1,0 +1,376 @@
+{
+  "date": "2026-10-19",
+  "context": "isolated DOM controls with existing scene screenshot background; browser simulated input, not physical iPhone",
+  "passed": 34,
+  "reports": [
+    {
+      "passed": 22,
+      "checks": [
+        {
+          "name": "cover defers scene",
+          "ok": true
+        },
+        {
+          "name": "select only one mode",
+          "ok": true
+        },
+        {
+          "name": "landscape controls in safe viewport",
+          "ok": true,
+          "detail": [
+            {
+              "id": "move",
+              "left": 64,
+              "top": 231.203125,
+              "right": 162,
+              "bottom": 329.203125,
+              "w": 98,
+              "h": 98
+            },
+            {
+              "id": "fire",
+              "left": 715.59375,
+              "top": 180.109375,
+              "right": 787.59375,
+              "bottom": 252.109375,
+              "w": 72,
+              "h": 72
+            },
+            {
+              "id": "ads",
+              "left": 644.640625,
+              "top": 193.875,
+              "right": 696.640625,
+              "bottom": 245.875,
+              "w": 52,
+              "h": 52
+            },
+            {
+              "id": "reload",
+              "left": 725.59375,
+              "top": 291.90625,
+              "right": 777.59375,
+              "bottom": 343.90625,
+              "w": 52,
+              "h": 52
+            },
+            {
+              "id": "swap",
+              "left": 577.265625,
+              "top": 295.671875,
+              "right": 629.265625,
+              "bottom": 347.671875,
+              "w": 52,
+              "h": 52
+            },
+            {
+              "id": "interact",
+              "left": 560.796875,
+              "top": 199.921875,
+              "right": 615.796875,
+              "bottom": 254.921875,
+              "w": 55,
+              "h": 55
+            },
+            {
+              "id": "sprint",
+              "left": 87,
+              "top": 129.796875,
+              "right": 139,
+              "bottom": 181.796875,
+              "w": 52,
+              "h": 52
+            },
+            {
+              "id": "crouch",
+              "left": 651.4375,
+              "top": 295.671875,
+              "right": 703.4375,
+              "bottom": 347.671875,
+              "w": 52,
+              "h": 52
+            },
+            {
+              "id": "heal",
+              "left": 194.109375,
+              "top": 295.671875,
+              "right": 246.109375,
+              "bottom": 347.671875,
+              "w": 52,
+              "h": 52
+            }
+          ]
+        },
+        {
+          "name": "aim reload swap heal commands",
+          "ok": true
+        },
+        {
+          "name": "fire capture releases outside target",
+          "ok": true
+        },
+        {
+          "name": "joystick forward and release",
+          "ok": true
+        },
+        {
+          "name": "squad command",
+          "ok": true
+        },
+        {
+          "name": "pause controls simulation",
+          "ok": true
+        },
+        {
+          "name": "credits panel contains original works and licenses",
+          "ok": true
+        },
+        {
+          "name": "local preview hides online-only credits",
+          "ok": true
+        },
+        {
+          "name": "natural language command",
+          "ok": true
+        },
+        {
+          "name": "settings forwarded and persisted",
+          "ok": true
+        },
+        {
+          "name": "editor world paused",
+          "ok": true
+        },
+        {
+          "name": "drag never fires",
+          "ok": true
+        },
+        {
+          "name": "drag position saved",
+          "ok": true,
+          "detail": {
+            "x": 0.7524271844660194,
+            "y": 0.649867374005305
+          }
+        },
+        {
+          "name": "portrait controls bounded at 125%",
+          "ok": true,
+          "detail": [
+            {
+              "id": "move",
+              "left": 13.984375,
+              "top": 585.671875,
+              "right": 148.984375,
+              "bottom": 720.671875,
+              "w": 135,
+              "h": 135
+            },
+            {
+              "id": "fire",
+              "left": 286,
+              "top": 570.78125,
+              "right": 376,
+              "bottom": 660.78125,
+              "w": 90,
+              "h": 90
+            },
+            {
+              "id": "ads",
+              "left": 213.59375,
+              "top": 579.125,
+              "right": 278.59375,
+              "bottom": 644.125,
+              "w": 65,
+              "h": 65
+            },
+            {
+              "id": "reload",
+              "left": 303.09375,
+              "top": 703.765625,
+              "right": 368.09375,
+              "bottom": 768.765625,
+              "w": 65,
+              "h": 65
+            },
+            {
+              "id": "swap",
+              "left": 136.59375,
+              "top": 728.703125,
+              "right": 201.59375,
+              "bottom": 793.703125,
+              "w": 65,
+              "h": 65
+            },
+            {
+              "id": "interact",
+              "left": 230.921875,
+              "top": 460.90625,
+              "right": 299.671875,
+              "bottom": 529.65625,
+              "w": 68.75,
+              "h": 68.75
+            },
+            {
+              "id": "sprint",
+              "left": 44.09375,
+              "top": 508.484375,
+              "right": 109.09375,
+              "bottom": 573.484375,
+              "w": 65,
+              "h": 65
+            },
+            {
+              "id": "crouch",
+              "left": 219.84375,
+              "top": 703.765625,
+              "right": 284.84375,
+              "bottom": 768.765625,
+              "w": 65,
+              "h": 65
+            },
+            {
+              "id": "heal",
+              "left": 44.09375,
+              "top": 737.015625,
+              "right": 109.09375,
+              "bottom": 802.015625,
+              "w": 65,
+              "h": 65
+            }
+          ]
+        },
+        {
+          "name": "portrait independent positions",
+          "ok": true
+        },
+        {
+          "name": "result shows actual stats",
+          "ok": true
+        },
+        {
+          "name": "legacy intel boolean and one-percent accuracy render correctly",
+          "ok": true
+        },
+        {
+          "name": "clear result restores game",
+          "ok": true
+        },
+        {
+          "name": "settings survive restart",
+          "ok": true
+        },
+        {
+          "name": "reset all settings and positions",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "passed": 12,
+      "checks": [
+        {
+          "name": "touch look zone accepts events",
+          "ok": true
+        },
+        {
+          "name": "three concurrent fingers move fire and aim",
+          "ok": true,
+          "detail": [
+            [
+              "move",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "fire",
+              {
+                "pressed": true
+              }
+            ],
+            [
+              "look",
+              {
+                "dx": 12,
+                "dy": -8
+              }
+            ],
+            [
+              "move",
+              {
+                "x": 0,
+                "y": 0.900360144057623
+              }
+            ],
+            [
+              "look",
+              {
+                "dx": 16,
+                "dy": 0
+              }
+            ],
+            [
+              "move",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "fire",
+              {
+                "pressed": false
+              }
+            ]
+          ]
+        },
+        {
+          "name": "all touch captures release",
+          "ok": true
+        },
+        {
+          "name": "cancel restores saved positions",
+          "ok": true
+        },
+        {
+          "name": "140% controls stay onscreen 375x667",
+          "ok": true
+        },
+        {
+          "name": "140% default circles do not overlap 375x667",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "140% controls stay onscreen 667x375",
+          "ok": true
+        },
+        {
+          "name": "140% default circles do not overlap 667x375",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "140% controls stay onscreen 430x932",
+          "ok": true
+        },
+        {
+          "name": "140% default circles do not overlap 430x932",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "140% controls stay onscreen 932x430",
+          "ok": true
+        },
+        {
+          "name": "140% default circles do not overlap 932x430",
+          "ok": true,
+          "detail": []
+        }
+      ]
+    }
+  ]
+}

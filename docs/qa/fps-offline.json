@@ -1,0 +1,253 @@
+{
+  "testedAt": "2026-10-19T11:10:47.566923+00:00",
+  "artifact": {
+    "path": "dist/mall.html",
+    "bytes": 34515229,
+    "sha256": "1beef83015f0fff5c63b027a8123d2b3e7a4a9fbf45a6d819352931d1d9d64d1"
+  },
+  "environment": {
+    "browser": "Chrome/155.0.8059.80",
+    "viewport": {
+      "width": 852,
+      "height": 393
+    },
+    "touchPoints": 5,
+    "protocol": "file:",
+    "offlineMethod": "CDP Network.emulateNetworkConditions offline=true before file reload",
+    "navigatorOnline": false,
+    "physicalIPhone": false
+  },
+  "passed": true,
+  "cover": {
+    "protocol": "file:",
+    "navigatorOffline": true,
+    "mode": "launch",
+    "coverVisible": true,
+    "modes": [
+      "竞技 FPS",
+      "普通导览"
+    ],
+    "webglContexts": 0,
+    "fetchCount": 0,
+    "errors": []
+  },
+  "fps": {
+    "mode": "fps",
+    "status": "playing",
+    "viewport": {
+      "width": 852,
+      "height": 393
+    },
+    "models": {
+      "loaded": true,
+      "assets": [
+        {
+          "id": "rifle",
+          "label": "SMG-45",
+          "bytes": 2895736,
+          "license": "CC-BY-4.0",
+          "author": "DJMaesen"
+        },
+        {
+          "id": "pistolHands",
+          "label": "第一人称手套",
+          "bytes": 1105828,
+          "license": "CC-BY-4.0",
+          "author": "DJMaesen"
+        },
+        {
+          "id": "pistol",
+          "label": "Desert Eagle",
+          "bytes": 2025036,
+          "license": "CC-BY-4.0",
+          "author": "ELIZION"
+        }
+      ],
+      "downloadBytes": 6026600,
+      "geometries": 40,
+      "materials": 8,
+      "textures": 19,
+      "rifleTriangles": 21425,
+      "pistolTriangles": 26983,
+      "reloadClips": [
+        "reload"
+      ],
+      "realTexturedMeshes": true,
+      "activeWeapon": "rifle",
+      "disposed": false
+    },
+    "phaseIds": [
+      "P1",
+      "H",
+      "A"
+    ],
+    "fetches": {
+      "total": 48,
+      "external": 0,
+      "inlineGLBBytes": [
+        2895736,
+        1105828,
+        2025036
+      ]
+    },
+    "webglContexts": 1,
+    "errors": []
+  },
+  "actions": {
+    "initial": {
+      "ammo": 25,
+      "elapsed": 40.050599999905,
+      "errors": []
+    },
+    "afterRifleShot": 24,
+    "rifleReload": {
+      "ammo": 25,
+      "sampledAnimationFrames": 70,
+      "distinctMagazinePoses": 69
+    },
+    "rifleToPistol": {
+      "finalWeapon": "pistol",
+      "displayedSequence": [
+        "rifle",
+        "pistol"
+      ],
+      "mountVisibilityConsistent": true
+    },
+    "afterPistolShot": 6,
+    "pistolReload": {
+      "ammo": 7,
+      "sampledAnimationFrames": 53,
+      "distinctMagazinePoses": 22
+    },
+    "pistolToRifle": {
+      "finalWeapon": "rifle",
+      "displayedSequence": [
+        "pistol",
+        "rifle"
+      ],
+      "mountVisibilityConsistent": true
+    },
+    "final": {
+      "status": "playing",
+      "errors": [],
+      "offline": true,
+      "framesRendered": 39,
+      "viewport": {
+        "width": 852,
+        "height": 393
+      },
+      "health": 100
+    }
+  },
+  "credits": {
+    "visible": true,
+    "title": "素材署名",
+    "authors": [
+      "DJMaesen",
+      "ELIZION"
+    ],
+    "license": true,
+    "offline": true,
+    "externalFetches": 0
+  },
+  "tour": {
+    "offline": true,
+    "mode": "tour",
+    "ready": true,
+    "fpsCreated": false,
+    "gunModelFetches": [],
+    "externalFetches": 0,
+    "phaseIds": [
+      "P1",
+      "H",
+      "A"
+    ],
+    "residentialModelCount": 0,
+    "webglContexts": 1,
+    "errors": [],
+    "visuallyChecked": true
+  },
+  "screenshot": {
+    "path": "docs/images/fps-gameplay-landscape.png",
+    "width": 852,
+    "height": 393,
+    "sha256": "74291dbfe148b531e74ab6bc6ce537820cd629aea232e2db7e02b0ae8584dbd2",
+    "source": "Actual offline FPS session after Restart; no mock scene or teleport.",
+    "visuallyChecked": true
+  },
+  "resolvedDuringQA": [
+    {
+      "previousArtifactSHA256": "23a3065968635b2b6639afb920d2c58daff685d3031a82531d32ec4abdc8ef54",
+      "error": "ReferenceError: recordTrail is not defined",
+      "resolution": "Parent restored follower imports and rebuilt; all checks above rerun against corrected artifact."
+    }
+  ],
+  "unresolvedIssues": [],
+  "limitations": [
+    "Chromium viewport/touch emulation does not establish real iPhone Safari frame rate, memory, temperature, or sustained performance.",
+    "The self-contained offline HTML embeds both modes; ordinary tour does not fetch/decode FPS GLBs or create FPS runtime."
+  ],
+  "validationProvenance": {
+    "fullActionAndTourValidation": {
+      "testedAt": "2026-10-19T11:00:04.409141+00:00",
+      "artifact": {
+        "path": "dist/mall.html",
+        "bytes": 34515190,
+        "sha256": "6222a144e045d20db0ae33f7055f1580d1c20d6cd09f2d5e95c206330c5fc2f6"
+      }
+    },
+    "sameGameplayCode": true,
+    "applicationEntry": {
+      "path": "dist/netlify/assets/main.OZUD4OZE.js",
+      "bytes": 10406,
+      "sha256": "bfff3dfc8df4536d6154419feeb5535fa3bcdfce7e70ed9b4febe562fd164790"
+    },
+    "evidence": "The application entry retained main.OZUD4OZE.js across the full action validation and this rebuild. The parent confirmed that only the shell CSS rule hiding #nl-badge-frame during FPS changed; gameplay code is unchanged.",
+    "carriedForwardChecks": [
+      "Fire, reload animations and ammunition restoration for both firearms",
+      "Old weapon holster then new weapon draw in both directions",
+      "Tour creates no FPS runtime and fetches no FPS GLBs",
+      "Previously inspected actual gameplay screenshot"
+    ],
+    "finalPackageScope": "The final CSS package was freshly opened from file: with CDP network offline; cover, FPS load and advancing game loop, embedded credits, and return to cover were rechecked. Full action tests and screenshot were not repeated."
+  },
+  "finalPackageEntryRecheck": {
+    "cover": {
+      "offline": true,
+      "mode": "launch",
+      "visible": true,
+      "errors": []
+    },
+    "fps": {
+      "offline": true,
+      "mode": "fps",
+      "status": "playing",
+      "elapsed": 0.31439999985694883,
+      "realTexturedMeshes": true,
+      "modelIds": [
+        "rifle",
+        "pistolHands",
+        "pistol"
+      ],
+      "errors": []
+    },
+    "credits": {
+      "offline": true,
+      "visible": true,
+      "authors": [
+        "DJMaesen",
+        "ELIZION"
+      ],
+      "license": true,
+      "errors": []
+    },
+    "returnedCover": {
+      "offline": true,
+      "mode": "launch",
+      "visible": true,
+      "fpsCreated": false,
+      "protocol": "file:",
+      "errors": []
+    }
+  }
+}

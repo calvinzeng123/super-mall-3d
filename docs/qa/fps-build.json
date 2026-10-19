@@ -1,0 +1,37 @@
+{
+  "files": 44,
+  "bytes": 26339815,
+  "kindBytes": {
+    "texture": 6014895,
+    "suite": 8977040,
+    "textured-person": 3202260,
+    "fps-model": 6026600,
+    "cover": 354429,
+    "launcher-script": 10406,
+    "application-chunk": 1689166,
+    "credits": 1950,
+    "license": 18659,
+    "document": 44410
+  },
+  "coverFiles": [
+    {
+      "path": "assets/cover.27284425db21785b.jpg",
+      "bytes": 354429,
+      "sha256": "27284425db21785bbed3c05136b56052e2d8ddfc8316c4d9efa5b11d45a452d2",
+      "kind": "cover"
+    },
+    {
+      "path": "assets/main.OZUD4OZE.js",
+      "bytes": 10406,
+      "sha256": "bfff3dfc8df4536d6154419feeb5535fa3bcdfce7e70ed9b4febe562fd164790",
+      "kind": "launcher-script"
+    },
+    {
+      "path": "index.html",
+      "bytes": 44410,
+      "sha256": "93dac3fea0e0c49f145d934e681d734349568c2c8dbadbee3f3b5115f9cd0f20",
+      "kind": "document"
+    }
+  ],
+  "coverBytes": 409245
+}

@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "file": "smg45-mobile.glb",
+      "bytes": 2895736,
+      "sha256": "986342e386b174d5a15ad531bb5aade9387b88a487356a8c4fb0914dcfb7358e",
+      "sourceFile": "smg.glb",
+      "sourceBytes": 21652620,
+      "sourceSha256": "234da8daae47bb5a96af7312d77cd56d92f098ec06403e5155ce66a9a49a4562",
+      "triangles": 21425,
+      "meshes": 7,
+      "animations": [
+        "reload"
+      ],
+      "textures": [
+        {
+          "name": "Image_2",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 386890
+        },
+        {
+          "name": "Image_1",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 194063
+        },
+        {
+          "name": "Image_0",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 77612
+        },
+        {
+          "name": "Image_5",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 356379
+        },
+        {
+          "name": "Image_4",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 532388
+        },
+        {
+          "name": "Image_3",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 208185
+        }
+      ]
+    },
+    {
+      "file": "pistol-hands-mobile.glb",
+      "bytes": 1105828,
+      "sha256": "94614904f4d82efd1fc361e7cea2e2e55e2bfa4397996da30565cf6318124fcd",
+      "sourceFile": "pistol-hands.glb",
+      "sourceBytes": 9450020,
+      "sourceSha256": "790b173064fa40f8a14547c69cdc279223d1f4a58bd05dab19d9a44fcd5b507f",
+      "triangles": 13704,
+      "meshes": 2,
+      "animations": [],
+      "textures": [
+        {
+          "name": "Image_2",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 386890
+        },
+        {
+          "name": "Image_1",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 194063
+        },
+        {
+          "name": "Image_0",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 77612
+        }
+      ]
+    },
+    {
+      "file": "desert-eagle-mobile.glb",
+      "bytes": 2025036,
+      "sha256": "77ed676903ec101bbfd9cc9e416dd0d1d534d05b88e9c27cc55145bd92927801",
+      "sourceFile": "desert-eagle.glb",
+      "sourceBytes": 11502692,
+      "sourceSha256": "87b22c44a9b58d0a3aaee72232480de35008d95534f11ad84c8ae9a2cf4f9063",
+      "triangles": 13279,
+      "meshes": 28,
+      "animations": [],
+      "textures": [
+        {
+          "name": "4",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 103448
+        },
+        {
+          "name": "5",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 84653
+        },
+        {
+          "name": "6",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 135692
+        },
+        {
+          "name": "7",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 77979
+        },
+        {
+          "name": "8",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 132200
+        },
+        {
+          "name": "9",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 135141
+        },
+        {
+          "name": "10",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 64650
+        },
+        {
+          "name": "11",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 91870
+        },
+        {
+          "name": "12",
+          "source": [
+            1024,
+            1024
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 73546
+        },
+        {
+          "name": "13",
+          "source": [
+            512,
+            512
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 83338
+        },
+        {
+          "name": "14",
+          "source": [
+            512,
+            512
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 87602
+        },
+        {
+          "name": "15",
+          "source": [
+            512,
+            512
+          ],
+          "runtime": [
+            512,
+            512
+          ],
+          "bytes": 41554
+        }
+      ]
+    }
+  ]
+}
