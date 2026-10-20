@@ -2,33 +2,34 @@
 // 外挂客梯在地库一段由 rooms.js 的电梯井绘制，这里只画地上井道。
 import * as THREE from 'three';
 import { COLORS } from '../theme.js';
+import { NORMAL } from '../../layout/geom.js';
 
 export function buildElevators(ctx) {
   const { layout } = ctx;
   const byId = ctx.lvById;
-  for (const e of layout.elevators.filter((x) => x.type === 'glass' || x.exterior)) {
-    const half = e.w / 2;
+  for (const e of layout.elevators.filter((x) => x.rideable || x.type === 'glass' || x.exterior)) {
+    const half = e.w / 2, depth = e.d / 2;
     const topId = e.serves[e.serves.length - 1];
     const frameCol = e.exterior ? '#2b3036' : COLORS.white;
     // 井道：每个停靠层一段（套件局部坐标）
     for (const id of e.serves) {
       const lv = byId[id];
-      if (lv.kind === 'parking') continue;
+      if (lv.kind === 'parking' && !e.rideable) continue;
       const B = ctx.levels[id].batch;
       const yA = lv.elev, yB = lv.elev + lv.height + (id === topId ? 0.2 : 0);
       const h = yB - yA;
       B.frame(e.frame, () => {
-        for (const [dx, dz] of [[-half, -half], [half, -half], [half, half], [-half, half]]) {
+        for (const [dx, dz] of [[-half, -depth], [half, -depth], [half, depth], [-half, depth]]) {
           B.get('metal').box(e.lu + dx, yA + h / 2, e.lv + dz, 0.14, h, 0.14, frameCol);
         }
-        for (const [sx, sz, ox, oz] of [[e.w, 0.03, 0, -half], [e.w, 0.03, 0, half], [0.03, e.d, -half, 0], [0.03, e.d, half, 0]]) {
+        for (const [sx, sz, ox, oz] of [[e.w, 0.03, 0, -depth], [e.w, 0.03, 0, depth], [0.03, e.d, -half, 0], [0.03, e.d, half, 0]]) {
           const doorFace = (e.door === 'N' && oz < 0) || (e.door === 'S' && oz > 0) || (e.door === 'W' && ox < 0) || (e.door === 'E' && ox > 0);
           // The landing has a real open doorway. Moving cabin doors are built
           // by the shared rideable-car builder, not a full-height shaft pane.
-          const bottom = e.type === 'glass' && doorFace ? yA + 2.9 : yA + .05;
+          const bottom = (e.rideable || e.type === 'glass') && doorFace ? yA + 2.9 : yA + .05;
           if (yB > bottom) B.get('glass').box(e.lu + ox, (bottom + yB) / 2, e.lv + oz, sx, yB - bottom, sz, 0xffffff);
         }
-        if (e.type === 'glass') {
+        if (e.rideable || e.type === 'glass') {
           // A perimeter ring leaves the cabin shaft open between floors.
           for (const sign of [-1, 1]) {
             B.get('metal').box(e.lu + sign * (e.w / 2 + .05), yA - .2, e.lv, .1, .4, e.d + .2, frameCol);
@@ -36,9 +37,14 @@ export function buildElevators(ctx) {
           }
         } else B.get('metal').box(e.lu, yA - 0.2, e.lv, e.w + 0.2, 0.4, e.d + 0.2, frameCol);
         if (id === topId) B.get('metal').box(e.lu, yB, e.lv, e.w + 0.3, 0.5, e.d + 0.3, frameCol);
+        // Landing sill and illuminated marker pass the cabin visibly in motion.
+        const [nx, nz] = NORMAL[e.door];
+        B.get('glowSoft').box(e.lu - nx * (half - .03), yA + .2, e.lv - nz * (depth - .03),
+          nx ? .04 : e.w - .3, .08, nz ? .04 : e.d - .3, '#d5ece1');
+        if (id === e.serves[0]) B.get('concrete').box(e.lu, yA - .35, e.lv, e.w, .2, e.d, '#9ea9ac');
       });
     }
-    if (e.type === 'glass') continue; // shared interactive cars in tower-elevators.js
+    if (e.rideable || e.type === 'glass') continue; // shared interactive cars in tower-elevators.js
     // 轿厢
     const car = new THREE.Group();
     const cb = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 2.2), new THREE.MeshStandardMaterial({ color: 0xd8d2c6, roughness: 0.4, metalness: 0.4 }));

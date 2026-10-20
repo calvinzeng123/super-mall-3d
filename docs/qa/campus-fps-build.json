@@ -1,0 +1,40 @@
+{
+  "filesIncludingManifest": 49,
+  "bytesExcludingManifest": 55347148,
+  "offlineBytes": 73151989,
+  "offlineSHA256": "df5920cd92382b0dccab6e5efcff02c656f18128f872846f9d0763bd9cd96769",
+  "launcher": [
+    {
+      "path": "assets/main.QTG46HEZ.js",
+      "bytes": 10440,
+      "sha256": "f14468082da8546d47f2e2d21b5df0529f46a58330aa0846f4bb70783f22772f",
+      "kind": "launcher-script"
+    }
+  ],
+  "residential": [
+    {
+      "path": "assets/residence-01.d7c68cf855216de9.bin",
+      "bytes": 8874062,
+      "sha256": "d7c68cf855216de9bca23a5dcf8215855efc7dafbd098875adad5f9ae857a89c",
+      "kind": "residential-model"
+    },
+    {
+      "path": "assets/residence-02.80b8dd6722294589.bin",
+      "bytes": 10131573,
+      "sha256": "80b8dd6722294589e20988195426130078f9db4c683e2ad2d6f655269dab8fc2",
+      "kind": "residential-model"
+    },
+    {
+      "path": "assets/residence-03.81f09c875fb2b416.bin",
+      "bytes": 9878943,
+      "sha256": "81f09c875fb2b41663d425483a5d2bfd954eb8116e31c0a686048cd9d3e86e88",
+      "kind": "residential-model"
+    }
+  ],
+  "sourceNewerThanBundle": [],
+  "tests": {
+    "command": "node --test --test-concurrency=4 tests/*.test.js",
+    "pass": 257,
+    "fail": 0
+  }
+}

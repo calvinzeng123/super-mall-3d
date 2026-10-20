@@ -1,0 +1,854 @@
+[
+  {
+    "viewport": [
+      375,
+      667
+    ],
+    "scale": 1.4,
+    "items": [
+      {
+        "id": "pause",
+        "x": 321,
+        "y": 7,
+        "w": 44,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "extract-route",
+        "x": 280.53125,
+        "y": 58,
+        "w": 84.46875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "squad-menu",
+        "x": 14,
+        "y": 92,
+        "w": 118.96875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "move",
+        "x": 14,
+        "y": 409.09375,
+        "w": 151.1875,
+        "h": 151.1875,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "fire",
+        "x": 260.1953125,
+        "y": 435.2890625,
+        "w": 100.796875,
+        "h": 100.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "ads",
+        "x": 187.1953125,
+        "y": 446.0078125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "reload",
+        "x": 285.9921875,
+        "y": 544.1171875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "swap",
+        "x": 124.3984375,
+        "y": 563.7265625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "interact",
+        "x": 195,
+        "y": 352.359375,
+        "w": 77,
+        "h": 77,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "sprint",
+        "x": 37.4921875,
+        "y": 324.2890625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "crouch",
+        "x": 205.1953125,
+        "y": 544.1171875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "heal",
+        "x": 37.4921875,
+        "y": 570.2734375,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "jump",
+        "x": 285.9921875,
+        "y": 354.4609375,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      }
+    ],
+    "overlaps": [],
+    "outside": [],
+    "tooSmall": [],
+    "hitMisses": []
+  },
+  {
+    "viewport": [
+      667,
+      375
+    ],
+    "scale": 1.4,
+    "items": [
+      {
+        "id": "pause",
+        "x": 613,
+        "y": 7,
+        "w": 44,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "extract-route",
+        "x": 572.53125,
+        "y": 58,
+        "w": 84.46875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "squad-menu",
+        "x": 14,
+        "y": 86,
+        "w": 116.96875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "move",
+        "x": 22.28125,
+        "y": 200.65625,
+        "w": 137.1875,
+        "h": 137.1875,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "fire",
+        "x": 541.8984375,
+        "y": 157.3203125,
+        "w": 100.796875,
+        "h": 100.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "ads",
+        "x": 454.2109375,
+        "y": 174.9296875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "reload",
+        "x": 555.8984375,
+        "y": 269.0546875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "swap",
+        "x": 394.3046875,
+        "y": 272.6796875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "interact",
+        "x": 354.578125,
+        "y": 180.078125,
+        "w": 77,
+        "h": 77,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "sprint",
+        "x": 171.4609375,
+        "y": 142.0546875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "crouch",
+        "x": 475.1015625,
+        "y": 272.6796875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "heal",
+        "x": 171.4609375,
+        "y": 272.6796875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "jump",
+        "x": 454.2109375,
+        "y": 88.1328125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      }
+    ],
+    "overlaps": [],
+    "outside": [],
+    "tooSmall": [],
+    "hitMisses": []
+  },
+  {
+    "viewport": [
+      393,
+      852
+    ],
+    "scale": 1.4,
+    "items": [
+      {
+        "id": "pause",
+        "x": 339,
+        "y": 7,
+        "w": 44,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "extract-route",
+        "x": 298.53125,
+        "y": 58,
+        "w": 84.46875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "squad-menu",
+        "x": 14,
+        "y": 92,
+        "w": 118.96875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "move",
+        "x": 13.984375,
+        "y": 579.28125,
+        "w": 151.1875,
+        "h": 151.1875,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "fire",
+        "x": 278.1953125,
+        "y": 571.2578125,
+        "w": 100.796875,
+        "h": 100.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "ads",
+        "x": 203.0390625,
+        "y": 581.0703125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "reload",
+        "x": 301.8359375,
+        "y": 706.9140625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "swap",
+        "x": 133.9765625,
+        "y": 732.0859375,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "interact",
+        "x": 210.828125,
+        "y": 461.5,
+        "w": 77,
+        "h": 77,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "sprint",
+        "x": 40.7265625,
+        "y": 494.4921875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "crouch",
+        "x": 217.9140625,
+        "y": 706.9140625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "heal",
+        "x": 40.7265625,
+        "y": 740.4765625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "jump",
+        "x": 301.8359375,
+        "y": 463.6015625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      }
+    ],
+    "overlaps": [],
+    "outside": [],
+    "tooSmall": [],
+    "hitMisses": []
+  },
+  {
+    "viewport": [
+      852,
+      393
+    ],
+    "scale": 1.4,
+    "items": [
+      {
+        "id": "pause",
+        "x": 798,
+        "y": 7,
+        "w": 44,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "extract-route",
+        "x": 757.53125,
+        "y": 58,
+        "w": 84.46875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "squad-menu",
+        "x": 14,
+        "y": 86,
+        "w": 116.96875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "move",
+        "x": 45.40625,
+        "y": 213.796875,
+        "w": 137.1875,
+        "h": 137.1875,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "fire",
+        "x": 708.3984375,
+        "y": 167.3984375,
+        "w": 100.796875,
+        "h": 100.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "ads",
+        "x": 616.4609375,
+        "y": 185.1953125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "reload",
+        "x": 722.3984375,
+        "y": 283.9921875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "swap",
+        "x": 560.8046875,
+        "y": 287.7890625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "interact",
+        "x": 510.34375,
+        "y": 190.6875,
+        "w": 77,
+        "h": 77,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "sprint",
+        "x": 194.5859375,
+        "y": 155.1953125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "crouch",
+        "x": 641.6015625,
+        "y": 287.7890625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "heal",
+        "x": 194.5859375,
+        "y": 287.7890625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "jump",
+        "x": 616.4609375,
+        "y": 97.7890625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      }
+    ],
+    "overlaps": [],
+    "outside": [],
+    "tooSmall": [],
+    "hitMisses": []
+  },
+  {
+    "viewport": [
+      430,
+      932
+    ],
+    "scale": 1.4,
+    "items": [
+      {
+        "id": "pause",
+        "x": 376,
+        "y": 7,
+        "w": 44,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "extract-route",
+        "x": 335.53125,
+        "y": 58,
+        "w": 84.46875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "squad-menu",
+        "x": 14,
+        "y": 92,
+        "w": 118.96875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "move",
+        "x": 13.984375,
+        "y": 646.21875,
+        "w": 151.1875,
+        "h": 151.1875,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "fire",
+        "x": 315.1953125,
+        "y": 630.0546875,
+        "w": 100.796875,
+        "h": 100.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "ads",
+        "x": 235.6015625,
+        "y": 639.4609375,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "reload",
+        "x": 334.3984375,
+        "y": 777.3203125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "swap",
+        "x": 149.8984375,
+        "y": 804.8828125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "interact",
+        "x": 243.390625,
+        "y": 508.703125,
+        "w": 77,
+        "h": 77,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "sprint",
+        "x": 47.3984375,
+        "y": 561.3515625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "crouch",
+        "x": 242.1484375,
+        "y": 777.3203125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "heal",
+        "x": 47.3984375,
+        "y": 814.0703125,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "jump",
+        "x": 334.3984375,
+        "y": 510.8046875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      }
+    ],
+    "overlaps": [],
+    "outside": [],
+    "tooSmall": [],
+    "hitMisses": []
+  },
+  {
+    "viewport": [
+      932,
+      430
+    ],
+    "scale": 1.4,
+    "items": [
+      {
+        "id": "pause",
+        "x": 878,
+        "y": 7,
+        "w": 44,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "extract-route",
+        "x": 837.53125,
+        "y": 58,
+        "w": 84.46875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "squad-menu",
+        "x": 14,
+        "y": 86,
+        "w": 116.96875,
+        "h": 44,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "move",
+        "x": 55.40625,
+        "y": 240.8125,
+        "w": 137.1875,
+        "h": 137.1875,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "fire",
+        "x": 780.3984375,
+        "y": 188.1171875,
+        "w": 100.796875,
+        "h": 100.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "ads",
+        "x": 686.6171875,
+        "y": 206.2890625,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "reload",
+        "x": 794.3984375,
+        "y": 314.7109375,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "swap",
+        "x": 630.2265625,
+        "y": 318.8671875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "interact",
+        "x": 577.703125,
+        "y": 212.515625,
+        "w": 77,
+        "h": 77,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "sprint",
+        "x": 206.1484375,
+        "y": 182.2109375,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "crouch",
+        "x": 712.3203125,
+        "y": 318.8671875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "heal",
+        "x": 206.1484375,
+        "y": 318.8671875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      },
+      {
+        "id": "jump",
+        "x": 686.6171875,
+        "y": 110.3671875,
+        "w": 72.796875,
+        "h": 72.796875,
+        "disabled": false,
+        "visible": true,
+        "centerHit": true
+      }
+    ],
+    "overlaps": [],
+    "outside": [],
+    "tooSmall": [],
+    "hitMisses": []
+  }
+]

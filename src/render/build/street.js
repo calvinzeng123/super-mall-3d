@@ -688,7 +688,7 @@ function surroundings(ctx, b) {
 }
 
 /** 地库：外墙（facade）与剖切矮墙（base） */
-function basement(ctx, b, lv) {
+export function basement(ctx, b, lv) {
   if (!lv) return;
   const L = ctx.levels[lv.id];
   const P = lv.outline;

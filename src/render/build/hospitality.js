@@ -3,13 +3,16 @@
 import * as THREE from 'three';
 import { BatchSet } from '../batch.js';
 import { carGeometry } from './parking.js';
-import { toW, toL, subtractInterval, pointInPoly, polyBounds, unionOutline, mergeSegments, subtractOpenings } from '../../layout/geom.js';
+import { toW, toL, subtractInterval, pointInPoly, polyBounds, unionOutline, mergeSegments, subtractOpenings, rectPoly } from '../../layout/geom.js';
 import { shapeFromPoly } from './shell.js';
+import { addCutSurfaceSlab } from './surface-shapes.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bollard, bench, planter } from './props.js';
 import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden } from './residential-shell.js';
 import { buildTowerStairGeometry, buildTowerStairInstances } from './tower-stairs.js';
 import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
+import { buildHospitalityLobby } from './hospitality-lobby.js';
+import { garageCeilingPanels } from '../../layout/garage-ceiling.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -112,7 +115,9 @@ export function buildHospitality(ctx) {
     ctx.buildings[b.id].group.add(group);
     ctx.buildings[b.id].exterior=group;
     ctx.buildings[b.id].exteriorClip=plane;
-    const groundGroup=b.usage==='residential'?buildResidentialLobby(ctx,b,levels.find(l=>l.short==='1F'),plane):buildLobby(ctx,b,levels.find(l=>l.short==='1F'),pal);
+    const ground=levels.find(l=>l.short==='1F');
+    const groundGroup=b.usage==='residential'?buildResidentialLobby(ctx,b,ground,plane)
+      :ground?.lobbyPlan?.kind==='hospitality'?buildHospitalityLobby(ctx,b,ground,plane):buildLobby(ctx,b,ground,pal);
     const roofGroup=b.usage==='residential'?buildResidentialRoofGarden(ctx,b,levels.find(l=>l.kind==='roof')):buildRoofGarden(ctx,b,levels.find(l=>l.kind==='roof'),pal);
     const sign=buildingSign(ctx,b,pal,plane);
     if(sign)group.add(sign);
@@ -264,6 +269,7 @@ function crown(B,b,lv,pal) {
     sideBox(B,e,'extMetal',-0.15,e.len+0.15,y+height,y+height+0.1,0.01,0.62,pal.metal);
     if(b.usage!=='residential')sideBox(B,e,'glowSoft',0.2,e.len-0.2,y+height-0.17,y+height-0.12,0.07,0.12,'#ead8af');
   }
+  if(lv.playableRoof)return;
   // 住宅机房在东北角，避开中部双电梯井；酒店机房在中央服务区。
   const mx=b.usage==='residential'?r.x1-6:cx,mz=b.usage==='residential'?r.z0+4:cz;
   B.get('extSatin').box(mx,y+1.2,mz,w*0.28,2.4,d*0.26,'#a5adae');
@@ -276,7 +282,7 @@ function crown(B,b,lv,pal) {
 
 function buildRoofGarden(ctx,b,lv,pal) {
   const group=new THREE.Group();group.name=`${b.id}-roof-garden`;
-  if(!lv||lv.playableCap)return group;
+  if(!lv||lv.playableCap||lv.playableRoof)return group;
   const B=new BatchSet(ctx.mats.base),r=b.footprint,y=lv.elev;
   B.frame(b.frame,()=>{
     for(const x of [r.x0+4,r.x1-4]) {
@@ -471,6 +477,7 @@ function subtractTraffic(rects, roads) {
 
 function connections(ctx) {
   const ext=ctx.layout.extensions;if(!ext)return;
+  const openings=[...(ctx.layout.site.trenches||[]),...(ctx.layout.site.openings||[])];
   const group=new THREE.Group();group.name='hospitality-connections';
   const B=new BatchSet(ctx.mats.base),underground=[];
   const trafficPolys=[...(ext.roads||[]).flatMap(r=>r.polys||[]),...(ctx.layout.site.roads||[]).flatMap(r=>r.poly?[r.poly]:[])];
@@ -498,7 +505,8 @@ function connections(ctx) {
     const boundary=subtractOpenings(edges,portals);
     network.boundary=boundary;
     for(const r of cells) {
-      PB.get(below?'concrete':'stone').box((r.x0+r.x1)/2,y-(sky?0.15:0.08),(r.z0+r.z1)/2,r.x1-r.x0,sky?0.3:0.16,r.z1-r.z0,'#e5dfd2');
+      if (!below && !sky) addCutSurfaceSlab(PB,'stone',rectPoly(r),openings,y,.16,'#e5dfd2');
+      else PB.get(below?'concrete':'stone').box((r.x0+r.x1)/2,y-(sky?0.15:0.08),(r.z0+r.z1)/2,r.x1-r.x0,sky?0.3:0.16,r.z1-r.z0,'#e5dfd2');
       if(below)CB.get('concrete').box((r.x0+r.x1)/2,y+3.2,(r.z0+r.z1)/2,r.x1-r.x0,0.18,r.z1-r.z0,'#c3c9c7');
       if(sky)PB.get('glassTint').box((r.x0+r.x1)/2,y+3.4,(r.z0+r.z1)/2,r.x1-r.x0,0.045,r.z1-r.z0,'#ffffff');
     }
@@ -515,7 +523,11 @@ function connections(ctx) {
         segmentBox(PB,'extMetal',a,b,0.2,0.18,-0.07,'#555f63');
         const span=Math.hypot(b[0]-a[0],b[2]-a[2]),n=Math.max(1,Math.ceil(span/7));
         for(let i=0;i<n;i++){const p=a.map((v,k)=>v+(b[k]-v)*i/n),q=a.map((v,k)=>v+(b[k]-v)*(i+1)/n);p[1]+=i%2?.28:3.08;q[1]+=i%2?3.08:.28;segmentBox(PB,'extMetal',p,q,.075,.11,0,'#849185');}
-      } else if(!trafficPolys.some(p=>pointInPoly([(e.x0+e.x1)/2,(e.z0+e.z1)/2],p)))segmentBox(PB,'concrete',a,b,0.14,0.1,0.015,'#c4c3ba');
+      } else if(!trafficPolys.some(p=>pointInPoly([(e.x0+e.x1)/2,(e.z0+e.z1)/2],p))) {
+        const r={x0:Math.min(e.x0,e.x1)-(e.x0===e.x1?.07:0),x1:Math.max(e.x0,e.x1)+(e.x0===e.x1?.07:0),
+          z0:Math.min(e.z0,e.z1)-(e.z0===e.z1?.07:0),z1:Math.max(e.z0,e.z1)+(e.z0===e.z1?.07:0)};
+        addCutSurfaceSlab(PB,'concrete',rectPoly(r),openings,y+.065,.1,'#c4c3ba');
+      }
     }
     if(sky)for(const path of paths)for(let i=1;i<path.points.length;i++) {
       const a=path.points[i-1],b=path.points[i],dx=b[0]-a[0],dz=b[2]-a[2],len=Math.hypot(dx,dz),nx=-dz/len,nz=dx/len;
@@ -549,11 +561,12 @@ function connections(ctx) {
   for(const road of ext.roads||[]) {
     if(ctx.layout.site.roads?.some(r=>r.id===road.id))continue;
     const {cells}=corridorUnion(road.polys.map(polyBounds));
-    for(const r of cells)B.get('ext').box((r.x0+r.x1)/2,-0.025,(r.z0+r.z1)/2,r.x1-r.x0,0.08,r.z1-r.z0,'#50585b');
+    for(const r of cells)addCutSurfaceSlab(B,'ext',rectPoly(r),openings,.015,.08,'#50585b');
     for(let i=1;i<road.points.length;i++) {
       const a=road.points[i-1],b=road.points[i],len=Math.hypot(b[0]-a[0],b[2]-a[2]);
       for(let t=1;t<len-1;t+=5) {
         const aa=a.map((v,k)=>v+(b[k]-v)*t/len),bb=a.map((v,k)=>v+(b[k]-v)*Math.min(t+2.5,len)/len);
+        if(openings.some(p=>pointInPoly([aa[0],aa[2]],p)||pointInPoly([bb[0],bb[2]],p)))continue;
         segmentBox(B,'ext',aa,bb,0.12,0.018,road.id.startsWith('west-')?.065:.025,'#ddd9b8');
       }
     }
@@ -569,12 +582,13 @@ function connections(ctx) {
  * counts. Geometry is instanced; charging pedestals sit behind each stall. */
 function sharedSurfaceParking(ctx) {
   const lots=ctx.layout.extensions?.surfaceParking||[];if(!lots.length)return;
+  const openings=[...(ctx.layout.site.trenches||[]),...(ctx.layout.site.openings||[])];
   const group=new THREE.Group();group.name='P1-hotel-apartment-shared-parking';
   const B=new BatchSet(ctx.mats.base),cars=[];
   for(const lot of lots) {
     const r=lot.rect,a=lot.aisle;
-    B.get('ext').box((r.x0+r.x1)/2,.015,(r.z0+r.z1)/2,r.x1-r.x0,.045,r.z1-r.z0,'#696d6b');
-    B.get('ext').box((a.x0+a.x1)/2,.018,(a.z0+a.z1)/2,a.x1-a.x0,.05,a.z1-a.z0,'#626865');
+    addCutSurfaceSlab(B,'ext',rectPoly(r),openings,.0375,.045,'#696d6b');
+    addCutSurfaceSlab(B,'ext',rectPoly(a),openings,.043,.05,'#626865');
     for(const [i,s] of lot.stalls.entries()) {
       const side=s.face==='E'||s.face==='W',color=s.type==='ev'?'#718d7e':s.type==='accessible'?'#608ca0':'#b7b6a9';
       B.get('ext').box(s.x,.045,s.z,s.w-.08,.012,s.d-.08,color);
@@ -657,6 +671,7 @@ function attachedDockLobbies(ctx) {
  * shell and opaque park-support roof are added here. */
 function buildPublicGarageShells(ctx) {
   for(const b of ctx.layout.buildings.filter(b=>b.undergroundOnly)) {
+    const roofPanels=garageCeilingPanels(b,ctx.layout.site,ctx.layout.levels.filter(l=>l.building===b.id));
     if(b.access?.protected)buildStairApproach(ctx,`${b.id}-G`,`${b.id}-B1`,
       ctx.layout.stairs.filter(s=>s.building===b.id),b.access);
     for(const lv of ctx.layout.levels.filter(l=>l.building===b.id)) {
@@ -676,20 +691,28 @@ function buildPublicGarageShells(ctx) {
         for(const room of lv.rooms.filter(r=>r.garageLift)) {
           for(const r of room.rects.slice(1))B.get('concrete').box((r.x0+r.x1)/2,lv.elev+(lv.height-.24)/2,(r.z0+r.z1)/2,r.x1-r.x0,lv.height-.24,r.z1-r.z0,'#c7cfcb');
           const lift=ctx.layout.elevators.find(e=>e.id===room.garageLift),z=lift.lv+lift.d/2+.03;
-          B.get('extMetal').box(lift.lu,lv.elev+1.15,z,1.65,2.3,.05,'#667873');
-          B.get('extSatin').box(lift.lu,lv.elev+1.1,z+.04,1.4,2.2,.03,'#c6d1ca');
-          B.get('extMetal').box(lift.lu,lv.elev+1.1,z+.06,.025,2.2,.02,'#586e65');
+          if(!lift.rideable&&!lift.animated) {
+            B.get('extMetal').box(lift.lu,lv.elev+1.15,z,1.65,2.3,.05,'#667873');
+            B.get('extSatin').box(lift.lu,lv.elev+1.1,z+.04,1.4,2.2,.03,'#c6d1ca');
+            B.get('extMetal').box(lift.lu,lv.elev+1.1,z+.06,.025,2.2,.02,'#586e65');
+          } else {
+            for(const dx of [-.86,.86])B.get('extMetal').box(lift.lu+dx,lv.elev+1.3,z,.07,2.6,.1,'#667873');
+            B.get('extMetal').box(lift.lu,lv.elev+2.62,z,1.8,.07,.1,'#667873');
+          }
           B.get('glowSoft').box(lift.lu,lv.elev+2.6,z+.05,.55,.18,.04,'#c9e6b9');
         }
-        if(lv.short==='B1')for(let x=-30;x<=30;x+=10)for(const z of [-10,0,10]) {
+        if(lv.short==='B1')for(let x=b.footprint.x0+8;x<b.footprint.x1-5;x+=14)for(let z=b.footprint.z0+8;z<b.footprint.z1-5;z+=16) {
+          if(!roofPanels.some(r=>x>r.x0&&x<r.x1&&z>r.z0&&z<r.z1))continue;
           B.get('extMetal').box(x,-.65,z,3.2,.09,.2,'#68736f');
           B.get('glowSoft').box(x,-.71,z,3.0,.025,.16,'#e6eedc');
         }
       });
       B.flush(group);ctx.levels[lv.id].shell.add(group);
       if(lv.short==='B1') {
-        const roof=new THREE.ExtrudeGeometry(shapeFromPoly(b.outline,b.accessKiosks.map(r=>[toW(b.frame,r.x0,r.z0),toW(b.frame,r.x1,r.z0),toW(b.frame,r.x1,r.z1),toW(b.frame,r.x0,r.z1)])),{depth:.18,bevelEnabled:false});roof.rotateX(-Math.PI/2);roof.translate(0,-.32,0);
-        const ceiling=new THREE.Mesh(roof,ctx.mats.base.concrete);ceiling.name='WPG-park-support-ceiling';group.add(ceiling);
+        const ceiling=new THREE.Group(),RB=new BatchSet(ctx.mats.base);
+        const panels=roofPanels;
+        RB.frame(b.frame,()=>{for(const r of panels)RB.get('concrete').box((r.x0+r.x1)/2,-.23,(r.z0+r.z1)/2,r.x1-r.x0,.18,r.z1-r.z0,'#c7cfcb');});
+        RB.flush(ceiling);ceiling.name='WPG-park-support-ceiling';ceiling.userData.panels=panels;group.add(ceiling);
         ctx.dynamic.push({name:'WPG-camera-aware-ceiling',update(){ceiling.visible=ctx.camera.position.y< -1;}});
       }
     }

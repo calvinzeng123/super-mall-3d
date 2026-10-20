@@ -11,6 +11,9 @@ import { addForecourt } from './forecourt.js';
 import { P1 } from './p1.js';
 import { P2 } from './p2.js';
 import { CATEGORIES } from './constants.js';
+import { prepareRideableElevators } from './elevator-shafts.js';
+import { applySharedGarages } from './shared-garages.js';
+import { addTransitCenter } from './transit-center.js';
 
 export function buildLayout() {
   const site = buildSite();
@@ -24,7 +27,7 @@ export function buildLayout() {
   addUrbanDistrict(site);
   const all = (k) => parts.flatMap((p) => p[k]);
   const buildings = parts.map((p) => p.building);
-  return {
+  const layout = {
     buildings,
     levels: all('levels'),
     escalators: all('escalators'),
@@ -37,4 +40,7 @@ export function buildLayout() {
     categories: { ...CATEGORIES, hotel: { label: '酒店套房', color: '#a27d49' }, apartment: { label: '服务公寓', color: '#537b78' }, residential: { label: '住宅', color: '#7b8470' } },
     extensions: hospitality.extensions,
   };
+  applySharedGarages(layout);
+  addTransitCenter(layout.site, layout.extensions);
+  return prepareRideableElevators(layout);
 }

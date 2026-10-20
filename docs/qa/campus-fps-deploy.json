@@ -1,0 +1,10 @@
+{
+  "id": "6ad7402730a839b9e6987c70",
+  "site_id": "3af33d60-6f93-4be3-a2e2-06f122ed5fc3",
+  "state": "ready",
+  "created_at": "2026-10-20T10:19:19.199Z",
+  "published_at": "2026-10-20T10:20:12.717Z",
+  "deploy_ssl_url": "https://6ad7402730a839b9e6987c70--yunlan-mall-calvin.netlify.app",
+  "ssl_url": "https://yunlan-mall-calvin.netlify.app",
+  "error_message": null
+}

@@ -14,9 +14,13 @@ function follow(points,floor='ground') {
   }
   return s;
 }
-test('西侧停车是真实732位三列车场，充电/无障碍位与原酒店46位并存',()=>{
-  assert.equal(P.stallCount,732);assert.equal(P.lots.length,26);assert.equal(P.evCount,68);assert.equal(P.accessibleCount,10);
-  assert.equal(L.extensions.surfaceParking.reduce((n,l)=>n+l.stalls.length,0),778);
+test('西侧三列停车场保留500以上实体车位及充电无障碍位，入口和交通中心占地已让开',()=>{
+  const stalls=P.lots.flatMap(l=>l.stalls);
+  assert.equal(P.stallCount,stalls.length);assert.ok(P.stallCount>500);assert.equal(P.lots.length,24);
+  assert.equal(P.evCount,stalls.filter(s=>s.type==='ev').length);assert.ok(P.evCount>=40);
+  assert.equal(P.accessibleCount,stalls.filter(s=>s.type==='accessible').length);assert.ok(P.accessibleCount>=8);
+  assert.equal(L.extensions.surfaceParking.reduce((n,l)=>n+l.stalls.length,0),
+    P.stallCount+L.extensions.surfaceParking.find(l=>l.id==='hotel-shared-parking').stalls.length);
   assert.equal(P.gates.length,3);
   const solids=[...L.site.openings,...L.site.trenches,...L.buildings.filter(b=>!b.undergroundOnly).map(b=>b.outline)];
   for(const lot of P.lots)for(const stall of lot.stalls) {

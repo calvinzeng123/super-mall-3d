@@ -83,6 +83,31 @@ test('中庭洞口挡人：一期 2F 朝圆厅中心走，停在洞口外', () =
   assert.ok(!lv.voids.some((v) => pointInPoly([s1.x, s1.z], v.poly)), '走进了中庭洞口');
 });
 
+test('斜向接近后已站进第一阶仍可接上楼梯，靠近高端同样可下楼', () => {
+  const sl = nav.slopeById.get('H-ST2-1F-2F-flight-1');
+  assert.ok(sl);
+  for (const [floor, u, sign] of [[sl.low, .136658, 1], [sl.high, sl.len - .136658, -1]]) {
+    const [x,z] = toW(sl.F, u, 0);
+    let s = at(floor,x,z);
+    s = step(nav,s,sl.F.c*.08*sign,sl.F.s*.08*sign);
+    assert.equal(s.slope?.id,sl.id,`${floor} 起步区未接入`);
+    for(let i=0;i<Math.ceil(sl.len/.08)+4;i++) s=step(nav,s,sl.F.c*.08*sign,sl.F.s*.08*sign);
+    assert.equal(s.floor,sign>0?sl.high:sl.low);
+    assert.ok(clear(nav,s));
+  }
+});
+
+test('坡段中部不能从错误标高横向吸附，防止侧面跳层', () => {
+  const sl = nav.slopeById.get('H-ST2-1F-2F-flight-1');
+  const [x,z]=toW(sl.F,sl.len/2,0);
+  for(const floor of [sl.low,sl.high]) {
+    const s=step(nav,at(floor,x,z),sl.F.c*.08,sl.F.s*.08);
+    assert.equal(s.slope,null);
+    assert.equal(s.floor,floor);
+    assert.equal(s.y,nav.floors.get(floor).y);
+  }
+});
+
 test('扶梯：上行从下端走上去到上层，下行从上端走下去到下层', () => {
   for (const e of L.escalators) {
     const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z);

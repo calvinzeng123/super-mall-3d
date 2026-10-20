@@ -33,7 +33,7 @@ export function mountLauncher({ onSelect, backgroundUrl = './docs/images/hotel-a
       </section>
       <nav class="yl-mode-list" aria-label="选择游戏模式">
         <button class="yl-mode yl-mode-primary" data-mode="fps"><b>竞技 FPS</b><span>单人 + AI 队友 · 搜索与撤离</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
-        <button class="yl-mode" data-mode="tour"><b>普通导览</b><span>自由漫游 · 探索一期、酒店与公寓</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
+        <button class="yl-mode" data-mode="tour"><b>完整园区探索</b><span>一期 · 二期 · 三期 · 住宅 · 地铁</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
       </nav>
       <footer class="yl-cover-footer"><p class="yl-cover-status" role="status" aria-live="polite">选择模式，进入云澜汇</p><p>触屏操作 · 横屏视野更开阔<br>按钮位置与大小可在游戏内调整</p></footer>
       <div class="yl-cover-load" hidden><i></i></div><p class="yl-cover-error" role="alert"></p>

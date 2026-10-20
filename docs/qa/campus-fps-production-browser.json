@@ -1,0 +1,398 @@
+{
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "deployId": "6ad7402730a839b9e6987c70",
+  "checkedAt": "2026-10-20T10:41:10.229191+00:00",
+  "physicalDevice": false,
+  "fps": {
+    "engine": "WebKit / iPhone 15 emulation",
+    "physicalDevice": false,
+    "before": {
+      "url": "https://yunlan-mall-calvin.netlify.app/",
+      "viewport": {
+        "width": 393,
+        "height": 659
+      },
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+      "buildings": [
+        "P1",
+        "H",
+        "A"
+      ],
+      "levels": 18,
+      "residentialModels": 0,
+      "weaponStats": {
+        "loaded": true,
+        "assets": [
+          {
+            "id": "rifle",
+            "label": "SMG-45",
+            "bytes": 2895736,
+            "license": "CC-BY-4.0",
+            "author": "DJMaesen"
+          },
+          {
+            "id": "pistolHands",
+            "label": "第一人称手套",
+            "bytes": 1105828,
+            "license": "CC-BY-4.0",
+            "author": "DJMaesen"
+          },
+          {
+            "id": "pistol",
+            "label": "Desert Eagle",
+            "bytes": 2025036,
+            "license": "CC-BY-4.0",
+            "author": "ELIZION"
+          }
+        ],
+        "downloadBytes": 6026600,
+        "geometries": 40,
+        "materials": 8,
+        "textures": 19,
+        "rifleTriangles": 21425,
+        "pistolTriangles": 26983,
+        "reloadClips": [
+          "reload"
+        ],
+        "realTexturedMeshes": true,
+        "activeWeapon": "rifle",
+        "disposed": false,
+        "sprinting": false,
+        "airborne": false
+      },
+      "assets": [
+        "https://yunlan-mall-calvin.netlify.app/assets/suite.a7f99bf01d3ad6e3.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/smg45.986342e386b174d5.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/fps-hands.94614904f4d82efd.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/deagle.77ed676903ec101b.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-m.5da2da91839f374d.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-f.a1ec332b8f429022.glb"
+      ],
+      "badgeDisplay": "none",
+      "jumpCount": 0,
+      "controls": [
+        {
+          "key": "move",
+          "x": 23.125,
+          "y": 454.875,
+          "width": 108,
+          "height": 108,
+          "bounded": true
+        },
+        {
+          "key": "fire",
+          "x": 302.234375,
+          "y": 443.796875,
+          "width": 72,
+          "height": 72,
+          "bounded": true
+        },
+        {
+          "key": "ads",
+          "x": 238.234375,
+          "y": 450.578125,
+          "width": 52,
+          "height": 52,
+          "bounded": true
+        },
+        {
+          "key": "reload",
+          "x": 312.234375,
+          "y": 547.46875,
+          "width": 52,
+          "height": 52,
+          "bounded": true
+        },
+        {
+          "key": "swap",
+          "x": 144.375,
+          "y": 566.859375,
+          "width": 52,
+          "height": 52,
+          "bounded": true
+        },
+        {
+          "key": "interact",
+          "x": 243.234375,
+          "y": 358.625,
+          "width": 55,
+          "height": 55,
+          "bounded": true
+        },
+        {
+          "key": "sprint",
+          "x": 51.125,
+          "y": 390.875,
+          "width": 52,
+          "height": 52,
+          "bounded": true
+        },
+        {
+          "key": "crouch",
+          "x": 228.3125,
+          "y": 547.46875,
+          "width": 52,
+          "height": 52,
+          "bounded": true
+        },
+        {
+          "key": "heal",
+          "x": 51.125,
+          "y": 573.3125,
+          "width": 52,
+          "height": 52,
+          "bounded": true
+        },
+        {
+          "key": "jump",
+          "x": 312.234375,
+          "y": 360.125,
+          "width": 52,
+          "height": 52,
+          "bounded": true
+        }
+      ]
+    },
+    "jump": {
+      "peak": 0.7425860000000001,
+      "landed": true,
+      "jumps": 1
+    },
+    "sprint": {
+      "active": true,
+      "stamina": 98.068,
+      "viewmodel": {
+        "loaded": true,
+        "assets": [
+          {
+            "id": "rifle",
+            "label": "SMG-45",
+            "bytes": 2895736,
+            "license": "CC-BY-4.0",
+            "author": "DJMaesen"
+          },
+          {
+            "id": "pistolHands",
+            "label": "第一人称手套",
+            "bytes": 1105828,
+            "license": "CC-BY-4.0",
+            "author": "DJMaesen"
+          },
+          {
+            "id": "pistol",
+            "label": "Desert Eagle",
+            "bytes": 2025036,
+            "license": "CC-BY-4.0",
+            "author": "ELIZION"
+          }
+        ],
+        "downloadBytes": 6026600,
+        "geometries": 40,
+        "materials": 8,
+        "textures": 19,
+        "rifleTriangles": 21425,
+        "pistolTriangles": 26983,
+        "reloadClips": [
+          "reload"
+        ],
+        "realTexturedMeshes": true,
+        "activeWeapon": "rifle",
+        "disposed": false,
+        "sprinting": true,
+        "airborne": false
+      }
+    },
+    "paused": true,
+    "resumed": true,
+    "pauseHit": true,
+    "errors": [],
+    "checks": {
+      "compactMap": true,
+      "noResidential": true,
+      "modelWeapons": true,
+      "netlifyBadgeHidden": true,
+      "jump": true,
+      "sprint": true,
+      "sprintPose": true,
+      "mobilityLabel": true,
+      "pauseAccessible": true,
+      "controls": true
+    },
+    "passed": true
+  },
+  "exploration": {
+    "engine": "WebKit / iPhone 15 emulation",
+    "physicalDevice": false,
+    "cover": {
+      "noScene": true,
+      "badge": "absent",
+      "models": [],
+      "entryHit": [
+        {
+          "mode": "fps",
+          "hit": true
+        },
+        {
+          "mode": "tour",
+          "hit": true
+        }
+      ]
+    },
+    "tour": {
+      "url": "https://yunlan-mall-calvin.netlify.app/",
+      "viewport": {
+        "width": 393,
+        "height": 659
+      },
+      "buildings": [
+        "P1",
+        "P2",
+        "P3",
+        "M",
+        "H",
+        "A",
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "WPG"
+      ],
+      "levels": 198,
+      "playableMarker": false,
+      "residential": {
+        "templates": 3,
+        "geometries": 169,
+        "materials": 116,
+        "textures": 17,
+        "imageSources": 17,
+        "geometryBytes": 71668220,
+        "cpuGeometryBytes": 71668220,
+        "maxTextureDimension": 512,
+        "sourceBytes": 77308884,
+        "compressedBytes": 28884578,
+        "variants": {
+          "01": {
+            "sourcePrimitives": 1508,
+            "excludedSlabs": 2,
+            "batches": 56,
+            "triangles": 585802,
+            "materials": 38,
+            "modelSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+            "bounds": {
+              "min": [
+                -0.025000175461173058,
+                -0.038999997079372406,
+                -11.524999618530273
+              ],
+              "max": [
+                15.625,
+                3.009999990463257,
+                2.799999952316284
+              ]
+            }
+          },
+          "02": {
+            "sourcePrimitives": 1547,
+            "excludedSlabs": 2,
+            "batches": 56,
+            "triangles": 583662,
+            "materials": 38,
+            "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+            "bounds": {
+              "min": [
+                -0.02500024251639843,
+                -0.038999997079372406,
+                -11.524999618530273
+              ],
+              "max": [
+                15.625,
+                3.009999990463257,
+                2.799999952316284
+              ]
+            }
+          },
+          "03": {
+            "sourcePrimitives": 1731,
+            "excludedSlabs": 2,
+            "batches": 57,
+            "triangles": 716706,
+            "materials": 40,
+            "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+            "bounds": {
+              "min": [
+                -0.025000175461173058,
+                -0.038999997079372406,
+                -11.524999618530273
+              ],
+              "max": [
+                17.625,
+                3.009999990463257,
+                2.799999952316284
+              ]
+            }
+          }
+        },
+        "floorGroupsCreated": 0,
+        "floorGroupsDisposed": 0,
+        "activeFloorGroups": 0,
+        "sharedGeometryDisposals": 0,
+        "sharedMaterialDisposals": 0,
+        "sharedTextureDisposals": 0,
+        "reusedTextures": 50,
+        "disposed": false
+      },
+      "labels": false,
+      "assets": [
+        "https://yunlan-mall-calvin.netlify.app/assets/suite.a7f99bf01d3ad6e3.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/residence-01.d7c68cf855216de9.bin",
+        "https://yunlan-mall-calvin.netlify.app/assets/residence-02.80b8dd6722294589.bin",
+        "https://yunlan-mall-calvin.netlify.app/assets/residence-03.81f09c875fb2b416.bin",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-m.5da2da91839f374d.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-f.a1ec332b8f429022.glb"
+      ],
+      "back": {
+        "x": 305,
+        "y": 8,
+        "width": 76,
+        "height": 36,
+        "top": 8,
+        "right": 381,
+        "bottom": 44,
+        "left": 305
+      },
+      "dock": {
+        "x": 8,
+        "y": 593,
+        "width": 377,
+        "height": 58,
+        "top": 593,
+        "right": 385,
+        "bottom": 651,
+        "left": 8
+      },
+      "returnTopRight": true,
+      "noDockOverlap": true,
+      "returnHit": true,
+      "fatalHidden": true
+    },
+    "clean": {
+      "active": true,
+      "back": "none",
+      "dock": "none",
+      "badge": "none"
+    },
+    "restored": true,
+    "errors": [],
+    "checks": {
+      "cover": true,
+      "fullMap": true,
+      "residences": true,
+      "mobileLabels": true,
+      "topReturn": true,
+      "clean": true,
+      "noFatal": true
+    },
+    "passed": true
+  },
+  "passed": true
+}

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FPS_MODEL_ASSETS } from './model-data.js';
 import { fetchBinary } from '../render/fetch-binary.js';
+import { movementPose } from './mobility.js';
 
 const clamp = THREE.MathUtils.clamp;
 const mix = THREE.MathUtils.lerp;
@@ -131,7 +132,7 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
   materials.add(flashMaterial);
   const flash = new THREE.Sprite(flashMaterial); flash.scale.set(.12, .12, .12); flash.visible = false; rig.add(flash);
   const flashLight = new THREE.PointLight(0xffbd65, 0, 2, 2); rig.add(flashLight);
-  let elapsed = 0, recoil = 0, flashTime = 0, aimBlend = 0, active = 'rifle';
+  let elapsed = 0, recoil = 0, flashTime = 0, aimBlend = 0, sprintBlend = 0, active = 'rifle';
   let flashPendingRender = false;
   let wasReloading = false, reloadClock = 0, wasSwitching = false, switchClock = 0, switchFrom = active;
   const presentation = { rifle: { x: .20, y: -.37, z: -.62 }, pistol: { x: .14, y: -.30, z: -.43 } };
@@ -147,6 +148,7 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
 
   function update(dt, state = {}) {
     if (disposed) return;
+    overlay.visible = state.visible !== false;
     dt = clamp(Number(dt) || 0, 0, .1); elapsed += dt;
     const next = weaponId(state.weapon);
     if (state.switching && !wasSwitching) { switchClock = 0; switchFrom = active; }
@@ -162,6 +164,9 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
     stats.activeWeapon = active;
     const moving = typeof state.moving === 'number' ? clamp(state.moving, 0, 1) : state.moving ? 1 : 0;
     aimBlend = mix(aimBlend, state.aiming ? 1 : 0, 1 - Math.exp(-dt * 14));
+    sprintBlend = mix(sprintBlend, state.sprinting && moving && !state.reloading && !state.switching ? 1 : 0, 1 - Math.exp(-dt * 10));
+    stats.sprinting = sprintBlend > .5;
+    stats.airborne = !!state.airborne;
     recoil *= Math.exp(-dt * 15);
     if (state.reloading || state.switching) { flashTime = 0; flashPendingRender = false; }
     else if (!flashPendingRender) flashTime = Math.max(0, flashTime - dt);
@@ -178,14 +183,15 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
     const hipZ = mix(base.z, -.46, portrait);
     const aimY = (active === 'rifle' ? -.335 : -.26) * modelScale;
     const aimZ = mix(active === 'rifle' ? -.82 : -.56, -.64, portrait);
-    const bob = moving * (1 - .8 * aimBlend);
+    const pose = movementPose(elapsed, { sprint: sprintBlend, moving, aiming: aimBlend,
+      airborne: state.airborne ? 1 : 0, landing: Number(state.landing) || 0 });
     const kick = Math.max(recoil, Number(state.recoil) || 0);
     rig.position.set(
-      mix(hipX, active === 'rifle' ? 0 : -.005, aimBlend) + Math.sin(elapsed * 8.5) * .008 * bob,
-      mix(hipY, aimY, aimBlend) + Math.sin(elapsed * 17) * .005 * bob - swap * .55,
-      mix(hipZ, aimZ, aimBlend) + kick * .055 + swap * .18,
+      mix(hipX, active === 'rifle' ? 0 : -.005, aimBlend) + pose.x,
+      mix(hipY, aimY, aimBlend) + pose.y - swap * .55,
+      mix(hipZ, aimZ, aimBlend) + pose.z + kick * .055 + swap * .18,
     );
-    rig.rotation.set(kick * .08 + swap * .15, Math.sin(elapsed * 4.25) * .008 * bob, -swap * .2 + Math.cos(elapsed * 8.5) * .008 * bob);
+    rig.rotation.set(pose.rx + kick * .08 + swap * .15, pose.ry, pose.rz - swap * .2);
     if (action) {
       action.time = state.reloading && active === 'rifle' ? reload * idleTime : idleTime;
       mixer.update(0);
@@ -215,7 +221,7 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
   }
 
   function render() {
-    if (disposed) return;
+    if (disposed || !overlay.visible) return;
     const aspect = camera.aspect || 1;
     if (viewCamera.aspect !== aspect) { viewCamera.aspect = aspect; viewCamera.updateProjectionMatrix(); }
     const autoClear = renderer.autoClear;

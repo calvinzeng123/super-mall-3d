@@ -1,0 +1,43 @@
+{
+  "cover": {
+    "ready": false,
+    "canvases": 1,
+    "resources": [
+      "http://127.0.0.1:5178/assets/main.VMC7XLPZ.js",
+      "http://127.0.0.1:5178/assets/chunk.WMKTFVSF.js",
+      "http://127.0.0.1:5178/assets/cover.27284425db21785b.jpg"
+    ]
+  },
+  "fps": {
+    "url": "http://127.0.0.1:5178/",
+    "ready": true,
+    "buildings": [
+      "P1",
+      "H",
+      "A"
+    ],
+    "player": {
+      "floor": "P1-1F",
+      "x": -135,
+      "z": -98,
+      "y": 0,
+      "slope": null,
+      "yaw": 1.8018869939907938,
+      "eye": 1.62,
+      "pitch": 0,
+      "airHeight": 0,
+      "sprinting": false
+    },
+    "assets": [
+      "http://127.0.0.1:5178/assets/suite.a7f99bf01d3ad6e3.glb",
+      "http://127.0.0.1:5178/assets/smg45.986342e386b174d5.glb",
+      "http://127.0.0.1:5178/assets/fps-hands.94614904f4d82efd.glb",
+      "http://127.0.0.1:5178/assets/deagle.77ed676903ec101b.glb",
+      "http://127.0.0.1:5178/assets/person-m.5da2da91839f374d.glb",
+      "http://127.0.0.1:5178/assets/person-f.a1ec332b8f429022.glb"
+    ],
+    "fatalHidden": true
+  },
+  "engine": "WebKit, Playwright iPhone 15 emulation",
+  "physicalDevice": false
+}

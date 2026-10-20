@@ -123,6 +123,7 @@ export function buildNav(layout) {
   }
   for (const o of S.urban?.buildings || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  for (const o of S.transitCenter?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.westParking?.islands || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const lot of layout.extensions?.surfaceParking || []) {
     for (const [i, s] of lot.stalls.entries()) {
@@ -536,12 +537,17 @@ export function step(nav, s, dx, dz, dt = 0) {
       if (G && clearAt(nav, G, x, z)) return { floor: G.id, x, z, y: G.y, slope: null };
     }
     for (const sl of F.slopes) {
-      const [u0, v0] = toL(sl.F, s.x, s.z), [u1, v1] = toL(sl.F, x, z);
+      const [u0] = toL(sl.F, s.x, s.z), [u1, v1] = toL(sl.F, x, z);
       const lim = sl.hw - NAV.r;
       const inside = u1 >= 0 && u1 <= sl.len && Math.abs(v1) <= lim;
-      const was = u0 >= 0 && u0 <= sl.len && Math.abs(v0) <= lim;
-      if (!inside || was) continue;
-      if ((sl.low === F.id && u0 < 0) || (sl.high === F.id && u0 > sl.len)) return atSlope({ ...s, floor: F.id }, sl, u1, v1);
+      if (!inside) continue;
+      // A diagonal approach or wall slide can leave the player's centre just
+      // inside the first tread while still on the landing. Capture only the
+      // endpoint band; entering the middle from another floor stays forbidden.
+      const capture = NAV.r + .08;
+      if ((sl.low === F.id && u0 <= capture) || (sl.high === F.id && u0 >= sl.len - capture)) {
+        return atSlope({ ...s, floor: F.id }, sl, u1, v1);
+      }
     }
     if (clearAt(nav, F, x, z)) return { floor: F.id, x, z, y: F.y, slope: null };
   }

@@ -1,0 +1,109 @@
+{
+  "before": {
+    "shots": 8,
+    "settings": {
+      "scale": 1.4,
+      "opacity": 0.78,
+      "sensitivity": 1,
+      "invertY": false,
+      "positions": {
+        "portrait": {},
+        "landscape": {}
+      }
+    }
+  },
+  "saved": {
+    "shots": 8,
+    "settings": {
+      "scale": 1.4,
+      "opacity": 0.78,
+      "sensitivity": 1,
+      "invertY": false,
+      "positions": {
+        "portrait": {
+          "jump": {
+            "x": 0.7989276139410187,
+            "y": 0.4564958283671037
+          }
+        },
+        "landscape": {}
+      }
+    },
+    "stored": {
+      "scale": 1.4,
+      "opacity": 0.78,
+      "sensitivity": 1,
+      "invertY": false,
+      "positions": {
+        "portrait": {
+          "jump": {
+            "x": 0.7989276139410187,
+            "y": 0.4564958283671037
+          }
+        },
+        "landscape": {}
+      }
+    }
+  },
+  "rotated": {
+    "mode": "landscape",
+    "settings": {
+      "scale": 1.4,
+      "opacity": 0.78,
+      "sensitivity": 1,
+      "invertY": false,
+      "positions": {
+        "portrait": {
+          "jump": {
+            "x": 0.7989276139410187,
+            "y": 0.4564958283671037
+          }
+        },
+        "landscape": {}
+      }
+    },
+    "box": {
+      "x": 616.4609375,
+      "y": 97.7890625,
+      "width": 72.796875,
+      "height": 72.796875,
+      "top": 97.7890625,
+      "right": 689.2578125,
+      "bottom": 170.5859375,
+      "left": 616.4609375
+    }
+  },
+  "restored": {
+    "settings": {
+      "scale": 1.4,
+      "opacity": 0.78,
+      "sensitivity": 1,
+      "invertY": false,
+      "positions": {
+        "portrait": {
+          "jump": {
+            "x": 0.7989276139410187,
+            "y": 0.4564958283671037
+          }
+        },
+        "landscape": {}
+      }
+    },
+    "box": {
+      "x": 271.6015625,
+      "y": 351.6015625,
+      "width": 72.796875,
+      "height": 72.796875,
+      "top": 351.6015625,
+      "right": 344.3984375,
+      "bottom": 424.3984375,
+      "left": 271.6015625
+    }
+  },
+  "checks": {
+    "editingDoesNotFire": true,
+    "persisted": true,
+    "orientationSeparate": true,
+    "reloaded": true
+  }
+}

@@ -21,9 +21,9 @@ function move(s,p,audit=()=>{}) {
   assert.equal(s.floor,p.floor);assert.ok(Math.abs(s.y-p.y)<1e-6);return s;
 }
 
-test('一期二期29座消防梯172条层间线路双向连续可走，含地下、挑高层和屋顶',()=>{
-  assert.equal(L.stairs.filter(s=>malls.some(b=>b.id===s.building)).length,29);
-  assert.equal(malls.reduce((n,b)=>n+b.access.routes.length,0),172);
+test('一期二期33座消防梯180条层间线路双向连续可走，含地下、挑高层和屋顶',()=>{
+  assert.equal(L.stairs.filter(s=>malls.some(b=>b.id===s.building)).length,33);
+  assert.equal(malls.reduce((n,b)=>n+b.access.routes.length,0),180);
   for(const b of malls)for(const route of b.access.routes)for(const reversed of [false,true]) {
     const path=reversed?[...route.waypoints].reverse():route.waypoints;
     let s={...path[0],slope:null},flightSteps=0;
@@ -93,7 +93,7 @@ test('数百梯段共享有限模板，完整楼层批次正确摆放且不复�
   const levels=Object.fromEntries(L.levels.filter(l=>malls.some(b=>b.id===l.building)).map(l=>[l.id,{batch:new BatchSet(materials),base:new THREE.Group(),signs:{frame:(f,fn)=>fn(),place:()=>{}}}]));
   const ctx={layout:L,levels,mats:{base:materials},atlas:Object.fromEntries(Object.keys(levels).map(id=>[id,{cell:()=>null}]))};
   buildMallStairs(ctx);
-  assert.ok(ctx.mallStairStats.templates<=12);assert.ok(ctx.mallStairStats.storedVertices<90000);
+  assert.ok(ctx.mallStairStats.templates<=14);assert.ok(ctx.mallStairStats.storedVertices<90000);
   for(const b of malls)for(const lv of L.levels.filter(l=>l.building===b.id)) {
     const meshes=levels[lv.id].base.children,flights=b.access.flights.filter(f=>f.parentFloor===lv.id);
     assert.equal(meshes.filter(m=>m.material===materials.concrete).reduce((n,m)=>n+m.count,0),flights.length);

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { FPS_MODEL_ASSETS } from '../src/fps/model-data.js';
+import { geometryLicenses } from './geometry-licenses.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 process.chdir(root);
@@ -45,9 +46,14 @@ for (const surface of surfaces) for (const [kind, url] of Object.entries(surface
 const suiteURL = await emitAsset('suite', 'glb', dataBytes(await generatedData('suite-data.js', 'SUITE_MODEL_URL'), 'model/gltf-binary'), 'suite');
 const people = await generatedData('people-data.js', 'PEOPLE_ASSETS');
 for (const person of people) person.url = await emitAsset(`person-${person.id}`, 'glb', dataBytes(person.url, 'model/gltf-binary'), 'textured-person');
-// Both phone modes physically omit the residential district. Do not publish or
-// download its 01/02/03 models; the source GLBs remain in the authoring repo.
-const residences = [];
+// Only exploration imports this module and fetches the three residential assets.
+// FPS keeps its physically pruned layout and never requests these model files.
+const residences = await generatedData('residential-data.js', 'RESIDENTIAL_ASSETS');
+for (const residence of residences) {
+  residence.url = await emitAsset(`residence-${residence.unit}`, 'bin',
+    Buffer.from(residence.data, 'base64'), 'residential-model');
+  delete residence.data;
+}
 const fpsAssets = await Promise.all(FPS_MODEL_ASSETS.map(async a=>({...a,
   url:await emitAsset(a.id==='rifle'?'smg45':a.id==='pistol'?'deagle':'fps-hands','glb',await readFile(a.url.replace(/^\.\//,'')),'fps-model'),
 })));
@@ -92,6 +98,9 @@ for(const name of ['CREDITS.txt','UPSTREAM-SMG-LICENSE.md','UPSTREAM-DESERT-EAGL
 }
 const license = await readFile('node_modules/three/LICENSE', 'utf8');
 const peopleLicense = await readFile('assets/models/people/LICENSE.txt', 'utf8');
+const geometryLicense = await geometryLicenses();
+await writeFile(path.join(output,'geometry-licenses.txt'),geometryLicense);
+files.push({path:'geometry-licenses.txt',bytes:Buffer.byteLength(geometryLicense),sha256:sha256(geometryLicense),kind:'license'});
 const shell = (await readFile('src/shell.html', 'utf8'))
   .replace(/<link[^>]*https:\/\/fonts\.[^>]+>\s*/g, '')
   .replace(/<script type="importmap">[\s\S]*?<\/script>/, '');

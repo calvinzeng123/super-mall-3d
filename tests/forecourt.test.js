@@ -86,7 +86,7 @@ test('二期真实北门与四栋住宅逐一往返乐园和食集，跨街路�
   const x=150/Math.SQRT2,crossing=F.paths.find(p=>p.id==='residential-recreation');
   assert.deepEqual(crossing.crossingSegments,[1,2]);
   for(const z of [-184,-170])assert.ok(L.site.crossings.some(c=>pointInPoly([x,z],c.poly)),`缺少z=${z}过街线`);
-  const destinations=[[[88,-142],[78,-142]],[[175,-142],[240,-142],[240,-120],[260.2,-120],[260.2,-158]]];
+  const destinations=[[[88,-142],[78,-142]],F.paths.find(p=>p.id==='p2-market').points.slice(1)];
   for(const id of ['P2-N','R1-MAIN','R2-MAIN','R3-MAIN','R4-MAIN'])for(const target of destinations){
     const e=L.entrances.find(e=>e.id===id),mid=[(e.seg.x0+e.seg.x1)/2,(e.seg.z0+e.seg.z1)/2];
     const inside=[mid[0]-e.nx*1.1,mid[1]-e.nz*1.1],outside=[mid[0]+e.nx*1.1,mid[1]+e.nz*1.1];

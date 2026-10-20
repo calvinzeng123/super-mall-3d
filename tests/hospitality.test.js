@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { L, inWalk, midOf } from './helpers.js';
+import { L, inWalk, inSite, midOf } from './helpers.js';
 import { HOSPITALITY } from '../src/layout/hospitality.js';
 import { convexOverlap, rect, rectPoly, polyBounds, polySamples, pointInPoly } from '../src/layout/geom.js';
 import { buildWalkGraph, components } from '../src/layout/walk.js';
@@ -9,7 +9,7 @@ const towers = L.buildings.filter(b => b.kind === 'tower');
 const floors = bid => L.levels.filter(l => l.building === bid);
 const within = (outer, inner, eps = 1e-6) => inner.x0 >= outer.x0 - eps && inner.x1 <= outer.x1 + eps && inner.z0 >= outer.z0 - eps && inner.z1 <= outer.z1 + eps;
 
-test('酒店公寓各20层10套，四栋30层住宅首层独立大堂、2至30层各01/02/03三户', () => {
+test('酒店公寓各20层且首层为大堂、上层10套，四栋30层住宅2至30层各01/02/03三户', () => {
   assert.deepEqual(towers.map(b => b.id), ['H', 'A', 'R1', 'R2', 'R3', 'R4']);
   for (const b of towers) {
     const live = floors(b.id).filter(l => l.levelNumber);
@@ -17,7 +17,7 @@ test('酒店公寓各20层10套，四栋30层住宅首层独立大堂、2至30�
     assert.equal(live.length, n, `${b.id} 层数`);
     for (const [i, lv] of live.entries()) {
       assert.equal(lv.levelNumber, i + 1);
-      assert.equal(lv.units.length, b.usage === 'residential' ? (lv.levelNumber === 1 ? 0 : 3) : 10, lv.id);
+      assert.equal(lv.units.length, lv.levelNumber === 1 ? 0 : b.usage === 'residential' ? 3 : 10, lv.id);
       if (b.usage === 'residential' && lv.levelNumber > 1) {
         assert.deepEqual(lv.units.map(u => u.residence.prototype), ['01', '02', '03']);
         assert.deepEqual(lv.units.map(u => u.residence.type), ['three-bedroom', 'three-bedroom', 'four-bedroom']);
@@ -33,7 +33,7 @@ test('酒店公寓各20层10套，四栋30层住宅首层独立大堂、2至30�
     for (const old of L.buildings.filter(q => q.kind === 'mall' || q.kind === 'street'))
       for (const p of polySamples(b.outline,.75,.03)) assert.ok(!pointInPoly(p,old.outline), `${b.id} 不应改占原商场`);
   }
-  assert.equal(towers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 748);
+  assert.equal(towers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 728);
 });
 
 test('每套有床和独卫，套内隔间、门洞与床均在实际房间范围内', () => {
@@ -75,7 +75,9 @@ test('地下、空中连接为真实连续宽度的通道，门户两侧等标�
   assert.ok(paths.some(p => p.kind === 'skybridge'));
   assert.ok(paths.some(p => p.id === 'hotel-mall-metro'));
   assert.ok(paths.some(p => p.id === 'residential-mall-metro'));
-  assert.ok(paths.some(p => p.id === 'hotel-garage'));
+  assert.ok(paths.some(p => p.id === 'shared-west-tunnel'));
+  assert.ok(paths.some(p => p.id === 'H-shared-south-collector'));
+  assert.ok(L.entrances.some(e => e.sharedGarage && e.level === 'H-B2' && e.to === 'P1-B1'));
   for (const p of paths) {
     const lv = L.levels.find(l => l.id === p.level);
     assert.ok(p.width >= 5 && p.slab.pieces.length >= p.points.length - 1);
@@ -88,6 +90,11 @@ test('地下、空中连接为真实连续宽度的通道，门户两侧等标�
   }
   for (const e of L.entrances.filter(e => e.extension)) {
     const a = L.levels.find(l => l.id === e.level), b = L.levels.find(l => l.id === e.to), [x, z] = midOf(e.seg);
+    if (e.to === 'site') {
+      assert.equal(a.elev, 0);
+      assert.ok(inWalk(a, [x - e.nx, z - e.nz]) && inSite([x + e.nx, z + e.nz]), `${e.id} 地面入口未接通`);
+      continue;
+    }
     assert.equal(a.elev, b.elev, `${e.id} 门户有高差`);
     assert.ok(inWalk(a, [x - e.nx, z - e.nz]) && inWalk(b, [x + e.nx, z + e.nz]), `${e.id} 门两侧没有实体走道`);
   }

@@ -9,6 +9,7 @@ export function createRun() {
     magazines:WEAPONS.map(w=>w.magazine), reserves:WEAPONS.map(w=>w.reserve),
     cooldown:0, reload:0, reloadDuration:0, switchTime:0, switchDuration:.6,
     shots:0, hits:0, kills:0, stage:0, interaction:0, extracting:0,
+    extractionId:'extract-car', extractionTitle:'装甲接应车', fireMode:'auto',
     medkits:2, healTime:0, hurtAgo:99, command:'follow', teammateHP:100,
     message:'回声已就位。先到商场终端确认目标。', result:null };
 }
@@ -36,6 +37,10 @@ export function switchWeapon(s) {
   if(s.status!=='playing'||s.paused||s.switchTime||s.healTime)return false;
   s.reload=0;s.reloadDuration=0;s.healTime=0;s.weapon=(s.weapon+1)%WEAPONS.length;s.switchTime=s.switchDuration;return true;
 }
+export function changeFireMode(s) {
+  if(s.status!=='playing')return false;
+  s.fireMode=s.fireMode==='auto'?'burst':'auto';return true;
+}
 export function healPlayer(s) {
   if(s.status!=='playing'||s.paused||s.hp>=100||!s.medkits||s.healTime||s.reload||s.switchTime)return false;
   s.medkits--;s.healTime=1.6;return true;
@@ -53,9 +58,11 @@ export function interactObjective(s,{near,clear,duration=1.4,dt}) {
   if(s.interaction<duration)return false;
   s.interaction=0;s.stage++;return true;
 }
-export function updateExtraction(s,{inside,contested,dt,duration=8}) {
+export function updateExtraction(s,{inside,contested,dt,duration=8,id=s.extractionId,title=s.extractionTitle}) {
   if(s.status!=='playing'||s.paused||s.stage<2)return false;
   if(!inside){s.extracting=0;return false;}
+  if(s.extractionId!==id){s.extracting=0;s.extractionId=id;}
+  s.extractionTitle=title;
   if(contested){s.extracting=Math.max(0,s.extracting-dt*.5);return false;}
   s.extracting+=Math.max(0,Math.min(.1,dt));
   if(s.extracting>=duration){finishRun(s,true);return true;}return false;
@@ -63,7 +70,7 @@ export function updateExtraction(s,{inside,contested,dt,duration=8}) {
 export function finishRun(s,success) {
   if(s.status!=='playing')return s.result;
   s.status=success?'success':'failed';s.paused=true;
-  return s.result={success,title:success?'行动完成':'行动中止',subtitle:success?'情报已带出，撤离成功。':'调整战术，再次进入封锁区。',
+  return s.result={success,title:success?'行动完成':'行动中止',subtitle:success?`情报已带出，${s.extractionTitle}撤离成功。`:'调整战术，再次进入封锁区。',
     kills:s.kills,shots:s.shots,accuracy:s.shots?Math.round(s.hits/s.shots*100):0,time:Math.round(s.elapsed),intel:Math.min(2,s.stage),teammate:s.teammateHP>0};
 }
 export function parseSquadOrder(text) {

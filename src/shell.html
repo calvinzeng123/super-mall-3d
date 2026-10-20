@@ -42,7 +42,9 @@ body[data-mode="launch"] #app { visibility: hidden; }
 body[data-mode="fps"] #app > :not(#stage):not(#fatal) { display:none !important; }
 body[data-mode="fps"] { touch-action:none; overscroll-behavior:none; }
 .mode-back { position:fixed; bottom:calc(12px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:12;padding:8px 13px;border:1px solid #ffffff60;border-radius:30px;background:#233443aa;color:#fff;font-size:12px;backdrop-filter:blur(10px); }
-body.ui-compact .mode-back { top:calc(8px + env(safe-area-inset-top));bottom:auto;left:auto;right:12px;transform:none; }
+@media (max-width:900px), (pointer:coarse), (max-height:520px) {
+  .mode-back { top:calc(8px + env(safe-area-inset-top));bottom:auto;left:auto;right:12px;transform:none; }
+}
 body.ui-hidden .mode-back, body.exploring .mode-back {display:none;}
 button { font: inherit; color: inherit; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
@@ -220,12 +222,8 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 .dir-actions { display: flex; align-items: center; gap: 4px; }
 .dir-close { border: 0; background: var(--chip); border-radius: 7px; min-width: 44px; min-height: 44px; cursor: pointer; font-size: 21px; }
 .dir-head { grid-template-columns: auto minmax(0, 1fr) auto; }
-/* Hosting badge must not cover the scene in clean view or the mobile dock. */
-body.ui-hidden #nl-badge-frame,
-body[data-mode="fps"] #nl-badge-frame { display: none !important; }
-@media (max-width: 900px), (pointer: coarse), (max-height: 520px) {
-  #nl-badge-frame { bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important; }
-}
+/* The injected host iframe intercepts phone taps, including the tour entry. */
+#nl-badge-frame { display: none !important; }
 body.ui-hidden #app > :not(#stage):not(.loading):not(.fatal):not(.clean-hint) { display: none !important; }
 @media (max-width: 900px), (pointer: coarse), (max-height: 520px) {
   .brand, .hint, .legend, .tooltip { display: none !important; }
@@ -344,7 +342,10 @@ body.ui-hidden #app > :not(#stage):not(.loading):not(.fatal):not(.clean-hint) { 
 <script type="importmap">
 { "imports": {
   "three": "./node_modules/three/build/three.module.js",
-  "three/addons/": "./node_modules/three/examples/jsm/"
+  "three/addons/": "./node_modules/three/examples/jsm/",
+  "polygon-clipping": "./node_modules/polygon-clipping/dist/polygon-clipping.esm.js",
+  "splaytree": "./node_modules/splaytree/dist/splaytree.js",
+  "robust-predicates": "./node_modules/robust-predicates/index.js"
 } }
 </script>
 <div id="app">

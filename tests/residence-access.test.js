@@ -20,8 +20,8 @@ function walk(from, to) {
 }
 const near = (a, b, eps = .035) => a.floor === b.floor && !a.slope && Math.hypot(a.x - b.x, a.z - b.z) < eps;
 
-test('全部748套的入户门与内部卧室/卫浴门均有双侧净空且能实际穿越', () => {
-  assert.equal(homes.length, 748);
+test('全部728套的入户门与内部卧室/卫浴门均有双侧净空且能实际穿越', () => {
+  assert.equal(homes.length, 728);
   let partitionDoors = 0;
   for (const { lv, u } of homes) {
     const entry = u.residence.entryDoor;

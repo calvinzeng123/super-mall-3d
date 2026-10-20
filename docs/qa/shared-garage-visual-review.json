@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "observations": [
+    {
+      "feature": "P2 street ramp mouths",
+      "result": "Initial low-end view identified retaining/sill wall across both ramp mouths. shell.js now removes their actual lane-wall intersection; both final screenshots show open exits.",
+      "beforeScreenshot": "output/playwright/garage-browser/p2-ramp-low-return-before-fix.jpg",
+      "afterScreenshot": "output/playwright/garage-browser/p2-in-open-return.jpg"
+    },
+    {
+      "feature": "P3 street ramp mouths",
+      "result": "All four mouths clear in both directions and five body heights.",
+      "screenshot": "output/playwright/garage-browser/p3-south-in-open-return.jpg"
+    },
+    {
+      "feature": "P1 south lift",
+      "result": "Glass entrance pavilion is visible and accessible; existing tree obscures a direct southern view but does not obstruct the tested doorway.",
+      "screenshot": "output/playwright/garage-browser/p1-south-lift-angle.jpg"
+    }
+  ],
+  "evidence": "shared-garage-wall-browser.json"
+}

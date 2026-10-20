@@ -2,7 +2,7 @@
 // 屋面（女儿墙、圆厅玻璃拱顶、商业街天窗）、楼名与 LED 屏、楼板下筒灯。
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { pointInPoly, distToPolyEdge, frame, toW, toL, lrectPoly, subtractInterval } from '../../layout/geom.js';
+import { pointInPoly, distToPolyEdge, frame, toW, toL, lrectPoly, subtractInterval, clipConvex } from '../../layout/geom.js';
 import { themeOf, COLORS } from '../theme.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 
@@ -62,14 +62,24 @@ export function outlineEdges(poly, building) {
   return out;
 }
 
-/** 外轮廓边扣掉本层入口（如地铁连接口）所占的区间，返回剩余墙段 [a,b]（沿边的 u，两端各外延 ext） */
-export function edgeSpans(e, entrances, ext = 0.2) {
+/** 外轮廓扣除人行门与车道穿墙区间，返回剩余墙段 [a,b]。 */
+export function edgeSpans(e, entrances, ext = 0.2, ramps = []) {
   let ivs = [[0, e.len]];
   for (const en of entrances) {
     const [u0, v0] = toL(e.F, en.seg.x0, en.seg.z0);
     const [u1, v1] = toL(e.F, en.seg.x1, en.seg.z1);
     if (Math.abs(v0) > 0.15 || Math.abs(v1) > 0.15) continue;
     ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]);
+  }
+  // A ramp is already a continuous navigation slope, so its wall opening must
+  // be cut separately from pedestrian portals. Intersect the actual lane with
+  // the wall's thickness instead of projecting the entire rotated ramp.
+  for (const ramp of ramps) {
+    const cut = clipConvex(ramp.poly.map(p => toL(e.F, ...p)),
+      [[-.3, -.45], [e.len + .3, -.45], [e.len + .3, .45], [-.3, .45]]);
+    if (cut.length < 3) continue;
+    const along = cut.map(p => p[0]);
+    ivs = subtractInterval(ivs, [Math.min(...along) - .15, Math.max(...along) + .15]);
   }
   return ivs.map(([a, b]) => [a < 0.01 ? a - ext : a, b > e.len - 0.01 ? b + ext : b]);
 }
@@ -249,19 +259,21 @@ export function sill(ctx, lv) {
   const h = lv.kind === 'roof' ? 0.3 : 0.9;
   const key = lv.kind === 'roof' ? 'satin' : 'matte';
   const ents = ctx.layout.entrances.filter((x) => x.level === lv.id);
+  const ramps = ctx.layout.ramps.filter(r => r.building === lv.building && [r.from.level, r.to.level].includes(lv.id));
   for (const e of ctx.outlineEdges(lv)) {
-    for (const [a, b] of edgeSpans(e, ents, 0.01)) B.frame(e.F, () => B.get(key).box((a + b) / 2, lv.elev + h / 2, -0.15, b - a, h, 0.3, c));
+    for (const [a, b] of edgeSpans(e, ents, 0.01, ramps)) B.frame(e.F, () => B.get(key).box((a + b) / 2, lv.elev + h / 2, -0.15, b - a, h, 0.3, c));
   }
 }
 
 /** 地下室挡土墙（立面组，聚焦时隐藏） */
-function retaining(ctx, lv) {
+export function retaining(ctx, lv) {
   const F = ctx.levels[lv.id].facadeBatch;
   const h = lv.height;
-  // 地下层外墙在地铁连接口处开洞
+  // 地铁、人行连接和车辆坡道均保留真实穿墙开口。
   const ents = ctx.layout.entrances.filter((x) => x.level === lv.id);
+  const ramps = ctx.layout.ramps.filter(r => r.building === lv.building && [r.from.level, r.to.level].includes(lv.id));
   for (const e of ctx.outlineEdges(lv)) {
-    for (const [a, b] of edgeSpans(e, ents)) F.frame(e.F, () => F.get('concrete').box((a + b) / 2, lv.elev + h / 2 - 0.05, 0.2, b - a, h, 0.4, '#ced0cc'));
+    for (const [a, b] of edgeSpans(e, ents, .2, ramps)) F.frame(e.F, () => F.get('concrete').box((a + b) / 2, lv.elev + h / 2 - 0.05, 0.2, b - a, h, 0.4, '#ced0cc'));
   }
 }
 

@@ -2,6 +2,7 @@
 // 行道树与路灯、入口雨棚与门（按入口法线）、车库道闸与灯箱、坡道护栏、卸货区、一期广场小品、园区外周边楼宇、未建地块围挡。
 import * as THREE from 'three';
 import { shapeFromPoly, flatShapeGeometry } from './shell.js';
+import { cutSurfaceShapes, addCutSurfaceSlab } from './surface-shapes.js';
 import { rect, rectPoly, frame, toW, toL, lrectPoly, pointInPoly, clipConvex, distToPolyEdge, polyArea, convexOverlap } from '../../layout/geom.js';
 import { hubOutline } from '../../layout/hub.js';
 import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from './props.js';
@@ -63,6 +64,7 @@ const raisedConnections = layout => [
   ...(layout.extensions?.gateways || []).filter(g => g.elev >= 0).map(g => g.poly),
   ...(layout.extensions?.paths || []).filter(p => p.kind === 'skybridge').flatMap(p => (p.slab?.pieces || []).map(s => s.outer)),
   ...layout.buildings.flatMap(b => (b.accessKiosks || []).map(r => lrectPoly(b.frame, r))),
+  ...(layout.levels || []).flatMap(l => (l.garageKiosks || []).map(k => k.poly)),
 ];
 const siteActivityFootprints = layout => {
   const S = layout.site, ext = layout.extensions;
@@ -85,9 +87,8 @@ export function siteTreePlacement(layout) {
 export function siteGroundHoles(layout) {
   const S = layout.site;
   const outlines = layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline);
-  const raw = [...outlines, ...S.trenches, ...(S.openings || [])];
-  // 包含的洞合并，避免三期街区内的地铁梯井与街区轮廓重复剖分。
-  return raw.filter((h, i) => !raw.some((g, j) => j !== i && h.every(q => pointInPoly(q, g))));
+  // cutSurfaceShapes unions intersecting and duplicate cuts before triangulation.
+  return [...outlines, ...S.trenches, ...(S.openings || [])];
 }
 
 export function buildSite(ctx) {
@@ -99,7 +100,8 @@ export function buildSite(ctx) {
   if (layout.playable) { buildPlayableSite(ctx, holes); return; }
 
   // 草地
-  const ground = new THREE.Mesh(flatShapeGeometry(shapeFromPoly([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], holes), -0.32), mats.floor('grass', 0.95));
+  const ground = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], holes), -0.32), mats.floor('grass', 0.95));
+  ground.name = 'site-grass-cut';
   ground.receiveShadow = true;
   G.add(ground);
   // 广场：有地块的商场做"外扩铺装带 + 入口步道 + 草坪树阵"，其余广场整块铺装
@@ -112,8 +114,8 @@ export function buildSite(ctx) {
   }
   for (const p of S.plazas) {
     if (landscaped.has(p.building)) continue;
-    const inner = holes.filter((h) => h.every((q) => pointInPoly(q, p.poly)));
-    const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(p.poly, inner), -0.14), mats.floor('paving', 0.75));
+    const m = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(p.poly, holes), -0.14), mats.floor('paving', 0.75));
+    m.name = 'site-plaza-cut';
     m.receiveShadow = true;
     G.add(m);
   }
@@ -146,9 +148,9 @@ function landscape(ctx, b, holes, G, B) {
   const rots = b.rotundas.map((r) => ({ id: r.id, x: r.x, z: r.z, R: r.R + 18 }));
   const arms = b.wings.map((w) => (w.link ? { id: w.id, rot: w.rot, to: w.to, deg: w.deg } : { id: w.id, rot: w.rot, deg: w.deg, uEnd: extendOf(w) }));
   const band = clipConvex(hubOutline(rots, arms, 41), plotIn);
-  const inner = holes.filter((h) => h.every((q) => pointInPoly(q, band)));
   const pave = ctx.mats.floor('paving', 0.75);
-  const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(band, inner), -0.14), pave);
+  const m = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(band, holes), -0.14), pave);
+  m.name = 'site-landscape-cut';
   m.receiveShadow = true;
   G.add(m);
   // 入口步道：沿入口外法线直到地块边
@@ -164,7 +166,8 @@ function landscape(ctx, b, holes, G, B) {
     if (strip.length < 3) continue;
     for (const piece of subtractTowerFootprints(strip, towers)) {
       paths.push(piece);
-      const pm = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(piece), -0.1), pave);
+      const pm = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(piece, holes), -0.1), pave);
+      pm.name = 'site-entry-path-cut';
       pm.receiveShadow = true;
       G.add(pm);
     }
@@ -201,18 +204,19 @@ function landscape(ctx, b, holes, G, B) {
   addTrees(G, ctx.mats, trees, 61 + b.id.length);
 }
 
-const flatRect = (G, mat, r, y, tile) => {
-  const g = new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0).rotateX(-Math.PI / 2);
+const flatRect = (G, mat, r, y, tile, holes = []) => {
+  const g = flatShapeGeometry(cutSurfaceShapes(rectPoly(r), holes), y);
   const uv = g.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, (r.x0 + uv.getX(i) * (r.x1 - r.x0)) / tile, (r.z0 + (1 - uv.getY(i)) * (r.z1 - r.z0)) / tile);
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / tile, uv.getY(i) / tile);
   const m = new THREE.Mesh(g, mat);
-  m.position.set((r.x0 + r.x1) / 2, y, (r.z0 + r.z1) / 2);
+  m.name = 'site-road-cut';
   m.receiveShadow = true;
   G.add(m);
   return m;
 };
 
 function roads(ctx, S, B, G) {
+  const openings = [...S.trenches, ...(S.openings || [])];
   const asphalt = ctx.mats.floor('asphalt', 0.9);
   asphalt.map.repeat.set(1, 1);
   const R = Object.fromEntries(S.roads.map((r) => [r.id, r.rect]));
@@ -223,9 +227,10 @@ function roads(ctx, S, B, G) {
     rect(-10, -256, 10, -14), rect(-10, 14, 10, 256), rect(-10, -298, 10, -268), rect(-10, 268, 10, 298),
     rect(-298, -256, -286, -14), rect(-298, 14, -286, 256), rect(286, -256, 298, -14), rect(286, 14, 298, 256),
   ];
-  for (const r of pieces) flatRect(G, asphalt, r, yR, 8);
+  for (const r of pieces) flatRect(G, asphalt, r, yR, 8, openings);
   for (const d of S.driveways) {
-    const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(d), yR + 0.006), asphalt);
+    const m = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(d, openings), yR + 0.006), asphalt);
+    m.name = 'site-driveway-cut';
     m.receiveShadow = true;
     G.add(m);
   }
@@ -274,11 +279,11 @@ function roads(ctx, S, B, G) {
   // 人行道 + 路缘石
   const walk = ctx.mats.floor('paving', 0.8);
   for (const s of S.sidewalks) {
-    flatRect(G, walk, s.rect, -0.135, 4.8);
+    flatRect(G, walk, s.rect, -0.135, 4.8, openings);
     const r = s.rect;
     const horiz = r.x1 - r.x0 > r.z1 - r.z0;
-    if (horiz) for (const z of [r.z0, r.z1]) B.get('ext').boxMinMax(r.x0, -0.14, z - 0.15, r.x1, 0.02, z + 0.15, '#c9c5bc');
-    else for (const x of [r.x0, r.x1]) B.get('ext').boxMinMax(x - 0.15, -0.14, r.z0, x + 0.15, 0.02, r.z1, '#c9c5bc');
+    if (horiz) for (const z of [r.z0, r.z1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(r.x0, z - .15, r.x1, z + .15)), openings, .02, .16, '#c9c5bc');
+    else for (const x of [r.x0, r.x1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(x - .15, r.z0, x + .15, r.z1)), openings, .02, .16, '#c9c5bc');
   }
 }
 

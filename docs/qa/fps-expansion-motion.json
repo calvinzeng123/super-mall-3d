@@ -1,0 +1,1904 @@
+{
+  "qa": {
+    "start": {
+      "floor": "P1-1F",
+      "x": -135,
+      "z": -98,
+      "y": 0,
+      "slope": null,
+      "yaw": 1.8018869939907938,
+      "pitch": 0,
+      "airHeight": 0,
+      "sprinting": false
+    },
+    "samples": [
+      {
+        "t": 0.054899999976158145,
+        "p": {
+          "floor": "P1-1F",
+          "x": -135.36339609712445,
+          "z": -97.9144950359707,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 98.84710000050069,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": false,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.09379999995231629,
+        "p": {
+          "floor": "P1-1F",
+          "x": -135.62088440633426,
+          "z": -97.85390955145076,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 98.03020000100136,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.12719999992847442,
+        "p": {
+          "floor": "P1-1F",
+          "x": -135.84196691344835,
+          "z": -97.80189013801214,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 97.32880000150205,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.16049999999999998,
+        "p": {
+          "floor": "P1-1F",
+          "x": -136.06238749751924,
+          "z": -97.75002647117194,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 96.62950000000001,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.19379999995231625,
+        "p": {
+          "floor": "P1-1F",
+          "x": -136.2828080808011,
+          "z": -97.69816280451738,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 95.93020000100137,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.19379999995231625,
+        "p": {
+          "floor": "P1-1F",
+          "x": -136.2828080808011,
+          "z": -97.69816280451738,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 95.93020000100137,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.22699999999999998,
+        "p": {
+          "floor": "P1-1F",
+          "x": -136.5025667410397,
+          "z": -97.64645488446124,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 95.233,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.26049999999999995,
+        "p": {
+          "floor": "P1-1F",
+          "x": -136.72431117198607,
+          "z": -97.59427972423856,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 94.5295,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.29379999995231626,
+        "p": {
+          "floor": "P1-1F",
+          "x": -136.94473175526792,
+          "z": -97.542416057584,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 93.83020000100136,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.3271000000238418,
+        "p": {
+          "floor": "P1-1F",
+          "x": -137.16515233933882,
+          "z": -97.4905523907438,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 93.13089999949932,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.3603999999761581,
+        "p": {
+          "floor": "P1-1F",
+          "x": -137.38557292262067,
+          "z": -97.43868872408925,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 92.43160000050068,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.3937999999523163,
+        "p": {
+          "floor": "P1-1F",
+          "x": -137.60665542973476,
+          "z": -97.38666931065063,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 91.73020000100136,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.42710000002384185,
+        "p": {
+          "floor": "P1-1F",
+          "x": -137.82707601380565,
+          "z": -97.33480564381043,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 91.03089999949933,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.4607999999523163,
+        "p": {
+          "floor": "P1-1F",
+          "x": -138.05014429162753,
+          "z": -97.28231899020528,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 90.32320000100137,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.4607999999523163,
+        "p": {
+          "floor": "P1-1F",
+          "x": -138.05014429162753,
+          "z": -97.28231899020528,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 90.32320000100137,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.49379999995231627,
+        "p": {
+          "floor": "P1-1F",
+          "x": -138.2685791042016,
+          "z": -97.23092256371726,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 89.63020000100137,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.5271000000238418,
+        "p": {
+          "floor": "P1-1F",
+          "x": -138.4889996882725,
+          "z": -97.17905889687705,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 88.93089999949933,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.5605,
+        "p": {
+          "floor": "P1-1F",
+          "x": -138.71008219538658,
+          "z": -97.12703948343844,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 88.22950000000002,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.5938999999761582,
+        "p": {
+          "floor": "P1-1F",
+          "x": -138.93116470250067,
+          "z": -97.07502006999982,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 87.5281000005007,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.6271000000238419,
+        "p": {
+          "floor": "P1-1F",
+          "x": -139.15092336273926,
+          "z": -97.02331214994368,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 86.83089999949934,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.6615000000000001,
+        "p": {
+          "floor": "P1-1F",
+          "x": -139.37862510659807,
+          "z": -96.96973526903574,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 86.10850000000002,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.6938999999761583,
+        "p": {
+          "floor": "P1-1F",
+          "x": -139.5930883769675,
+          "z": -96.91927332306645,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 85.4281000005007,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.7271999999284745,
+        "p": {
+          "floor": "P1-1F",
+          "x": -139.81350896024935,
+          "z": -96.8674096564119,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 84.72880000150207,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.7605000000000001,
+        "p": {
+          "floor": "P1-1F",
+          "x": -140.03392954432024,
+          "z": -96.81554598957169,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 84.02950000000003,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.7937999999523163,
+        "p": {
+          "floor": "P1-1F",
+          "x": -140.2543501276021,
+          "z": -96.76368232291713,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 83.33020000100139,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.7937999999523163,
+        "p": {
+          "floor": "P1-1F",
+          "x": -140.2543501276021,
+          "z": -96.76368232291713,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 83.33020000100139,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.8271999999284745,
+        "p": {
+          "floor": "P1-1F",
+          "x": -140.47543263471619,
+          "z": -96.71166290947852,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 82.62880000150207,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.8605,
+        "p": {
+          "floor": "P1-1F",
+          "x": -140.69585321878708,
+          "z": -96.65979924263831,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 81.92950000000003,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.8937999999523163,
+        "p": {
+          "floor": "P1-1F",
+          "x": -140.91627380206893,
+          "z": -96.60793557598376,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 81.23020000100139,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.927,
+        "p": {
+          "floor": "P1-1F",
+          "x": -141.13603246230753,
+          "z": -96.55622765592761,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 80.53300000000003,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.9603999999761582,
+        "p": {
+          "floor": "P1-1F",
+          "x": -141.35711496942162,
+          "z": -96.504208242489,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 79.83160000050071,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 0.9937999999523164,
+        "p": {
+          "floor": "P1-1F",
+          "x": -141.5781974765357,
+          "z": -96.45218882905039,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 79.1302000010014,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.027100000023842,
+        "p": {
+          "floor": "P1-1F",
+          "x": -141.7986180606066,
+          "z": -96.40032516221018,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 78.43089999949936,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.0606999999284745,
+        "p": {
+          "floor": "P1-1F",
+          "x": -142.02102441459618,
+          "z": -96.3479942553891,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 77.72530000150208,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.0937999999523165,
+        "p": {
+          "floor": "P1-1F",
+          "x": -142.24012115100254,
+          "z": -96.29644208211701,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 77.0302000010014,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.0937999999523165,
+        "p": {
+          "floor": "P1-1F",
+          "x": -142.24012115100254,
+          "z": -96.29644208211701,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 77.0302000010014,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.1273999999761584,
+        "p": {
+          "floor": "P1-1F",
+          "x": -142.46252750578122,
+          "z": -96.24411117511028,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 76.32460000050072,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.1603999999761583,
+        "p": {
+          "floor": "P1-1F",
+          "x": -142.68096231835528,
+          "z": -96.19271474862225,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 75.63160000050073,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.1937999999523163,
+        "p": {
+          "floor": "P1-1F",
+          "x": -142.90204482546937,
+          "z": -96.14069533518364,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 74.93020000100141,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.2271999999284744,
+        "p": {
+          "floor": "P1-1F",
+          "x": -143.12312733258346,
+          "z": -96.08867592174502,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 74.2288000015021,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.2603999999761581,
+        "p": {
+          "floor": "P1-1F",
+          "x": -143.34288599282206,
+          "z": -96.03696800168888,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 73.53160000050073,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.2937999999523162,
+        "p": {
+          "floor": "P1-1F",
+          "x": -143.56396849993615,
+          "z": -95.98494858825026,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 72.83020000100142,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.3271000000238418,
+        "p": {
+          "floor": "P1-1F",
+          "x": -143.78438908400705,
+          "z": -95.93308492141006,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 72.13089999949938,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 0
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      },
+      {
+        "t": 1.3604999999999998,
+        "p": {
+          "floor": "P1-1F",
+          "x": -144.00547159112114,
+          "z": -95.88106550797144,
+          "y": 0,
+          "slope": null,
+          "eye": 1.7657021599078562,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.14570215990785598,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 71.42950000000006,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.14570215990785598,
+          "velocity": 4.332400000333786,
+          "landing": 0,
+          "jumpCooldown": 0.3166000000238418,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.393799999952316,
+        "p": {
+          "floor": "P1-1F",
+          "x": -144.225892174403,
+          "z": -95.82920184131689,
+          "y": 0,
+          "slope": null,
+          "eye": 1.8944466197568466,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.2744466197568464,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 70.73020000100142,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.2744466197568464,
+          "velocity": 3.866200001001358,
+          "landing": 0,
+          "jumpCooldown": 0.2833000000715255,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.393799999952316,
+        "p": {
+          "floor": "P1-1F",
+          "x": -144.225892174403,
+          "z": -95.82920184131689,
+          "y": 0,
+          "slope": null,
+          "eye": 1.8944466197568466,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.2744466197568464,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 70.73020000100142,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.2744466197568464,
+          "velocity": 3.866200001001358,
+          "landing": 0,
+          "jumpCooldown": 0.2833000000715255,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.4271000000238416,
+        "p": {
+          "floor": "P1-1F",
+          "x": -144.44631275847388,
+          "z": -95.77733817447668,
+          "y": 0,
+          "slope": null,
+          "eye": 2.0076666200000335,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.3876666200000334,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 70.03089999949938,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.3876666200000334,
+          "velocity": 3.4000000000000004,
+          "landing": 0,
+          "jumpCooldown": 0.24999999999999994,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.4604999999999997,
+        "p": {
+          "floor": "P1-1F",
+          "x": -144.66739526558797,
+          "z": -95.72531876103807,
+          "y": 0,
+          "slope": null,
+          "eye": 2.105608779941268,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.48560877994126794,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 69.32950000000007,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.48560877994126794,
+          "velocity": 2.9324000003337862,
+          "landing": 0,
+          "jumpCooldown": 0.2166000000238418,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.493799999952316,
+        "p": {
+          "floor": "P1-1F",
+          "x": -144.88781584886982,
+          "z": -95.67345509438351,
+          "y": 0,
+          "slope": null,
+          "eye": 2.1877332398570157,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.5677332398570156,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 68.63020000100143,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.5677332398570156,
+          "velocity": 2.4662000010013583,
+          "landing": 0,
+          "jumpCooldown": 0.18330000007152553,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.5271000000238415,
+        "p": {
+          "floor": "P1-1F",
+          "x": -145.1082364329407,
+          "z": -95.62159142754331,
+          "y": 0,
+          "slope": null,
+          "eye": 2.254333240000067,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.6343332400000667,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 67.93089999949939,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.6343332400000667,
+          "velocity": 2,
+          "landing": 0,
+          "jumpCooldown": 0.14999999999999997,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.5603999999761577,
+        "p": {
+          "floor": "P1-1F",
+          "x": -145.32865701622256,
+          "z": -95.56972776088875,
+          "y": 0,
+          "slope": null,
+          "eye": 2.30540877994916,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.6854087799491596,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 67.23160000050075,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.6854087799491596,
+          "velocity": 1.533800000667572,
+          "landing": 0,
+          "jumpCooldown": 0.11670000004768369,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.593699999928474,
+        "p": {
+          "floor": "P1-1F",
+          "x": -145.54907759950441,
+          "z": -95.5178640942342,
+          "y": 0,
+          "slope": null,
+          "eye": 2.340959859942713,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.7209598599427127,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 66.53230000150211,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.7209598599427127,
+          "velocity": 1.067600001335144,
+          "landing": 0,
+          "jumpCooldown": 0.08340000009536741,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.6271000000238414,
+        "p": {
+          "floor": "P1-1F",
+          "x": -145.7701601074076,
+          "z": -95.46584468060993,
+          "y": 0,
+          "slope": null,
+          "eye": 2.360999859999933,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.7409998599999332,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 65.8308999994994,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.7409998599999332,
+          "velocity": 0.6000000000000001,
+          "landing": 0,
+          "jumpCooldown": 0.04999999999999998,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.6603999999761576,
+        "p": {
+          "floor": "P1-1F",
+          "x": -145.99058069068946,
+          "z": -95.41398101395538,
+          "y": 0,
+          "slope": null,
+          "eye": 2.3654554000157835,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.7454554000157833,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 65.13160000050075,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.7454554000157833,
+          "velocity": 0.13380000066757208,
+          "landing": 0,
+          "jumpCooldown": 0.016700000047683697,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.6936999999284739,
+        "p": {
+          "floor": "P1-1F",
+          "x": -146.2110012739713,
+          "z": -95.36211734730082,
+          "y": 0,
+          "slope": null,
+          "eye": 2.354386480076094,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.7343864800760936,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 64.43230000150211,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.7343864800760936,
+          "velocity": -0.3323999986648559,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.6936999999284739,
+        "p": {
+          "floor": "P1-1F",
+          "x": -146.2110012739713,
+          "z": -95.36211734730082,
+          "y": 0,
+          "slope": null,
+          "eye": 2.354386480076094,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.7343864800760936,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 64.43230000150211,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.7343864800760936,
+          "velocity": -0.3323999986648559,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.7271000000238412,
+        "p": {
+          "floor": "P1-1F",
+          "x": -146.4320837818745,
+          "z": -95.31009793367656,
+          "y": 0,
+          "slope": null,
+          "eye": 2.3276664799997997,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.7076664799997997,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 63.7308999994994,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.7076664799997997,
+          "velocity": -0.7999999999999999,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.7603999999761575,
+        "p": {
+          "floor": "P1-1F",
+          "x": -146.65250436515635,
+          "z": -95.258234267022,
+          "y": 0,
+          "slope": null,
+          "eye": 2.285502020082407,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.665502020082407,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 63.03160000050076,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.665502020082407,
+          "velocity": -1.266199999332428,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.7936999999284737,
+        "p": {
+          "floor": "P1-1F",
+          "x": -146.8729249484382,
+          "z": -95.20637060036745,
+          "y": 0,
+          "slope": null,
+          "eye": 2.2278131002094748,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.6078131002094745,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 62.33230000150212,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.6078131002094745,
+          "velocity": -1.732399998664856,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.8269999999999993,
+        "p": {
+          "floor": "P1-1F",
+          "x": -147.0933455325091,
+          "z": -95.15450693352724,
+          "y": 0,
+          "slope": null,
+          "eye": 2.1545997200633336,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.5345997200633335,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 61.63300000000008,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.5345997200633335,
+          "velocity": -2.198599999666214,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.8606999999284737,
+        "p": {
+          "floor": "P1-1F",
+          "x": -147.31641381033097,
+          "z": -95.1020202799221,
+          "y": 0,
+          "slope": null,
+          "eye": 2.06460724029933,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.4446072402993297,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 60.925300001502116,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.4446072402993297,
+          "velocity": -2.670399998664856,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.8938999999761574,
+        "p": {
+          "floor": "P1-1F",
+          "x": -147.53617247056957,
+          "z": -95.05031235986596,
+          "y": 0,
+          "slope": null,
+          "eye": 1.9605186001719952,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.3405186001719951,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 60.22810000050076,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.3405186001719951,
+          "velocity": -3.135199999332428,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.9269999999999994,
+        "p": {
+          "floor": "P1-1F",
+          "x": -147.75526920697592,
+          "z": -94.99876018659387,
+          "y": 0,
+          "slope": null,
+          "eye": 1.841404940097246,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.2214049400972461,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 59.53300000000008,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.2214049400972461,
+          "velocity": -3.598599999666214,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.9604999999999995,
+        "p": {
+          "floor": "P1-1F",
+          "x": -147.9770136379223,
+          "z": -94.9465850263712,
+          "y": 0,
+          "slope": null,
+          "eye": 1.705140340108428,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0.08514034010842791,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 58.82950000000008,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0.08514034010842791,
+          "velocity": -4.067599999666214,
+          "landing": 0,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": true
+        }
+      },
+      {
+        "t": 1.993699999928474,
+        "p": {
+          "floor": "P1-1F",
+          "x": -148.19677229737187,
+          "z": -94.8948771065007,
+          "y": 0,
+          "slope": null,
+          "eye": 1.62,
+          "yaw": 1.8018869939907938,
+          "pitch": 0,
+          "airHeight": 0,
+          "sprinting": true
+        },
+        "m": {
+          "stamina": 58.13230000150212,
+          "exhausted": false,
+          "sprinting": true,
+          "height": 0,
+          "velocity": 0,
+          "landing": 1,
+          "jumpCooldown": 0,
+          "jumps": 1
+        },
+        "viewmodel": {
+          "sprinting": true,
+          "airborne": false
+        }
+      }
+    ]
+  },
+  "maxHeight": 0.7454554000157833,
+  "landed": true
+}

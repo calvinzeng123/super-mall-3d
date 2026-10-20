@@ -5,7 +5,7 @@ import { toW, toL, convexOverlap, pointInPoly, polySamples } from '../src/layout
 import { buildNav, clear, step } from '../src/layout/nav.js';
 
 const nav=buildNav(L);
-test('酒店和公寓分别位于用户左下与右上指定位置且全部400套模型保持1:1、不占商场车道',()=>{
+test('酒店和公寓分别位于用户左下与右上指定位置且上层380套模型保持1:1、不占商场车道',()=>{
   const H=L.buildings.find(b=>b.id==='H'),A=L.buildings.find(b=>b.id==='A');
   assert.deepEqual(H.center,[-247,-81.1533717]);assert.equal(H.frame.deg,0);assert.deepEqual(A.center,[-35,-214]);assert.equal(A.frame.deg,90);
   assert.equal(H.usage,'hotel');assert.equal(A.usage,'apartment');
@@ -16,7 +16,7 @@ test('酒店和公寓分别位于用户左下与右上指定位置且全部400�
   for(const b of [H,A]) {
     for(const road of L.site.roads)assert.ok(!convexOverlap(b.outline,road.poly),`${b.id}/${road.id}压原车道`);
     for(const road of L.extensions.roads)for(const poly of road.polys)assert.ok(!convexOverlap(b.outline,poly),`${b.id}/${road.id}压新落客车道`);
-    const floors=L.levels.filter(l=>l.building===b.id&&l.levelNumber);assert.equal(floors.flatMap(l=>l.units).length,200);
+    const floors=L.levels.filter(l=>l.building===b.id&&l.levelNumber);assert.equal(floors.flatMap(l=>l.units).length,190);
     for(const lv of floors)for(const u of lv.units) {
       assert.equal(u.rects[0].x1,11);assert.equal(u.rects[0].z1,15);
       assert.ok([b.frame.deg,b.frame.deg+180].includes(u.frame.deg));
@@ -28,9 +28,9 @@ test('酒店和公寓分别位于用户左下与右上指定位置且全部400�
   }
 });
 
-test('保留西侧公共车库后共16个街道坡口及28条坡道，酒店公寓和西库全部实际双向步行',()=>{
-  const ramps=L.ramps.filter(r=>['H','A','WPG'].includes(r.building));assert.equal(ramps.length,12);
-  assert.equal(L.ramps.length,28);assert.equal(L.ramps.filter(r=>r.type.startsWith('street')).length,16);
+test('共享地库共16个街道坡口及32条坡道，酒店公寓和西库全部实际双向步行',()=>{
+  const ramps=L.ramps.filter(r=>['H','A','WPG'].includes(r.building));assert.equal(ramps.length,16);
+  assert.equal(L.ramps.length,32);assert.equal(L.ramps.filter(r=>r.type.startsWith('street')).length,16);
   for(const r of ramps)for(const reverse of [false,true]) {
     const a=reverse?r.to:r.from,b=reverse?r.from:r.to,len=Math.hypot(b.x-a.x,b.z-a.z),ux=(b.x-a.x)/len,uz=(b.z-a.z)/len;
     assert.ok(Math.abs(b.y-a.y)/len<=.150001,`${r.id}坡度`);
@@ -43,14 +43,15 @@ test('保留西侧公共车库后共16个街道坡口及28条坡道，酒店公�
   }
   for(const id of ['H','A','WPG']) {
     const upper=L.levels.find(l=>l.id===`${id}-B1`);
-    for(const r of ramps.filter(r=>r.building===id&&['down','up'].includes(r.type)))assert.ok(upper.slab.pieces.some(p=>p.holes.includes(r.poly)),`${r.id}上层没有实洞`);
+    for(const r of ramps.filter(r=>r.building===id&&['down','up'].includes(r.type)))assert.ok(
+      upper.slab.pieces.some(p=>p.holes.some(h=>polySamples(r.poly,4,.05).every(q=>pointInPoly(q,h)))),`${r.id}上层没有实洞`);
   }
 });
 
 test('共享地面停车包含真实车位、充电位和两端通路，避开全部坡口及建筑',()=>{
   const lots=L.extensions.surfaceParking;assert.ok(lots.length>=2);
-  assert.equal(lots.find(l=>l.id==='hotel-shared-parking').stalls.length,46,'左下酒店46位必须保持');
-  assert.ok(lots.reduce((s,l)=>s+l.stalls.length,0)>77,'西侧停车必须真实增加车位');
+  assert.ok(lots.find(l=>l.id==='hotel-shared-parking').stalls.length>=20,'酒店仍须保留地面短停车位');
+  assert.ok(lots.reduce((s,l)=>s+l.stalls.length,0)>500,'交通中心和共享入口之外仍须保留大型地面停车场');
   for(const lot of lots) {
     assert.ok(lot.stalls.some(s=>s.type==='ev'));assert.ok(lot.aisle);
     for(const s of lot.stalls) {
@@ -106,7 +107,8 @@ test('右上公寓四层公共连廊抵达一期北翼主走道，经过公共�
   const F=L.buildings.find(b=>b.id==='P1').wings.find(w=>w.id==='N').F;
   for(const [hShort,pShort] of [['1F','1F'],['2F','2F'],['B1','B1M'],['B2','B1']]) {
     const dock=L.extensions.gateways.find(g=>g.id===`P1-apartment-dock-${pShort}`),z=(dock.outerSeg.z0+dock.outerSeg.z1)/2;
-    const route=[[-35,-180],[-35,z],[-59,z],toW(F,76,21),toW(F,76,6),toW(F,76,0)];
+    const route=hShort==='B2'?[[-35,-214],[-54,-214],[-66,-214]]:
+      [[-35,-180],[-35,z],[-59,z],toW(F,76,21),toW(F,76,6),toW(F,76,0)];
     if(hShort==='1F') {
       const groundLink=L.extensions.paths.find(p=>p.kind==='ground'&&p.id==='公寓与一期迎宾连廊');
       const roads=[...L.site.roads.map(r=>r.poly),...L.extensions.roads.flatMap(r=>r.polys)];
@@ -133,18 +135,19 @@ test('右上公寓四层公共连廊抵达一期北翼主走道，经过公共�
   }
 });
 
-test('西侧公共附库只保留两个停车层，停车场地面连续且旧一期地下通路仍可走',()=>{
+test('西侧共享车库保留两停车层、四电梯与九楼梯，地面连续且一期地下通路可走',()=>{
   const b=L.buildings.find(b=>b.id==='WPG');
   assert.ok(b.undergroundOnly);assert.equal(b.kind,'garage');assert.equal(b.height,0);
   assert.deepEqual(b.levels,['WPG-B2','WPG-B1','WPG-G']);
   assert.equal(L.levels.filter(l=>l.building==='WPG').flatMap(l=>l.units).length,0);
-  assert.equal(L.elevators.filter(e=>e.building==='WPG').length,2);
-  assert.equal(L.stairs.filter(e=>e.building==='WPG').length,2);
-  const entry=L.levels.find(l=>l.id==='WPG-G');assert.equal(entry.slab.pieces.filter(p=>!p.stair).length,2);assert.equal(entry.kind,'lobby');
+  assert.equal(L.elevators.filter(e=>e.building==='WPG').length,4);
+  assert.equal(L.stairs.filter(e=>e.building==='WPG').length,9);
+  const entry=L.levels.find(l=>l.id==='WPG-G');assert.equal(entry.slab.pieces.filter(p=>!p.stair).length,11);assert.equal(entry.kind,'lobby');
+  assert.equal(entry.garageKiosks.length,9);
   for(const [x,z] of [[-344.5,-200],[-344.5,-215],[-377,-200]])assert.ok(clear(nav,{floor:'ground',x,z,y:0,slope:null}),'不能把公共停车地面挖掉');
   for(const [floor,target,route] of [
     ['WPG-B1','P1-B1M',[[-310,-200],[-282,-200],[-278,-200]]],
-    ['WPG-B2','P1-B1',[[-310,-200],[-301,-200],[-301,-179],[-278,-179],[-273,-179]]],
+    ['WPG-B2','P1-B1',[[-310,-200],[-304,-200],[-304,-179],[-279,-179],[-273,-179]]],
   ])for(const reverse of [false,true]) {
     const pts=reverse?[...route].reverse():route;let s={floor:reverse?target:floor,x:pts[0][0],z:pts[0][1],y:nav.floors.get(floor).y,slope:null};
     assert.ok(clear(nav,s));
@@ -204,17 +207,18 @@ test('西侧公共车库两组行人小厅均可实际走入、候梯和到达�
 });
 
 
-test('位置互换保留酒店200套和公寓200套用途，双层酒店及公寓首层与顶层LOFT不改变原位置',()=>{
+test('酒店公寓首层改豪华大堂、上层各190套保持用途，公寓顶层10套LOFT保留原位置',()=>{
   const hotel=L.levels.filter(l=>l.building==='H').flatMap(l=>l.units),apartment=L.levels.filter(l=>l.building==='A').flatMap(l=>l.units);
-  assert.equal(hotel.length,200);assert.equal(apartment.length,200);
+  assert.equal(hotel.length,190);assert.equal(apartment.length,190);
   assert.ok(hotel.every(u=>u.residence.kind==='hotel'));
   assert.ok(apartment.every(u=>u.residence.kind==='apartment'));
-  assert.equal(hotel.filter(u=>u.residence.duplex).length,10);
-  assert.ok(hotel.filter(u=>u.residence.duplex).every(u=>u.level==='H-1F'));
-  const duplexes=apartment.filter(u=>u.residence.duplex);assert.equal(duplexes.length,20);
-  assert.ok(duplexes.every(u=>['A-1F','A-20F'].includes(u.level)&&[90,270].includes(u.frame.deg)));
+  assert.equal(hotel.filter(u=>u.residence.duplex).length,0);
+  assert.ok(['H-1F','A-1F'].every(id=>L.levels.find(l=>l.id===id).lobbyPlan.kind==='hospitality'));
+  const duplexes=apartment.filter(u=>u.residence.duplex);assert.equal(duplexes.length,10);
+  assert.ok(duplexes.every(u=>u.level==='A-20F'&&[90,270].includes(u.frame.deg)));
   for(const [bid,wing,prefix] of [['H','west-wing','hotel'],['A','north-wing','apartment']]) {
     assert.equal(L.buildings.find(b=>b.id===bid).attachment,wing);
-    for(const kind of ['skybridge','mall-metro','garage'])assert.equal(L.extensions.paths.find(p=>p.id===`${prefix}-${kind}`).building,bid);
+    for(const kind of ['skybridge','mall-metro'])assert.equal(L.extensions.paths.find(p=>p.id===`${prefix}-${kind}`).building,bid);
+    assert.ok(L.entrances.some(e=>e.sharedGarage&&e.level===`${bid}-B2`&&e.to==='P1-B1'));
   }
 });

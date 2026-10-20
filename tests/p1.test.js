@@ -1,7 +1,7 @@
 // 一期 云澜汇专项规则（规格第 4 节、第 10 节 1、2、5、6、8、9、10、12、13 条）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { L, lvl, levelsOf, inWalk, inSite, inBridge, midOf, directionCount, segProbes } from './helpers.js';
+import { L, lvl, levelsOf, inWalk, inSite, inBridge, onSlab, midOf, directionCount, segProbes } from './helpers.js';
 import { convexOverlap, pointInPoly } from '../src/layout/geom.js';
 
 const P = (s) => lvl(`P1-${s}`);
@@ -61,28 +61,36 @@ test('一期入口：≥4 个、朝向 ≥3 个方向、1 个主入口；内侧�
       }
       continue;
     }
-    assert.ok(!lv.slab.pieces.some((s) => pointInPoly(out, s.outer)), `${e.name} 外侧仍在楼内`);
+    if (e.sharedGarage && lv.elev < 0)
+      assert.ok(!onSlab(lv, out), `${e.name} 外侧仍在同一张共享地库楼板内`);
+    else assert.ok(!lv.slab.pieces.some((s) => pointInPoly(out, s.outer)), `${e.name} 外侧仍在楼内`);
     if (e.to === 'site') assert.ok(inSite(out), `${e.name} 外侧不在场地步行区`);
     else if (e.to === 'bridge') { if (L.bridges) assert.ok(inBridge(out), `${e.name} 外侧不在天桥桥面上`); }
     else assert.ok(inWalk(lvl(e.to), out), `${e.name} 外侧不在 ${e.to} 走道上`);
   }
 });
 
-test('一期车库：入口、出口坡道各 1 且不重叠，坡度 ≤15%，两端接车道；B1↔B2 双向', () => {
-  const R = L.ramps.filter((r) => r.building === 'P1');
+test('一期共享车库：四组分离街道进出口坡度 ≤15%，两端接车道；B1↔B2 双向', () => {
+  const R = L.ramps.filter((r) => ['P1', 'H', 'A', 'WPG'].includes(r.building));
   const inR = R.filter((r) => r.type === 'street-in');
   const outR = R.filter((r) => r.type === 'street-out');
-  assert.equal(inR.length, 1);
-  assert.equal(outR.length, 1);
-  assert.ok(!convexOverlap(inR[0].poly, outR[0].poly), '入口与出口坡道重叠');
+  assert.equal(inR.length, 4);
+  assert.equal(outR.length, 4);
+  assert.equal(new Set(inR.map(r => r.quadrant)).size, 4);
+  const street = [...inR, ...outR];
+  for (let i = 0; i < street.length; i++) for (const b of street.slice(i + 1))
+    assert.ok(!convexOverlap(street[i].poly, b.poly), `${street[i].id}/${b.id} 坡道重叠`);
   assert.ok(R.some((r) => r.type === 'down' && r.from.level === 'P1-B1' && r.to.level === 'P1-B2'));
   assert.ok(R.some((r) => r.type === 'up' && r.from.level === 'P1-B2' && r.to.level === 'P1-B1'));
   for (const r of R) {
     const h = Math.hypot(r.to.x - r.from.x, r.to.z - r.from.z);
     assert.ok(Math.abs(r.to.y - r.from.y) / h <= 0.15 + 1e-9, `${r.id} 坡度过大`);
     for (const end of [r.from, r.to]) {
-      if (end.level === 'street') assert.ok(L.site.driveways.some((d) => pointInPoly([end.x, end.z], d)), `${r.id} 地面端没有接到车道`);
-      else assert.ok(inWalk(lvl(end.level), [end.x, end.z]), `${r.id} 在 ${end.level} 的端点没有接到车道`);
+      const sign = end === r.from ? -1 : 1;
+      const outside = [end.x + sign * (r.to.x - r.from.x) / h * .2,
+        end.z + sign * (r.to.z - r.from.z) / h * .2];
+      if (end.level === 'street') assert.ok(L.site.driveways.some((d) => pointInPoly(outside, d)), `${r.id} 地面端没有接到车道`);
+      else assert.ok(inWalk(lvl(end.level), outside), `${r.id} 在 ${end.level} 的端点没有接到车道`);
     }
   }
 });

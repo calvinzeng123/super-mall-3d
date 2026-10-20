@@ -24,18 +24,18 @@ function go(s, u, p, audit = null) {
 }
 const reached = (s, u, p) => Math.hypot(...toL(u.frame, s.x, s.z).map((v, i) => v - p[i])) < .025;
 
-test('模型套房覆盖酒店公寓400户和30套夹层，住宅大堂改造后合计748住户', () => {
-  assert.equal(homes.length, 400);
-  assert.equal(duplexes.length, 30);
-  assert.ok(duplexes.every(({ lv }) => ['H-1F','A-1F','A-20F'].includes(lv.id) && lv.height === 6.5));
+test('模型套房覆盖酒店公寓380户和10套顶层夹层，六栋独立首层大堂后合计728住户', () => {
+  assert.equal(homes.length, 380);
+  assert.equal(duplexes.length, 10);
+  assert.ok(duplexes.every(({ lv }) => lv.id === 'A-20F' && lv.height === 6.5));
   assert.equal(L.levels.filter(l => l.building === 'H' && l.levelNumber).length, 20);
   assert.equal(L.levels.filter(l => l.building === 'A' && l.levelNumber).length, 20);
-  assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 748);
+  assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 728);
   const streetLandings = L.buildings.reduce((n, b) => n + (b.access?.surfaces.length || 0), 0) + (L.bridges?.access?.surfaces.length || 0);
-  assert.equal(nav.floors.size, L.levels.length + 2 + 30 + streetLandings);
+  assert.equal(nav.floors.size, L.levels.length + 2 + 10 + streetLandings);
 });
 
-test('30套复式从入户经新侧门逐步上下楼，可达夹层床侧和书桌，再回到原层', () => {
+test('10套顶层复式从入户经新侧门逐步上下楼，可达夹层床侧和书桌，再回到原层', () => {
   for (const { lv, u } of duplexes) {
     const d = u.residence.duplex;
     let s = state(lv, u, [5.5, -.8]), climbed = 0, descended = 0;

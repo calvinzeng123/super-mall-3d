@@ -1,6 +1,6 @@
 # 封锁行动 · 手机入口与操作界面
 
-2026-10-19。实现文件为 `src/launcher.js` 与 `src/fps/hud.js`。全部为原生 DOM 与内嵌样式，不引入 UI 框架、字体下载、额外 WebGL 上下文或全屏背景模糊。
+2026-10-20。实现文件为 `src/launcher.js` 与 `src/fps/hud.js`。全部为原生 DOM 与内嵌样式，不引入 UI 框架、字体下载、额外 WebGL 上下文或全屏背景模糊。
 
 ## 视觉与入口
 
@@ -31,9 +31,11 @@ const hud = createFPSHUD({
 });
 ```
 
-- `fire` / `sprint`：`{ pressed: boolean }`，松手、取消、暂停与页面失焦均释放。
+- `fire`：`{ pressed: boolean }`，松手、取消、暂停与页面失焦均释放。
+- `sprint`：`{ active: boolean }`，点击切换持续冲刺，再推动摇杆；暂停和失焦会释放。
 - `ads` / `crouch`：`{ active: boolean }`。
-- `reload` / `swap` / `interact` / `heal`：点击调用。
+- `reload` / `swap` / `interact` / `heal` / `jump`：点击调用；跳跃也纳入拖动和横竖屏独立布局。
+- `extract-route` 切换车辆 / 直升机；`firemode` 切换 SMG 全自动 / 两连发；`lift` 传 `{ id, floor }`，游戏校验候梯位置后启动连续乘梯。
 - `squad`：`{ command: 'follow' | 'hold' | 'cover' }`。
 - `order`：`{ text }`，由游戏解析或请求后端；输入框不直接调用模型，不暴露密钥。
 - `pause`：`{ paused }`；`restart` / `exit` 由启动与游戏层处理。
@@ -50,10 +52,12 @@ const hud = createFPSHUD({
   teammate: { name, hp, status, command },
   interactLabel, extracting, // extracting 为 0..1，-1/false/null 隐藏。
   medkits, healing, ads, crouching, message, hit, damaged,
+  stamina, sprinting, sprintRequested, airborne, movementLabel,
+  extractionLabel, fireMode, threatLabel,
 }
 ```
 
-`hud.marker` 是供游戏投影导航标记的 DOM 容器；`hud.map` 是默认隐藏的备用容器。`setPaused(bool)` 只同步界面，不反向发送 pause 动作；玩家点击暂停、设置或编辑器才会调用 pause 回调。`showSettings()`、`editControls()` 可程序打开对应界面。
+`hud.marker` 是供游戏投影导航标记的 DOM 容器；`hud.map` 是默认隐藏的备用容器。`setPaused(bool)` 只同步界面，不反向发送 pause 动作；玩家点击暂停、设置或编辑器才会调用 pause 回调。`showSettings()`、`editControls()` 可程序打开对应界面；`showLiftStops(link,currentFloor)` 显示实际停靠楼层，不提供任意传送。
 
 结果接口 `showResult({success,title,subtitle,kills,shots,accuracy,time,intel,teammate})`：`accuracy` 是 **0–100 百分数**，`time` 是秒，`intel` 是 0–2，兼容旧布尔字段并显示 `0/2`–`2/2`。`clearResult()` / `reset()` 隐藏结果与准星状态并恢复普通 HUD，不重建模型。`notify(text)` 在暂停时也更新指令反馈，不把消息藏在菜单后面。`dispose()` 释放监听器、计时器和 DOM。
 
@@ -67,6 +71,8 @@ const hud = createFPSHUD({
 
 ## 验证范围
 
-`docs/qa/fps-ui-controls.json` 记录独立界面检查。34 项浏览器断言覆盖入口延迟、回调、按住释放、三触点同时移动/开火/转向、暂停、文字指令、设置保存、拖动不触发开火、横竖屏独立、取消/恢复、结果/重新开始；并验证 375×667、667×375、430×932、932×430 的 140% 默认控制位置不越界和不相互覆盖。`tests/fps-hud.test.js` 验证损坏存储、隔离复制与屏幕边缘约束。
+`docs/qa/fps-ui-controls.json` 记录独立界面检查。上一版的 34 项浏览器断言覆盖入口延迟、回调、按住释放、三触点同时移动/开火/转向、暂停、文字指令、设置保存、拖动不触发开火、横竖屏独立、取消/恢复、结果/重新开始；并验证 375×667、667×375、430×932、932×430 的 140% 默认控制位置不越界和不相互覆盖。`tests/fps-hud.test.js` 验证损坏存储、隔离复制与屏幕边缘约束。
 
 `fps-hud-layout-preview-*` 截图是使用既有场景图片作背景的**独立 UI 预览**，不构成真实游戏截图或物理手机验收。完整游戏流程、资源加载、帧率和上线验收由本轮主游戏 QA 记录另行说明。
+
+本轮冲刺、跳跃、双撤离和电梯的真实浏览器验收见 [扩展 QA](fps-expansion-qa.md)。

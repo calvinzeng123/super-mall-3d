@@ -40,6 +40,8 @@ import { createSuiteLighting } from './suite-lighting.js';
 import { loadResidentialAssets } from './residential-asset.js';
 import { createResidentialLighting } from './residential-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
+import { createExploreVisibility } from './explore-visibility.js';
+import { buildTransitCenter } from './build/transit-center.js';
 
 const EXPLODE_GAP = 13;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -191,6 +193,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   onProgress('建造云澜汇酒店、公寓与住宅', 0.96);
   await nextFrame();
   buildHospitality(ctx);
+  buildTransitCenter(ctx);
   const towerIds = new Set(layout.buildings.filter(b => b.kind === 'tower').map(b => b.id));
   buildParking({ ...ctx, layout: { ...layout,
     buildings: layout.buildings.filter(b => towerIds.has(b.id)),
@@ -218,17 +221,19 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   });
 
   // ---------- 状态与视图 ----------
-  const state = { building: null, focus: null, exploded: false, flows: false, labels: true, night: false, selected: null, touring: false, explore: null };
+  const state = { building: null, focus: null, exploded: false, flows: false, labels: !MOBILE, night: false, selected: null, touring: false, explore: null };
   const listeners = new Set();
   const emit = () => listeners.forEach((fn) => fn(state));
   const highlight = makeHighlight(scene);
   const residenceCache = new Map();
+  const resolveExploreVisibility = createExploreVisibility(layout);
+  let visibleExploreLevels = new Set();
   ctx.dynamic.push({ name: 'suite-floor-visibility', update(dt, elapsed, app) {
     for (const result of residenceCache.values()) result.update?.(app);
   } });
   function ensureTowerFloor(id) {
     const L = ctx.levels[id];
-    if (!L || ctx.bById[L.building]?.kind !== 'tower') return;
+    if (!L || ctx.bById[L.building]?.kind !== 'tower' || !L.lv.units.some(u => u.residence)) return;
     if (!residenceCache.has(id)) {
       const result = buildResidenceFloor(ctx, L);
       L.base.add(result.group);
@@ -255,7 +260,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     setHospitalityCut(ctx, B.b.id, !explore && selectedLevel && selectedLevel.kind !== 'roof' ? selectedLevel.elev + 0.05 : Infinity);
     if (B.exterior) B.exterior.visible = true;
     for (const L of B.levels) {
-      const active = L.lv.id === wanted;
+      const active = L.lv.id === wanted || (!!explore && visibleExploreLevels.has(L.lv.id) && L.lv.elev <= 0);
       const common = (!explore && !focus && (L.lv.short === '1F' || L.lv.kind === 'roof'))
         || (!!explore && !explore.under && L.lv.kind === 'roof');
       L.group.visible = active || common;
@@ -275,11 +280,14 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     const lv = ctx.lvById[ex ? ex.level : state.focus];
     const under = ex ? ex.under : !!lv && lv.elev < 0;
     const elevation = lv?.elev ?? camera.position.y - 1.62;
-    if (ctx.hospitality?.connections) ctx.hospitality.connections.visible = !under;
+    if (ctx.hospitality?.connections) ctx.hospitality.connections.visible = !!ex || !under;
     for (const record of ctx.hospitality?.underground || []) {
       const path = record.paths?.[0] || record.path;
       const y = path?.points?.[0]?.[1];
-      record.group.visible = !!under && Math.abs(y - elevation) < 0.6;
+      record.group.visible = ex
+        ? (record.paths || [record.path]).some(p => visibleExploreLevels.has(p?.level)
+          || visibleExploreLevels.has(p?.from) || visibleExploreLevels.has(p?.to))
+        : !!under && Math.abs(y - elevation) < 0.6;
     }
   }
 
@@ -289,6 +297,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
    */
   function applyExploreVisibility() {
     const ex = state.explore;
+    visibleExploreLevels = resolveExploreVisibility(ex);
     for (const B of Object.values(ctx.buildings)) {
       if (B.b.kind === 'tower') { towerVisibility(B, ex); continue; }
       const metro = B.b.kind === 'metro';
@@ -296,9 +305,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       const peek = B.b.id === ex.near;
       for (const L of B.levels) {
         const lv = L.lv;
-        L.group.visible = B.b.undergroundOnly ? ex.under || lv.elev >= 0 : metro ? inside || lv.short === 'B1' : true;
+        const connected = visibleExploreLevels.has(lv.id);
+        L.group.visible = B.b.undergroundOnly ? connected || lv.elev >= 0 : metro ? inside || connected || lv.short === 'B1' : true;
         L.base.visible = (inside && (ex.under || lv.kind !== 'parking')) || (peek && lv.elev >= 0)
-          || lv.kind === 'roof' || (B.b.kind === 'street' && lv.elev >= 0);
+          || connected || lv.kind === 'roof' || (B.b.kind === 'street' && lv.elev >= 0);
         L.facade.visible = !metro;
         L.shell.visible = true;
         L.people.visible = L.base.visible;

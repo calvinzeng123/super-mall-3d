@@ -27,7 +27,9 @@ export function addForecourt(site) {
     { id:'north-reading', width:6, entrance:'P1-SQ-E', points:[[-160,-200],[-130,-200],[-130,-221]] },
     { id:'east-court', width:6, entrance:'P1-E', points:[[-73.34,-114.75],[-61,-120],[-24,-120]] },
     { id:'p2-family', width:4, entrance:'P2-N', points:[[northX,-135.901674039],[northX,-142],[88,-142],[78,-142]] },
-    { id:'p2-market', width:4, points:[[northX,-142],[175,-142],[240,-142],[240,-120],[260.2,-120],[260.2,-158]] },
+    // Stay north of both real garage trenches before returning to the market
+    // promenade; the former straight path crossed the open sloping lanes.
+    { id:'p2-market', width:4, points:[[northX,-142],[northX,-162],[175,-162],[175,-142],[240,-142],[240,-120],[260.2,-120],[260.2,-158]] },
     { id:'residential-recreation', width:6, crossingSegments:[1,2], points:[[northX,-193],[northX,-190],[northX,-178],[northX,-162],[northX,-142]] },
     ...[49,115,181,247].map((x,i)=>({id:`residential-${i+1}-recreation`,width:5,entrance:`R${i+1}-MAIN`,pavedBy:'hospitality',points:[[x,-201.4],[x,-193],[northX,-193]]})),
   ];

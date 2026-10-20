@@ -7,6 +7,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { FPS_MODEL_ASSETS } from './src/fps/model-data.js';
+import { geometryLicenses } from './scripts/geometry-licenses.mjs';
 
 const shell = await readFile('src/shell.html', 'utf8');
 if (!shell.includes('<!--APP-->')) throw new Error('src/shell.html 缺少 <!--APP--> 占位');
@@ -69,16 +70,16 @@ const out = await build({
   plugins:[{name:'phone-offline-assets',setup(b){
     b.onLoad({filter:/[\\/]fps[\\/]model-data\.js$/},()=>({contents:`export const FPS_MODEL_ASSETS = ${JSON.stringify(embeddedFPS)};`,loader:'js'}));
     b.onLoad({filter:/[\\/]cover-data\.js$/},()=>({contents:`export const COVER_URL = ${JSON.stringify(coverURL)};`,loader:'js'}));
-    b.onLoad({filter:/[\\/]residential-data\.js$/},()=>({contents:'export const RESIDENTIAL_ASSETS = [];',loader:'js'}));
   }}],
 });
 const code = out.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const threeLicense = await readFile('node_modules/three/LICENSE', 'utf8');
 const peopleLicense = await readFile('assets/models/people/LICENSE.txt', 'utf8');
+const geometryLicense = await geometryLicenses();
 // 交付文件连 three.js 和材质一起内嵌；系统字体兜底，断网可用。
 const offlineShell = shell.replace(/<link[^>]*https:\/\/fonts\.[^>]+>\s*/g, '')
   .replace(/<script type="importmap">[\s\S]*?<\/script>/, '');
-const page = offlineShell.replace('<!--APP-->', () => `<!-- Three.js license\n${threeLicense}\n-->\n<!-- Microsoft Rocketbox avatar license\n${peopleLicense}\n-->\n<script type="module">${code}</script>`);
+const page = offlineShell.replace('<!--APP-->', () => `<!-- Three.js license\n${threeLicense}\n-->\n<!-- Microsoft Rocketbox avatar license\n${peopleLicense}\n-->\n<!-- Geometry library licenses\n${geometryLicense}\n-->\n<script type="module">${code}</script>`);
 
 await mkdir('dist', { recursive: true });
 await writeFile('dist/artifact.html', page);

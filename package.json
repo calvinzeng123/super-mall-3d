@@ -13,5 +13,8 @@
   "devDependencies": {
     "esbuild": "^0.28.2",
     "three": "0.170.0"
+  },
+  "dependencies": {
+    "polygon-clipping": "0.15.7"
   }
 }

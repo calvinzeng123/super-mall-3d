@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPlayableLayout, PLAYABLE_BOUNDS } from '../src/layout/playable.js';
+import { buildLayout } from '../src/layout/layout.js';
 import { buildNav, clear, step } from '../src/layout/nav.js';
+import { toW } from '../src/layout/geom.js';
 import { findPath, hasLineOfSight, traceMotion, advanceGuide } from '../src/fps/pathfinding.js';
 import { FPS_MISSION, createMissionLayout } from '../src/fps/mission-layout.js';
 import { buildRoof } from '../src/render/build/roof.js';
@@ -13,35 +15,47 @@ const fps = buildPlayableLayout({ mode: 'fps' }), nav = buildNav(fps);
 const tour = buildPlayableLayout();
 const state = (floor, x, z) => ({ floor, x, z, y: nav.floors.get(floor).y, slope: null });
 
-test('both runtime modes physically contain only P1, hotel and apartments', () => {
-  for (const l of [fps, tour]) {
+test('only FPS physically trims the campus to P1, hotel and apartments', () => {
+  for (const l of [fps]) {
     assert.deepEqual(l.buildings.map(b => b.id), ['P1', 'H', 'A']);
     assert.equal(l.bridges, null);
     for (const key of ['park', 'urban', 'forecourt', 'westParking']) assert.equal(l.site[key], undefined);
     assert.deepEqual(l.site.bounds, PLAYABLE_BOUNDS);
     assert.ok(l.levels.every(v => ['P1', 'H', 'A'].includes(v.building)));
     assert.ok(l.site.plots.every(p => p.id === 'P1'));
-    assert.equal(l.extensions.surfaceParking.reduce((n, p) => n + p.stalls.length, 0), 46);
+    assert.equal(l.extensions.surfaceParking.reduce((n, p) => n + p.stalls.length, 0),
+      tour.extensions.surfaceParking.filter(p=>p.id==='hotel-shared-parking').reduce((n,p)=>n+p.stalls.length,0));
     assert.equal(l.extensions.connections.some(c => /P2|P3|R[1-4]|WPG|M-B/.test(`${c.from} ${c.to}`)), false);
     assert.ok(l.site.roads.length < 5);
   }
 });
 
-test('FPS releases upper floors and closes a lightweight roof; tour keeps original 20F homes', () => {
+test('tour restores all authoring buildings, transit and floors before scene creation', () => {
+  const complete=buildLayout();
+  assert.equal(tour.playable,undefined,'full tour must not trigger compact site/traffic code');
+  assert.deepEqual(tour.buildings.map(b=>b.id),complete.buildings.map(b=>b.id));
+  assert.deepEqual(tour.levels.map(l=>l.id),complete.levels.map(l=>l.id));
+  assert.ok(tour.buildings.some(b=>b.id==='P2')&&tour.buildings.some(b=>b.id==='P3'));
+  assert.ok(tour.levels.some(l=>l.id==='R4-30F'));
+  assert.ok(tour.bridges&&tour.site.westParking&&tour.site.urban);
+  assert.deepEqual(tour.extensions.connections,complete.extensions.connections);
+});
+
+test('FPS releases upper rooms but preserves physically reachable tower rooftops', () => {
   assert.equal(fps.levels.length, 18);
-  assert.equal(fps.playable.walkableLevelIds.length, 15);
-  assert.equal(fps.levels.reduce((n, l) => n + l.units.filter(u => u.residence).length, 0), 60);
+  assert.equal(fps.playable.walkableLevelIds.length, 17);
   for (const id of ['H', 'A']) {
     const b = fps.buildings.find(b => b.id === id), cap = fps.levels.find(l => l.id === `${id}-RF`);
     assert.equal(b.storeys, 3); assert.equal(b.height, 13.3); assert.equal(cap.elev, 13.3);
-    assert.equal(cap.playableCap, true); assert.equal(cap.units.length, 0); assert.equal(cap.voids.length, 0);
-    assert.ok(cap.slab.pieces.every(p => !p.holes.length));
+    assert.equal(cap.playableRoof, true); assert.equal(cap.units.length, 0);
+    assert.ok(cap.voids.some(v=>v.kind==='stair')&&cap.voids.some(v=>v.kind==='shaft'));
+    assert.ok(b.access.routes.some(r=>r.from===`${id}-3F`&&r.to===`${id}-RF`));
+    assert.ok(fps.elevators.filter(e=>e.building===id).every(e=>e.serves.includes(`${id}-RF`)));
     assert.ok(tour.levels.some(l => l.id === `${id}-20F`));
   }
   assert.ok(!fps.levels.some(l => l.id === 'P1-3F'));
   assert.equal(fps.levels.find(l => l.id === 'P1-RF').elev, 12);
-  assert.equal(tour.levels.length, 53);
-  assert.equal(tour.levels.reduce((n, l) => n + l.units.filter(u => u.residence).length, 0), 400);
+  assert.ok(tour.levels.length>180);
 });
 
 test('no remaining navigation link points at a removed floor or inaccessible cap', () => {
@@ -58,6 +72,7 @@ test('no remaining navigation link points at a removed floor or inaccessible cap
 
 test('all objective, squad and patrol positions remain usable with tactical cover installed', () => {
   for (const p of [FPS_MISSION.spawn, FPS_MISSION.teammate, ...FPS_MISSION.objectives,
+    ...FPS_MISSION.extractions,
     ...FPS_MISSION.enemies, ...FPS_MISSION.enemies.flatMap(e => e.patrol)]) assert.ok(clear(nav, p), `${p.id || 'patrol'}: ${p.floor}/${p.x}/${p.z}`);
   for (const c of FPS_MISSION.cover) {
     assert.equal(clear(nav, c), false, `${c.id} must collide`);
@@ -91,6 +106,19 @@ test('complete mission route is continuously walkable using player collision and
   assert.ok(usedConcourse, 'mission should use the original underground mall connection');
 });
 
+test('hotel roof helicopter and underground getaway vehicle both have continuous two-way routes',()=>{
+  const mission=createMissionLayout(fps);
+  for(const extraction of mission.extractions){
+    for(const [from,to] of [[mission.objectives[1],extraction],[extraction,mission.objectives[1]]]){
+      const route=findPath(nav,from,to);assert.ok(route?.length>1,extraction.id);
+      for(let i=1;i<route.length;i++)assert.ok(traceMotion(nav,route[i-1],route[i]),`${extraction.id}: ${route[i].floor}`);
+    }
+    const v=extraction.vehicle;
+    assert.equal(clear(nav,{...extraction,x:v.x,z:v.z}),false,'vehicle hull must collide');
+    assert.ok(clear(nav,extraction),'boarding ring must stay unobstructed');
+  }
+});
+
 test('following the HUD breadcrumb reaches every mission goal without skipping stair approaches', () => {
   const stops = [FPS_MISSION.spawn, ...FPS_MISSION.objectives];
   let player = { ...stops[0] };
@@ -106,6 +134,29 @@ test('following the HUD breadcrumb reaches every mission goal without skipping s
     }
     assert.ok(frames < 6000, `guide stalled on leg ${leg} at ${player.floor}/${player.x}/${player.z}`);
   }
+});
+
+test('HUD recovers a reachable corner after touch steering drifts beside the escalator railing', () => {
+  const slope = nav.slopeById.get('P1-K7-U');
+  const high = toW(slope.F, slope.len + .5, 0), low = toW(slope.F, -.5, 0);
+  const route = [state('P1-2F', -147, -143.5), state('P1-2F', ...high), state('P1-1F', ...low)];
+  let player = state('P1-2F', -146.26102242694387, -143.5721823026115);
+  assert.ok(clear(nav, player));
+  assert.equal(traceMotion(nav, player, route[1]), null, 'the railing blocks the advanced marker');
+  assert.equal(advanceGuide(nav, route, player, 1), 0, 'guide must first return to the reachable corner');
+  let index = 1, frames = 0, dx = 0, dz = 0;
+  for (; frames < 900; frames++) {
+    index = advanceGuide(nav, route, player, index);
+    // A touch look update can arrive less often than the render/navigation tick.
+    if (frames % 2 === 0) {
+      const goal = route[index], d = Math.hypot(goal.x - player.x, goal.z - player.z);
+      dx = (goal.x - player.x) / Math.max(.01, d) * Math.min(d, 3.8 / 30);
+      dz = (goal.z - player.z) / Math.max(.01, d) * Math.min(d, 3.8 / 30);
+    }
+    player = step(nav, player, dx, dz, 1 / 30);
+    if (player.floor === 'P1-1F' && Math.hypot(player.x - low[0], player.z - low[1]) < .2) break;
+  }
+  assert.ok(frames < 900, 'touch movement must finish the escalator descent without teleporting');
 });
 
 test('patrols use real floor paths and visibility never passes through cover or ceilings', () => {
@@ -149,14 +200,14 @@ test('FPS roof decoration is absent and the square pendant fixtures stay below t
   for (const fixture of fixtures) assert.ok(fixture.top < 11.4, `fixture pierces the 12m cap: ${fixture.top}`);
 });
 
-test('the top hotel floor does not replicate a phantom flight through its roof', () => {
+test('the top hotel floor renders its real RF staircase and roof exit enclosure', () => {
   const building = fps.buildings.find(b => b.id === 'H');
   const levels = fps.levels.filter(l => l.building === 'H'), stairs = fps.stairs.filter(s => s.building === 'H');
   const solids = [], recorder = { get: () => ({
     box: (x, y, z, w, h, d) => solids.push({ y, h }), bar: () => {},
   }) };
   buildTowerStairGeometry(recorder, building, levels, stairs, { flights: false });
-  for (const solid of solids) assert.ok(solid.y + solid.h / 2 <= 13.31, 'roof has an unused upper stair enclosure');
+  for (const solid of solids) assert.ok(solid.y + solid.h / 2 <= 16.5, 'roof enclosure exceeds its authored headroom');
   const materials = Object.fromEntries(['concrete', 'extMetal', 'glowSoft'].map(key => [key, new THREE.MeshStandardMaterial()]));
   const exterior = new THREE.Group(), ctx = { dynamic: [] };
   buildTowerStairInstances(ctx, building, levels, stairs, materials, exterior);
@@ -165,7 +216,7 @@ test('the top hotel floor does not replicate a phantom flight through its roof',
   exterior.traverse(mesh => {
     if (!mesh.isInstancedMesh || !mesh.visible) return;
     for (let i = 0; i < mesh.count; i++) {
-      mesh.getMatrixAt(i, matrix); assert.ok(matrix.elements[13] <= 6.5, '3F inherited the 2F upward staircase'); count++;
+      mesh.getMatrixAt(i, matrix); assert.ok(matrix.elements[13] <= 9.91, '3F staircase must start at its actual floor'); count++;
     }
     mesh.geometry.dispose();
   });

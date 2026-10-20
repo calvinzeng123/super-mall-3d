@@ -27,6 +27,18 @@ export function traceMotion(nav, start, target, { stepSize = .24 } = {}) {
 export function advanceGuide(nav, route, player, index = 0) {
   if (!route?.length) return 0;
   let next = Math.min(index, route.length - 1), nearest = next, best = 3;
+  // Touch steering can drift around a railing after a corner was advanced.
+  // Recover the last reachable corner instead of leaving a nearby marker on
+  // the other side of the railing forever. Keep the real collision solver.
+  if (next > 0 && !player.slope && route[next].floor === player.floor
+    && distance(player, route[next]) < 2.4 && !traceMotion(nav, player, route[next])) {
+    for (let i = next - 1; i >= 0; i--) {
+      if (route[i].floor === player.floor && traceMotion(nav, player, route[i])) {
+        next = nearest = i;
+        break;
+      }
+    }
+  }
   for (let i = next + 1; i < route.length; i++) {
     if (route[i].floor !== player.floor) continue;
     const d = distance(player, route[i]);

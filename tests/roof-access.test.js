@@ -69,7 +69,7 @@ test('六台观光梯均到达屋顶，电梯井真正挖空且门外有可站�
 
 test('观光梯每层真实井道门在2.9m以下畅通，背面玻璃仍然存在',()=>{
   const lifts=L.elevators.filter(e=>e.type==='glass'&&['P1','P2'].includes(e.building));
-  const materials={metal:new THREE.MeshBasicMaterial({side:THREE.DoubleSide}),glass:new THREE.MeshBasicMaterial({side:THREE.DoubleSide})};
+  const materials=Object.fromEntries(['metal','glass','glowSoft','concrete'].map(key=>[key,new THREE.MeshBasicMaterial({side:THREE.DoubleSide})]));
   const levels=Object.fromEntries(L.levels.map(l=>[l.id,{batch:new BatchSet(materials)}]));
   buildElevators({layout:{elevators:lifts},lvById:Object.fromEntries(L.levels.map(l=>[l.id,l])),levels});
   for(const id of new Set(lifts.flatMap(e=>e.serves))) {
@@ -91,7 +91,7 @@ test('观光梯每层真实井道门在2.9m以下畅通，背面玻璃仍然存�
 test('六台观光梯完整井道没有横穿轿厢的中间楼板或金属底板，顶盖单独保留',()=>{
   const lifts=L.elevators.filter(e=>e.type==='glass'&&['P1','P2'].includes(e.building));
   const material=new THREE.MeshBasicMaterial({side:THREE.DoubleSide});
-  const levels=Object.fromEntries(L.levels.map(l=>[l.id,{batch:new BatchSet({metal:material,glass:material})}]));
+  const levels=Object.fromEntries(L.levels.map(l=>[l.id,{batch:new BatchSet({metal:material,glass:material,glowSoft:material,concrete:material})}]));
   buildElevators({layout:{elevators:lifts},lvById:Object.fromEntries(L.levels.map(l=>[l.id,l])),levels});
   const group=new THREE.Group();
   for(const id of new Set(lifts.flatMap(e=>e.serves))) {

@@ -1,0 +1,30 @@
+{
+  "url": "file:///Users/calvin/Downloads/%E7%9B%B8%E5%86%8C%E5%8E%BB%E5%9B%BE%E6%A0%87/super-mall-3d/dist/mall.html",
+  "ready": true,
+  "fatalHidden": true,
+  "buildings": [
+    "P1",
+    "P2",
+    "P3",
+    "M",
+    "H",
+    "A",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "WPG"
+  ],
+  "levels": 198,
+  "templates": 3,
+  "http": [],
+  "renderer": {
+    "frame": 4918,
+    "calls": 55,
+    "triangles": 110,
+    "points": 0,
+    "lines": 0
+  },
+  "engine": "WebKit / iPhone 15 emulation",
+  "physicalDevice": false
+}

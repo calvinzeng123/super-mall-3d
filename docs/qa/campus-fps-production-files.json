@@ -1,0 +1,366 @@
+{
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "deployId": "6ad7402730a839b9e6987c70",
+  "total": 49,
+  "passed": 49,
+  "files": [
+    {
+      "path": "asset-manifest.json",
+      "status": 200,
+      "bytes": 9730,
+      "sha256": "2719de430a3279c6fa80bcff9b0b12b9a9a9a8c8a23b3b2172ebca12c7455f81",
+      "matches": true
+    },
+    {
+      "path": "assets/brick_wall_09-color.4b05ac9c45cb2ea9.jpg",
+      "status": 200,
+      "bytes": 336310,
+      "sha256": "4b05ac9c45cb2ea9c68eaccf4221db7821ec6b73349b54becadaa6a77db7c8a8",
+      "matches": true
+    },
+    {
+      "path": "assets/brick_wall_09-normal.1848e73816802e95.jpg",
+      "status": 200,
+      "bytes": 534605,
+      "sha256": "1848e73816802e95356795d967dd12f146643e8169677846ce1bf6023210f95c",
+      "matches": true
+    },
+    {
+      "path": "assets/brick_wall_09-roughness.0ecbbc52c5bfea9c.jpg",
+      "status": 200,
+      "bytes": 164362,
+      "sha256": "0ecbbc52c5bfea9cc865f0def42deca02bb7bb6231d358a3a68cb8aa12b67084",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.3BBAK3EM.js",
+      "status": 200,
+      "bytes": 6449,
+      "sha256": "ad69e98859ca1846bc2d85ef061b0842f1d446357f42e7238e2ca2ba827089e3",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.4QDYA4MS.js",
+      "status": 200,
+      "bytes": 2476,
+      "sha256": "98d447f0f727ffc759d9b3f6162c92ef9bed00016d7f1f48ace5b14db7f4282c",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.BSM3MV2Y.js",
+      "status": 200,
+      "bytes": 998596,
+      "sha256": "7376addc0f6b7e88339a169cc19e0bae30c88b762a830e56f93574e649323d26",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.EIGKUZYE.js",
+      "status": 200,
+      "bytes": 16926,
+      "sha256": "983f5ab0dacf2c42f130c1b6bc110c4069faadb1c48f237de8908fcf208b1409",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.K23NU6QQ.js",
+      "status": 200,
+      "bytes": 580882,
+      "sha256": "2dbf5a8ca460c7ce728af422fca7bed54d54b0fb0a6b29ab5c9aca8390043b36",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.OGKWKFHC.js",
+      "status": 200,
+      "bytes": 13963,
+      "sha256": "3d4d389f9eb9e4580acdfedddf24555755656e64d72058e25666bc649704fbec",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.POIIW4BF.js",
+      "status": 200,
+      "bytes": 56048,
+      "sha256": "5c770a50617b1b4ada24950e9c666af5e8f276d4a25355db85ded2c059b15a23",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.V4FE7RPJ.js",
+      "status": 200,
+      "bytes": 5975,
+      "sha256": "051104fa269d603d36c906d5ce2f43e80ecb3a5134773508c4eb7f5841ff1fc8",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.VXTUHZRX.js",
+      "status": 200,
+      "bytes": 107454,
+      "sha256": "7558696f69db66d0b0fc97c2a4334c2530da8e7d67cb8a589982ce83eddb17a2",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.WMKTFVSF.js",
+      "status": 200,
+      "bytes": 577,
+      "sha256": "11247d28c5c2fb3d976002c2b55fecb6ba19fd88153e11d2c7af5832fd6ff331",
+      "matches": true
+    },
+    {
+      "path": "assets/chunk.XWHKNJDB.js",
+      "status": 200,
+      "bytes": 18872,
+      "sha256": "4a09710cf0cf18c665c4186957f37240259d4c46a4a60cc4f94a74a7f5cb5755",
+      "matches": true
+    },
+    {
+      "path": "assets/clean_asphalt-color.216d473cd81362a7.jpg",
+      "status": 200,
+      "bytes": 339275,
+      "sha256": "216d473cd81362a7b975ee538e49f85fe0d13b222dd659cdad22e1a761466819",
+      "matches": true
+    },
+    {
+      "path": "assets/clean_asphalt-normal.744aa64e65425ae2.jpg",
+      "status": 200,
+      "bytes": 364957,
+      "sha256": "744aa64e65425ae2e953f98e461c7bc683f29ce9318e43d390539c3dd6aec21c",
+      "matches": true
+    },
+    {
+      "path": "assets/clean_asphalt-roughness.c9216e94586cb9fc.jpg",
+      "status": 200,
+      "bytes": 334508,
+      "sha256": "c9216e94586cb9fc8b179c035dece1cbe1489642d3eaec1dee9a591bd4bec9bb",
+      "matches": true
+    },
+    {
+      "path": "assets/concrete_pavement_02-color.3fbaf294fd7e535a.jpg",
+      "status": 200,
+      "bytes": 501967,
+      "sha256": "3fbaf294fd7e535a49558d266d6275290c6f116571b8bb323c9df9642eed69ba",
+      "matches": true
+    },
+    {
+      "path": "assets/concrete_pavement_02-normal.02430189a96f108a.jpg",
+      "status": 200,
+      "bytes": 632817,
+      "sha256": "02430189a96f108ae1473ce4a920500c5df74f61cf9e1169fa53505672a28d82",
+      "matches": true
+    },
+    {
+      "path": "assets/concrete_pavement_02-roughness.6d7ec0b23daa4e80.jpg",
+      "status": 200,
+      "bytes": 242721,
+      "sha256": "6d7ec0b23daa4e80521744cc01fabc6675763c2a218289ce4bbe51776cdf7c31",
+      "matches": true
+    },
+    {
+      "path": "assets/cover.27284425db21785b.jpg",
+      "status": 200,
+      "bytes": 354429,
+      "sha256": "27284425db21785bbed3c05136b56052e2d8ddfc8316c4d9efa5b11d45a452d2",
+      "matches": true
+    },
+    {
+      "path": "assets/deagle.77ed676903ec101b.glb",
+      "status": 200,
+      "bytes": 2025036,
+      "sha256": "77ed676903ec101bbfd9cc9e416dd0d1d534d05b88e9c27cc55145bd92927801",
+      "matches": true
+    },
+    {
+      "path": "assets/fps-hands.94614904f4d82efd.glb",
+      "status": 200,
+      "bytes": 1105828,
+      "sha256": "94614904f4d82efd1fc361e7cea2e2e55e2bfa4397996da30565cf6318124fcd",
+      "matches": true
+    },
+    {
+      "path": "assets/grass_ground-color.bd4f8524889bf2a3.jpg",
+      "status": 200,
+      "bytes": 405955,
+      "sha256": "bd4f8524889bf2a3f3a5f4a6cd56154cecf71f1f6ae2da16598452e00137dcf0",
+      "matches": true
+    },
+    {
+      "path": "assets/grass_ground-normal.316ba72f9809e5d2.jpg",
+      "status": 200,
+      "bytes": 704408,
+      "sha256": "316ba72f9809e5d29977c17f0214cf4233fae72bb90c3096609ccf489c2d8503",
+      "matches": true
+    },
+    {
+      "path": "assets/grass_ground-roughness.dc99159a3abad2d6.jpg",
+      "status": 200,
+      "bytes": 87775,
+      "sha256": "dc99159a3abad2d6825c18dc749c5230328b8a12bec50588c15ee0fa42c0e2bc",
+      "matches": true
+    },
+    {
+      "path": "assets/main.QTG46HEZ.js",
+      "status": 200,
+      "bytes": 10440,
+      "sha256": "f14468082da8546d47f2e2d21b5df0529f46a58330aa0846f4bb70783f22772f",
+      "matches": true
+    },
+    {
+      "path": "assets/marble_01-color.402d3d2f8781e21f.jpg",
+      "status": 200,
+      "bytes": 270770,
+      "sha256": "402d3d2f8781e21f2752455416aa913be342a519864b807f32f8c08045966134",
+      "matches": true
+    },
+    {
+      "path": "assets/marble_01-normal.8ae668e3badd5d38.jpg",
+      "status": 200,
+      "bytes": 120121,
+      "sha256": "8ae668e3badd5d386dbb5be3228a8dc2f7eb4a6704f7847dd0858c6546cc8ecd",
+      "matches": true
+    },
+    {
+      "path": "assets/marble_01-roughness.6edf2daf5b864534.jpg",
+      "status": 200,
+      "bytes": 76297,
+      "sha256": "6edf2daf5b8645341c7f8e047bb1db11605a9f6ff6bcd3a7d56373a23f087857",
+      "matches": true
+    },
+    {
+      "path": "assets/models/fps/CREDITS.txt",
+      "status": 200,
+      "bytes": 1336,
+      "sha256": "05d0ac65a3959278cb4a127528351ea30a00e2d7c6223a9323085393572a9372",
+      "matches": true
+    },
+    {
+      "path": "assets/models/fps/UPSTREAM-DESERT-EAGLE-LICENSE.md",
+      "status": 200,
+      "bytes": 882,
+      "sha256": "569d8dfc8020b38b68d2828c9ce6fcb6d6d1d41ac0eb2f70cdcb5bf1f22f5620",
+      "matches": true
+    },
+    {
+      "path": "assets/models/fps/UPSTREAM-MIT-LICENSE.txt",
+      "status": 200,
+      "bytes": 1068,
+      "sha256": "6795e9bfe7d67b87c0233b4fca631435982341efadc55702af61cfb3a71d717e",
+      "matches": true
+    },
+    {
+      "path": "assets/models/fps/UPSTREAM-SMG-LICENSE.md",
+      "status": 200,
+      "bytes": 12570,
+      "sha256": "9df6d10a0b84a472efe323be992712bf224a9fb621d62053687ef291be8b930e",
+      "matches": true
+    },
+    {
+      "path": "assets/models/fps/sources.json",
+      "status": 200,
+      "bytes": 2803,
+      "sha256": "7f134672882d8847de5eb35fdbe05f9e2d3d424b2185b84b37cafbfb5746fa86",
+      "matches": true
+    },
+    {
+      "path": "assets/oak_wood_planks-color.a188de42bf9198bb.jpg",
+      "status": 200,
+      "bytes": 286752,
+      "sha256": "a188de42bf9198bb3c49b560f0c726a3ebddadc315ff0b293c208f632fe270b4",
+      "matches": true
+    },
+    {
+      "path": "assets/oak_wood_planks-normal.63f52712f3b94bb9.jpg",
+      "status": 200,
+      "bytes": 135866,
+      "sha256": "63f52712f3b94bb9d266496da7a578972a0398ed5fa9f6fa5700d93d97d69245",
+      "matches": true
+    },
+    {
+      "path": "assets/oak_wood_planks-roughness.7fd2de468f186a17.jpg",
+      "status": 200,
+      "bytes": 475429,
+      "sha256": "7fd2de468f186a17e78d65fdeec9da6e870fdd61ca11d9549f4e0d30f43da998",
+      "matches": true
+    },
+    {
+      "path": "assets/person-f.a1ec332b8f429022.glb",
+      "status": 200,
+      "bytes": 1626388,
+      "sha256": "a1ec332b8f429022538a63de0a495c246d7da125974adf3df92bf1b9ff635787",
+      "matches": true
+    },
+    {
+      "path": "assets/person-m.5da2da91839f374d.glb",
+      "status": 200,
+      "bytes": 1575872,
+      "sha256": "5da2da91839f374d05763d4da05ebbbb85f39a5542d5d7d90c549b524d38cbbd",
+      "matches": true
+    },
+    {
+      "path": "assets/residence-01.d7c68cf855216de9.bin",
+      "status": 200,
+      "bytes": 8874062,
+      "sha256": "d7c68cf855216de9bca23a5dcf8215855efc7dafbd098875adad5f9ae857a89c",
+      "matches": true
+    },
+    {
+      "path": "assets/residence-02.80b8dd6722294589.bin",
+      "status": 200,
+      "bytes": 10131573,
+      "sha256": "80b8dd6722294589e20988195426130078f9db4c683e2ad2d6f655269dab8fc2",
+      "matches": true
+    },
+    {
+      "path": "assets/residence-03.81f09c875fb2b416.bin",
+      "status": 200,
+      "bytes": 9878943,
+      "sha256": "81f09c875fb2b41663d425483a5d2bfd954eb8116e31c0a686048cd9d3e86e88",
+      "matches": true
+    },
+    {
+      "path": "assets/smg45.986342e386b174d5.glb",
+      "status": 200,
+      "bytes": 2895736,
+      "sha256": "986342e386b174d5a15ad531bb5aade9387b88a487356a8c4fb0914dcfb7358e",
+      "matches": true
+    },
+    {
+      "path": "assets/suite.a7f99bf01d3ad6e3.glb",
+      "status": 200,
+      "bytes": 8977040,
+      "sha256": "a7f99bf01d3ad6e3545102329ecd6ee8269c7cad6d41816dbdcb313a003da80e",
+      "matches": true
+    },
+    {
+      "path": "credits.html",
+      "status": 200,
+      "bytes": 2159,
+      "sha256": "7b24c827b60be6e6a8eed35ccaca96b471fa4032fabde633d16aa35dc7b6c940",
+      "rawMatches": false,
+      "hostingInjected": true,
+      "normalizedBytes": 1950,
+      "normalizedSHA256": "91a521fa24e036e3a81b579314c6e6c8db64494986d95f25680e32234f7499c1",
+      "matches": true,
+      "comparison": "Exact application bytes after removing the observed Netlify hosting comment and badge loader"
+    },
+    {
+      "path": "geometry-licenses.txt",
+      "status": 200,
+      "bytes": 3827,
+      "sha256": "ea1efafbb8ff41b25fd45f6eceb0f9e564f1e5a4a8f85c872f5a3d172f5d1d9d",
+      "matches": true
+    },
+    {
+      "path": "index.html",
+      "status": 200,
+      "bytes": 44787,
+      "sha256": "d25be43825ec5ed3ce0041052b8571b9dac3d1ccf9f0db3c90f9d00eae0320c9",
+      "rawMatches": false,
+      "hostingInjected": true,
+      "normalizedBytes": 44252,
+      "normalizedSHA256": "11cdc0dd283babb1e1468a88c34faa3a60dfe407feca4e43e39319b4f06c5917",
+      "matches": true,
+      "comparison": "Exact application bytes after removing the observed Netlify hosting comment and badge loader"
+    }
+  ],
+  "rawByteMatches": 47,
+  "htmlWithHostingInjection": [
+    "credits.html",
+    "index.html"
+  ]
+}

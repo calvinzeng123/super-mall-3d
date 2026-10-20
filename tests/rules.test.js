@@ -17,8 +17,13 @@ test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', ()
         if (convexOverlap(items[i].p, items[j].p)) assert.fail(`${lv.id}: ${items[i].id} 与 ${items[j].id} 重叠`);
       }
       for (const q of polySamples(items[i].p, 1.5, 0.05)) {
-        const ownShaft = items[i].room?.type === 'stair' && lv.voids.find(v =>
-          v.kind === 'stair' && v.stair === items[i].id && pointInPoly(q, v.poly));
+        const room = items[i].room;
+        const ownShaft = lv.voids.find(v => pointInPoly(q, v.poly) && (
+          room?.type === 'stair' && v.kind === 'stair' && v.stair === items[i].id
+          || room?.type === 'core' && v.kind === 'shaft' && v.elevator
+            && L.elevators.some(e => e.id === v.elevator && e.frame.id === room.frame.id
+              && room.polys.some(p => pointInPoly([e.x, e.z], p)))
+        ));
         const cutShaft = ownShaft && lv.slab.pieces.some(s => s.holes.some(h =>
           ownShaft.poly.every(p => pointInPoly(p, h) || distToPolyEdge(p, h) < 1e-6) && pointInPoly(q, h)));
         if (!onSlab(lv, q) && !cutShaft) assert.fail(`${lv.id}: ${items[i].id} 在 (${q[0].toFixed(1)}, ${q[1].toFixed(1)}) 处不在楼板上或落入无关洞口`);

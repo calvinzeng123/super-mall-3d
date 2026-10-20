@@ -185,8 +185,9 @@ export function attachExplore(app, ui) {
     const level = F?.parentFloor || F?.level?.id || (building && (ctx.bById[building]?.kind === 'tower' || ctx.bById[building]?.undergroundOnly)
       ? ctx.buildings[building].levels.filter(L => L.lv.elev <= camera.position.y - 0.8).at(-1)?.lv.id : null);
     const ex = app.state.explore;
-    if (force || !ex || ex.building !== building || ex.metro !== metro || ex.near !== nearB || ex.under !== under || ex.level !== level) {
-      app.state.explore = { building, metro, near: nearB, under, level };
+    const sector = `${Math.floor(x / 24)}:${Math.floor(z / 24)}`;
+    if (force || !ex || ex.building !== building || ex.metro !== metro || ex.near !== nearB || ex.under !== under || ex.level !== level || ex.sector !== sector) {
+      app.state.explore = { building, metro, near: nearB, under, level, sector, position: { x, z } };
       app.refresh();
     }
   }
@@ -411,8 +412,12 @@ export function attachExplore(app, ui) {
     busy = true;
     const to = { ...stop, y: nav.floors.get(stop.floor).y };
     liftRide = { ...createElevatorRide({ ...s }, to, { x: car.elevator.x, z: car.elevator.z }, approach), link, car };
+    app.state.explore = { ...app.state.explore, elevator: { id: link.id, from: s.floor, to: stop.floor } };
+    app.refresh();
     app.ensureTowerFloor?.(stop.floor);
-    yaw = yawOf(car.elevator.nx, car.elevator.nz); pitch = 0;
+    liftRide.entryYaw = yawOf(-car.elevator.nx, -car.elevator.nz);
+    liftRide.exitYaw = yawOf(car.elevator.nx, car.elevator.nz);
+    yaw = liftRide.entryYaw; pitch = 0;
     hud.help.hidden = true;
     return true;
   }
@@ -421,13 +426,18 @@ export function attachExplore(app, ui) {
     const r = liftRide;
     r.elapsed += dt;
     const p = sampleElevatorRide(r, r.elapsed);
+    const turnAt = (r.approach ? .65 : 0) + .9;
+    const turn = Math.max(0, Math.min(1, (r.elapsed - turnAt) / .65));
+    const delta = Math.atan2(Math.sin(r.exitYaw - r.entryYaw), Math.cos(r.exitYaw - r.entryYaw));
+    yaw = r.entryYaw + delta * turn * turn * (3 - 2 * turn);
     Object.assign(s, { x: p.x, y: p.y, z: p.z, slope: null });
     // 经过哪层就显示哪层的真实内饰，观光梯外不会出现整栋空壳。
     // 每次仅切换当前经过层，仍使用全局三层缓存上限。
     const passFloor = r.link.stops.filter(st => nav.floors.get(st.floor).y <= p.y + 0.05).at(-1)?.floor;
     if (passFloor && passFloor !== r.viewFloor) {
       r.viewFloor = passFloor;
-      app.state.explore = { ...app.state.explore, level: passFloor, under: p.y < 0 };
+      app.state.explore = { ...app.state.explore, level: passFloor, under: p.y < 0,
+        elevator: { id: r.link.id, from: r.from.floor, to: r.to.floor } };
       app.refresh();
     }
     if (p.arrived) {

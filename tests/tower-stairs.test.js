@@ -83,8 +83,13 @@ test('酒店西门实际接停车场，公寓东门避开车库坡口并接星�
   assert.ok(!A.rooms.some(r=>r.polys.some(p=>convexOverlap(p,hall.poly))));
 });
 
-test('首层酒店双层套房和顶层LOFT保留原模型尺寸、连廊标高与完整上层净高',()=>{
-  for(const id of ['H-1F','A-1F','A-20F']) {
+test('首层大堂保持挑高与连廊标高，顶层LOFT保留原模型尺寸和完整上层净高',()=>{
+  for(const id of ['H-1F','A-1F']) {
+    const lv=L.levels.find(l=>l.id===id);
+    assert.equal(lv.height,6.5);assert.equal(lv.kind,'lobby');assert.equal(lv.units.length,0);
+    assert.ok(lv.lobbyPlan);
+  }
+  for(const id of ['A-20F']) {
     const lv=L.levels.find(l=>l.id===id);assert.equal(lv.height,6.5);assert.equal(lv.units.length,10);
     for(const u of lv.units) {
       assert.ok(u.residence.duplex);assert.equal(u.rects[0].x1,11);assert.equal(u.rects[0].z1,15);

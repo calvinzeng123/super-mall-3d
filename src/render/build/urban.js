@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 import { subtractRect } from '../../layout/urban.js';
 import { rectPoly } from '../../layout/geom.js';
-import { shapeFromPoly, flatShapeGeometry } from './shell.js';
+import { flatShapeGeometry } from './shell.js';
+import { cutSurfaceShapes } from './surface-shapes.js';
 import { addTrees, streetLamp, bench, zebra } from './props.js';
 
 export function buildUrbanDistrict(ctx) {
   const U=ctx.layout.site.urban;if(!U)return;
   const G=ctx.site.group,B=ctx.site.batch,ext=B.get('ext');
+  const openings=[...(ctx.layout.site.trenches||[]),...(ctx.layout.site.openings||[])];
   function surface(r,key,y) {
-    const m=new THREE.Mesh(flatShapeGeometry(shapeFromPoly(rectPoly(r)),y),ctx.mats.floor(key,.9));m.receiveShadow=true;G.add(m);
+    const m=new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(rectPoly(r),openings),y),ctx.mats.floor(key,.9));m.receiveShadow=true;G.add(m);
   }
   for(const r of U.surfaces)surface(r,'asphalt',-.12);
   // Adjacent strips can overlap at corners, so deduplicate their paving too.

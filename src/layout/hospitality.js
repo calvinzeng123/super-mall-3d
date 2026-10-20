@@ -9,6 +9,7 @@ import { createSuitePlan, createSuiteMezzanine, suiteAdditionObstacles } from '.
 import { createResidentialPlan, RESIDENTIAL_SLOTS } from './residential-plan.js';
 import { towerStairPlan, buildTowerStairAccess } from './tower-stairs.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
+import { createHospitalityLobby } from './hospitality-lobby.js';
 
 export const HOSPITALITY = {
   west: rect(-286, -151, -203, -27),
@@ -116,6 +117,13 @@ function tower(spec) {
   defs.push({ short: 'RF', elev: top, height: 3.2, kind: 'roof' });
   const levels = defs.map(c => ({ ...c, id: `${spec.id}-${c.short}`, building: spec.id, name: c.kind === 'parking' ? `${c.short} 住客车库` : c.kind === 'concourse' ? 'B1 商场与地铁连廊' : c.kind === 'roof' ? 'RF 屋顶花园' : `${c.short} ${residential ? '三户住宅' : '十间套房'}`, theme: { key: residential ? 'loft' : 'lux', floor: c.kind === 'parking' ? 'concrete-blue' : c.kind === 'roof' ? 'terrace-stone' : 'terrazzo', accent: spec.accent, label: c.kind === 'parking' ? '住客车库 · 独立进出' : c.kind === 'roof' ? '屋顶花园 · 电梯直达' : c.kind === 'concourse' ? '商场连廊 · 地铁换乘' : `${residential ? '三种户型' : '独卫套房'} · ${spec.name}` }, outline, units: [], rooms: [], walk: [], voids: [], features: [], slab: { pieces: [{ outer: outline, holes: [] }] } }));
   if (!residential) { const b1 = levels.find(l => l.short === 'B1'); b1.name = 'B1 住客车库与地铁连廊'; b1.theme.label = '独立车库出入口 · 商场与地铁连通'; }
+  if (['hotel', 'apartment'].includes(spec.usage)) {
+    const ground = levels.find(l => l.levelNumber === 1);
+    ground.kind = 'lobby';
+    ground.name = spec.usage === 'hotel' ? '1F 云澜酒店 · 豪华迎宾大堂' : '1F 云澜公寓 · 迎宾与生活大堂';
+    ground.theme.label = spec.usage === 'hotel' ? '办理入住 · 全日餐厅 · 钢琴酒廊 · 健身康体' : '办理入住 · 邻里餐厅 · 共享办公 · 健身洗衣';
+    ground.lobbyPlan = createHospitalityLobby(F, spec.usage);
+  }
   if (residential) for (const lv of levels) {
     if (lv.levelNumber === 1) {
       lv.kind = 'lobby'; lv.name = '1F 迎宾与社区大堂';
@@ -153,7 +161,10 @@ function tower(spec) {
           localWalk(F, `${spec.id}-garage-exit-aisle`, 'aisle', rect(5.5, 3, 11.5, spec.d/2)));
       }
     }
-    else lv.walk.push(localWalk(F, `${spec.id}-lobby`, 'lobby', rect(28, -3, 37, 3)), localWalk(F, `${spec.id}-lift-hall`, 'lobby', rect(-37, -2.5, -28, 3)));
+    else {
+      lv.walk.push(localWalk(F, `${spec.id}-lobby`, 'lobby', rect(28, -3, 37, 3)), localWalk(F, `${spec.id}-lift-hall`, 'lobby', rect(-37, -2.5, -28, 3)));
+      for (const [i, r] of (lv.lobbyPlan?.circulation || []).entries()) lv.walk.push(localWalk(F, `${spec.id}-public-lobby-${i}`, 'lobby', r));
+    }
     for (const s of stairs) {
       const stairRoom = room(s.id, 'stair', F, s.rect, [s.door]);
       Object.assign(stairRoom, { continuous: true, shaftRect: s.shaftRect, landingRect: s.landingRect });
@@ -183,7 +194,7 @@ function tower(spec) {
       } else lv.slab.pieces[0].holes.push(poly);
     }
     if (lv.levelNumber) {
-      if (!residential) {
+      if (!residential && lv.levelNumber > 1) {
         for (let i = 0; i < 5; i++) {
           const x0 = -27.5 + i * 11;
           const north = toW(F, x0 + 11, -2.5), south = toW(F, x0, 2.5);

@@ -4,13 +4,14 @@ import { canvasTexture, FONT_CN } from '../textures.js';
 
 export function buildTowerElevators(ctx) {
   ctx.elevatorCars = new Map();
-  for (const e of ctx.layout.elevators.filter(e => ctx.bById[e.building]?.kind === 'tower' || e.type === 'glass')) {
+  for (const e of ctx.layout.elevators.filter(e => e.rideable || ctx.bById[e.building]?.kind === 'tower' || e.type === 'glass')) {
     const group = new THREE.Group();
     group.name = `玻璃轿厢 ${e.id}`;
     group.position.set(e.x, 0, e.z);
     group.rotation.y = Math.atan2(e.nx, e.nz);
     const B = new BatchSet(ctx.mats.base);
-    const hw = e.w / 2 - 0.13, hd = e.d / 2 - 0.13;
+    const sideways = e.door === 'W' || e.door === 'E';
+    const hw = (sideways ? e.d : e.w) / 2 - 0.13, hd = (sideways ? e.w : e.d) / 2 - 0.13;
     B.get('stone').box(0, 0.07, 0, hw * 2, 0.14, hd * 2, '#eee7db');
     B.get('metal').box(0, 2.7, 0, hw * 2, 0.12, hd * 2, '#8f989e');
     B.get('glow').box(0, 2.625, 0, hw * 1.5, 0.018, hd * 1.5, '#fff0d3');

@@ -4,6 +4,7 @@ import { NORMAL, rw, rd, rcx, rcz } from '../../layout/geom.js';
 import { themeOf, COLORS } from '../theme.js';
 import { clearHeight } from './shell.js';
 import { buildMallStairs } from './mall-stairs.js';
+import { coreInfill } from '../../layout/elevator-shafts.js';
 
 /** 以一段门（或墙）为基准的局部坐标：u 沿门所在墙，v 向房间内部 */
 function wallFrame(rect, side) {
@@ -64,8 +65,11 @@ export function buildRooms(ctx) {
 function coreShafts(B, lv, r, y0, H, lifts) {
   const g = r.rects[0];
   const clad = lv.kind === 'parking' ? '#c3c8cc' : themeOf(lv).column;
-  B.get('satin').box(rcx(g), y0 + H / 2, rcz(g), rw(g), H, rd(g), clad);
-  B.get('matte').box(rcx(g), y0 + H + 0.015, rcz(g), rw(g), 0.03, rd(g), '#5d5650');
+  const localLifts = lifts.filter(e => e.lu >= g.x0 && e.lu <= g.x1 && e.lv >= g.z0 && e.lv <= g.z1);
+  for (const piece of coreInfill(g, localLifts.filter(e => e.rideable))) {
+    B.get('satin').box(rcx(piece), y0 + H / 2, rcz(piece), rw(piece), H, rd(piece), clad);
+    B.get('matte').box(rcx(piece), y0 + H + 0.015, rcz(piece), rw(piece), .03, rd(piece), '#5d5650');
+  }
   // 电梯门（在电梯的门所在面，局部坐标）
   for (const e of lifts) {
     if (e.lu < g.x0 || e.lu > g.x1 || e.lv < g.z0 || e.lv > g.z1) continue;
@@ -73,9 +77,11 @@ function coreShafts(B, lv, r, y0, H, lifts) {
     const alongU = e.door === 'N' || e.door === 'S';
     const fx = e.lu + nx * (e.d / 2 + 0.03), fz = e.lv + nz * (e.d / 2 + 0.03);
     const box = (k, y, w, h, color, o = 0) => B.get(k).box(fx + nx * o, y, fz + nz * o, alongU ? w : 0.04, h, alongU ? 0.04 : w, color);
-    box('metal', y0 + 1.15, 1.5, 2.3, '#5f666d');
-    box('metal', y0 + 1.1, 1.2, 2.2, '#c9ced3', 0.01);
-    box('metal', y0 + 1.1, 0.02, 2.2, '#8a9198', 0.012);
+    if (!e.rideable) {
+      box('metal', y0 + 1.15, 1.5, 2.3, '#5f666d');
+      box('metal', y0 + 1.1, 1.2, 2.2, '#c9ced3', 0.01);
+      box('metal', y0 + 1.1, 0.02, 2.2, '#8a9198', 0.012);
+    }
     box('glow', y0 + 2.55, 0.5, 0.18, '#ff7a45', 0.02);
   }
 }

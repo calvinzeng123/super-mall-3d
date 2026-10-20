@@ -2,15 +2,15 @@
 export const FPS_CONTROL_STORAGE_KEY = 'yunlan.fps.controls.v1';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const numeric = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
-const CONTROL_KEYS = ['move', 'fire', 'ads', 'reload', 'swap', 'interact', 'sprint', 'crouch', 'heal'];
+const CONTROL_KEYS = ['move', 'fire', 'ads', 'reload', 'swap', 'interact', 'sprint', 'crouch', 'heal', 'jump'];
 const DEFAULT_POSITIONS = {
   landscape: {
     move: [.125, .73], fire: [.895, .56], ads: [.79, .57], reload: [.90, .83],
-    swap: [.72, .84], interact: [.68, .59], sprint: [.125, .40], crouch: [.81, .84], heal: [.255, .84],
+    swap: [.72, .84], interact: [.68, .59], sprint: [.125, .40], crouch: [.81, .84], heal: [.255, .84], jump: [.90, .34],
   },
   portrait: {
     move: [.18, .81], fire: [.85, .735], ads: [.67, .73], reload: [.85, .88],
-    swap: [.50, .89], interact: [.69, .59], sprint: [.18, .645], crouch: [.68, .88], heal: [.18, .92],
+    swap: [.50, .89], interact: [.64, .59], sprint: [.18, .645], crouch: [.68, .88], heal: [.18, .92], jump: [.88, .59],
   },
 };
 
@@ -51,6 +51,7 @@ const icons = {
   swap: '<path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
   interact: '<path d="M8 13V5a2 2 0 0 1 4 0v7m0-4a2 2 0 0 1 4 0v4m0-2a2 2 0 0 1 4 0v6c0 4-3 6-6 6-3 0-5-2-6-4l-4-5a2 2 0 0 1 3-2l1 2"/>',
   sprint: '<circle cx="15" cy="4" r="2"/><path d="m7 10 5-3 4 4 4 1m-8-5-2 7 5 3 1 5M10 14l-4 6H2"/>',
+  jump: '<circle cx="14" cy="4" r="2"/><path d="m6 5 4 5 5-1 4-4M10 10l-2 5-4 2m4-2 7 2 2 4M3 22h18"/>',
   crouch: '<circle cx="12" cy="4" r="2"/><path d="m9 8 4 3 5 1M9 8l-2 6 7 2-2 5h7M7 14l-4 5"/>',
   heal: '<rect x="4" y="5" width="16" height="16" rx="4"/><path d="M9 5V3h6v2m-3 5v7m-3.5-3.5h7"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
@@ -58,6 +59,7 @@ const icons = {
 };
 const svg = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || ''}</svg>`;
 const HUD_CSS = `
+.fps-exit-choice{position:absolute;right:calc(10px + env(safe-area-inset-right,0px));top:calc(58px + env(safe-area-inset-top,0px));min-height:44px;max-width:142px;padding:5px 10px;color:#badfd9;border:1px solid #bfe4d64d;border-radius:12px;background:#102431a8;pointer-events:auto;font-size:10px}.fps-hud[data-paused="true"] .fps-exit-choice{pointer-events:none}.fps-mobility{position:absolute;left:50%;bottom:calc(38px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font-size:9px;text-align:center;color:#c7e1dc;text-shadow:0 1px 3px #000;min-width:110px}.fps-stamina-track{height:2px;width:82px;margin:4px auto;background:#d8eeec30}.fps-stamina-track i{display:block;height:100%;background:#97d7bd}.fps-jump{border-color:#c5e5ec9c}.fps-hud[data-sprinting="true"] .fps-crosshair{opacity:.25}.fps-hud[data-airborne="true"] .fps-crosshair{transform:translate(-50%,-50%) scale(1.4)}.fps-threat-status{color:#edbb96;font-size:9px;min-height:12px;margin-top:2px}
 .fps-hud{--fps-scale:1;--fps-opacity:.78;--fps-amber:#e8b876;--fps-mint:#9bc9bc;--fps-white:#edf4f8;--fps-muted:#b4c7d3;position:fixed;inset:0;z-index:80;color:var(--fps-white);font:12px/1.4 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;pointer-events:none;user-select:none;-webkit-user-select:none;touch-action:none;overflow:hidden;isolation:isolate;color-scheme:dark}
 .fps-hud *{box-sizing:border-box}.fps-hud [hidden]{display:none!important}.fps-hud button,.fps-hud input{font:inherit}.fps-hud button{color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}.fps-hud button:focus-visible,.fps-hud input:focus-visible{outline:2px solid var(--fps-amber);outline-offset:3px}.fps-hud button:disabled{cursor:default}.fps-hud svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.fps-look{position:absolute;inset:0 0 0 34%;pointer-events:auto;touch-action:none;z-index:0}.fps-live{position:absolute;inset:0;pointer-events:none;transition:opacity .15s}.fps-hud[data-paused="true"]:not([data-editing="true"]) .fps-live{opacity:.22}.fps-hud[data-paused="true"] .fps-look{pointer-events:none}.fps-hud[data-paused="true"]:not([data-editing="true"]) .fps-control,.fps-hud[data-paused="true"] .fps-pause,.fps-hud[data-paused="true"] .fps-squad-toggle{pointer-events:none}
 .fps-top-left{position:absolute;left:calc(14px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));width:min(280px,40vw);text-shadow:0 1px 3px #000,0 1px 8px #0009}.fps-mission-overline{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:.12em;color:var(--fps-amber)}.fps-mission-step{font:600 13px/1 ui-monospace,SFMono-Regular,monospace}.fps-objective{font-size:13px;font-weight:600;margin:4px 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fps-objective-detail{font-size:10px;color:#d5e0e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:14px}.fps-route{display:flex;gap:5px;width:104px;margin:7px 0 5px}.fps-route i{height:2px;background:#d1e1ed4a;flex:1}.fps-route i.complete{background:#9bc9bc}.fps-route i.current{background:#e8b876}.fps-bearing{font-size:10px;color:#e8cda4;min-height:14px}.fps-compass{position:absolute;left:50%;top:calc(13px + env(safe-area-inset-top,0px));transform:translateX(-50%);font:600 10px/1.2 ui-monospace,SFMono-Regular,monospace;display:flex;align-items:center;gap:15px;color:#d3e1e9;text-shadow:0 1px 4px #000}.fps-compass:before,.fps-compass:after{content:"";height:4px;width:30px;border-top:1px solid #d9e9f08c;border-left:1px solid #d9e9f04d;border-right:1px solid #d9e9f04d}.fps-compass b{color:#fff;font-size:12px;min-width:45px;text-align:center}.fps-pause{position:absolute;top:calc(7px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));width:44px;height:44px;border-radius:14px;background:#10243176;border:1px solid #d1e5f03d;display:grid;place-items:center;pointer-events:auto}.fps-pause svg{width:19px;height:19px}
@@ -67,6 +69,7 @@ const HUD_CSS = `
 .fps-health{position:absolute;bottom:calc(13px + env(safe-area-inset-bottom,0px));left:calc(16px + env(safe-area-inset-left,0px));display:flex;align-items:center;gap:9px;text-shadow:0 1px 5px #000}.fps-health b{font:600 17px ui-monospace,monospace;min-width:32px}.fps-health-track{height:3px;background:#e4f2f235;width:82px;overflow:hidden}.fps-health-track i{display:block;width:100%;height:100%;background:#c0e1d5}.fps-health.low{color:#ffb5a4}.fps-health.low i{background:#ff9e87}.fps-health small{font-size:8px;letter-spacing:.1em;color:#c5d9e2}.fps-ammo{position:absolute;bottom:calc(11px + env(safe-area-inset-bottom,0px));right:calc(16px + env(safe-area-inset-right,0px));display:flex;align-items:flex-end;gap:10px;text-shadow:0 1px 5px #000}.fps-weapon{font-size:10px;text-transform:uppercase;color:#d6e3ec;max-width:120px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;padding-bottom:3px}.fps-ammo-numbers b{font:600 25px/1 ui-monospace,monospace}.fps-ammo-numbers span{font:12px ui-monospace,monospace;color:#bbccd7}.fps-ammo.reloading .fps-weapon{color:var(--fps-amber)}.fps-notice{position:absolute;left:50%;top:calc(55px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:7px 13px;background:#102636dd;border:1px solid #b6d0dd3b;border-radius:10px;max-width:min(390px,62vw);font-size:11px;text-align:center;opacity:0;transition:opacity .2s}.fps-notice.on{opacity:1}.fps-interact-prompt{position:absolute;left:50%;top:calc(50% + 43px);transform:translateX(-50%);max-width:42vw;font-size:11px;text-align:center;text-shadow:0 1px 5px #000;color:#cce9de}.fps-extract-progress{position:absolute;left:50%;top:calc(50% + 67px);transform:translateX(-50%);width:120px;height:3px;background:#d2efde32}.fps-extract-progress i{height:100%;display:block;background:#a4d4bf;width:0}.fps-keyboard-hint{position:absolute;left:50%;bottom:13px;transform:translateX(-50%);font-size:9px;color:#d7e7ef94;text-shadow:0 1px 4px #000;white-space:nowrap}.fps-world-marker{position:absolute;pointer-events:none;transform:translate(-50%,-50%);color:#ffe1ad;font-weight:600;font-size:11px;text-shadow:0 1px 3px #000;white-space:nowrap;padding:4px 8px;background:#112b3d80;border:1px solid #c6a3695e;border-radius:8px}.fps-world-marker:empty{display:none}.fps-map{position:absolute;display:none}
 .fps-modal{position:absolute;inset:0;background:#06121ddb;display:flex;align-items:center;justify-content:center;padding:calc(18px + env(safe-area-inset-top,0px)) calc(22px + env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) calc(22px + env(safe-area-inset-left,0px));pointer-events:auto;touch-action:pan-y;overflow:auto;z-index:20}.fps-dialog{width:min(620px,100%);max-height:100%;overflow:auto;background:#142735ed;border:1px solid #afc7d135;border-radius:22px;padding:24px;box-shadow:0 15px 80px #0006}.fps-dialog h2{margin:2px 0 6px;font-size:27px;letter-spacing:.05em}.fps-dialog p{color:#b6cbd7;font-size:12px;line-height:1.75;margin:6px 0 17px}.fps-eyebrow{font:10px ui-monospace,monospace;letter-spacing:.15em;color:#e8b876}.fps-dialog button{min-height:44px;padding:10px 15px;border:1px solid #c1d7e32b;border-radius:11px;background:#b9d2e20a;font-weight:500}.fps-dialog button:hover{background:#c9e5f41c}.fps-dialog .fps-primary{background:#e8b876;color:#162733;border-color:#e8b876;font-weight:650}.fps-dialog .fps-primary:hover{background:#f1c88f}.fps-menu-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:16px 0}.fps-menu-actions .fps-primary{grid-column:1/-1}.fps-menu-bottom{display:flex;gap:9px;margin-top:13px}.fps-menu-bottom button{flex:1;font-size:11px}.fps-order-form{border-top:1px solid #b3d0e11c;padding-top:16px;margin-top:18px}.fps-order-form label{font-size:11px;display:block;margin-bottom:8px;color:#c5e0d9}.fps-order-row{display:flex;gap:8px}.fps-order-row input{min-width:0;flex:1;min-height:44px;padding:10px 12px;background:#08182596;color:#edf4f8;border:1px solid #bdd6e236;border-radius:10px;user-select:text;-webkit-user-select:text}.fps-order-row button{flex:none}.fps-order-status{font-size:10px;color:#b5d7c9;min-height:14px;margin-top:7px}.fps-credits{display:flex;align-items:center;min-height:44px;font-size:9px;color:#aac8d8;text-underline-offset:3px}.fps-dialog .fps-credits{border:0;padding:0;background:none;text-decoration:underline}.fps-credits-content article{padding:8px 0 15px;border-bottom:1px solid #c9dfed26}.fps-credits-content h3{font-size:14px;margin:8px 0}.fps-credits-content a{display:inline-flex;align-items:center;min-height:44px;margin-right:18px;font-size:11px;color:#d9c59e;text-underline-offset:4px}.fps-credits-content p{font-size:11px;margin:5px 0;line-height:1.75}.fps-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}.fps-panel-heading h2{font-size:21px;margin:0}.fps-settings-row{display:grid;grid-template-columns:1fr auto;gap:6px 16px;margin-bottom:20px;align-items:center}.fps-settings-row label{font-size:12px}.fps-settings-row output{font:11px ui-monospace,monospace;color:#e8c48f}.fps-settings-row input[type="range"]{grid-column:1/-1;width:100%;min-height:28px;accent-color:#e8b876;cursor:pointer;touch-action:pan-y}.fps-settings-toggle{display:flex;align-items:center;gap:10px;min-height:44px;font-size:12px}.fps-settings-toggle input{width:20px;height:20px;accent-color:#e8b876}.fps-settings-actions{display:flex;gap:9px;margin-top:14px}.fps-settings-actions button{flex:1;font-size:11px}.fps-settings-caption{font-size:10px!important;margin:12px 0 0!important}.fps-editor-bar{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 26px);padding:8px 10px 8px 14px;border:1px solid #d2dfeb40;background:#102839f5;border-radius:16px;display:flex;gap:10px;align-items:center;pointer-events:auto;z-index:30;box-shadow:0 7px 28px #0005}.fps-editor-bar b{font-size:11px}.fps-editor-bar span{display:block;font-size:9px;color:#c4d7e2;line-height:1.6}.fps-editor-bar button{min-height:44px;padding:6px 14px;border:1px solid #bfd8e433;border-radius:10px;background:#d7e9f014;font-size:11px;white-space:nowrap}.fps-editor-bar button[data-action="editor-save"]{background:#e8b876;color:#162733;border-color:#e8b876}.fps-hud[data-editing="true"] .fps-control{opacity:1;border-style:dashed;border-color:#dfbf8b;background:#0c293ab8;pointer-events:auto;cursor:grab}.fps-hud[data-editing="true"] .fps-control.is-selected{border:2px solid #ffda99;box-shadow:0 0 0 4px #e8b8762b}.fps-hud[data-editing="true"] .fps-top-left,.fps-hud[data-editing="true"] .fps-compass,.fps-hud[data-editing="true"] .fps-squad,.fps-hud[data-editing="true"] .fps-pause{visibility:hidden}.fps-editor-grid{position:absolute;inset:0;background-image:linear-gradient(#a0bdcd09 1px,transparent 1px),linear-gradient(90deg,#a0bdcd09 1px,transparent 1px);background-size:24px 24px;pointer-events:none}.fps-result-title{font-size:32px!important;margin:8px 0!important}.fps-result-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:22px 0}.fps-result-stat{padding:11px 0;border-top:1px solid #b4d2df29}.fps-result-stat b{display:block;font:600 23px ui-monospace,monospace;color:#f2dab6}.fps-result-stat span{font-size:10px;color:#b9cedb}.fps-result-actions{display:flex;gap:10px}.fps-result-actions button{flex:1}.fps-dialog[data-result="failure"] .fps-eyebrow{color:#ffb6a7}.fps-dialog[data-result="failure"] .fps-result-title{color:#f6d1c8}
 @media(orientation:portrait){.fps-top-left{width:calc(100% - 80px);max-width:310px;top:calc(15px + env(safe-area-inset-top,0px))}.fps-objective{font-size:14px}.fps-compass{top:calc(134px + env(safe-area-inset-top,0px));font-size:10px}.fps-squad{top:calc(92px + env(safe-area-inset-top,0px))}.fps-squad-toggle{min-height:44px;padding:4px 9px}.fps-notice{top:calc(175px + env(safe-area-inset-top,0px));max-width:84vw}.fps-health-track{width:61px}.fps-health{bottom:calc(18px + env(safe-area-inset-bottom,0px))}.fps-ammo{bottom:calc(15px + env(safe-area-inset-bottom,0px))}.fps-weapon{font-size:9px;max-width:90px}.fps-keyboard-hint{display:none}.fps-dialog{padding:23px 20px;border-radius:21px}.fps-menu-actions{grid-template-columns:1fr}.fps-menu-actions .fps-primary{grid-column:auto}.fps-editor-bar{align-items:center;gap:7px;padding:8px 9px}.fps-editor-bar b{font-size:10px}.fps-editor-bar button{padding:6px 10px;min-height:44px}.fps-editor-bar span{font-size:8px}.fps-result-stats{grid-template-columns:repeat(3,1fr)}.fps-interact-prompt{max-width:70vw}}
+@media(orientation:portrait){.fps-mobility{top:calc(153px + env(safe-area-inset-top,0px));bottom:auto}.fps-notice{top:calc(184px + env(safe-area-inset-top,0px))}}
 @media(orientation:landscape) and (max-height:460px){.fps-top-left{top:calc(8px + env(safe-area-inset-top,0px));width:min(235px,32vw)}.fps-objective{font-size:11px}.fps-objective-detail{font-size:9px}.fps-mission-overline{font-size:8px}.fps-route{margin-top:4px;margin-bottom:3px}.fps-bearing{font-size:9px}.fps-squad{top:calc(86px + env(safe-area-inset-top,0px))}.fps-squad-toggle{min-height:44px;padding:4px 8px}.fps-squad-choices{position:absolute;left:100%;top:0;margin:0 0 0 5px}.fps-squad-choices button{min-width:44px;font-size:10px}.fps-stick{--base-size:98px}.fps-notice{top:calc(42px + env(safe-area-inset-top,0px))}.fps-dialog{padding:20px 23px;width:min(680px,100%)}.fps-dialog [data-panel="menu"]{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}.fps-menu-intro{grid-column:1}.fps-menu-actions{grid-column:2;grid-row:1/3;margin:0;align-self:start}.fps-menu-bottom{grid-column:2;grid-row:3;margin-top:0}.fps-order-form{grid-column:1;grid-row:2/4;margin:0;padding-top:10px}.fps-dialog h2{font-size:24px}.fps-dialog p{font-size:11px;margin-bottom:10px}.fps-order-form label{font-size:10px}.fps-order-row input{width:100px;font-size:11px}.fps-order-row button{font-size:10px;padding:8px 11px}.fps-menu-actions button{min-height:44px;font-size:11px}.fps-settings-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:24px}.fps-settings-row{margin-bottom:9px}.fps-settings-actions{margin-top:8px}.fps-settings-caption{margin-top:6px!important}.fps-settings-toggle{min-height:35px}.fps-result-layout{display:grid;grid-template-columns:1fr 1fr;gap:0 25px}.fps-result-stats{margin:0;grid-column:2;grid-row:1/3}.fps-result-actions{grid-column:1/-1;margin-top:14px}.fps-result-title{font-size:28px!important}}
 @media(hover:hover) and (pointer:fine){.fps-look{pointer-events:none}}@media(pointer:coarse){.fps-keyboard-hint{display:none}}@media(prefers-reduced-motion:reduce){.fps-hud *{transition:none!important;animation:none!important}}
 `;
@@ -85,27 +88,29 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
   root.innerHTML = `
     <div class="fps-look" aria-hidden="true"></div>
     <div class="fps-live">
-      <div class="fps-top-left"><div class="fps-mission-overline"><span class="fps-mission-step">01</span><span>封锁行动 / 当前目标</span></div><div class="fps-objective">搜索商场终端</div><div class="fps-objective-detail">和队友一起获取情报</div><div class="fps-route" aria-label="任务进度"><i class="current"></i><i></i><i></i></div><div class="fps-bearing"></div></div>
+      <div class="fps-top-left"><div class="fps-mission-overline"><span class="fps-mission-step">01</span><span>封锁行动 / 当前目标</span></div><div class="fps-objective">搜索商场终端</div><div class="fps-objective-detail">和队友一起获取情报</div><div class="fps-route" aria-label="任务进度"><i class="current"></i><i></i><i></i></div><div class="fps-bearing"></div><div class="fps-threat-status"></div></div>
       <div class="fps-compass" aria-label="朝向"><b>北 000°</b></div>
       <button class="fps-pause" data-action="pause" aria-label="暂停游戏">${svg('pause')}</button>
+      <button class="fps-exit-choice" data-action="extract-route" aria-label="切换撤离方式">车辆撤离 ⇄</button>
       <div class="fps-squad"><button class="fps-squad-toggle" data-action="squad-menu" aria-label="队友指令" aria-expanded="false">${svg('squad')}<span class="fps-teammate">回声 · 跟随</span><span class="fps-teammate-health">100</span></button><div class="fps-squad-choices" hidden><button data-action="squad" data-command="follow" aria-pressed="true">跟随</button><button data-action="squad" data-command="hold" aria-pressed="false">守位</button><button data-action="squad" data-command="cover" aria-pressed="false">掩护</button><button data-action="order-panel" aria-label="输入队友指令">指令</button></div></div>
       <div class="fps-controls" aria-label="触屏游戏控制">
         <div class="fps-control fps-stick" data-control="move" role="application" aria-label="左摇杆：移动"><i class="fps-stick-knob"></i><span class="fps-control-label">移动</span></div>
-        ${[['fire','开火','按住开火'],['ads','瞄准','切换瞄准'],['reload','换弹','重新装填'],['swap','切枪','切换武器'],['interact','互动','互动或拾取'],['sprint','冲刺','按住冲刺'],['crouch','蹲伏','切换蹲伏'],['heal','急救 2','使用急救包']].map(([key,label,aria]) => `<button class="fps-control fps-${key}" data-action="${key}" data-control="${key}" aria-label="${aria}"${['ads','crouch'].includes(key)?' aria-pressed="false"':''}>${svg(key)}<span class="fps-control-label">${label}</span></button>`).join('')}
+        ${[['fire','开火','按住开火'],['ads','瞄准','切换瞄准'],['reload','换弹','重新装填'],['swap','切枪','切换武器'],['interact','互动','互动或拾取'],['sprint','冲刺','切换持续冲刺'],['crouch','蹲伏','切换蹲伏'],['heal','急救 2','使用急救包'],['jump','跳跃','跳跃']].map(([key,label,aria]) => `<button class="fps-control fps-${key}" data-action="${key}" data-control="${key}" aria-label="${aria}"${['ads','crouch','sprint'].includes(key)?' aria-pressed="false"':''}>${svg(key)}<span class="fps-control-label">${label}</span></button>`).join('')}
       </div>
       <div class="fps-crosshair" aria-hidden="true"><i></i></div><div class="fps-hit-marker" aria-hidden="true"></div><div class="fps-damage" aria-hidden="true"></div>
       <div class="fps-health"><b>100</b><div><small>生命</small><div class="fps-health-track"><i></i></div></div></div>
+      <div class="fps-mobility"><span>步行 · 全自动</span><div class="fps-stamina-track" aria-label="冲刺耐力"><i></i></div></div>
       <div class="fps-ammo"><div class="fps-weapon">步枪</div><div class="fps-ammo-numbers"><b>30</b><span> / 120</span></div></div>
       <div class="fps-notice" role="status" aria-live="polite"></div><div class="fps-interact-prompt" hidden></div><div class="fps-extract-progress" hidden><i></i></div>
-      <div class="fps-keyboard-hint">WASD 移动 · 鼠标瞄准 · R 换弹 · E 互动 · Q 切枪</div><div class="fps-world-marker"></div><div class="fps-map"></div>
+      <div class="fps-keyboard-hint">WASD 移动 · Shift 冲刺 · 空格 跳跃 · R 换弹 · E 互动 · Q 切枪</div><div class="fps-world-marker"></div><div class="fps-map"></div>
     </div>
     <div class="fps-editor-grid" hidden></div>
     <div class="fps-editor-bar" hidden><div><b>拖动按钮，自定义布局</b><span class="fps-editor-caption">游戏已暂停 · 横竖屏分别保存</span></div><button data-action="editor-cancel">取消</button><button data-action="editor-save">保存</button></div>
     <div class="fps-modal" hidden>
       <section class="fps-dialog" role="dialog" aria-modal="true" aria-label="游戏菜单">
         <div data-panel="menu">
-          <div class="fps-menu-intro"><div class="fps-eyebrow">OPERATION / PAUSED</div><h2>行动暂停</h2><p>搜索商场终端，获取酒店情报，<br>和队友前往公寓撤离点。</p></div>
-          <div class="fps-menu-actions"><button class="fps-primary" data-action="resume">继续行动</button><button data-action="settings">操作设置</button><button data-action="editor">调整按键</button></div>
+          <div class="fps-menu-intro"><div class="fps-eyebrow">OPERATION / PAUSED</div><h2>行动暂停</h2><p>搜索商场终端，获取酒店情报。<br>在车库接应车与屋顶直升机之间选择。<br>点击冲刺开关后推动摇杆，跳跃独立操作。</p></div>
+          <div class="fps-menu-actions"><button class="fps-primary" data-action="resume">继续行动</button><button data-action="settings">操作设置</button><button data-action="editor">调整按键</button><button data-action="firemode" class="fps-firemode">SMG：全自动 ⇄ 两连发</button></div>
           <div class="fps-menu-bottom"><button data-action="restart">重新行动</button><button data-action="exit">返回封面</button></div>
           <form class="fps-order-form"><label for="fpsOrderInput">给队友下达指令</label><div class="fps-order-row"><input id="fpsOrderInput" autocomplete="off" maxlength="120" placeholder="例如：守住这里"><button type="submit">发送</button></div><div class="fps-order-status">支持跟随、守位与掩护指令</div><button class="fps-credits" type="button" data-action="credits" aria-label="素材署名与许可">素材署名 · DJMaesen / ELIZION</button></form>
         </div>
@@ -116,6 +121,7 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
           <label class="fps-settings-toggle"><input data-setting="invertY" type="checkbox">反转上下视角</label></div>
           <div class="fps-settings-actions"><button class="fps-primary" data-action="editor">拖动调整按键</button><button data-action="reset-controls">恢复默认</button></div><p class="fps-settings-caption">布局按横屏与竖屏分别保存。左侧摇杆移动，右侧空白区域滑动转向。</p>
         </div>
+        <div data-panel="lift" hidden><div class="fps-panel-heading"><h2>选择电梯楼层</h2><button data-action="resume">返回行动</button></div><p>走入玻璃轿厢后连续升降，抵达后开门。附近的回声会一起乘梯。</p><div class="fps-lift-stops fps-menu-actions"></div></div>
         <div data-panel="credits" hidden><div class="fps-panel-heading"><h2>素材署名</h2><button data-action="menu">返回</button></div><div class="fps-credits-content">
           <article><h3>SMG-45 / 贴图手臂</h3><p>“fps animated smg” · DJMaesen<br>采用源模型手套、布料袖子与 SMG 原生换弹动画。</p><a href="https://sketchfab.com/3d-models/fps-animated-smg-ea3dad7478624495a5a46f40127b0579" target="_blank" rel="noopener">DJMaesen 原始作品</a><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0 许可</a><p>改动：移动端贴图缩放与 JPEG 重编码，第一人称位置、后坐力、切枪与手枪换弹呈现。保留源几何。手枪握持姿态继承 AetherRadar / Operation Steel Tide 的适配。</p></article>
           <article><h3>Desert Eagle</h3><p>“Desert Eagle” · ELIZION</p><a href="https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95" target="_blank" rel="noopener">ELIZION 原始作品</a><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0 许可</a><p>改动：贴图缩放与 JPEG 重编码、统一呈现比例、基于源分件制作弹匣和套筒运动。保留源几何。</p></article>
@@ -135,7 +141,7 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
   const held = new Map();
   let paused = false, editing = false, disposed = false, resultVisible = false, editBackup = null;
   let lookPointer = null, lookLast = null, stickPointer = null, drag = null, fireLook = null;
-  let ads = false, crouching = false, lastInteract = '', lastMessage = '', noticeTimer = 0, hitTimer = 0, damageTimer = 0;
+  let ads = false, crouching = false, sprintRequested = false, lastInteract = '', lastMessage = '', noticeTimer = 0, hitTimer = 0, damageTimer = 0;
   let previousFocus = null;
   const orientation = () => innerWidth > innerHeight ? 'landscape' : 'portrait';
   const saveSettings = () => { try { storage?.setItem(FPS_CONTROL_STORAGE_KEY, JSON.stringify(settings)); } catch { /* Private browsing may disallow persistence. */ } };
@@ -161,9 +167,14 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
       defaults.sprint.y = Math.min(.645, defaults.move.y - ((sizes.move.height + sizes.sprint.height) / 2 + 12) / height);
       defaults.swap.y = .91;
       defaults.heal.y = .92;
+      defaults.interact.x = defaults.jump.x - ((sizes.jump.width + sizes.interact.width) / 2 + 14) / width;
     } else {
       defaults.interact.x = defaults.ads.x - ((sizes.ads.width + sizes.interact.width) / 2 + Math.max(12, width * .035)) / width;
       defaults.heal.x = Math.max(.255, defaults.move.x + ((sizes.move.width + sizes.heal.width) / 2 + 12) / width);
+      defaults.sprint.x = defaults.heal.x;
+      defaults.sprint.y = defaults.move.y - ((sizes.sprint.height + sizes.heal.height) / 2 + 18) / height;
+      defaults.jump.x = defaults.ads.x;
+      defaults.jump.y = Math.min(.34, defaults.ads.y - ((sizes.ads.height + sizes.jump.height) / 2 + 14) / height);
     }
     for (const key of CONTROL_KEYS) {
       const node = controls[key];
@@ -241,7 +252,7 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
     held.delete(key); controls[key].classList.remove('is-active'); onAction(key, { pressed: false });
     if (key === 'fire') fireLook = null;
   }
-  for (const key of ['fire', 'sprint']) {
+  for (const key of ['fire']) {
     const button = controls[key];
     listen(button, 'pointerdown', event => {
       if (paused || editing || event.button > 0) return;
@@ -313,6 +324,9 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
     else if (action === 'resume') setPaused(false, true);
     else if (action === 'settings') { setPaused(true, true); setPanel('settings'); }
     else if (action === 'credits') setPanel('credits');
+    else if (action === 'firemode') onAction('firemode', {});
+    else if (action === 'extract-route' && !paused) onAction('extract-route', {});
+    else if (action === 'lift-stop') onAction('lift', { id: button.dataset.lift, floor: button.dataset.floor });
     else if (action === 'menu') setPanel('menu');
     else if (action === 'editor') beginEditor();
     else if (action === 'editor-save') finishEditor(true);
@@ -327,8 +341,9 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
       for (const b of root.querySelectorAll('[data-command]')) b.setAttribute('aria-pressed', String(b.dataset.command === command));
       $('.fps-squad-choices').hidden = true; $('.fps-squad-toggle').setAttribute('aria-expanded', 'false');
     } else if (action === 'ads' && !paused) { ads = !ads; root.dataset.ads = String(ads); button.setAttribute('aria-pressed', String(ads)); onAction('ads', { active: ads }); }
+    else if (action === 'sprint' && !paused) { sprintRequested = !sprintRequested; button.setAttribute('aria-pressed', String(sprintRequested)); onAction('sprint', { active: sprintRequested }); }
     else if (action === 'crouch' && !paused) { crouching = !crouching; button.setAttribute('aria-pressed', String(crouching)); onAction('crouch', { active: crouching }); }
-    else if (['reload','swap','interact','heal'].includes(action) && !paused) onAction(action, {});
+    else if (['reload','swap','interact','heal','jump'].includes(action) && !paused) onAction(action, {});
   });
   listen(root, 'input', event => {
     const input = event.target.closest('[data-setting]'); if (!input) return;
@@ -394,6 +409,14 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
       $('.fps-extract-progress i').style.width = `${clamp(numeric(value, 0), 0, 1) * 100}%`;
     }
     if (snapshot.ads !== undefined) { ads = !!snapshot.ads; root.dataset.ads = String(ads); controls.ads.setAttribute('aria-pressed', String(ads)); }
+    if (snapshot.stamina !== undefined) $('.fps-stamina-track i').style.width = `${clamp(snapshot.stamina, 0, 100)}%`;
+    if (snapshot.movementLabel !== undefined) setText('.fps-mobility span', snapshot.movementLabel);
+    if (snapshot.sprintRequested !== undefined) { sprintRequested = !!snapshot.sprintRequested; controls.sprint.setAttribute('aria-pressed', String(sprintRequested)); }
+    root.dataset.sprinting = String(!!snapshot.sprinting);
+    root.dataset.airborne = String(!!snapshot.airborne);
+    if (snapshot.extractionLabel) setText('.fps-exit-choice', `${snapshot.extractionLabel} ⇄`);
+    if (snapshot.threatLabel !== undefined) setText('.fps-threat-status', snapshot.threatLabel);
+    if (snapshot.fireMode) setText('.fps-firemode', `SMG：${snapshot.fireMode === 'burst' ? '两连发' : '全自动'} ⇄`);
     if (snapshot.medkits !== undefined) { setText('.fps-heal .fps-control-label', snapshot.healing ? '急救中' : `急救 ${snapshot.medkits}`); controls.heal.disabled = !editing && (snapshot.medkits <= 0 || snapshot.healing); }
     if (snapshot.crouching !== undefined) { crouching = !!snapshot.crouching; controls.crouch.setAttribute('aria-pressed', String(crouching)); }
     if (snapshot.message && snapshot.message !== lastMessage) { lastMessage = snapshot.message; notify(snapshot.message); }
@@ -423,7 +446,7 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
   }
   applySettings(false); controls.interact.disabled = true;
   function clearResult() {
-    resultVisible = false; setPaused(false, false); ads = false; crouching = false; lastMessage = '';
+    resultVisible = false; setPaused(false, false); ads = false; crouching = false; sprintRequested = false; lastMessage = '';
     root.dataset.ads = 'false'; controls.ads.setAttribute('aria-pressed', 'false'); controls.crouch.setAttribute('aria-pressed', 'false');
     $('.fps-hit-marker').classList.remove('on'); $('.fps-damage').classList.remove('on'); $('.fps-notice').classList.remove('on');
     $('.fps-extract-progress').hidden = true; lastInteract = ''; controls.interact.disabled = true;
@@ -433,6 +456,15 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
     get settings() { return normalizeControlSettings(settings); },
     get paused() { return paused; }, get editing() { return editing; },
     showSettings() { setPaused(true, true); setPanel('settings'); },
+    showLiftStops(link, current) {
+      setPaused(true, true); setPanel('lift');
+      $('.fps-lift-stops').replaceChildren(...link.stops.map(stop => {
+        const button = document.createElement('button');
+        button.dataset.action = 'lift-stop'; button.dataset.lift = link.id; button.dataset.floor = stop.floor;
+        button.textContent = stop.label || stop.floor; button.disabled = stop.floor === current;
+        return button;
+      }));
+    },
     editControls: beginEditor,
     dispose() {
       if (disposed) return; disposed = true; releaseInputs(); abort.abort();

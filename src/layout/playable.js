@@ -1,8 +1,9 @@
-// The phone runtime owns only the first-phase mall and its attached hotel and
-// apartments. The full authoring layout remains available for legacy tools.
+// Exploration owns the original complete campus. Only the FPS session trims
+// buildings before rendering so the two experiences have independent budgets.
 import { buildLayout } from './layout.js';
 import { rect, rectPoly, clipConvex } from './geom.js';
 import { addMissionCollision } from '../fps/mission-layout.js';
+import { buildTowerStairAccess } from './tower-stairs.js';
 
 const BUILDINGS = new Set(['P1', 'H', 'A']);
 export const PLAYABLE_BOUNDS = Object.freeze({ x0: -304, z0: -270, x1: -8, z1: -18 });
@@ -30,29 +31,37 @@ function capFor(building, roof, levels) {
     slab: { pieces: [{ outer: building.outline, holes: [] }] } };
 }
 
-/** Physically discard unused data before any meshes, physics or people exist.
- * Tour keeps the original P1/H/A floors. FPS has two retail floors and three
- * tower floors, connected basements and solid lightweight caps. */
+function accessibleTowerRoof(building, roof, levels) {
+  const last = levels.filter(l => l.building === building.id).at(-1);
+  return { ...roof, elev: +(last.elev + last.height).toFixed(3), height: 3.2,
+    name: 'RF 屋顶接应平台', playableRoof: true, units: [], features: [],
+    theme: { ...roof.theme, label: '消防梯 / 玻璃电梯直达 · 空中接应' } };
+}
+
+/** Physically discard unused data before FPS meshes, physics or people exist.
+ * Tour returns the full source layout, including phases 2/3, homes and metro.
+ * FPS keeps two retail floors, three tower floors and reachable tower roofs. */
 export function buildPlayableLayout({ mode = 'tour' } = {}) {
   if (!['tour', 'fps'].includes(mode)) throw new Error(`Unknown playable mode: ${mode}`);
   const layout = buildLayout(), full = {
     buildings: layout.buildings.length, levels: layout.levels.length,
     dwellings: layout.levels.reduce((n, l) => n + l.units.filter(u => u.residence).length, 0),
   };
+  if (mode === 'tour') {
+    return layout;
+  }
   const buildings = layout.buildings.filter(b => BUILDINGS.has(b.id));
-  let levels = layout.levels.filter(l => BUILDINGS.has(l.building) && (mode === 'tour' || FPS_FLOORS.has(l.id)));
+  let levels = layout.levels.filter(l => BUILDINGS.has(l.building) && FPS_FLOORS.has(l.id));
   for (const level of levels) if (['H-B1', 'A-B1'].includes(level.id)) {
     level.name = 'B1 住客车库与商场连廊';
     level.theme = { ...level.theme, label: '独立车库出入口 · 商场地下连通' };
   }
-  const walkableIds = new Set(levels.map(l => l.id));
-  if (mode === 'fps') {
-    for (const b of buildings) {
-      const roof = layout.levels.find(l => l.building === b.id && l.kind === 'roof');
-      levels.push(capFor(b, roof, levels));
-    }
-    levels.sort((a, b) => buildings.findIndex(v => v.id === a.building) - buildings.findIndex(v => v.id === b.building) || a.elev - b.elev);
+  for (const b of buildings) {
+    const roof = layout.levels.find(l => l.building === b.id && l.kind === 'roof');
+    levels.push(b.kind === 'tower' ? accessibleTowerRoof(b, roof, levels) : capFor(b, roof, levels));
   }
+  levels.sort((a, b) => buildings.findIndex(v => v.id === a.building) - buildings.findIndex(v => v.id === b.building) || a.elev - b.elev);
+  const walkableIds = new Set(levels.filter(l => !l.playableCap).map(l => l.id));
   const levelIds = new Set(levels.map(l => l.id));
   const validEnd = id => id === 'site' || id === 'street' || id === 'ground' || walkableIds.has(id);
   for (const b of buildings) {
@@ -62,7 +71,9 @@ export function buildPlayableLayout({ mode = 'tour' } = {}) {
       b.height = owned.at(-1).elev;
       if (b.kind === 'tower') { b.storeys = 3; b.massing = { ...b.massing, top: b.height }; }
     }
-    if (b.access) {
+    if (b.kind === 'tower') {
+      b.access = buildTowerStairAccess(b, owned, layout.stairs.filter(s => s.building === b.id));
+    } else if (b.access) {
       const routes = b.access.routes.filter(r => walkableIds.has(r.from) && walkableIds.has(r.to));
       const surfaceIds = new Set(routes.flatMap(r => r.landings || [r.landing]).filter(Boolean));
       const supports = new Set([...walkableIds, ...surfaceIds]);
@@ -71,6 +82,14 @@ export function buildPlayableLayout({ mode = 'tour' } = {}) {
         flights: b.access.flights.filter(f => supports.has(f.from) && supports.has(f.to)),
       };
     }
+  }
+  // Shared first-phase garages can extend under the western surface lot. FPS
+  // still allocates geometry only inside its compact site slice.
+  for (const level of levels.filter(l => l.elev < 0)) {
+    level.slab.pieces = level.slab.pieces.map(p => ({ ...p, outer: clip(p.outer),
+      holes: p.holes.map(clip).filter(h => h.length >= 3) })).filter(p => p.outer.length >= 3);
+    level.outline = clip(level.outline);
+    level.features = level.features.filter(f => !Number.isFinite(f.x) || inside([f.x, f.z]));
   }
   layout.buildings = buildings; layout.levels = levels;
   for (const key of ['stairs', 'elevators']) layout[key] = layout[key]
@@ -111,6 +130,6 @@ export function buildPlayableLayout({ mode = 'tour' } = {}) {
   };
   layout.playable = { mode, bounds: { ...PLAYABLE_BOUNDS }, buildingIds: [...BUILDINGS],
     walkableLevelIds: [...walkableIds], full, levels: levelIds.size, capped: mode === 'fps' };
-  if (mode === 'fps') addMissionCollision(layout);
+  addMissionCollision(layout);
   return layout;
 }

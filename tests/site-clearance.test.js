@@ -5,12 +5,14 @@ import { L } from './helpers.js';
 import { rect, rectPoly, frame, toW, lrectPoly, clipConvex, polyArea, pointInPoly, convexOverlap, distToPolyEdge } from '../src/layout/geom.js';
 import { subtractTowerFootprints, siteLampPlacement, siteTreePlacement, siteGroundHoles, siteContextBuildings } from '../src/render/build/site.js';
 import { shapeFromPoly, flatShapeGeometry } from '../src/render/build/shell.js';
+import { cutSurfaceShapes } from '../src/render/build/surface-shapes.js';
 import { BatchSet } from '../src/render/batch.js';
 import { addTrees, streetLamp } from '../src/render/build/props.js';
 
 const area = poly => Math.abs(polyArea(poly));
 const towers = L.buildings.filter(b => b.kind === 'tower' && !b.undergroundOnly).map(b => b.outline);
 const accessKiosks = L.buildings.flatMap(b => (b.accessKiosks || []).map(r => lrectPoly(b.frame, r)));
+const garageKiosks = L.levels.flatMap(l => (l.garageKiosks || []).map(k => k.poly));
 function approaches() {
   const result = [];
   for (const b of L.buildings.filter(b => b.kind === 'mall')) {
@@ -50,7 +52,7 @@ test('入口铺装扣除部分相交、旋转及反绕序塔楼后，面积守�
 
 test('保留入口与街道照明，真实灯杆和灯臂均不穿入塔楼或接驳围护', () => {
   const allow = siteLampPlacement(L), B = new BatchSet({});
-  const enclosures = [...towers, ...accessKiosks, ...(L.extensions.gateways || []).filter(g => g.elev >= 0).map(g => g.poly),
+  const enclosures = [...towers, ...accessKiosks, ...garageKiosks, ...(L.extensions.gateways || []).filter(g => g.elev >= 0).map(g => g.poly),
     ...L.extensions.paths.filter(p => p.kind === 'skybridge').flatMap(p => p.slab.pieces.map(s => s.outer))];
   let retained = 0;
   const place = (x, z, dir) => { if (allow(x, z)) { streetLamp(B, x, z, -.14, dir, 5); retained++; } };
@@ -69,7 +71,7 @@ test('保留入口与街道照明，真实灯杆和灯臂均不穿入塔楼或�
 
 test('按实际树心和尺寸避让，含随机偏移的真实树冠不穿建筑、接驳体或活动场地', () => {
   const allow = siteTreePlacement(L), list = [];
-  const solids = [...L.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline), ...accessKiosks,
+  const solids = [...L.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline), ...accessKiosks, ...garageKiosks,
     ...L.extensions.gateways.filter(g => g.elev >= 0).map(g => g.poly),
     ...L.extensions.paths.filter(p => p.kind === 'skybridge').flatMap(p => p.slab.pieces.map(s => s.outer)),
     ...L.site.activityExclusions, ...L.site.trenches, ...L.extensions.surfaceParking.map(p => p.poly),
@@ -96,7 +98,7 @@ test('按实际树心和尺寸避让，含随机偏移的真实树冠不穿建�
 });
 
 test('跳过通用大雨棚的入口均落在已有地面接驳结构上', () => {
-  const covers = [...accessKiosks, ...L.extensions.gateways.filter(g => g.elev === 0).map(g => g.poly),
+  const covers = [...accessKiosks, ...garageKiosks, ...L.extensions.gateways.filter(g => g.elev === 0).map(g => g.poly),
     ...L.extensions.paths.filter(p => p.kind === 'ground').flatMap(p => p.polys || [])];
   const entries = L.entrances.filter(e => e.coveredConnection);
   assert.ok(entries.length >= 2);
@@ -124,7 +126,7 @@ test('地下附库上方保留真实地面及绿化照明，实际坡口仍挖�
 
   // Use buildSite's real mesh boundary and actual annex roof locations as well
   // as the synthetic garage: underground mass must never cut out the surface.
-  const actual = flatShapeGeometry(shapeFromPoly([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], siteGroundHoles(L)), -.32);
+  const actual = flatShapeGeometry(cutSurfaceShapes([[-1500, -1500], [1500, -1500], [1500, 1500], [-1500, 1500]], siteGroundHoles(L)), -.32);
   const ap = actual.attributes.position, ai = actual.index, actualTriangles = [];
   for (let i = 0; i < ai.count; i += 3) actualTriangles.push([0, 1, 2].map(k => { const j = ai.getX(i + k); return [ap.getX(j), ap.getZ(j)]; }));
   for (const point of [[-344.5, -200], [-344.5, -215], [-377, -200]]) {

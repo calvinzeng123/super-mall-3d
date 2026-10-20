@@ -19,5 +19,6 @@ export function createGameAudio() {
     tone(pistol?110:160,.09,.1,'triangle',40);
   },hit(){tone(900,.055,.06,'triangle',430);},reload(){tone(450,.08,.035,'square',200);},radio(){tone(700,.08,.04);},
   objective(){tone(620,.25,.07,'sine',920);},hurt(){tone(110,.18,.06,'triangle',45);},step(){tone(65,.035,.018,'triangle',35);},
+  jump(){tone(90,.12,.022,'triangle',150);},land(){tone(70,.085,.045,'triangle',28);},
   dispose(){context?.close();context=null;}};
 }

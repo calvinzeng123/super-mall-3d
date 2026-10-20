@@ -1,10 +1,13 @@
 // 停车层：车道漆面、车位线、充电位/无障碍位、挡车器、分区色柱、停放车辆（实例化）、
 // 车道中线与方向箭头、步行脊、吊挂指示牌、地面坡道与层间坡道。全部按各自的局部坐标系生成。
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, labelTexture } from '../textures.js';
 import { themeOf } from '../theme.js';
-import { clearHeight, shapeFromPoly, flatShapeGeometry } from './shell.js';
-import { frame, toW, toL, IDENTITY, convexOverlap, pointInPoly as pointInPolyLocal } from '../../layout/geom.js';
+import { clearHeight, flatShapeGeometry } from './shell.js';
+import { frame, rect, lrectPoly, toW, toL, IDENTITY, convexOverlap, polyBounds, pointInPoly as pointInPolyLocal } from '../../layout/geom.js';
+import { buildSharedGarageDetails } from './shared-garages.js';
+import { cutSurfaceShapes } from './surface-shapes.js';
 
 const CAR_COLORS = ['#f2f2f0', '#c9ccd0', '#1f2328', '#6b7178', '#2f5d9e', '#a8262b', '#d8cbb0', '#2f5f4a', '#f2f2f0', '#c9ccd0', '#1f2328'];
 
@@ -51,6 +54,16 @@ export function carGeometry() {
 const FACE_ROT = { S: 0, N: Math.PI, E: Math.PI / 2, W: -Math.PI / 2 };
 const BACK = { N: [0, 1], S: [0, -1], E: [-1, 0], W: [1, 0] };
 
+/** Paint and markings use the same true holes as the supporting slab. */
+export function parkingPaintCuts(lv, poly) {
+  const b = polyBounds(poly);
+  return [...new Set([...lv.voids.map(v => v.poly), ...lv.slab.pieces.flatMap(p => p.holes)])]
+    .filter(p => {
+      const q = polyBounds(p);
+      return b.x0 < q.x1 && b.x1 > q.x0 && b.z0 < q.z1 && b.z1 > q.z0;
+    });
+}
+
 export function buildParking(ctx) {
   const carGeo = carGeometry();
   const carMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.45 });
@@ -70,23 +83,35 @@ export function buildParking(ctx) {
     // 车道与步行脊漆面
     const aisleMat = new THREE.MeshStandardMaterial({ color: aisleCol, roughness: 0.85 });
     ctx.mats.onNight((t) => aisleMat.emissive.setRGB(t * 0.1, t * 0.1, t * 0.11));
+    const painted = [], spinePainted = [];
     for (const w of lv.walk) {
+      const cuts = parkingPaintCuts(lv, w.poly);
       if (w.kind === 'aisle') {
-        if (w.rect) {
+        if (w.rect && !cuts.length) {
           const r = w.rect;
           B.frame(w.frame, () => B.get('satin').box((r.x0 + r.x1) / 2, y0 + 0.006, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.008, r.z1 - r.z0, aisleCol));
         } else {
-          const m = new THREE.Mesh(flatShapeGeometry(shapeFromPoly(w.poly), y0 + 0.007), aisleMat);
-          m.receiveShadow = true;
-          L.base.add(m);
+          painted.push(flatShapeGeometry(cutSurfaceShapes(w.poly, cuts), y0 + .007));
         }
       } else if ((w.kind === 'spine' || w.kind === 'eschall') && w.rect) {
         const r = w.rect;
+        if (cuts.length) {
+          spinePainted.push(flatShapeGeometry(cutSurfaceShapes(w.poly, cuts), y0 + .008));
+          continue;
+        }
         B.frame(w.frame, () => {
           B.get('satin').box((r.x0 + r.x1) / 2, y0 + 0.008, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 0.2, 0.01, r.z1 - r.z0 - 0.2, '#c9c3b6');
           for (const v of [r.z0 + 0.3, r.z1 - 0.3]) B.get('satin').box((r.x0 + r.x1) / 2, y0 + 0.012, v, r.x1 - r.x0 - 0.4, 0.01, 0.12, band);
         });
       }
+    }
+    for (const [pieces, material] of [[painted, aisleMat], [spinePainted,
+      new THREE.MeshStandardMaterial({ color: '#c9c3b6', roughness: .85 })]]) {
+      if (!pieces.length) { if (material !== aisleMat) material.dispose(); continue; }
+      const merged = mergeGeometries(pieces, false);
+      pieces.forEach(g => g.dispose());
+      const mesh = new THREE.Mesh(merged, material);
+      mesh.name = `${lv.id}-cut-parking-paint`; mesh.receiveShadow = true; L.base.add(mesh);
     }
 
     // 车位线、特殊车位、挡车器、停放车辆
@@ -180,16 +205,19 @@ export function buildParking(ctx) {
       const alongU = r.x1 - r.x0 > r.z1 - r.z0;
       const len = alongU ? r.x1 - r.x0 : r.z1 - r.z0;
       const dir = w.dir || (w.id.endsWith('aisle1') ? [-1, 0] : w.id.endsWith('aisle2') ? [1, 0] : [0, -1]);
+      const cuts = parkingPaintCuts(lv, w.poly);
+      const markFits = (x, z) => !cuts.some(poly =>
+        convexOverlap(lrectPoly(w.frame, rect(x - 1.5, z - 1.5, x + 1.5, z + 1.5)), poly));
       B.frame(w.frame, () => {
         const n = Math.floor((len - 4) / 3);
         for (let i = 0; i < n; i++) {
           const t = 2 + (i + 0.25) * 3;
-          if (alongU) B.get('matte').box(r.x0 + t, y0 + 0.014, (r.z0 + r.z1) / 2, 1.4, 0.01, 0.1, '#e7b416');
-          else B.get('matte').box((r.x0 + r.x1) / 2, y0 + 0.014, r.z0 + t, 0.1, 0.01, 1.4, '#e7b416');
+          if (alongU && markFits(r.x0 + t, (r.z0 + r.z1) / 2)) B.get('matte').box(r.x0 + t, y0 + 0.014, (r.z0 + r.z1) / 2, 1.4, 0.01, 0.1, '#e7b416');
+          else if (!alongU && markFits((r.x0 + r.x1) / 2, r.z0 + t)) B.get('matte').box((r.x0 + r.x1) / 2, y0 + 0.014, r.z0 + t, 0.1, 0.01, 1.4, '#e7b416');
         }
         for (let t = 10; t < len - 6; t += 16) {
-          if (alongU) arrow(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5, dir[0], dir[1]);
-          else arrow((r.x0 + r.x1) / 2 + 1.5, r.z0 + t, dir[0], dir[1]);
+          if (alongU && markFits(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5)) arrow(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5, dir[0], dir[1]);
+          else if (!alongU && markFits((r.x0 + r.x1) / 2 + 1.5, r.z0 + t)) arrow((r.x0 + r.x1) / 2 + 1.5, r.z0 + t, dir[0], dir[1]);
         }
       });
     }
@@ -214,6 +242,7 @@ export function buildParking(ctx) {
   }
   streetRamps(ctx);
   innerRamps(ctx);
+  buildSharedGarageDetails(ctx);
 }
 
 /** 双面吊挂指示牌（局部坐标系 F 内的位置） */
@@ -249,15 +278,36 @@ function slopedSlab(B, key, len, ya, yb, w, t, color) {
 }
 
 function rampMarks(B, len, ya, yb, w, steps) {
-  for (let i = 1; i < steps; i++) {
-    const t = i / steps;
-    const u = len * t, y = ya + (yb - ya) * t + 0.03;
-    B.get('matte').box(u, y, 0, 1.5, 0.02, 0.25, '#ffffff');
-    B.get('matte').box(u + 0.75, y, 0, 0.45, 0.02, 0.9, '#ffffff');
-  }
   const sl = Math.hypot(len, yb - ya);
   const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(yb - ya, len));
+  const mark = (u, length, width) => B.get('matte').shape('box',
+    new THREE.Vector3(u, ya + (yb - ya) * u / len + .03, 0), q,
+    new THREE.Vector3(length, .02, width), '#ffffff');
+  for (let i = 1; i < steps; i++) {
+    const u = len * i / steps;
+    mark(u, 1.5, .25);
+    mark(u + .75, .45, .9);
+  }
   for (const v of [-w / 2 + 0.25, w / 2 - 0.25]) B.get('matte').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + 0.03, v), q, new THREE.Vector3(sl, 0.02, 0.15), '#e7b416');
+}
+
+/** Guard walls follow the actual incline. Tall horizontal boxes previously
+ * hid the next deck and made a descending ramp look like a black void. */
+function rampGuards(B, len, ya, yb, width) {
+  const rise = yb - ya, sl = Math.hypot(len, rise);
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(rise, len));
+  for (const side of [-1, 1]) {
+    const z = side * (width / 2 + .12);
+    B.get('concrete').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + .45, z),
+      q, new THREE.Vector3(sl, .9, .24), '#aeb9b4');
+    B.get('metal').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + .95, z),
+      q, new THREE.Vector3(sl, .08, .12), '#536861');
+    for (let u = 2; u < len - 1; u += 4) {
+      const y = ya + rise * u / len;
+      B.get('glow').box(u, y + .7, side * (width / 2 - .01), .3, .13, .025, '#f3dc8b');
+      B.get('matte').box(u, y + .2, z, .28, .3, .27, '#d9ae3a');
+    }
+  }
 }
 
 /** 地面车库出入口坡道（敞开段 + 暗埋段），属于其地下层；敞开段（坡道槽）另画一份整宽坡面到场地组，园区视角也可见 */
@@ -287,8 +337,7 @@ function streetRamps(ctx) {
     const { F, len } = rampFrame(r);
     B.frame(F, () => {
       slopedSlab(B, 'matte', len, r.from.y, r.to.y, r.width, 0.4, '#555b62');
-      const yLow = Math.min(r.from.y, r.to.y) - 0.5;
-      for (const v of [-r.width / 2 - 0.15, r.width / 2 + 0.15]) B.get('matte').boxMinMax(0, yLow, v - 0.15, len, -0.15, v + 0.15, '#a3a9ae');
+      rampGuards(B, len, r.from.y, r.to.y, r.width);
       rampMarks(B, len, r.from.y, r.to.y, r.width, 9);
     });
   }
@@ -302,8 +351,7 @@ function innerRamps(ctx) {
     const { F, len } = rampFrame(r);
     B.frame(F, () => {
       slopedSlab(B, 'matte', len, r.from.y, r.to.y, r.width, 0.35, '#5d646b');
-      const lo = Math.min(r.from.y, r.to.y), hi = Math.max(r.from.y, r.to.y);
-      for (const v of [-r.width / 2 - 0.1, r.width / 2 + 0.1]) B.get('matte').boxMinMax(0, lo, v - 0.1, len, hi + 1.0, v + 0.1, '#a3a9ae');
+      rampGuards(B, len, r.from.y, r.to.y, r.width);
       rampMarks(B, len, r.from.y, r.to.y, r.width, 6);
     });
   }

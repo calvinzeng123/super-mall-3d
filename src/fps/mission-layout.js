@@ -2,10 +2,20 @@
 // are surveyed walkable positions, not a separate arena placed over the mall.
 const point = (floor, x, z, y = 0) => ({ floor, x, z, y, slope: null });
 const hotelZ = -81.1533717;
+const carExtraction = {
+  id: 'extract-car', title: '公寓 B1 · 装甲接应车', description: '穿过一期地下连廊，在接应车旁守住 8 秒撤离；也可切换屋顶直升机路线。',
+  ...point('A-B1', -35, -220, -4.5), radius: 3.2, holdSeconds: 8, prop: 'extraction',
+  vehicle: { kind: 'car', x: -41, z: -220, yaw: 0, w: 2.4, d: 5.8 },
+};
+const helicopterExtraction = {
+  id: 'extract-heli', title: '酒店 RF · 直升机接应', description: '沿酒店消防梯或玻璃电梯到 RF，抵达直升机侧门并守住 11 秒。',
+  ...point('H-RF', -250, hotelZ - 5, 13.3), radius: 3.2, holdSeconds: 11, prop: 'extraction',
+  vehicle: { kind: 'helicopter', x: -250, z: hotelZ - 11, yaw: Math.PI / 2, w: 8.8, d: 3 },
+};
 
 export const FPS_MISSION = {
   id: 'yunlan-blackout', title: '云澜行动 · 断电撤离', duration: 900,
-  briefing: '取得商场终端密钥，进入酒店二楼取回情报，前往公寓 B1 接应点撤离。',
+  briefing: '取得商场终端密钥和酒店二楼情报。选择地下接应车或酒店屋顶直升机，与回声一起撤离。',
   spawn: { ...point('P1-1F', -135, -98), yaw: Math.atan2(34, -8) },
   teammate: { id: 'echo', name: '回声', ...point('P1-1F', -133, -98) },
   objectives: [
@@ -13,20 +23,24 @@ export const FPS_MISSION = {
       ...point('P1-1F', -169, -90), radius: 2.4, holdSeconds: 2.5, prop: 'terminal' },
     { id: 'intel', title: '取回酒店情报', description: '沿酒店消防梯上至 2F，在走廊取回数据箱。',
       ...point('H-2F', -245, hotelZ, 6.5), radius: 2.4, holdSeconds: 3, prop: 'case' },
-    { id: 'extract', title: '抵达公寓 B1 撤离点', description: '通过商场地下连廊前往公寓 B1，守住接应区完成撤离。',
-      ...point('A-B1', -35, -220, -4.5), radius: 3.2, holdSeconds: 8, prop: 'extraction' },
+    carExtraction,
   ],
+  extractions: [carExtraction, helicopterExtraction],
   enemies: [
-    { id: 'west-patrol', name: '西翼巡逻', ...point('P1-1F', -179, -87),
-      patrol: [point('P1-1F', -178, -87), point('P1-1F', -157, -92)], health: 70 },
-    { id: 'hotel-entry', name: '酒店警戒', ...point('H-1F', -220, hotelZ),
-      patrol: [point('H-1F', -219, hotelZ), point('H-1F', -241, hotelZ)], health: 70 },
-    { id: 'hotel-intel', name: '情报守卫', ...point('H-2F', -258, hotelZ, 6.5),
-      patrol: [point('H-2F', -259, hotelZ, 6.5), point('H-2F', -243, hotelZ, 6.5)], health: 90 },
-    { id: 'concourse-patrol', name: '地下巡逻', ...point('P1-B1M', -130, -100, -4.5),
-      patrol: [point('P1-B1M', -130, -100, -4.5), point('P1-B1M', -151, -94, -4.5)], health: 70 },
-    { id: 'extraction-guard', name: '撤离点警戒', ...point('A-B1', -35, -202, -4.5),
-      patrol: [point('A-B1', -35, -202, -4.5), point('A-B1', -35, -216, -4.5)], health: 90 },
+    { id: 'west-patrol', name: '西翼侦察', type: 'scout', ...point('P1-1F', -179, -87),
+      patrol: [point('P1-1F', -178, -87), point('P1-1F', -157, -92)], health: 72 },
+    { id: 'hotel-entry', name: '酒店突击', type: 'assault', ...point('H-1F', -220, hotelZ),
+      patrol: [point('H-1F', -219, hotelZ), point('H-1F', -241, hotelZ)], health: 98 },
+    { id: 'hotel-intel', name: '情报装甲守卫', type: 'heavy', ...point('H-2F', -258, hotelZ, 6.5),
+      patrol: [point('H-2F', -259, hotelZ, 6.5), point('H-2F', -243, hotelZ, 6.5)], health: 145 },
+    { id: 'concourse-patrol', name: '地下侦察', type: 'scout', ...point('P1-B1M', -130, -100, -4.5),
+      patrol: [point('P1-B1M', -130, -100, -4.5), point('P1-B1M', -151, -94, -4.5)], health: 72 },
+    { id: 'extraction-guard', name: '车库突击', type: 'assault', ...point('A-B1', -35, -202, -4.5),
+      patrol: [point('A-B1', -35, -202, -4.5), point('A-B1', -35, -216, -4.5)], health: 98 },
+    { id: 'roof-guard', name: '屋顶装甲守卫', type: 'heavy', ...point('H-RF', -239, hotelZ, 13.3),
+      patrol: [point('H-RF', -239, hotelZ, 13.3), point('H-RF', -257, hotelZ, 13.3)], health: 145 },
+    { id: 'roof-scout', name: '屋顶侦察', type: 'scout', ...point('H-3F', -220, hotelZ, 9.9),
+      patrol: [point('H-3F', -219, hotelZ, 9.9), point('H-3F', -241, hotelZ, 9.9)], health: 72 },
   ],
   cover: [
     { id: 'west-equipment', ...point('P1-1F', -151, -98.4), w: 2.4, d: 1.15, height: 1.75, style: 'equipment' },
@@ -38,15 +52,30 @@ export const FPS_MISSION = {
 };
 
 export const MISSION = FPS_MISSION;
-export function createMissionLayout() { return structuredClone(FPS_MISSION); }
+export function createMissionLayout(layout) {
+  const mission = structuredClone(FPS_MISSION);
+  if (layout) {
+    const elevations = new Map(layout.levels.map(l => [l.id, l.elev]));
+    for (const p of [mission.spawn, mission.teammate, ...mission.objectives, ...mission.extractions,
+      ...mission.enemies, ...mission.enemies.flatMap(e => e.patrol), ...mission.cover]) {
+      if (elevations.has(p.floor)) p.y = elevations.get(p.floor);
+    }
+  }
+  return mission;
+}
 
 /** The existing navigation builder already treats market-stall footprints as
  * solid furniture. Reuse it so tactical props render and collide at one place. */
-export function addMissionCollision(layout, mission = FPS_MISSION) {
+export function addMissionCollision(layout, mission = createMissionLayout(layout)) {
   for (const c of mission.cover) {
     const level = layout.levels.find(l => l.id === c.floor);
     if (!level) throw new Error(`Missing mission floor: ${c.floor}`);
     if (!level.features.some(f => f.id === c.id)) level.features.push({ ...c, type: 'market-stall', tactical: true });
+  }
+  for (const exit of mission.extractions) {
+    const level = layout.levels.find(l => l.id === exit.floor), v = exit.vehicle;
+    if (level && v) level.features.push({ id: `${exit.id}-vehicle`, type: 'market-stall',
+      tactical: true, x: v.x, z: v.z, w: v.w, d: v.d, height: v.kind === 'helicopter' ? 2.5 : 2.2 });
   }
   layout.mission = mission;
   return layout;

@@ -9,10 +9,11 @@ test('总图道路齐全：云澜大道、星湾路、四条外环、星湾北�
   for (const id of ['avenue', 'xingwan', 'ring-n', 'ring-s', 'ring-w', 'ring-e', 'service-n']) assert.ok(ids.includes(id), `缺少道路 ${id}`);
 });
 
-test('建筑楼板不压道路与人行道（地铁站厅在道路下方，不计）', () => {
+test('地上建筑楼板不压道路与人行道，地下共享车库允许从道路下方连接', () => {
   const blocked = [...L.site.roads, ...L.site.sidewalks];
   for (const b of L.buildings.filter((x) => x.kind !== 'metro')) {
     for (const lv of levelsOf(b.id)) {
+      if (lv.elev < 0) continue;
       for (const piece of lv.slab.pieces) {
         for (const p of polySamples(piece.outer, 3, 0.05)) {
           const hit = blocked.find((r) => pointInPoly(p, r.poly));
@@ -24,7 +25,7 @@ test('建筑楼板不压道路与人行道（地铁站厅在道路下方，不�
 });
 
 test('各期外轮廓互不重叠（地下的地铁不计）', () => {
-  const above = L.buildings.filter((x) => x.kind !== 'metro');
+  const above = L.buildings.filter((x) => x.kind !== 'metro' && !x.undergroundOnly);
   for (const a of above) {
     for (const b of above) {
       if (a === b) continue;
