@@ -1,7 +1,7 @@
 import { buildPlayableLayout } from './layout/playable.js';
 import { createApp } from './render/app.js';
 
-export async function startRuntime(mode,onProgress=()=>{}) {
+export async function startRuntime(mode,onProgress=()=>{},options={}) {
   if(!['tour','fps'].includes(mode))throw new Error('未知模式');
   document.body.dataset.mode=mode;
   document.getElementById('fatal').hidden=true;
@@ -12,7 +12,7 @@ export async function startRuntime(mode,onProgress=()=>{}) {
   window.__mall=app;
   if(mode==='fps'){
     const {createFPSGame}=await import('./fps/game.js');
-    window.__fps=await createFPSGame(app,{onProgress:(label,p)=>onProgress(label,.76+p*.24)});
+    window.__fps=await createFPSGame(app,{onProgress:(label,p)=>onProgress(label,.76+p*.24),difficulty:options.difficulty});
   }else{
     const [{createUI},{attachExplore},{attachTour}]=await Promise.all([
       import('./render/ui.js'),import('./render/explore.js'),import('./render/tour.js'),

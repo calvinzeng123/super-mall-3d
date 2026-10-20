@@ -7,12 +7,12 @@ window.__mallBooted = true;
 document.body.dataset.mode = 'launch';
 document.getElementById('loading').hidden = true;
 let failed = false;
-const launcher = mountLauncher({ backgroundUrl:COVER_URL, async onSelect(mode) {
+const launcher = mountLauncher({ backgroundUrl:COVER_URL, async onSelect(mode, options = {}) {
   if (failed) { location.reload(); return; }
   launcher.setLoading('准备进入云澜汇',0);
   try {
     const { startRuntime } = await import('./runtime.js');
-    await startRuntime(mode,(label,p)=>launcher.setLoading(label,p));
+    await startRuntime(mode,(label,p)=>launcher.setLoading(label,p),options);
     launcher.dispose();
   } catch(error) {
     failed = true;
