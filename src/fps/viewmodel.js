@@ -8,6 +8,62 @@ const clamp = THREE.MathUtils.clamp;
 const mix = THREE.MathUtils.lerp;
 const weaponId = value => value === 1 || value === 'pistol' || value?.id === 'pistol' ? 'pistol' : 'rifle';
 const ease = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const NO_POSE = Object.freeze({ x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 });
+
+/** Exponential damping shared by ADS/sprint/slide/look blending. Returns a
+ * number so the per-frame path never allocates; dt is clamped by the caller. */
+export function dampValue(current, target, dt, rate = 12) {
+  const amount = 1 - Math.exp(-Math.max(0, Number(dt) || 0) * Math.max(.001, Number(rate) || 0));
+  return current + (target - current) * amount;
+}
+
+/** Per-weapon recoil: the pistol kicks harder, the SMG climbs on a five-shot
+ * alternating pattern, and shouldering (ADS) damps the whole impulse. */
+export const RECOIL = Object.freeze({
+  rifle: Object.freeze({ kick: .95, pitch: .009, yaw: .014, roll: .012,
+    pattern: Object.freeze([1, -.62, .38, -.86, .5]) }),
+  pistol: Object.freeze({ kick: 1.35, pitch: .022, yaw: .02, roll: .018,
+    pattern: Object.freeze([1, -.7]) }),
+});
+export function recoilOffset(value = 'rifle', shot = 0, ads = 0) {
+  const config = RECOIL[weaponId(value)];
+  const index = Math.abs(Math.floor(Number(shot) || 0)) % config.pattern.length;
+  const sway = config.pattern[index], damp = 1 - .45 * clamp(Number(ads) || 0, 0, 1);
+  return { kick: config.kick * damp, pitch: config.pitch * damp,
+    yaw: config.yaw * sway * damp, roll: config.roll * sway * damp };
+}
+
+/** Procedural knife swing 0..1: wind up, slash across the screen, recover.
+ * Pure pose offsets (metres/radians) so the animation can be unit-tested. */
+export const KNIFE_SWING = Object.freeze({ duration: .52, impactAt: .5 });
+export function knifeSwing(progress) {
+  const t = clamp(Number(progress) || 0, 0, 1);
+  const lift = Math.sin(Math.PI * clamp(t / .55, 0, 1));
+  const strike = Math.sin(Math.PI * clamp((t - .28) / .45, 0, 1));
+  return { x: .16 * lift - .10 * strike, y: .12 * lift - .14 * strike, z: -.10 * lift - .12 * strike,
+    rx: -.5 * lift + .65 * strike, ry: -.85 * lift + 1.35 * strike, rz: -.3 * lift + .4 * strike };
+}
+
+/** Procedural grenade throw 0..1: raise, toss, release. `release` is the
+ * fraction after which the grenade has left the hand and must be hidden. */
+export const GRENADE_THROW = Object.freeze({ duration: .72, releaseAt: .52 });
+export function grenadeThrow(progress) {
+  const t = clamp(Number(progress) || 0, 0, 1);
+  const raise = Math.sin(Math.PI * clamp(t / .6, 0, 1));
+  const toss = Math.sin(Math.PI * clamp((t - .3) / .4, 0, 1));
+  return { x: -.18 * raise + .12 * toss, y: .16 * raise - .10 * toss, z: -.12 * raise - .16 * toss,
+    rx: -.55 * raise + .8 * toss, ry: .35 * raise - .55 * toss, rz: -.18 * raise + .25 * toss,
+    release: clamp((t - GRENADE_THROW.releaseAt) / .12, 0, 1) };
+}
+
+/** Extra weapon-only offset layered on the body slide pose: the gun is pulled
+ * in and canted so it does not clip the legs mid-slide. */
+export function slideViewPose(blend = 0, progress = 0) {
+  const b = clamp(Number(blend) || 0, 0, 1), p = clamp(Number(progress) || 0, 0, 1);
+  const hold = Math.min(1, p / .18) * (1 - .25 * clamp((p - .7) / .3, 0, 1));
+  return { x: -.035 * b * hold, y: -.06 * b * hold, z: .05 * b * hold,
+    rx: .1 * b * hold, ry: .16 * b * hold, rz: -.12 * b * hold };
+}
 
 /** Licensed textured arms + firearms. Call render() AFTER the world render.
  * This own-light overlay uses the same renderer, an isolated depth buffer and
@@ -131,10 +187,67 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
   const flashMaterial = new THREE.SpriteMaterial({ map: flashTexture, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
   materials.add(flashMaterial);
   const flash = new THREE.Sprite(flashMaterial); flash.scale.set(.12, .12, .12); flash.visible = false; rig.add(flash);
+  // Second muzzle-flash flavour: alternating shots swap shape and spin so
+  // sustained fire never looks like one frozen frame.
+  const flashMaterialAlt = flashMaterial.clone();
+  materials.add(flashMaterialAlt);
+  const flashAlt = new THREE.Sprite(flashMaterialAlt); flashAlt.scale.set(.17, .17, .17); flashAlt.visible = false; rig.add(flashAlt);
   const flashLight = new THREE.PointLight(0xffbd65, 0, 2, 2); rig.add(flashLight);
+
+  // Procedural melee knife and frag grenade: small owned geometries/materials,
+  // no external asset. Both live under the rig and are disposed with it.
+  const knifeMount = new THREE.Group();
+  knifeMount.name = 'YunlanProceduralKnife';
+  rig.add(knifeMount);
+  const steelMaterial = new THREE.MeshStandardMaterial({ color: 0xaab6c4, metalness: .85, roughness: .3 });
+  const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x20242a, metalness: .25, roughness: .8 });
+  const oliveMaterial = new THREE.MeshStandardMaterial({ color: 0x3c4a2e, metalness: .15, roughness: .82 });
+  materials.add(steelMaterial); materials.add(gripMaterial); materials.add(oliveMaterial);
+  const knifeShape = new THREE.Shape();
+  knifeShape.moveTo(0, -.016); knifeShape.lineTo(.17, -.016); knifeShape.lineTo(.205, 0);
+  knifeShape.lineTo(.17, .016); knifeShape.lineTo(0, .016); knifeShape.closePath();
+  const bladeGeometry = new THREE.ExtrudeGeometry(knifeShape, { depth: .005, bevelEnabled: true,
+    bevelThickness: .0012, bevelSize: .0012, bevelSegments: 1 });
+  const handleGeometry = new THREE.BoxGeometry(.022, .026, .075);
+  const guardGeometry = new THREE.BoxGeometry(.05, .012, .016);
+  geometries.add(bladeGeometry); geometries.add(handleGeometry); geometries.add(guardGeometry);
+  const blade = new THREE.Mesh(bladeGeometry, steelMaterial);
+  blade.rotation.y = Math.PI / 2; // Side profile built on +X; point the edge down -Z.
+  const knifeHandle = new THREE.Mesh(handleGeometry, gripMaterial);
+  knifeHandle.position.set(0, 0, .038);
+  const knifeGuard = new THREE.Mesh(guardGeometry, steelMaterial);
+  knifeGuard.position.set(0, 0, .002);
+  knifeMount.add(blade, knifeGuard, knifeHandle);
+  const KNIFE_BASE = Object.freeze({ x: .19, y: -.27, z: -.46, rx: -.22, ry: .12, rz: .3 });
+  knifeMount.position.set(KNIFE_BASE.x, KNIFE_BASE.y, KNIFE_BASE.z);
+  knifeMount.rotation.set(KNIFE_BASE.rx, KNIFE_BASE.ry, KNIFE_BASE.rz);
+  knifeMount.visible = false;
+
+  const grenadeMount = new THREE.Group();
+  grenadeMount.name = 'YunlanProceduralFragGrenade';
+  rig.add(grenadeMount);
+  const grenadeBodyGeometry = new THREE.CylinderGeometry(.031, .031, .068, 10);
+  const grenadeCapGeometry = new THREE.CylinderGeometry(.015, .015, .02, 8);
+  const grenadeLeverGeometry = new THREE.BoxGeometry(.008, .05, .012);
+  geometries.add(grenadeBodyGeometry); geometries.add(grenadeCapGeometry); geometries.add(grenadeLeverGeometry);
+  const grenadeBody = new THREE.Mesh(grenadeBodyGeometry, oliveMaterial);
+  const grenadeCap = new THREE.Mesh(grenadeCapGeometry, steelMaterial);
+  grenadeCap.position.y = .044;
+  const grenadeLever = new THREE.Mesh(grenadeLeverGeometry, steelMaterial);
+  grenadeLever.position.set(.034, .028, 0);
+  grenadeMount.add(grenadeBody, grenadeCap, grenadeLever);
+  const GRENADE_BASE = Object.freeze({ x: .17, y: -.23, z: -.42, rx: .25, ry: -.2, rz: .15 });
+  grenadeMount.position.set(GRENADE_BASE.x, GRENADE_BASE.y, GRENADE_BASE.z);
+  grenadeMount.rotation.set(GRENADE_BASE.rx, GRENADE_BASE.ry, GRENADE_BASE.rz);
+  grenadeMount.visible = false;
+
   let elapsed = 0, recoil = 0, flashTime = 0, aimBlend = 0, sprintBlend = 0, active = 'rifle';
-  let flashPendingRender = false;
+  let flashPendingRender = false, flashAltShot = 0, shotIndex = 0;
   let wasReloading = false, reloadClock = 0, wasSwitching = false, switchClock = 0, switchFrom = active;
+  // Smooth presentation state. Scalars only: the update loop allocates nothing.
+  let lookX = 0, lookY = 0, slideBlend = 0, settle = 0, knifeBlend = 0, throwBlend = 0;
+  let meleeClock = 0, meleeActive = false, throwClock = 0, throwActive = false;
+  const kick = { pitch: 0, yaw: 0, roll: 0 };
   const presentation = { rifle: { x: .20, y: -.37, z: -.62 }, pistol: { x: .14, y: -.30, z: -.43 } };
   const worldTemplates = new Map();
 
@@ -144,6 +257,7 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
     geometries: geometries.size, materials: materials.size, textures: textures.size,
     rifleTriangles: 21425, pistolTriangles: 13279 + 13704, reloadClips: smg.animations.map(clip => clip.name),
     realTexturedMeshes: true, activeWeapon: active, disposed: false,
+    melee: false, throwing: false, slide: 0, empty: false, settling: false,
   };
 
   function update(dt, state = {}) {
@@ -163,11 +277,40 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
     rifleMount.visible = active === 'rifle'; pistolMount.visible = active === 'pistol';
     stats.activeWeapon = active;
     const moving = typeof state.moving === 'number' ? clamp(state.moving, 0, 1) : state.moving ? 1 : 0;
-    aimBlend = mix(aimBlend, state.aiming ? 1 : 0, 1 - Math.exp(-dt * 14));
-    sprintBlend = mix(sprintBlend, state.sprinting && moving && !state.reloading && !state.switching ? 1 : 0, 1 - Math.exp(-dt * 10));
+    aimBlend = dampValue(aimBlend, state.aiming ? 1 : 0, dt, state.aiming ? 15 : 10);
+    const sprintTarget = state.sprinting && moving && !state.reloading && !state.switching ? 1 : 0;
+    const previousSprint = sprintBlend;
+    // Sprint enters quickly, then settles back slower so the gun visibly
+    // decelerates instead of snapping to the idle pose.
+    sprintBlend = dampValue(sprintBlend, sprintTarget, dt, sprintTarget > sprintBlend ? 10 : 6);
+    if (previousSprint > .3 && sprintBlend <= .3) settle = Math.min(1, previousSprint);
+    settle *= Math.exp(-dt * 4.5);
+    const settleWobble = settle * Math.sin(elapsed * 9.5);
     stats.sprinting = sprintBlend > .5;
     stats.airborne = !!state.airborne;
+    stats.settling = settle > .05;
+    // One-shot utility animations: game progress wins, local clocks otherwise.
+    let meleeProgress = null, throwProgress = null;
+    if (typeof state.meleeProgress === 'number') { meleeActive = false; meleeProgress = clamp(state.meleeProgress, 0, 1); }
+    else if (meleeActive) {
+      meleeClock += dt; meleeProgress = clamp(meleeClock / KNIFE_SWING.duration, 0, 1);
+      if (meleeProgress >= 1) meleeActive = false;
+    }
+    if (typeof state.throwProgress === 'number') { throwActive = false; throwProgress = clamp(state.throwProgress, 0, 1); }
+    else if (throwActive) {
+      throwClock += dt; throwProgress = clamp(throwClock / GRENADE_THROW.duration, 0, 1);
+      if (throwProgress >= 1) throwActive = false;
+    }
+    const slideTarget = typeof state.sliding === 'number' ? clamp(state.sliding, 0, 1) : state.sliding ? 1 : 0;
+    slideBlend = dampValue(slideBlend, slideTarget, dt, 16);
+    const slideProgress = clamp(Number(state.slideProgress) || 0, 0, 1);
+    stats.slide = slideBlend;
+    stats.melee = meleeProgress !== null;
+    stats.throwing = throwProgress !== null;
     recoil *= Math.exp(-dt * 15);
+    kick.pitch *= Math.exp(-dt * 12);
+    kick.yaw *= Math.exp(-dt * 9);
+    kick.roll *= Math.exp(-dt * 10);
     if (state.reloading || state.switching) { flashTime = 0; flashPendingRender = false; }
     else if (!flashPendingRender) flashTime = Math.max(0, flashTime - dt);
     if (state.reloading && !wasReloading) reloadClock = 0;
@@ -184,14 +327,55 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
     const aimY = (active === 'rifle' ? -.335 : -.26) * modelScale;
     const aimZ = mix(active === 'rifle' ? -.82 : -.56, -.64, portrait);
     const pose = movementPose(elapsed, { sprint: sprintBlend, moving, aiming: aimBlend,
-      airborne: state.airborne ? 1 : 0, landing: Number(state.landing) || 0 });
-    const kick = Math.max(recoil, Number(state.recoil) || 0);
+      airborne: state.airborne ? 1 : 0, landing: Number(state.landing) || 0,
+      sliding: slideBlend, slideProgress });
+    const slidePose = slideBlend > .001 ? slideViewPose(slideBlend, slideProgress) : NO_POSE;
+    const swingPose = meleeProgress === null ? NO_POSE : knifeSwing(meleeProgress);
+    const tossPose = throwProgress === null ? NO_POSE : grenadeThrow(throwProgress);
+    const knifeTarget = meleeProgress === null ? 0 : 1;
+    knifeBlend = dampValue(knifeBlend, knifeTarget, dt, knifeTarget ? 26 : 12);
+    const throwTarget = throwProgress === null ? 0 : 1;
+    throwBlend = dampValue(throwBlend, throwTarget, dt, throwTarget ? 22 : 10);
+    const kickAmount = Math.max(recoil, clamp(Number(state.recoil) || 0, 0, 1.5));
+    // Idle breathing + look-lag sway; ADS and slides damp both down so the
+    // sight picture stays stable when the player is trying to be precise.
+    const look = state.lookDelta || 0;
+    lookX = dampValue(lookX, clamp(Number(look.x) || 0, -1.2, 1.2), dt, 16);
+    lookY = dampValue(lookY, clamp(Number(look.y) || 0, -1.2, 1.2), dt, 16);
+    const steady = (1 - .7 * aimBlend) * (1 - .5 * slideBlend);
+    const swayX = clamp(-lookX * .05, -.05, .05) * steady;
+    const swayY = clamp(-lookY * .04, -.04, .04) * steady;
+    const breath = (1 - .7 * aimBlend) * (1 - .5 * sprintBlend) * (1 - .6 * slideBlend);
+    const breathX = Math.sin(elapsed * 1.7) * .0035 * breath;
+    const breathY = Math.sin(elapsed * 2.6) * .004 * breath;
+    const breathRz = Math.sin(elapsed * 1.3) * .004 * breath;
     rig.position.set(
-      mix(hipX, active === 'rifle' ? 0 : -.005, aimBlend) + pose.x,
-      mix(hipY, aimY, aimBlend) + pose.y - swap * .55,
-      mix(hipZ, aimZ, aimBlend) + pose.z + kick * .055 + swap * .18,
+      mix(hipX, active === 'rifle' ? 0 : -.005, aimBlend) + pose.x + slidePose.x + breathX + swayX + kick.yaw * .55
+        - swingPose.x * .25,
+      mix(hipY, aimY, aimBlend) + pose.y + slidePose.y + breathY + swayY + settleWobble * .006 - swap * .55
+        - Math.abs(swingPose.y) * .12 - tossPose.y * .3,
+      mix(hipZ, aimZ, aimBlend) + pose.z + slidePose.z + kickAmount * .055 + swap * .18 - tossPose.z * .2,
     );
-    rig.rotation.set(pose.rx + kick * .08 + swap * .15, pose.ry, pose.rz - swap * .2);
+    rig.rotation.set(
+      pose.rx + slidePose.rx + kickAmount * .08 + kick.pitch + swap * .15 + swayY * .5 + settleWobble * .02,
+      pose.ry + slidePose.ry + kick.yaw + swayX * .8 + tossPose.ry * .35,
+      pose.rz + slidePose.rz + kick.roll + breathRz - swap * .2 + settleWobble * .03,
+    );
+    // Lower the firearm while the knife or grenade is out.
+    const utility = Math.max(knifeBlend, throwBlend);
+    rifleMount.position.set(.03 * utility, -.28 * utility, .06 * utility);
+    pistolMount.position.set(.03 * utility, -.24 * utility, .06 * utility);
+    knifeMount.visible = knifeBlend > .01;
+    knifeMount.position.set(KNIFE_BASE.x + swingPose.x * knifeBlend, KNIFE_BASE.y + swingPose.y * knifeBlend,
+      KNIFE_BASE.z + swingPose.z * knifeBlend);
+    knifeMount.rotation.set(KNIFE_BASE.rx + swingPose.rx * knifeBlend, KNIFE_BASE.ry + swingPose.ry * knifeBlend,
+      KNIFE_BASE.rz + swingPose.rz * knifeBlend);
+    const release = tossPose.release || 0;
+    grenadeMount.visible = throwBlend > .02 && release < .95;
+    grenadeMount.position.set(GRENADE_BASE.x + tossPose.x * throwBlend,
+      GRENADE_BASE.y + tossPose.y * throwBlend, GRENADE_BASE.z + tossPose.z * throwBlend);
+    grenadeMount.rotation.set(GRENADE_BASE.rx + tossPose.rx * throwBlend,
+      GRENADE_BASE.ry + tossPose.ry * throwBlend, GRENADE_BASE.rz + tossPose.rz * throwBlend);
     if (action) {
       action.time = state.reloading && active === 'rifle' ? reload * idleTime : idleTime;
       mixer.update(0);
@@ -211,12 +395,25 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
       object.position.copy(original); object.position.y -= magazineTravel * 15;
       object.visible = !(magazineTravel > .98 && reload > .40 && reload < .57);
     }
-    const slideTravel = state.reloading && active === 'pistol' ? Math.sin(Math.PI * clamp((reload - .80) / .15, 0, 1)) * 2.8 : kick * 2.5;
+    // Empty desert pistol holds the slide back until a reload frees it.
+    const empty = Boolean(state.empty) && active === 'pistol' && !state.reloading;
+    stats.empty = empty;
+    const slideTravel = empty ? 2.8
+      : state.reloading && active === 'pistol' ? Math.sin(Math.PI * clamp((reload - .80) / .15, 0, 1)) * 2.8
+        : kickAmount * 2.5;
     for (const { object, base: original } of slides) { object.position.copy(original); object.position.z -= slideTravel; }
-    flash.position.set(active === 'rifle' ? 0 : 0, active === 'rifle' ? .28 : .20, active === 'rifle' ? -.82 : -.43);
-    flash.visible = flashTime > 0 && !state.reloading && !state.switching;
+    const flashY = active === 'rifle' ? .28 : .20, flashZ = active === 'rifle' ? -.82 : -.43;
+    const flashVisible = flashTime > 0 && !state.reloading && !state.switching;
+    flash.visible = flashVisible && flashAltShot === 0;
+    flashAlt.visible = flashVisible && flashAltShot === 1;
+    flash.position.set(0, flashY, flashZ);
+    flashAlt.position.copy(flash.position);
+    flash.scale.setScalar(active === 'rifle' ? .12 : .17);
+    flashAlt.scale.setScalar(active === 'rifle' ? .17 : .12);
     flash.material.rotation = elapsed * 27;
-    flashLight.position.copy(flash.position); flashLight.intensity = flash.visible ? .7 : 0;
+    flashAlt.material.rotation = 1.1 - elapsed * 19.5;
+    flashLight.position.copy(flash.position);
+    flashLight.intensity = flashVisible ? .7 : 0;
     overlay.updateMatrixWorld(true);
   }
 
@@ -231,7 +428,7 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
       renderer.render(overlay, viewCamera);
       // Even a frame slower than the 45 ms flash lifetime must display the
       // shot once; updates alone cannot consume an unrendered flash.
-      if (flash.visible) flashPendingRender = false;
+      if (flash.visible || flashAlt.visible) flashPendingRender = false;
     } finally { renderer.autoClear = autoClear; }
   }
 
@@ -273,7 +470,36 @@ export async function createViewmodel({ camera, renderer, onProgress, assets = F
   update(0, { weapon: 'rifle' });
   return {
     update, render, stats, createWorldWeapon,
-    fire() { if (!disposed) { recoil = 1; flashTime = .045; flashPendingRender = true; } },
+    fire() {
+      if (disposed) return;
+      const shot = recoilOffset(active, shotIndex++, aimBlend);
+      kick.pitch = Math.min(.06, kick.pitch + shot.pitch);
+      kick.yaw = clamp(kick.yaw + shot.yaw, -.05, .05);
+      kick.roll = clamp(kick.roll + shot.roll, -.04, .04);
+      recoil = Math.min(1.4, recoil + shot.kick);
+      flashAltShot = shotIndex & 1;
+      flashTime = .045; flashPendingRender = true;
+    },
+    /** Start the procedural knife swing. Returns false while one is playing. */
+    melee() {
+      if (disposed || meleeActive || knifeBlend > .35) return false;
+      meleeActive = true; meleeClock = 0;
+      return true;
+    },
+    /** Start the procedural grenade throw. Returns false while one is playing. */
+    throwGrenade() {
+      if (disposed || throwActive || throwBlend > .35) return false;
+      throwActive = true; throwClock = 0;
+      return true;
+    },
+    /** Drop transient presentation state (respawn / cutscene hand-off). */
+    resetPose() {
+      if (disposed) return;
+      aimBlend = sprintBlend = slideBlend = settle = knifeBlend = throwBlend = 0;
+      recoil = 0; kick.pitch = kick.yaw = kick.roll = 0; lookX = lookY = 0;
+      meleeActive = throwActive = false; meleeClock = throwClock = 0;
+      flashTime = 0; flashPendingRender = false;
+    },
     dispose() {
       if (disposed) return; disposed = true; stats.disposed = true;
       mixer.stopAllAction(); mixer.uncacheRoot(smg.scene);
