@@ -112,4 +112,20 @@ const html = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8
 await writeFile(path.join(output, 'index.html'), html);
 files.push({ path: 'index.html', bytes: Buffer.byteLength(html), sha256: sha256(html), kind: 'document' });
 await writeFile(path.join(output, 'asset-manifest.json'), JSON.stringify({ version: 1, files }, null, 2) + '\n');
+// Shared by Netlify and Cloudflare Pages (both read _headers at the publish root).
+const headers = [
+  '/assets/*',
+  '  Cache-Control: public, max-age=31536000, immutable',
+  '',
+  '/',
+  '  Cache-Control: public, max-age=0, must-revalidate',
+  '',
+  '/index.html',
+  '  Cache-Control: public, max-age=0, must-revalidate',
+  '',
+  '/credits.html',
+  '  Cache-Control: public, max-age=0, must-revalidate',
+  '',
+].join('\n');
+await writeFile(path.join(output, '_headers'), headers);
 console.log(`dist/netlify: ${files.length + 1} files · ${(files.reduce((sum, file) => sum + file.bytes, 0) / 1024 / 1024).toFixed(2)} MiB · lazy launcher ${script}`);

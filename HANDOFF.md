@@ -14,6 +14,7 @@
 - **验证**：`npm test` 307 项全通过（新增 FPS v5 规则/战术/任务/滑铲/特效/视图/UI 测试）；`npm run build` 通过。Playwright 在 1280×720、844×390、390×844 下验证了首页、简报、难度、HUD、设置分页、编辑器、结算无 JS 报错；实际动作验证了冲刺/滑铲、近战冷却、手雷、5 枚情报拾取中的 1 枚（+150 分、补弹）、终端目标读取（阶段 1）。截图位于 `docs/images/fps-v5-*.png`。
 - **边界**：浏览器验收使用 SwiftShader 软件渲染（约 2–3 fps），不能作为实体 iPhone 帧率/温升结论；手雷不做墙面反弹；可选目标与屋顶撤离的完整端到端流程未在软件渲染下走完。短横屏空间不足时不显示击杀信息流。
 - **提交**：分支包含源码、测试、文档、截图与重建后的 `dist/` 离线产物；线上 Netlify 仍为手动部署，未推送/发布。
+- **Cloudflare Pages**：另起项目 `yunlan-mall-v5`（https://yunlan-mall-v5.pages.dev/），构建命令 `npm run build:netlify`、输出 `dist/netlify/`，根目录 `wrangler.toml` + 构建脚本生成的 `_headers`；手动部署用 `npm run deploy:cf`。Cloudflare 无 Functions，自然语言队友指令自动回退本地解析，其余玩法一致。详见 [Cloudflare Pages 部署](docs/cloudflare-pages.md)。
 
 ## 2026-10-20 最新交接：恢复全园探索、共享地库与双撤离
 

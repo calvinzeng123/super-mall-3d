@@ -61,7 +61,7 @@ npm run serve
 
 `dist/mall.html` 是资源内嵌的双模式离线版，可下载后在新版桌面浏览器中直接打开。手机优先使用 HTTPS 在线站点；iOS 文件预览不能代替 Safari 网页运行环境。离线版的本地 AI、枪械和任务不需要模型 API。
 
-## GitHub 与 Netlify
+## GitHub 与 Netlify / Cloudflare Pages
 
 GitHub 保存源码、模型许可和离线产物；线上仍为 **手动部署**，推送不会自动发布。
 
@@ -72,6 +72,15 @@ netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2
 ```
 
 发布目录只用 `dist/netlify/`；`netlify.toml` 声明可选的 `netlify/functions/`。线上资源使用内容哈希和长期缓存，首页校验更新。部署 ID、文件校验和最终检查结果见[本轮 QA](docs/qa-2026-10-20-campus-fps.md)。
+
+Cloudflare Pages 另起项目 `yunlan-mall-v5`（https://yunlan-mall-v5.pages.dev/），与 Netlify 互不影响：
+
+```sh
+npm run deploy:cf
+```
+
+根目录 `wrangler.toml` 指向 `dist/netlify/`，`_headers` 由构建脚本统一生成；Cloudflare 没有 Functions，
+自然语言队友指令会回退到本地解析。详见 [Cloudflare Pages 部署](docs/cloudflare-pages.md)。
 
 可选语言模型接入只把一句自然语言转换为跟随、守点、掩护三个已有动作；战斗规则仍由本地游戏执行。默认不启用云端模型。环境变量与边界见 [FPS 接入说明](docs/fps-sample.md#可选模型-api)。
 

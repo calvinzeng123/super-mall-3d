@@ -1,0 +1,7 @@
+# Cloudflare Pages project for the browser build. The static output is shared
+# with Netlify (scripts/build-netlify.mjs) and needs no Functions runtime: the
+# optional squad-order model endpoint is Netlify-only and the game falls back
+# to its local parser when it is unavailable.
+name = "yunlan-mall-v5"
+pages_build_output_dir = "dist/netlify"
+compatibility_date = "2026-10-20"
