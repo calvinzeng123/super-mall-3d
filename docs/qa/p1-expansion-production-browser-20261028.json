@@ -1,0 +1,976 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-28T08:26:58.401Z",
+  "status": "production-browser-pass",
+  "pending": [],
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "deploymentReference": {
+    "deployId": "6ae1abe7328708a824482cc8",
+    "sourceCommit": "0d61f0a0c46edbb368394accb6dbf37497bb9492",
+    "source": "Provided by the integrating parent agent; deployment API and all-file integrity checks are reported separately.",
+    "observedLauncherAsset": "assets/main.743SDAXW.js"
+  },
+  "environment": {
+    "engine": "Playwright WebKit",
+    "session": "p1-production-webkit",
+    "host": "macOS desktop",
+    "devicePreset": "iPhone 15",
+    "physicalIPhone": false,
+    "portraitCss": [
+      393,
+      659
+    ],
+    "landscapeCss": [
+      852,
+      393
+    ],
+    "deviceScaleFactor": 3,
+    "coarsePointer": true,
+    "reportedMaxTouchPoints": 0,
+    "touchscreenTapRestoredUi": true,
+    "browserClosed": true
+  },
+  "checks": {
+    "coverLoadsLatestEntry": true,
+    "coverDoesNotInitializeWorld": true,
+    "fullTourRetained": true,
+    "coldInteriorsDeferred": true,
+    "buildingOverviewNoDetailBuild": true,
+    "cacheBounded": true,
+    "cultureInteriorGeometry": true,
+    "sunkenTunnelVisibleAndWalkable": true,
+    "cleanViewPortraitAndLandscape": true,
+    "noOverflow": true,
+    "fpsMapIsolated": true,
+    "noApplicationErrors": true,
+    "noFailedRequests": true,
+    "noContextLoss": true
+  },
+  "summary": {
+    "levels": 236,
+    "fixtures": 98,
+    "fixtureLevels": 27,
+    "eligibleStreamedFloors": 40,
+    "coldResidentFloors": 0,
+    "maximumSampledResidentFloors": 4,
+    "maximumSampledActualInteriorGroups": 4,
+    "floorCoverage": [
+      "P1C-2F",
+      "P1C-7F",
+      "P1W4-2F",
+      "P3-3F",
+      "P1-B2",
+      "M-B1"
+    ],
+    "sunkenTunnelWalkingDistance": 2.066399999999966,
+    "portraitCleanVisibleButtons": 0,
+    "landscapeCleanVisibleButtons": 0,
+    "landscapeDockButtonHeightCss": 44,
+    "fpsLevels": 18,
+    "fpsBuildings": [
+      "P1",
+      "H",
+      "A"
+    ],
+    "residenceRequests": 0,
+    "applicationErrors": 0,
+    "failedRequests": 0,
+    "httpErrorResponses": 0,
+    "webglContextLossEvents": 0,
+    "cliConsoleErrors": 0,
+    "cliConsoleWarnings": 0
+  },
+  "methods": [
+    "Entered tour through the production cover button; selected cultural pavilion and 2F using UI buttons.",
+    "Inspected remaining floor cuts through app.setFocus and walking destinations through app.explore.teleport.",
+    "Placed the player within the new sunken passage and verified more than 2 meters of keyboard movement with its shell visible.",
+    "Activated clean view via its UI button, verified zero visible buttons in both orientations, and restored with touchscreen taps.",
+    "Returned through the UI cover button and selected FPS; verified completed game initialization and isolated layout/assets."
+  ],
+  "limits": [
+    "Desktop mobile emulation only; no physical iPhone, iOS process-memory limit, thermal behavior or background-resume certification.",
+    "WebKit device preset reports maxTouchPoints=0 despite a coarse pointer and operational Playwright touchscreen taps; this does not certify all real-device input behavior.",
+    "This is a production smoke test, not a full replay of the local test suite or exhaustive collision/room inspection.",
+    "FPS startup, rendering and map isolation were checked; combat, teammates, extraction and all weapon interactions were not replayed.",
+    "Residential rooms and their large deferred binary downloads were not exercised. Parent-agent command-line integrity checks are separate evidence.",
+    "Cache figures are sampled resident interior groups, not total process/GPU memory or a measured peak."
+  ],
+  "screenshots": [
+    {
+      "path": "docs/images/p1-production-20261028-culture2-clean.png",
+      "caption": "Production WebKit landscape: cultural pavilion 2F details and clean view after the temporary hint expires.",
+      "visuallyInspected": true
+    },
+    {
+      "path": "docs/images/p1-production-20261028-sunken-tunnel.png",
+      "caption": "Production WebKit landscape walking view: tunnel floor, walls, ceiling and the sunken courtyard stairs.",
+      "visuallyInspected": true
+    }
+  ],
+  "raw": {
+    "errors": [],
+    "failed": [],
+    "badResponses": [],
+    "cover": {
+      "mode": "launch",
+      "app": false,
+      "viewport": [
+        393,
+        659
+      ],
+      "dpr": 3,
+      "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+      "coarse": true,
+      "maxTouchPoints": 0,
+      "entries": [
+        "https://yunlan-mall-calvin.netlify.app/assets/main.743SDAXW.js"
+      ],
+      "glbs": []
+    },
+    "cold": {
+      "mode": "tour",
+      "levels": 236,
+      "fixtures": 98,
+      "fixtureLevels": 27,
+      "streaming": {
+        "mode": "streamed-tour",
+        "eligible": 40,
+        "limit": 4,
+        "hardLimit": 4,
+        "required": [],
+        "resident": [],
+        "errors": [],
+        "requests": 0,
+        "builds": 0,
+        "hits": 0,
+        "evictions": 0,
+        "disposed": 0,
+        "deferred": [
+          "P1-1F",
+          "P1-2F",
+          "P1-3F",
+          "P1-4F",
+          "P1-5F",
+          "P1-6F",
+          "P2-1F",
+          "P2-2F",
+          "P2-3F",
+          "P2-4F",
+          "P3-1F",
+          "P3-2F",
+          "P3-3F",
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-3F",
+          "P1C-4F",
+          "P1C-5F",
+          "P1C-6F",
+          "P1C-7F",
+          "P1S-1F",
+          "P1S-2F",
+          "P1S-3F",
+          "P1E-1F",
+          "P1E-2F",
+          "P1E-3F",
+          "P1E-4F",
+          "P1E2-1F",
+          "P1E2-2F",
+          "P1E2-3F",
+          "P1W1-1F",
+          "P1W1-2F",
+          "P1W1-3F",
+          "P1W2-1F",
+          "P1W2-2F",
+          "P1W3-1F",
+          "P1W3-2F",
+          "P1W4-1F",
+          "P1W4-2F",
+          "P1W4-3F"
+        ],
+        "lazyAtlasLevels": [
+          "P1-3F",
+          "P1-4F",
+          "P1-5F",
+          "P1-6F",
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-3F",
+          "P1C-4F",
+          "P1C-5F",
+          "P1C-6F",
+          "P1C-7F",
+          "P1S-1F",
+          "P1S-2F",
+          "P1S-3F",
+          "P1E-1F",
+          "P1E-2F",
+          "P1E-3F",
+          "P1E-4F",
+          "P1E2-1F",
+          "P1E2-2F",
+          "P1E2-3F",
+          "P1W1-1F",
+          "P1W1-2F",
+          "P1W1-3F",
+          "P1W2-1F",
+          "P1W2-2F",
+          "P1W3-1F",
+          "P1W3-2F",
+          "P1W4-1F",
+          "P1W4-2F",
+          "P1W4-3F"
+        ],
+        "persistentGeometry": {
+          "geometries": 3058,
+          "vertices": 13048594,
+          "bufferBytes": 253338310
+        },
+        "detailGeometry": {
+          "geometries": 0,
+          "vertices": 0,
+          "bufferBytes": 0
+        }
+      },
+      "resources": {
+        "suite": "idle",
+        "residential": "idle",
+        "floor": null,
+        "errors": []
+      },
+      "buildings": [
+        "P1",
+        "P2",
+        "P3",
+        "M",
+        "H",
+        "A",
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "WPG",
+        "P1C",
+        "P1S",
+        "P1E",
+        "P1E2",
+        "P1W1",
+        "P1W2",
+        "P1W3",
+        "P1W4"
+      ],
+      "sunkenPreview": {
+        "exists": true,
+        "visible": true,
+        "children": 8
+      },
+      "contextLost": false,
+      "contextLossEvents": [],
+      "overflow": false,
+      "glbs": [
+        "https://yunlan-mall-calvin.netlify.app/assets/person-f.a1ec332b8f429022.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-m.5da2da91839f374d.glb"
+      ]
+    },
+    "portraitClean": {
+      "viewport": [
+        393,
+        659
+      ],
+      "classes": "quality-low ui-hidden",
+      "visibleButtons": 0,
+      "overflow": false,
+      "restored": true
+    },
+    "buildingOverview": {
+      "state": {
+        "building": "P1C",
+        "focus": null,
+        "exploded": false,
+        "flows": false,
+        "labels": false,
+        "night": false,
+        "selected": null,
+        "touring": false,
+        "explore": null
+      },
+      "streaming": {
+        "mode": "streamed-tour",
+        "eligible": 40,
+        "limit": 4,
+        "hardLimit": 4,
+        "required": [],
+        "resident": [],
+        "errors": [],
+        "requests": 0,
+        "builds": 0,
+        "hits": 0,
+        "evictions": 0,
+        "disposed": 0,
+        "deferred": [
+          "P1-1F",
+          "P1-2F",
+          "P1-3F",
+          "P1-4F",
+          "P1-5F",
+          "P1-6F",
+          "P2-1F",
+          "P2-2F",
+          "P2-3F",
+          "P2-4F",
+          "P3-1F",
+          "P3-2F",
+          "P3-3F",
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-3F",
+          "P1C-4F",
+          "P1C-5F",
+          "P1C-6F",
+          "P1C-7F",
+          "P1S-1F",
+          "P1S-2F",
+          "P1S-3F",
+          "P1E-1F",
+          "P1E-2F",
+          "P1E-3F",
+          "P1E-4F",
+          "P1E2-1F",
+          "P1E2-2F",
+          "P1E2-3F",
+          "P1W1-1F",
+          "P1W1-2F",
+          "P1W1-3F",
+          "P1W2-1F",
+          "P1W2-2F",
+          "P1W3-1F",
+          "P1W3-2F",
+          "P1W4-1F",
+          "P1W4-2F",
+          "P1W4-3F"
+        ],
+        "lazyAtlasLevels": [
+          "P1-3F",
+          "P1-4F",
+          "P1-5F",
+          "P1-6F",
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-3F",
+          "P1C-4F",
+          "P1C-5F",
+          "P1C-6F",
+          "P1C-7F",
+          "P1S-1F",
+          "P1S-2F",
+          "P1S-3F",
+          "P1E-1F",
+          "P1E-2F",
+          "P1E-3F",
+          "P1E-4F",
+          "P1E2-1F",
+          "P1E2-2F",
+          "P1E2-3F",
+          "P1W1-1F",
+          "P1W1-2F",
+          "P1W1-3F",
+          "P1W2-1F",
+          "P1W2-2F",
+          "P1W3-1F",
+          "P1W3-2F",
+          "P1W4-1F",
+          "P1W4-2F",
+          "P1W4-3F"
+        ],
+        "persistentGeometry": {
+          "geometries": 3058,
+          "vertices": 13048594,
+          "bufferBytes": 253338310
+        },
+        "detailGeometry": {
+          "geometries": 0,
+          "vertices": 0,
+          "bufferBytes": 0
+        }
+      }
+    },
+    "checkpoints": [
+      {
+        "method": "UI cultural pavilion 2F",
+        "focus": "P1C-2F",
+        "explore": null,
+        "fixtures": 7,
+        "detailGroup": true,
+        "vertices": 42648,
+        "required": [
+          "P1C-2F",
+          "P1C-1F",
+          "P1C-3F"
+        ],
+        "resident": [
+          "P1C-2F",
+          "P1C-1F",
+          "P1C-3F"
+        ],
+        "physicalGroups": [
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-3F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": []
+      },
+      {
+        "method": "runtime floor cut",
+        "focus": "P1C-7F",
+        "explore": null,
+        "fixtures": 5,
+        "detailGroup": true,
+        "vertices": 37440,
+        "required": [
+          "P1C-7F",
+          "P1C-6F"
+        ],
+        "resident": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-7F",
+          "P1C-6F"
+        ],
+        "physicalGroups": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-6F",
+          "P1C-7F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": []
+      },
+      {
+        "method": "runtime floor cut",
+        "focus": "P1W4-2F",
+        "explore": null,
+        "fixtures": 2,
+        "detailGroup": true,
+        "vertices": 8256,
+        "required": [
+          "P1W4-2F",
+          "P1W4-1F",
+          "P1W4-3F"
+        ],
+        "resident": [
+          "P1C-6F",
+          "P1W4-2F",
+          "P1W4-1F",
+          "P1W4-3F"
+        ],
+        "physicalGroups": [
+          "P1C-6F",
+          "P1W4-1F",
+          "P1W4-2F",
+          "P1W4-3F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": []
+      },
+      {
+        "method": "runtime floor cut",
+        "focus": "P3-3F",
+        "explore": null,
+        "fixtures": 0,
+        "detailGroup": true,
+        "vertices": 473010,
+        "required": [
+          "P3-3F",
+          "P3-2F"
+        ],
+        "resident": [
+          "P1W4-1F",
+          "P1W4-3F",
+          "P3-3F",
+          "P3-2F"
+        ],
+        "physicalGroups": [
+          "P3-2F",
+          "P3-3F",
+          "P1W4-1F",
+          "P1W4-3F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": []
+      },
+      {
+        "method": "runtime floor cut",
+        "focus": "P1-B2",
+        "explore": null,
+        "fixtures": 0,
+        "detailGroup": false,
+        "vertices": 0,
+        "required": [],
+        "resident": [
+          "P1W4-1F",
+          "P1W4-3F",
+          "P3-3F",
+          "P3-2F"
+        ],
+        "physicalGroups": [
+          "P3-2F",
+          "P3-3F",
+          "P1W4-1F",
+          "P1W4-3F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": []
+      },
+      {
+        "method": "runtime floor cut",
+        "focus": "M-B1",
+        "explore": null,
+        "fixtures": 0,
+        "detailGroup": false,
+        "vertices": 0,
+        "required": [],
+        "resident": [
+          "P1W4-1F",
+          "P1W4-3F",
+          "P3-3F",
+          "P3-2F"
+        ],
+        "physicalGroups": [
+          "P3-2F",
+          "P3-3F",
+          "P1W4-1F",
+          "P1W4-3F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": []
+      },
+      {
+        "method": "runtime floor cut",
+        "focus": "P1C-2F",
+        "explore": null,
+        "fixtures": 7,
+        "detailGroup": true,
+        "vertices": 42648,
+        "required": [
+          "P1C-2F",
+          "P1C-1F",
+          "P1C-3F"
+        ],
+        "resident": [
+          "P3-2F",
+          "P1C-2F",
+          "P1C-1F",
+          "P1C-3F"
+        ],
+        "physicalGroups": [
+          "P3-2F",
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-3F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": []
+      },
+      {
+        "method": "runtime explore.teleport",
+        "focus": "P1C-2F",
+        "explore": "P1C-7F",
+        "fixtures": 5,
+        "detailGroup": true,
+        "vertices": 37440,
+        "required": [
+          "P1C-7F",
+          "P1C-6F"
+        ],
+        "resident": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-7F",
+          "P1C-6F"
+        ],
+        "physicalGroups": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-6F",
+          "P1C-7F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": [],
+        "position": {
+          "floor": "P1C-7F",
+          "x": -128.25931034482758,
+          "z": -228.95999999999998,
+          "y": 34,
+          "slope": null,
+          "yaw": -1.5707963267948966,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": 35.62,
+          "riding": null
+        },
+        "camera": [
+          -128.25931034482758,
+          35.62,
+          -228.95999999999998
+        ]
+      },
+      {
+        "method": "runtime explore.teleport",
+        "focus": "P1C-2F",
+        "explore": "P1-B2",
+        "fixtures": 0,
+        "detailGroup": false,
+        "vertices": 0,
+        "required": [],
+        "resident": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-7F",
+          "P1C-6F"
+        ],
+        "physicalGroups": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-6F",
+          "P1C-7F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": [],
+        "position": {
+          "floor": "P1-B2",
+          "x": -150,
+          "z": -215,
+          "y": -12,
+          "slope": null,
+          "yaw": -1.5707963267948966,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": -10.379999999999999,
+          "riding": null
+        },
+        "camera": [
+          -150,
+          -10.379999999999999,
+          -215
+        ]
+      },
+      {
+        "method": "runtime explore.teleport",
+        "focus": "P1C-2F",
+        "explore": "M-B1",
+        "fixtures": 0,
+        "detailGroup": false,
+        "vertices": 0,
+        "required": [],
+        "resident": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-7F",
+          "P1C-6F"
+        ],
+        "physicalGroups": [
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-6F",
+          "P1C-7F"
+        ],
+        "errors": [],
+        "contextLost": false,
+        "contextLossEvents": [],
+        "position": {
+          "floor": "M-B1",
+          "x": 1,
+          "z": -8,
+          "y": -4.5,
+          "slope": null,
+          "yaw": -1.5707963267948966,
+          "pitch": 0,
+          "flying": false,
+          "eyeY": -2.88,
+          "riding": null
+        },
+        "camera": [
+          1,
+          -2.88,
+          -8
+        ]
+      }
+    ],
+    "landscapeUi": {
+      "viewport": [
+        852,
+        393
+      ],
+      "overflow": false,
+      "buttons": [
+        {
+          "label": "2F ▴",
+          "rect": {
+            "x": 241,
+            "y": 335,
+            "w": 72.40625,
+            "h": 44
+          }
+        },
+        {
+          "label": "工具",
+          "rect": {
+            "x": 315.40625,
+            "y": 335,
+            "w": 72.40625,
+            "h": 44
+          }
+        },
+        {
+          "label": "地点",
+          "rect": {
+            "x": 389.8125,
+            "y": 335,
+            "w": 72.40625,
+            "h": 44
+          }
+        },
+        {
+          "label": "漫游",
+          "rect": {
+            "x": 464.21875,
+            "y": 335,
+            "w": 72.40625,
+            "h": 44
+          }
+        },
+        {
+          "label": "净览：隐藏所有界面，轻点画面恢复",
+          "rect": {
+            "x": 538.625,
+            "y": 335,
+            "w": 72.40625,
+            "h": 44
+          }
+        }
+      ]
+    },
+    "landscapeClean": {
+      "viewport": [
+        852,
+        393
+      ],
+      "classes": "quality-low ui-hidden",
+      "visibleButtons": 0,
+      "overflow": false,
+      "restored": true
+    },
+    "sunkenTunnel": {
+      "start": {
+        "floor": "P1-B1M",
+        "x": -108.5,
+        "z": -62,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.88,
+        "riding": null
+      },
+      "end": {
+        "floor": "P1-B1M",
+        "x": -108.5,
+        "z": -59.933600000000034,
+        "y": -4.5,
+        "slope": null,
+        "yaw": 3.141592653589793,
+        "pitch": 0,
+        "flying": false,
+        "eyeY": -2.88,
+        "riding": null
+      },
+      "distance": 2.066399999999966,
+      "network": {
+        "name": "expansion-tunnel-9",
+        "visible": true,
+        "ownerVisible": true,
+        "shellVisible": true,
+        "ceilingVisible": true,
+        "vertices": 684
+      },
+      "contextLost": false
+    },
+    "beforeFps": {
+      "contextLost": false,
+      "contextLossEvents": [],
+      "streaming": {
+        "mode": "streamed-tour",
+        "eligible": 40,
+        "limit": 4,
+        "hardLimit": 4,
+        "required": [
+          "P1C-2F",
+          "P1C-1F",
+          "P1C-3F"
+        ],
+        "resident": [
+          "P1-1F",
+          "P1C-2F",
+          "P1C-1F",
+          "P1C-3F"
+        ],
+        "errors": [],
+        "requests": 22,
+        "builds": 17,
+        "hits": 5,
+        "evictions": 13,
+        "disposed": 13,
+        "deferred": [
+          "P1-2F",
+          "P1-3F",
+          "P1-4F",
+          "P1-5F",
+          "P1-6F",
+          "P2-1F",
+          "P2-2F",
+          "P2-3F",
+          "P2-4F",
+          "P3-1F",
+          "P3-2F",
+          "P3-3F",
+          "P1C-4F",
+          "P1C-5F",
+          "P1C-6F",
+          "P1C-7F",
+          "P1S-1F",
+          "P1S-2F",
+          "P1S-3F",
+          "P1E-1F",
+          "P1E-2F",
+          "P1E-3F",
+          "P1E-4F",
+          "P1E2-1F",
+          "P1E2-2F",
+          "P1E2-3F",
+          "P1W1-1F",
+          "P1W1-2F",
+          "P1W1-3F",
+          "P1W2-1F",
+          "P1W2-2F",
+          "P1W3-1F",
+          "P1W3-2F",
+          "P1W4-1F",
+          "P1W4-2F",
+          "P1W4-3F"
+        ],
+        "lazyAtlasLevels": [
+          "P1-3F",
+          "P1-4F",
+          "P1-5F",
+          "P1-6F",
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-3F",
+          "P1C-4F",
+          "P1C-5F",
+          "P1C-6F",
+          "P1C-7F",
+          "P1S-1F",
+          "P1S-2F",
+          "P1S-3F",
+          "P1E-1F",
+          "P1E-2F",
+          "P1E-3F",
+          "P1E-4F",
+          "P1E2-1F",
+          "P1E2-2F",
+          "P1E2-3F",
+          "P1W1-1F",
+          "P1W1-2F",
+          "P1W1-3F",
+          "P1W2-1F",
+          "P1W2-2F",
+          "P1W3-1F",
+          "P1W3-2F",
+          "P1W4-1F",
+          "P1W4-2F",
+          "P1W4-3F"
+        ],
+        "persistentGeometry": {
+          "geometries": 3058,
+          "vertices": 13048594,
+          "bufferBytes": 253338310
+        },
+        "detailGeometry": {
+          "geometries": 51,
+          "vertices": 1099638,
+          "bufferBytes": 20400492
+        }
+      },
+      "resources": {
+        "suite": "idle",
+        "residential": "idle",
+        "floor": "P1C-2F",
+        "errors": []
+      },
+      "errors": [],
+      "failed": [],
+      "badResponses": []
+    },
+    "fps": {
+      "mode": "fps",
+      "levels": 18,
+      "buildings": [
+        "P1",
+        "H",
+        "A"
+      ],
+      "streaming": {
+        "mode": "eager-fps",
+        "eligible": 0,
+        "deferred": [],
+        "lazyAtlasLevels": [],
+        "persistentGeometry": {
+          "geometries": 592,
+          "vertices": 5391931,
+          "bufferBytes": 100594724
+        },
+        "detailGeometry": {
+          "geometries": 0,
+          "vertices": 0,
+          "bufferBytes": 0
+        }
+      },
+      "resources": {
+        "suite": "ready",
+        "residential": "idle",
+        "floor": "P1-1F",
+        "errors": []
+      },
+      "initialized": true,
+      "contextLost": false,
+      "contextLossEvents": [],
+      "glbs": [
+        "https://yunlan-mall-calvin.netlify.app/assets/suite.a7f99bf01d3ad6e3.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/smg45.986342e386b174d5.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/fps-hands.94614904f4d82efd.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/deagle.77ed676903ec101b.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-m.5da2da91839f374d.glb",
+        "https://yunlan-mall-calvin.netlify.app/assets/person-f.a1ec332b8f429022.glb"
+      ],
+      "residenceRequests": [],
+      "viewport": [
+        852,
+        393
+      ],
+      "overflow": false
+    },
+    "completedAt": "2026-10-28T08:26:58.401Z",
+    "finalContextLossEvents": []
+  }
+}

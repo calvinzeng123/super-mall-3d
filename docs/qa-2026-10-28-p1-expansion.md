@@ -59,4 +59,10 @@
 
 ## 发布
 
-沿用 [原 Netlify 入口](https://yunlan-mall-calvin.netlify.app/) 与 GitHub `feat/explore-v4`。本节在实际发布并复查后记录部署 ID、远端提交和文件校验。
+沿用 [原 Netlify 入口](https://yunlan-mall-calvin.netlify.app/) 与 GitHub `feat/explore-v4`。部署应用源码为 [`0d61f0a`](https://github.com/calvinzeng123/super-mall-3d/commit/0d61f0a0c46edbb368394accb6dbf37497bb9492)，已推送远端；后续补充验收记录的提交只改文档，不改变本次应用产物。
+
+- Netlify 生产部署 `6ae1abe7328708a824482cc8` 于 **2026-10-28 08:01:56 UTC** 发布，API 状态为 `ready`，站点的 `published_deploy` 与该 ID 一致。
+- 从原正式域名下载验证全部 49 个文件：**47 个文件原始字节数及 SHA-256 一致**；两份 HTML 去除已逐段识别的 Netlify 托管注释、HUD 脚本及其尾随换行后与本地产物一致。入口为 `main.743SDAXW.js`，SHA-256 为 `182613a0d6517d30f5074f25e66506724e7d2f99b7a01d3e4ca06a3837b4ee00`。[正式资源记录](qa/p1-expansion-production-files-20261028.json)。
+- 三份既有住宅 `.bin` 首轮下载在 60 秒后超时，并出现 curl HTTP/2 framing error；改用 HTTP/1.1 重试后均完整取得且哈希一致。初次网络下载速度仍可能波动，不能把重试成功写成任意网络下都快速加载。
+- 正式原网址的 WebKit 手机模拟通过封面 → 完整探索：236 层、98 组陈设、40 个延迟商业层；冷启动商业室内缓存为 0。文化馆 2F/7F、小馆、三期、P1-B2 与地铁 M-B1 切层和漫游可用，实际室内组及缓存均不超过 4 层。横竖屏无横向溢出，净览隐藏全部按钮，触摸可恢复。
+- 同一正式网址返回封面后进入 FPS 成功：18 层，仅 P1/H/A，套房资源 ready、住宅 idle，住宅请求为 0。检查期间没有页面异常、失败请求、HTTP 400 及以上响应或 WebGL 上下文丢失。[生产浏览器记录](qa/p1-expansion-production-browser-20261028.json)。这些结果仍是桌面 WebKit 手机模拟，未替代实体 iPhone 验收。
