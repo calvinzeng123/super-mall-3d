@@ -1,0 +1,414 @@
+{
+  "check": "Full campus initial ready memory comparison; no tower interior entered",
+  "environment": "Desktop Chromium 155 with Pixel 10 mobile emulation, 360x732; NOT physical iPhone or Safari",
+  "dateUtc": "2026-10-28",
+  "beforeBuild": "41e4dc7 prior dist/netlify",
+  "afterBuild": "rebuilt dist/netlify served by parent at http://127.0.0.1:5178/",
+  "method": "Same scene traversal and performance.memory measurement as baseline, unique geometry identity, initial overview only; no forced garbage collection",
+  "before": {
+    "heap": 516132937,
+    "geometries": 2225,
+    "geometryBytes": 340568438,
+    "cpuGeometryBytes": 182333416,
+    "vertices": 17823525,
+    "gpu": {
+      "geometries": 1463,
+      "textures": 245
+    },
+    "textures": 505,
+    "textureImageBytes": 149319648,
+    "residential": {
+      "templates": 3,
+      "geometries": 169,
+      "materials": 116,
+      "textures": 17,
+      "imageSources": 17,
+      "geometryBytes": 71668220,
+      "cpuGeometryBytes": 71668220,
+      "maxTextureDimension": 512,
+      "sourceBytes": 77308884,
+      "compressedBytes": 28884578,
+      "variants": {
+        "01": {
+          "sourcePrimitives": 1508,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 585802,
+          "materials": 38,
+          "modelSHA256": "8167df76c9d627bcb90966783d4518236cb3ab1f0753c51a448da51b979643c7",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "02": {
+          "sourcePrimitives": 1547,
+          "excludedSlabs": 2,
+          "batches": 56,
+          "triangles": 583662,
+          "materials": 38,
+          "modelSHA256": "fcd3507885ba0e94f242cbf5dfcd4c13d6ad39b7daa00b09057c474e64f07593",
+          "bounds": {
+            "min": [
+              -0.02500024251639843,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              15.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        },
+        "03": {
+          "sourcePrimitives": 1731,
+          "excludedSlabs": 2,
+          "batches": 57,
+          "triangles": 716706,
+          "materials": 40,
+          "modelSHA256": "14f14bd773907ff6dac4d6de143ace60c00a8698f31a93f110023d91f8d6a0b4",
+          "bounds": {
+            "min": [
+              -0.025000175461173058,
+              -0.038999997079372406,
+              -11.524999618530273
+            ],
+            "max": [
+              17.625,
+              3.009999990463257,
+              2.799999952316284
+            ]
+          }
+        }
+      },
+      "floorGroupsCreated": 0,
+      "floorGroupsDisposed": 0,
+      "activeFloorGroups": 0,
+      "sharedGeometryDisposals": 0,
+      "sharedMaterialDisposals": 0,
+      "sharedTextureDisposals": 0,
+      "reusedTextures": 50,
+      "disposed": false
+    },
+    "largest": [
+      {
+        "name": "ext",
+        "parent": "site",
+        "bytes": 11394648,
+        "cpu": 0
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 9554328,
+        "cpu": 9554328
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7954632,
+        "cpu": 7954632
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7891128,
+        "cpu": 7891128
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7558488,
+        "cpu": 0
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7041492,
+        "cpu": 7041492
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 6683364,
+        "cpu": 6683364
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 6503652,
+        "cpu": 6503652
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 5982552,
+        "cpu": 5982552
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 5261976,
+        "cpu": 5261976
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 5151600,
+        "cpu": 0
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 4939056,
+        "cpu": 0
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 4786344,
+        "cpu": 0
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 4468284,
+        "cpu": 4468284
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 4236192,
+        "cpu": 4236192
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 4067064,
+        "cpu": 4067064
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 3802896,
+        "cpu": 3802896
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 3791556,
+        "cpu": 3791556
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 3772008,
+        "cpu": 3772008
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 3766824,
+        "cpu": 3766824
+      }
+    ]
+  },
+  "after": {
+    "userAgent": "Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.8059.12 Mobile Safari/537.36",
+    "viewport": [
+      360,
+      732
+    ],
+    "heap": 462269242,
+    "geometries": 2225,
+    "geometryBytes": 340568438,
+    "cpuGeometryBytes": 182333416,
+    "vertices": 17823525,
+    "gpu": {
+      "geometries": 1463,
+      "textures": 245
+    },
+    "textures": 505,
+    "textureImageBytes": 149319648,
+    "residential": {
+      "models": 0,
+      "templates": 0,
+      "loadStatus": "idle"
+    },
+    "detailLoading": {
+      "suite": "idle",
+      "residential": "idle",
+      "floor": null,
+      "errors": []
+    },
+    "buildingIds": [
+      "P1",
+      "P2",
+      "P3",
+      "M",
+      "H",
+      "A",
+      "R1",
+      "R2",
+      "R3",
+      "R4",
+      "WPG"
+    ],
+    "largest": [
+      {
+        "name": "ext",
+        "parent": "site",
+        "bytes": 11394648,
+        "cpu": 0
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 9554328,
+        "cpu": 9554328
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7954632,
+        "cpu": 7954632
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7891128,
+        "cpu": 7891128
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7558488,
+        "cpu": 0
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 7041492,
+        "cpu": 7041492
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 6683364,
+        "cpu": 6683364
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 6503652,
+        "cpu": 6503652
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 5982552,
+        "cpu": 5982552
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 5261976,
+        "cpu": 5261976
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 5151600,
+        "cpu": 0
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 4939056,
+        "cpu": 0
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 4786344,
+        "cpu": 0
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 4468284,
+        "cpu": 4468284
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 4236192,
+        "cpu": 4236192
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 4067064,
+        "cpu": 4067064
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 3802896,
+        "cpu": 3802896
+      },
+      {
+        "name": "metal",
+        "parent": "",
+        "bytes": 3791556,
+        "cpu": 3791556
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 3772008,
+        "cpu": 3772008
+      },
+      {
+        "name": "matte",
+        "parent": "",
+        "bytes": 3766824,
+        "cpu": 3766824
+      }
+    ]
+  },
+  "deltaAfterMinusBefore": {
+    "heap": -53863695,
+    "geometries": 0,
+    "geometryBytes": 0,
+    "cpuGeometryBytes": 0,
+    "vertices": 0,
+    "textures": 0,
+    "textureImageBytes": 0
+  },
+  "heapReductionPercent": 10.44,
+  "deferredResidentialCpuGeometryBytes": 71668220,
+  "checks": {
+    "suiteIdle": true,
+    "residentialIdle": true,
+    "zeroResidentialTemplates": true,
+    "unchangedSceneGeometry": true,
+    "fullCampusBuildings": true
+  },
+  "limitations": [
+    "performance.memory is a Chromium JS heap estimate, not total browser or GPU process memory; GC timing changes the reading.",
+    "geometryBytes includes previously uploaded historical buffer sizes; cpuGeometryBytes counts retained typed arrays.",
+    "Scene geometry excludes unloaded residential manager templates. Prior manager held 71,668,220 bytes; new manager holds zero templates.",
+    "textureImageBytes is a crude per Texture estimate and may double-count shared image sources.",
+    "These measurements do not demonstrate physical iPhone Safari crash resolution or quantify transient construction peak."
+  ]
+}

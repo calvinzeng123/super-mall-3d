@@ -31,6 +31,11 @@ export function scaled(c, k = TEX_SCALE) {
   const g = s.getContext('2d');
   g.imageSmoothingQuality = 'high';
   g.drawImage(c, 0, 0, s.width, s.height);
+  // The source is a temporary drawing surface at all scaled() call sites.
+  // Safari may keep its native pixel buffer after the JS wrapper becomes
+  // unreachable; resize it now, after drawImage has copied the pixels.
+  c.width = 1;
+  c.height = 1;
   return s;
 }
 

@@ -1,0 +1,86 @@
+[
+  {
+    "path": "assets/main.GBGQTF4H.js",
+    "bytes": 10440,
+    "sha256": "98e2ac21717d0124ba3ce7a613a253418f922501d486a89e945b2050e99a523c",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.V4FE7RPJ.js",
+    "bytes": 5975,
+    "sha256": "051104fa269d603d36c906d5ce2f43e80ecb3a5134773508c4eb7f5841ff1fc8",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.VXTUHZRX.js",
+    "bytes": 107454,
+    "sha256": "7558696f69db66d0b0fc97c2a4334c2530da8e7d67cb8a589982ce83eddb17a2",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.EIGKUZYE.js",
+    "bytes": 16926,
+    "sha256": "983f5ab0dacf2c42f130c1b6bc110c4069faadb1c48f237de8908fcf208b1409",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.OGKWKFHC.js",
+    "bytes": 13963,
+    "sha256": "3d4d389f9eb9e4580acdfedddf24555755656e64d72058e25666bc649704fbec",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.XWHKNJDB.js",
+    "bytes": 18872,
+    "sha256": "4a09710cf0cf18c665c4186957f37240259d4c46a4a60cc4f94a74a7f5cb5755",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.3BBAK3EM.js",
+    "bytes": 6449,
+    "sha256": "ad69e98859ca1846bc2d85ef061b0842f1d446357f42e7238e2ca2ba827089e3",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.RI5LZXLK.js",
+    "bytes": 1001368,
+    "sha256": "6c5d945128cb2f8c201bc06e61cf7d88f29aef2583e660c2e53b60450837bd67",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.POIIW4BF.js",
+    "bytes": 56048,
+    "sha256": "5c770a50617b1b4ada24950e9c666af5e8f276d4a25355db85ded2c059b15a23",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.4QDYA4MS.js",
+    "bytes": 2476,
+    "sha256": "98d447f0f727ffc759d9b3f6162c92ef9bed00016d7f1f48ace5b14db7f4282c",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.K23NU6QQ.js",
+    "bytes": 580882,
+    "sha256": "2dbf5a8ca460c7ce728af422fca7bed54d54b0fb0a6b29ab5c9aca8390043b36",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  },
+  {
+    "path": "assets/chunk.WMKTFVSF.js",
+    "bytes": 577,
+    "sha256": "11247d28c5c2fb3d976002c2b55fecb6ba19fd88153e11d2c7af5832fd6ff331",
+    "rawMatch": true,
+    "htmlHostingInjection": false
+  }
+]

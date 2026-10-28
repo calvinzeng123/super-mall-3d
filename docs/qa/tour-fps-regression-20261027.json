@@ -1,0 +1,18 @@
+{
+  "buildings": [
+    "P1",
+    "H",
+    "A"
+  ],
+  "levels": 18,
+  "details": {
+    "suite": "ready",
+    "residential": "idle",
+    "floor": "P1-1F",
+    "errors": []
+  },
+  "modelLoaded": true,
+  "contextLost": false,
+  "residentialRequested": false,
+  "jump": 1
+}

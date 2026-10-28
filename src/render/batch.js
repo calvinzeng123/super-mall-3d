@@ -195,13 +195,26 @@ export class Batcher {
   }
 
   /** 生成网格；为空返回 null */
-  mesh(material, { shadow = true, receive = true, name = '' } = {}) {
+  mesh(material, { shadow = true, receive = true, name = '', consume = false } = {}) {
     if (this.n === 0) return null;
+    // flush owns these buffers exclusively. Transfer and trim them instead of
+    // temporarily retaining both the grown builder and a full geometry copy.
+    // A direct mesh() call still creates an independent, reusable snapshot.
+    const take = (key, count) => {
+      const source = this[key];
+      const bytes = count * source.BYTES_PER_ELEMENT;
+      const result = consume && typeof source.buffer.transferToFixedLength === 'function'
+        ? new source.constructor(source.buffer.transferToFixedLength(bytes))
+        : source.slice(0, count);
+      if (consume) this[key] = null;
+      return result;
+    };
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, this.n * 3), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.slice(0, this.n * 3), 3, true));
-    if (this.withUv) g.setAttribute('uv', new THREE.BufferAttribute(this.uv.slice(0, this.n * 2), 2));
-    g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, this.n * 3), 3, true));
+    g.setAttribute('position', new THREE.BufferAttribute(take('pos', this.n * 3), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(take('nor', this.n * 3), 3, true));
+    if (this.withUv) g.setAttribute('uv', new THREE.BufferAttribute(take('uv', this.n * 2), 2));
+    g.setAttribute('color', new THREE.BufferAttribute(take('col', this.n * 3), 3, true));
+    if (consume) { this.n = 0; this.cap = 0; }
     g.computeBoundingSphere();
     g.computeBoundingBox();
     const mesh = new THREE.Mesh(g, material);
@@ -246,7 +259,7 @@ export class SignBatch {
     this.b.shape('plane', _sp, _sq, _ss, 0xffffff, uv);
   }
   flush(group, material) {
-    const m = this.b.mesh(material, { shadow: false, receive: false, name: 'signs' });
+    const m = this.b.mesh(material, { shadow: false, receive: false, name: 'signs', consume: true });
     if (m) group.add(m);
     this.b = new Batcher(null, true);
   }
@@ -290,7 +303,7 @@ export class BatchSet {
       const mat = this.materials[key];
       if (!mat) throw new Error('missing material ' + key);
       const noShadow = key === 'glass' || key === 'glow' || key === 'glowSoft' || key === 'water';
-      const m = b.mesh(mat, { shadow: !noShadow && opts.shadow !== false, receive: key !== 'glow' && key !== 'glowSoft', name: key });
+      const m = b.mesh(mat, { shadow: !noShadow && opts.shadow !== false, receive: key !== 'glow' && key !== 'glowSoft', name: key, consume: true });
       if (m) {
         if (key === 'glass' || key === 'water') m.renderOrder = 2;
         group.add(m);

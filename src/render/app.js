@@ -42,6 +42,7 @@ import { createResidentialLighting } from './residential-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 import { createExploreVisibility } from './explore-visibility.js';
 import { buildTransitCenter } from './build/transit-center.js';
+import { createDeferredResource, createSerialTaskQueue, detailAssetKind, activeDetailFloor } from './deferred-resource.js';
 
 const EXPLODE_GAP = 13;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -106,14 +107,31 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   scene.add(root);
 
   const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality };
-  onProgress('载入你的套房家具、材质与灯具', .015);
-  ctx.suiteAsset = await loadSuiteAsset(SUITE_MODEL_URL, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+  const detailQueue = createSerialTaskQueue();
+  const assetAnisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  let residentialProgress = '';
+  ctx.suiteAsset = null;
+  const suiteResource = createDeferredResource(async () => {
+    ctx.suiteAsset = await loadSuiteAsset(SUITE_MODEL_URL, assetAnisotropy);
+    return ctx.suiteAsset;
+  }, detailQueue);
+  // FPS keeps its compact-map startup contract. The complete tour only parses
+  // interiors on a first room-floor visit, not alongside every campus builder.
+  if (fps) {
+    onProgress('载入你的套房家具、材质与灯具', .015);
+    await suiteResource.request();
+  }
   ctx.suiteLighting = createSuiteLighting(ctx);
-  ctx.residentialAssets = layout.buildings.some(b => b.usage === 'residential')
-    ? await loadResidentialAssets((await import('./residential-data.js')).RESIDENTIAL_ASSETS,
-      Math.min(8, renderer.capabilities.getMaxAnisotropy()), unit => onProgress(`展开住宅${unit}精细户型与共享材质`, .02))
-    : { stats: { models: 0 }, templates: new Map() };
-  ctx.residentialLighting = ctx.residentialAssets.templates.size ? createResidentialLighting(ctx) : null;
+  ctx.residentialAssets = { stats: { models: 0, templates: 0 }, templates: new Map() };
+  ctx.residentialLighting = null;
+  const residentialResource = createDeferredResource(async () => {
+    const assets = await loadResidentialAssets((await import('./residential-data.js')).RESIDENTIAL_ASSETS,
+      assetAnisotropy, unit => { residentialProgress = `正在展开 ${unit} 户型家具与材质`; syncDetailStatus(); });
+    ctx.residentialAssets = assets;
+    ctx.residentialLighting = createResidentialLighting(ctx);
+    return assets;
+  }, detailQueue);
+  const detailResources = { suite: suiteResource, residential: residentialResource };
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
   for (const b of layout.buildings) {
@@ -204,12 +222,16 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   buildTowerElevators(ctx);
   onProgress('整理场景', 0.98);
   await nextFrame();
+  let flushedLevels = 0;
   for (const L of Object.values(ctx.levels)) {
     L.batch.flush(L.base);
     L.shellBatch.flush(L.shell);
     L.facadeBatch.flush(L.facade);
     if (L.signs) L.signs.flush(L.base, ctx.atlas[L.lv.id].material);
     if (L.facadeSigns) L.facadeSigns.flush(L.facade, ctx.atlas[L.lv.id].material);
+    // Give mobile engines a chance to reclaim consumed builders between groups
+    // instead of retaining every transient allocation until the final frame.
+    if (MOBILE && ++flushedLevels % 8 === 0) await nextFrame();
   }
   ctx.site.batch.flush(siteGroup);
   buildPicks(ctx);
@@ -226,6 +248,54 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const emit = () => listeners.forEach((fn) => fn(state));
   const highlight = makeHighlight(scene);
   const residenceCache = new Map();
+  const detailErrors = new Map();
+  let detailPanel = null, detailMessage = null, detailRetry = null;
+  function syncDetailStatus() {
+    if (fps) return;
+    const id = activeDetailFloor(state), kind = detailAssetKind(ctx.lvById[id]);
+    const resource = detailResources[kind];
+    if (!resource || residenceCache.has(id)) {
+      if (detailPanel) detailPanel.hidden = true;
+      return;
+    }
+    if (!detailPanel) {
+      detailPanel = document.createElement('aside'); detailPanel.id = 'residenceLoadStatus';
+      detailPanel.setAttribute('role', 'status'); detailPanel.setAttribute('aria-live', 'polite');
+      detailPanel.style.cssText = 'position:fixed;z-index:18;left:50%;top:calc(60px + env(safe-area-inset-top,0px));transform:translateX(-50%);width:min(360px,calc(100vw - 28px));box-sizing:border-box;padding:12px 15px;border:1px solid #ffffff66;border-radius:15px;background:#173442ed;color:#fff;font:13px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 4px 24px #0003';
+      detailMessage = document.createElement('span'); detailMessage.style.display = 'block';
+      detailRetry = document.createElement('button'); detailRetry.type = 'button'; detailRetry.textContent = '重试加载';
+      detailRetry.style.cssText = 'min-height:44px;margin-top:8px;padding:8px 16px;border:1px solid #bcd7db;border-radius:10px;color:#173442;background:#e8f2ed;font:inherit;cursor:pointer';
+      detailRetry.addEventListener('click', () => {
+        const floor = activeDetailFloor(state), type = detailAssetKind(ctx.lvById[floor]);
+        if (!type) return;
+        detailErrors.delete(floor);
+        if (detailResources[type].status === 'error') requestDetailResource(type, true);
+        else ensureTowerFloor(floor);
+        syncDetailStatus();
+      });
+      detailPanel.append(detailMessage, detailRetry);
+      (document.getElementById('app') || document.body).append(detailPanel);
+    }
+    const failed = resource.status === 'error' || detailErrors.has(id);
+    const name = ctx.lvById[id]?.name || id;
+    detailMessage.textContent = failed ? `${name} 的房间细节暂未载入，请重试。园区仍可继续浏览。`
+      : `${name} · ${kind === 'residential' ? residentialProgress || '正在载入 01 / 02 / 03 完整户型' : '正在载入套房家具与材质'}。首次进入需要片刻。`;
+    detailRetry.hidden = !failed;
+    detailPanel.hidden = false;
+  }
+  function requestDetailResource(kind, retry = false) {
+    const resource = detailResources[kind];
+    if (!resource || resource.status === 'loading' || resource.status === 'ready' || (resource.status === 'error' && !retry)) return;
+    resource.request({ retry }).then(() => {
+      // applyVisibility resolves the current destination again. A stale request
+      // never builds or reactivates the floor that originally started it.
+      applyVisibility(); emit();
+    }).catch(error => {
+      console.error('Room detail loading failed', error);
+      syncDetailStatus();
+    });
+    syncDetailStatus();
+  }
   const resolveExploreVisibility = createExploreVisibility(layout);
   let visibleExploreLevels = new Set();
   ctx.dynamic.push({ name: 'suite-floor-visibility', update(dt, elapsed, app) {
@@ -234,10 +304,18 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   function ensureTowerFloor(id) {
     const L = ctx.levels[id];
     if (!L || ctx.bById[L.building]?.kind !== 'tower' || !L.lv.units.some(u => u.residence)) return;
+    const kind = detailAssetKind(L.lv), resource = detailResources[kind];
+    if (resource && resource.status !== 'ready') { requestDetailResource(kind); return; }
+    if (detailErrors.has(id)) return;
     if (!residenceCache.has(id)) {
-      const result = buildResidenceFloor(ctx, L);
-      L.base.add(result.group);
-      residenceCache.set(id, result);
+      try {
+        const result = buildResidenceFloor(ctx, L);
+        L.base.add(result.group);
+        residenceCache.set(id, result);
+      } catch (error) {
+        detailErrors.set(id, error); console.error('Room detail construction failed', error);
+        syncDetailStatus(); return;
+      }
     } else {
       const cached = residenceCache.get(id); residenceCache.delete(id); residenceCache.set(id, cached);
     }
@@ -255,7 +333,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     const wanted = explore ? inside ? explore.level : explore.near === B.b.id ? `${B.b.id}-1F` : null
       : selected ? focus || `${B.b.id}-1F` : null;
     if (wanted) ensureTowerFloor(wanted);
-    setResidentialDetailLevel(ctx, B.b.id, wanted);
+    setResidentialDetailLevel(ctx, B.b.id, residenceCache.has(wanted) ? wanted : null);
     const selectedLevel = ctx.levels[focus]?.lv;
     setHospitalityCut(ctx, B.b.id, !explore && selectedLevel && selectedLevel.kind !== 'roof' ? selectedLevel.elev + 0.05 : Infinity);
     if (B.exterior) B.exterior.visible = true;
@@ -327,7 +405,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   }
 
   function applyVisibility() {
-    if (state.explore) { applyExploreVisibility(); return; }
+    if (state.explore) { applyExploreVisibility(); syncDetailStatus(); return; }
     const focusLv0 = state.focus ? ctx.lvById[state.focus] : null;
     // 聚焦某期与站厅同高的地下层（一期 B1M、二期 B1、三期 B1）时，一并显示相连的地铁站厅与通道
     const metroLink = !!focusLv0 && focusLv0.elev < 0 && ctx.bById[focusLv0.building].kind !== 'metro' && Math.abs(focusLv0.elev + 4.5) < 0.5;
@@ -380,6 +458,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     const sel = state.selected && findUnit(state.selected);
     highlight.show(sel && ctx.levels[sel.level].group.visible ? sel : null, ctx);
     renderer.shadowMap.needsUpdate = true;
+    syncDetailStatus();
   }
   function findUnit(id) {
     for (const lv of layout.levels) {
@@ -444,7 +523,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     onQuality(fn) { return qualityManager.subscribe(fn); },
     ensureTowerFloor,
     get residenceCache() { return [...residenceCache.keys()]; },
-    get residentialStats() { return ctx.residentialAssets.stats; },
+    get residentialStats() { return { ...ctx.residentialAssets.stats, loadStatus: residentialResource.status }; },
+    get detailLoading() { return { suite: suiteResource.status, residential: residentialResource.status,
+      floor: activeDetailFloor(state), errors: [...detailErrors.keys()] }; },
     get flying() { return !!flight; },
     cancelFlight() { flight = null; },
     fitFov() { fitFov(); },

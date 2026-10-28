@@ -1,0 +1,94 @@
+{
+  "engine": "WebKit iPhone 15 emulation",
+  "physicalDevice": false,
+  "failed": {
+    "details": {
+      "suite": "idle",
+      "residential": "error",
+      "floor": "R1-2F",
+      "errors": []
+    },
+    "cache": [],
+    "panel": "2F 三户住宅 的房间细节暂未载入，请重试。园区仍可继续浏览。重试加载",
+    "panelVisible": true,
+    "contextLost": false
+  },
+  "afterLeave": {
+    "details": {
+      "suite": "idle",
+      "residential": "ready",
+      "floor": "P2-1F",
+      "errors": []
+    },
+    "cache": [],
+    "building": "P2",
+    "panelHidden": true
+  },
+  "residential": {
+    "details": {
+      "suite": "idle",
+      "residential": "ready",
+      "floor": "R2-2F",
+      "errors": []
+    },
+    "cache": [
+      "R2-2F"
+    ],
+    "templates": 3,
+    "variants": [
+      "01",
+      "02",
+      "03"
+    ],
+    "lighting": true,
+    "panelHidden": true
+  },
+  "suite": {
+    "details": {
+      "suite": "ready",
+      "residential": "ready",
+      "floor": "H-2F",
+      "errors": []
+    },
+    "cache": [
+      "R2-2F",
+      "H-2F"
+    ],
+    "loaded": true,
+    "panelHidden": true,
+    "contextLost": false
+  },
+  "requests": [
+    {
+      "url": "http://127.0.0.1:5178/assets/residence-01.d7c68cf855216de9.bin",
+      "failed": true
+    },
+    {
+      "url": "http://127.0.0.1:5178/assets/residence-01.d7c68cf855216de9.bin",
+      "failed": true
+    },
+    {
+      "url": "http://127.0.0.1:5178/assets/residence-01.d7c68cf855216de9.bin",
+      "failed": true
+    },
+    {
+      "url": "http://127.0.0.1:5178/assets/residence-01.d7c68cf855216de9.bin",
+      "failed": false
+    },
+    {
+      "url": "http://127.0.0.1:5178/assets/residence-02.80b8dd6722294589.bin",
+      "failed": false
+    },
+    {
+      "url": "http://127.0.0.1:5178/assets/residence-03.81f09c875fb2b416.bin",
+      "failed": false
+    }
+  ],
+  "checks": {
+    "retry": true,
+    "noStaleFloor": true,
+    "residential": true,
+    "suite": true
+  },
+  "passed": true
+}

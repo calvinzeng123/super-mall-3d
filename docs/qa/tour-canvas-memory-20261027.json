@@ -1,0 +1,15 @@
+{
+  "check": "scaled canvas pixel preservation and immediate source backing-store release",
+  "environment": "Chromium 155, Pixel 10 mobile emulation; source served at localhost:5191",
+  "dateUtc": "2026-10-28",
+  "method": "Compare every RGBA byte against a separate Canvas2D downsample using the original dimensions and identical smoothing settings, then inspect source dimensions and identity.",
+  "cases": [
+    {"source": [17, 29], "scale": 0.5, "result": [9, 15], "sourceAfter": [1, 1], "sameCanvas": false, "pixelsEqual": true, "pass": true},
+    {"source": [2048, 2432], "scale": 0.5, "result": [1024, 1216], "sourceAfter": [1, 1], "sameCanvas": false, "pixelsEqual": true, "pass": true},
+    {"source": [3, 3], "scale": 0.1, "result": [1, 1], "sourceAfter": [1, 1], "sameCanvas": false, "pixelsEqual": true, "pass": true},
+    {"source": [43, 37], "scale": 1, "result": [43, 37], "sourceAfter": [43, 37], "sameCanvas": true, "pixelsEqual": true, "pass": true}
+  ],
+  "callerReview": "All four callers only retain the returned canvas texture. Sign and metro UV maps use dimensions calculated before scaling. No caller reads the temporary source canvas after scaling.",
+  "scope": "Verifies pixel behavior and explicit release of temporary canvas capacity. Does not prove iPhone Safari memory usage or end-to-end crash resolution.",
+  "pass": true
+}

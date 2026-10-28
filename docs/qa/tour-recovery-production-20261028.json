@@ -1,0 +1,72 @@
+{
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "deployId": "6ae17419aa68289806db3846",
+  "deployState": "ready",
+  "publishedAt": "2026-10-28T04:03:44.816Z",
+  "engine": "WebKit iPhone 15 emulation",
+  "physicalDevice": false,
+  "boot": {
+    "levels": 198,
+    "buildings": [
+      "P1",
+      "P2",
+      "P3",
+      "M",
+      "H",
+      "A",
+      "R1",
+      "R2",
+      "R3",
+      "R4",
+      "WPG"
+    ],
+    "details": {
+      "suite": "idle",
+      "residential": "idle",
+      "floor": null,
+      "errors": []
+    },
+    "assets": [],
+    "contextLost": false
+  },
+  "residential": {
+    "details": {
+      "suite": "idle",
+      "residential": "ready",
+      "floor": "R2-2F",
+      "errors": []
+    },
+    "cache": [
+      "R2-2F"
+    ],
+    "templates": 3,
+    "variants": [
+      "01",
+      "02",
+      "03"
+    ],
+    "contextLost": false
+  },
+  "notes": [
+    "Public residential download exceeded initial 45 second wait; remained responsive without context loss and later completed. No public load-speed guarantee."
+  ],
+  "suite": {
+    "details": {
+      "suite": "ready",
+      "residential": "ready",
+      "floor": "H-2F",
+      "errors": []
+    },
+    "cache": [
+      "R2-2F",
+      "H-2F"
+    ],
+    "contextLost": false
+  },
+  "returnedToCover": true,
+  "javascriptHashes": {
+    "checked": 12,
+    "matched": 12,
+    "scope": "All published JavaScript files; large model files verified by successful browser loading, not full release byte comparison."
+  }
+}

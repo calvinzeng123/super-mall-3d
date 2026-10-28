@@ -1,0 +1,38 @@
+{
+  "elapsedMs": 3553,
+  "errors": [],
+  "state": {
+    "levels": 198,
+    "buildings": [
+      "P1",
+      "P2",
+      "P3",
+      "M",
+      "H",
+      "A",
+      "R1",
+      "R2",
+      "R3",
+      "R4",
+      "WPG"
+    ],
+    "details": {
+      "suite": "idle",
+      "residential": "idle",
+      "floor": null,
+      "errors": []
+    },
+    "suiteLoaded": false,
+    "residential": {
+      "models": 0,
+      "templates": 0,
+      "loadStatus": "idle"
+    },
+    "transferSupported": true,
+    "assets": [
+      "http://127.0.0.1:5178/assets/person-m.5da2da91839f374d.glb",
+      "http://127.0.0.1:5178/assets/person-f.a1ec332b8f429022.glb"
+    ],
+    "contextLost": false
+  }
+}
