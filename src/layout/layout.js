@@ -14,11 +14,22 @@ import { CATEGORIES } from './constants.js';
 import { prepareRideableElevators } from './elevator-shafts.js';
 import { applySharedGarages } from './shared-garages.js';
 import { addTransitCenter } from './transit-center.js';
+import { buildExpandedP1Spec } from './p1-expansion-spec.js';
+import { applyP1Expansion } from './p1-expansion.js';
 
-export function buildLayout() {
+export function buildLayout({ expansion = true } = {}) {
   const site = buildSite();
   const picker = new BrandPicker(2026);
-  const parts = [buildMall(P1, site, picker), buildMall(P2, site, picker), buildP3(site, picker)];
+  const originalP1 = buildMall(P1, site, picker);
+  const expandedP1 = expansion ? buildMall(buildExpandedP1Spec(P1), buildSite(), new BrandPicker(2026)) : originalP1;
+  if (expansion) {
+    const oldRoof = originalP1.levels.find(l => l.short === 'RF');
+    for (const unit of expandedP1.levels.find(l => l.short === 'RF').units) {
+      const original = oldRoof.units.find(u => u.id === unit.id);
+      if (original) unit.brand = original.brand;
+    }
+  }
+  const parts = [expandedP1, buildMall(P2, site, picker), buildP3(site, picker)];
   addPark(site);
   parts.push(buildMetro(parts, site, picker));
   const hospitality = buildHospitality(parts, site);
@@ -41,6 +52,7 @@ export function buildLayout() {
     extensions: hospitality.extensions,
   };
   applySharedGarages(layout);
+  if (expansion) applyP1Expansion(layout, picker);
   addTransitCenter(layout.site, layout.extensions);
   return prepareRideableElevators(layout);
 }

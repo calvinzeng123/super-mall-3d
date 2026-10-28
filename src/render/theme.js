@@ -16,6 +16,11 @@ export const THEME = {
   street: { wall: '#e9dfd0', column: '#dccfbc', band: '#9a5b34', trim: '#6b4a32', ceiling: '#f2ece3' },
   loft: { wall: '#e4ded6', column: '#d6cec4', band: '#3d6f8f', trim: '#5c544b', ceiling: '#efebe5' },
   terrace: { wall: '#e7e2d8', column: '#d8d1c4', band: '#5a8f4e', trim: '#776f62', ceiling: '#efece6' },
+  design: { wall: '#e8e1d5', column: '#d9cebc', band: '#b58a5b', trim: '#8e7756', ceiling: '#f0ebe2' },
+  culture: { wall: '#e6d9cf', column: '#d6bda9', band: '#ad785f', trim: '#825844', ceiling: '#eee4da' },
+  'sky-dining': { wall: '#e1e5d9', column: '#cdd4c0', band: '#7c997c', trim: '#6f8066', ceiling: '#f0f0e7' },
+  garden: { wall: '#dde5da', column: '#bcccbc', band: '#7c9b88', trim: '#596d60', ceiling: '#edf1e8' },
+  creative: { wall: '#e5dbcc', column: '#c9b99f', band: '#92775c', trim: '#615c50', ceiling: '#efe7db' },
   metro: { wall: '#e8ebee', column: '#e1e5e8', band: '#c8352b', trim: '#8a939b', ceiling: '#d6dade' },
   platform: { wall: '#e3e6e9', column: '#dadfe3', band: '#c8352b', trim: '#7d858c', ceiling: '#cdd2d7' },
 };

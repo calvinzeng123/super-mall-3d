@@ -3,8 +3,9 @@
 // every high-rise apartment floor or exposing the whole campus below ground.
 export function createExploreVisibility(layout) {
   const byId = new Map(layout.levels.map(l => [l.id, l]));
-  const district = id => ['P1', 'H', 'A', 'WPG'].includes(id) ? 'P1'
-    : id === 'P2' || /^R[1-4]$/.test(id) ? 'P2' : id;
+  const buildings = new Map(layout.buildings.map(b => [b.id, b]));
+  const district = id => buildings.get(id)?.campusGroup || (['P1', 'H', 'A', 'WPG'].includes(id) ? 'P1'
+    : id === 'P2' || /^R[1-4]$/.test(id) ? 'P2' : id);
   const underground = layout.levels.filter(l => l.elev < 0);
   const neighbors = new Map();
   const connect = (a, b) => {

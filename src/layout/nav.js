@@ -67,7 +67,7 @@ export function buildNav(layout) {
   const district = p3 ? p3.outline : null;
   const ground = mk('ground', 0, 'ground');
   const groundHoles = [
-    ...layout.buildings.filter((b) => b.kind === 'mall' || b.kind === 'tower').map((b) => b.outline),
+    ...layout.buildings.filter((b) => ['mall', 'tower', 'annex'].includes(b.kind)).map((b) => b.outline),
     ...(layout.extensions?.gateways || []).filter(g => Math.abs(g.elev) < .01).map(g => g.poly),
     ...(district ? [district] : []),
     ...(S.park ? [S.park.lake] : []),
@@ -206,13 +206,15 @@ export function buildNav(layout) {
       const outline = mergeSegments(unionOutline(m.rects));
       // Protected residential stair rooms have a real doorway and a solid
       // landing before the shaft. Their floor-change interaction is retained.
-      const segments = m.shaftRect ? subtractOpenings(outline, m.doors || []) : outline;
+      const segments = m.shaftRect || m.publicAccess ? subtractOpenings(outline, m.doors || []) : outline;
       for (const s of segments) wallL(F, m.frame, s);
     }
     if (lv.lobbyPlan) {
       for (const p of lv.lobbyPlan.partitions || []) partition(F, lv.lobbyPlan.frame, p);
       for (const o of lv.lobbyPlan.obstacles || []) obstacle(F, lv.lobbyPlan.frame, o.rect);
     }
+    for (const fixture of lv.expansion?.publicFixtures || [])
+      polygonObstacle(F, frame(0, 0, 0), fixture);
     for (const f of lv.features) {
       if (f.type === 'gates') {
         const n = Math.max(2, Math.round((f.z1 - f.z0) / 0.95));
@@ -623,7 +625,7 @@ export function spawn(nav, layout, { building, level } = {}) {
   };
   if (building) {
     const b = layout.buildings.find((x) => x.id === building);
-    if (b && (b.kind === 'mall' || b.kind === 'tower')) {
+    if (b && ['mall', 'tower', 'annex'].includes(b.kind)) {
       const e = layout.entrances.find((x) => x.building === building && x.main) || layout.entrances.find((x) => x.building === building && x.to === 'site');
       if (e) {
         const p = inside(e, -2);

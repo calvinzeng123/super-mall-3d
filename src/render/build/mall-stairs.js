@@ -90,7 +90,7 @@ export function buildStairApproach(ctx,upperId,lowerId,stairs,access) {
  * Instances live with the originating floor, so half-landings stay visible. */
 export function buildMallStairs(ctx) {
   const templates=new Map();
-  for(const building of ctx.layout.buildings.filter(b=>b.kind==='mall'&&b.access?.protected)) {
+  for(const building of ctx.layout.buildings.filter(b=>['mall','annex'].includes(b.kind)&&b.access?.protected)) {
     const stairs=ctx.layout.stairs.filter(s=>s.building===building.id),access=building.access;
     for(const level of ctx.layout.levels.filter(l=>l.building===building.id)) {
       const L=ctx.levels[level.id];buildMallStairLevel(L.batch,level,stairs,access);

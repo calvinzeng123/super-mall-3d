@@ -175,14 +175,14 @@ export function attachExplore(app, ui) {
     if (!building || building === 'P3') {
       let best = 30;
       for (const b of layout.buildings) {
-        if (b.kind !== 'mall' && b.kind !== 'tower') continue;
+        if (!['mall', 'tower', 'annex'].includes(b.kind)) continue;
         if (pointInPoly([x, z], b.outline)) { nearB = b.id; break; }
         const d = distToPolyEdge([x, z], b.outline);
         if (d < best) { best = d; nearB = b.id; }
       }
     }
     const under = flying ? camera.position.y < 0 : !!F && F.y < 0;
-    const level = F?.parentFloor || F?.level?.id || (building && (ctx.bById[building]?.kind === 'tower' || ctx.bById[building]?.undergroundOnly)
+    const level = F?.parentFloor || F?.level?.id || (building && (['tower', 'annex'].includes(ctx.bById[building]?.kind) || ctx.bById[building]?.undergroundOnly)
       ? ctx.buildings[building].levels.filter(L => L.lv.elev <= camera.position.y - 0.8).at(-1)?.lv.id : null);
     const ex = app.state.explore;
     const sector = `${Math.floor(x / 24)}:${Math.floor(z / 24)}`;

@@ -13,7 +13,9 @@ const PHASES = [
 ];
 
 export function createUI(app, layout) {
-  const phases = [...PHASES.filter(p=>!layout.playable||!p.id||layout.buildings.some(b=>b.id===p.id)), ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' })),
+  const annexes = layout.buildings.filter(b => b.kind === 'annex');
+  const phases = [...PHASES.filter(p=>!layout.playable||!p.id||layout.buildings.some(b=>b.id===p.id)).flatMap(p => [p,
+    ...annexes.filter(b => b.campusGroup === p.id).map(b => ({ id: b.id, label: b.short, sub: '一期 · 艺术街区' }))]), ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' })),
     ...layout.buildings.filter(b => b.undergroundOnly).map(b => ({ id: b.id, label: b.short, sub: '地下公共停车' }))];
   const built = new Set(layout.buildings.map((b) => b.id));
   const bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
@@ -22,7 +24,7 @@ export function createUI(app, layout) {
   const floorList = $('floorList');
   phaseTabs.innerHTML = phases.map((p) => {
     const ok = !p.id || built.has(p.id);
-    return `<button class="phase" data-building="${p.id || ''}" aria-pressed="false"${ok ? '' : ' disabled'}><b>${p.label}</b><span>${ok ? p.sub : '规划中'}</span></button>`;
+    return `<button class="phase" data-building="${p.id || ''}" aria-pressed="false"${ok ? '' : ' disabled'}><b>${esc(p.label)}</b><span>${ok ? esc(p.sub) : '规划中'}</span></button>`;
   }).join('');
   phaseTabs.addEventListener('click', (e) => {
     const b = e.target.closest('.phase');
@@ -132,6 +134,9 @@ export function createUI(app, layout) {
         html = layout.levels.filter((l) => l.building === b.id).reverse()
           .map((l) => `<li><button class="shop" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + (b.kind === 'tower' ? ' 户/间' : ' 家') : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`)
           .join('');
+        const linked = annexes.filter(a => a.campusGroup === b.id);
+        if (linked.length) html += '<li class="dir-group">一期 · 艺术街区</li>' + linked.map(a =>
+          `<li><button class="shop" data-building="${a.id}"><span class="shop-code">${esc(a.short)}</span><span class="shop-name"><b>${esc(a.name)}</b><span>连廊接入主商场 · 可进入各层</span></span><span class="shop-cat">${layout.levels.filter(l => l.building === a.id && l.kind !== 'roof').length} 层</span></button></li>`).join('');
       }
     } else if (!pool.length) {
       html = `<li class="empty">${q ? '没有找到匹配的名称或房号。' : '这一层主要是公共设施和停车空间。'}</li>`;

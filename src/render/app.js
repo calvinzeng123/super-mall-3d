@@ -43,6 +43,9 @@ import { toW, frame, IDENTITY } from '../layout/geom.js';
 import { createExploreVisibility } from './explore-visibility.js';
 import { buildTransitCenter } from './build/transit-center.js';
 import { createDeferredResource, createSerialTaskQueue, detailAssetKind, activeDetailFloor } from './deferred-resource.js';
+import { createFloorDetailSelector, createFloorDetailCache } from './floor-detail-streaming.js';
+import { buildOwnedFloorDetail, sceneResources, geometryStats } from './floor-detail-scene.js';
+import { buildP1ExpansionExterior, buildP1ExpansionLevel, usesExpansionFacade } from './build/p1-expansion.js';
 
 const EXPLODE_GAP = 13;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -134,6 +137,19 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const detailResources = { suite: suiteResource, residential: residentialResource };
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
+  const floorSelector = fps ? null : createFloorDetailSelector(layout, { limit: MOBILE ? 4 : 6, explodedLimit: MOBILE ? 4 : 8 });
+  const lazyAtlasLevels = new Set(layout.levels.filter(l => floorSelector?.eligible.has(l.id)
+    && (ctx.bById[l.building].kind === 'annex' || usesExpansionFacade(l))).map(l => l.id));
+  const wayfindingEntries = WAYFINDING.map(w => ({ id: w.id,
+    draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, w.kind, w.text, w.bg) }));
+  const makeFloorAtlas = (lv, materials = mats) => {
+    const atlas = makeSignAtlas([...lv.units.map(u => ({ id: u.id, brand: u.brand })), ...wayfindingEntries]);
+    atlas.material = materials.sign(atlas.texture);
+    return atlas;
+  };
+  // Custom expansion façades need only shared exit/elevator signs. Their large
+  // brand atlas belongs to the interior and is freed when that floor is evicted.
+  let sharedWayfindingAtlas = null;
   for (const b of layout.buildings) {
     const bg = new THREE.Group();
     bg.name = b.id;
@@ -147,13 +163,12 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       const [base, shell, facade, labels, flows, people, picks] = parts;
       group.add(...parts);
       bg.add(group);
-      const entries = [
-        ...lv.units.map((u) => ({ id: u.id, brand: u.brand })),
-        ...WAYFINDING.map((w) => ({ id: w.id, draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, w.kind, w.text, w.bg) })),
-      ];
       // 高层房号按当前楼层生成，避免为160层常驻数百张招牌图集。
-      const atlas = b.kind === 'tower' ? null : makeSignAtlas(entries);
-      if (atlas) atlas.material = mats.sign(atlas.texture);
+      if (lazyAtlasLevels.has(lv.id) && !sharedWayfindingAtlas) {
+        sharedWayfindingAtlas = makeSignAtlas(wayfindingEntries);
+        sharedWayfindingAtlas.material = mats.sign(sharedWayfindingAtlas.texture);
+      }
+      const atlas = b.kind === 'tower' ? null : lazyAtlasLevels.has(lv.id) ? sharedWayfindingAtlas : makeFloorAtlas(lv);
       ctx.atlas[lv.id] = atlas;
       const L = {
         lv, index, building: b.id, group, base, shell, facade, labels, flows, people, picks,
@@ -198,16 +213,28 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     levels: layout.levels.filter(l => originalIds.has(l.building)) };
   for (const key of ['elevators', 'stairs', 'entrances', 'ramps']) legacyLayout[key] = layout[key].filter(v => originalIds.has(v.building));
   const legacyCtx = { ...ctx, layout: legacyLayout };
+  const eagerLevels = legacyLayout.levels.filter(l => !floorSelector?.eligible.has(l.id));
+  const eagerLevelIds = new Set(eagerLevels.map(l => l.id));
+  const eagerCtx = { ...legacyCtx, layout: { ...legacyLayout, levels: eagerLevels },
+    buildings: Object.fromEntries(Object.entries(ctx.buildings).map(([id, B]) => [id,
+      { ...B, levels: B.levels.filter(L => eagerLevelIds.has(L.lv.id)) }])) };
+  const deferredBuilders = new Set([buildWalls, buildStorefronts, buildInteriors]);
   for (let i = 0; i < steps.length; i++) {
     if (layout.playable && steps[i][1] === buildTraffic) continue;
     if (fps && [buildPeople, buildTraffic, buildFlows, buildLabels].includes(steps[i][1])) continue;
     onProgress(steps[i][0], i / steps.length);
     await nextFrame();
-    const currentCtx = steps[i][1] === buildSite ? ctx : legacyCtx;
-    await steps[i][1](currentCtx);
+    const builder = steps[i][1];
+    const currentCtx = builder === buildSite ? ctx : floorSelector && deferredBuilders.has(builder) ? eagerCtx : legacyCtx;
+    if (floorSelector && builder === buildPublic) {
+      buildPublic(legacyCtx, { details: false });
+      buildPublic(eagerCtx, { art: false });
+    } else await builder(currentCtx);
     // 构建器注册的动态接口（outlineEdges、metroSync等）回传给完整场景。
     if (currentCtx === legacyCtx) for (const key of ['outlineEdges', 'metroSync', 'bridgeGroup', 'paths', 'ferris', 'carGeo', 'carMat', 'peopleQuality', 'mallStairStats']) if (legacyCtx[key]) ctx[key] = legacyCtx[key];
   }
+  buildP1ExpansionExterior(ctx);
+  for (const lv of legacyLayout.levels) if (!floorSelector?.eligible.has(lv.id)) buildP1ExpansionLevel(ctx, lv);
   onProgress('建造云澜汇酒店、公寓与住宅', 0.96);
   await nextFrame();
   buildHospitality(ctx);
@@ -244,6 +271,34 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
   // ---------- 状态与视图 ----------
   const state = { building: null, focus: null, exploded: false, flows: false, labels: !MOBILE, night: false, selected: null, touring: false, explore: null };
+  const persistentResources = sceneResources([root]);
+  const persistentGeometry = geometryStats(persistentResources.geometries);
+  const floorCache = floorSelector ? createFloorDetailCache({ limit: MOBILE ? 4 : 6, hardLimit: MOBILE ? 4 : 8,
+    build: id => buildOwnedFloorDetail(ctx, ctx.levels[id], {
+      protectedResources: persistentResources, release: releaseGeometryAfterUpload,
+      atlas: lazyAtlasLevels.has(id) ? materials => makeFloorAtlas(ctx.lvById[id], materials) : null,
+      build(local, lv) {
+        buildWalls(local); buildStorefronts(local); buildInteriors(local);
+        buildPublic(local, { art: false }); buildP1ExpansionLevel(local, lv);
+      },
+    }),
+    onError: (error, id) => console.error(`Floor interior construction failed: ${id}`, error),
+  }) : null;
+  let detailPosition = null;
+  if (floorCache) ctx.dynamic.push({ name: 'nearby-floor-detail', update() {
+    const ex = state.explore;
+    if (!ex) { detailPosition = null; return; }
+    const x = camera.position.x, z = camera.position.z, key = `${ex.level}/${ex.near}/${ex.elevator?.to}`;
+    // Explore's general visibility refresh uses 24m sectors. A short bridge
+    // branch can fit inside one sector, so check its actual approach every 3m.
+    if (detailPosition?.key === key && Math.hypot(x - detailPosition.x, z - detailPosition.z) < 3) return;
+    detailPosition = { x, z, key, explore: ex };
+    const wanted = floorSelector.select({ ...state, explore: { ...ex, position: { x, z } } });
+    const previous = floorCache.stats.required;
+    if (wanted.size === previous.length && previous.every(id => wanted.has(id))) return;
+    floorCache.sync(wanted);
+    applyExploreVisibility();
+  } });
   const listeners = new Set();
   const emit = () => listeners.forEach((fn) => fn(state));
   const highlight = makeHighlight(scene);
@@ -386,10 +441,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         const connected = visibleExploreLevels.has(lv.id);
         L.group.visible = B.b.undergroundOnly ? connected || lv.elev >= 0 : metro ? inside || connected || lv.short === 'B1' : true;
         L.base.visible = (inside && (ex.under || lv.kind !== 'parking')) || (peek && lv.elev >= 0)
-          || connected || lv.kind === 'roof' || (B.b.kind === 'street' && lv.elev >= 0);
+          || connected || floorCache?.active(lv.id) || lv.kind === 'roof' || (B.b.kind === 'street' && lv.elev >= 0);
         L.facade.visible = !metro;
         L.shell.visible = true;
-        L.people.visible = L.base.visible;
+        L.people.visible = L.base.visible && (!floorSelector?.eligible.has(lv.id) || floorCache.active(lv.id));
         L.labels.visible = false;
         if (L.title) L.title.visible = false;
         L.flows.visible = false;
@@ -405,6 +460,14 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   }
 
   function applyVisibility() {
+    if (floorCache) {
+      // A non-movement refresh (labels/quality/etc.) should not rewind the
+      // approach check to the last 24m sector's old position.
+      const ex = state.explore;
+      const current = ex && detailPosition?.explore === ex
+        ? { ...state, explore: { ...ex, position: { x: camera.position.x, z: camera.position.z } } } : state;
+      floorCache.sync(floorSelector.select(current));
+    }
     if (state.explore) { applyExploreVisibility(); syncDetailStatus(); return; }
     const focusLv0 = state.focus ? ctx.lvById[state.focus] : null;
     // 聚焦某期与站厅同高的地下层（一期 B1M、二期 B1、三期 B1）时，一并显示相连的地铁站厅与通道
@@ -422,7 +485,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
           L.facade.visible = false;
         } else if (sel) {
           L.group.visible = L.index <= fi;
-          L.base.visible = true;
+          L.base.visible = fps || !!state.focus || L.lv.kind === 'roof' || B.b.kind === 'street';
           L.facade.visible = !state.focus || L.index < fi;
         } else if (B.b.undergroundOnly) {
           // A public garage may sit below a park: it has no above-ground mass.
@@ -442,7 +505,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         }
         // 爆炸视图里街区的 1F 室外铺装让开，露出下面的地库
         L.shell.visible = !(state.exploded && B.b.kind === 'street' && L.lv.ground);
-        L.people.visible = L.base.visible;
+        L.people.visible = L.base.visible && (!floorSelector?.eligible.has(id) || floorCache.active(id));
         L.labels.visible = state.labels && !state.touring && !state.exploded && state.focus === id;
         if (L.title) L.title.visible = state.exploded && sel && state.labels && !state.touring;
         L.flows.visible = state.flows && !exterior && (state.focus ? id === state.focus : state.exploded || L.lv.kind === 'roof');
@@ -526,6 +589,16 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     get residentialStats() { return { ...ctx.residentialAssets.stats, loadStatus: residentialResource.status }; },
     get detailLoading() { return { suite: suiteResource.status, residential: residentialResource.status,
       floor: activeDetailFloor(state), errors: [...detailErrors.keys()] }; },
+    get floorStreaming() {
+      const records = floorCache?.records || [];
+      return { mode: fps ? 'eager-fps' : 'streamed-tour', eligible: floorSelector?.eligible.size || 0,
+        ...(floorCache?.stats || {}), deferred: [...floorSelector?.eligible || []].filter(id => !floorCache.has(id)),
+        lazyAtlasLevels: [...lazyAtlasLevels], persistentGeometry,
+        detailGeometry: records.reduce((total, item) => ({ geometries: total.geometries + item.stats.geometries,
+          vertices: total.vertices + item.stats.vertices, bufferBytes: total.bufferBytes + item.stats.bufferBytes }),
+        { geometries: 0, vertices: 0, bufferBytes: 0 }) };
+    },
+    retryFloorDetail(id = state.explore?.level || state.focus) { floorCache?.retry(id); applyVisibility(); },
     get flying() { return !!flight; },
     cancelFlight() { flight = null; },
     fitFov() { fitFov(); },

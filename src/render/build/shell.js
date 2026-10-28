@@ -90,7 +90,8 @@ export function buildShell(ctx) {
   mats.onNight((t) => slabBody.emissive.setRGB(t * 0.12, t * 0.11, t * 0.1));
   const edgesCache = new Map();
   ctx.outlineEdges = (lv) => {
-    if (!edgesCache.has(lv.id)) edgesCache.set(lv.id, outlineEdges(lv.outline, ctx.bById[lv.building]));
+    if (!edgesCache.has(lv.id)) edgesCache.set(lv.id, (lv.expansion?.floorPolys || [lv.outline])
+      .flatMap(poly => outlineEdges(poly, ctx.bById[lv.building])));
     return edgesCache.get(lv.id);
   };
 
@@ -125,9 +126,12 @@ export function buildShell(ctx) {
       railings(ctx, lv);
       roofTop(ctx, lv);
     }
-    if (lv.elev >= 0 && lv.kind === 'retail') facade(ctx, lv);
+    // Expanded upper floors use their inset enclosed envelope, not the terrace
+    // slab perimeter. The dedicated builder keeps real terrace doors open.
+    const expandedFacade = lv.expansion && (lv.expansion.zone !== 'main' || (lv.expansion.storey || parseInt(lv.short, 10)) >= 3);
+    if (lv.elev >= 0 && lv.kind === 'retail' && !expandedFacade) facade(ctx, lv);
     if (lv.elev < 0) retaining(ctx, lv);
-    sill(ctx, lv);
+    if (!expandedFacade) sill(ctx, lv);
   }
   for (const b of layout.buildings) if (b.kind === 'mall') signage(ctx, b);
   ceilingLights(ctx);
@@ -147,6 +151,10 @@ function ceilingLights(ctx) {
       const once = (x, z, k = 2) => {
         const key = `${Math.round(x / k)},${Math.round(z / k)}`;
         if (seen.has(key) || inVoid(x, z)) return false;
+        // A stepped floorplate can expose part of the floor below. Fixtures
+        // belong to an actual ceiling, not the previous storey's old outline.
+        if (above.expansion && ![[0, 0], [.8, 0], [-.8, 0], [0, .8], [0, -.8]].every(([dx, dz]) =>
+          above.slab.pieces.some(s => pointInPoly([x + dx, z + dz], s.outer) && !s.holes.some(h => pointInPoly([x + dx, z + dz], h))))) return false;
         seen.add(key);
         return true;
       };
@@ -193,6 +201,8 @@ function columns(ctx, lv) {
         const [x, z] = toW(u.frame, a, b);
         const k = `${x.toFixed(1)},${z.toFixed(1)}`;
         if (seen.has(k) || distToPolyEdge([x, z], lv.outline) < 0.6) continue;
+        if (lv.expansion && ![[0, 0], [.2, 0], [-.2, 0], [0, .2], [0, -.2]].some(([dx, dz]) =>
+          lv.slab.pieces.some(s => pointInPoly([x + dx, z + dz], s.outer) && !s.holes.some(h => pointInPoly([x + dx, z + dz], h))))) continue;
         seen.add(k);
         B.frame(u.frame, () => {
           B.get('stone').box(a, lv.elev + h / 2, b, 0.7, h, 0.7, th.column);
@@ -443,6 +453,7 @@ function roofTop(ctx, lv) {
   }
   for (const v of lv.voids) {
     if (v.kind !== 'skylight') continue;
+    if (lv.expansion?.zone === 'main' && v.id === 'C-void') continue;
     if (v.radius) vault(B, v, y, 3.6);
     else ridge(B, v, y);
   }

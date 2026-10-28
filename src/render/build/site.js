@@ -54,7 +54,7 @@ export function subtractTowerFootprints(poly, footprints) {
 
 /** 斜向灯臂加方灯头的最远角约 2.24m；活动、停车和坡口仅保留边界外的灯杆。 */
 export function siteLampPlacement(layout) {
-  const towers = [...layout.buildings.filter(b => b.kind === 'tower' && !b.undergroundOnly).map(b => b.outline), ...raisedConnections(layout)];
+  const towers = [...layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline), ...raisedConnections(layout)];
   const clear = siteActivityFootprints(layout);
   const near = (p, poly, margin) => pointInPoly(p, poly) || distToPolyEdge(p, poly) < margin;
   return (x, z) => !towers.some(poly => near([x, z], poly, 2.25)) && !clear.some(poly => near([x, z], poly, .45));
@@ -155,7 +155,7 @@ function landscape(ctx, b, holes, G, B) {
   G.add(m);
   // 入口步道：沿入口外法线直到地块边
   const paths = [];
-  const towers = ctx.layout.buildings.filter(other => other.kind === 'tower' && !other.undergroundOnly).map(other => other.outline);
+  const towers = ctx.layout.buildings.filter(other => ['tower', 'annex'].includes(other.kind) && !other.undergroundOnly).map(other => other.outline);
   const allowLamp = siteLampPlacement(ctx.layout);
   for (const e of ctx.layout.entrances) {
     if (e.building !== b.id || e.to !== 'site') continue;
@@ -294,14 +294,15 @@ function entrances(ctx) {
     const L = ctx.levels[e.level];
     const FB = L.facadeBatch;
     const main = e.main;
+    const custom = L.lv.expansion && L.lv.expansion.zone !== 'main';
     const width = e.width;
-    const depth = main ? 7 : 4.5;
-    const hY = main ? 4.9 : 4.4;
+    const depth = custom ? 3.1 : main ? 7 : 4.5;
+    const hY = custom ? 4.05 : main ? 4.9 : 4.4;
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     const F = frame(mx, mz, Math.atan2(e.nz, e.nx) * DEG);
     const cw = width + (main ? 8 : 4);
     const y0 = L.lv.elev;
-    FB.frame(F, () => {
+    if (!custom) FB.frame(F, () => {
       FB.get('glass').box(depth / 2, y0 + hY, 0, depth, 0.06, cw, 0xffffff);
       FB.get('extMetal').box(depth / 2, y0 + hY + 0.18, 0, depth + 0.1, 0.28, cw + 0.2, COLORS.white);
       FB.get('glow').box(depth, y0 + hY + 0.05, 0, 0.08, 0.05, cw, COLORS.led);

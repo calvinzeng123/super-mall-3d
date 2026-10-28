@@ -1,0 +1,129 @@
+{
+  "at": "2026-10-28T07:18:06.066Z",
+  "buildings": 19,
+  "levels": 236,
+  "shops": 680,
+  "residences": 728,
+  "elevators": 60,
+  "escalators": 82,
+  "bridges": 10,
+  "main": [
+    {
+      "id": "P1-B2",
+      "elev": -12,
+      "shops": 0
+    },
+    {
+      "id": "P1-B1",
+      "elev": -8.4,
+      "shops": 0
+    },
+    {
+      "id": "P1-B1M",
+      "elev": -4.5,
+      "shops": 67
+    },
+    {
+      "id": "P1-1F",
+      "elev": 0,
+      "shops": 64
+    },
+    {
+      "id": "P1-2F",
+      "elev": 6.5,
+      "shops": 63
+    },
+    {
+      "id": "P1-3F",
+      "elev": 12,
+      "shops": 49
+    },
+    {
+      "id": "P1-4F",
+      "elev": 17.5,
+      "shops": 51
+    },
+    {
+      "id": "P1-5F",
+      "elev": 23,
+      "shops": 39
+    },
+    {
+      "id": "P1-6F",
+      "elev": 28.5,
+      "shops": 46
+    },
+    {
+      "id": "P1-RF",
+      "elev": 34,
+      "shops": 4
+    }
+  ],
+  "annexes": [
+    {
+      "id": "P1C",
+      "name": "一期 · 云澜艺文馆",
+      "levels": 8,
+      "floors": 7,
+      "shops": 28
+    },
+    {
+      "id": "P1S",
+      "name": "一期 · 南庭曲廊",
+      "levels": 4,
+      "floors": 3,
+      "shops": 6
+    },
+    {
+      "id": "P1E",
+      "name": "一期 · 东庭花园馆",
+      "levels": 5,
+      "floors": 4,
+      "shops": 12
+    },
+    {
+      "id": "P1E2",
+      "name": "一期 · 东庭玻璃花房",
+      "levels": 4,
+      "floors": 3,
+      "shops": 6
+    },
+    {
+      "id": "P1W1",
+      "name": "一期 · 西里红砖工坊",
+      "levels": 4,
+      "floors": 3,
+      "shops": 6
+    },
+    {
+      "id": "P1W2",
+      "name": "一期 · 西里石廊书屋",
+      "levels": 3,
+      "floors": 2,
+      "shops": 4
+    },
+    {
+      "id": "P1W3",
+      "name": "一期 · 西里木构茶舍",
+      "levels": 3,
+      "floors": 2,
+      "shops": 4
+    },
+    {
+      "id": "P1W4",
+      "name": "一期 · 西里玻璃艺廊",
+      "levels": 4,
+      "floors": 3,
+      "shops": 6
+    }
+  ],
+  "coverage": {
+    "unit": "model square metres; union of1F slab outer polygons, ignoring holes",
+    "plot": 63720,
+    "before": 30181.933074169116,
+    "after": 36283.377402289494,
+    "increase": 6101.4443281203785,
+    "beforePercent": 47.36649886090571,
+    "afterPercent": 56.941897994804606
+  }
+}

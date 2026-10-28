@@ -13,6 +13,7 @@ import { buildTowerStairGeometry, buildTowerStairInstances } from './tower-stair
 import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 import { buildHospitalityLobby } from './hospitality-lobby.js';
 import { garageCeilingPanels } from '../../layout/garage-ceiling.js';
+import { buildExpansionConnections } from './expansion-connections.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -484,6 +485,10 @@ function connections(ctx) {
   const groundPaths=(ext.paths||[]).filter(p=>p.kind==='ground').flatMap(p=>p.polys.map(polyBounds));
   const networks=new Map();
   for(const path of ext.paths||[]) {
+    // New art-district bridges include diagonal and kinked polygons. Their
+    // exact unions are rendered separately; legacy hotel/tunnel paths retain
+    // the existing rectangle construction and visibility contract.
+    if(path.expansion&&['skybridge','underground','garage'].includes(path.kind))continue;
     const below=path.kind==='underground'||path.kind==='garage',sky=path.kind==='skybridge';
     const y=path.points[0][1],key=`${below?'below':sky?'sky':'ground'}:${y}`;
     if(!networks.has(key))networks.set(key,{paths:[],below,sky,y});
@@ -574,6 +579,7 @@ function connections(ctx) {
   B.flush(group);ctx.root.add(group);
   ctx.hospitality.connections=group;ctx.hospitality.underground=underground;
   ctx.hospitality.connectionNetworks=[...networks.values()];
+  ctx.hospitality.connectionNetworks.push(...buildExpansionConnections(ctx));
   ctx.dynamic.push({name:'hospitality-ceilings',update(){for(const x of underground)x.ceiling.visible=ctx.camera.position.y<x.elevation+3.0;}});
 }
 

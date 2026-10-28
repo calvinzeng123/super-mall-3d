@@ -1,0 +1,219 @@
+{
+  "lift": {
+    "id": "P1C-GL1",
+    "from": "P1C-1F",
+    "to": "P1C-7F",
+    "samples": [
+      {
+        "frame": 0,
+        "y": 0,
+        "phase": "进入轿厢",
+        "carY": 0,
+        "required": [
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-7F",
+          "P1C-6F"
+        ]
+      },
+      {
+        "frame": 20,
+        "y": 0,
+        "phase": "关门",
+        "carY": 0,
+        "required": [
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-7F",
+          "P1C-6F"
+        ]
+      },
+      {
+        "frame": 40,
+        "y": 1.0067041522491378,
+        "phase": "上行",
+        "carY": 1.0067041522491378,
+        "required": [
+          "P1C-1F",
+          "P1C-2F",
+          "P1C-7F",
+          "P1C-6F"
+        ]
+      },
+      {
+        "frame": 60,
+        "y": 7.725129757785441,
+        "phase": "上行",
+        "carY": 7.725129757785441,
+        "required": [
+          "P1C-2F",
+          "P1C-1F",
+          "P1C-3F",
+          "P1C-7F",
+          "P1C-6F"
+        ]
+      },
+      {
+        "frame": 80,
+        "y": 17.749783737024156,
+        "phase": "上行",
+        "carY": 17.749783737024156,
+        "required": [
+          "P1C-4F",
+          "P1C-3F",
+          "P1C-5F",
+          "P1C-7F",
+          "P1C-6F"
+        ]
+      },
+      {
+        "frame": 100,
+        "y": 27.52011245674732,
+        "phase": "上行",
+        "carY": 27.52011245674732,
+        "required": [
+          "P1C-5F",
+          "P1C-4F",
+          "P1C-6F",
+          "P1C-7F"
+        ]
+      },
+      {
+        "frame": 120,
+        "y": 33.475562283736984,
+        "phase": "上行",
+        "carY": 33.475562283736984,
+        "required": [
+          "P1C-6F",
+          "P1C-5F",
+          "P1C-7F"
+        ]
+      },
+      {
+        "frame": 140,
+        "y": 34,
+        "phase": "开门",
+        "carY": 34,
+        "required": [
+          "P1C-7F",
+          "P1C-6F"
+        ]
+      }
+    ],
+    "end": {
+      "floor": "P1C-7F",
+      "x": -136.5,
+      "z": -236.5,
+      "y": 34,
+      "slope": null,
+      "yaw": -3.141592653589793,
+      "pitch": 0,
+      "flying": false,
+      "eyeY": 35.62,
+      "riding": null
+    },
+    "frames": 160
+  },
+  "heap": 381010330,
+  "streaming": {
+    "mode": "streamed-tour",
+    "eligible": 40,
+    "limit": 6,
+    "hardLimit": 8,
+    "required": [],
+    "resident": [
+      "P1C-2F",
+      "P1C-3F",
+      "P1C-4F",
+      "P1C-5F",
+      "P1C-7F",
+      "P1C-6F"
+    ],
+    "errors": [],
+    "requests": 139,
+    "builds": 51,
+    "hits": 88,
+    "evictions": 45,
+    "disposed": 45,
+    "deferred": [
+      "P1-1F",
+      "P1-2F",
+      "P1-3F",
+      "P1-4F",
+      "P1-5F",
+      "P1-6F",
+      "P2-1F",
+      "P2-2F",
+      "P2-3F",
+      "P2-4F",
+      "P3-1F",
+      "P3-2F",
+      "P3-3F",
+      "P1C-1F",
+      "P1S-1F",
+      "P1S-2F",
+      "P1S-3F",
+      "P1E-1F",
+      "P1E-2F",
+      "P1E-3F",
+      "P1E-4F",
+      "P1E2-1F",
+      "P1E2-2F",
+      "P1E2-3F",
+      "P1W1-1F",
+      "P1W1-2F",
+      "P1W1-3F",
+      "P1W2-1F",
+      "P1W2-2F",
+      "P1W3-1F",
+      "P1W3-2F",
+      "P1W4-1F",
+      "P1W4-2F",
+      "P1W4-3F"
+    ],
+    "lazyAtlasLevels": [
+      "P1-3F",
+      "P1-4F",
+      "P1-5F",
+      "P1-6F",
+      "P1C-1F",
+      "P1C-2F",
+      "P1C-3F",
+      "P1C-4F",
+      "P1C-5F",
+      "P1C-6F",
+      "P1C-7F",
+      "P1S-1F",
+      "P1S-2F",
+      "P1S-3F",
+      "P1E-1F",
+      "P1E-2F",
+      "P1E-3F",
+      "P1E-4F",
+      "P1E2-1F",
+      "P1E2-2F",
+      "P1E2-3F",
+      "P1W1-1F",
+      "P1W1-2F",
+      "P1W1-3F",
+      "P1W2-1F",
+      "P1W2-2F",
+      "P1W3-1F",
+      "P1W3-2F",
+      "P1W4-1F",
+      "P1W4-2F",
+      "P1W4-3F"
+    ],
+    "persistentGeometry": {
+      "geometries": 3058,
+      "vertices": 13048702,
+      "bufferBytes": 253340254
+    },
+    "detailGeometry": {
+      "geometries": 79,
+      "vertices": 246144,
+      "bufferBytes": 4748160
+    }
+  },
+  "contextLost": false
+}

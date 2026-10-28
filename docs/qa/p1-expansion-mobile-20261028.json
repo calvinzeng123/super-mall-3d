@@ -1,0 +1,1797 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-28T07:45:02Z",
+  "status": "final-local-pass",
+  "pending": [],
+  "url": "http://127.0.0.1:5182",
+  "buildEvidence": {
+    "log": "/tmp/p1-expansion-build-release.log",
+    "launcherAsset": "assets/main.743SDAXW.js",
+    "completedBuild": "49 files / 52.84 MiB"
+  },
+  "environment": {
+    "session": "p1-mobile-final",
+    "host": "macOS desktop",
+    "devicePreset": "iPhone 15",
+    "portraitCss": [
+      393,
+      659
+    ],
+    "landscapeCss": [
+      852,
+      393
+    ],
+    "deviceScaleFactor": 3,
+    "physicalIPhone": false,
+    "note": "Chromium and Playwright WebKit with mobile UA, viewport and touch/coarse-pointer emulation. No physical iOS process-memory limit, heat or background-resume certification."
+  },
+  "summary": {
+    "browserEnginesPassed": [
+      "chromium",
+      "webkit"
+    ],
+    "coldTour": {
+      "levels": 236,
+      "deferredDetailFloors": 40,
+      "residentDetailFloors": 0,
+      "suite": "idle",
+      "residential": "idle",
+      "suiteOrResidenceRequests": 0
+    },
+    "selectedBuildingOverviewBuiltDetails": 0,
+    "p1SecondFloorRequired": [
+      "P1-2F",
+      "P1-1F",
+      "P1-3F"
+    ],
+    "maximumObservedResidentFloors": 4,
+    "actualSceneGroupCountVerified": 4,
+    "activeFloorCoverage": [
+      "P1-2F",
+      "P1C-7F",
+      "P1W4-2F",
+      "P3-3F",
+      "P1-B2",
+      "M-B1"
+    ],
+    "floorNavigationModes": [
+      "UI first-floor selection flow",
+      "runtime setFocus cut views",
+      "runtime explore.teleport walking destinations"
+    ],
+    "ui": {
+      "portraitOverflow": false,
+      "landscapeOverflow": false,
+      "cleanViewVisibleButtons": 0,
+      "touchRestorationPassed": true,
+      "landscapePrimaryButtonHeightCss": 44
+    },
+    "chromiumWarmRevisit": {
+      "rounds": 3,
+      "builds": 57,
+      "evictions": 53,
+      "stableGpuGeometries": 2394,
+      "stableGpuTextures": 364,
+      "stableNightHooks": 507,
+      "heapBytes": [
+        191960749,
+        210531784,
+        198080147
+      ]
+    },
+    "applicationErrors": 0,
+    "requestFailures": 0,
+    "webglContextLost": false,
+    "fps": {
+      "engine": "chromium",
+      "levels": 18,
+      "buildings": [
+        "P1",
+        "H",
+        "A"
+      ],
+      "residentialRequestCount": 0,
+      "gameInitialized": true,
+      "webglContextLost": false
+    },
+    "finalFixtures": {
+      "count": 98,
+      "levels": 27,
+      "sunkenStairPreviewVisibleAtOverview": true,
+      "testedDetailFloors": [
+        "P1C-2F",
+        "P1C-7F",
+        "P1W4-2F",
+        "P1W1-3F"
+      ],
+      "maximumActualSceneGroups": 4
+    }
+  },
+  "nonBlockingObservations": [
+    "Chromium requested /favicon.ico before monitoring and received the existing local-server 404. No application runtime request failed.",
+    "WebKit exposes navigator.maxTouchPoints=0 in this desktop build, but pointer:coarse was true and Playwright touchscreen tap restored the UI in both orientations.",
+    "Automatic quality settings were left intact; screenshots show the mobile rendering quality produced by each engine."
+  ],
+  "limits": [
+    "No physical iPhone or iPad execution.",
+    "Chromium performance.memory is desktop JS-heap telemetry only, not iPhone memory consumption or total GPU/process memory; sampled values are not a measured peak.",
+    "WebKit exposes no performance.memory metric here.",
+    "The local build was tested; production deployment was not checked by this subtask.",
+    "FPS startup/map isolation checked in Chromium only; combat, extraction and WebKit FPS were not retested.",
+    "Exhaustive room completeness and every individual fixture collision were outside this mobile stability/UI check.",
+    "The full Chromium/WebKit matrix above used the earlier build; the final fixture/stair-preview delta was rechecked in WebKit, not rerun as a full Chromium matrix."
+  ],
+  "screenshots": [
+    {
+      "path": "docs/images/p1-mobile-qa-20261028-webkit-portrait.png",
+      "engine": "webkit",
+      "view": "P1 overview, portrait UI",
+      "preFinal": true
+    },
+    {
+      "path": "docs/images/p1-mobile-qa-20261028-webkit-landscape-clean.png",
+      "engine": "webkit",
+      "view": "Final local build: P1C 2F public fixtures, landscape clean view",
+      "preFinal": false,
+      "build": "assets/main.743SDAXW.js"
+    }
+  ],
+  "raw": {
+    "chromium": {
+      "errors": [],
+      "failed": [],
+      "checkpoints": [
+        {
+          "label": "P1-2F UI selection",
+          "focus": "P1-2F",
+          "streaming": {
+            "mode": "streamed-tour",
+            "eligible": 40,
+            "limit": 4,
+            "hardLimit": 4,
+            "required": [
+              "P1-2F",
+              "P1-1F",
+              "P1-3F"
+            ],
+            "resident": [
+              "P1-2F",
+              "P1-1F",
+              "P1-3F"
+            ],
+            "errors": [],
+            "requests": 3,
+            "builds": 3,
+            "hits": 0,
+            "evictions": 0,
+            "disposed": 0,
+            "deferred": [
+              "P1-4F",
+              "P1-5F",
+              "P1-6F",
+              "P2-1F",
+              "P2-2F",
+              "P2-3F",
+              "P2-4F",
+              "P3-1F",
+              "P3-2F",
+              "P3-3F",
+              "P1C-1F",
+              "P1C-2F",
+              "P1C-3F",
+              "P1C-4F",
+              "P1C-5F",
+              "P1C-6F",
+              "P1C-7F",
+              "P1S-1F",
+              "P1S-2F",
+              "P1S-3F",
+              "P1E-1F",
+              "P1E-2F",
+              "P1E-3F",
+              "P1E-4F",
+              "P1E2-1F",
+              "P1E2-2F",
+              "P1E2-3F",
+              "P1W1-1F",
+              "P1W1-2F",
+              "P1W1-3F",
+              "P1W2-1F",
+              "P1W2-2F",
+              "P1W3-1F",
+              "P1W3-2F",
+              "P1W4-1F",
+              "P1W4-2F",
+              "P1W4-3F"
+            ],
+            "lazyAtlasLevels": [
+              "P1-3F",
+              "P1-4F",
+              "P1-5F",
+              "P1-6F",
+              "P1C-1F",
+              "P1C-2F",
+              "P1C-3F",
+              "P1C-4F",
+              "P1C-5F",
+              "P1C-6F",
+              "P1C-7F",
+              "P1S-1F",
+              "P1S-2F",
+              "P1S-3F",
+              "P1E-1F",
+              "P1E-2F",
+              "P1E-3F",
+              "P1E-4F",
+              "P1E2-1F",
+              "P1E2-2F",
+              "P1E2-3F",
+              "P1W1-1F",
+              "P1W1-2F",
+              "P1W1-3F",
+              "P1W2-1F",
+              "P1W2-2F",
+              "P1W3-1F",
+              "P1W3-2F",
+              "P1W4-1F",
+              "P1W4-2F",
+              "P1W4-3F"
+            ],
+            "persistentGeometry": {
+              "geometries": 3050,
+              "vertices": 13042318,
+              "bufferBytes": 253202302
+            },
+            "detailGeometry": {
+              "geometries": 35,
+              "vertices": 2700708,
+              "bufferBytes": 50579832
+            }
+          },
+          "heap": 184742937,
+          "gpu": {
+            "geometries": 2171,
+            "textures": 329
+          },
+          "nightHooks": 507
+        },
+        {
+          "focus": "P1C-7F",
+          "resident": [
+            "P1-1F",
+            "P1-3F",
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "required": [
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "errors": [],
+          "builds": 5,
+          "evictions": 1,
+          "heap": 185904389,
+          "gpu": {
+            "geometries": 2270,
+            "textures": 332
+          },
+          "nightHooks": 509,
+          "vertices": 1810320,
+          "webglLost": false
+        },
+        {
+          "focus": "P1W4-2F",
+          "resident": [
+            "P1C-6F",
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "required": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "errors": [],
+          "builds": 8,
+          "evictions": 4,
+          "heap": 176521514,
+          "gpu": {
+            "geometries": 2262,
+            "textures": 331
+          },
+          "nightHooks": 510,
+          "vertices": 41784,
+          "webglLost": false
+        },
+        {
+          "focus": "P3-3F",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [
+            "P3-3F",
+            "P3-2F"
+          ],
+          "errors": [],
+          "builds": 10,
+          "evictions": 6,
+          "heap": 173140663,
+          "gpu": {
+            "geometries": 2256,
+            "textures": 338
+          },
+          "nightHooks": 508,
+          "vertices": 1108062,
+          "webglLost": false
+        },
+        {
+          "focus": "P1-B2",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "builds": 10,
+          "evictions": 6,
+          "heap": 184896005,
+          "gpu": {
+            "geometries": 2271,
+            "textures": 338
+          },
+          "nightHooks": 508,
+          "vertices": 1108062,
+          "webglLost": false
+        },
+        {
+          "focus": "M-B1",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "builds": 10,
+          "evictions": 6,
+          "heap": 189008742,
+          "gpu": {
+            "geometries": 2356,
+            "textures": 348
+          },
+          "nightHooks": 508,
+          "vertices": 1108062,
+          "webglLost": false
+        },
+        {
+          "focus": "P1-2F",
+          "resident": [
+            "P3-2F",
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "required": [
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "errors": [],
+          "builds": 13,
+          "evictions": 9,
+          "heap": 188268925,
+          "gpu": {
+            "geometries": 2365,
+            "textures": 348
+          },
+          "nightHooks": 507,
+          "vertices": 3325044,
+          "webglLost": false
+        },
+        {
+          "focus": "P1C-7F",
+          "resident": [
+            "P1-1F",
+            "P1-3F",
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "required": [
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "errors": [],
+          "builds": 15,
+          "evictions": 11,
+          "heap": 196776297,
+          "gpu": {
+            "geometries": 2373,
+            "textures": 350
+          },
+          "nightHooks": 509,
+          "vertices": 1810320,
+          "webglLost": false
+        },
+        {
+          "focus": "P1W4-2F",
+          "resident": [
+            "P1C-6F",
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "required": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "errors": [],
+          "builds": 18,
+          "evictions": 14,
+          "heap": 211846253,
+          "gpu": {
+            "geometries": 2375,
+            "textures": 351
+          },
+          "nightHooks": 510,
+          "vertices": 41784,
+          "webglLost": false
+        },
+        {
+          "focus": "P3-2F",
+          "resident": [
+            "P1W4-3F",
+            "P3-2F",
+            "P3-1F",
+            "P3-3F"
+          ],
+          "required": [
+            "P3-2F",
+            "P3-1F",
+            "P3-3F"
+          ],
+          "errors": [],
+          "builds": 21,
+          "evictions": 17,
+          "heap": 249028898,
+          "gpu": {
+            "geometries": 2386,
+            "textures": 364
+          },
+          "nightHooks": 507,
+          "vertices": 1823754,
+          "webglLost": false
+        },
+        {
+          "focus": "P1-2F",
+          "resident": [
+            "P3-3F",
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "required": [
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "errors": [],
+          "builds": 24,
+          "evictions": 20,
+          "heap": 205758131,
+          "gpu": {
+            "geometries": 2388,
+            "textures": 364
+          },
+          "nightHooks": 507,
+          "vertices": 3173718,
+          "webglLost": false
+        },
+        {
+          "label": "warm-repeat-0",
+          "focus": "P1-2F",
+          "resident": [
+            "P3-3F",
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "builds": 35,
+          "evictions": 31,
+          "heap": 191960749,
+          "gpu": {
+            "geometries": 2394,
+            "textures": 364
+          },
+          "nightHooks": 507,
+          "errors": []
+        },
+        {
+          "label": "warm-repeat-1",
+          "focus": "P1-2F",
+          "resident": [
+            "P3-3F",
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "builds": 46,
+          "evictions": 42,
+          "heap": 210531784,
+          "gpu": {
+            "geometries": 2394,
+            "textures": 364
+          },
+          "nightHooks": 507,
+          "errors": []
+        },
+        {
+          "label": "warm-repeat-2",
+          "focus": "P1-2F",
+          "resident": [
+            "P3-3F",
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "builds": 57,
+          "evictions": 53,
+          "heap": 198080147,
+          "gpu": {
+            "geometries": 2394,
+            "textures": 364
+          },
+          "nightHooks": 507,
+          "errors": []
+        },
+        {
+          "label": "walk-culture-7F",
+          "explore": {
+            "building": "P1C",
+            "near": null,
+            "under": false,
+            "level": "P1C-7F",
+            "sector": "-6:-10",
+            "position": {
+              "x": -128.25931034482758,
+              "z": -228.95999999999998
+            }
+          },
+          "nav": {
+            "floor": "P1C-7F",
+            "x": -128.25931034482758,
+            "z": -228.95999999999998,
+            "y": 34,
+            "slope": null,
+            "yaw": -1.5707963267948966,
+            "pitch": 0,
+            "flying": false,
+            "eyeY": 35.62,
+            "riding": null
+          },
+          "resident": [
+            "P1-1F",
+            "P1-3F",
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "required": [
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "errors": [],
+          "heap": 172837710
+        },
+        {
+          "label": "walk",
+          "floor": "P1-2F",
+          "resident": [
+            "P1-2F",
+            "P1-1F",
+            "P1-3F",
+            "P1E-2F"
+          ],
+          "required": [
+            "P1-2F",
+            "P1-1F",
+            "P1-3F",
+            "P1E-2F"
+          ],
+          "errors": [],
+          "webglLost": false,
+          "heap": 207108179
+        },
+        {
+          "label": "walk",
+          "floor": "P1W4-2F",
+          "resident": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F",
+            "P1W2-2F"
+          ],
+          "required": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F",
+            "P1W2-2F"
+          ],
+          "errors": [],
+          "webglLost": false,
+          "heap": 206770579
+        },
+        {
+          "label": "walk",
+          "floor": "P3-3F",
+          "resident": [
+            "P1W4-3F",
+            "P1W2-2F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [
+            "P3-3F",
+            "P3-2F"
+          ],
+          "errors": [],
+          "webglLost": false,
+          "heap": 254660894
+        },
+        {
+          "label": "walk",
+          "floor": "P1-B2",
+          "resident": [
+            "P1W4-3F",
+            "P1W2-2F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "webglLost": false,
+          "heap": 228427710
+        },
+        {
+          "label": "walk",
+          "floor": "M-B1",
+          "resident": [
+            "P1W4-3F",
+            "P1W2-2F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "webglLost": false,
+          "heap": 238847945
+        }
+      ],
+      "cold": {
+        "mode": "tour",
+        "levels": 236,
+        "streaming": {
+          "mode": "streamed-tour",
+          "eligible": 40,
+          "limit": 4,
+          "hardLimit": 4,
+          "required": [],
+          "resident": [],
+          "errors": [],
+          "requests": 0,
+          "builds": 0,
+          "hits": 0,
+          "evictions": 0,
+          "disposed": 0,
+          "deferred": [
+            "P1-1F",
+            "P1-2F",
+            "P1-3F",
+            "P1-4F",
+            "P1-5F",
+            "P1-6F",
+            "P2-1F",
+            "P2-2F",
+            "P2-3F",
+            "P2-4F",
+            "P3-1F",
+            "P3-2F",
+            "P3-3F",
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F",
+            "P1C-4F",
+            "P1C-5F",
+            "P1C-6F",
+            "P1C-7F",
+            "P1S-1F",
+            "P1S-2F",
+            "P1S-3F",
+            "P1E-1F",
+            "P1E-2F",
+            "P1E-3F",
+            "P1E-4F",
+            "P1E2-1F",
+            "P1E2-2F",
+            "P1E2-3F",
+            "P1W1-1F",
+            "P1W1-2F",
+            "P1W1-3F",
+            "P1W2-1F",
+            "P1W2-2F",
+            "P1W3-1F",
+            "P1W3-2F",
+            "P1W4-1F",
+            "P1W4-2F",
+            "P1W4-3F"
+          ],
+          "lazyAtlasLevels": [
+            "P1-3F",
+            "P1-4F",
+            "P1-5F",
+            "P1-6F",
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F",
+            "P1C-4F",
+            "P1C-5F",
+            "P1C-6F",
+            "P1C-7F",
+            "P1S-1F",
+            "P1S-2F",
+            "P1S-3F",
+            "P1E-1F",
+            "P1E-2F",
+            "P1E-3F",
+            "P1E-4F",
+            "P1E2-1F",
+            "P1E2-2F",
+            "P1E2-3F",
+            "P1W1-1F",
+            "P1W1-2F",
+            "P1W1-3F",
+            "P1W2-1F",
+            "P1W2-2F",
+            "P1W3-1F",
+            "P1W3-2F",
+            "P1W4-1F",
+            "P1W4-2F",
+            "P1W4-3F"
+          ],
+          "persistentGeometry": {
+            "geometries": 3050,
+            "vertices": 13042318,
+            "bufferBytes": 253202302
+          },
+          "detailGeometry": {
+            "geometries": 0,
+            "vertices": 0,
+            "bufferBytes": 0
+          }
+        },
+        "resources": {
+          "suite": "idle",
+          "residential": "idle",
+          "floor": null,
+          "errors": []
+        },
+        "heap": 383086727,
+        "requests": [
+          "http://127.0.0.1:5182/assets/main.2C4MUIOC.js",
+          "http://127.0.0.1:5182/assets/chunk.WMKTFVSF.js",
+          "http://127.0.0.1:5182/assets/cover.27284425db21785b.jpg",
+          "http://127.0.0.1:5182/favicon.ico",
+          "http://127.0.0.1:5182/assets/chunk.BHU4QJRK.js",
+          "http://127.0.0.1:5182/assets/chunk.ZR23VVJR.js",
+          "http://127.0.0.1:5182/assets/chunk.6DOFNXYE.js",
+          "http://127.0.0.1:5182/assets/chunk.H2Y4LDIT.js",
+          "http://127.0.0.1:5182/assets/marble_01-color.402d3d2f8781e21f.jpg",
+          "http://127.0.0.1:5182/assets/marble_01-normal.8ae668e3badd5d38.jpg",
+          "http://127.0.0.1:5182/assets/marble_01-roughness.6edf2daf5b864534.jpg",
+          "http://127.0.0.1:5182/assets/concrete_pavement_02-color.3fbaf294fd7e535a.jpg",
+          "http://127.0.0.1:5182/assets/oak_wood_planks-color.a188de42bf9198bb.jpg",
+          "http://127.0.0.1:5182/assets/concrete_pavement_02-roughness.6d7ec0b23daa4e80.jpg",
+          "http://127.0.0.1:5182/assets/concrete_pavement_02-normal.02430189a96f108a.jpg",
+          "http://127.0.0.1:5182/assets/oak_wood_planks-normal.63f52712f3b94bb9.jpg",
+          "http://127.0.0.1:5182/assets/oak_wood_planks-roughness.7fd2de468f186a17.jpg",
+          "http://127.0.0.1:5182/assets/brick_wall_09-color.4b05ac9c45cb2ea9.jpg",
+          "http://127.0.0.1:5182/assets/brick_wall_09-normal.1848e73816802e95.jpg",
+          "http://127.0.0.1:5182/assets/clean_asphalt-color.216d473cd81362a7.jpg",
+          "http://127.0.0.1:5182/assets/clean_asphalt-normal.744aa64e65425ae2.jpg",
+          "http://127.0.0.1:5182/assets/brick_wall_09-roughness.0ecbbc52c5bfea9c.jpg",
+          "http://127.0.0.1:5182/assets/grass_ground-roughness.dc99159a3abad2d6.jpg",
+          "http://127.0.0.1:5182/assets/grass_ground-normal.316ba72f9809e5d2.jpg",
+          "http://127.0.0.1:5182/assets/clean_asphalt-roughness.c9216e94586cb9fc.jpg",
+          "http://127.0.0.1:5182/assets/grass_ground-color.bd4f8524889bf2a3.jpg",
+          "http://127.0.0.1:5182/assets/person-m.5da2da91839f374d.glb",
+          "http://127.0.0.1:5182/assets/person-f.a1ec332b8f429022.glb",
+          "http://127.0.0.1:5182/assets/chunk.KASRGM4X.js",
+          "http://127.0.0.1:5182/assets/chunk.ZEKIE4KL.js",
+          "http://127.0.0.1:5182/assets/chunk.LUUH7S3E.js",
+          "http://127.0.0.1:5182/assets/chunk.OCDW3FQT.js"
+        ],
+        "viewport": [
+          393,
+          659
+        ],
+        "touch": 1,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1"
+      },
+      "engine": "chromium",
+      "portraitClean": {
+        "hidden": true,
+        "visibleButtons": [],
+        "width": 393,
+        "height": 659,
+        "viewport": [
+          393,
+          659
+        ]
+      },
+      "landscapeUI": {
+        "viewport": [
+          852,
+          393
+        ],
+        "scroll": [
+          852,
+          393
+        ],
+        "buttons": [
+          {
+            "text": "2F ▴",
+            "rect": {
+              "x": 241,
+              "y": 335,
+              "width": 72.390625,
+              "height": 44
+            }
+          },
+          {
+            "text": "工具",
+            "rect": {
+              "x": 315.390625,
+              "y": 335,
+              "width": 72.40625,
+              "height": 44
+            }
+          },
+          {
+            "text": "地点",
+            "rect": {
+              "x": 389.796875,
+              "y": 335,
+              "width": 72.390625,
+              "height": 44
+            }
+          },
+          {
+            "text": "漫游",
+            "rect": {
+              "x": 464.1875,
+              "y": 335,
+              "width": 72.40625,
+              "height": 44
+            }
+          },
+          {
+            "text": "净览",
+            "rect": {
+              "x": 538.59375,
+              "y": 335,
+              "width": 72.40625,
+              "height": 44
+            }
+          },
+          {
+            "text": "返回封面",
+            "rect": {
+              "x": 764,
+              "y": 8,
+              "width": 76,
+              "height": 36
+            }
+          }
+        ]
+      },
+      "landscapeClean": {
+        "hidden": true,
+        "buttons": []
+      }
+    },
+    "webkit": {
+      "engine": "webkit",
+      "errors": [],
+      "failed": [],
+      "checkpoints": [
+        {
+          "focus": "P1-2F",
+          "resident": [
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "required": [
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "errors": [],
+          "builds": 3,
+          "evictions": 0,
+          "gpu": {
+            "geometries": 2171,
+            "textures": 329
+          },
+          "nightHooks": 507,
+          "webglLost": false
+        },
+        {
+          "focus": "P1C-7F",
+          "resident": [
+            "P1-1F",
+            "P1-3F",
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "required": [
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "errors": [],
+          "builds": 5,
+          "evictions": 1,
+          "gpu": {
+            "geometries": 2270,
+            "textures": 332
+          },
+          "nightHooks": 509,
+          "webglLost": false
+        },
+        {
+          "focus": "P1W4-2F",
+          "resident": [
+            "P1C-6F",
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "required": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "errors": [],
+          "builds": 8,
+          "evictions": 4,
+          "gpu": {
+            "geometries": 2287,
+            "textures": 333
+          },
+          "nightHooks": 510,
+          "webglLost": false
+        },
+        {
+          "focus": "P3-3F",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [
+            "P3-3F",
+            "P3-2F"
+          ],
+          "errors": [],
+          "builds": 10,
+          "evictions": 6,
+          "gpu": {
+            "geometries": 2318,
+            "textures": 359
+          },
+          "nightHooks": 508,
+          "webglLost": false
+        },
+        {
+          "focus": "P1-B2",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "builds": 10,
+          "evictions": 6,
+          "gpu": {
+            "geometries": 2318,
+            "textures": 359
+          },
+          "nightHooks": 508,
+          "webglLost": false
+        },
+        {
+          "focus": "M-B1",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "builds": 10,
+          "evictions": 6,
+          "gpu": {
+            "geometries": 2409,
+            "textures": 372
+          },
+          "nightHooks": 508,
+          "webglLost": false
+        },
+        {
+          "focus": "P1-2F",
+          "resident": [
+            "P3-2F",
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "required": [
+            "P1-2F",
+            "P1-1F",
+            "P1-3F"
+          ],
+          "errors": [],
+          "builds": 13,
+          "evictions": 9,
+          "gpu": {
+            "geometries": 2411,
+            "textures": 371
+          },
+          "nightHooks": 507,
+          "webglLost": false
+        },
+        {
+          "focus": "P1C-7F",
+          "resident": [
+            "P1-1F",
+            "P1-3F",
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "required": [
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "errors": [],
+          "builds": 15,
+          "evictions": 11,
+          "gpu": {
+            "geometries": 2417,
+            "textures": 373
+          },
+          "nightHooks": 509,
+          "webglLost": false
+        },
+        {
+          "focus": "P1W4-2F",
+          "resident": [
+            "P1C-6F",
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "required": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "errors": [],
+          "builds": 18,
+          "evictions": 14,
+          "gpu": {
+            "geometries": 2417,
+            "textures": 374
+          },
+          "nightHooks": 510,
+          "webglLost": false
+        },
+        {
+          "focus": "P3-3F",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [
+            "P3-3F",
+            "P3-2F"
+          ],
+          "errors": [],
+          "builds": 20,
+          "evictions": 16,
+          "gpu": {
+            "geometries": 2409,
+            "textures": 372
+          },
+          "nightHooks": 508,
+          "webglLost": false
+        },
+        {
+          "focus": "P1-B2",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "builds": 20,
+          "evictions": 16,
+          "gpu": {
+            "geometries": 2409,
+            "textures": 372
+          },
+          "nightHooks": 508,
+          "webglLost": false
+        },
+        {
+          "focus": "M-B1",
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "builds": 20,
+          "evictions": 16,
+          "gpu": {
+            "geometries": 2409,
+            "textures": 372
+          },
+          "nightHooks": 508,
+          "webglLost": false
+        },
+        {
+          "label": "walk",
+          "floor": "P1C-7F",
+          "resident": [
+            "P1-1F",
+            "P1-3F",
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "required": [
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "label": "walk",
+          "floor": "P1W4-2F",
+          "resident": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F",
+            "P1W2-2F"
+          ],
+          "required": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F",
+            "P1W2-2F"
+          ],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "label": "walk",
+          "floor": "P3-3F",
+          "resident": [
+            "P1W4-3F",
+            "P1W2-2F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [
+            "P3-3F",
+            "P3-2F"
+          ],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "label": "walk",
+          "floor": "P1-B2",
+          "resident": [
+            "P1W4-3F",
+            "P1W2-2F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "label": "walk",
+          "floor": "M-B1",
+          "resident": [
+            "P1W4-3F",
+            "P1W2-2F",
+            "P3-3F",
+            "P3-2F"
+          ],
+          "required": [],
+          "errors": [],
+          "webglLost": false
+        }
+      ],
+      "cover": {
+        "app": false,
+        "viewport": [
+          393,
+          659
+        ],
+        "touch": 0,
+        "requests": [
+          "http://127.0.0.1:5182/assets/main.2C4MUIOC.js",
+          "http://127.0.0.1:5182/assets/chunk.WMKTFVSF.js",
+          "http://127.0.0.1:5182/assets/cover.27284425db21785b.jpg"
+        ]
+      },
+      "cold": {
+        "mode": "tour",
+        "viewport": [
+          393,
+          659
+        ],
+        "touch": 0,
+        "coarse": true,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+        "levels": 236,
+        "streaming": {
+          "mode": "streamed-tour",
+          "eligible": 40,
+          "limit": 4,
+          "hardLimit": 4,
+          "required": [],
+          "resident": [],
+          "errors": [],
+          "requests": 0,
+          "builds": 0,
+          "hits": 0,
+          "evictions": 0,
+          "disposed": 0,
+          "deferred": [
+            "P1-1F",
+            "P1-2F",
+            "P1-3F",
+            "P1-4F",
+            "P1-5F",
+            "P1-6F",
+            "P2-1F",
+            "P2-2F",
+            "P2-3F",
+            "P2-4F",
+            "P3-1F",
+            "P3-2F",
+            "P3-3F",
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F",
+            "P1C-4F",
+            "P1C-5F",
+            "P1C-6F",
+            "P1C-7F",
+            "P1S-1F",
+            "P1S-2F",
+            "P1S-3F",
+            "P1E-1F",
+            "P1E-2F",
+            "P1E-3F",
+            "P1E-4F",
+            "P1E2-1F",
+            "P1E2-2F",
+            "P1E2-3F",
+            "P1W1-1F",
+            "P1W1-2F",
+            "P1W1-3F",
+            "P1W2-1F",
+            "P1W2-2F",
+            "P1W3-1F",
+            "P1W3-2F",
+            "P1W4-1F",
+            "P1W4-2F",
+            "P1W4-3F"
+          ],
+          "lazyAtlasLevels": [
+            "P1-3F",
+            "P1-4F",
+            "P1-5F",
+            "P1-6F",
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F",
+            "P1C-4F",
+            "P1C-5F",
+            "P1C-6F",
+            "P1C-7F",
+            "P1S-1F",
+            "P1S-2F",
+            "P1S-3F",
+            "P1E-1F",
+            "P1E-2F",
+            "P1E-3F",
+            "P1E-4F",
+            "P1E2-1F",
+            "P1E2-2F",
+            "P1E2-3F",
+            "P1W1-1F",
+            "P1W1-2F",
+            "P1W1-3F",
+            "P1W2-1F",
+            "P1W2-2F",
+            "P1W3-1F",
+            "P1W3-2F",
+            "P1W4-1F",
+            "P1W4-2F",
+            "P1W4-3F"
+          ],
+          "persistentGeometry": {
+            "geometries": 3050,
+            "vertices": 13042210,
+            "bufferBytes": 253200358
+          },
+          "detailGeometry": {
+            "geometries": 0,
+            "vertices": 0,
+            "bufferBytes": 0
+          }
+        },
+        "resources": {
+          "suite": "idle",
+          "residential": "idle",
+          "floor": null,
+          "errors": []
+        },
+        "heap": null,
+        "requests": [
+          "http://127.0.0.1:5182/assets/person-f.a1ec332b8f429022.glb",
+          "http://127.0.0.1:5182/assets/person-m.5da2da91839f374d.glb"
+        ],
+        "webglLost": false
+      },
+      "portraitUI": {
+        "viewport": [
+          393,
+          659
+        ],
+        "scroll": [
+          393,
+          659
+        ]
+      },
+      "portraitClean": {
+        "hidden": true,
+        "buttons": 0,
+        "touchRestored": true
+      },
+      "landscapeUI": {
+        "viewport": [
+          852,
+          393
+        ],
+        "scroll": [
+          852,
+          393
+        ],
+        "buttons": [
+          {
+            "text": "2F ▴",
+            "w": 72.40625,
+            "h": 44,
+            "x": 241,
+            "y": 335
+          },
+          {
+            "text": "工具",
+            "w": 72.40625,
+            "h": 44,
+            "x": 315.40625,
+            "y": 335
+          },
+          {
+            "text": "地点",
+            "w": 72.40625,
+            "h": 44,
+            "x": 389.8125,
+            "y": 335
+          },
+          {
+            "text": "漫游",
+            "w": 72.40625,
+            "h": 44,
+            "x": 464.21875,
+            "y": 335
+          },
+          {
+            "text": "净览",
+            "w": 72.40625,
+            "h": 44,
+            "x": 538.625,
+            "y": 335
+          },
+          {
+            "text": "返回封面",
+            "w": 76,
+            "h": 36,
+            "x": 764,
+            "y": 8
+          }
+        ]
+      },
+      "landscapeClean": {
+        "hidden": true,
+        "buttons": 0,
+        "touchRestored": true
+      },
+      "actualGroups": {
+        "floorGroups": [
+          "P3-2F",
+          "P3-3F",
+          "P1W2-2F",
+          "P1W4-3F"
+        ],
+        "resident": [
+          "P1W4-3F",
+          "P1W2-2F",
+          "P3-3F",
+          "P3-2F"
+        ],
+        "resources": {
+          "suite": "idle",
+          "residential": "idle",
+          "floor": "M-B1",
+          "errors": []
+        },
+        "requests": []
+      }
+    },
+    "fps": {
+      "errors": [],
+      "failed": [],
+      "checkpoints": [],
+      "fps": {
+        "mode": "fps",
+        "levels": 18,
+        "buildings": [
+          "P1",
+          "H",
+          "A"
+        ],
+        "streaming": {
+          "mode": "eager-fps",
+          "eligible": 0,
+          "deferred": [],
+          "lazyAtlasLevels": [],
+          "persistentGeometry": {
+            "geometries": 592,
+            "vertices": 5391931,
+            "bufferBytes": 100594724
+          },
+          "detailGeometry": {
+            "geometries": 0,
+            "vertices": 0,
+            "bufferBytes": 0
+          }
+        },
+        "resources": {
+          "suite": "ready",
+          "residential": "idle",
+          "floor": "P1-1F",
+          "errors": []
+        },
+        "requests": [
+          "http://127.0.0.1:5182/assets/suite.a7f99bf01d3ad6e3.glb",
+          "http://127.0.0.1:5182/assets/smg45.986342e386b174d5.glb",
+          "http://127.0.0.1:5182/assets/fps-hands.94614904f4d82efd.glb",
+          "http://127.0.0.1:5182/assets/deagle.77ed676903ec101b.glb",
+          "http://127.0.0.1:5182/assets/person-m.5da2da91839f374d.glb",
+          "http://127.0.0.1:5182/assets/person-f.a1ec332b8f429022.glb"
+        ],
+        "heap": 209026326,
+        "webglLost": false
+      }
+    },
+    "finalWebKitRegression": {
+      "engine": "webkit",
+      "errors": [],
+      "failed": [],
+      "checkpoints": [
+        {
+          "focus": "P1C-2F",
+          "fixtures": 7,
+          "detailGroup": true,
+          "vertices": 42648,
+          "required": [
+            "P1C-2F",
+            "P1C-1F",
+            "P1C-3F"
+          ],
+          "resident": [
+            "P1C-2F",
+            "P1C-1F",
+            "P1C-3F"
+          ],
+          "physicalGroups": [
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F"
+          ],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "focus": "P1C-7F",
+          "fixtures": 5,
+          "detailGroup": true,
+          "vertices": 37440,
+          "required": [
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "resident": [
+            "P1C-1F",
+            "P1C-3F",
+            "P1C-7F",
+            "P1C-6F"
+          ],
+          "physicalGroups": [
+            "P1C-1F",
+            "P1C-3F",
+            "P1C-6F",
+            "P1C-7F"
+          ],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "focus": "P1W4-2F",
+          "fixtures": 2,
+          "detailGroup": true,
+          "vertices": 8256,
+          "required": [
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "resident": [
+            "P1C-6F",
+            "P1W4-2F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "physicalGroups": [
+            "P1C-6F",
+            "P1W4-1F",
+            "P1W4-2F",
+            "P1W4-3F"
+          ],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "focus": "P1W1-3F",
+          "fixtures": 3,
+          "detailGroup": true,
+          "vertices": 11088,
+          "required": [
+            "P1W1-3F",
+            "P1W1-2F"
+          ],
+          "resident": [
+            "P1W4-1F",
+            "P1W4-3F",
+            "P1W1-3F",
+            "P1W1-2F"
+          ],
+          "physicalGroups": [
+            "P1W1-2F",
+            "P1W1-3F",
+            "P1W4-1F",
+            "P1W4-3F"
+          ],
+          "errors": [],
+          "webglLost": false
+        },
+        {
+          "focus": "P1C-2F",
+          "fixtures": 7,
+          "detailGroup": true,
+          "vertices": 42648,
+          "required": [
+            "P1C-2F",
+            "P1C-1F",
+            "P1C-3F"
+          ],
+          "resident": [
+            "P1W1-2F",
+            "P1C-2F",
+            "P1C-1F",
+            "P1C-3F"
+          ],
+          "physicalGroups": [
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F",
+            "P1W1-2F"
+          ],
+          "errors": [],
+          "webglLost": false
+        }
+      ],
+      "cover": {
+        "mode": "launch",
+        "app": false,
+        "entry": [
+          "http://127.0.0.1:5182/assets/main.743SDAXW.js"
+        ]
+      },
+      "cold": {
+        "levels": 236,
+        "fixtureCount": 98,
+        "fixtureLevels": 27,
+        "streaming": {
+          "mode": "streamed-tour",
+          "eligible": 40,
+          "limit": 4,
+          "hardLimit": 4,
+          "required": [],
+          "resident": [],
+          "errors": [],
+          "requests": 0,
+          "builds": 0,
+          "hits": 0,
+          "evictions": 0,
+          "disposed": 0,
+          "deferred": [
+            "P1-1F",
+            "P1-2F",
+            "P1-3F",
+            "P1-4F",
+            "P1-5F",
+            "P1-6F",
+            "P2-1F",
+            "P2-2F",
+            "P2-3F",
+            "P2-4F",
+            "P3-1F",
+            "P3-2F",
+            "P3-3F",
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F",
+            "P1C-4F",
+            "P1C-5F",
+            "P1C-6F",
+            "P1C-7F",
+            "P1S-1F",
+            "P1S-2F",
+            "P1S-3F",
+            "P1E-1F",
+            "P1E-2F",
+            "P1E-3F",
+            "P1E-4F",
+            "P1E2-1F",
+            "P1E2-2F",
+            "P1E2-3F",
+            "P1W1-1F",
+            "P1W1-2F",
+            "P1W1-3F",
+            "P1W2-1F",
+            "P1W2-2F",
+            "P1W3-1F",
+            "P1W3-2F",
+            "P1W4-1F",
+            "P1W4-2F",
+            "P1W4-3F"
+          ],
+          "lazyAtlasLevels": [
+            "P1-3F",
+            "P1-4F",
+            "P1-5F",
+            "P1-6F",
+            "P1C-1F",
+            "P1C-2F",
+            "P1C-3F",
+            "P1C-4F",
+            "P1C-5F",
+            "P1C-6F",
+            "P1C-7F",
+            "P1S-1F",
+            "P1S-2F",
+            "P1S-3F",
+            "P1E-1F",
+            "P1E-2F",
+            "P1E-3F",
+            "P1E-4F",
+            "P1E2-1F",
+            "P1E2-2F",
+            "P1E2-3F",
+            "P1W1-1F",
+            "P1W1-2F",
+            "P1W1-3F",
+            "P1W2-1F",
+            "P1W2-2F",
+            "P1W3-1F",
+            "P1W3-2F",
+            "P1W4-1F",
+            "P1W4-2F",
+            "P1W4-3F"
+          ],
+          "persistentGeometry": {
+            "geometries": 3058,
+            "vertices": 13048594,
+            "bufferBytes": 253338310
+          },
+          "detailGeometry": {
+            "geometries": 0,
+            "vertices": 0,
+            "bufferBytes": 0
+          }
+        },
+        "resources": {
+          "suite": "idle",
+          "residential": "idle",
+          "floor": null,
+          "errors": []
+        },
+        "sunkenPreview": {
+          "exists": true,
+          "visible": true,
+          "parent": "",
+          "children": 8
+        },
+        "webglLost": false
+      },
+      "clean": {
+        "hidden": true,
+        "visibleButtons": 0,
+        "viewport": [
+          852,
+          393
+        ],
+        "touchRestored": true
+      },
+      "checkedAt": "2026-10-28T07:45:02Z",
+      "build": {
+        "log": "/tmp/p1-expansion-build-release.log",
+        "launcherAsset": "assets/main.743SDAXW.js",
+        "completedBuild": "49 files / 52.84 MiB"
+      },
+      "status": "pass",
+      "screenshot": "docs/images/p1-mobile-qa-20261028-webkit-landscape-clean.png"
+    }
+  },
+  "previousBuildEvidence": {
+    "log": "/tmp/p1-expansion-build-final.log",
+    "launcherAsset": "assets/main.2C4MUIOC.js",
+    "completedBuild": "49 files / 52.83 MiB"
+  }
+}

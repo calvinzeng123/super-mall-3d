@@ -10,11 +10,11 @@ import { clearHeight } from './shell.js';
 const flatDetail = (B, y0) => interiorDetail(B, { at: (a, b) => [a, b], ang: 0, nx: 0, nz: -1 },
   (key, a, b, y, w, d, h, color, rot = 0) => B.get(key).box(a, y, b, w, h, d, color, rot), y0);
 
-export function buildPublic(ctx) {
+export function buildPublic(ctx, { details = true, art = true } = {}) {
   for (const b of ctx.layout.buildings) {
     if (b.kind !== 'mall') continue;
     const levels = ctx.buildings[b.id].levels.map((L) => L.lv);
-    for (const lv of levels) {
+    for (const lv of details ? levels : []) {
       if (lv.kind === 'food') {
         foodCourt(ctx, b, lv);
         oldStreet(ctx, b, lv);
@@ -25,7 +25,7 @@ export function buildPublic(ctx) {
       if (lv.short === '2F') popups(ctx, b, lv);
       if (b.id === 'P1' || b.id === 'P2') mallFinish(ctx, b, lv);
     }
-    atriumArt(ctx, b, levels);
+    if (art) atriumArt(ctx, b, levels);
   }
 }
 

@@ -6,11 +6,11 @@ import { convexOverlap, pointInPoly } from '../src/layout/geom.js';
 
 const P = (s) => lvl(`P1-${s}`);
 
-test('一期：七个楼层，标高与规格一致，各层主题与地面材质不同', () => {
+test('一期扩建：十个楼层标高正确，六层商业各有主题并保留原材质系统', () => {
   const ls = levelsOf('P1');
-  assert.deepEqual(ls.map((l) => l.short), ['B2', 'B1', 'B1M', '1F', '2F', '3F', 'RF']);
-  assert.deepEqual(Object.fromEntries(ls.map((l) => [l.short, l.elev])), { B2: -12, B1: -8.4, B1M: -4.5, '1F': 0, '2F': 6.5, '3F': 12, RF: 17.5 });
-  assert.equal(new Set(ls.map((l) => l.theme.key)).size, 7, '每层场景主题应不同');
+  assert.deepEqual(ls.map((l) => l.short), ['B2', 'B1', 'B1M', '1F', '2F', '3F', '4F', '5F', '6F', 'RF']);
+  assert.deepEqual(Object.fromEntries(ls.map((l) => [l.short, l.elev])), { B2: -12, B1: -8.4, B1M: -4.5, '1F': 0, '2F': 6.5, '3F': 12, '4F': 17.5, '5F': 23, '6F': 28.5, RF: 34 });
+  assert.equal(new Set(ls.map((l) => l.theme.key)).size, 10, '每层场景主题应不同');
   assert.equal(new Set(ls.map((l) => l.theme.floor)).size, 7, '每层地面材质应不同');
 });
 
@@ -20,9 +20,9 @@ test('一期铺位数量：1F/2F ≥25，3F/B1M ≥20', () => {
   }
 });
 
-test('一期卫生间：B1M 与 1F–3F 每层 ≥2 组，B1/B2/RF ≥1 组，门口通走道', () => {
+test('一期卫生间：B1M 与 1F–6F 每层 ≥2 组，B1/B2/RF ≥1 组，门口通走道', () => {
   const wc = (s) => P(s).rooms.filter((m) => m.type === 'wc');
-  for (const s of ['B1M', '1F', '2F', '3F']) assert.ok(wc(s).length >= 2, `${s} 卫生间不足 2 组`);
+  for (const s of ['B1M', '1F', '2F', '3F', '4F', '5F', '6F']) assert.ok(wc(s).length >= 2, `${s} 卫生间不足 2 组`);
   for (const s of ['B1', 'B2', 'RF']) assert.ok(wc(s).length >= 1, `${s} 没有卫生间`);
   for (const lv of levelsOf('P1')) {
     for (const m of lv.rooms.filter((r) => r.type === 'wc')) {
@@ -31,12 +31,12 @@ test('一期卫生间：B1M 与 1F–3F 每层 ≥2 组，B1/B2/RF ≥1 组，�
   }
 });
 
-test('一期 Y 形部分（圆厅与三翼）垂直交通：观光梯 2 部；扶梯 10 对 20 部，五段都有上下行', () => {
+test('一期 Y 形部分（圆厅与三翼）垂直交通：观光梯 2 部；扶梯 16 对 32 部，八段都有上下行', () => {
   assert.equal(L.elevators.filter((e) => e.building === 'P1' && e.type === 'glass' && !e.square).length, 2);
   const E = L.escalators.filter((e) => e.building === 'P1' && !e.square && e.wing !== 'NW');
-  assert.equal(E.length, 20);
-  assert.equal(new Set(E.map((e) => e.pair)).size, 10);
-  for (const [a, b] of [['B1', 'B1M'], ['B1M', '1F'], ['1F', '2F'], ['2F', '3F'], ['3F', 'RF']]) {
+  assert.equal(E.length, 32);
+  assert.equal(new Set(E.map((e) => e.pair)).size, 16);
+  for (const [a, b] of [['B1', 'B1M'], ['B1M', '1F'], ['1F', '2F'], ['2F', '3F'], ['3F', '4F'], ['4F', '5F'], ['5F', '6F'], ['6F', 'RF']]) {
     const es = E.filter((e) => e.from === `P1-${a}` && e.to === `P1-${b}`);
     assert.ok(es.some((e) => e.dir === 'up') && es.some((e) => e.dir === 'down'), `${a}→${b} 缺少上行或下行扶梯`);
   }
@@ -57,7 +57,8 @@ test('一期入口：≥4 个、朝向 ≥3 个方向、1 个主入口；内侧�
       assert.ok(inWalk(lv, out), `${e.name} 没有接到外伸大厅`);
       for (let d=-1.2;d<=1.2;d+=.2) {
         const p=[mx+e.nx*d,mz+e.nz*d];
-        assert.ok(lv.slab.pieces.some(s=>pointInPoly(p,s.outer)&&!s.holes.some(h=>pointInPoly(p,h))), `${e.name} 内门断板`);
+        const pieces=[...lv.slab.pieces,...L.extensions.paths.filter(p=>p.level===lv.id).flatMap(p=>p.slab?.pieces||[])];
+        assert.ok(pieces.some(s=>pointInPoly(p,s.outer)&&!s.holes.some(h=>pointInPoly(p,h))), `${e.name} 内门断板`);
       }
       continue;
     }

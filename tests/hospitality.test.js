@@ -72,6 +72,7 @@ test('每套有床和独卫，套内隔间、门洞与床均在实际房间范�
 
 test('地下、空中连接为真实连续宽度的通道，门户两侧等标高且都能落到走道', () => {
   const paths = L.extensions.paths.filter(p => p.level);
+  const accessible=(lv,p)=>inWalk(lv,p)||paths.some(path=>path.level===lv.id&&path.slab.pieces.some(s=>pointInPoly(p,s.outer)&&!s.holes.some(h=>pointInPoly(p,h))));
   assert.ok(paths.some(p => p.kind === 'skybridge'));
   assert.ok(paths.some(p => p.id === 'hotel-mall-metro'));
   assert.ok(paths.some(p => p.id === 'residential-mall-metro'));
@@ -80,12 +81,13 @@ test('地下、空中连接为真实连续宽度的通道，门户两侧等标�
   assert.ok(L.entrances.some(e => e.sharedGarage && e.level === 'H-B2' && e.to === 'P1-B1'));
   for (const p of paths) {
     const lv = L.levels.find(l => l.id === p.level);
-    assert.ok(p.width >= 5 && p.slab.pieces.length >= p.points.length - 1);
+    assert.ok(p.width >= (p.expansion ? 2.2 : 5));
+    assert.ok(p.slab.pieces.length >= (p.expansion ? 1 : p.points.length - 1));
     assert.ok(p.points.every(q => Math.abs(q[1] - lv.elev) < 1e-6));
     for (let i = 0; i < p.points.length - 1; i++) {
       const a = p.points[i], b = p.points[i + 1];
-      assert.ok(Math.abs(a[0] - b[0]) < 1e-6 || Math.abs(a[2] - b[2]) < 1e-6, `${p.id} 应是可构建正交通道`);
-      assert.ok(inWalk(lv, [(a[0] + b[0]) / 2, (a[2] + b[2]) / 2]), `${p.id} 只有图没有路`);
+      if(!p.expansion) assert.ok(Math.abs(a[0] - b[0]) < 1e-6 || Math.abs(a[2] - b[2]) < 1e-6, `${p.id} 应是可构建正交通道`);
+      assert.ok(accessible(lv, [(a[0] + b[0]) / 2, (a[2] + b[2]) / 2]), `${p.id} 只有图没有路`);
     }
   }
   for (const e of L.entrances.filter(e => e.extension)) {
@@ -96,7 +98,11 @@ test('地下、空中连接为真实连续宽度的通道，门户两侧等标�
       continue;
     }
     assert.equal(a.elev, b.elev, `${e.id} 门户有高差`);
-    assert.ok(inWalk(a, [x - e.nx, z - e.nz]) && inWalk(b, [x + e.nx, z + e.nz]), `${e.id} 门两侧没有实体走道`);
+    // A façade opening may coincide with the bridge portal. Its outward
+    // threshold is then physically on a connected source-owned bridge plate.
+    const support=(lv,q)=>accessible(lv,q)||(e.architecturalOpening&&paths.some(path=>
+      [path.from,path.to].includes(lv.id)&&path.slab.pieces.some(s=>pointInPoly(q,s.outer)&&!s.holes.some(h=>pointInPoly(q,h)))));
+    assert.ok(support(a, [x - e.nx, z - e.nz]) && support(b, [x + e.nx, z + e.nz]), `${e.id} 门两侧没有实体走道`);
   }
   const comp = components(buildWalkGraph(L));
   const first = comp.get(`ent:${L.entrances.find(e => e.building === 'M').id}`);

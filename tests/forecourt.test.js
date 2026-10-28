@@ -7,8 +7,8 @@ const F=L.site.forecourt,nav=buildNav(L);
 const at=(x,z)=>({floor:'ground',x,z,y:0,slope:null});
 const move=(s,p)=>{const dx=p[0]-s.x,dz=p[1]-s.z,n=Math.ceil(Math.hypot(dx,dz)/.09);for(let i=0;i<n;i++)s=step(nav,s,dx/n,dz/n,0);return s;};
 
-test('五个活动地块不压建筑、道路、车库坡道或共享车位',()=>{
-  assert.equal(F.zones.length,5);
+test('二期乐园与市集地块不压建筑、道路、车库坡道或共享车位',()=>{
+  assert.deepEqual(F.zones.map(z=>z.id),['family','market']);
   for(const zone of F.zones){
     for(let x=zone.rect.x0+.25;x<zone.rect.x1;x+=1)for(let z=zone.rect.z0+.25;z<zone.rect.z1;z+=1){
       if(!pointInPoly([x,z],zone.poly))continue;
@@ -19,7 +19,7 @@ test('五个活动地块不压建筑、道路、车库坡道或共享车位',()=
 });
 
 test('二期与住宅之间接纳完整乐园与五间食集，轨道旋转且设备不缩小',()=>{
-  assert.equal(F.items.length,61);
+  assert.equal(F.items.length,28);
   const family=F.zones.find(z=>z.id==='family'),market=F.zones.find(z=>z.id==='market');
   assert.deepEqual(family.rect,{x0:16,z0:-163,x1:90,z1:-115});
   assert.deepEqual(market.rect,{x0:244,z0:-162,x1:281,z1:-119});
@@ -29,8 +29,7 @@ test('二期与住宅之间接纳完整乐园与五间食集，轨道旋转且�
   }
   assert.equal(F.items.filter(i=>i.zone==='market'&&i.type==='kiosk').length,5);
   assert.equal(F.items.filter(i=>i.zone==='market'&&i.type==='cafe-table').length,4);
-  assert.equal(F.items.filter(i=>i.type==='garden-island').length,14);
-  assert.equal(F.zones.find(z=>z.id==='east-garden').name,'星湾街角庭院');
+  assert.equal(F.items.filter(i=>i.type==='garden-island').length,8);
   const train=F.items.find(i=>i.type==='mini-train'),p2=L.buildings.find(b=>b.id==='P2');
   assert.equal(train.rotation,90);
   assert.ok(Math.abs(train.rect.x1-train.rect.x0-67.2)<1e-6,'66m轨道长轴及两侧0.6m轨枕沿x');
@@ -38,15 +37,16 @@ test('二期与住宅之间接纳完整乐园与五间食集，轨道旋转且�
   assert.ok(train.poly.every(p=>!pointInPoly(p,p2.outline)&&distToPolyEdge(p,p2.outline)>4.5),'轨枕轮廓与商场外墙净距不足');
 });
 
-test('西侧原乐园及市集连同专用步道全部腾出，保留原一期三处庭院',()=>{
+test('乐园市集保持二期位置，一期旧庭院已由获批艺术街区替换',()=>{
   assert.ok(F.items.filter(i=>['family','market'].includes(i.zone)).every(i=>i.poly.every(p=>p[0]>0)));
   assert.ok(F.paths.every(p=>p.points.every(([x])=>x>=-280)));
-  for(const id of ['events','north-garden','east-garden'])assert.ok(F.zones.some(z=>z.id===id));
+  for(const id of ['events','north-garden','east-garden'])assert.equal(F.zones.some(z=>z.id===id),false);
+  for(const id of ['P1C','P1S','P1E','P1E2'])assert.ok(L.buildings.some(b=>b.id===id&&b.kind==='annex'));
   assert.equal(F.paths.some(p=>p.id==='square-west-recreation'),false);
 });
 
-test('亲子设施、食集、阅读庭院共用实际物件和碰撞足迹',()=>{
-  for(const type of ['carousel','play-castle','swings','sandpit','mini-train','kiosk','stage','pergola','cafe-table','reading-table','bikes'])assert.ok(F.items.some(i=>i.type===type),type);
+test('保留的亲子设施与食集共用实际物件和碰撞足迹',()=>{
+  for(const type of ['carousel','play-castle','swings','sandpit','mini-train','kiosk','pergola','cafe-table'])assert.ok(F.items.some(i=>i.type===type),type);
   for(const item of F.items){
     const zone=F.zones.find(z=>z.id===item.zone);
     assert.ok(item.poly.every(p=>pointInPoly(p,zone.poly)),`${item.id}:越界`);

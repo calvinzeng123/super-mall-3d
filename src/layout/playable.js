@@ -43,7 +43,9 @@ function accessibleTowerRoof(building, roof, levels) {
  * FPS keeps two retail floors, three tower floors and reachable tower roofs. */
 export function buildPlayableLayout({ mode = 'tour' } = {}) {
   if (!['tour', 'fps'].includes(mode)) throw new Error(`Unknown playable mode: ${mode}`);
-  const layout = buildLayout(), full = {
+  // The exploration extension is authored independently from the compact FPS
+  // slice, so new courts and upstairs links cannot change mission geometry.
+  const layout = buildLayout({ expansion: mode === 'tour' }), full = {
     buildings: layout.buildings.length, levels: layout.levels.length,
     dwellings: layout.levels.reduce((n, l) => n + l.units.filter(u => u.residence).length, 0),
   };

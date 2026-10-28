@@ -35,7 +35,7 @@ test('一期共享地库扩大到整片一期与西停车场，塔楼区域只�
     }
   }
   for (const p of [[-279, -246], [-130, -225], [-174, -40], [-28, -132]]) assert.ok(onSlab(lv('P1-B1'), p), `${p} has no floor`);
-  assert.equal(L.levels.filter(l => l.building === 'P1').length, 7);
+  assert.equal(L.levels.filter(l => l.building === 'P1').length, 10);
   assert.equal(L.levels.filter(l => l.building === 'WPG').length, 3);
 });
 
@@ -124,7 +124,13 @@ test('新增六组电梯均有真实地面入口候梯楼板，十一组安全�
     const link = nav.links.find(l => l.id === e.id);
     assert.equal(link.stops.length, 3);
     for (const s of link.stops) assert.ok(clear(nav, at(s.floor, s.x, s.z)), `${e.id}/${s.floor} lift lobby blocked`);
-    assert.ok(L.entrances.some(en => en.id === `${e.id}-entry` && en.to === 'site'));
+    const entry=L.entrances.find(en=>en.id===`${e.id}-entry`);
+    assert.ok(entry);
+    if(entry.to!=='site') {
+      const hall=lv(entry.to);
+      assert.equal(hall.elev,0);
+      assert.ok(hall.integratedGarageKiosks.some(k=>k.id===e.id));
+    }
     assert.ok(lv(e.serves.at(-1)).slab.pieces.some(p => pointInPoly([e.x, e.z + 3.2], p.outer)));
   }
   const stairs = L.stairs.filter(s => s.sharedGarage);

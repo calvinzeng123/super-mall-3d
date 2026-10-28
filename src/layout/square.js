@@ -79,7 +79,7 @@ const CORE_E = { shafts: rect(12.5, 24, 16, 33), lobby: rect(8, 24, 12.5, 33), s
 const SERVICE = { shaft: rect(12, -34, 15.5, -24), lobby: rect(15.5, -34, 20, -24), stair: rect(12, -40, 20, -34) };
 const WC_W = { rect: rect(-28, -40, -20, -24), door: { x0: -25.5, z0: -24, x1: -22.5, z1: -24, side: 'S' } };
 const WC_E = { rect: rect(16, 24, 24, 40), door: { x0: 18.5, z0: 24, x1: 21.5, z1: 24, side: 'N' } };
-const ABOVE = ['B1M', '1F', '2F', '3F', 'RF'];
+const ABOVE = ['B1M', '1F', '2F', '3F', '4F', '5F', '6F', 'RF'];
 
 /** 中庭洞口与天窗 */
 const VOID_1F = { rect: rect(-5, -8, 5, 8), r: 0.6 };
@@ -107,12 +107,12 @@ export const SQUARE_ENTRANCES = [
 
 /** 电梯与楼梯（一期构建前调用；ids 为一期楼层 id 映射） */
 export function squareSetup(bid, byShort, lift) {
-  const all = ['B2', 'B1', 'B1M', '1F', '2F', '3F', 'RF'].map((s) => byShort[s].id);
-  const ids = (list) => list.map((s) => byShort[s].id);
+  const all = Object.values(byShort).map(l => l.id);
+  const ids = (list) => list.filter(s => byShort[s]).map((s) => byShort[s].id);
   const elevators = [
     ...[-32.1, -29.5, -26.9].map((z, i) => lift(`${bid}-SQ-W-L${i + 1}`, bid, 'passenger', F_SQ, -34.5, z, 3, 2.6, 'E', all)),
     ...[25.5, 28.5, 31.5].map((z, i) => lift(`${bid}-SQ-E-L${i + 1}`, bid, 'passenger', F_SQ, 14.25, z, 3, 2.6, 'W', all)),
-    ...[['GW', -15.5, 'W'], ['GE', 15.5, 'E']].map(([id, x, door]) => lift(`${bid}-SQ-${id}`, bid, 'glass', F_SQ, x, 0, 2.6, 2.6, door, ids(['B1M', '1F', '2F', '3F', 'RF']))),
+    ...[['GW', -15.5, 'W'], ['GE', 15.5, 'E']].map(([id, x, door]) => lift(`${bid}-SQ-${id}`, bid, 'glass', F_SQ, x, 0, 2.6, 2.6, door, ids(ABOVE))),
     lift(`${bid}-SQ-F1`, bid, 'freight', F_SQ, 13.75, -29, 3.5, 4, 'E', ids(ABOVE)),
   ].map((e) => ({ ...e, square: true }));
   const park = (side, x0, z0, x1, z1) => ({ x0, z0, x1, z1, side });
@@ -232,7 +232,7 @@ export function squareLevel(lv, picker, state) {
     const k = (state[`sq-${lv.id}`] = (state[`sq-${lv.id}`] || 0) + 1);
     return picker.take(cats[(k - 1) % cats.length]);
   };
-  for (const slot of LEVEL_SLOTS[s] || []) {
+  for (const slot of LEVEL_SLOTS[s] || (['4F','5F','6F'].includes(s) ? LEVEL_SLOTS[s === '5F' ? '3F' : '2F'] : [])) {
     const t = SLOTS[slot];
     lv.units.push({
       id: `${lv.id}-SQ-${slot}`, slot: `SQ-${slot}`, level: lv.id, building: lv.building, brand: brand(slot), frame: F_SQ,
@@ -262,7 +262,7 @@ export function squareLevel(lv, picker, state) {
         lv.voids.push({ id: `SQ-ground-shaft-${x}`, kind: 'shaft', poly: lrectPoly(F_SQ, shaft), frame: F_SQ, rect: shaft });
       }
     }
-    if (s === '2F' || s === '3F') lv.voids.push({ id: 'SQ-void', kind: 'atrium', poly: lroundPoly(F_SQ, VOID_UP.rect, VOID_UP.r), frame: F_SQ, rect: VOID_UP.rect, radius: VOID_UP.r, square: true });
+    if (['2F','3F','4F','5F','6F'].includes(s)) lv.voids.push({ id: 'SQ-void', kind: 'atrium', poly: lroundPoly(F_SQ, VOID_UP.rect, VOID_UP.r), frame: F_SQ, rect: VOID_UP.rect, radius: VOID_UP.r, square: true });
     if (s === 'B1M') {
       lv.rooms.push({ id: 'SQ-store', type: 'equip', label: '超市仓储', frame: F_SQ, rects: [rect(49, -18, 55, 4)], doors: [] });
       lv.walk.push(W('svcE', 'service', rect(55, -4, 60, 4)));

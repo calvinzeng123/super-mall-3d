@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-10-28T07:44:47.472689+00:00",
+  "command": "node --test --test-concurrency=4 tests/*.test.js",
+  "tests": 302,
+  "passed": 302,
+  "failed": 0,
+  "log": "/tmp/p1-expansion-tests-release.log",
+  "buildCommand": "npm run build:netlify",
+  "buildLog": "/tmp/p1-expansion-build-release.log",
+  "publicFiles": 49,
+  "totalMiB": 52.84,
+  "launcher": {
+    "path": "assets/main.743SDAXW.js",
+    "bytes": 10440,
+    "sha256": "182613a0d6517d30f5074f25e66506724e7d2f99b7a01d3e4ca06a3837b4ee00",
+    "kind": "launcher-script"
+  },
+  "offlineFiles": [
+    "dist/mall.html",
+    "dist/artifact.html"
+  ]
+}

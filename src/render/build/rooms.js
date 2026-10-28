@@ -128,6 +128,10 @@ function restroom(B, L, atlas, lv, r, y0, H, roof) {
     B.get(key).box(x, y, z, sa, sy, sb, color, F.ang);
   };
   const W = F.len, D = F.depth;
+  if (r.publicAccess) {
+    compactRestroom(L, atlas, r, F, P, y0, H);
+    return;
+  }
   const tile = '#eef0f1';
   P('satin', W / 2, D / 2, y0 + 0.008, W - 0.2, D - 0.2, 0.016, '#dfe3e6');
   if (roof) {
@@ -182,6 +186,39 @@ function restroom(B, L, atlas, lv, r, y0, H, roof) {
   P('glow', 7.1, 3.12, y0 + 2.4, 0.5, 0.03, 0.5, '#e05a8a');
   P('glow', 4.0, 3.12, y0 + 2.4, 0.5, 0.03, 0.5, '#3aa76d');
   void lv;
+}
+
+/** Small annex restrooms have a real foyer and two open cubicle doors. The
+ * older full-size mall template has fixed 8×11m fixtures and cannot be scaled
+ * into a 6×5.5m room without furniture spilling through the public corridor. */
+function compactRestroom(L, atlas, room, F, P, y0, H) {
+  const W = F.len, D = F.depth, partition = Math.min(2.25, D * .43);
+  const wall = (a0, a1, b0, b1, h = 2.35) => P('matte', (a0 + a1) / 2, (b0 + b1) / 2,
+    y0 + h / 2, Math.max(.09, a1 - a0), Math.max(.09, b1 - b0), h, '#e1e5df');
+  P('stone', W / 2, D / 2, y0 + .012, W - .2, D - .2, .024, '#e5e4da');
+  wall(W / 2 - .045, W / 2 + .045, partition, D - .12);
+  for (let i = 0; i < 2; i++) {
+    const a0 = .12 + i * W / 2, a1 = (i + 1) * W / 2 - .12, center = (a0 + a1) / 2, doorW = Math.min(1.15, (a1 - a0) * .55);
+    wall(a0, center - doorW / 2, partition, partition + .1);
+    wall(center + doorW / 2, a1, partition, partition + .1);
+    P('wood', center, partition + .05, y0 + 2.45, doorW + .16, .16, .15, '#b49e7f');
+    // The door leaf is parked against the stall side, never across its opening.
+    P('wood', a0 + .1, partition + .62, y0 + 1.05, .055, .95, 2.1, '#c3b59d');
+    P('satin', center, D - 1.0, y0 + .24, .6, .82, .48, '#f6f6f1');
+    P('satin', center, D - .53, y0 + .55, .58, .24, .6, '#f6f6f1');
+    P('metal', center + .58, D - 1.05, y0 + .74, .04, 1.1, .045, '#a4b1ac');
+    P('glowSoft', center, partition + .105, y0 + 2.12, .28, .02, .25, i ? '#bf917b' : '#7a9c8e');
+  }
+  // Sink and mirror line the side wall, keeping the entrance-to-stalls axis clear.
+  P('stone', .48, 1.05, y0 + .8, .65, 1.35, .12, '#e6e2d6');
+  for (const b of [.65, 1.35]) P('satin', .51, b, y0 + .89, .42, .48, .1, '#ffffff');
+  P('mirror', .13, 1.05, y0 + 1.65, .025, 1.4, 1.0, '#ffffff');
+  P('glow', .15, 1.05, y0 + 2.23, .04, 1.36, .055, '#fff0d2');
+  P('satin', W - .55, .85, y0 + .55, .65, .85, 1.1, '#ded9ce');
+  P('glow', W / 2, D / 2, y0 + Math.min(H - .12, 3.0), W - 1.0, .12, .035, '#fff1dc');
+  const d = room.doors[0], [nx, nz] = NORMAL[d.side];
+  L.signs.place((d.x0 + d.x1) / 2 + nx * .12, y0 + 2.8, (d.z0 + d.z1) / 2 + nz * .12,
+    1.8, .45, d.side, atlas.cell('wf-wc'));
 }
 
 /** 客梯厅导视牌：挂在电梯门前方的商业街 / 步行脊上空 */

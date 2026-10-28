@@ -45,10 +45,11 @@ test('每个铺位至少有一段门面临走道', () => {
   }
 });
 
-test('客梯：每层 ≥2 部；每部电梯在每个停靠层的门口都在走道上', () => {
+test('主体每层双客梯、小型附楼逐层有观光梯，所有梯门均有候梯走道', () => {
   for (const lv of L.levels) {
-    const n = L.elevators.filter((e) => e.type === 'passenger' && e.serves.includes(lv.id)).length;
-    assert.ok(n >= 2, `${lv.id} 客梯只有 ${n} 部`);
+    const annex=L.buildings.find(b=>b.id===lv.building)?.kind==='annex';
+    const n = L.elevators.filter((e) => (e.type === 'passenger' || annex&&e.type==='glass') && e.serves.includes(lv.id)).length;
+    assert.ok(n >= (annex?1:2), `${lv.id} 客梯只有 ${n} 部`);
   }
   for (const e of L.elevators) {
     for (const id of e.serves) assert.ok(inWalk(lvl(id), liftProbe(e)), `${e.id} 在 ${id} 的门口不在走道上`);
@@ -97,10 +98,11 @@ test('同层扶梯（含上下平台）互不重叠', () => {
   }
 });
 
-test('疏散：每层 ≥2 部楼梯；室内走道到最近楼梯或出口 ≤45m（停车层 ≤60m）', () => {
+test('主体与大型附楼保留双楼梯，小型附楼至少一梯；走道到楼梯或出口 ≤45m（停车层 ≤60m）', () => {
   for (const lv of L.levels) {
     const st = L.stairs.filter((s) => s.serves.includes(lv.id));
-    assert.ok(st.length >= 2, `${lv.id} 楼梯只有 ${st.length} 部`);
+    const smallAnnex=['P1E','P1E2','P1W1','P1W2','P1W3','P1W4'].includes(lv.building);
+    assert.ok(st.length >= (smallAnnex?1:2), `${lv.id} 楼梯只有 ${st.length} 部`);
     if (!['retail', 'food', 'parking'].includes(lv.kind)) continue;
     const exits = st.map((s) => midOf(stairDoor(s, lv.id)));
     exits.push(...L.entrances.filter((e) => e.level === lv.id).map((e) => midOf(e.seg)));

@@ -68,7 +68,12 @@ export function lift(id, bid, type, F, lu, lv, w, d, door, serves) {
   return { id, building: bid, type, frame: F, lu, lv, w, d, door, x, z, nx, nz, reach, serves };
 }
 
-export function buildMall(spec, site, picker) {
+export function buildMall(sourceSpec, site, picker) {
+  // Brand queues are per build. Keeping their consumed cursor on the imported
+  // spec made a second tour/FPS build change merchants in every later phase.
+  const copy = value => Array.isArray(value) ? value.map(copy) : value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'brandQ').map(([key, child]) => [key, copy(child)])) : value;
+  const spec = copy(sourceSpec);
   const bid = spec.id;
   const rots = Object.fromEntries(spec.rotundas.map((r) => [r.id, { ...r, kitF: frame(r.x, r.z, r.kitDeg || 0, `${bid}-${r.id}`) }]));
   const wings = spec.wings.map((w) => makeWing(w, rots, bid));

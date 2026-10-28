@@ -9,7 +9,9 @@ import { buildMallStairLevel, buildMallStairs } from '../src/render/build/mall-s
 import { BatchSet } from '../src/render/batch.js';
 import { SLAB_T } from '../src/render/build/shell.js';
 
-const malls=L.buildings.filter(b=>b.kind==='mall'),nav=buildNav(L);
+const malls=L.buildings.filter(b=>['mall','annex'].includes(b.kind)),nav=buildNav(L);
+// The sunken court has a separate open-air single flight and acceptance route.
+const protectedRoutes=b=>b.access.routes.filter(r=>L.stairs.some(s=>s.building===b.id&&s.id===r.stair));
 function move(s,p,audit=()=>{}) {
   const n=Math.max(1,Math.ceil(Math.hypot(p.x-s.x,p.z-s.z)/.05)),dx=(p.x-s.x)/n,dz=(p.z-s.z)/n;
   for(let i=0;i<n;i++) {
@@ -21,10 +23,10 @@ function move(s,p,audit=()=>{}) {
   assert.equal(s.floor,p.floor);assert.ok(Math.abs(s.y-p.y)<1e-6);return s;
 }
 
-test('一期二期33座消防梯180条层间线路双向连续可走，含地下、挑高层和屋顶',()=>{
-  assert.equal(L.stairs.filter(s=>malls.some(b=>b.id===s.building)).length,33);
-  assert.equal(malls.reduce((n,b)=>n+b.access.routes.length,0),180);
-  for(const b of malls)for(const route of b.access.routes)for(const reversed of [false,true]) {
+test('主楼和八个附楼43座消防梯271条层间线路双向连续可走，含地下、挑高层和屋顶',()=>{
+  assert.equal(L.stairs.filter(s=>malls.some(b=>b.id===s.building)).length,43);
+  assert.equal(malls.reduce((n,b)=>n+protectedRoutes(b).length,0),271);
+  for(const b of malls)for(const route of protectedRoutes(b))for(const reversed of [false,true]) {
     const path=reversed?[...route.waypoints].reverse():route.waypoints;
     let s={...path[0],slope:null},flightSteps=0;
     assert.ok(clear(nav,s),`${route.id} has no accessible doorway`);
@@ -64,7 +66,7 @@ test('完整梯段、平台、墙和真实厚楼板均避开身体与2米头部�
       assert.ok(w>0&&h>0&&d>0);solids.push({frame,x,y,z,w,h,d});
     },bar:()=>{}})};
     for(const lv of levels)buildMallStairLevel(B,lv,stairs,b.access,{flights:true});
-    for(const route of b.access.routes) {
+    for(const route of protectedRoutes(b)) {
       const lower=nav.floors.get(route.from).y,upper=nav.floors.get(route.to).y;
       const relevant=solids.filter(o=>o.y+o.h/2>lower+.4&&o.y-o.h/2<upper+2);
       const slabs=levels.filter(lv=>lv.elev>lower+.4&&lv.elev-(SLAB_T[lv.kind]||.45)-.03<upper+2);
@@ -93,7 +95,7 @@ test('数百梯段共享有限模板，完整楼层批次正确摆放且不复�
   const levels=Object.fromEntries(L.levels.filter(l=>malls.some(b=>b.id===l.building)).map(l=>[l.id,{batch:new BatchSet(materials),base:new THREE.Group(),signs:{frame:(f,fn)=>fn(),place:()=>{}}}]));
   const ctx={layout:L,levels,mats:{base:materials},atlas:Object.fromEntries(Object.keys(levels).map(id=>[id,{cell:()=>null}]))};
   buildMallStairs(ctx);
-  assert.ok(ctx.mallStairStats.templates<=14);assert.ok(ctx.mallStairStats.storedVertices<90000);
+  assert.ok(ctx.mallStairStats.templates<=18);assert.ok(ctx.mallStairStats.storedVertices<90000);
   for(const b of malls)for(const lv of L.levels.filter(l=>l.building===b.id)) {
     const meshes=levels[lv.id].base.children,flights=b.access.flights.filter(f=>f.parentFloor===lv.id);
     assert.equal(meshes.filter(m=>m.material===materials.concrete).reduce((n,m)=>n+m.count,0),flights.length);
