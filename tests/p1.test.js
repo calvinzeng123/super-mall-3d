@@ -1,5 +1,6 @@
 // 一期 云澜汇专项规则（规格第 4 节、第 10 节 1、2、5、6、8、9、10、12、13 条）。
 import test from 'node:test';
+import { buildLayout } from '../src/layout/layout.js';
 import assert from 'node:assert/strict';
 import { L, lvl, levelsOf, inWalk, inSite, inBridge, onSlab, midOf, directionCount, segProbes } from './helpers.js';
 import { convexOverlap, pointInPoly } from '../src/layout/geom.js';
@@ -102,11 +103,14 @@ test('一期车位：B1、B2 各 ≥150，B1 有充电位和无障碍位', () =>
   assert.ok(types.has('ev') && types.has('accessible'));
 });
 
-test('一期天台：餐吧 ≥3、摩天轮 1、IP、天空之镜、观景台、立体字', () => {
+test('一期天台：餐吧 ≥3、光穹/天幕/采光峡谷取代摩天轮（FPS 原图保留）、IP、天空之镜、观景台、立体字', () => {
   const rf = P('RF');
   const bars = rf.units.filter((u) => ['bar', 'restaurant'].includes(u.brand.cat));
   assert.ok(bars.length >= 3, `天台餐吧只有 ${bars.length} 家`);
   const types = rf.features.map((f) => f.type);
-  assert.equal(types.filter((t) => t === 'ferris').length, 1);
-  for (const t of ['ip', 'mirror', 'skywalk', 'letters']) assert.ok(types.includes(t), `天台缺少 ${t}`);
+  assert.equal(types.filter((t) => t === 'ferris').length, 0, '效果图没有摩天轮');
+  for (const t of ['art-dome', 'glass-canopy', 'canyon-skylight']) assert.equal(types.filter((x) => x === t).length, 1, `天台缺少 ${t}`);
+  for (const t of ['ip', 'mirror', 'skywalk', 'letters', 'viewdeck', 'cinema-open']) assert.ok(types.includes(t), `天台缺少 ${t}`);
+  const original = buildLayout({ expansion: false }).levels.find((l) => l.id === 'P1-RF');
+  assert.equal(original.features.filter((f) => f.type === 'ferris').length, 1, 'FPS 原图摩天轮被改动');
 });

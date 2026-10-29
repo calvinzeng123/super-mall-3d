@@ -241,14 +241,17 @@ function artLantern(ctx, lv) {
   const x0 = r.x0, x1 = r.x1, cz = (r.z0 + r.z1) / 2, half = (r.z1 - r.z0) / 2;
   const y = lv.elev + .28, rise = Math.min(5.4, half * .55), segments = 16;
   const profile = Array.from({ length: segments + 1 }, (_, i) => { const a = i * Math.PI / segments; return [cz - Math.cos(a) * half, y + Math.sin(a) * rise]; });
+  // Under the 06 dome the atrium stays open to it; only the art rings remain.
+  const dome = lv.features.find(f => f.type === 'art-dome'), domed = !!dome;
+  const hang = dome ? lv.elev + dome.spring + dome.rise - .5 : y + rise - .2;
   B.frame(v.frame, () => {
-    for (let i = 0; i < segments; i++) {
+    if (!domed) for (let i = 0; i < segments; i++) {
       const [z0, ya] = profile[i], [z1, yb] = profile[i + 1], angle = Math.atan2(yb - ya, z1 - z0);
       B.get('glass').shape('box', new THREE.Vector3((x0 + x1) / 2, (ya + yb) / 2, (z0 + z1) / 2), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -angle), new THREE.Vector3(x1 - x0, .035, Math.hypot(z1 - z0, yb - ya)), '#ffffff');
       for (let x = x0; x <= x1 + .01; x += (x1 - x0) / 8) B.get('extMetal').bar({ x, y: ya, z: z0 }, { x, y: yb, z: z1 }, .1, p.trim);
     }
-    for (let i = 0; i <= segments; i += 4) B.get('extMetal').box((x0 + x1) / 2, profile[i][1], profile[i][0], x1 - x0, .08, .1, p.trim);
-    for (const x of [x0, x1]) for (let i = 0; i < segments; i++) {
+    if (!domed) for (let i = 0; i <= segments; i += 4) B.get('extMetal').box((x0 + x1) / 2, profile[i][1], profile[i][0], x1 - x0, .08, .1, p.trim);
+    if (!domed) for (const x of [x0, x1]) for (let i = 0; i < segments; i++) {
       const [z0, ya] = profile[i], [z1, yb] = profile[i + 1];
       B.get('glass').box(x, y + Math.max(0, (ya + yb) / 2 - y) / 2, (z0 + z1) / 2, .03, Math.max(.02, (ya + yb) / 2 - y), z1 - z0, '#ffffff');
     }
@@ -256,7 +259,7 @@ function artLantern(ctx, lv) {
     for (let i = 0; i < 3; i++) {
       const xx = (x0 + x1) / 2 + (i - 1) * 3, yy = y - 3 - i * .55;
       B.get('extMetal').shape('torus', new THREE.Vector3(xx, yy, cz), new THREE.Quaternion().setFromEuler(new THREE.Euler(1.06, .2 * i, .22 * i)), new THREE.Vector3(6.3 - i * .5, 4.2, .55), i % 2 ? '#ae956b' : '#c6b08b');
-      B.get('extMetal').bar({ x: xx, y: yy + 1.8, z: cz }, { x: xx, y: y + rise - .2, z: cz }, .025, p.trim);
+      B.get('extMetal').bar({ x: xx, y: yy + 1.8, z: cz }, { x: xx, y: hang, z: cz }, .025, p.trim);
     }
   });
 }

@@ -46,6 +46,7 @@ import { createDeferredResource, createSerialTaskQueue, detailAssetKind, activeD
 import { createFloorDetailSelector, createFloorDetailCache } from './floor-detail-streaming.js';
 import { buildOwnedFloorDetail, sceneResources, geometryStats } from './floor-detail-scene.js';
 import { buildP1ExpansionExterior, buildP1ExpansionLevel, usesExpansionFacade } from './build/p1-expansion.js';
+import { buildP1FidelityRoof } from './build/p1-fidelity.js';
 
 const EXPLODE_GAP = 13;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -234,6 +235,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     if (currentCtx === legacyCtx) for (const key of ['outlineEdges', 'metroSync', 'bridgeGroup', 'paths', 'ferris', 'carGeo', 'carMat', 'peopleQuality', 'mallStairStats']) if (legacyCtx[key]) ctx[key] = legacyCtx[key];
   }
   buildP1ExpansionExterior(ctx);
+  buildP1FidelityRoof(ctx);
   for (const lv of legacyLayout.levels) if (!floorSelector?.eligible.has(lv.id)) buildP1ExpansionLevel(ctx, lv);
   onProgress('建造云澜汇酒店、公寓与住宅', 0.96);
   await nextFrame();

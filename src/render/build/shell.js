@@ -596,7 +596,8 @@ function signage(ctx, b) {
       { t: '云澜酒店 · 连廊直达', s: 'HOTEL · CONNECTED WALKWAYS', a: '#3b1d2e', b: '#b59a6b' },
       { t: 'B1M 美食广场', s: 'FOOD COURT · LOWER CONCOURSE', a: '#8a2c10', b: '#f59e0b' },
       { t: '云澜公寓 · 地库互通', s: 'RESIDENCES · CONNECTED PARKING', a: '#111827', b: '#2f86b0' },
-    ] : cfg.slides;
+    ] : ctx.layout.fidelity && b.id === 'P1' ? cfg.slides.map(s => s.t.includes('摩天轮')
+      ? { t: '天台「云澜光穹」艺术中庭', s: 'ART DOME · 每晚 19:00 灯光秀', a: '#3b2a17', b: '#d9a24a' } : s) : cfg.slides;
     let last = -1;
     ctx.dynamic.push({
       update(dt, time) {
