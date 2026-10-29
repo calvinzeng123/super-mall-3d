@@ -241,6 +241,7 @@ export function buildParking(ctx) {
     }
   }
   streetRamps(ctx);
+  rampHeads(ctx);
   innerRamps(ctx);
   buildSharedGarageDetails(ctx);
 }
@@ -318,7 +319,9 @@ function streetRamps(ctx) {
     if (!r) continue;
     const { F, len } = rampFrame(r);
     const loc = t.map(([x, z]) => toL(F, x, z));
-    const ua = Math.max(0, Math.min(...loc.map((p) => p[0]))), ub = Math.min(len, Math.max(...loc.map((p) => p[0])));
+    // A covered ramp keeps its whole slab in the site group, so the tunnel
+    // floor beyond the open trench is still drawn when the deck is hidden.
+    const ua = r.cover ? 0 : Math.max(0, Math.min(...loc.map((p) => p[0]))), ub = r.cover ? len : Math.min(len, Math.max(...loc.map((p) => p[0])));
     const va = Math.min(...loc.map((p) => p[1])), vb = Math.max(...loc.map((p) => p[1]));
     if (ub - ua < 1) continue;
     const yAt = (u) => r.from.y + ((r.to.y - r.from.y) * u) / len;
@@ -339,6 +342,40 @@ function streetRamps(ctx) {
       slopedSlab(B, 'matte', len, r.from.y, r.to.y, r.width, 0.4, '#555b62');
       rampGuards(B, len, r.from.y, r.to.y, r.width);
       rampMarks(B, len, r.from.y, r.to.y, r.width, 9);
+    });
+  }
+}
+
+/** Street ramp heads seen from the site: a light canopy over the open trench
+ * (phase-one gates, as in the concept aerial) and, for covered ramps, the
+ * portal, tunnel walls and cover slab between the trench and the deck. */
+function rampHeads(ctx) {
+  const S = ctx.site.batch;
+  for (const r of ctx.layout.ramps.filter((x) => x.type.startsWith('street'))) {
+    const street = r.from.level === 'street' ? r.from : r.to, low = street === r.from ? r.to : r.from;
+    const len = Math.hypot(low.x - street.x, low.z - street.z);
+    const F = frame(street.x, street.z, Math.atan2(low.z - street.z, low.x - street.x) * 180 / Math.PI);
+    const yAt = (u) => street.y + ((low.y - street.y) * u) / len;
+    const open = r.cover ? r.cover.open : len, w = r.width, half = w / 2;
+    S.frame(F, () => {
+      if (['P1', 'H', 'A'].includes(r.building)) {
+        const span = open - 0.6, ribs = Math.max(2, Math.round(span / 1.5));
+        for (let u = 0.6; u <= open - 0.3; u += 6) for (const v of [-half - 0.35, half + 0.35]) S.get('extMetal').box(u, 1.6, v, 0.14, 3.4, 0.14, '#59605d');
+        S.get('extMetal').box(open / 2, 3.32, 0, span + 0.6, 0.12, w + 1.2, '#6a716d');
+        S.get('glass').box(open / 2, 3.42, 0, span + 0.4, 0.04, w + 1.0, '#ffffff');
+        for (let i = 0; i <= ribs; i++) S.get('extMetal').box(0.3 + (span * i) / ribs, 3.47, 0, 0.06, 0.06, w + 1.1, '#6a716d');
+        S.get('glow').box(open / 2, 3.24, 0, span, 0.03, 0.12, '#fff2cf');
+      }
+      if (!r.cover) return;
+      const uc = Math.min(len, (len * 4.5) / -low.y);
+      // Portal head wall at grade and the cover slab the plaza sits on.
+      S.get('concrete').box(open + 0.2, 0.05, 0, 0.4, 1.0, w + 0.9, '#b9bfba');
+      S.get('concrete').box((open + uc) / 2, -0.42, 0, uc - open, 0.3, w + 0.9, '#a4aca8');
+      for (let u = open; u < uc - 0.01; u += 2) {
+        const b = Math.min(uc, u + 2), bottom = yAt(b) - 0.4;
+        for (const v of [-half - 0.3, half + 0.3]) S.get('concrete').box((u + b) / 2, (bottom - 0.27) / 2, v, b - u, -0.27 - bottom, 0.3, '#a9b1ad');
+      }
+      S.get('glow').box((open + uc) / 2, -0.6, 0, uc - open - 0.6, 0.04, 0.16, '#eef6ff');
     });
   }
 }

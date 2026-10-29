@@ -342,21 +342,25 @@ function garageGates(ctx, S, B) {
     const deg = Math.atan2(street.z - other.z, street.x - other.x) * DEG; // u 指向坡道外（地面方向）
     const F = frame(street.x, street.z, deg);
     const inbound = r.type === 'street-in';
+    // Paired lanes keep the post, booth and sign on their outer side.
+    const side = r.gate?.side ?? 1, signSide = r.gate?.sign ?? -1;
     B.frame(F, () => {
       const g = 4;
       for (const dv of [-r.width / 2 - 0.4, r.width / 2 + 0.4]) B.get('extMetal').cyl(g, y, dv, 0.14, 3.0, '#e7b416', 8);
       B.get('extMetal').box(g, y + 2.9, 0, 0.3, 0.35, r.width + 1.2, '#e7b416');
       for (let i = 0; i < 6; i++) B.get('ext').box(g + 0.16, y + 2.9, -r.width / 2 + 0.4 + i * ((r.width - 0.8) / 5), 0.02, 0.36, 0.5, i % 2 ? '#1d2023' : '#e7b416');
-      B.get('extMetal').box(1.5, y + 0.55, r.width / 2 + 0.6, 0.45, 1.1, 0.45, '#d9dde0');
+      B.get('extMetal').box(1.5, y + 0.55, side * (r.width / 2 + 0.6), 0.45, 1.1, 0.45, '#d9dde0');
       B.get('ext').box(1.5, y + 1.05, 0, 0.12, 0.12, r.width, '#e8352b');
-      B.get('ext').box(1.6, y + 1.4, r.width / 2 + 2.4, 2.2, 2.8, 2.2, '#e9ecef');
-      B.get('glass').box(1.6, y + 1.7, r.width / 2 + 1.29, 1.8, 1.2, 0.04, 0xffffff);
-      B.get('extMetal').cyl(7, y, -r.width / 2 - 1.2, 0.12, 4.0, '#3b4046', 8);
+      if (r.gate?.booth !== false) {
+        B.get('ext').box(1.6, y + 1.4, side * (r.width / 2 + 2.4), 2.2, 2.8, 2.2, '#e9ecef');
+        B.get('glass').box(1.6, y + 1.7, side * (r.width / 2 + 1.29), 1.8, 1.2, 0.04, 0xffffff);
+      }
+      B.get('extMetal').cyl(7, y, signSide * (r.width / 2 + 1.2), 0.12, 4.0, '#3b4046', 8);
     });
     const lab = labelTexture(inbound ? '车库入口' : '车库出口', { bg: 'rgba(29,78,216,0.96)', fg: '#ffffff', icon: 'parking', sub: inbound ? 'P · ENTRANCE' : 'P · EXIT' });
     const mat = ctx.mats.screen(lab.texture, 1.0, 1.45);
     const h = 2.0;
-    const [px, pz] = toW(F, 7, -r.width / 2 - 1.2);
+    const [px, pz] = toW(F, 7, signSide * (r.width / 2 + 1.2));
     for (const k of [0, Math.PI]) {
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * lab.aspect, h), mat);
       plane.position.set(px, y + 5.0, pz);

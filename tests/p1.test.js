@@ -71,13 +71,13 @@ test('一期入口：≥4 个、朝向 ≥3 个方向、1 个主入口；内侧�
   }
 });
 
-test('一期共享车库：四组分离街道进出口坡度 ≤15%，两端接车道；B1↔B2 双向', () => {
+test('一期共享车库：六组分离街道进出口坡度 ≤15%，两端接车道；B1↔B2 双向', () => {
   const R = L.ramps.filter((r) => ['P1', 'H', 'A', 'WPG'].includes(r.building));
   const inR = R.filter((r) => r.type === 'street-in');
   const outR = R.filter((r) => r.type === 'street-out');
-  assert.equal(inR.length, 4);
-  assert.equal(outR.length, 4);
-  assert.equal(new Set(inR.map(r => r.quadrant)).size, 4);
+  assert.equal(inR.length, 6);
+  assert.equal(outR.length, 6);
+  assert.equal(new Set(inR.map(r => r.quadrant)).size, 6);
   const street = [...inR, ...outR];
   for (let i = 0; i < street.length; i++) for (const b of street.slice(i + 1))
     assert.ok(!convexOverlap(street[i].poly, b.poly), `${street[i].id}/${b.id} 坡道重叠`);

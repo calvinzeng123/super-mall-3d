@@ -215,6 +215,8 @@ export function buildNav(layout) {
     }
     for (const fixture of lv.expansion?.publicFixtures || [])
       polygonObstacle(F, frame(0, 0, 0), fixture);
+    // Ramp slabs that drop into a deck storey: guard lines leave the low end open.
+    for (const s of lv.navWalls || []) wall(F, s.x0, s.z0, s.x1, s.z1);
     for (const f of lv.features) {
       if (f.type === 'gates') {
         const n = Math.max(2, Math.round((f.z1 - f.z0) / 0.95));

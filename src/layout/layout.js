@@ -16,6 +16,7 @@ import { applySharedGarages } from './shared-garages.js';
 import { addTransitCenter } from './transit-center.js';
 import { buildExpandedP1Spec } from './p1-expansion-spec.js';
 import { applyP1Expansion } from './p1-expansion.js';
+import { applyP1VehicleAccess } from './p1-access.js';
 
 export function buildLayout({ expansion = true } = {}) {
   const site = buildSite();
@@ -52,7 +53,7 @@ export function buildLayout({ expansion = true } = {}) {
     extensions: hospitality.extensions,
   };
   applySharedGarages(layout);
-  if (expansion) applyP1Expansion(layout, picker);
+  if (expansion) { applyP1Expansion(layout, picker); applyP1VehicleAccess(layout); }
   addTransitCenter(layout.site, layout.extensions);
   return prepareRideableElevators(layout);
 }

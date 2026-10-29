@@ -39,21 +39,27 @@ test('一期共享地库扩大到整片一期与西停车场，塔楼区域只�
   assert.equal(L.levels.filter(l => l.building === 'WPG').length, 3);
 });
 
-test('四组共享地面进出坡道成对分离，原公寓与商场交叉坡道已删除', () => {
+test('六组共享地面进出坡道成对分离，原公寓与商场交叉坡道已删除', () => {
   assert.ok(!L.ramps.some(r => ['P1-IN', 'P1-OUT'].includes(r.id)));
   const ramps = L.ramps.filter(r => r.sharedGarage && r.type.startsWith('street'));
-  assert.equal(ramps.length, 8);
-  assert.equal(new Set(ramps.map(r => r.quadrant)).size, 4);
+  assert.equal(ramps.length, 12);
+  assert.equal(new Set(ramps.map(r => r.quadrant)).size, 6);
   const all = L.ramps.filter(r => r.type.startsWith('street'));
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++)
     assert.ok(!convexOverlap(all[i].poly, all[j].poly), `${all[i].id}/${all[j].id} intersect`);
   for (const r of all) {
-    assert.ok(L.site.trenches.some(p => p === r.poly), `${r.id} does not share its excavation with the surface`);
+    // Covered ramps open only until the surface is 3.05 m below grade.
+    const opening = r.cover ? r.groundOpening : r.poly;
+    assert.ok(L.site.trenches.some(p => p === opening), `${r.id} does not share its excavation with the surface`);
+    if (r.cover) {
+      assert.ok(r.cover.open < r.cover.length && Math.abs(r.cover.open / r.cover.length * 8.4 - 3.05) < 1e-9, `${r.id} open length`);
+      assert.ok(polySamples(opening, 1, .05).every(q => pointInPoly(q, r.poly)), `${r.id} trench leaves the lane`);
+    }
     assert.ok(Math.abs(r.to.y - r.from.y) / Math.hypot(r.to.x - r.from.x, r.to.z - r.from.z) <= .15001);
   }
 });
 
-test('全园32条车库坡道中线和两侧均连续双向步行，所有层间坡道有真洞口', () => {
+test('全园36条车库坡道中线和两侧均连续双向步行，所有层间坡道有真洞口', () => {
   let count = 0;
   for (const r of L.ramps) {
     for (const reverse of [false, true]) for (const offset of [-1.8, 0, 1.8]) {
