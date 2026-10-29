@@ -7,7 +7,6 @@ Writes masterplan.svg and parking-plan.svg next to this file.
 """
 import html
 import json
-import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -79,6 +78,8 @@ class Svg:
                 '<path d="M0 0V10" stroke="#c8ccc5" stroke-width="1.4"/></pattern>',
                 '<pattern id="steps" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#e6dccb"/>'
                 '<path d="M0 4H8" stroke="#c3b59c" stroke-width="2"/></pattern>',
+                '<pattern id="roof" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="9" height="9" fill="#c99272"/>'
+                '<path d="M0 9L9 0" stroke="#a86f50" stroke-width="1.6"/></pattern>',
                 '<filter id="shadow"><feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#1c3528" flood-opacity=".14"/></filter>']
         for color in (NEW, OLD, '#2f6fd6', '#8a8f86'):
             c = color.strip('#')
@@ -105,13 +106,25 @@ def ramp_arrow(g, ramp, color):
     g.arrow((ax + (bx - ax) * k0, az + (bz - az) * k0), (ax + (bx - ax) * k1, az + (bz - az) * k1), color, 3.2)
 
 
+SQ = DS['squareRoof']
+SQ_W, SQ_D = round(SQ['rect']['x1'] - SQ['rect']['x0']), round(SQ['rect']['z1'] - SQ['rect']['z0'])
+RAMP = {r['id']: r for r in PR['garage']}
+LOOP = DS['hotelLoop']
+
+
+def rounded_rect(g, r, rad, fill, stroke='none', w=1):
+    g.rect(r, fill, stroke, w, rad)
+
+
 def masterplan():
     g = Svg(1920, 1500, 4.0, 1300, 1372)
     g.add('<rect width="1920" height="1500" fill="#f5f2e9"/>')
     g.text(80, 70, 'YUNLAN  /  PHASE 01  /  CONCEPT A · FIDELITY', 18, '#7c826f', 600, extra='letter-spacing="4"')
     g.text(80, 134, '云澜汇一期 · 概念 A 对图深化方案', 50, INK, 650)
     g.text(80, 178, '以已批准效果图为唯一外观依据：平面位置保持，补齐穹顶、天幕、屋顶景观与车行出入口', 22, '#687568')
-    stats = [('4 → 6 对', '共享地库对外坡道'), ('3 → 6 口', '西侧地面停车场车行口'), ('Ø60m · 54m', '06 光穹直径 / 顶高'), ('76×36m', '01 方庭玻璃天幕')]
+    dome = DS['dome']
+    stats = [('4 → 6 对', '共享地库对外坡道'), ('3 → 6 口', '西侧地面停车场车行口'),
+             (f"Ø{dome['radius'] * 2:.0f}m · {dome['apex']:.0f}m", '06 光穹直径 / 顶高'), (f'{SQ_W}×{SQ_D}m', '01 方庭玻璃天幕')]
     for i, (n, t) in enumerate(stats):
         g.text(80 + i * 330, 238, n, 32, INK, 650)
         g.text(80 + i * 330, 266, t, 16, '#7a8276')
@@ -122,12 +135,8 @@ def masterplan():
         g.poly(r['poly'], '#d6dbd6')
     g.rect(D['plot'], '#e6e9df')
     # Tree belts
-    for belt in DS['treeBelts']:
-        (x0, z0), (x1, z1), step = belt['from'], belt['to'], belt['step']
-        n = int(math.hypot(x1 - x0, z1 - z0) // step)
-        for i in range(n + 1):
-            t = i / n
-            g.circle(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, 1.6, '#7f9f78', '#fffdf7', 1)
+    for x, z in DS['trees']:
+        g.circle(x, z, 1.6, '#7f9f78', '#fffdf7', 1)
     # Ground floor footprints
     for b in D['buildings']:
         fill = ZONE.get(b['id'], '#cfc6b3')
@@ -144,22 +153,16 @@ def masterplan():
     for x, z in dome['columns']:
         g.circle(x, z, .9, '#3c6f65')
     g.poly(DS['canyon']['poly'], 'url(#glass)', '#3c6f65', 1.6, 'stroke-dasharray="6 4"')
+    for a in DS['annexRoofs']:
+        fill = 'url(#glass)' if a['type'] == 'glass-pavilion' else 'url(#roof)'
+        g.rect(a['rect'], fill, '#7a4e34', 1.4, 0, 'stroke-dasharray="5 4"')
     # Courtyards, SE steps, hotel loop
     for c in DS['courtyards']:
         g.circle(c['x'], c['z'], c['r'], '#a9cdd8', '#ffffff', 3)
         g.circle(c['x'], c['z'], 1.2, '#ffffff', '#6d97a3', 1.5)
-    (ax, az), (bx, bz) = DS['seSteps']['along']
-    nx, nz = (az - bz), (bx - ax)
-    ln = math.hypot(nx, nz)
-    nx, nz = nx / ln, nz / ln
-    off = DS['seSteps']['offset']
-    p = [(ax + nx * 2, az + nz * 2), (bx + nx * 2, bz + nz * 2), (bx + nx * off, bz + nz * off), (ax + nx * off, az + nz * off)]
-    g.poly(p, 'url(#steps)', '#b39b72', 1.5)
-    loop = DS['hotelLoop']
-    rx, rz = loop['planter']
-    road = loop['road']
-    g.add(f'<ellipse cx="{g.X(loop["cx"]):.1f}" cy="{g.Y(loop["cz"]):.1f}" rx="{(rx+road)*g.s:.1f}" ry="{(rz+road)*g.s:.1f}" fill="#9aa09d" stroke="#fffdf7" stroke-width="2"/>')
-    g.add(f'<ellipse cx="{g.X(loop["cx"]):.1f}" cy="{g.Y(loop["cz"]):.1f}" rx="{rx*g.s:.1f}" ry="{rz*g.s:.1f}" fill="#87a77b" stroke="#fffdf7" stroke-width="2"/>')
+    g.poly(DS['seSteps']['poly'], 'url(#steps)', '#b39b72', 1.5)
+    rounded_rect(g, LOOP['rect'], LOOP['corner'], '#9aa09d', '#fffdf7', 2)
+    g.poly(LOOP['planterPoly'], '#87a77b', '#fffdf7', 2)
     # Bridges
     for b in D['bridges']:
         for q in b['polys']:
@@ -200,21 +203,23 @@ def masterplan():
     g.text(g.X(-50), g.Y(-27) + 4, '东南大台阶', 14, '#8a6f4b', 600, 'middle')
     g.text(g.X(-108.5), g.Y(-24) + 2, '下沉剧场', 14, '#8a6f4b', 600, 'middle')
     # New ramp call-outs
-    g.text(g.X(-196), g.Y(-256) - 10, '新增 方庭北口 · 入/出 2×5.5m · 60m · 14%', 15, NEW, 700, 'middle')
+    n, e = RAMP['P1-N-IN'], RAMP['P1-E-IN']
+    g.text(g.X(-196), g.Y(-256) - 10, f"新增 方庭北口 · 入/出 2×{n['width']}m · {n['length']:.0f}m · {n['slope']:.0f}%", 15, NEW, 700, 'middle')
     g.add(f'<path d="M{g.X(-27.5):.1f},{g.Y(-80):.1f} L{g.X(-52):.1f},{g.Y(-80):.1f}" stroke="{NEW}" stroke-width="1.6"/>')
     g.text(g.X(-53), g.Y(-80) - 4, '新增 星湾东口', 15, NEW, 700, 'end')
-    g.text(g.X(-53), g.Y(-80) + 15, '入/出 2×5m · 56m · 15%', 13, NEW, 600, 'end')
+    g.text(g.X(-53), g.Y(-80) + 15, f"入/出 2×{e['width']}m · {e['length']:.0f}m · {e['slope']:.0f}%", 13, NEW, 600, 'end')
     # Right panel
     x0 = 1350
     g.text(x0, 340, '对图要点', 28, INK, 650)
     notes = [
         ('平面', '位置、Y 形骨架、附楼与连廊已与效果图吻合，保持不动'),
-        ('06', '圆厅升起 Ø60m 网格玻璃穹顶，12 柱，下方 4m 环形露台'),
-        ('01', '方庭中心 76×36m 四坡玻璃天幕，檐口 40.6m，脊 45.2m'),
-        ('屋顶', '橙色木板屋面改浅色石材 + 木平台 + 花池 + 伞座外摆'),
-        ('立面', '主楼 3F 以上铜色竖向格栅与暖光玻璃，翼端巨幅画屏'),
-        ('景观', '北庭/西庭喷泉雕塑、东南大台阶、沿街双排树'),
-        ('酒店', '29 个地面车位并入地库，前场改落客环岛'),
+        ('06', f"圆厅升起 Ø{dome['radius'] * 2:.0f}m 网格玻璃穹顶，{len(dome['columns'])} 柱，顶高 {dome['apex']}m"),
+        ('01', f"方庭中心 {SQ_W}×{SQ_D}m 四坡玻璃天幕，檐口 {SQ['eave']}m，脊 {SQ['ridge']}m"),
+        ('屋顶', f"浅色石材屋面 + {DS['roofGarden']['planters']} 处花池 + {DS['roofGarden']['cafes']} 组伞座外摆"),
+        ('附楼', '02 玻璃亭 · 03 木构棚架 · 04 屋顶花园 · 05 坡屋顶'),
+        ('立面', '主楼 3F 以上铜木竖向格栅与暖光玻璃，三块画屏'),
+        ('景观', f"两处喷泉雕塑、东南大台阶、沿街行道树 {len(DS['trees'])} 株"),
+        ('酒店', f"前场改落客环岛，地面车位 {LOOP['stallsBefore']} → {LOOP['stallsAfter']}"),
         ('车行', '新增 2 对地库坡道 + 西侧停车场 3 个车行口'),
     ]
     y = 384
@@ -228,7 +233,7 @@ def masterplan():
     y += 30
     legend = [
         ('#d8c6a3', '主楼 1F 轮廓（现状）'), ('#b86f50', '附楼（现状）'), ('url(#glass)', '天幕 / 采光峡谷（新增）'),
-        ('url(#dome)', '光穹（新增）'), (NEW, '新增坡道敞开段'), ('#f0b9a5', '新增坡道暗埋段'),
+        ('url(#dome)', '光穹（新增）'), ('url(#roof)', '坡屋顶 / 棚架（新增）'), (NEW, '新增坡道敞开段'), ('#f0b9a5', '新增坡道暗埋段'),
         ('#a8b3bb', '既有对外坡道'), ('#5f7584', '既有地库电梯/楼梯厅'), ('#a9cdd8', '喷泉水院（新增）'),
     ]
     for fill, t in legend:
@@ -312,8 +317,9 @@ def parking():
         anchor = 'start' if dx >= 0 else 'end'
         g.text(tx, yy + dy + 2, title, 16, color, 700, anchor)
         g.text(tx, yy + dy + 22, sub, 13, '#4c5a52', 500, anchor)
-    callout(-196, -249, -30, -60, '① 方庭北口（新增）', '北外环右进右出 · 坡长 60m · 14% · 落 P1-B1')
-    callout(-21.75, -66, -40, 290, '② 星湾东口（新增）', '星湾路右进右出 · 56m · 15% · 距大道红线 70.5m')
+    n, e = RAMP['P1-N-IN'], RAMP['P1-E-IN']
+    callout(-196, -249, -30, -60, '① 方庭北口（新增）', f"北外环右进右出 · 坡长 {n['length']:.0f}m · {n['slope']:.0f}% · 落 P1-B1")
+    callout(-21.75, -66, -40, 290, '② 星湾东口（新增）', f"星湾路右进右出 · {e['length']:.0f}m · {e['slope']:.0f}% · 距大道红线 {-20 - e['from'][1]:.1f}m")
     callout(-422, -251, -20, -64, '③ 北环西口（新增）', '西侧停车场 · 7m 双向')
     callout(-375, -251, 30, -64, '④ 北环东口（新增）', '距西外环 77m · 7m 双向')
     callout(-375, -25, 34, 116, '⑤ 大道口（新增）', '云澜大道西延段右进右出 · 距西外环 76m')
@@ -338,14 +344,17 @@ def parking():
     y += 34
     g.text(x0, y, '* 南侧经西侧停车场大道口进入；一期地块南沿', 13, MUTED)
     g.text(x0, y + 20, '  被美食层、下沉剧场与地铁通道占用，不设坡道', 13, MUTED)
-    stalls = D['stalls']
+    stalls, after = D['stalls'], D['stallsAfter']
     y += 66
-    g.text(x0, y, '车位（现状）', 20, INK, 650)
+    g.text(x0, y, '车位', 20, INK, 650)
+    g.text(x0 + 250, y, '现状', 14, MUTED, 600, 'end')
+    g.text(x0 + 340, y, '本方案', 14, NEW, 700, 'end')
     for name, key in (('一期 B1', 'P1-B1'), ('一期 B2', 'P1-B2'), ('西库 B1', 'WPG-B1'), ('西库 B2', 'WPG-B2'),
-                      ('西侧地面', 'westSurface'), ('酒店地面 → 并入地库', 'hotelSurface')):
+                      ('西侧地面', 'westSurface'), ('酒店地面（落客环岛）', 'hotelSurface')):
         y += 30
         g.text(x0, y, name, 15, '#3d4a42')
-        g.text(x0 + 330, y, f'{stalls[key]:,}', 15, INK, 650, 'end')
+        g.text(x0 + 250, y, f'{stalls[key]:,}', 15, INK, 650, 'end')
+        g.text(x0 + 340, y, f'{after[key]:,}', 15, NEW if after[key] != stalls[key] else INK, 700, 'end')
     y += 52
     g.text(x0, y, '控制规则', 20, INK, 650)
     for t in ('车行口距道路交叉口红线 ≥ 70m', '距人行横道 ≥ 5m · 距地铁口/公交站 ≥ 15m', '坡度 ≤ 15%，敞开段至板下 3.05m',
