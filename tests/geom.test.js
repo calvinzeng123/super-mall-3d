@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  frame, toW, toL, lrectPoly, lseg, rect, rectPoly, convexOverlap, polysOverlap, clipConvex, circlePoly, polyArea, polysConnect, polySamples, pointInPoly,
+  frame, toW, toL, lrectPoly, lseg, rect, rectPoly, convexOverlap, polysOverlap, clipConvex, circlePoly, ellipsePoly, boundsPoly, polyArea, polysConnect, polySamples, pointInPoly,
 } from '../src/layout/geom.js';
 import { hubOutline } from '../src/layout/hub.js';
 
@@ -13,6 +13,13 @@ test('frame：局部 ↔ 世界互逆，门面法线随 frame 旋转', () => {
   assert.ok(Math.abs(u - 3) < 1e-9 && Math.abs(v - 4) < 1e-9);
   const s = lseg(frame(0, 0, 90), { x0: 0, z0: 7, x1: 10, z1: 7, side: 'N' });
   assert.ok(Math.abs(s.nx - 1) < 1e-9 && Math.abs(s.nz) < 1e-9, '90° frame 的 N（−v）应指向 +x');
+});
+
+test('椭圆与外包矩形：椭圆面积≈πab、首顶点在 +x；外包矩形四周外扩 pad', () => {
+  const e = ellipsePoly(10, -5, 4, 2, 72);
+  assert.ok(Math.abs(Math.abs(polyArea(e)) - Math.PI * 8) < .05);
+  assert.deepEqual(e[0], [14, -5]);
+  assert.deepEqual(boundsPoly([[0, 0], [3, 1], [1, 4]], .5), rectPoly(rect(-.5, -.5, 3.5, 4.5)));
 });
 
 test('凹多边形相交：U 形缺口里的方块不算重叠（SAT 会误判），压到翼、整块落在翼内都算，相接不算', () => {

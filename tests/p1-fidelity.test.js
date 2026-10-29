@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { L, onSlab } from './helpers.js';
+import { L, onSlab, walkNav, standable as standableOn } from './helpers.js';
 import { buildLayout } from '../src/layout/layout.js';
-import { buildNav, clear, step } from '../src/layout/nav.js';
-import { ART_DOME, SQUARE_CANOPY, BILLBOARDS, COURT_FOUNTAINS, CREATIVE_ROOFS, domeColumns, canopyColumns } from '../src/layout/p1-fidelity.js';
+import { buildNav } from '../src/layout/nav.js';
+import { ART_DOME, SQUARE_CANOPY, BILLBOARDS, domeColumns, canopyColumns } from '../src/layout/p1-fidelity.js';
+import { CREATIVE_ROOFS } from '../src/layout/p1-roofscape.js';
+import { COURT_FOUNTAINS } from '../src/layout/p1-landscape.js';
 import { lrectPoly, pointInPoly, convexOverlap, polysOverlap, rect, rectPoly, toW, polySamples, polyArea, polyBounds } from '../src/layout/geom.js';
 
 const rf = L.levels.find(l => l.id === 'P1-RF'), nav = buildNav(L);
@@ -11,14 +13,8 @@ const feature = t => rf.features.find(f => f.type === t);
 const solidRooms = rf.rooms.flatMap(r => r.polys);
 const column = ([x, z], r) => rectPoly(rect(x - r - .2, z - r - .2, x + r + .2, z + r + .2));
 const level = id => L.levels.find(l => l.id === id);
-const standable = (floor, x, z) => clear(nav, { floor, x, z, y: floor === 'ground' ? 0 : level(floor).elev, slope: null });
-function walk(from, to, floor = 'P1-RF') {
-  let s = { floor, x: from[0], z: from[1], y: floor === 'ground' ? 0 : level(floor).elev, slope: null };
-  assert.ok(clear(nav, s), `${from} not standable`);
-  const n = Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) / .1);
-  for (let i = 0; i < n; i++) s = step(nav, s, (to[0] - from[0]) / n, (to[1] - from[1]) / n, 0);
-  return s;
-}
+const standable = (floor, x, z) => standableOn(nav, floor, x, z);
+const walk = (from, to, floor = 'P1-RF') => walkNav(nav, floor, from, to);
 
 test('06 光穹：12 柱立在圆厅屋面、避开扶梯口与玻璃梯，四翼轴线从柱间进入，顶高低于酒店', () => {
   const d = feature('art-dome');
@@ -81,6 +77,16 @@ test('FPS 布局不含效果图改造：无光穹、天幕、峡谷、屋顶家�
   const all = new Set(compact.levels.flatMap(l => l.features.map(f => f.type)));
   for (const t of ['planter-bed', 'cafe-cluster', 'glass-pavilion', 'timber-lattice', 'creative-roof']) assert.ok(!all.has(t), `FPS 出现 ${t}`);
   assert.equal(compact.extensions.surfaceParking.find(l => l.id === 'hotel-shared-parking').stalls.length, 29);
+});
+
+test('fidelity:false 给出方案前的完整探索：一期扩建保留，新车行口、屋面造型和景观都不在', () => {
+  const before = buildLayout({ fidelity: false });
+  assert.equal(before.fidelity, undefined);
+  assert.ok(before.levels.some(l => l.expansion), '一期扩建应保留');
+  assert.ok(!before.ramps.some(r => /^P1-[NE]-/.test(r.id)));
+  assert.equal(before.site.westParking.gates.length, 3);
+  assert.ok(before.levels.find(l => l.id === 'P1-RF').features.some(f => f.type === 'ferris'));
+  assert.equal(before.extensions.surfaceParking.find(l => l.id === 'hotel-shared-parking').stalls.length, 29);
 });
 
 test('屋面改浅色石材：花池与咖啡座只放在真实屋面上，避开核心筒、天窗、光穹柱环和天幕，实体即导航障碍', () => {

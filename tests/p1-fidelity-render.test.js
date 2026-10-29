@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { L } from './helpers.js';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { BatchSet } from '../src/render/batch.js';
-import { buildP1FidelityRoof } from '../src/render/build/p1-fidelity.js';
+import { buildP1Fidelity } from '../src/render/build/p1-fidelity.js';
 
 // Posters paint on a canvas; under Node a no-op 2D context is enough.
 const paint = new Proxy({}, {
@@ -20,7 +20,7 @@ function render(layout) {
   }]));
   const ctx = { layout, levels, site: { group: new THREE.Group(), batch: new BatchSet(materials) },
     mats: { base: materials, sign: () => new THREE.MeshBasicMaterial(), onNight: () => {} } };
-  buildP1FidelityRoof(ctx);
+  buildP1Fidelity(ctx);
   for (const v of Object.values(levels)) { v.batch.flush(v.base); v.facadeBatch.flush(v.facade); }
   ctx.site.batch.flush(ctx.site.group);
   for (const g of [ctx.site.group, ...Object.values(levels).flatMap(v => [v.base, v.facade])]) g.updateMatrixWorld(true);

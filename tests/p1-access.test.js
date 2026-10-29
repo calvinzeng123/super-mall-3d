@@ -1,21 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { L } from './helpers.js';
+import { L, walkNav } from './helpers.js';
 import { buildLayout } from '../src/layout/layout.js';
-import { buildNav, clear, step } from '../src/layout/nav.js';
+import { buildNav } from '../src/layout/nav.js';
 import { P1_GARAGE_RAMPS, WEST_LOT_GATES } from '../src/layout/p1-access.js';
 import { convexOverlap, pointInPoly, polySamples, lrectPoly, rect } from '../src/layout/geom.js';
 
 const nav = buildNav(L), old = buildLayout({ expansion: false });
 const deck = L.levels.find(l => l.id === 'P1-B1');
 const ramps = P1_GARAGE_RAMPS.map(d => L.ramps.find(r => r.id === d.id));
-function walk(floor, from, to) {
-  let s = { floor, x: from[0], z: from[1], y: floor === 'ground' ? 0 : L.levels.find(l => l.id === floor).elev, slope: null };
-  assert.ok(clear(nav, s), `${floor} ${from} not standable`);
-  const n = Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) / .1);
-  for (let i = 0; i < n; i++) s = step(nav, s, (to[0] - from[0]) / n, (to[1] - from[1]) / n, 0);
-  return s;
-}
+const walk = (floor, from, to) => walkNav(nav, floor, from, to);
 
 test('一期新增方庭北口、星湾东口两对坡道只在完整探索中出现，直落 P1-B1，坡度 ≤15%', () => {
   assert.equal(ramps.filter(Boolean).length, 4);

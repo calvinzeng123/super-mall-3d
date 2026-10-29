@@ -19,7 +19,10 @@ import { applyP1Expansion } from './p1-expansion.js';
 import { applyP1VehicleAccess } from './p1-access.js';
 import { applyP1Fidelity } from './p1-fidelity.js';
 
-export function buildLayout({ expansion = true } = {}) {
+/** expansion: the full phase-one tour (false builds the compact FPS authoring
+ * layout). fidelity: the concept A scheme on top of it — extra vehicle access,
+ * roof forms, roofscape and landscape; false gives the tour before the scheme. */
+export function buildLayout({ expansion = true, fidelity = expansion } = {}) {
   const site = buildSite();
   const picker = new BrandPicker(2026);
   const originalP1 = buildMall(P1, site, picker);
@@ -54,7 +57,8 @@ export function buildLayout({ expansion = true } = {}) {
     extensions: hospitality.extensions,
   };
   applySharedGarages(layout);
-  if (expansion) { applyP1Expansion(layout, picker); applyP1VehicleAccess(layout); applyP1Fidelity(layout); }
+  if (expansion) applyP1Expansion(layout, picker);
+  if (expansion && fidelity) { applyP1VehicleAccess(layout); applyP1Fidelity(layout); }
   addTransitCenter(layout.site, layout.extensions);
   return prepareRideableElevators(layout);
 }

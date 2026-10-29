@@ -310,6 +310,17 @@ export function circlePoly(cx, cz, r, n = 120, a0 = 0) {
   return pts;
 }
 
+/** 椭圆（n 边形近似），半轴 a（x 向）、b（z 向），首顶点在 +x */
+export function ellipsePoly(cx, cz, a, b, n = 36) {
+  return Array.from({ length: n }, (_, k) => [cx + a * Math.cos(k * 2 * Math.PI / n), cz + b * Math.sin(k * 2 * Math.PI / n)]);
+}
+
+/** 多边形的轴对齐外包矩形，四周外扩 pad，返回四点多边形 */
+export function boundsPoly(poly, pad = 0) {
+  const b = polyBounds(poly);
+  return rectPoly(rect(b.x0 - pad, b.z0 - pad, b.x1 + pad, b.z1 + pad));
+}
+
 /** 多边形内部网格采样（离边 ≥ inset），外加向形心内缩的顶点 */
 export function polySamples(poly, step = 1.5, inset = 0.05) {
   const b = polyBounds(poly);
