@@ -63,6 +63,8 @@ test('坡脚接 B1 到达车道；坡板进入 B1 层高后的投影内不留车
     assert.ok(!deck.parking.stalls.some(s => convexOverlap(s.poly, under)), `${r.id} 板下仍有车位`);
     assert.ok(!deck.walk.some(w => w.kind === 'aisle' && polySamples(under, 1.5, .3).some(p => pointInPoly(p, w.poly))), `${r.id} 板下仍画车道`);
   }
+  for (const w of deck.walk.filter(w => /^P1-[NE]-arrival/.test(w.id)))
+    for (const room of deck.rooms) assert.ok(!room.polys.some(p => convexOverlap(p, w.poly)), `${w.id} 压 ${room.id}`);
   // 北口两坡板在 B1 的南侧护线：从南侧车道往北走会被挡在板外。
   const s = walk('P1-B1', [-210, -238], [-210, -250]);
   assert.ok(s.z > -243.9, `从侧面钻进北口坡板下 ${s.z}`);

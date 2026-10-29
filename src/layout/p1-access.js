@@ -18,10 +18,12 @@ export const P1_GARAGE_RAMPS = [
 ];
 // Right-in/right-out aprons from the street edge to both lane heads.
 const APRONS = [rect(-167, -256, -155, -244), rect(-27.3, -97.5, -10, -90.5)];
-// Deck lanes joining each ramp foot to the existing aisle grid.
+// Deck lanes joining each ramp foot to the existing aisle grid. The east foot
+// turns west along the deck edge and meets the z=-39 aisle short of the SE stair core.
 const ARRIVALS = [
   { id: 'P1-N-arrival', rect: rect(-240, -255.5, -226, -242.5) },
-  { id: 'P1-E-arrival', rect: rect(-64, -34.5, -16, -29) },
+  { id: 'P1-E-arrival', rect: rect(-27.3, -34.5, -16, -29) },
+  { id: 'P1-E-arrival-west', rect: rect(-56, -36, -27.3, -29) },
 ];
 
 export const WEST_LOT_GATES = [
