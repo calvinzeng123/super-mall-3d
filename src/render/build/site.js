@@ -390,16 +390,18 @@ function plazaFeatures(ctx, B) {
   if (ctx.bById.P2) starBayPlaza(ctx, B);
   const p1 = ctx.bById.P1;
   if (!p1) return;
-  // 喷泉（东南主入口与路口之间，偏离天桥轴线）
-  const f = { x: -30, z: -52, r: 6 };
-  B.get('extSatin').cyl(f.x, y, f.z, f.r, 0.55, COLORS.stoneDark, 24);
-  B.get('water').cyl(f.x, y + 0.05, f.z, f.r - 0.35, 0.45, '#ffffff', 24);
-  B.get('extSatin').cyl(f.x, y, f.z, 1.2, 1.2, COLORS.stone, 16);
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    B.get('glass').cyl(f.x + Math.cos(a) * 3.2, y + 0.5, f.z + Math.sin(a) * 3.2, 0.08, 1.6 + (i % 3) * 0.5, '#ffffff', 6);
+  // 喷泉（东南主入口与路口之间，偏离天桥轴线）；效果图版这里是大台阶与树阵。
+  if (!ctx.layout.fidelity) {
+    const f = { x: -30, z: -52, r: 6 };
+    B.get('extSatin').cyl(f.x, y, f.z, f.r, 0.55, COLORS.stoneDark, 24);
+    B.get('water').cyl(f.x, y + 0.05, f.z, f.r - 0.35, 0.45, '#ffffff', 24);
+    B.get('extSatin').cyl(f.x, y, f.z, 1.2, 1.2, COLORS.stone, 16);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      B.get('glass').cyl(f.x + Math.cos(a) * 3.2, y + 0.5, f.z + Math.sin(a) * 3.2, 0.08, 1.6 + (i % 3) * 0.5, '#ffffff', 6);
+    }
+    B.get('glass').cyl(f.x, y + 1.2, f.z, 0.18, 3.2, '#ffffff', 8);
   }
-  B.get('glass').cyl(f.x, y + 1.2, f.z, 0.18, 3.2, '#ffffff', 8);
   ipMascot(B, -52, y, -30, 0.75, 0.6);
   // 立牌
   const m = { x: -24, z: -40 };
@@ -417,7 +419,10 @@ function plazaFeatures(ctx, B) {
   plane.rotation.y = Math.atan2(Math.cos(Math.PI / 4), Math.sin(Math.PI / 4));
   ctx.site.group.add(plane);
   // 花坛与长椅
-  for (const [x, z] of [[-40, -64], [-64, -40], [-28, -70], [-70, -28]]) planter(B, x - 3, z - 2, x + 3, z + 2, y, x * 7 + z);
+  // 坡道敞开段上不放花坛（星湾东口的坡槽经过 (-28,-70)）。
+  const overTrench = poly => ctx.layout.site.trenches.some(t => convexOverlap(t, poly));
+  for (const [x, z] of [[-40, -64], [-64, -40], [-28, -70], [-70, -28]])
+    if (!overTrench(rectPoly(rect(x - 3, z - 2, x + 3, z + 2)))) planter(B, x - 3, z - 2, x + 3, z + 2, y, x * 7 + z);
   for (const [x, z, r] of [[-36, -60, 0.8], [-60, -36, 2.4], [-24, -60, 0.8]]) bench(B, x, y, z, r);
   // 卸货区：北翼末端坡道旁
   const N = p1.wings.find((w) => w.id === 'N');

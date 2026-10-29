@@ -12,7 +12,7 @@ import { buildTowerStairGeometry, buildTowerStairInstances } from '../src/render
 import * as THREE from 'three';
 
 const fps = buildPlayableLayout({ mode: 'fps' }), nav = buildNav(fps);
-const tour = buildPlayableLayout();
+const tour = buildPlayableLayout(), compact = buildLayout({ expansion: false });
 const state = (floor, x, z) => ({ floor, x, z, y: nav.floors.get(floor).y, slope: null });
 
 test('only FPS physically trims the campus to P1, hotel and apartments', () => {
@@ -23,8 +23,9 @@ test('only FPS physically trims the campus to P1, hotel and apartments', () => {
     assert.deepEqual(l.site.bounds, PLAYABLE_BOUNDS);
     assert.ok(l.levels.every(v => ['P1', 'H', 'A'].includes(v.building)));
     assert.ok(l.site.plots.every(p => p.id === 'P1'));
+    // FPS is cut from the compact authoring layout; the tour's hotel forecourt has a drop-off loop.
     assert.equal(l.extensions.surfaceParking.reduce((n, p) => n + p.stalls.length, 0),
-      tour.extensions.surfaceParking.filter(p=>p.id==='hotel-shared-parking').reduce((n,p)=>n+p.stalls.length,0));
+      compact.extensions.surfaceParking.filter(p=>p.id==='hotel-shared-parking').reduce((n,p)=>n+p.stalls.length,0));
     assert.equal(l.extensions.connections.some(c => /P2|P3|R[1-4]|WPG|M-B/.test(`${c.from} ${c.to}`)), false);
     assert.ok(l.site.roads.length < 5);
   }

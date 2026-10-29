@@ -82,7 +82,7 @@ export class MaterialLib {
     if (this.floors[kind]) return this.floors[kind];
     const def = FLOOR_SURFACES[kind];
     const asset = def && this.surfaces[def.id];
-    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'rubber', 'cobble'].includes(kind);
+    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'roof-stone', 'rubber', 'cobble'].includes(kind);
     if (asset) {
       const m = metricFloor(new THREE.MeshStandardMaterial({
         ...pbrOptions(asset, kind === 'grass' ? 0.7 : 0.32), color: def.tint || '#ffffff',

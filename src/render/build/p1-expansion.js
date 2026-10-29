@@ -9,7 +9,7 @@ import { BatchSet } from '../batch.js';
 import { buildMallFlightGeometry } from './mall-stairs.js';
 
 const PALETTES = {
-  main: { stone: '#e5ded0', trim: '#9c825c', dark: '#5a5e56', fin: '#c8b99e', glow: '#ffe7bb', material: 'facadeStone' },
+  main: { stone: '#e9e2d4', trim: '#8f7553', dark: '#4f4a42', fin: '#a98a62', glow: '#ffe2b2', material: 'facadeStone' },
   culture: { stone: '#b97554', trim: '#80513e', dark: '#655449', fin: '#d69a73', glow: '#ffdfab', material: 'facadeBrick' },
   dining: { stone: '#e1cdb3', trim: '#8d6950', dark: '#63594b', fin: '#c7a67b', glow: '#ffdda3', material: 'facadeStone' },
   garden: { stone: '#a3b2a0', trim: '#596d60', dark: '#425c50', fin: '#7c9b88', glow: '#e5f0ce', material: 'facadeConcrete' },
@@ -89,6 +89,11 @@ function facade(ctx, lv) {
       } else if (zone === 'creative') {
         put(a + .12, a + .44, y + .2, y + h - .1, .32, .22, p.material, p.fin);
         put(a + .10, b - .08, y + h - .35, y + h - .25, .72, .27, p.material, p.fin);
+      } else if (zone === 'main' && Math.floor(i / 3) % 4 === 1) {
+        // Bronze and timber louvre screens, one bay group in four, as in the concept aerial.
+        // They stay within 0.4 m of the glass so the LED screen and posters hang in front.
+        for (let x = a + .3; x < b - .1; x += .6) put(x - .06, x + .06, y + .1, y + h - .08, .3, .22, 'facadeTimber', (lv.expansion.storey || 0) % 2 ? '#a8794a' : '#93683f');
+        put(a, b, y + h - .32, y + h - .1, .32, .22, 'extMetal', p.trim);
       } else {
         put(a + .10, a + (i % 3 ? .25 : .48), y + .25, y + h - .12, .42, .25, p.material, p.stone);
         if (zone === 'dining' && bay > 2.5) {
@@ -203,7 +208,8 @@ function atriumRails(ctx, lv) {
 }
 
 function creativeRoof(ctx, lv) {
-  if (zoneOf(lv) !== 'creative' || lv.kind !== 'roof') return;
+  // The concept-fidelity tour draws full pitched roofs instead (p1-fidelity.js).
+  if (zoneOf(lv) !== 'creative' || lv.kind !== 'roof' || lv.features.some(f => f.type === 'creative-roof')) return;
   const B = ctx.levels[lv.id].shellBatch, p = paletteOf(lv), r = polyBounds(lv.outline);
   const width = Math.min(8, r.x1 - r.x0 - 6), depth = Math.min(3.3, r.z1 - r.z0 - 6), y = lv.elev;
   if (width < 3 || depth < 2) return;

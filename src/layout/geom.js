@@ -263,6 +263,16 @@ export function convexOverlap(a, b, eps = 0.02) {
   return true;
 }
 
+/** 任意（含凹）多边形是否相交：边真正相交，或一方包含另一方（相接不算） */
+export function polysOverlap(a, b) {
+  const side = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+  for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) {
+    const p = a[i], q = a[(i + 1) % a.length], r = b[j], t = b[(j + 1) % b.length];
+    if (side(r, t, p) * side(r, t, q) < 0 && side(p, q, r) * side(p, q, t) < 0) return true;
+  }
+  return pointInPoly(a[0], b) || pointInPoly(b[0], a);
+}
+
 function lineHit(P, Q, A, B) {
   const r = [Q[0] - P[0], Q[1] - P[1]], s = [B[0] - A[0], B[1] - A[1]];
   const den = r[0] * s[1] - r[1] * s[0];
