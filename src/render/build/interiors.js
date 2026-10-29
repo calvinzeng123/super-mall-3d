@@ -339,7 +339,7 @@ function furnish(L, atlas, lv, u, rand) {
       // 后厨出菜口与传菜台，餐区能看到碟盘、保温灯及制作设备。
       P('metal', mid, D - 1.0, y0 + .52, W - 1.2, .9, 1.04, '#b5bfba');
       P('stone', mid, D - 1.0, y0 + 1.07, W - 1.1, 1.0, .07, '#ffffff');
-      P('matte', mid, D - .3, y0 + (H - 1) / 2 + .2, W - .6, .4, H - 1, '#e8e4dc');
+      P('slat', mid, D - .3, y0 + (H - 1) / 2 + .2, W - .6, .4, H - 1, '#d9b48a');
       P('metal', mid, D - .8, y0 + 2.15, W - 1.3, .72, .09, '#bec4bd');
       for (let k = 0; k < Math.min(5, Math.floor(W / 1.5)); k++) {
         const a = u0 + 1.3 + k * (W - 2.6) / Math.max(1, Math.min(5, Math.floor(W / 1.5)) - 1);

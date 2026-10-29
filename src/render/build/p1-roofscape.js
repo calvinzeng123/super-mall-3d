@@ -46,15 +46,15 @@ export function buildP1Roofscape(ctx, L, lv) {
 function glassPavilion(B, f, y0) {
   const r = f.rect, h = f.height, top = y0 + h, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
   B.get('facadeTimber').box(cx, y0 + .06, cz, w - .2, .12, d - .2, '#c2a27a');
-  for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]]) B.get('extMetal').box(x, y0 + h / 2, z, .24, h, .24, COLORS.bronze);
+  for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]]) B.get('facadeBronze').box(x, y0 + h / 2, z, .24, h, .24, COLORS.bronze);
   // Three glazed sides with mullions every ~1.75 m; the south side stays open.
   B.get('glass').box(cx, y0 + h / 2, r.z0, w, h - .3, .05, '#ffffff');
   for (const x of [r.x0, r.x1]) B.get('glass').box(x, y0 + h / 2, cz, .05, h - .3, d, '#ffffff');
-  for (let i = 1, n = Math.round(w / 1.75); i < n; i++) B.get('extMetal').box(r.x0 + w * i / n, y0 + h / 2, r.z0, .07, h, .1, COLORS.bronze);
-  for (const x of [r.x0, r.x1]) for (let i = 1, n = Math.round(d / 1.75); i < n; i++) B.get('extMetal').box(x, y0 + h / 2, r.z0 + d * i / n, .1, h, .07, COLORS.bronze);
+  for (let i = 1, n = Math.round(w / 1.75); i < n; i++) B.get('facadeBronze').box(r.x0 + w * i / n, y0 + h / 2, r.z0, .07, h, .1, COLORS.bronze);
+  for (const x of [r.x0, r.x1]) for (let i = 1, n = Math.round(d / 1.75); i < n; i++) B.get('facadeBronze').box(x, y0 + h / 2, r.z0 + d * i / n, .1, h, .07, COLORS.bronze);
   // Fascia ring with a glazed roof light and a warm cove line for the night view.
-  for (const z of [r.z0, r.z1]) B.get('extMetal').box(cx, top, z, w + 1.2, .42, .5, COLORS.bronze);
-  for (const x of [r.x0, r.x1]) B.get('extMetal').box(x, top, cz, .5, .42, d + 1.2, COLORS.bronze);
+  for (const z of [r.z0, r.z1]) B.get('facadeBronze').box(cx, top, z, w + 1.2, .42, .5, COLORS.bronze);
+  for (const x of [r.x0, r.x1]) B.get('facadeBronze').box(x, top, cz, .5, .42, d + 1.2, COLORS.bronze);
   B.get('glass').box(cx, top + .1, cz, w - .4, .05, d - .4, '#ffffff');
   B.get('glow').box(cx, top - .26, r.z1 + .2, w, .05, .08, COLORS.warmLight);
   for (const [x, z] of f.tablesAt) roundTable(B, x, y0 + .12, z, 4, { top: '#efe7d8', chair: '#5d4a36' }, 'matte');
@@ -101,7 +101,7 @@ function pitchedRoof(B, f, y0) {
     const ridge = eave + f.rise, k = f.rise / half, lo = eave - k * o, x0 = r.x0 - o, x1 = r.x1 + o;
     const P = (x, y, z) => [x, y, z], N = [P(x0, lo, r.z0 - o), P(x1, lo, r.z0 - o), P(x1, ridge, cz), P(x0, ridge, cz)];
     const S = [P(x1, lo, r.z1 + o), P(x0, lo, r.z1 + o), P(x0, ridge, cz), P(x1, ridge, cz)];
-    pushTris(B, 'facadeBrick', [[N[0], N[2], N[1]], [N[0], N[3], N[2]], [S[0], S[2], S[1]], [S[0], S[3], S[2]]], '#9a5b40', '#8a6a4e');
+    pushTris(B, 'roofTile', [[N[0], N[2], N[1]], [N[0], N[3], N[2]], [S[0], S[2], S[1]], [S[0], S[3], S[2]]], '#b0644a', '#8a6a4e');
     // Brick gable ends sit on the eave beams, above head height.
     for (const x of [r.x0, r.x1]) pushTris(B, 'facadeBrick', [x === r.x0 ? [P(x, eave, r.z1), P(x, eave, r.z0), P(x, ridge, cz)] : [P(x, eave, r.z0), P(x, eave, r.z1), P(x, ridge, cz)]], '#b07454', '#a06a4c', 0);
     B.get('extMetal').bar({ x: x0, y: ridge + .08, z: cz }, { x: x1, y: ridge + .08, z: cz }, .22, '#5c4632');

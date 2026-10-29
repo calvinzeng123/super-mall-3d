@@ -8,6 +8,15 @@ export const FACADE_SURFACES = Object.freeze({
   facadeConcrete: { id: 'concrete_pavement_02', roughness: 0.95, normal: 0.24 },
   facadeBrick: { id: 'brick_wall_09', roughness: 0.96, normal: 0.5 },
   facadeTimber: { id: 'oak_wood_planks', roughness: 0.8, normal: 0.25 },
+  // Procedural finishes from assets/textures/procedural: their roughness maps
+  // hold absolute values, so the scalar stays 1 and the map decides.
+  facadeTravertine: { id: 'travertine_panel', roughness: 1, normal: 0.7 },
+  facadeTerracotta: { id: 'terracotta_baguette', roughness: 1, normal: 0.9 },
+  facadeBronze: { id: 'bronze_brushed', roughness: 1, normal: 0.35, metalness: 0.72 },
+  roofTile: { id: 'clay_roof_tile', roughness: 1, normal: 1 },
+  facadePlaster: { id: 'fine_plaster', roughness: 1, normal: 0.4 },
+  facadeBoardConcrete: { id: 'board_concrete', roughness: 1, normal: 0.6 },
+  facadeSlat: { id: 'timber_slat', roughness: 1, normal: 0.8 },
 });
 
 export function createFacadeMaterials(surfaces, onNight = () => {}) {
@@ -15,7 +24,7 @@ export function createFacadeMaterials(surfaces, onNight = () => {}) {
   for (const [key, spec] of Object.entries(FACADE_SURFACES)) {
     const asset = surfaces[spec.id];
     const material = new THREE.MeshStandardMaterial({ vertexColors: true,
-      roughness: spec.roughness, metalness: 0, ...(asset ? pbrOptions(asset, spec.normal) : {}) });
+      roughness: spec.roughness, metalness: spec.metalness || 0, ...(asset ? pbrOptions(asset, spec.normal) : {}) });
     material.name = `${key} · ${spec.id} · CC0`;
     material.userData = { surface: spec.id, source: asset?.sourceUrl, license: 'CC0-1.0', outdoor: true };
     materials[key] = material;

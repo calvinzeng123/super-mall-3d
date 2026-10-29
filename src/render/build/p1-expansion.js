@@ -9,20 +9,20 @@ import { BatchSet } from '../batch.js';
 import { buildMallFlightGeometry } from './mall-stairs.js';
 
 const PALETTES = {
-  main: { stone: '#e9e2d4', trim: '#8f7553', dark: '#4f4a42', fin: '#a98a62', glow: '#ffe2b2', material: 'facadeStone' },
-  culture: { stone: '#b97554', trim: '#80513e', dark: '#655449', fin: '#d69a73', glow: '#ffdfab', material: 'facadeBrick' },
-  dining: { stone: '#e1cdb3', trim: '#8d6950', dark: '#63594b', fin: '#c7a67b', glow: '#ffdda3', material: 'facadeStone' },
-  garden: { stone: '#a3b2a0', trim: '#596d60', dark: '#425c50', fin: '#7c9b88', glow: '#e5f0ce', material: 'facadeConcrete' },
-  creative: { stone: '#c6b6a0', trim: '#615c50', dark: '#4b514b', fin: '#92775c', glow: '#ffe4b8', material: 'facadeTimber' },
+  main: { stone: '#e9e2d4', trim: '#8f7553', dark: '#4f4a42', fin: '#a98a62', glow: '#ffe2b2', material: 'facadeTravertine' },
+  culture: { stone: '#b97554', trim: '#80513e', dark: '#655449', fin: '#d69a73', glow: '#ffdfab', material: 'facadeTerracotta' },
+  dining: { stone: '#e1cdb3', trim: '#8d6950', dark: '#63594b', fin: '#c7a67b', glow: '#ffdda3', material: 'facadeTravertine' },
+  garden: { stone: '#a3b2a0', trim: '#596d60', dark: '#425c50', fin: '#7c9b88', glow: '#e5f0ce', material: 'facadeBoardConcrete' },
+  creative: { stone: '#c6b6a0', trim: '#615c50', dark: '#4b514b', fin: '#92775c', glow: '#ffe4b8', material: 'facadeSlat' },
 };
 const zoneOf = lv => lv.expansion?.zone || 'main';
 const paletteOf = lv => {
   const base = PALETTES[zoneOf(lv)] || PALETTES.main;
   const variant = {
     P1W1: { stone: '#bd9077', trim: '#795d50', fin: '#9e6950', material: 'facadeBrick' },
-    P1W2: { stone: '#ded6c6', trim: '#8e8068', fin: '#b3a187', material: 'facadeStone' },
-    P1W3: { stone: '#c5aa84', trim: '#6d5b44', fin: '#ad8c61', material: 'facadeTimber' },
-    P1W4: { stone: '#b5c6c4', trim: '#647e7d', fin: '#829e9a', material: 'facadeConcrete' },
+    P1W2: { stone: '#ded6c6', trim: '#8e8068', fin: '#b3a187', material: 'facadeTravertine' },
+    P1W3: { stone: '#c5aa84', trim: '#6d5b44', fin: '#ad8c61', material: 'facadeSlat' },
+    P1W4: { stone: '#b5c6c4', trim: '#647e7d', fin: '#829e9a', material: 'facadePlaster' },
   }[lv.building];
   return variant ? { ...base, ...variant } : base;
 };
@@ -81,10 +81,10 @@ function facade(ctx, lv) {
       put(a + .04, a + .13, y + .22, y + h - .58, .23, .11, 'extMetal', p.dark);
       if (bay > 2.2) put(a + bay / 2 - .025, a + bay / 2 + .025, y + .25, y + h - .65, .1, .04, 'extMetal', p.dark);
       if (zone === 'culture') {
-        put(a + .18, a + .40, y + .12, y + h - .08, .72, .39, 'facadeBrick', i % 3 ? p.fin : p.stone);
+        put(a + .18, a + .40, y + .12, y + h - .08, .72, .39, 'facadeTerracotta', i % 3 ? p.fin : p.stone);
         put(a + .22, a + .35, y + .12, y + h - .08, .075, .795, 'extMetal', p.trim);
       } else if (zone === 'garden') {
-        put(a + .15, a + .32, y + .25, y + h - .15, .65, .32, 'facadeConcrete', p.fin);
+        put(a + .15, a + .32, y + .25, y + h - .15, .65, .32, 'facadeBoardConcrete', p.fin);
         if (lv.short !== '1F') put(a + .15, b - .1, y + h * .57, y + h * .57 + .09, .36, .2, 'extMetal', p.trim);
       } else if (zone === 'creative') {
         put(a + .12, a + .44, y + .2, y + h - .1, .32, .22, p.material, p.fin);
@@ -92,7 +92,7 @@ function facade(ctx, lv) {
       } else if (zone === 'main' && Math.floor(i / 3) % 4 === 1) {
         // Bronze and timber louvre screens, one bay group in four, as in the concept aerial.
         // They stay within 0.4 m of the glass so the LED screen and posters hang in front.
-        for (let x = a + .3; x < b - .1; x += .6) put(x - .06, x + .06, y + .1, y + h - .08, .3, .22, 'facadeTimber', (lv.expansion.storey || 0) % 2 ? '#a8794a' : '#93683f');
+        for (let x = a + .3; x < b - .1; x += .6) put(x - .06, x + .06, y + .1, y + h - .08, .3, .22, ...((lv.expansion.storey || 0) % 2 ? ['facadeBronze', '#b08a5c'] : ['facadeTimber', '#93683f']));
         put(a, b, y + h - .32, y + h - .1, .32, .22, 'extMetal', p.trim);
       } else {
         put(a + .10, a + (i % 3 ? .25 : .48), y + .25, y + h - .12, .42, .25, p.material, p.stone);
@@ -281,13 +281,13 @@ function sunkenCourtExterior(ctx) {
     // The north opening is a covered B1M passage; the south slot contains the
     // real rising stair. Its ground rail must open at the stair, not at B1M.
     for (const [a, b] of edgeSpans(e, [north, south], 0)) {
-      B.get('facadeStone').box((a + b) / 2, (y - .12) / 2, -.12, b - a, -y - .12, .28, '#d5c6ae');
+      B.get('facadeTravertine').box((a + b) / 2, (y - .12) / 2, -.12, b - a, -y - .12, .28, '#d5c6ae');
       B.get('glow').box((a + b) / 2, -.6, -.275, b - a, .035, .035, p.glow);
     }
     const northAt = [toL(e.F, north.seg.x0, north.seg.z0), toL(e.F, north.seg.x1, north.seg.z1)];
     if (northAt.every(q => Math.abs(q[1]) < .05)) {
       const a = Math.min(northAt[0][0], northAt[1][0]), b = Math.max(northAt[0][0], northAt[1][0]);
-      B.get('facadeStone').box((a + b) / 2, (y + 3.2 - .12) / 2, -.12, b - a, -y - 3.2 - .12, .28, '#d5c6ae');
+      B.get('facadeTravertine').box((a + b) / 2, (y + 3.2 - .12) / 2, -.12, b - a, -y - 3.2 - .12, .28, '#d5c6ae');
       B.get('glow').box((a + b) / 2, y + 3.24, -.29, b - a - .2, .04, .05, p.glow);
     }
     for (const [a, b] of edgeSpans(e, [south], 0)) {

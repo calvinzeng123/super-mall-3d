@@ -51,16 +51,16 @@ function artDome(ctx, L, f, y0) {
   }
   for (let j = 0; j < meridians; j++) {
     const p = at(0, j), q = at(0, j + 1);
-    B.get('extMetal').bar(p, q, .55, COLORS.bronze);
+    B.get('facadeBronze').bar(p, q, .55, COLORS.bronze);
     B.get('glow').bar({ ...p, y: p.y - .36 }, { ...q, y: q.y - .36 }, .08, COLORS.warmLight);
   }
   for (const [x, z] of f.columnsAt) {
-    B.get('extMetal').cyl(x, y0, z, f.columnRadius, f.spring, COLORS.bronze, 12);
+    B.get('facadeBronze').cyl(x, y0, z, f.columnRadius, f.spring, COLORS.bronze, 12);
     B.get('extMetal').cyl(x, y0, z, f.columnRadius + .12, .35, '#6c5a43', 12);
   }
   // A small oculus crown at the apex.
   const top = at(rings, 0);
-  B.get('extMetal').cyl(f.cx, top.y - .2, f.cz, 1.6, .45, COLORS.bronze, 24);
+  B.get('facadeBronze').cyl(f.cx, top.y - .2, f.cz, 1.6, .45, COLORS.bronze, 24);
   B.get('glow').cyl(f.cx, top.y + .22, f.cz, 1.1, .06, COLORS.warmLight, 24);
 }
 
@@ -91,7 +91,7 @@ function glassCanopy(ctx, L, f, y0) {
   glass.renderOrder = 2;
   L.base.add(glass);
   const V = v => ({ x: v.x, y: v.y, z: v.z });
-  for (let i = 0; i < 4; i++) B.get('extMetal').bar(V(c[i]), V(c[(i + 1) % 4]), .42, COLORS.bronze);
+  for (let i = 0; i < 4; i++) B.get('facadeBronze').bar(V(c[i]), V(c[(i + 1) % 4]), .42, COLORS.bronze);
   for (const [a, b] of [[c[0], k0], [c[3], k0], [c[1], k1], [c[2], k1], [k0, k1]]) B.get('extMetal').bar(V(a), V(b), .26, STEEL);
   // Rafters every ~2.2 m on all four faces and purlins at fifths of the slope:
   // from the aerial the pane grid is what reads as a glass roof.
@@ -111,7 +111,7 @@ function glassCanopy(ctx, L, f, y0) {
     for (let i = 0; i < 4; i++) B.get('extMetal').bar(V(ring[i]), V(ring[(i + 1) % 4]), .1, STEEL);
   }
   for (const [x, z] of f.columnsAt) {
-    B.get('extMetal').cyl(x, y0, z, f.columnRadius, f.eave, COLORS.bronze, 10);
+    B.get('facadeBronze').cyl(x, y0, z, f.columnRadius, f.eave, COLORS.bronze, 10);
     B.get('glow').box(x, eave - .3, z, .9, .05, .9, COLORS.warmLight);
   }
 }
@@ -129,7 +129,7 @@ function canyonSkylight(L, f, y0) {
         B.get('extMetal').bar({ x: u, y: y0 + curb, z: s * half }, { x: u, y: y0 + curb + rise, z: 0 }, .08, STEEL);
     }
     for (const u of [r.x0, r.x1]) B.get('facadeStone').box(u, y0 + curb / 2, 0, .4, curb, half * 2, '#d8d2c4');
-    B.get('extMetal').box(cu, y0 + curb + rise, 0, len, .16, .2, COLORS.bronze);
+    B.get('facadeBronze').box(cu, y0 + curb + rise, 0, len, .16, .2, COLORS.bronze);
     B.get('glow').box(cu, y0 + curb + .05, 0, len - .6, .05, .14, COLORS.warmLight);
   });
 }
@@ -156,8 +156,8 @@ function buildPosters(ctx) {
     // Backing panel and frame, aligned with the plane's own width axis.
     const F = L.facadeBatch, tx = b.nz, tz = -b.nx, hw = b.width / 2 + .18;
     F.get('extMetal').box(b.x - b.nx * .1, cy, b.z - b.nz * .1, b.width + .5, b.height + .5, .14, '#2e2822', ry);
-    for (const yy of [b.y0 - .18, b.y1 + .18]) F.get('extMetal').bar({ x: b.x - tx * hw, y: yy, z: b.z - tz * hw }, { x: b.x + tx * hw, y: yy, z: b.z + tz * hw }, .2, COLORS.bronze);
-    for (const s of [-1, 1]) F.get('extMetal').bar({ x: b.x + s * tx * hw, y: b.y0 - .18, z: b.z + s * tz * hw }, { x: b.x + s * tx * hw, y: b.y1 + .18, z: b.z + s * tz * hw }, .2, COLORS.bronze);
+    for (const yy of [b.y0 - .18, b.y1 + .18]) F.get('facadeBronze').bar({ x: b.x - tx * hw, y: yy, z: b.z - tz * hw }, { x: b.x + tx * hw, y: yy, z: b.z + tz * hw }, .2, COLORS.bronze);
+    for (const s of [-1, 1]) F.get('facadeBronze').bar({ x: b.x + s * tx * hw, y: b.y0 - .18, z: b.z + s * tz * hw }, { x: b.x + s * tx * hw, y: b.y1 + .18, z: b.z + s * tz * hw }, .2, COLORS.bronze);
   });
 }
 

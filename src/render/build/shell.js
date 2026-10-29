@@ -267,7 +267,7 @@ export function sill(ctx, lv) {
   const B = ctx.levels[lv.id].batch;
   const c = lv.kind === 'parking' || lv.kind === 'food' ? COLORS.concrete : COLORS.stone;
   const h = lv.kind === 'roof' ? 0.3 : 0.9;
-  const key = lv.kind === 'roof' ? 'satin' : 'matte';
+  const key = lv.kind === 'roof' ? 'satin' : lv.kind === 'parking' || lv.kind === 'food' ? 'matte' : 'travertine';
   const ents = ctx.layout.entrances.filter((x) => x.level === lv.id);
   const ramps = ctx.layout.ramps.filter(r => r.building === lv.building && [r.from.level, r.to.level].includes(lv.id));
   for (const e of ctx.outlineEdges(lv)) {
@@ -341,7 +341,7 @@ function facade(ctx, lv) {
         if(yB>head)rawPlace(a0,a1,head,yB,depth,offset,key,color);
       };
       const clad = (a, b, ya, yb) => {
-        place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'facadeConcrete' : 'facadeStone', pal.stone);
+        place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'facadeConcrete' : 'facadeTravertine', pal.stone);
         // 石板横向接缝跟随楼层标高；平整贴图之外仍能读到板块尺度。
         if (!pal.fin) for (let y = ya + 1.35; y < yb - 0.3; y += 1.35) place(a, b, y, y + 0.022, 0.012, 0.325, 'ext', '#8f887b');
       };
@@ -354,7 +354,7 @@ function facade(ctx, lv) {
         if (type === 'stone') {
           clad(a + 0.02, b - 0.02, y0, y0 + H);
           place(a, a + 0.04, y0, y0 + H, 0.34, 0.17, 'ext', pal.stoneDark);
-          if (pal.fin) for (const p of [a + bw * 0.25, a + bw * 0.5, a + bw * 0.75]) place(p - 0.06, p + 0.06, y0, y0 + H, 0.55, 0.42, 'extMetal', pal.fin);
+          if (pal.fin) for (const p of [a + bw * 0.25, a + bw * 0.5, a + bw * 0.75]) place(p - 0.06, p + 0.06, y0, y0 + H, 0.55, 0.42, 'facadeBronze', pal.fin);
         } else if (type === 'slot') {
           const s = Math.min(1.6, bw * 0.4);
           clad(a, a + s, y0, y0 + H);

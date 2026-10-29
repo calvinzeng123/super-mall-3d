@@ -139,7 +139,7 @@ function front(B, S, lv, u, f, cell, style) {
   box('metal', F.len / 2, -0.015, y0 + fasciaTop + 0.015, F.len + 0.08, 0.42, 0.035, frameCol);
   box('metal', F.len / 2, 0.0, y0 + glassTop + 0.01, F.len + 0.08, 0.4, 0.04, frameCol);
   box('glow', F.len / 2, -0.08, y0 + glassTop - 0.035, Math.max(0.1, F.len - 0.32), 0.065, 0.035, '#fff0d2');
-  if (H > fasciaTop + 0.1) box('matte', F.len / 2, 0.08, y0 + (fasciaTop + H) / 2, F.len, 0.24, H - fasciaTop, themeOf(lv).wall);
+  if (H > fasciaTop + 0.1) box('plaster', F.len / 2, 0.08, y0 + (fasciaTop + H) / 2, F.len, 0.24, H - fasciaTop, themeOf(lv).wall);
   const maxW = F.len >= 14 ? 12 : 6.4;
   let w = Math.min(F.len * 0.78, maxW);
   let h = w / 4;

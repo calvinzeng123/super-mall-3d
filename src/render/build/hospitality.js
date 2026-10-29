@@ -17,9 +17,9 @@ import { buildExpansionConnections } from './expansion-connections.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
-  hotel: { key: 'stone', wall: '#f3ebdc', dark: '#bfb29b', metal: '#8e7653', glazing: '#526b76', fabric: '#eadfc9' },
-  apartment: { key: 'stone', wall: '#dfddd3', dark: '#a78770', metal: '#454d50', glazing: '#638087', fabric: '#d9d9c6' },
-  residential: { key: 'concrete', wall: '#efefeb', dark: '#babdbb', metal: '#657275', glazing: '#647d88', fabric: '#e5dfd1' },
+  hotel: { key: 'facadeTravertine', wall: '#f3ebdc', dark: '#bfb29b', metal: '#8e7653', glazing: '#526b76', fabric: '#eadfc9' },
+  apartment: { key: 'facadeTravertine', wall: '#dfddd3', dark: '#a78770', metal: '#454d50', glazing: '#638087', fabric: '#d9d9c6' },
+  residential: { key: 'facadePlaster', wall: '#efefeb', dark: '#babdbb', metal: '#657275', glazing: '#647d88', fabric: '#e5dfd1' },
 };
 const FULL_HEIGHT = 1e5;
 

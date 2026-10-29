@@ -38,7 +38,7 @@ export const FLOOR_SURFACES = {
   'wood-warm': { id: 'oak_wood_planks' },
   'deck-garden': { id: 'oak_wood_planks', tint: '#e2d1b8' },
   // Pale roof pavers of the concept aerial; timber stays under seating only.
-  'roof-stone': { id: 'concrete_pavement_02', tint: '#efe8dc' },
+  'roof-stone': { id: 'travertine_panel', tint: '#f4efe6' },
   'concrete-blue': { id: 'concrete_pavement_02', tint: '#bbcddd' },
   'concrete-green': { id: 'concrete_pavement_02', tint: '#c1d0c4' },
   paving: { id: 'concrete_pavement_02' },

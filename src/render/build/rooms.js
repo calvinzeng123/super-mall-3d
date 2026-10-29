@@ -193,7 +193,7 @@ function restroom(B, L, atlas, lv, r, y0, H, roof) {
  * into a 6×5.5m room without furniture spilling through the public corridor. */
 function compactRestroom(L, atlas, room, F, P, y0, H) {
   const W = F.len, D = F.depth, partition = Math.min(2.25, D * .43);
-  const wall = (a0, a1, b0, b1, h = 2.35) => P('matte', (a0 + a1) / 2, (b0 + b1) / 2,
+  const wall = (a0, a1, b0, b1, h = 2.35) => P('plaster', (a0 + a1) / 2, (b0 + b1) / 2,
     y0 + h / 2, Math.max(.09, a1 - a0), Math.max(.09, b1 - b0), h, '#e1e5df');
   P('stone', W / 2, D / 2, y0 + .012, W - .2, D - .2, .024, '#e5e4da');
   wall(W / 2 - .045, W / 2 + .045, partition, D - .12);
