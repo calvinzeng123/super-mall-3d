@@ -1,4 +1,5 @@
 // A 2D entry screen. Importing this module must never initialize a WebGL scene.
+import { COVER_URL } from './cover-data.js';
 const launcherCSS = `
 .yl-launcher{--yl-amber:#e8b876;--yl-ink:#edf4f8;position:fixed;inset:0;z-index:1000;isolation:isolate;overflow:auto;color:var(--yl-ink);background:#0a121b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;overscroll-behavior:none}
 .yl-launcher *{box-sizing:border-box}.yl-launcher[hidden]{display:none!important}.yl-launcher button{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent;cursor:pointer}.yl-launcher button:focus-visible{outline:3px solid var(--yl-amber);outline-offset:5px}
@@ -13,7 +14,7 @@ const launcherCSS = `
 `;
 
 /** @param {{onSelect:(mode:'tour'|'fps')=>unknown,backgroundUrl?:string}} options */
-export function mountLauncher({ onSelect, backgroundUrl = './docs/images/hotel-apartment-sides-overview.jpg' } = {}) {
+export function mountLauncher({ onSelect, backgroundUrl = COVER_URL } = {}) {
   const style = document.createElement('style');
   style.textContent = launcherCSS;
   const root = document.createElement('main');
@@ -21,7 +22,7 @@ export function mountLauncher({ onSelect, backgroundUrl = './docs/images/hotel-a
   root.id = 'ylLauncher';
   root.setAttribute('aria-label', '云澜汇游戏入口');
   root.innerHTML = `
-    <img class="yl-cover-image" alt="云澜汇一期商场与酒店公寓" decoding="async" fetchpriority="high">
+    <img class="yl-cover-image" alt="云澜汇一期六层商场、艺术街区与完整园区鸟瞰" decoding="async" fetchpriority="high">
     <div class="yl-cover-shade"></div>
     <div class="yl-cover-content">
       <header class="yl-cover-top"><span class="yl-wordmark">云澜汇</span><span class="yl-edition">YUNLAN / MOBILE EDITION</span></header>

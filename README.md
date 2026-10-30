@@ -2,7 +2,7 @@
 
 面向手机的 Three.js 小样，同一封面提供 **完整园区探索** 与 **竞技 FPS** 两种入口。
 
-[在线体验](https://yunlan-mall-calvin.netlify.app/) · [最新交接](HANDOFF.md) · [FPS 说明](docs/fps-sample.md) · [免费模型来源](docs/fps-asset-sources.md)
+[在线体验（Cloudflare）](https://yunlan-mall-3d-github.pages.dev/) · [最新交接](HANDOFF.md) · [FPS 说明](docs/fps-sample.md) · [免费模型来源](docs/fps-asset-sources.md)
 
 ![一期扩建后的游戏实景鸟瞰](docs/images/p1-expansion-aerial-20261028.png)
 
@@ -66,9 +66,18 @@ npm run serve
 
 `dist/mall.html` 是资源内嵌的双模式离线版，可下载后在新版桌面浏览器中直接打开。手机优先使用 HTTPS 在线站点；iOS 文件预览不能代替 Safari 网页运行环境。离线版的本地 AI、枪械和任务不需要模型 API。
 
-## GitHub 与 Netlify
+## GitHub 与部署
 
-GitHub 保存源码、模型许可和离线产物；线上仍为 **手动部署**，推送不会自动发布。
+GitHub 保存源码、模型许可和离线产物；Cloudflare 为当前体验入口，线上仍为 **手动部署**，推送不会自动发布。
+
+Cloudflare Pages 使用同一份静态构建：
+
+```sh
+npm run build:netlify
+npx wrangler pages deploy dist/netlify --project-name yunlan-mall-3d-github --branch feat/explore-v4
+```
+
+原 [Netlify 入口](https://yunlan-mall-calvin.netlify.app/)独立发布，不会随 Cloudflare 部署自动更新：
 
 ```sh
 npm test
