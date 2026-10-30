@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { FPS_MODEL_ASSETS } from '../src/fps/model-data.js';
 import { geometryLicenses } from './geometry-licenses.mjs';
+import { COVER_SOURCE, COVER_MIME } from '../src/cover-data.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 process.chdir(root);
@@ -57,7 +58,7 @@ for (const residence of residences) {
 const fpsAssets = await Promise.all(FPS_MODEL_ASSETS.map(async a=>({...a,
   url:await emitAsset(a.id==='rifle'?'smg45':a.id==='pistol'?'deagle':'fps-hands','glb',await readFile(a.url.replace(/^\.\//,'')),'fps-model'),
 })));
-const coverURL = await emitAsset('cover','jpg',await readFile('docs/images/hotel-apartment-sides-overview.jpg'),'cover');
+const coverURL = await emitAsset('cover',COVER_MIME.split('/')[1],await readFile(COVER_SOURCE),'cover');
 
 const replacements = new Map([
   ['people-data.js', `export const PEOPLE_ASSETS = ${JSON.stringify(people)};`],

@@ -19,3 +19,6 @@ __pycache__/
 # Netlify local linkage and generated online release
 .netlify/
 dist/netlify/
+
+# Temporary Superdesign drafts
+.superdesign/tmp/
