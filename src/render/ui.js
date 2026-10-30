@@ -1,5 +1,6 @@
 import { attachViewportUI } from './viewport-ui.js';
 import { attachQualityUI } from './quality-ui.js';
+import { attachGlassLens } from './liquid-glass.js';
 // 界面：分期切换（园区 / 一期 / 二期 / 三期 / 地铁）、所选期的楼层牌、工具条、全园区店铺目录与搜索、悬停提示。
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -26,6 +27,8 @@ export function createUI(app, layout) {
     const ok = !p.id || built.has(p.id);
     return `<button class="phase" data-building="${p.id || ''}" aria-pressed="false"${ok ? '' : ' disabled'}><b>${esc(p.label)}</b><span>${ok ? esc(p.sub) : '规划中'}</span></button>`;
   }).join('');
+  const phaseGlass = attachGlassLens(phaseTabs, '.phase');
+  const floorGlass = attachGlassLens(floorList, '.floor');
   phaseTabs.addEventListener('click', (e) => {
     const b = e.target.closest('.phase');
     if (!b || b.disabled) return;
@@ -195,6 +198,8 @@ export function createUI(app, layout) {
     for (const t of phaseTabs.querySelectorAll('.phase')) t.setAttribute('aria-pressed', String((t.dataset.building || null) === s.building));
     renderFloors(s.building);
     for (const f of floorList.querySelectorAll('.floor')) f.setAttribute('aria-pressed', String((f.dataset.level || null) === s.focus && !s.exploded));
+    phaseGlass.sync();
+    floorGlass.sync();
     const activeFloor = floorList.querySelector('[aria-pressed="true"]');
     if (activeFloor && s.focus) activeFloor.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     const press = (act, on) => toolbar.querySelector(`[data-act="${act}"]`)?.setAttribute('aria-pressed', String(!!on));

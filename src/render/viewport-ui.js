@@ -1,3 +1,4 @@
+import { attachGlassLens } from './liquid-glass.js';
 // Compact controls and a genuinely clear canvas, shared by orbit and walking.
 export function attachViewportUI(app) {
   const compact = matchMedia('(max-width: 900px), (pointer: coarse), (max-height: 520px)');
@@ -5,21 +6,15 @@ export function attachViewportUI(app) {
   const dock = document.getElementById('mobileDock'), directory = document.getElementById('directory');
   let panel = null, hidden = false, previousLabels = false, exploring = false, hintTimer;
   const hint = document.getElementById('cleanHint');
-  const lens = dock.querySelector('.dock-lens');
-  function placeLens() {
-    const button = dock.querySelector('[aria-expanded="true"]');
-    dock.classList.toggle('has-selection', !!button);
-    if (!button) return;
-    lens.style.width = `${button.offsetWidth}px`;
-    lens.style.transform = `translateX(${button.offsetLeft}px)`;
-  }
-  new ResizeObserver(placeLens).observe(dock);
+  const glass = attachGlassLens(dock, 'button');
+  let lastButton = dock.querySelector('[data-panel="floors"]');
   function setPanel(next) {
     window.dispatchEvent(new Event('mall-panel-change'));
     panel = next;
     for (const name of ['floors', 'tools', 'directory']) body.classList.toggle(`mobile-${name}`, name === panel);
     for (const b of dock.querySelectorAll('[data-panel]')) b.setAttribute('aria-expanded', String(b.dataset.panel === panel));
-    placeLens();
+    lastButton = dock.querySelector('[aria-expanded="true"]') || lastButton;
+    glass.select(lastButton);
     if (compact.matches) directory.classList.toggle('collapsed', panel !== 'directory');
     document.querySelector('[data-act="directory"]')?.setAttribute('aria-pressed', String(!directory.classList.contains('collapsed')));
   }
@@ -40,7 +35,36 @@ export function attachViewportUI(app) {
     canvas.focus({ preventScroll: true });
   }
   for (const b of document.querySelectorAll('[data-ui-hide]')) b.addEventListener('click', () => setHidden(true));
+  let scrub = null, suppressClick = false;
+  dock.addEventListener('pointerdown', e => {
+    if (!e.isPrimary || e.button !== 0) return;
+    const button = e.target.closest('button');
+    if (!button) return;
+    lastButton = button; glass.select(button);
+    if (button.dataset.panel) scrub = { id: e.pointerId, x: e.clientX, button, moved: false };
+  });
+  dock.addEventListener('pointermove', e => {
+    if (!scrub || scrub.id !== e.pointerId) return;
+    if (!scrub.moved && Math.abs(e.clientX - scrub.x) < 8) return;
+    scrub.moved = true;
+    if (!dock.hasPointerCapture(e.pointerId)) dock.setPointerCapture(e.pointerId);
+    const x = e.clientX - dock.getBoundingClientRect().left;
+    const buttons = [...dock.querySelectorAll('[data-panel]')];
+    scrub.button = buttons.reduce((a, b) => Math.abs(b.offsetLeft + b.offsetWidth / 2 - x) < Math.abs(a.offsetLeft + a.offsetWidth / 2 - x) ? b : a);
+    glass.select(scrub.button);
+  });
+  dock.addEventListener('pointerup', e => {
+    if (!scrub || scrub.id !== e.pointerId) return;
+    if (scrub.moved) {
+      suppressClick = true;
+      setPanel(scrub.button.dataset.panel);
+      setTimeout(() => { suppressClick = false; }, 0);
+    }
+    scrub = null;
+  });
+  dock.addEventListener('pointercancel', () => { scrub = null; glass.select(lastButton); });
   dock.addEventListener('click', e => {
+    if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; }
     const b = e.target.closest('[data-panel]');
     if (b) setPanel(panel === b.dataset.panel ? null : b.dataset.panel);
   });
