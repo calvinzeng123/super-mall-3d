@@ -45,12 +45,15 @@ export class MaterialLib {
       mirror: std({ color: 0x8fb4c8, roughness: 0.02, metalness: 0.95, envMapIntensity: 2.4 }),
     };
     Object.assign(this.base, createFacadeMaterials(surfaces, fn => this.onNight(fn)));
-    for (const [key, id, strength] of [
-      ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22],
+    for (const [key, id, strength, roughness = 0.86, metalness = 0] of [
+      ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22, 0.48],
       ['concrete', 'concrete_pavement_02', 0.3], ['brick', 'brick_wall_09', 0.55],
+      // 室内墙面：抹灰、木格栅、洞石墙板、拉丝铜饰面（程序化面层，粗糙度由贴图决定）
+      ['plaster', 'fine_plaster', 0.35, 1], ['slat', 'timber_slat', 0.7, 1],
+      ['travertine', 'travertine_panel', 0.5, 0.9], ['bronze', 'bronze_brushed', 0.3, 1, 0.7],
     ]) {
       const asset = surfaces[id];
-      this.base[key] = interior({ roughness: key === 'stone' ? 0.48 : 0.86,
+      this.base[key] = interior({ roughness, metalness,
         ...(asset ? pbrOptions(asset, strength) : {}) }, 0.14);
       this.base[key].name = `CC0 ${key}`;
     }
@@ -82,7 +85,7 @@ export class MaterialLib {
     if (this.floors[kind]) return this.floors[kind];
     const def = FLOOR_SURFACES[kind];
     const asset = def && this.surfaces[def.id];
-    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'rubber', 'cobble'].includes(kind);
+    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'roof-stone', 'rubber', 'cobble'].includes(kind);
     if (asset) {
       const m = metricFloor(new THREE.MeshStandardMaterial({
         ...pbrOptions(asset, kind === 'grass' ? 0.7 : 0.32), color: def.tint || '#ffffff',

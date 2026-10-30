@@ -44,8 +44,9 @@ function steps(layout) {
   const eye = br.y + 1.7;
   const SE = wing(p1, 'SE'), P2W = wing(p2, 'W');
   const rf1 = lv('P1-RF'), rf2 = lv('P2-RF');
-  const ferris = rf1.features.find((f) => f.type === 'ferris');
-  const hub = (() => { const [x, z] = toW(ferris.frame, ferris.lu, ferris.lv); return V(x, rf1.elev + 18.5, z); })();
+  const ferris = rf1.features.find((f) => f.type === 'ferris'), dome = rf1.features.find((f) => f.type === 'art-dome');
+  const hub = dome ? V(dome.cx, rf1.elev + dome.spring + dome.rise * .45, dome.cz)
+    : (() => { const [x, z] = toW(ferris.frame, ferris.lu, ferris.lv); return V(x, rf1.elev + 18.5, z); })();
   const court = rf2.features.find((f) => f.type === 'court');
   const C = (u, y, v) => { const [x, z] = toW(court.frame, u, v); return V(x, y, z); };
   const plaza = lv('P3-1F').features.find((f) => f.type === 'plaza');
@@ -77,7 +78,8 @@ function steps(layout) {
     { caption: '三期街巷 · 店铺、外摆与串灯', pos: V(-58, 2.4, 44.5), target: V(-140, 3, 43), dur: 5, shadow: 90 },
     { caption: '中心广场 · 街区舞台与旱喷', pos: V(plaza.x - 10, 7, plaza.z - 8), target: V(plaza.x + 3, 2, plaza.z - 1), dur: 4.5 },
     { caption: '一期方庭 · 原四方格商场的通高中庭', building: 'P1', pos: SQ(-21, 6.5 + 1.75, 14), target: SQ(6, 10.5, -3), dur: 5.5, shadow: 120 },
-    { caption: '一期天台 · 云澜之眼摩天轮', building: 'P1', pos: W(p1, 'W', 72, 21.5, 10), target: hub, dur: 5.5, shadow: 140 },
+    dome ? { caption: '一期天台 · 云澜光穹与方庭玻璃天幕', building: 'P1', pos: W(p1, 'W', 72, 28, 10), target: hub, dur: 5.5, shadow: 160 }
+      : { caption: '一期天台 · 云澜之眼摩天轮', building: 'P1', pos: W(p1, 'W', 72, 21.5, 10), target: hub, dur: 5.5, shadow: 140 },
     { caption: '园区全景', pos: V(110, 430, 480), target: V(0, 0, 0), dur: 5, shadow: 380 },
   ];
 }

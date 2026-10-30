@@ -25,7 +25,7 @@ const ADS = [
   ['云澜汇 周年庆', 'YUNLAN MALL · 全场 8 折起', '#7a1f2b', '#d9a24a'],
   ['星湾 真冰场', 'XINGWAN ICE RINK · 冬季限定', '#0f3d5c', '#5fb7e5'],
   ['云澜里 周末市集', 'YUNLAN LANE · 每周六 18:00', '#5a2d18', '#e0a060'],
-  ['云澜之眼 摩天轮', 'SKY EYE · 天台夜景', '#2b1a4d', '#b48cff'],
+  ['云澜光穹 艺术中庭', 'ART DOME · 天台夜景', '#3b2a17', '#d9a24a'],
   ['IMAX 星湾影城', 'XINGWAN IMAX · 新片上映', '#111a24', '#f0c040'],
   ['湖畔音乐节', 'CENTRAL PARK · LAKESIDE LIVE', '#1f5133', '#9be07a'],
 ];

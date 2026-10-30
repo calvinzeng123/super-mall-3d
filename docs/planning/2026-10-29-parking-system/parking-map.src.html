@@ -1,0 +1,904 @@
+<title>云澜汇停车地图</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Map app: a full-bleed indoor-style map with floating cards — search and panel on the left,
+   floor picker and tools on the right, scale at the bottom. Day palette by default, night in dark mode. */
+:root {
+  --land: #f2f0eb; --plot: #eae7df; --green: #d3e8c0; --water: #a9d3f2;
+  --road: #ffffff; --road-edge: #d6d0c2; --road-major: #fde49b; --road-major-edge: #ecc25f;
+  --bldg: #e5e0d4; --bldg-edge: #cdc5b3;
+  --deck: #e2e8f1; --deck-edge: #a7b4c7; --deck-other: #e8e6e1; --deck-other-edge: #c2bdb2;
+  --aisle: #fbfcfe; --stall: #cad3df; --stall-edge: #9aa8bc; --stall-ev: #9edbb4; --stall-acc: #9bc3fa; --col: #7a8698; --core: #5a7ed8;
+  --concourse: #f4e4c6; --concourse-edge: #d6b479; --lot: #e7eaef;
+  --street: #ff7a1a; --inner: #7a5bff; --link: #1f6fff; --walk: #12a26b; --risk: #e5484d; --warn: #e89a10; --ok: #1f9d68;
+  --ink: #222a34; --muted: #677181; --halo: #ffffff; --card: #ffffff; --card-edge: #e1e4ea; --soft: #f4f6f9;
+  --shadow: 0 2px 10px rgba(30, 40, 60, .16);
+  --accent: #2f6bff; --accent-ink: #ffffff; --chip: #ecf1fd;
+  --font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --num: "Barlow Semi Condensed", "DIN Alternate", "Helvetica Neue", Arial, sans-serif;
+  --gl: max(16px, env(safe-area-inset-left, 0px)); --gr: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --land: #151b26; --plot: #1a212e; --green: #1b2a24; --water: #1c344f;
+  --road: #2a3345; --road-edge: #20283a; --road-major: #4a432f; --road-major-edge: #5c5135;
+  --bldg: #222a39; --bldg-edge: #303a4d;
+  --deck: #1e2737; --deck-edge: #3d4b63; --deck-other: #20242d; --deck-other-edge: #353b48;
+  --aisle: #2b3548; --stall: #333f58; --stall-edge: #4b5a76; --stall-ev: #2e6a51; --stall-acc: #2e5490; --col: #8591a6; --core: #7d9cf2;
+  --concourse: #3a3223; --concourse-edge: #6c5934; --lot: #1f2633;
+  --street: #ff8a3d; --inner: #9a85ff; --link: #5c96ff; --walk: #31c48a; --risk: #ff6b70; --warn: #f2b340; --ok: #3cc788;
+  --ink: #e4e9f1; --muted: #98a3b5; --halo: #151b26; --card: #1d2431; --card-edge: #2d3646; --soft: #232b39;
+  --shadow: 0 2px 14px rgba(0, 0, 0, .45);
+  --accent: #5d8dff; --accent-ink: #0c1120; --chip: #253049; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --land: #151b26; --plot: #1a212e; --green: #1b2a24; --water: #1c344f;
+  --road: #2a3345; --road-edge: #20283a; --road-major: #4a432f; --road-major-edge: #5c5135;
+  --bldg: #222a39; --bldg-edge: #303a4d;
+  --deck: #1e2737; --deck-edge: #3d4b63; --deck-other: #20242d; --deck-other-edge: #353b48;
+  --aisle: #2b3548; --stall: #333f58; --stall-edge: #4b5a76; --stall-ev: #2e6a51; --stall-acc: #2e5490; --col: #8591a6; --core: #7d9cf2;
+  --concourse: #3a3223; --concourse-edge: #6c5934; --lot: #1f2633;
+  --street: #ff8a3d; --inner: #9a85ff; --link: #5c96ff; --walk: #31c48a; --risk: #ff6b70; --warn: #f2b340; --ok: #3cc788;
+  --ink: #e4e9f1; --muted: #98a3b5; --halo: #151b26; --card: #1d2431; --card-edge: #2d3646; --soft: #232b39;
+  --shadow: 0 2px 14px rgba(0, 0, 0, .45);
+  --accent: #5d8dff; --accent-ink: #0c1120; --chip: #253049; color-scheme: dark;
+}
+html { height: 100%; box-sizing: border-box; }
+body { height: 100%; margin: 0; background: var(--land); color: var(--ink); font-family: var(--font); font-size: 14px; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+#app { position: relative; height: 100%; overflow: hidden; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; background: var(--land); }
+#map.dragging { cursor: grabbing; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+/* ---------- SVG map styling (all colours from tokens) ---------- */
+.land { fill: var(--land); }
+.plot { fill: var(--plot); }
+.plot.park { fill: var(--green); }
+.road { fill: var(--road); stroke: var(--road-edge); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.road.major { fill: var(--road-major); stroke: var(--road-major-edge); }
+.xing { fill: url(#zebra); }
+.bldg { fill: var(--bldg); stroke: var(--bldg-edge); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ghost { fill: none; stroke: var(--bldg-edge); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; opacity: .8; }
+.dim .road, .dim .road.major { fill: var(--plot); stroke: var(--road-edge); }
+.deck { fill: var(--deck); stroke: var(--deck-edge); stroke-width: 1.2; vector-effect: non-scaling-stroke; fill-rule: evenodd; }
+.deck.other { fill: var(--deck-other); stroke: var(--deck-other-edge); }
+.deck.concourse { fill: var(--concourse); stroke: var(--concourse-edge); }
+.aisle { fill: var(--aisle); }
+.lobby { fill: var(--soft); }
+.stall { fill: var(--stall); stroke: var(--stall-edge); stroke-width: .6; vector-effect: non-scaling-stroke; }
+.stall.ev { fill: var(--stall-ev); }
+.stall.acc { fill: var(--stall-acc); }
+.col { fill: var(--col); }
+.core { fill: var(--core); opacity: .85; }
+.lot { fill: var(--lot); stroke: var(--deck-edge); stroke-width: .8; vector-effect: non-scaling-stroke; }
+.lotroad { fill: var(--road); }
+.island { fill: var(--green); }
+.walkway { fill: none; stroke: var(--walk); stroke-width: 1.4; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: .7; }
+.transit { fill: var(--water); opacity: .45; }
+.ramp { stroke-width: 1.4; vector-effect: non-scaling-stroke; cursor: pointer; }
+.ramp.street { fill: color-mix(in srgb, var(--street) 32%, transparent); stroke: var(--street); }
+.ramp.inner { fill: color-mix(in srgb, var(--inner) 30%, transparent); stroke: var(--inner); }
+.trench { fill: color-mix(in srgb, var(--street) 45%, transparent); stroke: var(--street); stroke-width: 1.2; vector-effect: non-scaling-stroke; cursor: pointer; }
+.arrow { fill: none; stroke: var(--halo); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+.link { stroke-width: 1.4; vector-effect: non-scaling-stroke; cursor: pointer; }
+.link.vehicle { fill: color-mix(in srgb, var(--link) 38%, transparent); stroke: var(--link); }
+.link.walk { fill: color-mix(in srgb, var(--walk) 30%, transparent); stroke: var(--walk); stroke-dasharray: 4 3; }
+.gate { fill: var(--street); stroke: var(--halo); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+.loop { fill: var(--road); stroke: var(--road-edge); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.planter { fill: var(--green); }
+.sel { fill: none; stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.hit { fill: transparent; stroke: transparent; stroke-width: 14; vector-effect: non-scaling-stroke; cursor: pointer; }
+.lod-stalls .stall, .lod-cols .col { display: none; }
+
+/* ---------- map labels ---------- */
+.lbl { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 12px; line-height: 1.2; color: var(--ink);
+  text-shadow: 0 0 2px var(--halo), 0 0 2px var(--halo), 0 0 3px var(--halo); will-change: transform; }
+.lbl.road { color: var(--muted); font-size: 12px; letter-spacing: .3em; }
+.lbl.road.v { writing-mode: vertical-rl; letter-spacing: .25em; }
+.lbl.level { font-weight: 700; font-size: 13px; }
+.lbl.level small { display: block; font-weight: 500; font-size: 11px; color: var(--muted); }
+.lbl.tag { pointer-events: auto; cursor: pointer; text-shadow: none; display: inline-flex; align-items: center; gap: 4px;
+  background: var(--card); border: 1px solid var(--card-edge); border-radius: 999px; padding: 3px 8px 3px 4px; box-shadow: var(--shadow); font-size: 12px; }
+.lbl.tag i { font-style: normal; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700; }
+.lbl.tag.street i { background: var(--street); }
+.lbl.tag.inner i { background: var(--inner); }
+.lbl.tag.vehicle i { background: var(--link); }
+.lbl.tag.walk i { background: var(--walk); }
+.lbl.tag.gate i { background: var(--street); }
+.lbl.tag:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lbl.tag.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow); }
+
+/* ---------- floating UI ---------- */
+.card { background: var(--card); border: 1px solid var(--card-edge); border-radius: 10px; box-shadow: var(--shadow); }
+.hud { position: absolute; inset: 0; pointer-events: none; padding-left: var(--gl); padding-right: var(--gr); padding-block: 12px; }
+.hud > * { pointer-events: auto; }
+.search { position: absolute; left: var(--gl); top: 12px; width: min(380px, calc(100% - var(--gl) - var(--gr) - 64px)); height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 8px; }
+.logo { flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 18px var(--num); }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 15px; }
+.search input::placeholder { color: var(--muted); }
+.iconbtn { flex: none; width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; display: grid; place-items: center; color: var(--muted); }
+.iconbtn:hover { background: var(--soft); color: var(--ink); }
+.iconbtn:focus-visible, .tabs button:focus-visible, .floors button:focus-visible, .zoom button:focus-visible, .layers button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#suggest { position: absolute; left: var(--gl); top: 64px; width: min(380px, calc(100% - var(--gl) - var(--gr) - 64px)); margin: 0; padding: 6px; list-style: none; max-height: 50%; overflow: auto; z-index: 6; }
+#suggest li button { width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+#suggest li button:hover, #suggest li button[aria-selected="true"] { background: var(--chip); }
+#suggest small { color: var(--muted); }
+
+#panel { position: absolute; left: var(--gl); top: 68px; bottom: 44px; width: min(380px, calc(100% - var(--gl) - var(--gr) - 64px)); display: flex; flex-direction: column; overflow: hidden; z-index: 4; }
+#panel.collapsed { bottom: auto; }
+#panel.collapsed .pane { display: none; }
+.handle { display: none; }
+.tabs { display: flex; gap: 2px; padding: 6px; border-bottom: 1px solid var(--card-edge); flex: none; }
+.tabs button { flex: 1; border: 0; background: transparent; padding: 8px 4px; border-radius: 7px; cursor: pointer; color: var(--muted); font-weight: 500; }
+.tabs button[aria-selected="true"] { background: var(--chip); color: var(--accent); font-weight: 700; }
+.pane { overflow: auto; padding: 14px 16px 18px; display: grid; gap: 14px; align-content: start; grid-auto-rows: max-content; min-height: 0; }
+.pane h2 { margin: 0; font-size: 15px; text-wrap: balance; }
+.pane h3 { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: 500; letter-spacing: .04em; }
+.pane p { margin: 0; line-height: 1.6; color: var(--ink); }
+.muted { color: var(--muted); }
+.sys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sys div { border: 1px solid var(--card-edge); border-radius: 8px; padding: 10px; display: grid; gap: 2px; background: var(--soft); }
+.sys b { font-size: 20px; font-family: var(--num); }
+.sys span { font-size: 12px; color: var(--muted); }
+.sys .hero { grid-column: 1 / -1; background: var(--chip); border-color: transparent; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--muted); padding: 6px 4px; border-bottom: 1px solid var(--card-edge); }
+td { padding: 7px 4px; border-bottom: 1px solid var(--card-edge); vertical-align: top; }
+td.r, th.r { text-align: right; }
+.tier { display: inline-block; font: 600 12px var(--num); padding: 1px 6px; border-radius: 5px; background: var(--chip); color: var(--accent); }
+.note { border-left: 3px solid var(--accent); padding: 8px 10px; background: var(--soft); border-radius: 0 8px 8px 0; line-height: 1.6; }
+.dims { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.dims li { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--card-edge); padding-bottom: 6px; }
+.dims b { font-weight: 500; }
+.ent { display: grid; gap: 8px; }
+.ent button { text-align: left; border: 1px solid var(--card-edge); background: var(--card); border-radius: 8px; padding: 10px; cursor: pointer; display: grid; gap: 4px; }
+.ent button:hover { border-color: var(--accent); }
+.ent .row1 { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.ent .row1 b { font-size: 14px; }
+.ent .row2 { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 1px 7px; border-radius: 999px; white-space: nowrap; border: 1px solid currentColor; }
+.chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip.risk { color: var(--risk); } .chip.new { color: var(--accent); }
+.find { margin: 0; padding-left: 18px; display: grid; gap: 6px; line-height: 1.55; }
+.diagram { overflow-x: auto; border: 1px solid var(--card-edge); border-radius: 8px; background: var(--soft); }
+.diagram svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.diagram-hint { display: none; margin: -8px 0 0 !important; font-size: 12px; color: var(--muted) !important; }
+/* The section diagram needs about 520px, so the side panel widens while it is open. */
+@media (min-width: 761px) {
+  #panel.wide { width: min(560px, calc(100% - var(--gl) - var(--gr) - 64px)); }
+  #app.wide-panel .scale { left: calc(var(--gl) + min(560px, calc(100% - var(--gl) - var(--gr) - 64px)) + 16px); }
+}
+.routes { margin: 0; padding-left: 18px; display: grid; gap: 8px; line-height: 1.55; }
+.gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gallery button { border: 1px solid var(--card-edge); background: var(--card); border-radius: 8px; padding: 0; overflow: hidden; cursor: pointer; text-align: left; display: grid; }
+.gallery img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; background: var(--soft); }
+.gallery span { padding: 6px 8px 8px; font-size: 12px; line-height: 1.4; }
+
+.right { position: absolute; right: var(--gr); top: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; z-index: 5; }
+.compass { width: 40px; height: 40px; display: grid; place-items: center; font: 600 13px var(--num); color: var(--risk); }
+.compass svg { width: 22px; height: 22px; }
+.floors { display: flex; flex-direction: column; padding: 4px; gap: 2px; width: 74px; }
+.floors .bname { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0 2px; }
+.floors button { border: 0; background: transparent; border-radius: 7px; padding: 6px 2px; cursor: pointer; display: grid; gap: 1px; justify-items: center; }
+.floors button b { font: 600 15px var(--num); }
+.floors button span { font-size: 10px; color: var(--muted); }
+.floors button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.floors button[aria-checked="true"] span { color: var(--accent-ink); opacity: .85; }
+.layers { display: flex; flex-direction: column; padding: 4px; gap: 2px; width: 74px; }
+.layers button { border: 0; background: transparent; border-radius: 7px; padding: 6px 2px; cursor: pointer; font-size: 11px; color: var(--muted); }
+.layers button[aria-pressed="true"] { color: var(--accent); background: var(--chip); font-weight: 500; }
+.zoom { display: flex; flex-direction: column; width: 40px; overflow: hidden; }
+.zoom button { border: 0; background: transparent; height: 38px; cursor: pointer; font-size: 18px; color: var(--ink); }
+.zoom button + button { border-top: 1px solid var(--card-edge); }
+.zoom button:hover { background: var(--soft); }
+.scale { position: absolute; left: calc(var(--gl) + min(380px, calc(100% - var(--gl) - var(--gr) - 64px)) + 16px); bottom: 14px; display: flex; flex-direction: column; gap: 2px; color: var(--ink); font: 600 12px var(--num); text-shadow: 0 0 2px var(--halo); pointer-events: none; }
+#scaleBar { display: block; height: 6px; border: 2px solid var(--ink); border-top: 0; }
+.floorchip { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); padding: 7px 14px; font-size: 13px; max-width: calc(100% - 2 * 400px - 120px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.floorchip b { color: var(--accent); }
+.legend { position: absolute; right: var(--gr); bottom: 12px; padding: 8px 10px; display: grid; gap: 4px; font-size: 12px; z-index: 3; }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; border: 1.5px solid; }
+
+.infowin { position: absolute; z-index: 8; width: min(320px, calc(100% - var(--gl) - var(--gr))); padding: 12px 14px 12px; display: grid; gap: 8px; }
+.infowin::after { content: ""; position: absolute; left: var(--tip, 50%); bottom: -7px; width: 12px; height: 12px; background: var(--card); border-right: 1px solid var(--card-edge); border-bottom: 1px solid var(--card-edge); transform: translateX(-50%) rotate(45deg); }
+.infowin.below::after { display: none; }
+.infowin header { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.infowin h4 { margin: 0; font-size: 16px; text-wrap: balance; }
+.infowin .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.infowin dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; }
+.infowin dt { color: var(--muted); }
+.infowin dd { margin: 0; }
+.infowin .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.infowin .acts button { border: 1px solid var(--card-edge); background: var(--soft); border-radius: 7px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+.infowin .acts button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+#lightbox { position: absolute; inset: 0; z-index: 20; background: color-mix(in srgb, var(--land) 20%, #000 80%); display: grid; grid-template-rows: auto 1fr auto; padding-left: var(--gl); padding-right: var(--gr); padding-block: 12px; gap: 10px; color: #f3f5f8; }
+#lightbox header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+#lightbox h4 { margin: 0; font-size: 16px; }
+#lightbox .stage { min-height: 0; display: grid; place-items: center; }
+#lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+#lightbox p { margin: 0; line-height: 1.6; max-width: 80ch; color: #d6dbe3; }
+#lightbox .nav { display: flex; gap: 8px; }
+#lightbox button { border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #f3f5f8; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+
+@media (max-width: 760px) {
+  .search, #suggest { width: calc(100% - var(--gl) - var(--gr) - 56px); }
+  .floorchip { display: none; }
+  .legend { display: none; }
+  .right { top: 66px; gap: 8px; }
+  .floors, .layers { width: 62px; }
+  #panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 46%; border-radius: 16px 16px 0 0; border-bottom: 0; padding-left: var(--gl); padding-right: var(--gr); }
+  #panel.collapsed { height: 104px; bottom: 0; }
+  #app:not(.sheet-low) .layers, #app:not(.sheet-low) .zoom { display: none; }
+  #panel.collapsed .pane { display: none; }
+  .handle { display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--card-edge); margin: 8px auto 0; flex: none; border: 0; cursor: pointer; padding: 0; }
+  .tabs { border-bottom: 0; }
+  .pane { padding: 6px 2px 18px; }
+  .scale { left: var(--gl); bottom: calc(46% + 10px); }
+  #panel.collapsed ~ .scale { bottom: 114px; }
+  .infowin { left: var(--gl) !important; top: auto !important; bottom: calc(46% + 12px); width: calc(100% - var(--gl) - var(--gr)); }
+  #app.sheet-low .infowin { bottom: 116px; }
+  .infowin::after { display: none; }
+  .diagram-hint { display: block; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="app">
+  <svg id="map" role="img" aria-label="云澜汇停车系统地图">
+    <defs>
+      <pattern id="zebra" width="1.2" height="1.2" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+        <rect width="1.2" height="1.2" fill="var(--road)"></rect><rect width=".6" height="1.2" fill="var(--road-edge)"></rect>
+      </pattern>
+    </defs>
+    <g id="world"></g>
+  </svg>
+  <div id="labels" aria-hidden="false"></div>
+
+  <div class="hud">
+    <div class="search card" role="search">
+      <span class="logo" aria-hidden="true">P</span>
+      <input id="q" type="search" placeholder="搜索出入口、地库楼层、连接通道" autocomplete="off" aria-label="搜索" aria-controls="suggest">
+      <button id="panelToggle" class="iconbtn" type="button" aria-label="收起面板" aria-expanded="true">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </div>
+    <ul id="suggest" class="card" role="listbox" hidden></ul>
+
+    <aside id="panel" class="card" aria-label="停车系统说明">
+      <button class="handle" id="handle" type="button" aria-label="展开或收起面板"></button>
+      <nav class="tabs" role="tablist">
+        <button role="tab" id="tab-overview" data-tab="overview" aria-selected="true" type="button">总览</button>
+        <button role="tab" id="tab-entrances" data-tab="entrances" aria-selected="false" type="button">出入口</button>
+        <button role="tab" id="tab-vertical" data-tab="vertical" aria-selected="false" type="button">竖向连接</button>
+        <button role="tab" id="tab-shots" data-tab="shots" aria-selected="false" type="button">实景截图</button>
+      </nav>
+      <section class="pane" data-pane="overview" role="tabpanel" aria-labelledby="tab-overview"></section>
+      <section class="pane" data-pane="entrances" role="tabpanel" aria-labelledby="tab-entrances" hidden></section>
+      <section class="pane" data-pane="vertical" role="tabpanel" aria-labelledby="tab-vertical" hidden></section>
+      <section class="pane" data-pane="shots" role="tabpanel" aria-labelledby="tab-shots" hidden></section>
+    </aside>
+
+    <div class="floorchip card" id="floorchip" aria-live="polite"></div>
+
+    <div class="right">
+      <div class="compass card" title="上北下南"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M11 2l4 9h-8z" fill="var(--risk)"/><path d="M11 20l-4-9h8z" fill="var(--muted)"/></svg></div>
+      <div class="floors card" role="radiogroup" aria-label="楼层" id="floors"><div class="bname">楼层</div></div>
+      <div class="layers card" id="layers" aria-label="图层">
+        <button type="button" data-layer="stalls" aria-pressed="true">车位</button>
+        <button type="button" data-layer="cols" aria-pressed="true">柱网</button>
+        <button type="button" data-layer="tags" aria-pressed="true">标注</button>
+      </div>
+      <div class="zoom card">
+        <button type="button" id="zin" aria-label="放大">+</button>
+        <button type="button" id="zout" aria-label="缩小">−</button>
+        <button type="button" id="zfit" aria-label="回到全图" title="回到全图">⌂</button>
+      </div>
+    </div>
+
+    <div class="scale" aria-hidden="true"><b id="scaleText" class="num">100 m</b><span id="scaleBar"></span></div>
+    <div class="legend card" id="legend" aria-label="图例"></div>
+  </div>
+
+  <div id="card" class="infowin card" role="dialog" aria-label="详情" hidden></div>
+  <div id="lightbox" role="dialog" aria-modal="true" aria-label="实景截图" hidden>
+    <header><h4 id="lbTitle"></h4><div class="nav"><button type="button" id="lbPrev">上一张</button><button type="button" id="lbNext">下一张</button><button type="button" id="lbClose">关闭</button></div></header>
+    <div class="stage"><img id="lbImg" alt=""></div>
+    <p id="lbText"></p>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const D = /*__PARKING_DATA__*/null;
+const NS = 'http://www.w3.org/2000/svg';
+const $ = s => document.querySelector(s);
+const svg = $('#map'), world = $('#world'), labelsEl = $('#labels'), app = $('#app');
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fmt = n => n.toLocaleString('zh-CN');
+
+// ---------- geometry helpers ----------
+const ring = a => { let s = ''; for (let i = 0; i < a.length; i += 2) s += (i ? 'L' : 'M') + a[i] + ' ' + a[i + 1]; return s + 'Z'; };
+const rings = list => list.map(ring).join('');
+const pairsOf = a => { const p = []; for (let i = 0; i < a.length; i += 2) p.push([a[i], a[i + 1]]); return p; };
+const center = a => { let x = 0, z = 0; const n = a.length / 2; for (let i = 0; i < a.length; i += 2) { x += a[i]; z += a[i + 1]; } return [x / n, z / n]; };
+const bounds = list => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; for (const a of list) for (let i = 0; i < a.length; i += 2) { x0 = Math.min(x0, a[i]); x1 = Math.max(x1, a[i]); z0 = Math.min(z0, a[i + 1]); z1 = Math.max(z1, a[i + 1]); } return { x0, z0, x1, z1 }; };
+function el(tag, attrs = {}, parent = null) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function h(tag, attrs = {}, ...kids) { const e = document.createElement(tag); for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]); else e.setAttribute(k, attrs[k]); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(c)); return e; }
+
+// ---------- data model ----------
+const LV = Object.fromEntries(D.levels.map(l => [l.id, l]));
+const lvName = id => id === 'street' ? '地面' : (LV[id]?.name || id);
+const lvElev = id => id === 'street' ? 0 : LV[id]?.elev;
+const m = v => `${v}m`;
+const FLOORS = [
+  { id: 'ground', name: '地面', sub: '0m' },
+  { id: 't1', name: '-4.5m', sub: '负一' },
+  { id: 't2', name: '-8.4m', sub: '负二' },
+  { id: 't3', name: '-12m', sub: '负三' },
+];
+const tierLevels = t => D.levels.filter(l => l.tier === t);
+const floorStalls = f => f === 'ground' ? D.surface.west.stallCount + D.surface.hotel.stallCount : tierLevels(f).reduce((n, l) => n + l.stallCount, 0);
+
+const STEM = id => id.replace(/-(IN|OUT|DN|UP|B1-B2-DOWN|B2-B1-UP)$/, '');
+const PAIR_NAME = {
+  'street|P1-N': '方庭北口', 'street|P1-E': '星湾东口', 'street|A': '公寓北口', 'street|H': '酒店南口',
+  'street|WPG': '西北公共口', 'street|WPG-SOUTH': '西南公共口', 'street|P2': '二期车库口', 'street|P3': '三期车库口',
+  'street|P3-SOUTH': '三期西南口', 'street|R1': '住宅车库口',
+  'inner|P1': '一期中庭坡道', 'inner|P1-SHARED-N': '一期北侧坡道', 'inner|WPG': '西库中部坡道', 'inner|WPG-SHARED': '西库西侧坡道',
+  'inner|H': '酒店坡道', 'inner|A': '公寓坡道', 'inner|P2': '二期坡道', 'inner|P3': '三期坡道',
+};
+const SHOTS = [
+  ['01-p1-b1-top', '一期 B1（-8.4m）俯视', '890 个车位。方庭北口、星湾东口两对坡道直接下到本层；中庭和北侧两对坡道下到 B2；西、西南、东北三处平层连接道分别通西库 B2、酒店 B2、公寓 B2。'],
+  ['02-p1-b2-top', '一期 B2（-12m）俯视', '1,164 个车位，只经中庭、北侧两对坡道与一期 B1 相连。'],
+  ['03-wpg-b1-top', '西侧公共车库 B1（-4.5m）俯视', '1,007 个车位。西北、西南两处坡道直通地面停车场，两对坡道下到西库 B2，东侧步行连廊通一期 B1M。'],
+  ['04-wpg-b2-top', '西侧公共车库 B2（-8.4m）俯视', '1,064 个车位。东侧经跨西外环隧道平层接一期 B1。'],
+  ['05-tier-84-top', '-8.4m 层整体俯视', '一期 B1、西库 B2、酒店 B2、公寓 B2 在同一标高，车辆可以直接开过去。'],
+  ['06-tier-45-top', '-4.5m 层整体俯视', '西库 B1、酒店 B1、公寓 B1 停车；一期 B1M 是美食广场和地铁站厅，只走人，不进车。'],
+  ['07-shared-exploded', '三层拆开鸟瞰', '自下而上：-12m 一期 B2；-8.4m 一期 B1、西库 B2、酒店/公寓 B2；-4.5m 西库 B1、一期 B1M、酒店/公寓 B1。为看清层次，上层向北错开显示。'],
+  ['08-p1-hub-ramps', '一期中庭坡道 B1 ⇄ B2', '一上一下两条坡道，各 4.5m 宽、24m 长，坡度 15%。'],
+  ['09-p1-north-ramps', '方庭北口坡道与北侧坡道', '远处两条 60m 长坡道上到北外环；近处是一期 B1 ⇄ B2 的北侧坡道。'],
+  ['10-p1-east-ramps', '星湾东口坡道', '从星湾路下到一期 B1 的两条 56m 坡道，坡脚接 B1 南缘到达车道。'],
+  ['11-west-tunnel', '跨西外环隧道', '西库 B2 与一期 B1 之间的车行隧道，两端都是 -8.4m，平层双向。'],
+  ['12-hotel-dock', '酒店 B2 ⇄ 一期 B1', '左上是酒店 B1 ⇄ B2 坡道，右侧是酒店 B2 与一期 B1 之间的平层连接道。'],
+  ['13-apartment-dock', '公寓 B2 ⇄ 一期 B1', '公寓坡道与平层连接道。'],
+  ['14-wpg-ramps', '西库 B1 ⇄ B2 坡道', '西库中部一对坡道，30m 长，坡度 13%。'],
+  ['15-ground-north-portal', '方庭北口地面口部', '北外环一侧的雨棚、闸杆和入口/出口标识。'],
+  ['16-ground-east-portal', '星湾东口地面口部', '星湾路一侧的雨棚、闸杆和标识。'],
+  ['17-west-lot-top', '西侧地面停车场俯视', '576 个车位，6 个车行口；场内两处坡道下到西库 B1。'],
+  ['18-west-lot-bird', '西侧地面停车场鸟瞰', '三列停车区、纵向车道、步行脊和南侧交通中心。'],
+  ['19-hotel-entrance', '酒店南口与落客环岛', '两条坡道有长雨棚；地面保留 22 个短停车位。'],
+];
+const SHOT_INDEX = Object.fromEntries(SHOTS.map((s, i) => [s[0].slice(0, 2), i]));
+const shotOf = n => SHOT_INDEX[n];
+
+// Ramp pairs: one map object per entrance or between-floor ramp pair.
+const pairs = new Map();
+for (const r of D.ramps) {
+  const key = `${r.kind}|${STEM(r.id)}`;
+  if (!pairs.has(key)) pairs.set(key, { key, id: 'pair:' + key, kind: r.kind, name: PAIR_NAME[key] || r.name, ramps: [], system: r.system });
+  pairs.get(key).ramps.push(r);
+}
+const ENT = Object.fromEntries(D.entrances.map(e => [e.id, e]));
+for (const p of pairs.values()) {
+  const c = p.ramps.map(r => [(r.low.x + r.high.x) / 2, (r.low.z + r.high.z) / 2]);
+  p.at = [c.reduce((s, q) => s + q[0], 0) / c.length, c.reduce((s, q) => s + q[1], 0) / c.length];
+  p.mouth = p.kind === 'street' ? [p.ramps.reduce((s, r) => s + r.high.x, 0) / p.ramps.length, p.ramps.reduce((s, r) => s + r.high.z, 0) / p.ramps.length] : null;
+  p.low = p.ramps[0].low.level; p.high = p.ramps[0].high.level;
+  p.tiers = [...new Set(p.ramps.flatMap(r => r.tiers))];
+  p.expansion = p.ramps.some(r => r.expansion);
+  p.entrances = p.ramps.map(r => ENT[r.id]).filter(Boolean);
+  p.dist = p.entrances.length ? Math.min(...p.entrances.map(e => e.toIntersection)) : null;
+}
+const PAIR_SHOTS = { 'street|P1-N': ['15', '09'], 'street|P1-E': ['16', '10'], 'inner|P1': ['08'], 'inner|P1-SHARED-N': ['09'], 'inner|WPG': ['14'], 'street|H': ['19'], 'street|WPG': ['17'], 'street|WPG-SOUTH': ['17'] };
+
+const LINK_GEO = Object.fromEntries(D.links.map(l => [l.id, l]));
+const LINKS = [
+  { id: 'link:tunnel', name: '跨西外环车行隧道', kind: 'vehicle', tier: 't2', from: 'WPG-B2', to: 'P1-B1', width: 6, geo: ['shared-west-tunnel'], at: [-293, -179], shots: ['11', '05'],
+    note: '从西外环路面下穿过，两端都在 -8.4m，平层双向通行。西侧地面停车场进来的车可经西库 B1 → B2 → 隧道到一期 B1。' },
+  { id: 'link:hotel', name: '酒店车行连接道', kind: 'vehicle', tier: 't2', from: 'H-B2', to: 'P1-B1', width: 6, geo: ['P1-hotel-dock-B1'], at: [-205, -81.2], shots: ['12', '05'],
+    note: '酒店 B2 与一期 B1 同为 -8.4m，经 6m 平层连接道互通；酒店南口进来的车可一路开进一期地库。' },
+  { id: 'link:apartment', name: '公寓车行连接道', kind: 'vehicle', tier: 't2', from: 'A-B2', to: 'P1-B1', width: 6, geo: ['P1-apartment-dock-B1'], at: [-60, -173.5], shots: ['13', '05'],
+    note: '公寓 B2 与一期 B1 同为 -8.4m，经 6m 平层连接道互通。' },
+  { id: 'link:west-walk', name: '西库—B1M 步行连廊', kind: 'walk', tier: 't1', from: 'WPG-B1', to: 'P1-B1M', width: 5, geo: ['west-parking-mall'], at: [-292, -200], shots: ['06'],
+    note: '-4.5m 步行连廊，从西库 B1 走到一期 B1M 美食广场和地铁站厅，不通车。' },
+  { id: 'link:hotel-walk', name: '酒店—B1M 步行连廊', kind: 'walk', tier: 't1', from: 'H-B1', to: 'P1-B1M', width: 5, geo: ['hotel-mall-metro'], at: [-208.5, -81.2], shots: ['06'],
+    note: '-4.5m 步行连廊，酒店 B1 直通一期 B1M 与地铁。' },
+  { id: 'link:apartment-walk', name: '公寓—B1M 步行连廊', kind: 'walk', tier: 't1', from: 'A-B1', to: 'P1-B1M', width: 5, geo: ['apartment-mall-metro'], at: [-46, -173.5], shots: ['06'],
+    note: '-4.5m 步行连廊，公寓 B1 直通一期 B1M 与地铁。' },
+  { id: 'link:res', name: '住宅地下车行通道', kind: 'vehicle', tier: 't1', from: 'R1-B1', to: 'R2/R3/R4-B1', width: 6, geo: ['residential-garage-spine', 'residential-2-garage', 'residential-3-garage', 'residential-4-garage'], at: [157, -190], shots: [],
+    note: '四栋住宅 B1 由一条 6m 地下车行通道串起，共用住宅车库口进出；不接一期。' },
+  { id: 'link:res-walk', name: '住宅—二期 B1 步行连廊', kind: 'walk', tier: 't1', from: 'R1-B1', to: 'P2-B1', width: 5, geo: ['residential-mall-metro'], at: [106, -163], shots: [],
+    note: '住宅 B1 走到二期 B1 与地铁的步行连廊，不通车。' },
+];
+const GATES = D.surface.west.gates.map(g => ({ ...g, id: 'gate:' + g.id, gid: g.id, ent: ENT[g.id], shots: ['17', '18'] }));
+const OBJ = new Map([...[...pairs.values()].map(p => [p.id, p]), ...LINKS.map(l => [l.id, l]), ...GATES.map(g => [g.id, g])]);
+
+// ---------- SVG scene ----------
+const G = {};
+const group = (name, parent = world, attrs = {}) => (G[name] = el('g', attrs, parent));
+group('base');
+for (const f of FLOORS) group(f.id, world, { 'data-floor': f.id });
+group('sel');
+const near = a => { const b = bounds([a]); return b.x1 > -620 && b.x0 < 360 && b.z1 > -320 && b.z0 < 300; };
+
+// Basemap shared by every floor (dimmed underground, like an indoor map over the city).
+el('rect', { x: -1400, y: -1400, width: 2800, height: 2800, class: 'land' }, G.base);
+for (const p of D.plots) el('path', { d: ring(p.poly), class: 'plot' + (p.id === 'park' ? ' park' : '') }, G.base);
+const roadsG = el('g', {}, G.base);
+for (const r of D.roads) el('path', { d: 'M' + r.poly.map(q => q.join(' ')).join('L') + 'Z', class: 'road' + (['avenue', 'xingwan'].includes(r.id) ? ' major' : '') }, roadsG);
+const groundOnly = el('g', {}, G.ground);
+for (const c of D.crossings) el('path', { d: 'M' + c.poly.map(q => q.join(' ')).join('L') + 'Z', class: 'xing' }, groundOnly);
+for (const b of D.footprints) el('path', { d: ring(b.poly), class: 'bldg' }, groundOnly);
+for (const f of ['t1', 't2', 't3']) for (const b of D.footprints) el('path', { d: ring(b.poly), class: 'ghost' }, G[f]);
+
+// Ground: surface lots, ramp mouths and gates.
+const W = D.surface.west, HL = D.surface.hotel;
+el('path', { d: ring(W.poly), class: 'lot' }, G.ground);
+el('path', { d: W.roads.flatMap(r => r.polys).map(ring).join(''), class: 'lotroad' }, G.ground);
+el('path', { d: rings(W.islands), class: 'island' }, G.ground);
+el('path', { d: ring(W.transit.poly), class: 'transit' }, G.ground);
+el('path', { d: W.walks.flatMap(w => w.polys).map(ring).join(''), class: 'walkway' }, G.ground);
+el('path', { d: ring(HL.poly), class: 'lot' }, G.ground);
+el('path', { d: ring(HL.aisle), class: 'lotroad' }, G.ground);
+if (HL.loop) { const r = HL.loop.rect; el('rect', { x: r.x0, y: r.z0, width: r.x1 - r.x0, height: r.z1 - r.z0, rx: HL.loop.corner, class: 'loop' }, G.ground); el('path', { d: ring(HL.loop.planter), class: 'planter' }, G.ground); }
+const stallPaths = (parent, s) => { el('path', { d: rings(s.normal), class: 'stall' }, parent); el('path', { d: rings(s.ev), class: 'stall ev' }, parent); el('path', { d: rings(s.accessible), class: 'stall acc' }, parent); };
+stallPaths(G.ground, W.stalls); stallPaths(G.ground, HL.stalls);
+
+const arrowAlong = (parent, a, b, every = 14) => {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len, nx = -uz, nz = ux;
+  const n = Math.max(1, Math.round(len / every));
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    const t = (i + .5) / n, cx = a[0] + (b[0] - a[0]) * t, cz = a[1] + (b[1] - a[1]) * t;
+    d += `M${cx - ux * 1.2 + nx * 1.3} ${cz - uz * 1.2 + nz * 1.3}L${cx + ux * 1.2} ${cz + uz * 1.2}L${cx - ux * 1.2 - nx * 1.3} ${cz - uz * 1.2 - nz * 1.3}`;
+  }
+  el('path', { d, class: 'arrow' }, parent);
+};
+const hitTargets = [];
+function addHit(parent, d, obj, cls) {
+  const shape = el('path', { d, class: cls, 'data-obj': obj.id }, parent);
+  const hit = el('path', { d, class: 'hit', 'data-obj': obj.id }, parent);
+  hitTargets.push(shape, hit);
+  return shape;
+}
+for (const p of pairs.values()) if (p.kind === 'street') for (const r of p.ramps) {
+  addHit(G.ground, ring(r.open || r.poly), p, 'trench');
+  arrowAlong(G.ground, [r.from.x, r.from.z], [r.to.x, r.to.z], 10);
+}
+for (const g of GATES) {
+  const fx = g.facing[0], fz = g.facing[1], hw = (g.width || 7) / 2;
+  const d = Math.abs(fx) > Math.abs(fz) ? ring([g.x - 1.5, g.z - hw, g.x + 1.5, g.z - hw, g.x + 1.5, g.z + hw, g.x - 1.5, g.z + hw]) : ring([g.x - hw, g.z - 1.5, g.x + hw, g.z - 1.5, g.x + hw, g.z + 1.5, g.x - hw, g.z + 1.5]);
+  addHit(G.ground, d, g, 'gate');
+}
+
+// Underground tiers: decks, lanes, stalls, columns, cores, ramps and links.
+for (const f of ['t1', 't2', 't3']) {
+  const g = G[f], levels = tierLevels(f);
+  for (const l of levels) {
+    const cls = l.id === 'P1-B1M' ? 'deck concourse' : l.system === 'shared' ? 'deck' : 'deck other';
+    el('path', { d: l.slab.map(s => ring(s.outer) + rings(s.holes)).join(''), class: cls }, g);
+    el('path', { d: rings([...l.aisles, ...l.spines]), class: 'aisle' }, g);
+    el('path', { d: rings(l.lobbies), class: 'lobby' }, g);
+  }
+  for (const k of D.links) if (k.tier === f && k.kind === 'vehicle' && !LINKS.some(L => L.geo.includes(k.id))) el('path', { d: rings(k.polys || [k.poly]), class: 'aisle' }, g);
+  for (const l of levels) {
+    stallPaths(g, l.stalls);
+    el('path', { d: l.columns.map(([x, z]) => `M${x - .35} ${z - .35}h.7v.7h-.7Z`).join(''), class: 'col' }, g);
+    el('path', { d: rings([...l.lifts.map(q => q.poly), ...l.stairs.map(q => q.poly)]), class: 'core' }, g);
+  }
+  for (const p of pairs.values()) if (p.tiers.includes(f)) for (const r of p.ramps) {
+    addHit(g, ring(r.poly), p, 'ramp ' + p.kind);
+    arrowAlong(g, [r.from.x, r.from.z], [r.to.x, r.to.z], 12);
+  }
+  for (const L of LINKS) if (L.tier === f) {
+    const polys = L.geo.flatMap(id => LINK_GEO[id] ? (LINK_GEO[id].polys || [LINK_GEO[id].poly]) : []);
+    if (polys.length) addHit(g, rings(polys), L, 'link ' + L.kind);
+  }
+}
+
+// ---------- labels ----------
+const labels = [];
+function label(o) {
+  const e = h(o.obj ? 'button' : 'div', { class: 'lbl ' + (o.cls || '') });
+  if (o.obj) { e.type = 'button'; e.dataset.obj = o.obj.id; e.setAttribute('aria-label', o.aria || o.text); }
+  if (o.icon) e.append(h('i', {}, o.icon));
+  e.append(o.html ? Object.assign(document.createElement('span'), { innerHTML: o.html }) : o.text);
+  labelsEl.append(e);
+  // Entrances, gates and links between garages outrank inner ramp tags, which outrank garage names, then roads.
+  labels.push({ ...o, el: e, pri: o.tag ? (/inner/.test(o.cls) ? 3 : 4) : /level/.test(o.cls) ? 2 : 1 });
+  return e;
+}
+// Roads: one label near the campus for each named road; vertical roads read top to bottom.
+for (const r of D.roads) {
+  if (/^city-(h|v|n|s)/.test(r.id) && !/xingwan/.test(r.id)) continue;
+  const xs = r.poly.map(q => q[0]), zs = r.poly.map(q => q[1]);
+  const x = Math.max(-560, Math.min(320, (Math.min(...xs) + Math.max(...xs)) / 2)), z = Math.max(-300, Math.min(290, (Math.min(...zs) + Math.max(...zs)) / 2));
+  const at = { avenue: [-150, 0], xingwan: [0, -150], 'ring-n': [-100, -262], 'ring-w': [-292, -160], 'ring-s': [-150, 262], 'ring-e': [292, -100], 'service-n': [150, -170],
+    'city-avenue-west': [-440, 0], 'city-ring-west-262': [-440, -262] }[r.id] || [x, z];
+  label({ x: at[0], z: at[1], text: r.name, cls: 'road' + (r.dir === 'z' ? ' v' : ''), floor: 'all', min: .7 });
+}
+// Garage level names with stall counts.
+for (const l of D.levels) {
+  const b = bounds(l.slab.map(s => s.outer)), big = (b.x1 - b.x0) * (b.z1 - b.z0) > 20000;
+  const at = { 'P1-B1': [-150, -60], 'P1-B2': [-150, -60], 'P1-B1M': [-160, -140], 'WPG-B1': [-391, -40], 'WPG-B2': [-391, -40], 'H-B1': [-246, -70], 'H-B2': [-246, -70], 'A-B1': [-35, -190], 'A-B2': [-35, -190] }[l.id] || [(b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2];
+  label({ x: at[0], z: at[1], cls: 'level', floor: l.tier, min: big ? .5 : 1.6,
+    html: `${l.name} <span class="num">${m(l.elev)}</span><small>${l.id === 'P1-B1M' ? '美食广场 · 地铁站厅（步行）' : `${fmt(l.stallCount)} 个车位${l.system !== 'shared' ? ' · 独立系统' : ''}`}</small>` });
+}
+label({ x: -392, z: -150, cls: 'level', floor: 'ground', min: .5, html: `西侧地面停车场<small>${fmt(W.stallCount)} 个车位 · 6 个车行口</small>` });
+label({ x: -248, z: -52, cls: 'level', floor: 'ground', min: 1.4, html: `酒店地面车位<small>${HL.stallCount} 个 · 落客环岛</small>` });
+// Clickable tags for ramp pairs, links and gates.
+const tagText = (p, f) => {
+  if (p.kind === 'street') return f === 'ground' ? p.name : `${p.name} ↑地面`;
+  const upper = lvElev(p.high), here = f === 't1' ? -4.5 : f === 't2' ? -8.4 : -12;
+  const otherIsBelow = Math.abs(here - (upper ?? 0)) < 1.5;
+  return `${p.name} ${otherIsBelow ? '↓' : '↑'}${otherIsBelow ? lvName(p.low) : lvName(p.high)}`;
+};
+for (const p of pairs.values()) for (const f of [p.kind === 'street' ? 'ground' : null, ...p.tiers.filter(t => t !== 'ground')].filter(Boolean)) {
+  const at = f === 'ground' ? p.mouth : p.at;
+  label({ x: at[0], z: at[1], obj: p, floor: f, cls: 'tag ' + p.kind, icon: p.kind === 'street' ? 'P' : '↕', text: tagText(p, f), min: p.system === 'shared' ? .9 : 1.3, tag: true });
+}
+for (const L of LINKS) label({ x: L.at[0], z: L.at[1], obj: L, floor: L.tier, cls: 'tag ' + L.kind, icon: L.kind === 'walk' ? '人' : '⇄', text: L.name, min: .9, tag: true });
+for (const g of GATES) label({ x: g.x + g.facing[0] * 8, z: g.z + g.facing[1] * 8, obj: g, floor: 'ground', cls: 'tag gate', icon: '口', text: g.name, min: 1.1, tag: true });
+
+// ---------- view: pan and zoom ----------
+const V = { cx: -250, cz: -142, k: 2 };
+const VW = () => svg.clientWidth, VH = () => svg.clientHeight;
+const toScreen = (x, z) => [(x - V.cx) * V.k + VW() / 2, (z - V.cz) * V.k + VH() / 2];
+const toWorld = (sx, sy) => [(sx - VW() / 2) / V.k + V.cx, (sy - VH() / 2) / V.k + V.cz];
+const KMIN = .35, KMAX = 26;
+let floor = 't2', layers = { stalls: true, cols: true, tags: true }, raf = 0;
+function render() {
+  raf = 0;
+  world.setAttribute('transform', `translate(${VW() / 2 - V.cx * V.k} ${VH() / 2 - V.cz * V.k}) scale(${V.k})`);
+  world.classList.toggle('lod-stalls', !layers.stalls || V.k < 1.1);
+  world.classList.toggle('lod-cols', !layers.cols || V.k < 3.2);
+  // Labels go down in priority order (the open card's own tag first); one that would overlap a placed
+  // label stays hidden until the map is zoomed in far enough to separate them, as on a street map.
+  const w = VW(), hh = VH(), taken = [];
+  const rank = L => L.pri + (current && L.obj === current.obj ? 10 : 0), minScale = innerWidth <= 760 ? .6 : 1;
+  for (const L of [...labels].sort((a, b) => rank(b) - rank(a))) {
+    const vis = (L.floor === 'all' || L.floor === floor) && V.k >= (L.min || 0) * minScale && (!L.tag || layers.tags);
+    if (!vis) { L.el.hidden = true; continue; }
+    const [sx, sy] = toScreen(L.x, L.z);
+    if (sx < -200 || sy < -60 || sx > w + 200 || sy > hh + 60) { L.el.hidden = true; continue; }
+    L.el.hidden = false;
+    if (!L.w) { L.w = L.el.offsetWidth; L.h = L.el.offsetHeight; }
+    const r = [sx - L.w / 2 - 3, sy - L.h / 2 - 2, sx + L.w / 2 + 3, sy + L.h / 2 + 2];
+    if (taken.some(t => r[0] < t[2] && r[2] > t[0] && r[1] < t[3] && r[3] > t[1])) { L.el.hidden = true; continue; }
+    taken.push(r);
+    L.el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%)`;
+  }
+  // Scale bar: a round length near 90 px.
+  const target = 90 / V.k, steps = [5, 10, 20, 50, 100, 200, 500, 1000];
+  const len = steps.find(s => s >= target * .7) || 1000;
+  $('#scaleBar').style.width = `${len * V.k}px`; $('#scaleText').textContent = len >= 1000 ? `${len / 1000} km` : `${len} m`;
+  placeCard();
+}
+const schedule = () => { if (!raf) raf = requestAnimationFrame(render); };
+// Web fonts change label widths once they arrive, so measure again.
+document.fonts?.ready.then(() => { for (const L of labels) L.w = 0; schedule(); });
+function zoomAt(f, sx = VW() / 2, sy = VH() / 2) {
+  const [wx, wz] = toWorld(sx, sy), k = Math.max(KMIN, Math.min(KMAX, V.k * f));
+  V.cx = wx - (sx - VW() / 2) / k; V.cz = wz - (sy - VH() / 2) / k; V.k = k; schedule();
+}
+function flyTo(cx, cz, k, ms = 450) {
+  if (REDUCED) { Object.assign(V, { cx, cz, k }); schedule(); return; }
+  const a = { ...V }, t0 = performance.now();
+  const tick = now => { const t = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - t, 3);
+    V.cx = a.cx + (cx - a.cx) * e; V.cz = a.cz + (cz - a.cz) * e; V.k = Math.exp(Math.log(a.k) + (Math.log(k) - Math.log(a.k)) * e); render();
+    if (t < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+// Height the phone bottom sheet covers right now (none on desktop, where the panel sits at the side).
+const sheetH = () => innerWidth > 760 ? 0 : $('#panel').classList.contains('collapsed') ? 104 : VH() * .46;
+// Width the desktop side panel covers, gutter included (none on phones or when collapsed).
+const sidePanelW = () => innerWidth > 760 && !$('#panel').classList.contains('collapsed') ? $('#panel').offsetWidth + 20 : 0;
+function fit(b, pad = 40) {
+  const phone = innerWidth <= 760, panelW = sidePanelW(), sheet = sheetH();
+  // Phones keep only a thin margin; the floor picker column on the right is all that must stay clear.
+  if (phone) pad = 12;
+  const right = phone ? 78 : 90, w = VW() - panelW - pad * 2 - right, hh = VH() - sheet - pad * 2 - 60;
+  const k = Math.max(KMIN, Math.min(KMAX, Math.min(w / (b.x1 - b.x0), hh / (b.z1 - b.z0))));
+  const cx = (b.x0 + b.x1) / 2 - (panelW - right) / 2 / k, cz = (b.z0 + b.z1) / 2 + (sheet - 20) / 2 / k;
+  return { cx, cz, k };
+}
+const HOME = { x0: -490, z0: -262, x1: -10, z1: -22 };
+// Pointer drag and pinch.
+const pts = new Map(); let pinch = null, moved = false;
+svg.addEventListener('pointerdown', e => { svg.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); moved = false;
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k: V.k }; } svg.classList.add('dragging'); });
+svg.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return;
+  const prev = pts.get(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pts.size === 2 && pinch) {
+    const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), r = svg.getBoundingClientRect();
+    zoomAt((pinch.k * d / pinch.d) / V.k, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top); moved = true; return;
+  }
+  const dx = e.clientX - prev[0], dy = e.clientY - prev[1];
+  if (Math.abs(dx) + Math.abs(dy) > 0) { V.cx -= dx / V.k; V.cz -= dy / V.k; if (Math.abs(dx) + Math.abs(dy) > 2) moved = true; schedule(); }
+});
+const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) svg.classList.remove('dragging'); };
+svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+svg.addEventListener('wheel', e => { e.preventDefault(); const r = svg.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * .0016), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+svg.addEventListener('dblclick', e => { const r = svg.getBoundingClientRect(); zoomAt(2, e.clientX - r.left, e.clientY - r.top); });
+svg.addEventListener('click', e => { if (moved) return; const t = e.target.closest('[data-obj]'); if (t) open(OBJ.get(t.dataset.obj)); else close(); });
+labelsEl.addEventListener('click', e => { const t = e.target.closest('[data-obj]'); if (t) open(OBJ.get(t.dataset.obj)); });
+addEventListener('keydown', e => {
+  if (e.target.closest('input')) return;
+  if (!$('#lightbox').hidden) { if (e.key === 'Escape') closeLightbox(); if (e.key === 'ArrowRight') showShot(lbIndex + 1); if (e.key === 'ArrowLeft') showShot(lbIndex - 1); return; }
+  const step = 60 / V.k;
+  if (e.key === 'ArrowLeft') V.cx -= step; else if (e.key === 'ArrowRight') V.cx += step; else if (e.key === 'ArrowUp') V.cz -= step; else if (e.key === 'ArrowDown') V.cz += step;
+  else if (e.key === '+' || e.key === '=') zoomAt(1.4, ...mapMid()); else if (e.key === '-') zoomAt(1 / 1.4, ...mapMid()); else if (e.key === 'Escape') close(); else return;
+  schedule();
+});
+// Zoom buttons keep the middle of the uncovered map still, not the middle of the window.
+const mapMid = () => [sidePanelW() + (VW() - sidePanelW()) / 2, (VH() - sheetH()) / 2];
+$('#zin').onclick = () => zoomAt(1.5, ...mapMid()); $('#zout').onclick = () => zoomAt(1 / 1.5, ...mapMid());
+$('#zfit').onclick = () => { const v = fit(HOME); flyTo(v.cx, v.cz, v.k); };
+addEventListener('resize', schedule);
+
+// ---------- floors, layers, legend ----------
+const floorsEl = $('#floors');
+for (const f of FLOORS) {
+  const b = h('button', { type: 'button', role: 'radio', 'data-floor': f.id, 'aria-checked': 'false', title: `${f.name} · ${fmt(floorStalls(f.id))} 个车位` }, h('b', {}, f.name), h('span', {}, f.sub));
+  b.onclick = () => setFloor(f.id);
+  floorsEl.append(b);
+}
+const FLOOR_NOTE = {
+  ground: '地面 · 街道口部、西侧与酒店地面停车场',
+  t1: '-4.5m · <b>西库 B1</b>、酒店 B1、公寓 B1 停车；一期 B1M 美食·地铁只走人',
+  t2: '-8.4m · <b>一期 B1</b>、西库 B2、酒店 B2、公寓 B2 平层互通',
+  t3: '-12m · <b>一期 B2</b>，经两对坡道上一期 B1',
+};
+function setFloor(f) {
+  floor = f;
+  for (const x of FLOORS) G[x.id].style.display = x.id === f ? '' : 'none';
+  roadsG.classList.toggle('dim', f !== 'ground'); G.base.classList.toggle('dim', f !== 'ground');
+  for (const b of floorsEl.querySelectorAll('button')) b.setAttribute('aria-checked', String(b.dataset.floor === f));
+  $('#floorchip').innerHTML = FLOOR_NOTE[f];
+  const sel = current && current.obj; if (sel && !visibleOn(sel, f)) close();
+  legend(); schedule();
+}
+const visibleOn = (o, f) => o.kind === 'street' ? f === 'ground' || o.tiers.includes(f) : o.tiers ? o.tiers.includes(f) : o.tier ? o.tier === f : f === 'ground';
+for (const b of $('#layers').querySelectorAll('button')) b.onclick = () => { const k = b.dataset.layer; layers[k] = !layers[k]; b.setAttribute('aria-pressed', String(layers[k])); schedule(); };
+function legend() {
+  const items = floor === 'ground'
+    ? [['var(--street)', '坡道口（入/出）'], ['var(--street)', '地面停车场车行口'], ['var(--stall)', '车位'], ['var(--stall-ev)', '充电车位'], ['var(--stall-acc)', '无障碍车位']]
+    : [['var(--street)', '通地面坡道'], ['var(--inner)', '层间坡道'], ['var(--link)', '平层车行连接'], ['var(--walk)', '步行连廊'], ['var(--core)', '电梯 / 楼梯'], ['var(--stall-ev)', '充电车位']];
+  $('#legend').replaceChildren(...items.map(([c, t]) => h('span', {}, Object.assign(h('i'), { style: `background:color-mix(in srgb, ${c} 45%, transparent);border-color:${c}` }), t)));
+}
+
+// ---------- info window ----------
+let current = null;
+const statusOf = d => d == null ? null : d >= 70 ? ['ok', '距路口充足'] : d >= 30 ? ['warn', '距路口偏近'] : ['risk', '距路口过近'];
+function open(o) {
+  if (!o) return;
+  if (!visibleOn(o, floor)) setFloor(o.kind === 'street' ? 'ground' : o.tiers ? o.tiers[0] : o.tier || 'ground');
+  current = { obj: o };
+  const c = $('#card'); c.hidden = false;
+  const rows = [], acts = [];
+  let title = o.name, sub = '';
+  if (o.ramps) {
+    const r = o.ramps[0];
+    sub = o.kind === 'street' ? `${o.ramps.length === 2 ? '入口 + 出口' : '坡道'} · 落 ${lvName(o.low)}（${m(lvElev(o.low))}）` : `${lvName(o.high)}（${m(lvElev(o.high))}）⇄ ${lvName(o.low)}（${m(lvElev(o.low))}）`;
+    const e = o.entrances[0];
+    if (o.kind === 'street') rows.push(['所接道路', e?.via || '—']);
+    rows.push(['坡道', `${o.ramps.length} 条 · 各宽 ${r.width}m · 长 ${r.length}m · 坡度 ${r.slope}%`]);
+    if (o.kind === 'street' && r.openLength != null) rows.push(['地面敞开段', r.openLength < r.length - .5 ? `${r.openLength}m，其后为暗埋段（上方可走人）` : `${r.openLength}m（全长敞开）`]);
+    if (e) { const s = statusOf(o.dist); rows.push(['距最近路口', `<span class="num">${o.dist}m</span>（${e.intersection}） <span class="chip ${s[0]}">${s[1]}</span>`]); rows.push(['距人行横道', `<span class="num">${Math.min(...o.entrances.map(x => x.toCrossing))}m</span>`]); }
+    rows.push(['所属', D.systems[o.system]?.name || '—']);
+    if (o.kind === 'street') acts.push(['查看地下落点', () => { setFloor(D.levels.find(l => l.id === o.low).tier); focusObj(o, false); }]);
+    else acts.push([`看${lvName(o.high)}`, () => setFloor(LV[o.high].tier)], [`看${lvName(o.low)}`, () => setFloor(LV[o.low].tier)]);
+  } else if (o.geo) {
+    sub = `${lvName(o.from)}（${m(lvElev(o.from) ?? -4.5)}）⇄ ${o.to.includes('/') ? o.to : `${lvName(o.to)}（${m(lvElev(o.to))}）`}`;
+    rows.push(['类型', o.kind === 'walk' ? '步行连廊 · 不通车' : '车行 · 双向']); rows.push(['宽度', `${o.width}m`]);
+    rows.push(['说明', o.note]);
+  } else {
+    const e = o.ent, s = statusOf(e?.toIntersection);
+    sub = `西侧地面停车场车行口${e?.expansion ? ' · 本方案新增' : ''}`;
+    rows.push(['所接道路', e?.via || '—'], ['方向', '双向 · 7m'], ['距最近路口', `<span class="num">${e?.toIntersection}m</span>（${e?.intersection}） <span class="chip ${s[0]}">${s[1]}</span>`]);
+    rows.push(['距人行横道', e?.toCrossing === 0 ? '车行口跨人行道，设斑马线' : `<span class="num">${e?.toCrossing}m</span>`]);
+  }
+  const shots = o.shots || PAIR_SHOTS[o.key] || [];
+  if (shots.length) acts.push(['实景截图', () => openLightbox(shotOf(shots[0]))]);
+  c.replaceChildren(
+    h('header', {}, h('div', {}, h('h4', {}, title, o.expansion || o.ent?.expansion ? ' ' : '', o.expansion || o.ent?.expansion ? h('span', { class: 'chip new' }, '新增') : null), h('div', { class: 'sub' }, sub)),
+      h('button', { class: 'iconbtn', type: 'button', 'aria-label': '关闭', onclick: close }, '✕')),
+    Object.assign(h('dl'), { innerHTML: rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') }),
+    h('div', { class: 'acts' }, acts.map(([t, fn], i) => h('button', { type: 'button', class: i === 0 ? 'primary' : '', onclick: fn }, t))));
+  for (const L of labels) L.el.classList.toggle('on', L.obj === o);
+  highlight(o); placeCard();
+}
+function close() { current = null; $('#card').hidden = true; for (const L of labels) L.el.classList.remove('on'); G.sel.replaceChildren(); }
+function anchorOf(o) { return o.ramps ? (floor === 'ground' && o.mouth ? o.mouth : o.at) : o.at || [o.x, o.z]; }
+function placeCard() {
+  const c = $('#card'); if (!current || c.hidden || innerWidth <= 760) return;
+  const [sx, sy] = toScreen(...anchorOf(current.obj)), w = c.offsetWidth, hh = c.offsetHeight, W0 = VW();
+  let left = Math.max(12, Math.min(W0 - w - 12, sx - w / 2)), top = sy - hh - 18, below = false;
+  if (top < 70) { top = sy + 22; below = true; }
+  c.classList.toggle('below', below);
+  c.style.left = left + 'px'; c.style.top = top + 'px'; c.style.setProperty('--tip', `${Math.max(16, Math.min(w - 16, sx - left))}px`);
+}
+function highlight(o) {
+  G.sel.replaceChildren();
+  const polys = o.ramps ? o.ramps.map(r => floor === 'ground' && r.open ? r.open : r.poly) : o.geo ? o.geo.flatMap(id => LINK_GEO[id] ? (LINK_GEO[id].polys || [LINK_GEO[id].poly]) : []) : null;
+  if (polys) el('path', { d: rings(polys), class: 'sel' }, G.sel);
+  else el('circle', { cx: o.x, cy: o.z, r: 6, class: 'sel' }, G.sel);
+}
+function focusObj(o, openIt = true) {
+  const [x, z] = anchorOf(o), k = Math.max(V.k, 3.2);
+  const sheet = sheetH(), panelW = sidePanelW();
+  flyTo(x - panelW / 2 / k + 45 / k, z + sheet / 2 / k, k);
+  if (openIt) open(o);
+}
+
+// ---------- panel ----------
+for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => tab(b.dataset.tab);
+function tab(id) {
+  $('#panel').classList.toggle('wide', id === 'vertical'); app.classList.toggle('wide-panel', id === 'vertical');
+  for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === id));
+  for (const p of document.querySelectorAll('.pane')) p.hidden = p.dataset.pane !== id;
+  setSheet(false);
+}
+const panel = $('#panel');
+function setSheet(collapse) { panel.classList.toggle('collapsed', collapse); app.classList.toggle('sheet-low', collapse); $('#panelToggle').setAttribute('aria-expanded', String(!collapse)); schedule(); }
+$('#panelToggle').onclick = () => setSheet(!panel.classList.contains('collapsed'));
+$('#handle').onclick = () => setSheet(!panel.classList.contains('collapsed'));
+
+const sys = D.summary.systems, S = sys.shared;
+const shared = D.levels.filter(l => l.system === 'shared' && l.stallCount);
+$('[data-pane="overview"]').append(
+  h('h2', {}, '一期共享地库 + 西侧地面停车场'),
+  h('div', { class: 'sys' },
+    h('div', { class: 'hero' }, h('b', {}, fmt(S.stalls)), h('span', {}, `共享地库车位 · ${S.streetRamps / 2} 对通地面坡道 · ${S.innerRamps / 2} 对层间坡道 · 3 条平层车行连接`)),
+    h('div', {}, h('b', {}, fmt(W.stallCount)), h('span', {}, '西侧地面车位 · 6 个车行口')),
+    h('div', {}, h('b', {}, String(HL.stallCount)), h('span', {}, '酒店地面短停 · 落客环岛')),
+    h('div', {}, h('b', {}, fmt(sys.P3.stalls)), h('span', {}, '三期地库（独立）')),
+    h('div', {}, h('b', {}, fmt(sys.P2.stalls + sys.R.stalls)), h('span', {}, '二期 + 住宅地库（独立）'))),
+  h('div', { class: 'note' }, '楼层名按各楼自己的编号：一期上面还有一层 -4.5m 的 B1M 美食广场和地铁站厅，所以一期的 “B1” 在 -8.4m，和西库 B2、酒店 B2、公寓 B2 在同一高度，四者平层直接开车互通；一期 B2 在 -12m。右侧楼层按真实标高切换。'),
+  h('h3', {}, '各层车位'),
+  h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, '楼层'), h('th', {}, '标高'), h('th', { class: 'r' }, '车位'), h('th', { class: 'r' }, '充电/无障碍'))),
+    h('tbody', {}, shared.sort((a, b) => b.elev - a.elev).map(l => h('tr', {}, h('td', {}, l.name), h('td', {}, h('span', { class: 'tier' }, m(l.elev))), h('td', { class: 'r num' }, fmt(l.stallCount)), h('td', { class: 'r num' }, `${l.stallTypes.ev} / ${l.stallTypes.accessible}`))))),
+  h('h3', {}, '车距与尺寸'),
+  h('ul', { class: 'dims' },
+    h('li', {}, h('span', {}, '车位（垂直停放）'), h('b', { class: 'num' }, '2.5 × 5.0 m')),
+    h('li', {}, h('span', {}, '主车道（双向）'), h('b', { class: 'num' }, '6 m')),
+    h('li', {}, h('span', {}, '停车模块（车位 + 车道 + 车位）'), h('b', { class: 'num' }, '5 + 6 + 5 = 16 m')),
+    h('li', {}, h('span', {}, '柱网（每跨约 3 个车位）'), h('b', { class: 'num' }, '8 m')),
+    h('li', {}, h('span', {}, '坡道宽度 · 最大坡度'), h('b', { class: 'num' }, '4.5–6 m · 15%')),
+    h('li', {}, h('span', {}, '一期 B1 / B2 层高'), h('b', { class: 'num' }, '3.9 m / 3.6 m'))),
+  h('p', { class: 'muted' }, `数据由 export-parking-data.mjs 从游戏布局导出（${D.generated}），图上车位、车道、柱子和坡道都是游戏里的实际几何。`));
+
+// Entrances: findings first, then every entrance grouped by side.
+const shared12 = [...pairs.values()].filter(p => p.kind === 'street' && p.system === 'shared');
+const others = [...pairs.values()].filter(p => p.kind === 'street' && p.system !== 'shared');
+const near70 = [...shared12.map(p => ({ o: p, d: p.dist, name: p.name, via: p.entrances[0]?.via })), ...GATES.map(g => ({ o: g, d: g.ent.toIntersection, name: g.name, via: g.ent.via }))].filter(x => x.d < 70).sort((a, b) => a.d - b.d);
+const ADVICE = {
+  '公寓北口': '出口距星湾路 × 北外环只有约 7m，车一出来就进路口。建议出口只许右转，或把入口和出口对调，让出口离路口远一些。',
+  '北口': '距北外环 × 西外环约 18m。北环西口、东口新增后，可以把北口改成只进不出。',
+  '酒店南口': '距云澜大道 × 西外环 24–32m。建议右进右出，送客车辆优先使用地面落客环岛。',
+  '南口': '距云澜大道 × 西外环约 39m。高峰时可只出不进，入场改走大道口。',
+};
+const entBtn = (o, name, via, dist, extra) => {
+  const s = statusOf(dist);
+  return h('button', { type: 'button', onclick: () => focusObj(o) },
+    h('div', { class: 'row1' }, h('b', {}, name, o.expansion || o.ent?.expansion ? ' ' : '', o.expansion || o.ent?.expansion ? h('span', { class: 'chip new' }, '新增') : null), s ? h('span', { class: 'chip ' + s[0] }, `${dist}m`) : null),
+    h('div', { class: 'row2' }, extra || `${via || ''}`));
+};
+const SIDES = [['北', '北侧（北外环）'], ['东', '东侧（星湾路）'], ['西', '西侧（西外环）'], ['场内', '西侧地面停车场内（下西库）']];
+const sideOf = p => p.entrances[0]?.side || '—';
+$('[data-pane="entrances"]').append(
+  h('h2', {}, '出入口分析'),
+  h('p', {}, `一期共享地库有 ${shared12.length / 1 / 2} 对通地面坡道，北、东、西三面进出；南侧（云澜大道）不直接开坡道，大道方向的车走星湾东口，或经西侧停车场大道口进场。另有西侧地面停车场 6 个车行口。下面按“离最近路口的距离”检查，70m 以上为充足。`),
+  h('h3', {}, '需要注意的口部'),
+  h('ol', { class: 'find' }, near70.map(x => h('li', {}, h('b', {}, `${x.name}`), `（${x.via}，距路口 ${x.d}m）：`, ADVICE[x.name] || '距路口偏近，建议右进右出。'))),
+  h('p', { class: 'muted' }, '这些都是方案前就有的口部。本次新增的方庭北口、星湾东口和三个地面车行口都在 77m 以上。'),
+  ...SIDES.flatMap(([k, t]) => { const list = shared12.filter(p => sideOf(p) === k); return list.length ? [h('h3', {}, t), h('div', { class: 'ent' }, list.map(p => entBtn(p, p.name, p.entrances[0]?.via, p.dist,
+    `${p.entrances[0]?.via} · 落 ${lvName(p.low)}（${m(lvElev(p.low))}）· ${p.ramps[0].length}m · ${p.ramps[0].slope}% · 宽 ${p.ramps[0].width}m`)))] : []; }),
+  h('h3', {}, '西侧地面停车场车行口'),
+  h('div', { class: 'ent' }, GATES.map(g => entBtn(g, g.name, g.ent.via, g.ent.toIntersection, `${g.ent.via} · 双向 7m${g.ent.toCrossing === 0 ? ' · 跨人行道设斑马线' : ''}`))),
+  h('h3', {}, '其他地库（独立系统）'),
+  h('div', { class: 'ent' }, others.map(p => entBtn(p, p.name, p.entrances[0]?.via, p.dist, `${D.systems[p.system]?.name} · ${p.entrances[0]?.via} · 落 ${lvName(p.low)}`))));
+
+// Vertical connections: section diagram of the shared garage.
+const COLS = { WPG: 84, H: 236, P1: 400, A: 568 }, ROWS = { ground: 46, t1: 176, t2: 306, t3: 436 }, BW = 128, BH = 58;
+const box = (id, col, row, l1, l2, cls = '') => ({ id, x: COLS[col], y: ROWS[row], l1, l2, cls });
+const lvBox = (id, col) => { const l = LV[id]; return box(id, col, l.tier, l.name.replace('西侧公共车库', '西库'), id === 'P1-B1M' ? `${m(l.elev)} · 美食·地铁 步行` : `${m(l.elev)} · ${fmt(l.stallCount)} 位`, id === 'P1-B1M' ? 'concourse' : ''); };
+const boxes = [lvBox('WPG-B1', 'WPG'), lvBox('WPG-B2', 'WPG'), lvBox('H-B1', 'H'), lvBox('H-B2', 'H'), lvBox('P1-B1M', 'P1'), lvBox('P1-B1', 'P1'), lvBox('P1-B2', 'P1'), lvBox('A-B1', 'A'), lvBox('A-B2', 'A')];
+const B = Object.fromEntries(boxes.map(b => [b.id, b]));
+const ds = el('svg', { viewBox: '0 0 660 520', role: 'img', 'aria-label': '一期共享地库竖向连接示意' });
+const T = (x, y, s, cls = '', size = 12, anchor = 'middle') => { const t = el('text', { x, y, 'text-anchor': anchor, 'font-size': size, fill: cls === 'muted' ? 'var(--muted)' : 'var(--ink)', 'font-weight': cls === 'b' ? 700 : 400 }, ds); t.textContent = s; return t; };
+for (const [k, y] of Object.entries(ROWS)) { el('line', { x1: 8, x2: 652, y1: y + BH / 2 + 18, y2: y + BH / 2 + 18, stroke: 'var(--card-edge)', 'stroke-dasharray': '3 4' }, ds); T(10, y - 18, k === 'ground' ? '地面 0m' : FLOORS.find(f => f.id === k).name + ' 层', 'muted', 11, 'start'); }
+el('rect', { x: 20, y: ROWS.ground - 6, width: 620, height: 30, rx: 6, fill: 'var(--road)', stroke: 'var(--road-edge)' }, ds);
+T(84, ROWS.ground + 13, '西侧地面停车场', '', 11); T(236, ROWS.ground + 13, '西外环', '', 11); T(400, ROWS.ground + 13, '北外环 · 星湾路', '', 11); T(568, ROWS.ground + 13, '北外环', '', 11);
+const defs = el('defs', {}, ds);
+for (const [id, c] of [['a-street', 'var(--street)'], ['a-inner', 'var(--inner)'], ['a-link', 'var(--link)'], ['a-walk', 'var(--walk)']]) {
+  const mk = el('marker', { id, viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+  el('path', { d: 'M0 0L10 5L0 10Z', fill: c }, mk);
+}
+const arrow = (d, kind, label, lx, ly, both = true) => { el('path', { d, fill: 'none', stroke: `var(--${kind === 'street' ? 'street' : kind === 'inner' ? 'inner' : kind === 'link' ? 'link' : 'walk'})`, 'stroke-width': 2.4, 'stroke-dasharray': kind === 'walk' ? '5 4' : '', 'marker-end': `url(#a-${kind})`, 'marker-start': both ? `url(#a-${kind})` : '' }, ds); if (label) T(lx, ly, label, '', 11); };
+const top = b => b.y, bot = b => b.y + BH, mid = b => b.y + BH / 2;
+arrow(`M${COLS.WPG} ${ROWS.ground + 26}V${top(B['WPG-B1']) - 2}`, 'street', '2 对', COLS.WPG + 22, ROWS.ground + 72);
+arrow(`M${COLS.H} ${ROWS.ground + 26}V${top(B['H-B1']) - 2}`, 'street', '1 对', COLS.H + 22, ROWS.ground + 72);
+arrow(`M${COLS.P1 + 52} ${ROWS.ground + 26}V${top(B['P1-B1']) - 2}`, 'street', '2 对直落', COLS.P1 + 92, ROWS.ground + 72);
+arrow(`M${COLS.A} ${ROWS.ground + 26}V${top(B['A-B1']) - 2}`, 'street', '1 对', COLS.A + 22, ROWS.ground + 72);
+arrow(`M${COLS.WPG} ${bot(B['WPG-B1']) + 2}V${top(B['WPG-B2']) - 2}`, 'inner', '2 对', COLS.WPG + 22, mid(B['WPG-B1']) + 66);
+arrow(`M${COLS.H} ${bot(B['H-B1']) + 2}V${top(B['H-B2']) - 2}`, 'inner', '1 对', COLS.H + 22, mid(B['H-B1']) + 66);
+arrow(`M${COLS.A} ${bot(B['A-B1']) + 2}V${top(B['A-B2']) - 2}`, 'inner', '1 对', COLS.A + 22, mid(B['A-B1']) + 66);
+arrow(`M${COLS.P1} ${bot(B['P1-B1']) + 2}V${top(B['P1-B2']) - 2}`, 'inner', '2 对（中庭 · 北侧）', COLS.P1 + 64, mid(B['P1-B1']) + 66);
+arrow(`M${COLS.WPG} ${bot(B['WPG-B2']) + 2}C${COLS.WPG} ${bot(B['WPG-B2']) + 48} ${COLS.P1 - BW / 2 - 40} ${bot(B['P1-B1']) + 48} ${COLS.P1 - BW / 2 + 8} ${bot(B['P1-B1']) + 2}`, 'link', '跨西外环隧道', (COLS.WPG + COLS.H) / 2 + 20, bot(B['WPG-B2']) + 52);
+arrow(`M${COLS.H + BW / 2 + 2} ${mid(B['H-B2'])}H${COLS.P1 - BW / 2 - 2}`, 'link', '连接道', (COLS.H + COLS.P1) / 2, mid(B['H-B2']) - 8);
+arrow(`M${COLS.A - BW / 2 - 2} ${mid(B['A-B2'])}H${COLS.P1 + BW / 2 + 2}`, 'link', '连接道', (COLS.A + COLS.P1) / 2, mid(B['A-B2']) - 8);
+arrow(`M${COLS.H + BW / 2 + 2} ${mid(B['H-B1'])}H${COLS.P1 - BW / 2 - 2}`, 'walk', '步行', (COLS.H + COLS.P1) / 2, mid(B['H-B1']) - 8);
+arrow(`M${COLS.A - BW / 2 - 2} ${mid(B['A-B1'])}H${COLS.P1 + BW / 2 + 2}`, 'walk', '步行', (COLS.A + COLS.P1) / 2, mid(B['A-B1']) - 8);
+arrow(`M${COLS.WPG} ${top(B['WPG-B1']) - 2}C${COLS.WPG} ${top(B['WPG-B1']) - 30} ${COLS.P1 - 30} ${top(B['P1-B1M']) - 30} ${COLS.P1 - 30} ${top(B['P1-B1M']) - 2}`, 'walk', '步行连廊', (COLS.WPG + COLS.H) / 2 + 30, top(B['WPG-B1']) - 30, true);
+for (const b of boxes) {
+  el('rect', { x: b.x - BW / 2, y: b.y, width: BW, height: BH, rx: 8, fill: b.cls === 'concourse' ? 'var(--concourse)' : 'var(--card)', stroke: b.cls === 'concourse' ? 'var(--concourse-edge)' : 'var(--deck-edge)', 'stroke-width': 1.4 }, ds);
+  T(b.x, b.y + 24, b.l1, 'b', 13); T(b.x, b.y + 44, b.l2, 'muted', 11);
+}
+$('[data-pane="vertical"]').append(
+  h('h2', {}, '负一、负二与一期 B1 怎么连'),
+  h('p', {}, '同一行是同一标高。竖向箭头是坡道，横向实线是平层车行连接，虚线是步行连廊。车从任何一个口进来，都能开到四栋楼的任一停车层。'),
+  h('div', { class: 'diagram' }, ds),
+  h('p', { class: 'diagram-hint' }, '剖面图较宽，可左右滑动查看。'),
+  h('h3', {}, '典型行车路线'),
+  h('ol', { class: 'routes' },
+    h('li', {}, '北外环 → 方庭北口 → 一期 B1（-8.4m）→ 北侧坡道 → 一期 B2（-12m）'),
+    h('li', {}, '星湾路 → 星湾东口 → 一期 B1 → 公寓连接道 → 公寓 B2'),
+    h('li', {}, '西外环 → 酒店南口 → 酒店 B1（-4.5m）→ 酒店坡道 → 酒店 B2（-8.4m）→ 连接道 → 一期 B1'),
+    h('li', {}, '西外环 / 北环西延 / 大道西延 → 西侧地面停车场 → 西北或西南公共口 → 西库 B1 → 坡道 → 西库 B2 → 跨西外环隧道 → 一期 B1')),
+  h('h3', {}, '人怎么走'),
+  h('p', {}, '一期 18 部电梯、21 组楼梯服务 B1/B2；西库 4 部电梯、9 组楼梯；酒店、公寓各 2 部电梯。-4.5m 层的西库 B1、酒店 B1、公寓 B1 都有步行连廊通一期 B1M 美食广场和地铁站厅。'));
+
+// Gallery.
+const gal = h('div', { class: 'gallery' }, SHOTS.map(([f, t], i) => h('button', { type: 'button', onclick: () => openLightbox(i) }, h('img', { src: `shots/thumbs/${f}.jpg`, alt: t, loading: 'lazy', width: '480', height: '300' }), h('span', {}, t))));
+$('[data-pane="shots"]').append(h('h2', {}, '游戏内实景截图'), h('p', { class: 'muted' }, '俯视图按真实坐标标注；鸟瞰图隐藏了地面和上层，只留相关楼层。点开看大图。'), gal);
+let lbIndex = 0;
+function openLightbox(i) { $('#lightbox').hidden = false; showShot(i); $('#lbClose').focus(); }
+function showShot(i) { lbIndex = (i + SHOTS.length) % SHOTS.length; const [f, t, d] = SHOTS[lbIndex]; $('#lbImg').src = `shots/${f}.jpg`; $('#lbImg').alt = t; $('#lbTitle').textContent = `${lbIndex + 1} / ${SHOTS.length} · ${t}`; $('#lbText').textContent = d; }
+function closeLightbox() { $('#lightbox').hidden = true; }
+$('#lbClose').onclick = closeLightbox; $('#lbPrev').onclick = () => showShot(lbIndex - 1); $('#lbNext').onclick = () => showShot(lbIndex + 1);
+
+// ---------- search ----------
+const index = [
+  ...[...pairs.values()].map(p => ({ o: p, t: p.name, s: p.kind === 'street' ? `${p.entrances[0]?.via || ''} · 落 ${lvName(p.low)}` : `${lvName(p.high)} ⇄ ${lvName(p.low)}` })),
+  ...LINKS.map(L => ({ o: L, t: L.name, s: `${lvName(L.from)} ⇄ ${L.to.includes('/') ? L.to : lvName(L.to)}` })),
+  ...GATES.map(g => ({ o: g, t: g.name, s: `西侧地面停车场 · ${g.ent.via}` })),
+  ...D.levels.map(l => ({ lv: l, t: l.name, s: `${m(l.elev)} · ${l.stallCount ? fmt(l.stallCount) + ' 个车位' : '步行层'}` })),
+];
+const q = $('#q'), sug = $('#suggest');
+let hits = [], active = -1;
+function suggest() {
+  const v = q.value.trim();
+  hits = v ? index.filter(x => (x.t + x.s).includes(v)).slice(0, 8) : [];
+  active = hits.length ? 0 : -1;
+  sug.replaceChildren(...hits.map((x, i) => h('li', {}, h('button', { type: 'button', role: 'option', 'aria-selected': String(i === active), onclick: () => choose(x) }, h('span', {}, x.t), h('small', {}, x.s)))));
+  sug.hidden = !hits.length;
+}
+function choose(x) {
+  sug.hidden = true; q.value = x.t;
+  if (x.o) focusObj(x.o);
+  else { setFloor(x.lv.tier); const b = bounds(x.lv.slab.map(s => s.outer)), v = fit(b, 30); flyTo(v.cx, v.cz, v.k); }
+}
+q.addEventListener('input', suggest);
+q.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!hits.length) return; active = (active + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length; [...sug.querySelectorAll('button')].forEach((b, i) => b.setAttribute('aria-selected', String(i === active))); }
+  else if (e.key === 'Enter' && hits[active]) choose(hits[active]);
+  else if (e.key === 'Escape') { sug.hidden = true; }
+});
+q.addEventListener('blur', () => setTimeout(() => { sug.hidden = true; }, 150));
+
+// ---------- start ----------
+setFloor('t2');
+if (innerWidth <= 760) setSheet(true);
+const v0 = fit(HOME); Object.assign(V, v0);
+render();
+})();
+</script>

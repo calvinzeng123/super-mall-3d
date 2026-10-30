@@ -1,0 +1,476 @@
+{
+ "date": "2026-10-29",
+ "bundle": "dist/netlify served locally over HTTP (python http.server); baseline = 0d61f0a rebuilt the same way",
+ "browser": "Playwright Chromium (SwiftShader WebGL); mobile = 390x844 @2x, touch, iPhone UA emulation — not a physical device",
+ "camera": {
+  "pos": [
+   -158.3,
+   386.1,
+   230.7
+  ],
+  "target": [
+   -151.5,
+   0,
+   -114.4
+  ],
+  "fov": 24.5,
+  "w": 1672,
+  "h": 941,
+  "note": "frame counters accumulated over one full frame incl. shadow pass and overlays"
+ },
+ "walks": {
+  "method": "real explore controller: keydown w, fixed 50 ms steps via app.debugShot, keyup",
+  "results": [
+   {
+    "id": "方庭北口 入口坡道 地面→B1",
+    "expect": "reach",
+    "pass": true,
+    "start": {
+     "floor": "ground",
+     "x": -165.5,
+     "z": -252.75,
+     "y": 0
+    },
+    "end": {
+     "floor": "P1-B1",
+     "x": -226.96,
+     "z": -252.75,
+     "y": -8.4
+    },
+    "metresShort": 0.04,
+    "usedSlope": true,
+    "steps": 439
+   },
+   {
+    "id": "星湾东口 出口坡道 B1→地面",
+    "expect": "reach",
+    "pass": true,
+    "start": {
+     "floor": "P1-B1",
+     "x": -24.5,
+     "z": -33.5,
+     "y": -8.4
+    },
+    "end": {
+     "floor": "ground",
+     "x": -24.5,
+     "z": -91.46,
+     "y": 0
+    },
+    "metresShort": 0.04,
+    "usedSlope": true,
+    "steps": 414
+   },
+   {
+    "id": "北口暗埋段上方 步行通过",
+    "expect": "reach",
+    "pass": true,
+    "start": {
+     "floor": "ground",
+     "x": -210,
+     "z": -255.6,
+     "y": 0
+    },
+    "end": {
+     "floor": "ground",
+     "x": -210,
+     "z": -241.04,
+     "y": 0
+    },
+    "metresShort": 0.04,
+    "usedSlope": false,
+    "steps": 104
+   },
+   {
+    "id": "北口敞开段 不能横穿",
+    "expect": "blocked",
+    "pass": true,
+    "start": {
+     "floor": "ground",
+     "x": -176,
+     "z": -255.8,
+     "y": 0
+    },
+    "end": {
+     "floor": "ground",
+     "x": -176,
+     "z": -255.52,
+     "y": 0
+    },
+    "metresShort": 14.52,
+    "usedSlope": false,
+    "steps": 106
+   },
+   {
+    "id": "西翼屋面 → 光穹柱间",
+    "expect": "reach",
+    "pass": true,
+    "start": {
+     "floor": "P1-RF",
+     "x": -140.77,
+     "z": -96.68,
+     "y": 34
+    },
+    "end": {
+     "floor": "P1-RF",
+     "x": -129.14,
+     "z": -99.8,
+     "y": 34
+    },
+    "metresShort": 0.04,
+    "usedSlope": false,
+    "steps": 86
+   },
+   {
+    "id": "艺文馆玻璃亭 南面草坪进入",
+    "expect": "reach",
+    "pass": true,
+    "start": {
+     "floor": "P1C-RF",
+     "x": -124,
+     "z": -227,
+     "y": 39.5
+    },
+    "end": {
+     "floor": "P1C-RF",
+     "x": -124,
+     "z": -231.06,
+     "y": 39.5
+    },
+    "metresShort": 0.06,
+    "usedSlope": false,
+    "steps": 29
+   },
+   {
+    "id": "艺文馆玻璃亭 北墙挡住",
+    "expect": "blocked",
+    "pass": true,
+    "start": {
+     "floor": "P1C-RF",
+     "x": -124,
+     "z": -239.5,
+     "y": 39.5
+    },
+    "end": {
+     "floor": "P1C-RF",
+     "x": -124,
+     "z": -238.3,
+     "y": 39.5
+    },
+    "metresShort": 2.3,
+    "usedSlope": false,
+    "steps": 25
+   },
+   {
+    "id": "西里 W1 楼梯口 → 坡屋顶下 → 南露台",
+    "expect": "reach",
+    "pass": true,
+    "start": {
+     "floor": "P1W1-RF",
+     "x": -260.75,
+     "z": -142.4,
+     "y": 17.5
+    },
+    "end": {
+     "floor": "P1W1-RF",
+     "x": -260.75,
+     "z": -135.12,
+     "y": 17.5
+    },
+    "metresShort": 0.02,
+    "usedSlope": false,
+    "steps": 52
+   },
+   {
+    "id": "北庭喷泉 水池挡住",
+    "expect": "blocked",
+    "pass": true,
+    "start": {
+     "floor": "ground",
+     "x": -128,
+     "z": -174,
+     "y": 0
+    },
+    "end": {
+     "floor": "ground",
+     "x": -128,
+     "z": -177.3,
+     "y": 0
+    },
+    "metresShort": 6.7,
+    "usedSlope": false,
+    "steps": 71
+   },
+   {
+    "id": "酒店落客环岛 花坛挡住",
+    "expect": "blocked",
+    "pass": true,
+    "start": {
+     "floor": "ground",
+     "x": -225.95,
+     "z": -32,
+     "y": 0
+    },
+    "end": {
+     "floor": "ground",
+     "x": -225.95,
+     "z": -36.2,
+     "y": 0
+    },
+    "metresShort": 2.55,
+    "usedSlope": false,
+    "steps": 48
+   }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [],
+  "failedRequests": [],
+  "badResponses": [],
+  "readyMs": 18341,
+  "requests": 34
+ },
+ "fps": {
+  "levels": 18,
+  "buildings": [
+   "P1",
+   "H",
+   "A"
+  ],
+  "fidelity": false,
+  "fpsReady": true,
+  "pageErrors": [],
+  "consoleErrors": [],
+  "failedRequests": [],
+  "badResponses": [],
+  "readyMs": 10829,
+  "requests": 79
+ },
+ "frameCost": {
+  "desktop": {
+   "calls": {
+    "base": 2629,
+    "new": 2706,
+    "change": 2.9
+   },
+   "triangles": {
+    "base": 5667467,
+    "new": 5804189,
+    "change": 2.4
+   },
+   "geometries": {
+    "base": 2019,
+    "new": 2072,
+    "change": 2.6
+   },
+   "textures": {
+    "base": 327,
+    "new": 337,
+    "change": 3.1
+   },
+   "heapMB": {
+    "base": 180,
+    "new": 181,
+    "change": 0.6
+   }
+  },
+  "mobile": {
+   "calls": {
+    "base": 1512,
+    "new": 1558,
+    "change": 3
+   },
+   "triangles": {
+    "base": 2755609,
+    "new": 2817235,
+    "change": 2.2
+   },
+   "geometries": {
+    "base": 2001,
+    "new": 2054,
+    "change": 2.6
+   },
+   "textures": {
+    "base": 267,
+    "new": 277,
+    "change": 3.7
+   },
+   "heapMB": {
+    "base": 184,
+    "new": 184,
+    "change": 0
+   }
+  }
+ },
+ "runs": {
+  "new-tour-desktop": {
+   "levels": 236,
+   "buildings": [
+    "P1",
+    "P2",
+    "P3",
+    "M",
+    "H",
+    "A",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "WPG",
+    "P1C",
+    "P1S",
+    "P1E",
+    "P1E2",
+    "P1W1",
+    "P1W2",
+    "P1W3",
+    "P1W4"
+   ],
+   "fidelity": true,
+   "ramps": 36,
+   "streetRamps": 20,
+   "westGates": 6,
+   "roofFormMeshes": [
+    "P1-art-dome-glass",
+    "P1-square-canopy-glass"
+   ],
+   "posters": 3,
+   "calls": 2706,
+   "triangles": 5804189,
+   "geometries": 2072,
+   "textures": 337,
+   "heapMB": 181,
+   "pageErrors": [],
+   "consoleErrors": [],
+   "failedRequests": [],
+   "badResponses": [],
+   "readyMs": 16148,
+   "requests": 34
+  },
+  "base-tour-desktop": {
+   "levels": 236,
+   "buildings": [
+    "P1",
+    "P2",
+    "P3",
+    "M",
+    "H",
+    "A",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "WPG",
+    "P1C",
+    "P1S",
+    "P1E",
+    "P1E2",
+    "P1W1",
+    "P1W2",
+    "P1W3",
+    "P1W4"
+   ],
+   "fidelity": false,
+   "ramps": 32,
+   "streetRamps": 16,
+   "westGates": 3,
+   "roofFormMeshes": [],
+   "posters": 0,
+   "calls": 2629,
+   "triangles": 5667467,
+   "geometries": 2019,
+   "textures": 327,
+   "heapMB": 180,
+   "pageErrors": [],
+   "consoleErrors": [],
+   "failedRequests": [],
+   "badResponses": [],
+   "readyMs": 15034,
+   "requests": 34
+  },
+  "new-tour-mobile": {
+   "levels": 236,
+   "buildings": [
+    "P1",
+    "P2",
+    "P3",
+    "M",
+    "H",
+    "A",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "WPG",
+    "P1C",
+    "P1S",
+    "P1E",
+    "P1E2",
+    "P1W1",
+    "P1W2",
+    "P1W3",
+    "P1W4"
+   ],
+   "fidelity": true,
+   "ramps": 36,
+   "streetRamps": 20,
+   "westGates": 6,
+   "roofFormMeshes": [
+    "P1-art-dome-glass",
+    "P1-square-canopy-glass"
+   ],
+   "posters": 3,
+   "calls": 1558,
+   "triangles": 2817235,
+   "geometries": 2054,
+   "textures": 277,
+   "heapMB": 184,
+   "pageErrors": [],
+   "consoleErrors": [],
+   "failedRequests": [],
+   "badResponses": [],
+   "readyMs": 15867,
+   "requests": 34
+  },
+  "base-tour-mobile": {
+   "levels": 236,
+   "buildings": [
+    "P1",
+    "P2",
+    "P3",
+    "M",
+    "H",
+    "A",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "WPG",
+    "P1C",
+    "P1S",
+    "P1E",
+    "P1E2",
+    "P1W1",
+    "P1W2",
+    "P1W3",
+    "P1W4"
+   ],
+   "fidelity": false,
+   "ramps": 32,
+   "streetRamps": 16,
+   "westGates": 3,
+   "roofFormMeshes": [],
+   "posters": 0,
+   "calls": 1512,
+   "triangles": 2755609,
+   "geometries": 2001,
+   "textures": 267,
+   "heapMB": 184,
+   "pageErrors": [],
+   "consoleErrors": [],
+   "failedRequests": [],
+   "badResponses": [],
+   "readyMs": 15233,
+   "requests": 34
+  }
+ }
+}

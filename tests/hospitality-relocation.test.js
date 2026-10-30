@@ -28,9 +28,9 @@ test('酒店和公寓分别位于用户左下与右上指定位置且上层380�
   }
 });
 
-test('共享地库共16个街道坡口及32条坡道，酒店公寓和西库全部实际双向步行',()=>{
-  const ramps=L.ramps.filter(r=>['H','A','WPG'].includes(r.building));assert.equal(ramps.length,16);
-  assert.equal(L.ramps.length,32);assert.equal(L.ramps.filter(r=>r.type.startsWith('street')).length,16);
+test('共享地库共20个街道坡口及36条坡道，酒店公寓、西库和一期新增北口东口全部实际双向步行',()=>{
+  const ramps=L.ramps.filter(r=>['H','A','WPG'].includes(r.building)||/^P1-[NE]-(IN|OUT)$/.test(r.id));assert.equal(ramps.length,20);
+  assert.equal(L.ramps.length,36);assert.equal(L.ramps.filter(r=>r.type.startsWith('street')).length,20);
   for(const r of ramps)for(const reverse of [false,true]) {
     const a=reverse?r.to:r.from,b=reverse?r.from:r.to,len=Math.hypot(b.x-a.x,b.z-a.z),ux=(b.x-a.x)/len,uz=(b.z-a.z)/len;
     assert.ok(Math.abs(b.y-a.y)/len<=.150001,`${r.id}坡度`);

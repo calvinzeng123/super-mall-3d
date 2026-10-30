@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "source": "Generated in this repository by scripts/procedural-textures.mjs from scripts/procedural-surfaces.mjs",
+  "license": "CC0-1.0",
+  "credit": "程序化生成，无外部图片",
+  "totalImageBytes": 1381396,
+  "assets": [
+    {
+      "id": "travertine_panel",
+      "label": "洞石干挂大板",
+      "meters": [
+        2.4,
+        2.4
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/travertine_panel/color.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "srgb",
+          "bytes": 81194,
+          "sha256": "9d426f16ceea6197dda8fc282038c1b0209f333d5d72f86c14866e5555c3a277"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/travertine_panel/normal.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 187642,
+          "sha256": "441a6f217d3df098ed5042204a7b49b18ecc078a97a2ea8441ca0c8bb986407b"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/travertine_panel/roughness.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 54943,
+          "sha256": "e68187a040c7e89fbd7e5708657b89855aa43d940ba9831b6f9e5c210a472781"
+        }
+      }
+    },
+    {
+      "id": "terracotta_baguette",
+      "label": "陶土挂板",
+      "meters": [
+        1.2,
+        1.2
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/terracotta_baguette/color.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "srgb",
+          "bytes": 79799,
+          "sha256": "82012f82cf32cb1d8f66be6d6d95c371607d532fab0879c22e42e716ec5d8a0c"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/terracotta_baguette/normal.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 173093,
+          "sha256": "324647fe8170b578f135f86a2334d0a91bbb8a81e86c41b92f8f6358cb73c6a2"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/terracotta_baguette/roughness.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 57977,
+          "sha256": "673edf24bc1c309a5e1706c377174015746180d42910d4e8ed05de082fa90079"
+        }
+      }
+    },
+    {
+      "id": "bronze_brushed",
+      "label": "拉丝铜板",
+      "meters": [
+        1,
+        1
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/bronze_brushed/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 21297,
+          "sha256": "6e029ccb346da1027f8bebb6e58964dc3c1c04f1702b5cb61b5ca4b30b11d089"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/bronze_brushed/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 15908,
+          "sha256": "735805673b57a3197002f9e5789a0132827bf4337460a48eb12a0572256be34d"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/bronze_brushed/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 17550,
+          "sha256": "8f0f5fd04b2c2e7bd81381c74b82d0de1d50ad09438a84ac88f5307f6ed60474"
+        }
+      }
+    },
+    {
+      "id": "clay_roof_tile",
+      "label": "筒瓦屋面",
+      "meters": [
+        1.8,
+        1.8
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/clay_roof_tile/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 20764,
+          "sha256": "b42180733db076bd83347acc284a9a492f02e74b0190240c6f97dc317bd36c8c"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/clay_roof_tile/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 36948,
+          "sha256": "96f7f9e64c8c0c2c66c58ace0b01e7e5273895510871dc3a8f1a1ad7395d4220"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/clay_roof_tile/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 9064,
+          "sha256": "e1259006e5d298b04d4608576a14f66402ceed26a6f64bec681857a98c5016e9"
+        }
+      }
+    },
+    {
+      "id": "fine_plaster",
+      "label": "细抹灰",
+      "meters": [
+        2,
+        2
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/fine_plaster/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 25362,
+          "sha256": "4e2281ee558ae9b7cceac15af853e9437cfc2c1b1aca91dc9194d96af43f6413"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/fine_plaster/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 73240,
+          "sha256": "8c500f17df9b9423d651080ab7fe46f24754443ec08124fdcd673cdb8b9aa85c"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/fine_plaster/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 25104,
+          "sha256": "d8c6801e8629eebd1ee2e50e918dc6ccf0716d46765992137886ba9ebafc0c27"
+        }
+      }
+    },
+    {
+      "id": "board_concrete",
+      "label": "清水混凝土",
+      "meters": [
+        2.4,
+        1.2
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/board_concrete/color.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "srgb",
+          "bytes": 43495,
+          "sha256": "d07fac92d1e20faacd7fbf67453e0d1cd6895ac5f03c20f08ef89e7cb4bcb683"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/board_concrete/normal.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 88949,
+          "sha256": "1fc3666bbfa8fd35d815caf86ce1bccaf3dda0dce2714c0beabdf26af347fddc"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/board_concrete/roughness.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 16172,
+          "sha256": "c7375cb18c2c9b794732f7d6149247a34f2ae0d94d07dd7216f5ce7272eeb176"
+        }
+      }
+    },
+    {
+      "id": "timber_slat",
+      "label": "木格栅墙板",
+      "meters": [
+        1.2,
+        1.2
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/timber_slat/color.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "srgb",
+          "bytes": 101667,
+          "sha256": "abcb1e90ae6c9a39a55f4e987ccc7d172db9818e515fe1b3130586c5f9bb3cce"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/timber_slat/normal.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 182586,
+          "sha256": "c312b7c42732e32b37299809281be6ddcf49b9bdb4ce5e9806150b2c7540f4e1"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/timber_slat/roughness.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 68642,
+          "sha256": "99c9651a5d215358aaa76ff9a33114224502e6d0649b3de8bd8ed03a06a9fd41"
+        }
+      }
+    }
+  ]
+}

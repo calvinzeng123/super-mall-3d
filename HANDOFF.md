@@ -1,8 +1,19 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-10-28。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-10-29。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
-## 2026-10-28 最新交接：一期艺术街区扩建
+## 2026-10-29 最新交接：一期概念 A 对图深化（未发布）
+
+用户要求一期“完全按照”已批准的概念 A 鸟瞰出方案，并要求增加停车出入口；之后要求重构并部署。方案见 [设计](docs/planning/2026-10-29-p1-concept-fidelity/DESIGN.md)，实施与证据见 [QA](docs/qa-2026-10-29-p1-concept-fidelity.md)。分支 `claude/loving-galileo-3u22m4`，**尚未部署**：云端会话的网络策略拒绝 Netlify 域名，且没有 `NETLIFY_AUTH_TOKEN`。线上仍是 2026-10-28 的 `0d61f0a`。
+
+- 只改完整探索：`buildLayout()` 在 `applyP1Expansion` 之后调用 `applyP1VehicleAccess`（`layout/p1-access.js`）与 `applyP1Fidelity`（`layout/p1-fidelity.js` → `p1-roofscape.js`、`p1-landscape.js`）。`buildLayout({ fidelity: false })` 给出方案前的完整探索，文档基线与对比都用它；FPS 仍是 `expansion:false`，不含任何改造。
+- 车行：新增 P1-N-IN/OUT（北外环，60m · 14%）和 P1-E-IN/OUT（星湾路，56m · 15%）直落 P1-B1。地面只开到坡面低于地面 3.05m，其后是暗埋段，上方广场可走；`lv.navWalls` 挡住板下侧面，板下和到达车道不留车位。西侧地面停车场新增 3 个车行口，`gate.facing` 决定闸架朝向。全园 36 坡道（街道 20），主楼四层车位 4,125。
+- 造型：光穹、天幕、峡谷、屋面花池/餐桌、玻璃亭、棚架、西里坡屋顶、画屏、喷泉、台阶、行道树、云伞、酒店环岛都以布局记录为准，渲染（`render/build/p1-fidelity.js` → `p1-roofscape.js`、`p1-landscape.js`）照记录画。所有实体都写进 `lv.navObstacles` / `navWalls` 或 `site.forecourt.obstacles`，改尺寸时两边一起改。
+- 约束：酒店地面车位按既有测试保留 ≥20（现为 22）；格栅离玻璃 ≤0.4m，LED 屏与画屏挂在外侧；坡屋顶檐口 4.2m 高过 3.8m 楼梯间；翼端平直立面只有 v±17m。凹多边形（Y 形主楼轮廓）判相交要用 `geom.polysOverlap`，`convexOverlap` 会按凸包误判。
+- 验证：322/322 测试；`dist/netlify` 49 文件 53.35 MiB，入口 `main.JQ4BQZND.js`，全部 SHA-256 记在 `docs/qa/p1-concept-fidelity-release-checks-20261029.json`。本地发布包实际漫游 10 段、FPS 18 层通过；概念相机下绘制调用 +2.9%、三角形 +2.4%，heap 持平。数字来自 Chromium 模拟，不代替实体 iPhone。
+- 发布：在有权限的环境运行 `npm run build:netlify` 与 `netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3`，再按记录核对线上哈希。
+
+## 历史 · 2026-10-28：一期艺术街区扩建
 
 用户已批准概念 A 并授权并行实施；本轮将一期扩建为六层主体与八座 2–7 层附楼。完整探索现为 **19 个建筑 ID、236 层、680 商铺、728 住户**。原酒店在西南、公寓在东北；二三期、住宅、地铁、西停车与车库标高保持。实施及最终发布证据见 [一期扩建 QA](docs/qa-2026-10-28-p1-expansion.md)，原审图见 [概念 A](docs/planning/2026-10-28-p1-expansion/PLAN.md)。
 

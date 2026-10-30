@@ -263,6 +263,16 @@ export function convexOverlap(a, b, eps = 0.02) {
   return true;
 }
 
+/** 任意（含凹）多边形是否相交：边真正相交，或一方包含另一方（相接不算） */
+export function polysOverlap(a, b) {
+  const side = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+  for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) {
+    const p = a[i], q = a[(i + 1) % a.length], r = b[j], t = b[(j + 1) % b.length];
+    if (side(r, t, p) * side(r, t, q) < 0 && side(p, q, r) * side(p, q, t) < 0) return true;
+  }
+  return pointInPoly(a[0], b) || pointInPoly(b[0], a);
+}
+
 function lineHit(P, Q, A, B) {
   const r = [Q[0] - P[0], Q[1] - P[1]], s = [B[0] - A[0], B[1] - A[1]];
   const den = r[0] * s[1] - r[1] * s[0];
@@ -298,6 +308,17 @@ export function circlePoly(cx, cz, r, n = 120, a0 = 0) {
     pts.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]);
   }
   return pts;
+}
+
+/** 椭圆（n 边形近似），半轴 a（x 向）、b（z 向），首顶点在 +x */
+export function ellipsePoly(cx, cz, a, b, n = 36) {
+  return Array.from({ length: n }, (_, k) => [cx + a * Math.cos(k * 2 * Math.PI / n), cz + b * Math.sin(k * 2 * Math.PI / n)]);
+}
+
+/** 多边形的轴对齐外包矩形，四周外扩 pad，返回四点多边形 */
+export function boundsPoly(poly, pad = 0) {
+  const b = polyBounds(poly);
+  return rectPoly(rect(b.x0 - pad, b.z0 - pad, b.x1 + pad, b.z1 + pad));
 }
 
 /** 多边形内部网格采样（离边 ≥ inset），外加向形心内缩的顶点 */

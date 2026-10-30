@@ -21,18 +21,24 @@ test('西侧三列停车场保留500以上实体车位及充电无障碍位，�
   assert.equal(P.accessibleCount,stalls.filter(s=>s.type==='accessible').length);assert.ok(P.accessibleCount>=8);
   assert.equal(L.extensions.surfaceParking.reduce((n,l)=>n+l.stalls.length,0),
     P.stallCount+L.extensions.surfaceParking.find(l=>l.id==='hotel-shared-parking').stalls.length);
-  assert.equal(P.gates.length,3);
+  assert.equal(P.gates.length,6);
+  assert.deepEqual(P.gates.filter(g=>g.facing).map(g=>g.name),['北环西口','北环东口','大道口']);
   const solids=[...L.site.openings,...L.site.trenches,...L.buildings.filter(b=>!b.undergroundOnly).map(b=>b.outline)];
   for(const lot of P.lots)for(const stall of lot.stalls) {
     assert.ok(stall.poly.every(p=>pointInPoly(p,P.poly)));
     for(const p of [...solids,...P.walks.flatMap(w=>w.polys),...P.roads.flatMap(r=>r.polys)])assert.ok(!convexOverlap(stall.poly,p,.025),`${lot.id}车位压占动线/建筑`);
   }
 });
-test('全部停车组两端连接循环车道，三地面进出口与WPG坡口可双向到达',()=>{
+test('全部停车组两端连接循环车道，六个地面进出口与WPG坡口可双向到达',()=>{
   for(const lot of P.lots){const z=(lot.aisle.z0+lot.aisle.z1)/2,west=lot.id.startsWith('WP-C')?-349:-480,east=lot.id.startsWith('WP-C')?-309:-375;
     for(const pts of [[[west,z],[east,z]],[[east,z],[west,z]]])follow(pts);
   }
-  for(const z of P.gates.map(g=>g.z))for(const pts of [[[-480,z],[-285,z]],[[-285,z],[-480,z]]])follow(pts);
+  for(const z of P.gates.filter(g=>!g.facing).map(g=>g.z))for(const pts of [[[-480,z],[-285,z]],[[-285,z],[-480,z]]])follow(pts);
+  // North and south gates run from the public street into a lot spine.
+  for(const g of P.gates.filter(g=>g.facing)){const street=g.facing[1]<0?-258:-12,lot=g.facing[1]<0?-240:-45;
+    for(const pts of [[[g.x,street],[g.x,lot]],[[g.x,lot],[g.x,street]]])follow(pts);
+    assert.ok(L.site.driveways.some(d=>pointInPoly([g.x,(street+lot)/2],d)),`${g.id}没有车行接入`);
+  }
   for(const x of [-363,-355])for(const pts of [[[-375,-130],[x,-130],[x,-143]],[[x,-143],[x,-130],[-375,-130]]])follow(pts);
   const halls=L.buildings.find(b=>b.id==='WPG');
   for(const p of P.roads.flatMap(r=>r.polys))for(const r of halls.accessKiosks)assert.ok(!convexOverlap(p,lrectPoly(halls.frame,r)),'车道不能穿附库小厅');

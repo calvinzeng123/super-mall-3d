@@ -1,6 +1,8 @@
 node_modules/
 .DS_Store
 shots/
+# 停车地图引用的截图要随文档提交
+!docs/planning/2026-10-29-parking-system/shots/
 src/render/pbr-data.js
 src/render/suite-data.js
 src/render/residential-data.js

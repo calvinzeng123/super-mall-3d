@@ -342,21 +342,25 @@ function garageGates(ctx, S, B) {
     const deg = Math.atan2(street.z - other.z, street.x - other.x) * DEG; // u 指向坡道外（地面方向）
     const F = frame(street.x, street.z, deg);
     const inbound = r.type === 'street-in';
+    // Paired lanes keep the post, booth and sign on their outer side.
+    const side = r.gate?.side ?? 1, signSide = r.gate?.sign ?? -1;
     B.frame(F, () => {
       const g = 4;
       for (const dv of [-r.width / 2 - 0.4, r.width / 2 + 0.4]) B.get('extMetal').cyl(g, y, dv, 0.14, 3.0, '#e7b416', 8);
       B.get('extMetal').box(g, y + 2.9, 0, 0.3, 0.35, r.width + 1.2, '#e7b416');
       for (let i = 0; i < 6; i++) B.get('ext').box(g + 0.16, y + 2.9, -r.width / 2 + 0.4 + i * ((r.width - 0.8) / 5), 0.02, 0.36, 0.5, i % 2 ? '#1d2023' : '#e7b416');
-      B.get('extMetal').box(1.5, y + 0.55, r.width / 2 + 0.6, 0.45, 1.1, 0.45, '#d9dde0');
+      B.get('extMetal').box(1.5, y + 0.55, side * (r.width / 2 + 0.6), 0.45, 1.1, 0.45, '#d9dde0');
       B.get('ext').box(1.5, y + 1.05, 0, 0.12, 0.12, r.width, '#e8352b');
-      B.get('ext').box(1.6, y + 1.4, r.width / 2 + 2.4, 2.2, 2.8, 2.2, '#e9ecef');
-      B.get('glass').box(1.6, y + 1.7, r.width / 2 + 1.29, 1.8, 1.2, 0.04, 0xffffff);
-      B.get('extMetal').cyl(7, y, -r.width / 2 - 1.2, 0.12, 4.0, '#3b4046', 8);
+      if (r.gate?.booth !== false) {
+        B.get('ext').box(1.6, y + 1.4, side * (r.width / 2 + 2.4), 2.2, 2.8, 2.2, '#e9ecef');
+        B.get('glass').box(1.6, y + 1.7, side * (r.width / 2 + 1.29), 1.8, 1.2, 0.04, 0xffffff);
+      }
+      B.get('extMetal').cyl(7, y, signSide * (r.width / 2 + 1.2), 0.12, 4.0, '#3b4046', 8);
     });
     const lab = labelTexture(inbound ? '车库入口' : '车库出口', { bg: 'rgba(29,78,216,0.96)', fg: '#ffffff', icon: 'parking', sub: inbound ? 'P · ENTRANCE' : 'P · EXIT' });
     const mat = ctx.mats.screen(lab.texture, 1.0, 1.45);
     const h = 2.0;
-    const [px, pz] = toW(F, 7, -r.width / 2 - 1.2);
+    const [px, pz] = toW(F, 7, signSide * (r.width / 2 + 1.2));
     for (const k of [0, Math.PI]) {
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * lab.aspect, h), mat);
       plane.position.set(px, y + 5.0, pz);
@@ -386,16 +390,18 @@ function plazaFeatures(ctx, B) {
   if (ctx.bById.P2) starBayPlaza(ctx, B);
   const p1 = ctx.bById.P1;
   if (!p1) return;
-  // 喷泉（东南主入口与路口之间，偏离天桥轴线）
-  const f = { x: -30, z: -52, r: 6 };
-  B.get('extSatin').cyl(f.x, y, f.z, f.r, 0.55, COLORS.stoneDark, 24);
-  B.get('water').cyl(f.x, y + 0.05, f.z, f.r - 0.35, 0.45, '#ffffff', 24);
-  B.get('extSatin').cyl(f.x, y, f.z, 1.2, 1.2, COLORS.stone, 16);
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    B.get('glass').cyl(f.x + Math.cos(a) * 3.2, y + 0.5, f.z + Math.sin(a) * 3.2, 0.08, 1.6 + (i % 3) * 0.5, '#ffffff', 6);
+  // 喷泉（东南主入口与路口之间，偏离天桥轴线）；效果图版这里是大台阶与树阵。
+  if (!ctx.layout.fidelity) {
+    const f = { x: -30, z: -52, r: 6 };
+    B.get('extSatin').cyl(f.x, y, f.z, f.r, 0.55, COLORS.stoneDark, 24);
+    B.get('water').cyl(f.x, y + 0.05, f.z, f.r - 0.35, 0.45, '#ffffff', 24);
+    B.get('extSatin').cyl(f.x, y, f.z, 1.2, 1.2, COLORS.stone, 16);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      B.get('glass').cyl(f.x + Math.cos(a) * 3.2, y + 0.5, f.z + Math.sin(a) * 3.2, 0.08, 1.6 + (i % 3) * 0.5, '#ffffff', 6);
+    }
+    B.get('glass').cyl(f.x, y + 1.2, f.z, 0.18, 3.2, '#ffffff', 8);
   }
-  B.get('glass').cyl(f.x, y + 1.2, f.z, 0.18, 3.2, '#ffffff', 8);
   ipMascot(B, -52, y, -30, 0.75, 0.6);
   // 立牌
   const m = { x: -24, z: -40 };
@@ -413,7 +419,10 @@ function plazaFeatures(ctx, B) {
   plane.rotation.y = Math.atan2(Math.cos(Math.PI / 4), Math.sin(Math.PI / 4));
   ctx.site.group.add(plane);
   // 花坛与长椅
-  for (const [x, z] of [[-40, -64], [-64, -40], [-28, -70], [-70, -28]]) planter(B, x - 3, z - 2, x + 3, z + 2, y, x * 7 + z);
+  // 坡道敞开段上不放花坛（星湾东口的坡槽经过 (-28,-70)）。
+  const overTrench = poly => ctx.layout.site.trenches.some(t => convexOverlap(t, poly));
+  for (const [x, z] of [[-40, -64], [-64, -40], [-28, -70], [-70, -28]])
+    if (!overTrench(rectPoly(rect(x - 3, z - 2, x + 3, z + 2)))) planter(B, x - 3, z - 2, x + 3, z + 2, y, x * 7 + z);
   for (const [x, z, r] of [[-36, -60, 0.8], [-60, -36, 2.4], [-24, -60, 0.8]]) bench(B, x, y, z, r);
   // 卸货区：北翼末端坡道旁
   const N = p1.wings.find((w) => w.id === 'N');

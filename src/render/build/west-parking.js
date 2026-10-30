@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BatchSet } from '../batch.js';
 import { addTrees, streetLamp } from './props.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+import { frame, toW } from '../../layout/geom.js';
 
 /** District-scale wayfinding, planted row dividers and open gate gantries.
  * Stalls and cars are drawn by the existing sharedSurfaceParking renderer. */
@@ -27,16 +28,21 @@ export function buildWestParkingDetails(ctx) {
   }
   for(const gate of plan.gates) {
     // Columns and kiosks stay outside the seven-metre carriageway. No closed boom blocks exploration.
-    for(const dz of [-gate.width/2-.75,gate.width/2+.75]) {
-      B.get('extMetal').box(gate.x,2.5,gate.z+dz,.25,5,.25,'#49645a');
-      B.get('glowSoft').box(gate.x+.14,1.2,gate.z+dz,.04,.8,.13,'#9bddb8');
-    }
-    B.get('extMetal').box(gate.x,5,gate.z,.3,.2,gate.width+1.8,'#49645a');
-    sign(gate.x+.17,4.1,gate.z,`西侧停车 · ${gate.name}`,'IN  ←     P     →  OUT',7.8,1.3,Math.PI/2);
-    for(const dz of [-2,2]) {
-      B.get('ext').box(gate.x-4,.05,gate.z+dz,2,.02,.12,'#e5dfb9');
-      for(const k of [-1,1])B.get('ext').box(gate.x-4+(dz<0?-1:1)*.8,.05,gate.z+dz+k*.24,.7,.02,.11,'#e5dfb9',k*(dz<0?-.65:.65));
-    }
+    // u points from the gantry to the public street; the original gates face 西外环 (+x).
+    const [fx,fz]=gate.facing||[1,0],F=frame(gate.x,gate.z,Math.atan2(fz,fx)*180/Math.PI);
+    B.frame(F,()=>{
+      for(const dz of [-gate.width/2-.75,gate.width/2+.75]) {
+        B.get('extMetal').box(0,2.5,dz,.25,5,.25,'#49645a');
+        B.get('glowSoft').box(.14,1.2,dz,.04,.8,.13,'#9bddb8');
+      }
+      B.get('extMetal').box(0,5,0,.3,.2,gate.width+1.8,'#49645a');
+      for(const dz of [-2,2]) {
+        B.get('ext').box(-4,.05,dz,2,.02,.12,'#e5dfb9');
+        for(const k of [-1,1])B.get('ext').box(-4+(dz<0?-1:1)*.8,.05,dz+k*.24,.7,.02,.11,'#e5dfb9',k*(dz<0?-.65:.65));
+      }
+    });
+    const [sx,sz]=toW(F,.17,0);
+    sign(sx,4.1,sz,`西侧停车 · ${gate.name}`,'IN  ←     P     →  OUT',7.8,1.3,Math.atan2(fx,fz));
   }
   sign(-438,4.8,-248,'云澜汇 · 西侧公共停车',`${plan.stallCount} SPACES  ·  EV ${plan.evCount}  ·  B1 / B2`,15,2.7);
   for(const x of [-444,-432])B.get('extMetal').box(x,2.3,-248,.2,4.6,.2,'#49645a');

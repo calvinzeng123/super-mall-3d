@@ -27,11 +27,11 @@ function openingWall(B,w,y,height,glass=true) {
   const length=Math.hypot(w.b[0]-w.a[0],w.b[1]-w.a[1]);
   const openings=w.openings||(w.door?[{...w.door,type:'door',bottom:0,top:2.5}]:[]);
   const spans=openings.map(o=>[Math.max(0,o.at-o.width/2),Math.min(length,o.at+o.width/2)]);
-  for(const [a,b] of spans.reduce((ivs,s)=>subtractInterval(ivs,s),[[0,length]]))wallPart(B,w,'extSatin',a,b,y,y+height,C.wall);
+  for(const [a,b] of spans.reduce((ivs,s)=>subtractInterval(ivs,s),[[0,length]]))wallPart(B,w,'facadePlaster',a,b,y,y+height,C.wall);
   for(let i=0;i<openings.length;i++) {
     const o=openings[i],[a,b]=spans[i];
-    wallPart(B,w,'extSatin',a,b,y,y+(o.bottom||0),C.wall);
-    wallPart(B,w,'extSatin',a,b,y+o.top,y+height,C.wall);
+    wallPart(B,w,'facadePlaster',a,b,y,y+(o.bottom||0),C.wall);
+    wallPart(B,w,'facadePlaster',a,b,y+o.top,y+height,C.wall);
     for(const t of [a+.022,b-.022])wallPart(B,w,'extMetal',t-.022,t+.022,y+(o.bottom||0),y+o.top,C.trim,.075);
     for(const h of [o.bottom||0,o.top])wallPart(B,w,'extMetal',a,b,y+h,y+h+.035,C.trim,.075);
     if(o.type==='window'&&glass) {
@@ -107,7 +107,7 @@ export function residentialCommon(ctx,B,b,lv) {
   const {corridor,liftLobby,stairVestibules}=lv.corePlan,y=lv.elev,h=lv.height;
   for(const r of [corridor,liftLobby,...stairVestibules])rectFinish(B,r,y);
   if(lv.elev>0) {
-    for(const r of stairVestibules)for(const x of [r.x0,r.x1])segment(B,'extSatin',[x,r.z0],[x,r.z1],y,y+h-.12,.16,C.wall);
+    for(const r of stairVestibules)for(const x of [r.x0,r.x1])segment(B,'facadePlaster',[x,r.z0],[x,r.z1],y,y+h-.12,.16,C.wall);
     // Exposed ends of the main gallery and the short open edges beside the 03 wing.
     for(const x of [corridor.x0,corridor.x1])railing(B,[x,corridor.z0],[x,corridor.z1],y);
     for(const [a,z] of [[-15,-8.8],[8.8,15]])railing(B,[a,-1.6],[z,-1.6],y);

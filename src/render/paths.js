@@ -100,12 +100,14 @@ function parkingPaths(layout, b, lv, P) {
   const r = b.rotundas[0];
   const terminal = b.wings.filter((w) => !w.link);
   if (b.rotundas.length === 1 && terminal.length) {
-    const rampWing = inR ? b.wings.find((w) => w.F === inR.frame) : terminal[0];
+    // Only a wing-end ramp starts the loop; shared-garage gates join it elsewhere.
+    const wingRamp = inR && b.wings.find((w) => w.F === inR.frame);
+    const rampWing = wingRamp || terminal[0];
     const order = [...terminal].sort((p, q) => mod360(rampWing.F.deg - p.F.deg) - mod360(rampWing.F.deg - q.F.deg));
     const ringR = r.R - 9;
     const delta = (Math.atan2(15, ringR) * DEG);
     const pts = [];
-    if (inR) pts.push([inR.to.x, y, inR.to.z], W3(rampWing.F, rampWing.uEnd - 9, -3, y), W3(rampWing.F, rampWing.uEnd - 9, -15, y));
+    if (wingRamp) pts.push([inR.to.x, y, inR.to.z], W3(rampWing.F, rampWing.uEnd - 9, -3, y), W3(rampWing.F, rampWing.uEnd - 9, -15, y));
     const seq = [...order.slice(1), order[0]];
     let fromAng = rampWing.F.deg - delta;
     pts.push(W3(rampWing.F, r.R - 4, -15, y));
@@ -113,7 +115,7 @@ function parkingPaths(layout, b, lv, P) {
       pts.push(...arcDown(r, ringR, fromAng, w.F.deg + delta, y));
       pts.push(W3(w.F, r.R - 4, 15, y), W3(w.F, w.uEnd - 9, 15, y));
       if (w === rampWing) {
-        if (outR) pts.push(W3(w.F, w.uEnd - 9, 3, y), [outR.from.x, y, outR.from.z]);
+        if (wingRamp && outR) pts.push(W3(w.F, w.uEnd - 9, 3, y), [outR.from.x, y, outR.from.z]);
         break;
       }
       pts.push(W3(w.F, w.uEnd - 9, -15, y), W3(w.F, r.R - 4, -15, y));

@@ -24,14 +24,14 @@ function openingWall(B, wall, y) {
   };
   const spans = wall.door ? [[0, wall.door.at - wall.door.width / 2], [wall.door.at + wall.door.width / 2, len]] : [[0, len]];
   for (const [a, b] of spans) {
-    box(a, b, 0, height, glass ? 'glass' : 'stone', glass ? .06 : .16, glass ? '#ffffff' : C.stone);
+    box(a, b, 0, height, glass ? 'glass' : 'travertine', glass ? .06 : .16, glass ? '#ffffff' : C.stone);
     box(a, b, .02, .075, 'metal', .085, C.bronze);
     if (glass) for (let t = a; t < b - .01; t += 2.4) box(t, Math.min(b, t + .045), .05, height, 'metal', .075, C.bronze);
   }
   box(0, len, height, .09, 'metal', .18, C.bronze);
   if (wall.door) {
     const a = wall.door.at - wall.door.width / 2, b = wall.door.at + wall.door.width / 2;
-    box(a, b, 2.65, height - 2.65, glass ? 'glass' : 'stone', glass ? .06 : .16, C.stone);
+    box(a, b, 2.65, height - 2.65, glass ? 'glass' : 'travertine', glass ? .06 : .16, C.stone);
     for (const t of [a - .025, b]) box(t, t + .025, 0, 2.7, 'metal', .18, C.bronze);
     box(a, b, 2.65, .06, 'metal', .18, C.bronze);
   }
@@ -58,7 +58,7 @@ function display(B, x, y, z, w = .55) {
 }
 function chair(B, w, d, y, color = '#8a6951', arm = false) {
   const leg = arm ? .1 : .055, seat = arm ? .45 : .47, height = arm ? .91 : .94;
-  for (const x of [-w * .34, w * .34]) for (const z of [-d * .33, d * .33]) B.get('metal').box(x, y + .2, z, leg, .4, leg, C.bronze);
+  for (const x of [-w * .34, w * .34]) for (const z of [-d * .33, d * .33]) B.get('bronze').box(x, y + .2, z, leg, .4, leg, C.bronze);
   B.get('satin').box(0, y + seat, 0, w * .9, .16, d * .9, color);
   B.get('satin').sphere(0, y + seat + .045, 0, w * .45, color, .09, d * .44, 'sphereLo');
   B.get('satin').box(0, y + (height + seat) / 2, -d * .36, w * .9, height - seat, .16, color);
@@ -97,7 +97,7 @@ function furniture(B, o, y, hotel) {
     B.get('stone').box(0, y + h / 2, 0, w, h, d, '#d8cbb4');
     for (let x = -w / 2 + .08; x < w / 2; x += .22) B.get('wood').box(x, y + h / 2, d / 2 + .04, .055, h, .08, hotel ? '#705c42' : '#b79c78');
     if (o.type === 'art-wall') {
-      B.get('metal').box(0, y + 2.2, d / 2 + .12, w * .76, 2.3, .1, C.bronze);
+      B.get('bronze').box(0, y + 2.2, d / 2 + .12, w * .76, 2.3, .1, C.bronze);
       B.get('matte').box(0, y + 2.2, d / 2 + .19, w * .73, 2.16, .06, '#cbbda3');
       for (let i = 0; i < 9; i++) B.get('matte').sphere(-w * .3 + i * w * .07, y + 1.7 + Math.sin(i) * .4, d / 2 + .24, .4, i % 2 ? '#597469' : '#ad7956', .45, .03, 'sphereLo');
     }

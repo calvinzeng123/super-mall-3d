@@ -26,7 +26,8 @@ test('tour adds six-storey main mall and eight stepped annexes while FPS and the
     assert.deepEqual(L.buildings.find(b=>b.id===bid),old.buildings.find(b=>b.id===bid),`${bid} building changed`);
     assert.deepEqual(L.levels.filter(l=>l.building===bid),old.levels.filter(l=>l.building===bid),`${bid} levels changed`);
   }
-  assert.deepEqual(L.ramps,old.ramps,'shared garage ramp topology changed');
+  assert.deepEqual(L.ramps.filter(r=>!r.expansion),old.ramps,'shared garage ramp topology changed');
+  assert.deepEqual(L.ramps.filter(r=>r.expansion).map(r=>r.id),['P1-N-IN','P1-N-OUT','P1-E-IN','P1-E-OUT'],'tour-only phase-one gates');
   assert.deepEqual(L.site.forecourt.items.filter(i=>['family','market'].includes(i.zone)),old.site.forecourt.items.filter(i=>['family','market'].includes(i.zone)));
 });
 

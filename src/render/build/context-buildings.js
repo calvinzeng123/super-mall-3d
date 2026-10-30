@@ -3,11 +3,11 @@ import { BatchSet, tpl } from '../batch.js';
 
 const PALETTES = [
   { key: 'facadeConcrete', wall: '#d4dcd8', trim: '#b9c4c5', frame: '#384c55', glass: '#6e909f', office: true },
-  { key: 'facadeStone', wall: '#f1ebe1', trim: '#d2c8b5', frame: '#665e51', glass: '#84969d', office: false },
+  { key: 'facadeTravertine', wall: '#f1ebe1', trim: '#d2c8b5', frame: '#665e51', glass: '#84969d', office: false },
   { key: 'facadeBrick', wall: '#e1c8b6', trim: '#c9bda9', frame: '#4c5a58', glass: '#78959b', office: false },
   { key: 'facadeStone', wall: '#dfd3b9', trim: '#c3b797', frame: '#5b574c', glass: '#8a9f9b', office: true },
-  { key: 'facadeConcrete', wall: '#ced4c6', trim: '#b7bfaf', frame: '#526353', glass: '#72918b', office: false },
-  { key: 'facadeBrick', wall: '#b7c3c8', trim: '#b1bdc3', frame: '#3c4c59', glass: '#6d8a9d', office: false },
+  { key: 'facadeBoardConcrete', wall: '#ced4c6', trim: '#b7bfaf', frame: '#526353', glass: '#72918b', office: false },
+  { key: 'facadePlaster', wall: '#b7c3c8', trim: '#b1bdc3', frame: '#3c4c59', glass: '#6d8a9d', office: false },
 ];
 const Y = new THREE.Vector3(0, 1, 0), position = new THREE.Vector3(), scale = new THREE.Vector3(), rotation = new THREE.Quaternion();
 const matrix = new THREE.Matrix4();

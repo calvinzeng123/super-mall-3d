@@ -43,4 +43,8 @@ export const COLORS = {
   grass: '#6d9b48',
   leaf: '#4f8a3a',
   red: '#c8352b',
+  // Concept A fidelity: bronze structure, warm night lights, white sculpture.
+  bronze: '#8f7553',
+  warmLight: '#ffe0a8',
+  ivory: '#f4f1ea',
 };

@@ -9,20 +9,20 @@ import { BatchSet } from '../batch.js';
 import { buildMallFlightGeometry } from './mall-stairs.js';
 
 const PALETTES = {
-  main: { stone: '#e5ded0', trim: '#9c825c', dark: '#5a5e56', fin: '#c8b99e', glow: '#ffe7bb', material: 'facadeStone' },
-  culture: { stone: '#b97554', trim: '#80513e', dark: '#655449', fin: '#d69a73', glow: '#ffdfab', material: 'facadeBrick' },
-  dining: { stone: '#e1cdb3', trim: '#8d6950', dark: '#63594b', fin: '#c7a67b', glow: '#ffdda3', material: 'facadeStone' },
-  garden: { stone: '#a3b2a0', trim: '#596d60', dark: '#425c50', fin: '#7c9b88', glow: '#e5f0ce', material: 'facadeConcrete' },
-  creative: { stone: '#c6b6a0', trim: '#615c50', dark: '#4b514b', fin: '#92775c', glow: '#ffe4b8', material: 'facadeTimber' },
+  main: { stone: '#e9e2d4', trim: '#8f7553', dark: '#4f4a42', fin: '#a98a62', glow: '#ffe2b2', material: 'facadeTravertine' },
+  culture: { stone: '#b97554', trim: '#80513e', dark: '#655449', fin: '#d69a73', glow: '#ffdfab', material: 'facadeTerracotta' },
+  dining: { stone: '#e1cdb3', trim: '#8d6950', dark: '#63594b', fin: '#c7a67b', glow: '#ffdda3', material: 'facadeTravertine' },
+  garden: { stone: '#a3b2a0', trim: '#596d60', dark: '#425c50', fin: '#7c9b88', glow: '#e5f0ce', material: 'facadeBoardConcrete' },
+  creative: { stone: '#c6b6a0', trim: '#615c50', dark: '#4b514b', fin: '#92775c', glow: '#ffe4b8', material: 'facadeSlat' },
 };
 const zoneOf = lv => lv.expansion?.zone || 'main';
 const paletteOf = lv => {
   const base = PALETTES[zoneOf(lv)] || PALETTES.main;
   const variant = {
     P1W1: { stone: '#bd9077', trim: '#795d50', fin: '#9e6950', material: 'facadeBrick' },
-    P1W2: { stone: '#ded6c6', trim: '#8e8068', fin: '#b3a187', material: 'facadeStone' },
-    P1W3: { stone: '#c5aa84', trim: '#6d5b44', fin: '#ad8c61', material: 'facadeTimber' },
-    P1W4: { stone: '#b5c6c4', trim: '#647e7d', fin: '#829e9a', material: 'facadeConcrete' },
+    P1W2: { stone: '#ded6c6', trim: '#8e8068', fin: '#b3a187', material: 'facadeTravertine' },
+    P1W3: { stone: '#c5aa84', trim: '#6d5b44', fin: '#ad8c61', material: 'facadeSlat' },
+    P1W4: { stone: '#b5c6c4', trim: '#647e7d', fin: '#829e9a', material: 'facadePlaster' },
   }[lv.building];
   return variant ? { ...base, ...variant } : base;
 };
@@ -81,14 +81,19 @@ function facade(ctx, lv) {
       put(a + .04, a + .13, y + .22, y + h - .58, .23, .11, 'extMetal', p.dark);
       if (bay > 2.2) put(a + bay / 2 - .025, a + bay / 2 + .025, y + .25, y + h - .65, .1, .04, 'extMetal', p.dark);
       if (zone === 'culture') {
-        put(a + .18, a + .40, y + .12, y + h - .08, .72, .39, 'facadeBrick', i % 3 ? p.fin : p.stone);
+        put(a + .18, a + .40, y + .12, y + h - .08, .72, .39, 'facadeTerracotta', i % 3 ? p.fin : p.stone);
         put(a + .22, a + .35, y + .12, y + h - .08, .075, .795, 'extMetal', p.trim);
       } else if (zone === 'garden') {
-        put(a + .15, a + .32, y + .25, y + h - .15, .65, .32, 'facadeConcrete', p.fin);
+        put(a + .15, a + .32, y + .25, y + h - .15, .65, .32, 'facadeBoardConcrete', p.fin);
         if (lv.short !== '1F') put(a + .15, b - .1, y + h * .57, y + h * .57 + .09, .36, .2, 'extMetal', p.trim);
       } else if (zone === 'creative') {
         put(a + .12, a + .44, y + .2, y + h - .1, .32, .22, p.material, p.fin);
         put(a + .10, b - .08, y + h - .35, y + h - .25, .72, .27, p.material, p.fin);
+      } else if (zone === 'main' && Math.floor(i / 3) % 4 === 1) {
+        // Bronze and timber louvre screens, one bay group in four, as in the concept aerial.
+        // They stay within 0.4 m of the glass so the LED screen and posters hang in front.
+        for (let x = a + .3; x < b - .1; x += .6) put(x - .06, x + .06, y + .1, y + h - .08, .3, .22, ...((lv.expansion.storey || 0) % 2 ? ['facadeBronze', '#b08a5c'] : ['facadeTimber', '#93683f']));
+        put(a, b, y + h - .32, y + h - .1, .32, .22, 'extMetal', p.trim);
       } else {
         put(a + .10, a + (i % 3 ? .25 : .48), y + .25, y + h - .12, .42, .25, p.material, p.stone);
         if (zone === 'dining' && bay > 2.5) {
@@ -203,7 +208,8 @@ function atriumRails(ctx, lv) {
 }
 
 function creativeRoof(ctx, lv) {
-  if (zoneOf(lv) !== 'creative' || lv.kind !== 'roof') return;
+  // The concept-fidelity tour draws full pitched roofs instead (p1-fidelity.js).
+  if (zoneOf(lv) !== 'creative' || lv.kind !== 'roof' || lv.features.some(f => f.type === 'creative-roof')) return;
   const B = ctx.levels[lv.id].shellBatch, p = paletteOf(lv), r = polyBounds(lv.outline);
   const width = Math.min(8, r.x1 - r.x0 - 6), depth = Math.min(3.3, r.z1 - r.z0 - 6), y = lv.elev;
   if (width < 3 || depth < 2) return;
@@ -241,14 +247,17 @@ function artLantern(ctx, lv) {
   const x0 = r.x0, x1 = r.x1, cz = (r.z0 + r.z1) / 2, half = (r.z1 - r.z0) / 2;
   const y = lv.elev + .28, rise = Math.min(5.4, half * .55), segments = 16;
   const profile = Array.from({ length: segments + 1 }, (_, i) => { const a = i * Math.PI / segments; return [cz - Math.cos(a) * half, y + Math.sin(a) * rise]; });
+  // Under the 06 dome the atrium stays open to it; only the art rings remain.
+  const dome = lv.features.find(f => f.type === 'art-dome'), domed = !!dome;
+  const hang = dome ? lv.elev + dome.spring + dome.rise - .5 : y + rise - .2;
   B.frame(v.frame, () => {
-    for (let i = 0; i < segments; i++) {
+    if (!domed) for (let i = 0; i < segments; i++) {
       const [z0, ya] = profile[i], [z1, yb] = profile[i + 1], angle = Math.atan2(yb - ya, z1 - z0);
       B.get('glass').shape('box', new THREE.Vector3((x0 + x1) / 2, (ya + yb) / 2, (z0 + z1) / 2), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -angle), new THREE.Vector3(x1 - x0, .035, Math.hypot(z1 - z0, yb - ya)), '#ffffff');
       for (let x = x0; x <= x1 + .01; x += (x1 - x0) / 8) B.get('extMetal').bar({ x, y: ya, z: z0 }, { x, y: yb, z: z1 }, .1, p.trim);
     }
-    for (let i = 0; i <= segments; i += 4) B.get('extMetal').box((x0 + x1) / 2, profile[i][1], profile[i][0], x1 - x0, .08, .1, p.trim);
-    for (const x of [x0, x1]) for (let i = 0; i < segments; i++) {
+    if (!domed) for (let i = 0; i <= segments; i += 4) B.get('extMetal').box((x0 + x1) / 2, profile[i][1], profile[i][0], x1 - x0, .08, .1, p.trim);
+    if (!domed) for (const x of [x0, x1]) for (let i = 0; i < segments; i++) {
       const [z0, ya] = profile[i], [z1, yb] = profile[i + 1];
       B.get('glass').box(x, y + Math.max(0, (ya + yb) / 2 - y) / 2, (z0 + z1) / 2, .03, Math.max(.02, (ya + yb) / 2 - y), z1 - z0, '#ffffff');
     }
@@ -256,7 +265,7 @@ function artLantern(ctx, lv) {
     for (let i = 0; i < 3; i++) {
       const xx = (x0 + x1) / 2 + (i - 1) * 3, yy = y - 3 - i * .55;
       B.get('extMetal').shape('torus', new THREE.Vector3(xx, yy, cz), new THREE.Quaternion().setFromEuler(new THREE.Euler(1.06, .2 * i, .22 * i)), new THREE.Vector3(6.3 - i * .5, 4.2, .55), i % 2 ? '#ae956b' : '#c6b08b');
-      B.get('extMetal').bar({ x: xx, y: yy + 1.8, z: cz }, { x: xx, y: y + rise - .2, z: cz }, .025, p.trim);
+      B.get('extMetal').bar({ x: xx, y: yy + 1.8, z: cz }, { x: xx, y: hang, z: cz }, .025, p.trim);
     }
   });
 }
@@ -272,13 +281,13 @@ function sunkenCourtExterior(ctx) {
     // The north opening is a covered B1M passage; the south slot contains the
     // real rising stair. Its ground rail must open at the stair, not at B1M.
     for (const [a, b] of edgeSpans(e, [north, south], 0)) {
-      B.get('facadeStone').box((a + b) / 2, (y - .12) / 2, -.12, b - a, -y - .12, .28, '#d5c6ae');
+      B.get('facadeTravertine').box((a + b) / 2, (y - .12) / 2, -.12, b - a, -y - .12, .28, '#d5c6ae');
       B.get('glow').box((a + b) / 2, -.6, -.275, b - a, .035, .035, p.glow);
     }
     const northAt = [toL(e.F, north.seg.x0, north.seg.z0), toL(e.F, north.seg.x1, north.seg.z1)];
     if (northAt.every(q => Math.abs(q[1]) < .05)) {
       const a = Math.min(northAt[0][0], northAt[1][0]), b = Math.max(northAt[0][0], northAt[1][0]);
-      B.get('facadeStone').box((a + b) / 2, (y + 3.2 - .12) / 2, -.12, b - a, -y - 3.2 - .12, .28, '#d5c6ae');
+      B.get('facadeTravertine').box((a + b) / 2, (y + 3.2 - .12) / 2, -.12, b - a, -y - 3.2 - .12, .28, '#d5c6ae');
       B.get('glow').box((a + b) / 2, y + 3.24, -.29, b - a - .2, .04, .05, p.glow);
     }
     for (const [a, b] of edgeSpans(e, [south], 0)) {

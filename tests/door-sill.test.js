@@ -20,7 +20,7 @@ test('一期和二期二楼天桥门实际矮墙网格全宽开口，门侧仍�
   assert.equal(doors.length,2);
   const material=new THREE.MeshBasicMaterial({side:THREE.DoubleSide});
   for(const e of doors) {
-    const lv=lvl(e.level),batch=new BatchSet({matte:material}),group=new THREE.Group();
+    const lv=lvl(e.level),batch=new BatchSet({matte:material,travertine:material}),group=new THREE.Group();
     sill({layout:L,levels:{[lv.id]:{batch}},outlineEdges:()=>outlineEdges(lv.outline,L.buildings.find(b=>b.id===lv.building))},lv);
     batch.flush(group);group.updateMatrixWorld(true);
     const len=Math.hypot(e.seg.x1-e.seg.x0,e.seg.z1-e.seg.z0),tx=(e.seg.x1-e.seg.x0)/len,tz=(e.seg.z1-e.seg.z0)/len;
