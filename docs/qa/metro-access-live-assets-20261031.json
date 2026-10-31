@@ -1,0 +1,513 @@
+{
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "checked": 84,
+  "entry": "assets/main.TBS64VI3.js",
+  "entryMatches": true,
+  "allMatch": true,
+  "checks": [
+    {
+      "path": "assets/marble_01-color.402d3d2f8781e21f.jpg",
+      "ok": true,
+      "bytes": 270770,
+      "sha256": "402d3d2f8781e21f2752455416aa913be342a519864b807f32f8c08045966134"
+    },
+    {
+      "path": "assets/marble_01-normal.8ae668e3badd5d38.jpg",
+      "ok": true,
+      "bytes": 120121,
+      "sha256": "8ae668e3badd5d386dbb5be3228a8dc2f7eb4a6704f7847dd0858c6546cc8ecd"
+    },
+    {
+      "path": "assets/marble_01-roughness.6edf2daf5b864534.jpg",
+      "ok": true,
+      "bytes": 76297,
+      "sha256": "6edf2daf5b8645341c7f8e047bb1db11605a9f6ff6bcd3a7d56373a23f087857"
+    },
+    {
+      "path": "assets/concrete_pavement_02-color.3fbaf294fd7e535a.jpg",
+      "ok": true,
+      "bytes": 501967,
+      "sha256": "3fbaf294fd7e535a49558d266d6275290c6f116571b8bb323c9df9642eed69ba"
+    },
+    {
+      "path": "assets/concrete_pavement_02-normal.02430189a96f108a.jpg",
+      "ok": true,
+      "bytes": 632817,
+      "sha256": "02430189a96f108ae1473ce4a920500c5df74f61cf9e1169fa53505672a28d82"
+    },
+    {
+      "path": "assets/concrete_pavement_02-roughness.6d7ec0b23daa4e80.jpg",
+      "ok": true,
+      "bytes": 242721,
+      "sha256": "6d7ec0b23daa4e80521744cc01fabc6675763c2a218289ce4bbe51776cdf7c31"
+    },
+    {
+      "path": "assets/oak_wood_planks-color.a188de42bf9198bb.jpg",
+      "ok": true,
+      "bytes": 286752,
+      "sha256": "a188de42bf9198bb3c49b560f0c726a3ebddadc315ff0b293c208f632fe270b4"
+    },
+    {
+      "path": "assets/oak_wood_planks-normal.63f52712f3b94bb9.jpg",
+      "ok": true,
+      "bytes": 135866,
+      "sha256": "63f52712f3b94bb9d266496da7a578972a0398ed5fa9f6fa5700d93d97d69245"
+    },
+    {
+      "path": "assets/oak_wood_planks-roughness.7fd2de468f186a17.jpg",
+      "ok": true,
+      "bytes": 475429,
+      "sha256": "7fd2de468f186a17e78d65fdeec9da6e870fdd61ca11d9549f4e0d30f43da998"
+    },
+    {
+      "path": "assets/brick_wall_09-color.4b05ac9c45cb2ea9.jpg",
+      "ok": true,
+      "bytes": 336310,
+      "sha256": "4b05ac9c45cb2ea9c68eaccf4221db7821ec6b73349b54becadaa6a77db7c8a8"
+    },
+    {
+      "path": "assets/brick_wall_09-normal.1848e73816802e95.jpg",
+      "ok": true,
+      "bytes": 534605,
+      "sha256": "1848e73816802e95356795d967dd12f146643e8169677846ce1bf6023210f95c"
+    },
+    {
+      "path": "assets/brick_wall_09-roughness.0ecbbc52c5bfea9c.jpg",
+      "ok": true,
+      "bytes": 164362,
+      "sha256": "0ecbbc52c5bfea9cc865f0def42deca02bb7bb6231d358a3a68cb8aa12b67084"
+    },
+    {
+      "path": "assets/clean_asphalt-color.216d473cd81362a7.jpg",
+      "ok": true,
+      "bytes": 339275,
+      "sha256": "216d473cd81362a7b975ee538e49f85fe0d13b222dd659cdad22e1a761466819"
+    },
+    {
+      "path": "assets/clean_asphalt-normal.744aa64e65425ae2.jpg",
+      "ok": true,
+      "bytes": 364957,
+      "sha256": "744aa64e65425ae2e953f98e461c7bc683f29ce9318e43d390539c3dd6aec21c"
+    },
+    {
+      "path": "assets/clean_asphalt-roughness.c9216e94586cb9fc.jpg",
+      "ok": true,
+      "bytes": 334508,
+      "sha256": "c9216e94586cb9fc8b179c035dece1cbe1489642d3eaec1dee9a591bd4bec9bb"
+    },
+    {
+      "path": "assets/grass_ground-color.bd4f8524889bf2a3.jpg",
+      "ok": true,
+      "bytes": 405955,
+      "sha256": "bd4f8524889bf2a3f3a5f4a6cd56154cecf71f1f6ae2da16598452e00137dcf0"
+    },
+    {
+      "path": "assets/grass_ground-normal.316ba72f9809e5d2.jpg",
+      "ok": true,
+      "bytes": 704408,
+      "sha256": "316ba72f9809e5d29977c17f0214cf4233fae72bb90c3096609ccf489c2d8503"
+    },
+    {
+      "path": "assets/grass_ground-roughness.dc99159a3abad2d6.jpg",
+      "ok": true,
+      "bytes": 87775,
+      "sha256": "dc99159a3abad2d6825c18dc749c5230328b8a12bec50588c15ee0fa42c0e2bc"
+    },
+    {
+      "path": "assets/metro_terrazzo-color.9416ba66624fd31f.jpg",
+      "ok": true,
+      "bytes": 67090,
+      "sha256": "9416ba66624fd31f57b80b71416b5b0bccbf337173a0e62e6f2fdf32375481a7"
+    },
+    {
+      "path": "assets/metro_terrazzo-normal.dc2d5df003bcd59f.jpg",
+      "ok": true,
+      "bytes": 31924,
+      "sha256": "dc2d5df003bcd59fd8630847614d16d0f3af56c39f0d7645e0b19d950bc31ab1"
+    },
+    {
+      "path": "assets/metro_terrazzo-roughness.802dcc0d09d9c161.jpg",
+      "ok": true,
+      "bytes": 3355,
+      "sha256": "802dcc0d09d9c1613a9db8c41bf443ca67c03602e2d687c6f34812c829fe5b44"
+    },
+    {
+      "path": "assets/metro_ceramic-color.3e8114d489d28824.jpg",
+      "ok": true,
+      "bytes": 10722,
+      "sha256": "3e8114d489d28824e1f5ebd3483ca769bcd9cfdd305c9f3b3d556d4128614607"
+    },
+    {
+      "path": "assets/metro_ceramic-normal.f3a3f80fe0a49975.jpg",
+      "ok": true,
+      "bytes": 14014,
+      "sha256": "f3a3f80fe0a4997577c2ba6d100fc585ba096d18a88bbe9e5fa7507fabf27620"
+    },
+    {
+      "path": "assets/metro_ceramic-roughness.eb0087877e261d70.jpg",
+      "ok": true,
+      "bytes": 9224,
+      "sha256": "eb0087877e261d707b846f7627c64777ea0e7bdeb0c02cb5d6e2d54fcf357a49"
+    },
+    {
+      "path": "assets/tunnel_liner-color.ed4c9da55b54d11a.jpg",
+      "ok": true,
+      "bytes": 15807,
+      "sha256": "ed4c9da55b54d11aac5e13bfb0d6763a98da3329a3cd98299743862aa4c7ca37"
+    },
+    {
+      "path": "assets/tunnel_liner-normal.5d45b3969bd13c95.jpg",
+      "ok": true,
+      "bytes": 15345,
+      "sha256": "5d45b3969bd13c95189f443522bd78a5364d789f86a035ddc2cef4476e82085f"
+    },
+    {
+      "path": "assets/tunnel_liner-roughness.43b8818f2db2311d.jpg",
+      "ok": true,
+      "bytes": 3356,
+      "sha256": "43b8818f2db2311dad10bc373ea28eb05f6a4bc6d41de6aaff6b84e48def1c7b"
+    },
+    {
+      "path": "assets/limestone_pavers-color.5ed046d7f3d59cf7.jpg",
+      "ok": true,
+      "bytes": 98064,
+      "sha256": "5ed046d7f3d59cf7f8372eb5e02f0cbf238a5f873313ec9ec7e73122ad0c7624"
+    },
+    {
+      "path": "assets/limestone_pavers-normal.39446a938f14ba6c.jpg",
+      "ok": true,
+      "bytes": 97104,
+      "sha256": "39446a938f14ba6c340ffffbc56f14d3a37c842225437fb8e1905452046b0825"
+    },
+    {
+      "path": "assets/limestone_pavers-roughness.fe68357c6d7c2119.jpg",
+      "ok": true,
+      "bytes": 101733,
+      "sha256": "fe68357c6d7c2119d5b032c18758abf8aa9b6a3e6cd54702ec06c457ad0fd579"
+    },
+    {
+      "path": "assets/woven_carpet-color.ee258cbdb55c556b.jpg",
+      "ok": true,
+      "bytes": 47236,
+      "sha256": "ee258cbdb55c556b97c0e6326a88da63acd2c2011bc34ea5ef6761d416403041"
+    },
+    {
+      "path": "assets/woven_carpet-normal.e4a040ae7cae8614.jpg",
+      "ok": true,
+      "bytes": 108656,
+      "sha256": "e4a040ae7cae8614811a559005b527b2be1006e221e9345dc89188c8ec7606d9"
+    },
+    {
+      "path": "assets/woven_carpet-roughness.dfbc6c78c47f1ecc.jpg",
+      "ok": true,
+      "bytes": 19453,
+      "sha256": "dfbc6c78c47f1ecc949ad0290ea913c8d2de8280a0d7e3b47362178dbb86aba0"
+    },
+    {
+      "path": "assets/carpet_jacquard-color.fce51c599244883d.jpg",
+      "ok": true,
+      "bytes": 55525,
+      "sha256": "fce51c599244883ddbbc0bfc427dc4924e3f3d2896278cd613157c829d4775fe"
+    },
+    {
+      "path": "assets/carpet_jacquard-normal.833f633b4daae995.jpg",
+      "ok": true,
+      "bytes": 3359,
+      "sha256": "833f633b4daae995be76b0d8378a912399e8b16a00c53b734fbd353864cca551"
+    },
+    {
+      "path": "assets/carpet_jacquard-roughness.2dae4437bee66ea7.jpg",
+      "ok": true,
+      "bytes": 3356,
+      "sha256": "2dae4437bee66ea7e30312d9a1a269bc149e2aa4efdbd7d1278458f16b592f39"
+    },
+    {
+      "path": "assets/travertine_panel-color.9d426f16ceea6197.jpg",
+      "ok": true,
+      "bytes": 81194,
+      "sha256": "9d426f16ceea6197dda8fc282038c1b0209f333d5d72f86c14866e5555c3a277"
+    },
+    {
+      "path": "assets/travertine_panel-normal.441a6f217d3df098.jpg",
+      "ok": true,
+      "bytes": 187642,
+      "sha256": "441a6f217d3df098ed5042204a7b49b18ecc078a97a2ea8441ca0c8bb986407b"
+    },
+    {
+      "path": "assets/travertine_panel-roughness.e68187a040c7e89f.jpg",
+      "ok": true,
+      "bytes": 54943,
+      "sha256": "e68187a040c7e89fbd7e5708657b89855aa43d940ba9831b6f9e5c210a472781"
+    },
+    {
+      "path": "assets/terracotta_baguette-color.82012f82cf32cb1d.jpg",
+      "ok": true,
+      "bytes": 79799,
+      "sha256": "82012f82cf32cb1d8f66be6d6d95c371607d532fab0879c22e42e716ec5d8a0c"
+    },
+    {
+      "path": "assets/terracotta_baguette-normal.324647fe8170b578.jpg",
+      "ok": true,
+      "bytes": 173093,
+      "sha256": "324647fe8170b578f135f86a2334d0a91bbb8a81e86c41b92f8f6358cb73c6a2"
+    },
+    {
+      "path": "assets/terracotta_baguette-roughness.673edf24bc1c309a.jpg",
+      "ok": true,
+      "bytes": 57977,
+      "sha256": "673edf24bc1c309a5e1706c377174015746180d42910d4e8ed05de082fa90079"
+    },
+    {
+      "path": "assets/bronze_brushed-color.6e029ccb346da102.jpg",
+      "ok": true,
+      "bytes": 21297,
+      "sha256": "6e029ccb346da1027f8bebb6e58964dc3c1c04f1702b5cb61b5ca4b30b11d089"
+    },
+    {
+      "path": "assets/bronze_brushed-normal.735805673b57a319.jpg",
+      "ok": true,
+      "bytes": 15908,
+      "sha256": "735805673b57a3197002f9e5789a0132827bf4337460a48eb12a0572256be34d"
+    },
+    {
+      "path": "assets/bronze_brushed-roughness.8f0f5fd04b2c2e7b.jpg",
+      "ok": true,
+      "bytes": 17550,
+      "sha256": "8f0f5fd04b2c2e7bd81381c74b82d0de1d50ad09438a84ac88f5307f6ed60474"
+    },
+    {
+      "path": "assets/clay_roof_tile-color.b42180733db076bd.jpg",
+      "ok": true,
+      "bytes": 20764,
+      "sha256": "b42180733db076bd83347acc284a9a492f02e74b0190240c6f97dc317bd36c8c"
+    },
+    {
+      "path": "assets/clay_roof_tile-normal.96f7f9e64c8c0c2c.jpg",
+      "ok": true,
+      "bytes": 36948,
+      "sha256": "96f7f9e64c8c0c2c66c58ace0b01e7e5273895510871dc3a8f1a1ad7395d4220"
+    },
+    {
+      "path": "assets/clay_roof_tile-roughness.e1259006e5d298b0.jpg",
+      "ok": true,
+      "bytes": 9064,
+      "sha256": "e1259006e5d298b04d4608576a14f66402ceed26a6f64bec681857a98c5016e9"
+    },
+    {
+      "path": "assets/fine_plaster-color.4e2281ee558ae9b7.jpg",
+      "ok": true,
+      "bytes": 25362,
+      "sha256": "4e2281ee558ae9b7cceac15af853e9437cfc2c1b1aca91dc9194d96af43f6413"
+    },
+    {
+      "path": "assets/fine_plaster-normal.8c500f17df9b9423.jpg",
+      "ok": true,
+      "bytes": 73240,
+      "sha256": "8c500f17df9b9423d651080ab7fe46f24754443ec08124fdcd673cdb8b9aa85c"
+    },
+    {
+      "path": "assets/fine_plaster-roughness.d8c6801e8629eebd.jpg",
+      "ok": true,
+      "bytes": 25104,
+      "sha256": "d8c6801e8629eebd1ee2e50e918dc6ccf0716d46765992137886ba9ebafc0c27"
+    },
+    {
+      "path": "assets/board_concrete-color.d07fac92d1e20faa.jpg",
+      "ok": true,
+      "bytes": 43495,
+      "sha256": "d07fac92d1e20faacd7fbf67453e0d1cd6895ac5f03c20f08ef89e7cb4bcb683"
+    },
+    {
+      "path": "assets/board_concrete-normal.1fc3666bbfa8fd35.jpg",
+      "ok": true,
+      "bytes": 88949,
+      "sha256": "1fc3666bbfa8fd35d815caf86ce1bccaf3dda0dce2714c0beabdf26af347fddc"
+    },
+    {
+      "path": "assets/board_concrete-roughness.c7375cb18c2c9b79.jpg",
+      "ok": true,
+      "bytes": 16172,
+      "sha256": "c7375cb18c2c9b794732f7d6149247a34f2ae0d94d07dd7216f5ce7272eeb176"
+    },
+    {
+      "path": "assets/timber_slat-color.abcb1e90ae6c9a39.jpg",
+      "ok": true,
+      "bytes": 101667,
+      "sha256": "abcb1e90ae6c9a39a55f4e987ccc7d172db9818e515fe1b3130586c5f9bb3cce"
+    },
+    {
+      "path": "assets/timber_slat-normal.c312b7c42732e32b.jpg",
+      "ok": true,
+      "bytes": 182586,
+      "sha256": "c312b7c42732e32b37299809281be6ddcf49b9bdb4ce5e9806150b2c7540f4e1"
+    },
+    {
+      "path": "assets/timber_slat-roughness.99c9651a5d215358.jpg",
+      "ok": true,
+      "bytes": 68642,
+      "sha256": "99c9651a5d215358aaa76ff9a33114224502e6d0649b3de8bd8ed03a06a9fd41"
+    },
+    {
+      "path": "assets/suite.a7f99bf01d3ad6e3.glb",
+      "ok": true,
+      "bytes": 8977040,
+      "sha256": "a7f99bf01d3ad6e3545102329ecd6ee8269c7cad6d41816dbdcb313a003da80e"
+    },
+    {
+      "path": "assets/person-m.5da2da91839f374d.glb",
+      "ok": true,
+      "bytes": 1575872,
+      "sha256": "5da2da91839f374d05763d4da05ebbbb85f39a5542d5d7d90c549b524d38cbbd"
+    },
+    {
+      "path": "assets/person-f.a1ec332b8f429022.glb",
+      "ok": true,
+      "bytes": 1626388,
+      "sha256": "a1ec332b8f429022538a63de0a495c246d7da125974adf3df92bf1b9ff635787"
+    },
+    {
+      "path": "assets/residence-01.d7c68cf855216de9.bin",
+      "ok": true,
+      "bytes": 8874062,
+      "sha256": "d7c68cf855216de9bca23a5dcf8215855efc7dafbd098875adad5f9ae857a89c"
+    },
+    {
+      "path": "assets/residence-02.80b8dd6722294589.bin",
+      "ok": true,
+      "bytes": 10131573,
+      "sha256": "80b8dd6722294589e20988195426130078f9db4c683e2ad2d6f655269dab8fc2"
+    },
+    {
+      "path": "assets/residence-03.81f09c875fb2b416.bin",
+      "ok": true,
+      "bytes": 9878943,
+      "sha256": "81f09c875fb2b41663d425483a5d2bfd954eb8116e31c0a686048cd9d3e86e88"
+    },
+    {
+      "path": "assets/fps-hands.94614904f4d82efd.glb",
+      "ok": true,
+      "bytes": 1105828,
+      "sha256": "94614904f4d82efd1fc361e7cea2e2e55e2bfa4397996da30565cf6318124fcd"
+    },
+    {
+      "path": "assets/deagle.77ed676903ec101b.glb",
+      "ok": true,
+      "bytes": 2025036,
+      "sha256": "77ed676903ec101bbfd9cc9e416dd0d1d534d05b88e9c27cc55145bd92927801"
+    },
+    {
+      "path": "assets/smg45.986342e386b174d5.glb",
+      "ok": true,
+      "bytes": 2895736,
+      "sha256": "986342e386b174d5a15ad531bb5aade9387b88a487356a8c4fb0914dcfb7358e"
+    },
+    {
+      "path": "assets/cover.041ec7e966948b05.png",
+      "ok": true,
+      "bytes": 2057638,
+      "sha256": "041ec7e966948b0517155e7c44b9441c849f23c213f1c11c5d2b8f522b61ea8a"
+    },
+    {
+      "path": "assets/main.TBS64VI3.js",
+      "ok": true,
+      "bytes": 10445,
+      "sha256": "3720a8b45b6eaceb35020383608729c640d3fcf8e3dbb7b74a883fc45564688d"
+    },
+    {
+      "path": "assets/chunk.V4FE7RPJ.js",
+      "ok": true,
+      "bytes": 5975,
+      "sha256": "051104fa269d603d36c906d5ce2f43e80ecb3a5134773508c4eb7f5841ff1fc8"
+    },
+    {
+      "path": "assets/chunk.TWMFNRWL.js",
+      "ok": true,
+      "bytes": 107454,
+      "sha256": "f7ee0d16fac2d5ee1d4109008a733741c6a162f92fadbda555f2542f81d5accd"
+    },
+    {
+      "path": "assets/chunk.BMKCGQCQ.js",
+      "ok": true,
+      "bytes": 20010,
+      "sha256": "918085df3375366f4cfba44fa0f67a3a909f987e779aa8546b8787880c9318cd"
+    },
+    {
+      "path": "assets/chunk.SVQDYVP2.js",
+      "ok": true,
+      "bytes": 14193,
+      "sha256": "8844e1ad895ece6a3d738b38383a7376cb3817f1b240b351908f3a8ba9f6c243"
+    },
+    {
+      "path": "assets/chunk.G5VBBZCJ.js",
+      "ok": true,
+      "bytes": 19075,
+      "sha256": "bff87449615c7efaf5a06e0845ed9ac722f3af3d1140e5098a85023cce894b9b"
+    },
+    {
+      "path": "assets/chunk.YVGMXROQ.js",
+      "ok": true,
+      "bytes": 7307,
+      "sha256": "759e4fd73d8197107b5e388617ec5a6496f327775e52845a74974eba13e0fe9c"
+    },
+    {
+      "path": "assets/chunk.VIEQD7WB.js",
+      "ok": true,
+      "bytes": 1130582,
+      "sha256": "1535fed26f9b5fbed27742a0966c289fd4e8c3024fe4760447d31d5d837c560e"
+    },
+    {
+      "path": "assets/chunk.AJN7FA7M.js",
+      "ok": true,
+      "bytes": 56053,
+      "sha256": "1d1f23ea011aa8a67fdea8cfb37c45e63890a75d8ceacf576bc77aae744a4551"
+    },
+    {
+      "path": "assets/chunk.7Q5YUO7Z.js",
+      "ok": true,
+      "bytes": 2476,
+      "sha256": "7e0e237878b521cd9b192a59ddf938702329f8a1a275a9ea8f67aae89d8e7510"
+    },
+    {
+      "path": "assets/chunk.5RRBW4UT.js",
+      "ok": true,
+      "bytes": 583316,
+      "sha256": "ca7f570e28bd2814317f8a571c9a68c399d1f2602637ad862314c78a6aed2089"
+    },
+    {
+      "path": "assets/chunk.WMKTFVSF.js",
+      "ok": true,
+      "bytes": 577,
+      "sha256": "11247d28c5c2fb3d976002c2b55fecb6ba19fd88153e11d2c7af5832fd6ff331"
+    },
+    {
+      "path": "assets/models/fps/CREDITS.txt",
+      "ok": true,
+      "bytes": 1336,
+      "sha256": "05d0ac65a3959278cb4a127528351ea30a00e2d7c6223a9323085393572a9372"
+    },
+    {
+      "path": "assets/models/fps/UPSTREAM-SMG-LICENSE.md",
+      "ok": true,
+      "bytes": 12570,
+      "sha256": "9df6d10a0b84a472efe323be992712bf224a9fb621d62053687ef291be8b930e"
+    },
+    {
+      "path": "assets/models/fps/UPSTREAM-DESERT-EAGLE-LICENSE.md",
+      "ok": true,
+      "bytes": 882,
+      "sha256": "569d8dfc8020b38b68d2828c9ce6fcb6d6d1d41ac0eb2f70cdcb5bf1f22f5620"
+    },
+    {
+      "path": "assets/models/fps/UPSTREAM-MIT-LICENSE.txt",
+      "ok": true,
+      "bytes": 1068,
+      "sha256": "6795e9bfe7d67b87c0233b4fca631435982341efadc55702af61cfb3a71d717e"
+    },
+    {
+      "path": "assets/models/fps/sources.json",
+      "ok": true,
+      "bytes": 2803,
+      "sha256": "7f134672882d8847de5eb35fdbe05f9e2d3d424b2185b84b37cafbfb5746fa86"
+    }
+  ]
+}

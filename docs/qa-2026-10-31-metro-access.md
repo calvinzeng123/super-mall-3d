@@ -29,4 +29,10 @@ G 口跨公园前广场边缘，改用多边形布尔运算开洞；H 口为三�
 
 ## 发布记录
 
-待本次生产部署完成后填入部署 ID、正式指针和线上检查结果。
+- 应用提交 `7472659` 已推送 GitHub `feat/explore-v4`，通过 `netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3 --json` 发布。
+- 部署 ID：`6ae5d26ad6e654e6e6d08517`，状态 **ready**，正式发布指针一致，见 [发布确认](qa/metro-access-published-20261031.json)。
+- 正式 HTML 引用 `assets/main.TBS64VI3.js`；[84 个线上静态资源](qa/metro-access-live-assets-20261031.json) SHA-256 全部与本地生产包一致。
+- [线上实际行走](qa/metro-access-live-walk-20261031.json)：E/F/G/H 各两趟，合计 8 趟、56 个检查点，最大水平误差小于 1e−10m，楼层与高度连续，无细节加载错误。
+- [线上换乘与手机检查](qa/metro-access-live-browser-20261031.json)：四个列车服务的进站/先下后上/关门离站时序、六部电梯 12 趟往返、最深层隧道飞行均通过；390×844 视口无溢出，玻璃透镜移动、选层与工具面板正常，文字无发光阴影，WebGL 未丢失。
+- [线上八口坐标与截图检查](qa/metro-access-live-shots-20261031.json)：原 A–D 与新增 E–H 均在正式站存在。截图位于本次任务 `outputs/Netlify_20261031_metro-eight-access-b1.png`、`metro-access-E/F/G/H.png` 与 `metro-access-corridor.png`；已逐张目视核对。
+- 正式站浏览器控制台 **0 errors / 0 warnings**。手机验证使用浏览器视口模拟，未做实体手机长时间性能测试。

@@ -1,0 +1,63 @@
+{
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "kind": "live explore controller with keyboard movement and touch-look; no segment teleportation",
+  "routes": [
+    {
+      "id": "exit-E",
+      "reverse": false,
+      "floor": "ground",
+      "checkpoints": 7,
+      "maxError": 3.6739403974424045e-16
+    },
+    {
+      "id": "exit-E",
+      "reverse": true,
+      "floor": "M-B1",
+      "checkpoints": 7,
+      "maxError": 3.6739403974424045e-16
+    },
+    {
+      "id": "exit-F",
+      "reverse": false,
+      "floor": "ground",
+      "checkpoints": 7,
+      "maxError": 3.552713678800501e-15
+    },
+    {
+      "id": "exit-F",
+      "reverse": true,
+      "floor": "M-B1",
+      "checkpoints": 7,
+      "maxError": 3.552713678800501e-15
+    },
+    {
+      "id": "exit-G",
+      "reverse": false,
+      "floor": "ground",
+      "checkpoints": 7,
+      "maxError": 1.1021821192327203e-15
+    },
+    {
+      "id": "exit-G",
+      "reverse": true,
+      "floor": "M-B1",
+      "checkpoints": 7,
+      "maxError": 2.939152317953924e-15
+    },
+    {
+      "id": "exit-H",
+      "reverse": false,
+      "floor": "ground",
+      "checkpoints": 7,
+      "maxError": 0
+    },
+    {
+      "id": "exit-H",
+      "reverse": true,
+      "floor": "M-B1",
+      "checkpoints": 7,
+      "maxError": 0
+    }
+  ],
+  "detailErrors": []
+}
