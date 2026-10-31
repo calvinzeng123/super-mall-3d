@@ -1,0 +1,322 @@
+{
+  "url": "https://yunlan-mall-calvin.netlify.app/",
+  "levels": [
+    {
+      "id": "M-B4",
+      "y": -27,
+      "label": "12号线站台 · 南北向 · 中央下车 / 两侧上车"
+    },
+    {
+      "id": "M-B3",
+      "y": -19.5,
+      "label": "十字换乘厅 · 7 ↔ 12 号线"
+    },
+    {
+      "id": "M-B2",
+      "y": -12,
+      "label": "7号线站台 · 东西向 · 中央下车 / 两侧上车"
+    },
+    {
+      "id": "M-B1",
+      "y": -4.5,
+      "label": "双线站厅 · 售票 / 24 条闸机通道"
+    }
+  ],
+  "textures": [
+    {
+      "surface": "metro_ceramic",
+      "map": true,
+      "normal": true
+    },
+    {
+      "surface": "tunnel_liner",
+      "map": true,
+      "normal": true
+    }
+  ],
+  "services": [
+    {
+      "line": "7",
+      "dir": -1,
+      "samples": [
+        {
+          "x": 94.61157024793387,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 10,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 0,
+          "stopped": true,
+          "phase": 24.5,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 1,
+          "stopped": true,
+          "phase": 30,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": true,
+          "phase": 45,
+          "trainVisible": true
+        },
+        {
+          "x": -53.219008264462815,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 55,
+          "trainVisible": true
+        }
+      ]
+    },
+    {
+      "line": "7",
+      "dir": 1,
+      "samples": [
+        {
+          "x": -94.61157024793387,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 10,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 0,
+          "stopped": true,
+          "phase": 24.5,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 1,
+          "stopped": true,
+          "phase": 30,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": true,
+          "phase": 45,
+          "trainVisible": true
+        },
+        {
+          "x": 53.219008264462815,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 55,
+          "trainVisible": true
+        }
+      ]
+    },
+    {
+      "line": "12",
+      "dir": -1,
+      "samples": [
+        {
+          "x": 94.61157024793387,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 10,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 0,
+          "stopped": true,
+          "phase": 24.5,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 1,
+          "stopped": true,
+          "phase": 30,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": true,
+          "phase": 45,
+          "trainVisible": true
+        },
+        {
+          "x": -53.219008264462815,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 55,
+          "trainVisible": true
+        }
+      ]
+    },
+    {
+      "line": "12",
+      "dir": 1,
+      "samples": [
+        {
+          "x": -94.61157024793387,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 10,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 0,
+          "stopped": true,
+          "phase": 24.5,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 1,
+          "board": 1,
+          "stopped": true,
+          "phase": 30,
+          "trainVisible": true
+        },
+        {
+          "x": 0,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": true,
+          "phase": 45,
+          "trainVisible": true
+        },
+        {
+          "x": 53.219008264462815,
+          "visible": true,
+          "alight": 0,
+          "board": 0,
+          "stopped": false,
+          "phase": 55,
+          "trainVisible": true
+        }
+      ]
+    }
+  ],
+  "deepFlight": {
+    "startY": -25.38,
+    "endY": -25.38,
+    "z": -170.14999999999995,
+    "metro": true,
+    "visible": true
+  },
+  "lifts": [
+    {
+      "id": "M-L1",
+      "from": "M-B4",
+      "to": "M-B1"
+    },
+    {
+      "id": "M-L1",
+      "from": "M-B1",
+      "to": "M-B4"
+    },
+    {
+      "id": "M-L2",
+      "from": "M-B4",
+      "to": "M-B1"
+    },
+    {
+      "id": "M-L2",
+      "from": "M-B1",
+      "to": "M-B4"
+    },
+    {
+      "id": "M-7-SIDE-L-1",
+      "from": "M-B3",
+      "to": "M-B1"
+    },
+    {
+      "id": "M-7-SIDE-L-1",
+      "from": "M-B1",
+      "to": "M-B3"
+    },
+    {
+      "id": "M-12-SIDE-L-1",
+      "from": "M-B4",
+      "to": "M-B3"
+    },
+    {
+      "id": "M-12-SIDE-L-1",
+      "from": "M-B3",
+      "to": "M-B4"
+    },
+    {
+      "id": "M-7-SIDE-L1",
+      "from": "M-B3",
+      "to": "M-B1"
+    },
+    {
+      "id": "M-7-SIDE-L1",
+      "from": "M-B1",
+      "to": "M-B3"
+    },
+    {
+      "id": "M-12-SIDE-L1",
+      "from": "M-B4",
+      "to": "M-B3"
+    },
+    {
+      "id": "M-12-SIDE-L1",
+      "from": "M-B3",
+      "to": "M-B4"
+    }
+  ],
+  "errors": [],
+  "mobile": {
+    "overflow": false,
+    "textShadow": "none",
+    "toolsVisible": true,
+    "webglLost": false,
+    "floorPanel": true,
+    "lensMoved": true,
+    "labels": "全楼地铁外观B1双线站厅B27号线站台B3十字换乘厅B412号线站台"
+  }
+}

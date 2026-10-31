@@ -1,0 +1,36 @@
+{
+  "checks": [
+    {
+      "caption": "地铁云澜汇站 · 站厅与闸机",
+      "focus": "M-B1",
+      "visible": true
+    },
+    {
+      "caption": "乘扶梯下站台",
+      "focus": "M-B1",
+      "visible": true
+    },
+    {
+      "caption": "乘扶梯下站台",
+      "focus": "M-B2",
+      "visible": true
+    },
+    {
+      "caption": "7 号线 · 中央下车、两侧上车",
+      "focus": "M-B2",
+      "visible": true
+    },
+    {
+      "caption": "B3 十字换乘厅 · 7 ↔ 12 号线",
+      "focus": "M-B3",
+      "visible": true
+    },
+    {
+      "caption": "12 号线 · 更深一层，南北双向列车",
+      "focus": "M-B4",
+      "visible": true
+    }
+  ],
+  "touring": false,
+  "errors": []
+}

@@ -29,4 +29,12 @@
 
 ## 发布
 
-最终测试、浏览器、电梯、移动导航和生产发布结果在完成验证后记录于本段。
+- 应用提交 `dcd715a` 已推送到 GitHub `feat/explore-v4`，历史仍包含 `f3517a6`。原 PR #1 合并历史保留。
+- 使用 `netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3 --json` 发布。部署 ID：`6ae5c873d8526b781ef6bc22`；API 状态 `ready`，正式发布指针与本次部署完全相同，见 [发布确认](qa/metro-interchange-published-20261031.json)。
+- 正式 HTML 引用 `assets/main.IC3TZLU7.js`，84 个线上静态资源均与本地生产包 SHA-256 一致，见 [全部资源校验](qa/metro-interchange-live-assets-20261031.json)。
+- [线上功能检查](qa/metro-interchange-live-browser-20261031.json)：四个列车服务各五个时点、全部六部电梯 12 趟往返、−25.38m 深层飞行至 12 号线远端 z≈−170m、手机玻璃导航均通过。
+- [线上实际行走](qa/metro-interchange-live-walk-20261031.json)：74 趟全部通过，涵盖站厅至最深线全程往返、18 段楼梯双向、36 部扶梯。最大检查点水平误差小于 1e−10m，无细节加载错误。
+- [既有一期功能复查](qa/metro-interchange-preserved-20261031.json)：西门、990m² 艺术广场、地铁通廊、34 层地毯、屋面穹顶、一期北/东口坡道及西停车场三车行口保留；玻璃导航透镜、清晰文字和移动端宽度正常。
+- [自动导览检查](qa/metro-interchange-tour-20261031.json)：六段地铁镜头的对应楼层均实际展开，导览正常结束。
+- 新浏览器会话 `metro-release` 的正式站控制台为 0 errors / 0 warnings；楼层细节错误为空，WebGL 上下文正常。
+- 正式站截图保存在本次任务 `outputs/Netlify_20261031_metro-*.png`，包括双线十字爆炸视图、7 / 12 号线站台、换乘厅、远端隧道和手机玻璃导航。
