@@ -10,6 +10,7 @@ import { drawEscalator, stripGeometry } from './escalators.js';
 import { makeCanvas, canvasTexture, scaled, releaseAfterUpload, FONT_CN, FONT_EN } from '../textures.js';
 import { clearHeight } from './shell.js';
 import { buildMetroInterchangePlatforms, buildInterchangeCeiling } from './metro-interchange.js';
+import { addCutSurfaceSlab } from './surface-shapes.js';
 
 const RED = '#c8352b';
 const LINE = '7';
@@ -194,14 +195,14 @@ function signEntries(b) {
   const sign = (id, s, w = 1024, h = 192) => out.push({ id, w, h, draw: (g, x, y, cw, ch) => drawSignCell(g, x, y, cw, ch, s) });
   sign('name', { text: '云澜汇站', sub: `YUNLAN HUI · ${b.interchange?'7 / 12 号线':LINE+' 号线'}`, badge: b.interchange?'M':LINE });
   sign('in', { text: '进站', sub: 'ENTRANCE · 刷卡 / 扫码', arrow: 'up', color: '#2e9c6a' }, 640, 160);
-  sign('out', { text: '出站 · A B C D 口', sub: 'EXIT', arrow: 'up', color: '#e7b416' }, 768, 160);
+  sign('out', { text: `出站 · ${b.exits.map(e=>e.id).sort().join(' ')} 口`, sub: 'EXIT', arrow: 'up', color: '#e7b416' }, 1024, 160);
   sign('service', { text: '客服中心', sub: 'CUSTOMER SERVICE', color: '#0f6f86' }, 640, 160);
   sign('tvm', { text: '自动售票', sub: 'TICKETS · 扫码 / 现金', color: '#0f6f86' }, 640, 160);
   sign('station', { text: '往 站厅 · 进站', sub: `TO STATION · LINE ${b.interchange?'7 / 12':LINE}`, arrow: 'up', badge: 'M' });
   sign('equip', { text: '设备区 · 闲人免进', sub: 'STAFF ONLY', color: '#e7b416', line: true }, 640, 160);
   sign('portal', { text: '地铁 云澜汇站', sub: `METRO LINE ${b.interchange?'7 / 12':LINE} · YUNLAN HUI`, badge: 'M' });
   for (const ex of b.exits) {
-    const p = PASSAGE[ex.passage];
+    const p = PASSAGE[ex.passage] || b.passages.find(p=>p.id===ex.passage).info;
     sign(`mouth-${ex.id}`, { text: `${ex.id} 口 · ${p.cn}`, sub: `EXIT ${ex.id} · ${p.en}`, arrow: 'up', color: p.color });
     sign(`pass-${ex.passage}`, { text: `往 ${p.cn} · ${ex.id} 口`, sub: `TO ${p.en}`, arrow: 'up', color: p.color });
     sign(`end-${ex.passage}`, { text: p.end, sub: p.en, color: p.color });
@@ -353,8 +354,14 @@ function concourse(ctx, b, lv, L, atlas, S) {
   const y0 = lv.elev, H = clearHeight(lv), HW = -0.1 - y0;
   const { x0, z0, x1, z1 } = b.box;
   // 外墙：南北墙在通道口处断开
-  const mouths = { N: [], S: [] };
+  const mouths = { N: [], S: [], W: [], E: [] };
   for (const p of b.passages) {
+    if(p.extension){
+      const m=p.mouth;
+      if(Math.abs(m.z1-m.z0)<.01)(m.z0<0?mouths.N:mouths.S).push({p,x0:Math.min(m.x0,m.x1),x1:Math.max(m.x0,m.x1),z:m.z0});
+      else (m.x0<0?mouths.W:mouths.E).push({p,z0:Math.min(m.z0,m.z1),z1:Math.max(m.z0,m.z1),x:m.x0});
+      continue;
+    }
     const a = toW(p.F, ...p.lpoly[0]), c = toW(p.F, ...p.lpoly[3]);
     (a[1] < 0 ? mouths.N : mouths.S).push({ p, x0: Math.min(a[0], c[0]), x1: Math.max(a[0], c[0]), z: a[1] < 0 ? z0 : z1 });
   }
@@ -365,11 +372,14 @@ function concourse(ctx, b, lv, L, atlas, S) {
   }
   const FZ = frame(0, 0, 90, 'metro-z');
   // frame(0,0,90)：u → +z，v → −x
-  wallRun(W, FZ, z0 - 0.3, z1 + 0.3, -x0, -1, y0, HW);
-  wallRun(W, FZ, z0 - 0.3, z1 + 0.3, -x1, 1, y0, HW);
+  for(const [x,inward,ms] of [[x0,-1,mouths.W],[x1,1,mouths.E]]){
+    let ivs=[[z0-.3,z1+.3]];
+    for(const m of ms)ivs=subtractInterval(ivs,[m.z0,m.z1]);
+    for(const [a,c] of ivs)wallRun(W,FZ,a,c,-x,inward,y0,HW);
+  }
   // 站名墙（两端）与线路图
-  wallSign(B, S, atlas, IDF, x0 + 0.02, 0, y0 + 1.9, 1, 0, 'name', 1.1, true);
-  wallSign(B, S, atlas, IDF, x1 - 0.02, 0, y0 + 1.9, -1, 0, 'name', 1.1, true);
+  wallSign(B, S, atlas, IDF, x0 + 0.02, mouths.W.length?9:0, y0 + 1.9, 1, 0, 'name', 1.1, true);
+  wallSign(B, S, atlas, IDF, x1 - 0.02, mouths.E.length?-9:0, y0 + 1.9, -1, 0, 'name', 1.1, true);
   wallSign(B, S, atlas, IDF, -30, z0 + 0.02, y0 + 1.75, 0, 1, 'linemap', 1.2);
   wallSign(B, S, atlas, IDF, 30, z1 - 0.02, y0 + 1.75, 0, -1, 'linemap', 1.2);
   // 长廊广告灯箱（避开通道口与用房）
@@ -451,6 +461,10 @@ function concourse(ctx, b, lv, L, atlas, S) {
       hangSign(B, S, atlas, IDF, (m.x0 + m.x1) / 2, m.z + nz * 1.2, y0 + 2.75, 0, nz, `mouth-${ex.id}`, 'station', 0.46, y0 + H);
     }
   }
+  for(const m of [...mouths.W,...mouths.E]){
+    const ex=b.exits.find(e=>e.passage===m.p.id),nx=m.x<0?1:-1;
+    hangSign(B,S,atlas,IDF,m.x+nx*1.2,(m.z0+m.z1)/2,y0+2.75,nx,0,`mouth-${ex.id}`,'station',.46,y0+H);
+  }
   // 盲道（长廊中线）
   for (const z of [-8, 8]) B.get('satin').box(0, y0 + 0.008, z, 112, 0.012, 0.3, '#e2b33a');
 }
@@ -466,6 +480,14 @@ function ceiling(ctx, b, lv, L) {
     for (let x = x0 + 3; x < x1 - 3; x += 6) B.get('glow').box(x + 2.7, y - 0.01, z, 5.2, 0.03, 0.14, '#f2f8ff');
   }
   for (const p of b.passages) {
+    if(p.extension){
+      addCutSurfaceSlab(B,'glowSoft',p.poly,[],y+.06,.06,'#dfe3e7');
+      for(let i=1;i<p.route.length;i++){
+        const [a,c]=[p.route[i-1],p.route[i]],len=Math.hypot(c[0]-a[0],c[1]-a[1]),F=frame(...a,Math.atan2(c[1]-a[1],c[0]-a[0])*DEG);
+        B.frame(F,()=>{for(let u=1;u<len-1;u+=4)B.get('glow').box(u,y-.01,0,Math.min(2.4,len-u-.2),.03,.16,'#f2f8ff');});
+      }
+      continue;
+    }
     const u0 = Math.min(p.lpoly[0][0], p.lpoly[3][0]);
     B.frame(p.F, () => {
       B.get('glowSoft').box((u0 + p.uEnd) / 2, y + 0.02, 0, p.uEnd - u0, 0.06, p.hw * 2, '#dfe3e7');
@@ -487,6 +509,7 @@ function passages(ctx, b, lv, L, atlas, S) {
   const y0 = lv.elev, H = clearHeight(lv), HW = -0.1 - y0;
   let ad = 2;
   for (const p of b.passages) {
+    if(p.extension){accessPassage(L,p,b.exits.find(e=>e.passage===p.id),lv,atlas,S);continue;}
     const F = p.F;
     const info = PASSAGE[p.id];
     const ex = b.exits.find((e) => e.passage === p.id);
@@ -532,6 +555,25 @@ function passages(ctx, b, lv, L, atlas, S) {
     // 尽端：去往各期的连接口门框（门框与灯箱由 portals() 画在各期一侧）；公园通道尽端接 B 口楼梯
     if (p.to) wallSign(B, S, atlas, F, p.uEnd - 0.05, 0, y0 + 2.95, -1, 0, `end-${p.id}`, 0.4);
   }
+}
+
+/** Bent access passages share their collision and rendered wall boundaries. */
+function accessPassage(L,p,ex,lv,atlas,S){
+  const B=L.batch,W=L.shellBatch,y=lv.elev,H=clearHeight(lv);
+  for(const w of p.walls){
+    const dx=w.x1-w.x0,dz=w.z1-w.z0,len=Math.hypot(dx,dz),F=frame(w.x0,w.z0,Math.atan2(dz,dx)*DEG);
+    wallRun(W,F,0,len,0,w.inward,y,-.1-y,{band:p.info.color});
+    if(len>14)wallSign(B,S,atlas,F,len/2,w.inward*.02,y+1.65,0,w.inward,`pass-${p.id}`,.65);
+  }
+  for(let i=1;i<p.route.length;i++){
+    const [a,c]=[p.route[i-1],p.route[i]],len=Math.hypot(c[0]-a[0],c[1]-a[1]),F=frame(...a,Math.atan2(c[1]-a[1],c[0]-a[0])*DEG);
+    B.frame(F,()=>{
+      B.get('satin').box(len/2,y+.01,0,len,.012,.32,p.info.color);
+      B.get('satin').box(len/2,y+.008,-1.6,len,.012,.3,'#e2b33a');
+    });
+    if(len>9)hangSign(B,S,atlas,F,len/2,0,y+2.75,-1,0,`pass-${p.id}`,'station',.42,y+H);
+  }
+  hangSign(B,S,atlas,ex.kiosk.frame,-.4,0,y+2.75,-1,0,`up-${ex.id}`,null,.42,y+H);
 }
 
 // ---------------------------------------------------------------------------
@@ -795,6 +837,18 @@ function exitKiosk(ctx, b, lv, L, ex, atlas, S) {
   const y0 = lv.elev;
   const rise = -y0;
   const yAt = (u) => y0 + (rise * u) / R;
+  if(ex.approach){
+    addCutSurfaceSlab(B,'concrete',ex.approach.poly,ctx.layout.site.openings,.012,.15,'#d0c9b9');
+    for(let i=1;i<ex.approach.points.length;i++){
+      const a=ex.approach.points[i-1],c=ex.approach.points[i],len=Math.hypot(c[0]-a[0],c[1]-a[1]);
+      const F=frame(...a,Math.atan2(c[1]-a[1],c[0]-a[0])*DEG);
+      B.frame(F,()=>{
+        for(const v of [-2.5,2.5])B.get('ext').box(len/2,.021,v,len,.012,.18,'#918b80');
+        for(let u=1;u<len;u+=2)B.get('ext').box(u,.022,0,.028,.01,4.8,'#afa99f');
+        B.get('ext').box(len/2,.029,0,len,.018,.32,'#ddbd67');
+      });
+    }
+  }
   B.frame(G, () => {
     // 梯井侧墙（地下）与地面压顶
     for (const s of [-1, 1]) {

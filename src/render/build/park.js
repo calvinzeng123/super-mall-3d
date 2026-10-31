@@ -1,8 +1,9 @@
 // 中央公园：湖面（湖床 + 水面 + 卵石滩 + 石砌驳岸）、环湖步道与园路（带状铺装）、落地塔与地铁口前广场、
 // 林地与开阔草坡、湖边亲水木栈道与亭、沿湖长椅与庭院灯。地铁 B 口的雨棚与楼梯由 metro.js 绘制，这里只在前广场挖出梯井。
 import * as THREE from 'three';
-import { pointInPoly, distToSeg, frame } from '../../layout/geom.js';
+import { pointInPoly, distToSeg, distToPolyEdge, frame } from '../../layout/geom.js';
 import { shapeFromPoly, flatShapeGeometry } from './shell.js';
+import { cutSurfaceShapes } from './surface-shapes.js';
 import { addTrees, bench, planter } from './props.js';
 import { COLORS } from '../theme.js';
 import { rng } from '../textures.js';
@@ -83,8 +84,8 @@ export function buildPark(ctx) {
   const pave = mats.floor('paving', 0.8);
   add(ribbon(pk.loop, 4, -0.12, true), pave);
   for (const p of pk.paths) add(ribbon(p, 3, -0.125, false), pave);
-  const wells = (ctx.layout.site.openings || []).filter((o) => o.every((q) => pointInPoly(q, FORECOURT)));
-  const fc = new THREE.Mesh(new THREE.ExtrudeGeometry(shapeFromPoly(FORECOURT, wells), { depth: 0.35, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, -0.35, 0), pave);
+  const fc = new THREE.Mesh(new THREE.ExtrudeGeometry(cutSurfaceShapes(FORECOURT, ctx.layout.site.openings || []), { depth: 0.35, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, -0.35, 0), pave);
+  fc.name = 'park-forecourt';
   fc.receiveShadow = true;
   G.add(fc);
   for (const [x, z] of [[24, 60], [34, 68], [88, 30], [92, 44]]) planter(B, x - 2.5, z - 1.5, x + 2.5, z + 1.5, 0, x + z, true);
@@ -101,6 +102,7 @@ export function buildPark(ctx) {
       if (nearPolyline(p, pk.loop, true) < 4 || pk.paths.some((q) => nearPolyline(p, q, false) < 3.5)) continue;
       if (MEADOWS.some(([mx, mz, r]) => Math.hypot(p[0] - mx, p[1] - mz) < r)) continue;
       if (Math.hypot(p[0] - pk.metro.x, p[1] - pk.metro.z) < 12) continue;
+      if ((ctx.layout.site.activityExclusions||[]).some(poly=>pointInPoly(p,poly)||distToPolyEdge(p,poly)<3.5)) continue;
       trees.push({ x: p[0], y: -0.3, z: p[1], s: 0.8 + rand() * 0.7, kind: rand() < 0.3 ? 'cone' : 'round' });
     }
   }

@@ -5,7 +5,7 @@ import { rect, rectPoly, lrectPoly, pointInPoly, polysOverlap } from '../../layo
 import { addCutSurfaceSlab } from './surface-shapes.js';
 import { sampleMetroService } from '../metro-service.js';
 
-const labels={transfer:['十字换乘厅','7 ↔ 12 · TRANSFER'],exit:['出站 · A B C D','EXIT VIA B1'],alight:['下车专用 · 换乘 / 出站','ALIGHT ONLY · TRANSFER / EXIT'],board:['上车专用 · 请先下后上','BOARDING ONLY'],
+const labels={transfer:['十字换乘厅','7 ↔ 12 · TRANSFER'],exit:['出站 · A–H 口','EXIT VIA B1 · A–H'],alight:['下车专用 · 换乘 / 出站','ALIGHT ONLY · TRANSFER / EXIT'],board:['上车专用 · 请先下后上','BOARDING ONLY'],
   '7':['7 号线 · 东西向','LINE 7 · EAST / WEST'],'12':['12 号线 · 南北向','LINE 12 · NORTH / SOUTH'],
   '7-to':['↑ 7 号线 · B2','TO LINE 7'],'12-to':['↓ 12 号线 · B4','TO LINE 12'],lift:['无障碍电梯','ACCESSIBLE LIFT'],
   '7--1':['7 号线 · 往云澜里','LINE 7 · YUNLAN LANE'],'7-1':['7 号线 · 往星湾','LINE 7 · XINGWAN'],

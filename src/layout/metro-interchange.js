@@ -4,6 +4,7 @@ import { carve } from './metro.js';
 import { ESC } from './constants.js';
 import { lift } from './mall.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
+import { addMetroAccess } from './metro-access.js';
 
 export const INTERCHANGE = {
   concourse: rect(-68,-26,68,26), platform: rect(-60,-6,60,6),
@@ -103,4 +104,5 @@ export function applyMetroInterchange(layout) {
   b.access=buildMallStairAccess(b,levels,stairs);
   layout.levels.splice(layout.levels.findIndex(l=>l.building==='M'),2,...levels);
   for(const [key,values]of [['escalators',escalators],['stairs',stairs],['elevators',elevators]])layout[key]=layout[key].filter(x=>x.building!=='M').concat(values);
+  addMetroAccess(layout,b,B1);
 }

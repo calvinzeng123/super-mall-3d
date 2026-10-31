@@ -2,7 +2,15 @@
 
 > 最后更新：2026-10-31。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
-## 2026-10-31 最新交接：7 / 12 号线十字换乘站
+## 2026-10-31 最新交接：地铁八口与四象限覆盖
+
+默认正式站仍为 [云澜汇 Netlify](https://yunlan-mall-calvin.netlify.app/)，site ID `3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。本次新增 E/F/G/H 口，A–H 合计八个，每个象限两个。实现与发布证据见 [八口 QA](docs/qa-2026-10-31-metro-access.md)。
+
+- `layout/metro-access.js` 在完整导览换乘站生成后补四条 6.8m 宽折线通道，分别接一期大道、二期星湾路、公园大道和三期街区。地面开洞、铺道、碰撞与标注随入口同步；原 A–D 及 FPS 四口布局保留。
+- `render/build/metro.js` 的站厅四边开口、折线墙体/吊顶和导向牌读取新记录。`labels.js`、`paths.js` 需区分 `extension` 通道，不得对折线通道读取旧的 `F/uEnd/lpoly`。公园铺装对部分越界洞口也做布尔开洞。
+- 一期南侧步道在 E 口附近经人行道绕行，保留东西端；冲突树池与碰撞同步移除。H 仅在三期 1F 加梯井，不改变地下停车层。两条运营线、站内交通、一期设计面层和玻璃导航保持。
+
+## 历史 · 2026-10-31：7 / 12 号线十字换乘站
 
 默认正式站仍为 [云澜汇 Netlify](https://yunlan-mall-calvin.netlify.app/)，site ID `3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。本次用户确认第二条线直接开通，两条线都有列车。设计和验证见 [地铁 QA](docs/qa-2026-10-31-metro-interchange.md)。
 

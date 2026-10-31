@@ -251,6 +251,7 @@ function metroPaths(b, lv, P) {
   line([[27.5, 0.9], [36, 2.5], [56, 2.5]], '闸机出站');
   }
   for (const p of b.passages) {
+    if(p.extension){line(p.route,p.name);continue;}
     const u0 = Math.max(p.lpoly[0][0], p.lpoly[3][0]) - 4;
     const end = p.uEnd - 1.5;
     P.people.push({ loop: false, name: p.name, pts: [W3(p.F, u0, -1.4, y), W3(p.F, end, -1.4, y)] });
@@ -259,9 +260,9 @@ function metroPaths(b, lv, P) {
   for (const ex of b.exits) {
     const G = ex.kiosk.frame;
     const p = b.passages.find((q) => q.id === ex.passage);
-    const [pu, pv] = toL(p.F, G.ox, G.oz);
+    const [pu, pv] = p.extension ? [0,0] : toL(p.F, G.ox, G.oz);
     const side = Math.abs(pv) > 1;
-    const [au, av] = toL(G, ...toW(p.F, side ? pu + 1.2 : pu - 8, 0));
+    const [au, av] = p.extension ? [-1.2,0] : toL(G, ...toW(p.F, side ? pu + 1.2 : pu - 8, 0));
     const T = (u, v, yy) => W3(G, u, v, yy);
     const run = ex.kiosk.run;
     P.people.push({ loop: false, name: `${ex.id} 口出站`, pts: [T(au, av, y), T(side ? -1.2 : au, -1.1, y), T(0, -1.1, y), T(run, -1.1, 0.07), T(run + 2.5, -1.1, 0.07)] });

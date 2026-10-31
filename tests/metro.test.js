@@ -25,9 +25,9 @@ test('一期 B1M、二期 B1、三期 B1 各有通往站厅的连接口', () => 
   }
 });
 
-test('四个地面出入口分属一期、二期、三期与公园，雨棚不压道路与人行道', () => {
+test('八个地面出入口分属一期、二期、三期与公园，雨棚不压道路与人行道', () => {
   const ex = L.entrances.filter((e) => e.building === 'M' && e.to === 'site');
-  assert.ok(ex.length >= 4);
+  assert.equal(ex.length, 8);
   const plots = new Set(ex.map((e) => (L.site.plots.find((p) => pointInPoly([e.kiosk.x, e.kiosk.z], p.poly)) || {}).id));
   for (const id of ['P1', 'P2', 'P3', 'park']) assert.ok(plots.has(id), `${id} 没有地铁出入口`);
   for (const e of ex) {
@@ -42,7 +42,7 @@ test('站厅 ↔ 站台：上下行扶梯各 ≥2、楼梯 ≥2、客梯 ≥2', 
   assert.ok(L.elevators.filter((e) => e.serves.includes('M-B1') && e.serves.includes('M-B2')).length >= 2);
 });
 
-test('四条通道沿对角线', () => {
-  const ang = M().passages.map((p) => Math.round(((p.deg % 360) + 360) % 360)).sort((a, b) => a - b);
+test('原有四条通道保留对角线走向', () => {
+  const ang = M().passages.filter(p=>!p.extension).map((p) => Math.round(((p.deg % 360) + 360) % 360)).sort((a, b) => a - b);
   assert.deepEqual(ang, [45, 135, 225, 315]);
 });

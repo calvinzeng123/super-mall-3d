@@ -24,7 +24,14 @@ test('tour adds six-storey main mall and eight stepped annexes while compact FPS
   assert.equal(old.expansion,undefined);assert.equal(old.levels.find(l=>l.id==='P1-RF').elev,17.5);
   for(const bid of ['P2','P3','H','A','R1','R2','R3','R4','WPG']) {
     assert.deepEqual(L.buildings.find(b=>b.id===bid),old.buildings.find(b=>b.id===bid),`${bid} building changed`);
-    assert.deepEqual(L.levels.filter(l=>l.building===bid),old.levels.filter(l=>l.building===bid),`${bid} levels changed`);
+    const levels=structuredClone(L.levels.filter(l=>l.building===bid));
+    // The full-tour H exit intentionally cuts the street slab; every other
+    // property of phase three, including its actual garage, stays identical.
+    if(bid==='P3'){
+      const hole=L.entrances.find(e=>e.id==='M-H').kiosk.open;
+      for(const lv of levels.filter(l=>l.ground))for(const p of lv.slab.pieces)p.holes=p.holes.filter(h=>JSON.stringify(h)!==JSON.stringify(hole));
+    }
+    assert.deepEqual(levels,old.levels.filter(l=>l.building===bid),`${bid} levels changed`);
   }
   assert.deepEqual(L.ramps.filter(r=>!r.expansion),old.ramps,'shared garage ramp topology changed');
   assert.deepEqual(L.ramps.filter(r=>r.expansion).map(r=>r.id),['P1-N-IN','P1-N-OUT','P1-E-IN','P1-E-OUT'],'tour-only phase-one gates');
