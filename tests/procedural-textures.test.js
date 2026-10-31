@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PROCEDURAL_SURFACES, surfacePixels } from '../scripts/procedural-surfaces.mjs';
 import { FACADE_SURFACES } from '../src/render/facade-materials.js';
+import { FLOOR_SURFACES } from '../src/render/pbr.js';
 
 const manifest = JSON.parse(readFileSync(new URL('../assets/textures/procedural/manifest.json', import.meta.url)));
 
@@ -34,7 +35,7 @@ test('程序化面层可复现，颜色接近中性、不会把顶点色压暗�
   }
 });
 
-test('每个程序化面层都有对应的外立面材质', () => {
-  const used = new Set(Object.values(FACADE_SURFACES).map(s => s.id));
+test('每个程序化面层都有对应的建筑或地面材质', () => {
+  const used = new Set([...Object.values(FACADE_SURFACES), ...Object.values(FLOOR_SURFACES)].flatMap(s => [s.id, s.pattern].filter(Boolean)));
   for (const id of Object.keys(PROCEDURAL_SURFACES)) assert.ok(used.has(id), id);
 });

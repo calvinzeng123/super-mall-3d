@@ -129,7 +129,47 @@ function timberSlat(u, v, S) {
   return [l * 1.03, l, l * 0.94, 0.7 + Math.sin(t * Math.PI) * 0.25, 0.62 + (grain - 0.5) * 0.15];
 }
 
+/** Honed limestone, 1200 × 600mm running bond, narrow recessed grout. */
+function limestonePavers(u, v, S) {
+  const x = u * 4.8, y = v * 4.8, row = Math.floor(y / .6);
+  const xx = (x + (row % 2) * .6) % 4.8, col = Math.floor(xx / 1.2);
+  const lx = xx % 1.2, ly = y % .6, edge = Math.min(lx, 1.2 - lx, ly, .6 - ly);
+  const grain = fbm(u, v, 128, 128, S + 3, 2);
+  if (edge < .004) return [.56, .55, .51, .14, .98];
+  const cloud = fbm(u, v, 12, 16, S, 3), bed = fbm(u, v, 10, 56, S + 7, 2);
+  const tone = .88 + cellRand(col, row, S) * .08 + (cloud - .5) * .06 + (grain - .5) * .045;
+  const bevel = clamp01((edge - .004) / .005);
+  return [tone * 1.02, tone * 1.01, tone * .985, .58 + bevel * .14 + (bed - .5) * .025, .77 + grain * .1];
+}
+
+/** Dense loop-pile wool, 600mm repeat. Neutral yarn lets every inlay share
+ * these maps; no reflective veins or stone joints occur in the carpet. */
+function wovenCarpet(u, v, S) {
+  const row = Math.floor(v * 128), shift = (row % 2) * .5;
+  const warp = Math.sin((u * 128 + shift) * Math.PI * 2);
+  const weft = Math.sin(v * 128 * Math.PI * 2);
+  const yarn = fbm(u, v, 128, 128, S, 2), soft = fbm(u, v, 16, 16, S + 1, 2);
+  const nap = warp * weft, l = .89 + nap * .035 + (yarn - .5) * .11 + (soft - .5) * .035;
+  return [l * 1.015, l, l * .98, .5 + nap * .09 + (yarn - .5) * .16, .94 + yarn * .055];
+}
+
+/** Linked quarter-circle jacquard, an original cloud/ripple motif. The colour
+ * repeat is large; rendering keeps the existing 600mm pile normals separate. */
+function carpetJacquard(u, v, S) {
+  const x = u * 4.8, y = v * 4.8, col = Math.floor(x / 2.4), row = Math.floor(y / 2.4);
+  let lx = x % 2.4; const ly = y % 2.4;
+  if ((col + row) % 2) lx = 2.4 - lx;
+  const distances = [Math.hypot(lx, ly), Math.hypot(2.4 - lx, 2.4 - ly)];
+  const stripe = Math.min(...distances.flatMap(r => [.88, 1.04, 1.20, 1.36, 1.52].map(radius => Math.abs(r - radius))));
+  const yarn = fbm(u, v, 128, 128, S, 2);
+  const l = (stripe < .018 ? .73 : stripe < .033 ? .97 : .9) + (yarn - .5) * .04;
+  return [l * 1.015, l, l * .98, .5, .98];
+}
+
 export const PROCEDURAL_SURFACES = Object.freeze({
+  limestone_pavers: { label: '一期 · 浅石色错缝地砖', meters: [4.8, 4.8], sample: limestonePavers, normal: 1.8, seed: 101 },
+  woven_carpet: { label: '一期 · 圈绒编织地毯', meters: [.6, .6], sample: wovenCarpet, normal: 1.0, seed: 113 },
+  carpet_jacquard: { label: '一期 · 云纹弧线提花', meters: [4.8, 4.8], sample: carpetJacquard, normal: .2, seed: 127 },
   travertine_panel: { label: '洞石干挂大板', meters: [2.4, 2.4], sample: travertine, normal: 2.2, seed: 11 },
   terracotta_baguette: { label: '陶土挂板', meters: [1.2, 1.2], sample: terracotta, normal: 3.0, seed: 23 },
   bronze_brushed: { label: '拉丝铜板', meters: [1, 1], sample: bronze, normal: 1.2, seed: 37 },

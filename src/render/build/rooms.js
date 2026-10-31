@@ -53,6 +53,7 @@ export function buildRooms(ctx) {
     }
     // 电梯厅地面
     for (const w of lv.walk) {
+      if (lv.finishes) continue; // Continuous woven floor already includes the lift lobby.
       if (!w.rect || !(w.kind === 'lobby' || w.kind === 'service' || w.kind === 'eschall')) continue;
       const g = w.rect;
       B.frame(w.frame, () => B.get('satin').box(rcx(g), y0 + 0.01, rcz(g), rw(g) - 0.1, 0.02, rd(g) - 0.1, lv.kind === 'parking' ? '#d9dde1' : '#cfc6b8'));
@@ -129,11 +130,11 @@ function restroom(B, L, atlas, lv, r, y0, H, roof) {
   };
   const W = F.len, D = F.depth;
   if (r.publicAccess) {
-    compactRestroom(L, atlas, r, F, P, y0, H);
+    compactRestroom(L, atlas, r, F, P, y0, H, lv);
     return;
   }
   const tile = '#eef0f1';
-  P('satin', W / 2, D / 2, y0 + 0.008, W - 0.2, D - 0.2, 0.016, '#dfe3e6');
+  P(lv.finishes ? 'carpet' : 'satin', W / 2, D / 2, y0 + 0.008, W - 0.2, D - 0.2, 0.016, lv.finishes ? '#bcb4a2' : '#dfe3e6');
   if (roof) {
     // 天台卫生间为独立小屋
     P('matte', W / 2, D / 2, y0 + H / 2, W, D, H, '#e7e2d8');
@@ -191,11 +192,11 @@ function restroom(B, L, atlas, lv, r, y0, H, roof) {
 /** Small annex restrooms have a real foyer and two open cubicle doors. The
  * older full-size mall template has fixed 8×11m fixtures and cannot be scaled
  * into a 6×5.5m room without furniture spilling through the public corridor. */
-function compactRestroom(L, atlas, room, F, P, y0, H) {
+function compactRestroom(L, atlas, room, F, P, y0, H, lv) {
   const W = F.len, D = F.depth, partition = Math.min(2.25, D * .43);
   const wall = (a0, a1, b0, b1, h = 2.35) => P('plaster', (a0 + a1) / 2, (b0 + b1) / 2,
     y0 + h / 2, Math.max(.09, a1 - a0), Math.max(.09, b1 - b0), h, '#e1e5df');
-  P('stone', W / 2, D / 2, y0 + .012, W - .2, D - .2, .024, '#e5e4da');
+  P(lv.finishes ? 'carpet' : 'stone', W / 2, D / 2, y0 + .012, W - .2, D - .2, .024, lv.finishes ? '#bcb4a2' : '#e5e4da');
   wall(W / 2 - .045, W / 2 + .045, partition, D - .12);
   for (let i = 0; i < 2; i++) {
     const a0 = .12 + i * W / 2, a1 = (i + 1) * W / 2 - .12, center = (a0 + a1) / 2, doorW = Math.min(1.15, (a1 - a0) * .55);

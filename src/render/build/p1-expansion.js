@@ -176,10 +176,11 @@ function gardenPlanter(B, x, y, z, p, tree = false) {
 
 function terraces(ctx, lv) {
   const B = ctx.levels[lv.id].shellBatch, p = paletteOf(lv), y = lv.elev;
+  if (lv.finishes) B.materials.p1TerracePaving = ctx.mats.floor(lv.finishes.exterior);
   for (const piece of terracePieces(lv)) {
     // Finish only the exposed terrace, never refill a skylight or lift shaft.
     const holes = (piece.holes || []).concat((lv.voids || []).map(v => v.poly), lv.slab.pieces.flatMap(s => s.holes || []), lv.kind === 'roof' ? [] : facadePolys(lv));
-    addCutSurfaceSlab(B, 'facadeStone', piece.outer, holes, y + .012, .018, '#d6d0bf');
+    addCutSurfaceSlab(B, lv.finishes ? 'p1TerracePaving' : 'facadeStone', piece.outer, holes, y + .012, .018, lv.finishes ? '#ffffff' : '#d6d0bf');
   }
   for (const e of expansionTerraceEdges(lv, ctx.layout.entrances)) B.frame(e.F, () => {
     for (const [a, b] of e.spans) {
@@ -394,7 +395,7 @@ export function buildP1PublicFixture(B, lv, f) {
       return;
     }
     // Flush rugs mark each activity without adding waist-high enclosures.
-    P('matte', 0, 0, .012, w - .18, d - .18, .024, f.kind === 'gallery' ? '#d2d1bd' : f.kind === 'garden' ? '#c6cbb4' : '#ddd0b7');
+    P('carpet', 0, 0, .012, w - .18, d - .18, .024, f.kind === 'gallery' ? '#b8b5a0' : f.kind === 'garden' ? '#a0ad91' : '#c1af96');
     if (f.kind === 'gallery') {
       for (const side of [-1, 1]) {
         const x = side * w * .24, z = -d * .27, pw = w * .4;

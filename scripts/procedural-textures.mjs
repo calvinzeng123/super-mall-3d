@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { PROCEDURAL_SURFACES, surfacePixels } from './procedural-surfaces.mjs';
 
 const OUT = 'assets/textures/procedural';
-const SIZE = { travertine_panel: 1024, board_concrete: 1024, terracotta_baguette: 1024, timber_slat: 1024 };
+const SIZE = { limestone_pavers: 1024, travertine_panel: 1024, board_concrete: 1024, terracotta_baguette: 1024, timber_slat: 1024 };
 const QUALITY = { color: 88, normal: 92, roughness: 84 };
 const tmp = mkdtempSync(join(tmpdir(), 'proc-tex-'));
 const jobs = [], assets = [];

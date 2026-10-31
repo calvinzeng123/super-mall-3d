@@ -13,6 +13,7 @@ import { buildContextBuildings } from './context-buildings.js';
 import { buildForecourt } from './forecourt.js';
 import { buildWestParkingDetails } from './west-parking.js';
 import { buildPlayableSite } from './playable-site.js';
+import { p1PavingCutouts, buildP1PavingInlays } from './floor-finishes.js';
 
 const DEG = 180 / Math.PI;
 /** 各期围合的铺装广场（椭圆）：渲染铺装与水景，并让草坪树阵避开 */
@@ -135,8 +136,10 @@ export function buildSite(ctx) {
 /** 商场地块景观：与建筑同形的外扩铺装带（裁到地块内）、入口步道（直通人行道或地块边）、草坪上的树阵与路灯 */
 function landscape(ctx, b, holes, G, B) {
   const S = ctx.layout.site;
+  const designed = b.id === 'P1' && !!ctx.layout.finishes?.P1;
+  if (designed) holes = p1PavingCutouts(ctx.layout, holes);
   const inset = (r, d) => rect(r.x0 + d, r.z0 + d, r.x1 - d, r.z1 - d);
-  const plotIn = rectPoly(inset(b.plot, 2));
+  const plotIn = rectPoly(inset(b.plot, designed ? 0 : 2));
   const extendOf = (w) => {
     let lim = w.uEnd + 20;
     for (const t of S.trenches) {
@@ -147,12 +150,13 @@ function landscape(ctx, b, holes, G, B) {
   };
   const rots = b.rotundas.map((r) => ({ id: r.id, x: r.x, z: r.z, R: r.R + 18 }));
   const arms = b.wings.map((w) => (w.link ? { id: w.id, rot: w.rot, to: w.to, deg: w.deg } : { id: w.id, rot: w.rot, deg: w.deg, uEnd: extendOf(w) }));
-  const band = clipConvex(hubOutline(rots, arms, 41), plotIn);
-  const pave = ctx.mats.floor('paving', 0.75);
+  const band = designed ? plotIn : clipConvex(hubOutline(rots, arms, 41), plotIn);
+  const pave = ctx.mats.floor(designed ? 'p1-paving' : 'paving', 0.75);
   const m = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(band, holes), -0.14), pave);
-  m.name = 'site-landscape-cut';
+  m.name = designed ? 'P1-continuous-tiled-plaza' : 'site-landscape-cut';
   m.receiveShadow = true;
   G.add(m);
+  if (designed) buildP1PavingInlays(ctx, b.plot, holes);
   // 入口步道：沿入口外法线直到地块边
   const paths = [];
   const towers = ctx.layout.buildings.filter(other => ['tower', 'annex'].includes(other.kind) && !other.undergroundOnly).map(other => other.outline);
@@ -162,14 +166,22 @@ function landscape(ctx, b, holes, G, B) {
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     const F = frame(mx, mz, Math.atan2(e.nz, e.nx) * DEG);
     const hw = Math.max(3, e.width / 2);
-    const strip = clipConvex([toW(F, 8, -hw), toW(F, 160, -hw), toW(F, 160, hw), toW(F, 8, hw)], plotIn);
+    const start = designed ? 0 : 8;
+    const strip = clipConvex([toW(F, start, -hw), toW(F, 160, -hw), toW(F, 160, hw), toW(F, start, hw)], plotIn);
     if (strip.length < 3) continue;
     for (const piece of subtractTowerFootprints(strip, towers)) {
       paths.push(piece);
-      const pm = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(piece, holes), -0.1), pave);
+      const pm = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(piece, holes), -0.1), designed ? ctx.mats.floor('p1-paving-border') : pave);
       pm.name = 'site-entry-path-cut';
       pm.receiveShadow = true;
       G.add(pm);
+    }
+    if (designed) {
+      const inner = clipConvex([toW(F, start, -hw + .4), toW(F, 160, -hw + .4), toW(F, 160, hw - .4), toW(F, start, hw - .4)], plotIn);
+      if (inner.length >= 3) {
+        const pm = new THREE.Mesh(flatShapeGeometry(cutSurfaceShapes(inner, holes), -.085), pave);
+        pm.name = 'P1-tiled-entrance-axis'; pm.receiveShadow = true; G.add(pm);
+      }
     }
     for (let u = 20; u < 160; u += 15) {
       const [x, z] = toW(F, u, 0);

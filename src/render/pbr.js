@@ -32,6 +32,14 @@ export async function loadSurfaceTextures(anisotropy = 4) {
 }
 
 export const FLOOR_SURFACES = {
+  'p1-paving': { id: 'limestone_pavers', tint: '#e6e0d3', roughness: 1, outdoor: true },
+  'p1-paving-border': { id: 'limestone_pavers', tint: '#677575', roughness: 1, outdoor: true },
+  'p1-paving-inlay': { id: 'limestone_pavers', tint: '#c7b18c', roughness: 1, outdoor: true },
+  'carpet-linen': { id: 'woven_carpet', tint: '#c1b5a1', roughness: 1, normal: .38, glow: .18 },
+  'carpet-ocean': { id: 'woven_carpet', pattern: 'carpet_jacquard', tint: '#52787a', roughness: 1, normal: .38, glow: .18 },
+  'carpet-sage': { id: 'woven_carpet', pattern: 'carpet_jacquard', tint: '#7c8b71', roughness: 1, normal: .38, glow: .18 },
+  'carpet-clay': { id: 'woven_carpet', pattern: 'carpet_jacquard', tint: '#a27b65', roughness: 1, normal: .38, glow: .18 },
+  'carpet-flax': { id: 'woven_carpet', tint: '#d3bd92', roughness: 1, normal: .38, glow: .18 },
   'marble-white': { id: 'marble_01', tint: '#f7f6f2' },
   'terrazzo-cool': { id: 'marble_01', tint: '#dce5e8' },
   'terrazzo-warm': { id: 'marble_01', tint: '#eddbc5' },
@@ -54,16 +62,16 @@ export function pbrOptions(asset, normalStrength = 0.35) {
 }
 
 /** 楼面一律按米制坐标取样，不受 ShapeGeometry 或旧局部 UV 缩放影响。 */
-export function metricFloor(mat, asset) {
+export function metricFloor(mat, asset, colorAsset = asset) {
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>
       vec2 surfaceUv = vec2(position.x, -position.z) / vec2(${asset.meters[0].toFixed(3)}, ${asset.meters[1].toFixed(3)});
-      vMapUv = surfaceUv;
+      vMapUv = vec2(position.x, -position.z) / vec2(${colorAsset.meters[0].toFixed(3)}, ${colorAsset.meters[1].toFixed(3)});
       vNormalMapUv = surfaceUv;
       vRoughnessMapUv = surfaceUv;
-      vEmissiveMapUv = surfaceUv;
+      vEmissiveMapUv = vMapUv;
     `);
   };
-  mat.customProgramCacheKey = () => `metric-floor-${asset.id}`;
+  mat.customProgramCacheKey = () => `metric-floor-${asset.id}-${colorAsset.id}`;
   return mat;
 }

@@ -3,8 +3,110 @@
   "source": "Generated in this repository by scripts/procedural-textures.mjs from scripts/procedural-surfaces.mjs",
   "license": "CC0-1.0",
   "credit": "程序化生成，无外部图片",
-  "totalImageBytes": 1381396,
+  "totalImageBytes": 1915882,
   "assets": [
+    {
+      "id": "limestone_pavers",
+      "label": "一期 · 浅石色错缝地砖",
+      "meters": [
+        4.8,
+        4.8
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/limestone_pavers/color.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "srgb",
+          "bytes": 98064,
+          "sha256": "5ed046d7f3d59cf7f8372eb5e02f0cbf238a5f873313ec9ec7e73122ad0c7624"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/limestone_pavers/normal.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 97104,
+          "sha256": "39446a938f14ba6c340ffffbc56f14d3a37c842225437fb8e1905452046b0825"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/limestone_pavers/roughness.jpg",
+          "width": 1024,
+          "height": 1024,
+          "colorSpace": "linear",
+          "bytes": 101733,
+          "sha256": "fe68357c6d7c2119d5b032c18758abf8aa9b6a3e6cd54702ec06c457ad0fd579"
+        }
+      }
+    },
+    {
+      "id": "woven_carpet",
+      "label": "一期 · 圈绒编织地毯",
+      "meters": [
+        0.6,
+        0.6
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/woven_carpet/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 47236,
+          "sha256": "ee258cbdb55c556b97c0e6326a88da63acd2c2011bc34ea5ef6761d416403041"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/woven_carpet/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 108656,
+          "sha256": "e4a040ae7cae8614811a559005b527b2be1006e221e9345dc89188c8ec7606d9"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/woven_carpet/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 19453,
+          "sha256": "dfbc6c78c47f1ecc949ad0290ea913c8d2de8280a0d7e3b47362178dbb86aba0"
+        }
+      }
+    },
+    {
+      "id": "carpet_jacquard",
+      "label": "一期 · 云纹弧线提花",
+      "meters": [
+        4.8,
+        4.8
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/carpet_jacquard/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 55525,
+          "sha256": "fce51c599244883ddbbc0bfc427dc4924e3f3d2896278cd613157c829d4775fe"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/carpet_jacquard/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 3359,
+          "sha256": "833f633b4daae995be76b0d8378a912399e8b16a00c53b734fbd353864cca551"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/carpet_jacquard/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 3356,
+          "sha256": "2dae4437bee66ea7e30312d9a1a269bc149e2aa4efdbd7d1278458f16b592f39"
+        }
+      }
+    },
     {
       "id": "travertine_panel",
       "label": "洞石干挂大板",

@@ -51,6 +51,7 @@ export class MaterialLib {
       // 室内墙面：抹灰、木格栅、洞石墙板、拉丝铜饰面（程序化面层，粗糙度由贴图决定）
       ['plaster', 'fine_plaster', 0.35, 1], ['slat', 'timber_slat', 0.7, 1],
       ['travertine', 'travertine_panel', 0.5, 0.9], ['bronze', 'bronze_brushed', 0.3, 1, 0.7],
+      ['carpet', 'woven_carpet', 0.38, 1],
     ]) {
       const asset = surfaces[id];
       this.base[key] = interior({ roughness, metalness,
@@ -85,15 +86,18 @@ export class MaterialLib {
     if (this.floors[kind]) return this.floors[kind];
     const def = FLOOR_SURFACES[kind];
     const asset = def && this.surfaces[def.id];
-    const outdoor = ['paving', 'asphalt', 'grass', 'deck-garden', 'roof-stone', 'rubber', 'cobble'].includes(kind);
+    const outdoor = def?.outdoor || ['paving', 'asphalt', 'grass', 'deck-garden', 'roof-stone', 'rubber', 'cobble'].includes(kind);
     if (asset) {
+      const colorAsset = this.surfaces[def.pattern] || asset;
       const m = metricFloor(new THREE.MeshStandardMaterial({
-        ...pbrOptions(asset, kind === 'grass' ? 0.7 : 0.32), color: def.tint || '#ffffff',
-        roughness: Math.min(1, roughness + 0.2), metalness: 0,
-        emissiveMap: asset.maps.color, emissive: 0x000000,
-      }), asset);
+        ...pbrOptions(asset, def.normal ?? (kind === 'grass' ? 0.7 : 0.32)), color: def.tint || '#ffffff',
+        map: colorAsset.maps.color,
+        roughness: def.roughness ?? Math.min(1, roughness + 0.2), metalness: 0,
+        emissiveMap: colorAsset.maps.color, emissive: 0x000000,
+      }), asset, colorAsset);
       m.name = `${kind} · ${asset.id} · CC0`;
-      this.onNight((t) => m.emissive.copy(WARM).multiplyScalar(outdoor ? t * 0.055 : t * 0.32));
+      m.userData = { surface: asset.id, pattern: colorAsset.id, finish: kind, outdoor: !!outdoor };
+      this.onNight((t) => m.emissive.copy(WARM).multiplyScalar(t * (def.glow ?? (outdoor ? .055 : .32))));
       this.floors[kind] = m;
       return m;
     }

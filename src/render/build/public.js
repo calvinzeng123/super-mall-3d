@@ -94,10 +94,11 @@ function foodCourt(ctx, b, lv) {
           B.get('glow').sphere(x, y0 + 3.4, z, 0.32, '#ffd9a0');
         }
       }
-      B.get('satin').box(0, y0 + 0.012, 0, 3.2, 0.01, (r.R - 1) * 2, '#c9a77a');
+      const floorKey = lv.finishes ? 'carpet' : 'satin';
+      B.get(floorKey).box(0, y0 + 0.012, 0, 3.2, 0.01, (r.R - 1) * 2, '#c9a77a');
       // 横带拆成两半，避免十字中心两张共面顶面闪烁。
       const half = r.R - 2.6;
-      for (const s of [-1, 1]) B.get('satin').box(s * (1.6 + half / 2), y0 + .012, 0, half, .01, 3.2, '#c9a77a');
+      for (const s of [-1, 1]) B.get(floorKey).box(s * (1.6 + half / 2), y0 + .012, 0, half, .01, 3.2, '#c9a77a');
     });
   }
 }
@@ -112,7 +113,7 @@ function oldStreet(ctx, b, lv) {
     const w = b.wings.find((x) => x.id === wid);
     const F = w.F;
     const stone = ctx.mats.floor('stone', 0.8);
-    for (const p of lv.walk.filter((x) => x.rect && x.frame === F && (x.kind === 'street' || x.kind === 'pocket' || x.kind === 'lounge'))) {
+    for (const p of lv.walk.filter((x) => !lv.finishes && x.rect && x.frame === F && (x.kind === 'street' || x.kind === 'pocket' || x.kind === 'lounge'))) {
       const r = p.rect;
       const g = new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0).rotateX(-Math.PI / 2);
       const uv = g.attributes.uv;
@@ -239,7 +240,7 @@ function lounges(ctx, b, lv) {
     B.frame(w.frame, () => {
       const detail = flatDetail(B, y0);
       if (w.kind === 'lounge') {
-        B.get('satin').box(cu, y0 + 0.008, cv, du - 1.5, 0.016, Math.min(dv - 2, 8), '#d9cbb5');
+        B.get(lv.finishes ? 'carpet' : 'satin').box(cu, y0 + 0.008, cv, du - 1.5, 0.016, Math.min(dv - 2, 8), '#d9cbb5');
         for (const dz of [-2.4, 2.4]) {
           B.get('matte').box(cu - 0.6, y0 + 0.25, cv + dz, 0.9, 0.5, 3.2, '#55707f');
           B.get('matte').box(cu - 0.98, y0 + 0.62, cv + dz, 0.18, 0.5, 3.2, '#55707f');

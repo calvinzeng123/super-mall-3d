@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { pointInPoly, distToPolyEdge, frame, toW, toL, lrectPoly, subtractInterval, clipConvex } from '../../layout/geom.js';
 import { themeOf, COLORS } from '../theme.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+import { buildCarpetFloor } from './floor-finishes.js';
 
 export const SLAB_T = { retail: 0.45, food: 0.45, parking: 0.35, roof: 0.6, street: 0.4 };
 const DEG = 180 / Math.PI;
@@ -103,18 +104,22 @@ export function buildShell(ctx) {
     const tops = [], bodies = [];
     for (const piece of lv.slab.pieces) {
       const shape = shapeFromPoly(piece.outer, piece.holes);
-      tops.push(flatShapeGeometry(shape, lv.elev));
+      if (!lv.finishes) tops.push(flatShapeGeometry(shape, lv.elev));
       // 楼板体顶面比地面低 3cm：远景时两者不会深度冲突
       bodies.push(slabGeometry(shape, lv.elev - 0.03, piece.thickness ?? t));
     }
-    if (tops.length) {
-      const top = new THREE.Mesh(tops.length > 1 ? mergeGeometries(tops) : tops[0], floorMat);
-      top.receiveShadow = true;
-      top.name = 'floor';
+    if (bodies.length) {
+      if (lv.finishes) buildCarpetFloor(ctx, lv);
+      else {
+        const top = new THREE.Mesh(tops.length > 1 ? mergeGeometries(tops) : tops[0], floorMat);
+        top.receiveShadow = true;
+        top.name = 'floor';
+        L.shell.add(top);
+      }
       const body = new THREE.Mesh(bodies.length > 1 ? mergeGeometries(bodies) : bodies[0], slabBody);
       body.castShadow = true;
       body.receiveShadow = true;
-      L.shell.add(top, body);
+      L.shell.add(body);
     }
     const b = ctx.bById[lv.building];
     if (b.kind !== 'mall') continue;

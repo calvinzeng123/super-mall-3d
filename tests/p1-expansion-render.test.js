@@ -13,7 +13,7 @@ import { buildP1ExpansionExterior, buildP1ExpansionLevel, expansionFacadeEdges, 
   expansionTerraceSites, usesExpansionFacade, buildP1PublicFixture } from '../src/render/build/p1-expansion.js';
 
 function context(layout) {
-  return { layout, levels: Object.fromEntries(layout.levels.map(lv => [lv.id, {
+  return { layout, mats: { floor: () => new THREE.MeshBasicMaterial() }, levels: Object.fromEntries(layout.levels.map(lv => [lv.id, {
     lv, batch: new BatchSet({}), shellBatch: new BatchSet({}), facadeBatch: new BatchSet({}),
   }])) };
 }

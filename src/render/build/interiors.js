@@ -119,9 +119,12 @@ function furnish(L, atlas, lv, u, rand) {
     cinema: '#2a1d24', arcade: '#1c1530', kids: '#ffe7a8', supermarket: '#e6e8e6', restaurant: '#c9a57c', bar: '#b08a63',
     jewelry: '#2d2c33', food: '#e7dccb', snack: '#8c7b68', tea: '#c7b08a', books: '#d9c6a5', cafe: '#cfae86',
   }[cat] || shade(u.brand.bg, 0.78).getStyle();
-  const floorKey = ['books', 'cafe', 'tea', 'home', 'fashion', 'luxury'].includes(cat) ? 'wood'
+  const floorKey = lv.finishes ? 'carpet' : ['books', 'cafe', 'tea', 'home', 'fashion', 'luxury'].includes(cat) ? 'wood'
     : ['jewelry', 'beauty', 'tech', 'accessory'].includes(cat) ? 'stone' : 'satin';
-  const floorTint = floorKey === 'wood' ? '#eee6d9' : floorKey === 'stone' ? '#eeece5' : floorCol;
+  const carpetTint = ['cinema', 'arcade', 'jewelry'].includes(cat) ? '#607878'
+    : ['restaurant', 'cafe', 'tea', 'snack'].includes(cat) ? '#b19a80'
+    : ['kids', 'books', 'home', 'studio'].includes(cat) ? '#9da78b' : '#c1b5a1';
+  const floorTint = floorKey === 'carpet' ? carpetTint : floorKey === 'wood' ? '#eee6d9' : floorKey === 'stone' ? '#eeece5' : floorCol;
   for (const r of u.rects) B.get(floorKey).box((r.x0 + r.x1) / 2, y0 + 0.008, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 0.2, 0.016, r.z1 - r.z0 - 0.2, floorTint);
 
   // 品牌背景墙（深度足够时）

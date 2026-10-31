@@ -7,12 +7,15 @@ import { convexOverlap, pointInPoly } from '../src/layout/geom.js';
 
 const P = (s) => lvl(`P1-${s}`);
 
-test('一期扩建：十个楼层标高正确，六层商业各有主题并保留原材质系统', () => {
+test('一期扩建：十个楼层标高正确，商业保留分层主题并统一为设计地毯', () => {
   const ls = levelsOf('P1');
   assert.deepEqual(ls.map((l) => l.short), ['B2', 'B1', 'B1M', '1F', '2F', '3F', '4F', '5F', '6F', 'RF']);
   assert.deepEqual(Object.fromEntries(ls.map((l) => [l.short, l.elev])), { B2: -12, B1: -8.4, B1M: -4.5, '1F': 0, '2F': 6.5, '3F': 12, '4F': 17.5, '5F': 23, '6F': 28.5, RF: 34 });
   assert.equal(new Set(ls.map((l) => l.theme.key)).size, 10, '每层场景主题应不同');
-  assert.equal(new Set(ls.map((l) => l.theme.floor)).size, 7, '每层地面材质应不同');
+  const commercial = ls.filter(l => ['retail', 'food'].includes(l.kind));
+  assert.equal(commercial.length, 7);
+  assert.ok(commercial.every(l => l.theme.floor === 'carpet-linen'));
+  assert.equal(new Set(commercial.map(l => l.finishes.accent)).size, 3, '导向地毯保留三种分区配色');
 });
 
 test('一期铺位数量：1F/2F ≥25，3F/B1M ≥20', () => {

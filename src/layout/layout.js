@@ -18,6 +18,7 @@ import { buildExpandedP1Spec } from './p1-expansion-spec.js';
 import { applyP1Expansion } from './p1-expansion.js';
 import { applyP1VehicleAccess } from './p1-access.js';
 import { applyP1Fidelity } from './p1-fidelity.js';
+import { applyP1Finishes } from './p1-finishes.js';
 
 /** expansion: the full phase-one tour (false builds the compact FPS authoring
  * layout). fidelity: the concept A scheme on top of it — extra vehicle access,
@@ -59,6 +60,7 @@ export function buildLayout({ expansion = true, fidelity = expansion } = {}) {
   applySharedGarages(layout);
   if (expansion) applyP1Expansion(layout, picker);
   if (expansion && fidelity) { applyP1VehicleAccess(layout); applyP1Fidelity(layout); }
+  if (expansion) applyP1Finishes(layout);
   addTransitCenter(layout.site, layout.extensions);
   return prepareRideableElevators(layout);
 }

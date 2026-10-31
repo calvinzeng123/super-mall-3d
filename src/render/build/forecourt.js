@@ -330,6 +330,7 @@ export function buildForecourt(ctx){
   B.materials.forecourtPaving=ctx.mats.floor('paving',.85);
   B.materials.forecourtStone=ctx.mats.floor('stone',.85);
   B.materials.forecourtGrass=ctx.mats.floor('grass',.9);
+  if(ctx.layout.finishes?.P1)B.materials.p1ForecourtPaving=ctx.mats.floor('p1-paving');
   const trees=[];
   for(const zone of plan.zones){
     const r=zone.rect,slab=new THREE.ExtrudeGeometry(shapeFromPoly(zone.poly),{depth:.08,bevelEnabled:false,curveSegments:4});
@@ -345,7 +346,8 @@ export function buildForecourt(ctx){
     // 标记的过街段使用场地同源斑马线，保持柏油车道连续，不盖一条石材地板。
     if(path.crossingSegments?.includes(i-1))continue;
     const a=path.points[i-1],b=path.points[i],dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz);
-    B.get('forecourtStone').box((a[0]+b[0])/2,-.012+(layer++)*.003,(a[1]+b[1])/2,len,.05,path.width,'#ded7c9',-Math.atan2(dz,dx));
+    const p1=ctx.layout.finishes?.P1&&path.points.every(p=>p[0]<-16&&p[0]>-286&&p[1]<-20&&p[1]>-256);
+    B.get(p1?'p1ForecourtPaving':'forecourtStone').box((a[0]+b[0])/2,-.012+(layer++)*.003,(a[1]+b[1])/2,len,.05,path.width,p1?'#ffffff':'#ded7c9',-Math.atan2(dz,dx));
   }
   for(const item of plan.items){
     const rotated=!!item.rotation&&!['carousel','garden-island'].includes(item.type);

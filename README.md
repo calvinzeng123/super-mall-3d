@@ -2,7 +2,7 @@
 
 面向手机的 Three.js 小样，同一封面提供 **完整园区探索** 与 **竞技 FPS** 两种入口。
 
-[在线体验（Cloudflare）](https://yunlan-mall-3d-github.pages.dev/) · [最新交接](HANDOFF.md) · [FPS 说明](docs/fps-sample.md) · [免费模型来源](docs/fps-asset-sources.md)
+[在线体验（Netlify）](https://yunlan-mall-calvin.netlify.app/) · [最新交接](HANDOFF.md) · [FPS 说明](docs/fps-sample.md) · [免费模型来源](docs/fps-asset-sources.md)
 
 ![一期按概念 A 对图深化后的游戏实景鸟瞰](docs/images/p1-concept-fidelity-day-20261029.jpg)
 
@@ -70,22 +70,17 @@ npm run serve
 
 ## GitHub 与部署
 
-GitHub 保存源码、模型许可和离线产物；Cloudflare 为当前体验入口，线上仍为 **手动部署**，推送不会自动发布。
-
-Cloudflare Pages 使用同一份静态构建：
+GitHub 保存源码、模型许可和离线产物。按用户指定，后续默认发布到 [Netlify 正式站](https://yunlan-mall-calvin.netlify.app/)，站点 ID 为 `3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。线上仍为 **手动部署**，推送不会自动发布。
 
 ```sh
-npm run build:netlify
-npx wrangler pages deploy dist/netlify --project-name yunlan-mall-3d-github --branch feat/explore-v4
-```
-
-原 [Netlify 入口](https://yunlan-mall-calvin.netlify.app/)独立发布，不会随 Cloudflare 部署自动更新：
-
-```sh
+npm install
+npm run build
 npm test
 npm run build:netlify
 netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3
 ```
+
+必须先构建再执行 `--no-build` 部署。旧 Cloudflare Pages 站点独立存在，不会自动同步；后续验收以以上 Netlify 地址为准。
 
 发布目录只用 `dist/netlify/`；`netlify.toml` 声明可选的 `netlify/functions/`。线上资源使用内容哈希和长期缓存，首页校验更新。部署 ID、文件校验和最终检查结果见[扩建 QA](docs/qa-2026-10-28-p1-expansion.md)。
 
