@@ -5,6 +5,7 @@ import { IDENTITY, frame, rect, rectPoly, roundedRectPoly, polyBounds, polyArea,
 import { lift } from './mall.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 import { CATEGORIES } from './constants.js';
+import { addSunkenArtCourt, addWestArrival } from './p1-public-realm.js';
 
 const ELEV = [0, 6.5, 12, 17.5, 23, 28.5, 34, 39.5];
 const DEFINITIONS = [
@@ -240,28 +241,6 @@ function reclaimForecourt(layout) {
   for(const [i,poly]of p.polys.entries())s.walk.push({id:`north-reading-${i}`,kind:'promenade',poly,outdoor:true});
   s.activityExclusions=[...fc.zones.map(z=>z.poly),...fc.paths.flatMap(p=>p.polys),...DEFINITIONS.map(d=>annexOutline(d,0))];
 }
-function addSunkenCourt(layout) {
-  const lv=layout.levels.find(l=>l.id==='P1-B1M'),b=layout.buildings.find(b=>b.id==='P1');
-  const bounds=rect(-117,-56,-100,-29.5),poly=roundedRectPoly(bounds,2.2,5);
-  layout.site.openings.push(poly);
-  lv.slab.pieces.push({outer:poly,holes:[]});
-  lv.walk.push({id:'P1-sunken-court',kind:'plaza',frame:IDENTITY,lpoly:poly,poly,outdoor:true});
-  const door=layout.entrances.find(e=>e.id==='P1-S'),mid=[(door.seg.x0+door.seg.x1)/2,(door.seg.z0+door.seg.z1)/2];
-  const points=[mid,[-108.5,-64],[-108.5,-56]],width=4.8;
-  const polys=points.slice(1).map((p,i)=>strip(points[i],p,width));
-  for(const [x,z]of points.slice(1,-1))polys.push(rectPoly(rect(x-width/2,z-width/2,x+width/2,z+width/2)));
-  const path={id:'P1-sunken-food-passage',kind:'underground',name:'下沉艺术庭院 · 美食层连接',building:'P1',level:lv.id,from:lv.id,to:lv.id,width,height:3.3,points:points.map(([x,z])=>[x,lv.elev,z]),polys,slab:{pieces:piecesOf(clipping.union(...polys.map(p=>[p])))},expansion:true};
-  layout.extensions.paths.push(path);
-  for(const [i,p]of path.slab.pieces.entries())lv.walk.push({id:`${path.id}-walk-${i}`,kind:'passage',frame:IDENTITY,lpoly:p.outer,poly:p.outer,extension:true});
-  entrance(layout,lv,lv.id,'P1-sunken-food-door',door.seg,door.nx,door.nz,{architecturalOpening:true,name:path.name});
-  const bottom={x:-108.5,z:-44,y:-4.5,floor:lv.id},top={x:-108.5,z:bounds.z1,y:0,floor:'ground'};
-  const flight={id:'P1-SUNKEN-ST',stair:'P1-SUNKEN-ST',building:'P1',parentFloor:lv.id,frame:IDENTITY,from:lv.id,to:'ground',bottom,top,localBottom:[bottom.x,bottom.z],localTop:[top.x,top.z],width:3.6,steps:26,rise:4.5,run:top.z-bottom.z,protected:true};
-  b.access.flights.push(flight);
-  const route={id:'P1-SUNKEN-ACCESS',stair:flight.id,from:lv.id,to:'ground',landings:[],waypoints:[{...bottom,z:-44.8},{...top,z:top.z+.65},{...top,z:-27.8}]};
-  b.access.routes.push(route);
-  layout.expansion.sunkenCourt={id:'P1-sunken-court',building:'P1',level:lv.id,bounds,poly,elev:-4.5,stair:flight,path:path.id,stage:rect(-115.5,-52,-112,-46),seating:rect(-103.5,-50,-101.2,-38)};
-}
-
 // Each island is a measured furniture group, not a random scatter. Its full
 // rectangle is also the conservative navigation footprint; the renderer keeps
 // chairs, screens and plant pots within it. Public axes and all approaches stay
@@ -331,7 +310,7 @@ export function applyP1Expansion(layout,picker) {
   for(const lv of layout.levels.filter(l=>l.building==='P1'&&['4F','5F','6F'].includes(l.short)))for(const u of lv.units){u.brand=picker.take(u.brand.cat);finalizeUnit(u);}
   mainTerraces(layout);
   for(const d of DEFINITIONS){const p=buildAnnex(d,picker);layout.buildings.push(p.building);for(const k of ['levels','stairs','elevators','escalators','entrances','ramps'])layout[k].push(...p[k]);}
-  groundEntrances(layout);integrateGarageKiosks(layout);connectLoop(layout);reclaimForecourt(layout);addSunkenCourt(layout);
+  groundEntrances(layout);integrateGarageKiosks(layout);connectLoop(layout);reclaimForecourt(layout);addSunkenArtCourt(layout);addWestArrival(layout);
   addPublicFixtures(layout);
   return layout;
 }

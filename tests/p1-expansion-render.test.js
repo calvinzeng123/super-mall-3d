@@ -30,7 +30,7 @@ function renderedContext(layout) {
   ctx.bById = Object.fromEntries(layout.buildings.map(b => [b.id, b]));
   ctx.atlas = Object.fromEntries(layout.levels.map(lv => [lv.id, { cell: () => null }]));
   for (const L of Object.values(ctx.levels)) Object.assign(L, {
-    base: new THREE.Group(), shell: new THREE.Group(), facade: new THREE.Group(), signs: new SignBatch(),
+    base: new THREE.Group(), shell: new THREE.Group(), facade: new THREE.Group(), signs: new SignBatch(), facadeSigns: new SignBatch(),
     batch: new BatchSet(materials), shellBatch: new BatchSet(materials), facadeBatch: new BatchSet(materials),
   });
   ctx.buildings = Object.fromEntries(layout.buildings.map(b => [b.id, { b, levels: layout.levels.filter(lv => lv.building === b.id).map(lv => ctx.levels[lv.id]) }]));
@@ -183,11 +183,35 @@ test('下沉庭院北侧地库通道和南侧真实楼梯口净空；地面北�
     assert.equal(cross(court.stair.top.x + dx, .7, court.bounds.z1).length, 0, '南侧楼梯出口被护栏封堵');
   }
   assert.ok(cross(-108.5, .7, court.bounds.z0).length > 0, '地面北侧落差缺少护栏');
+  for (const dz of [-1.8, 0, 1.8]) for (const h of [.5, 1.65, 2.3]) {
+    const east = new THREE.Raycaster(new THREE.Vector3(-87, court.elev + h, -38.5 + dz), new THREE.Vector3(1, 0, 0), 0, 2);
+    assert.equal(east.intersectObjects(shell, false).length, 0, '东侧地铁通廊入口封堵');
+  }
   const before = vertices(L.shellBatch);
   buildP1ExpansionLevel(ctx, layout.levels.find(l => l.id === court.level));
   assert.equal(vertices(L.shellBatch), before);
   assert.ok(vertices(L.batch) > 500, '下沉院未生成阶梯座椅和植物');
   dispose(shell); material.dispose();
+});
+
+test('西门新增横向门厅的真实隔墙、店铺陈设和立面保留整段通行净空', t => {
+  const previousDocument = globalThis.document;
+  const paint = new Proxy({}, { get: (p,k) => k in p ? p[k] : k === 'measureText' ? () => ({width:10}) : String(k).startsWith('create') ? () => ({addColorStop(){}}) : () => {}, set: (p,k,v) => {p[k]=v;return true;} });
+  globalThis.document = {createElement:()=>({width:0,height:0,getContext:()=>paint})};
+  t.after(() => { if(previousDocument)globalThis.document=previousDocument;else delete globalThis.document; });
+  const full = buildLayout(), D = full.expansion.westArrival;
+  const layout = { ...full, expansion: null, buildings: full.buildings.filter(b => b.id === 'P1'), levels: full.levels.filter(lv => lv.id === 'P1-1F') };
+  const ctx = renderedContext(layout);
+  ctx.dynamic = []; ctx.mats.screen = () => ctx.mats.base.screen;
+  buildShell(ctx); buildRooms(ctx); buildWalls(ctx); buildStorefronts(ctx); buildInteriors(ctx); buildP1ExpansionExterior(ctx);
+  buildP1ExpansionLevel(ctx, layout.levels[0]); ctx.finish();
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), r = polyBounds(D.hall);
+  const solid = meshSubset(allMeshes(ctx), new THREE.Box3(new THREE.Vector3(r.x0 - 2, 0, r.z0 - 2), new THREE.Vector3(r.x1 + 2, 2.5, r.z1 + 2)), material);
+  const F = layout.buildings[0].wings.find(w => w.id === 'NW').F;
+  for (const u of [83, 84.25, 85.5]) for (let v = -25; v <= -3; v += .5) {
+    const [x,z] = toW(F,u,v); bodyClear(solid,{x,y:0,z},'P1-WEST-ART');
+  }
+  solid.geometry.dispose(); material.dispose(); ctx.cleanup();
 });
 
 test('八座附楼所有连续梯段、平台和RF出口避开真实楼板、幕墙、内装及坡屋顶', () => {
@@ -329,7 +353,8 @@ test('下沉庭院总览预览有真实台阶和座椅，室内显示、B2聚焦
     const ray = new THREE.Raycaster(new THREE.Vector3(p.x, p.y + .4, p.z), new THREE.Vector3(0, -1, 0), 0, .7);
     assert.ok(ray.intersectObject(preview, true).length > 0, '预览缺少与导航同源的实体阶梯');
   }
-  const r = court.seating, ray = new THREE.Raycaster(new THREE.Vector3(r.x1 - .5, court.elev + 1.5, r.z0 + 1), new THREE.Vector3(0, -1, 0), 0, 1.4);
+  const seat = court.seats[1], a = seat.poly[12], b = seat.poly[37];
+  const ray = new THREE.Raycaster(new THREE.Vector3((a[0] + b[0]) / 2, court.elev + 1.5, (a[1] + b[1]) / 2), new THREE.Vector3(0, -1, 0), 0, 1.4);
   assert.ok(ray.intersectObject(preview, true).length > 0, '总览预览缺少阶梯座椅');
   L.base.visible = true; update(0, 0, { state: {} }); assert.equal(preview.visible, false, '与完整B1M台阶重复');
   L.base.visible = false; update(0, 0, { state: { focus: 'P1-B2' } }); assert.equal(preview.visible, false, 'B2视图中漂浮');

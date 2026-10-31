@@ -429,7 +429,7 @@ function districtGarden(ctx,B,group,trees) {
   };
   // The former remote hotel/apartment island has been vacated. Planting now
   // follows the attached tower forecourts, outside traffic and garage openings.
-  for(const [x,z] of [[-282,-121],[-252,-112]]) {
+  for(const [x,z] of [[-282,ctx.layout.expansion?.westArrival?-114:-121],[-252,-112]]) {
     planter(B,x-1.25,z-.7,x+1.25,z+.7,0,x+z,true,'stone');
     trees.push({x,y:.65,z,s:1.2,kind:'round'});
   }

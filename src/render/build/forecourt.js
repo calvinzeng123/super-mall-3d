@@ -67,7 +67,10 @@ function carousel(ctx,f) {
 }
 
 function slide(B,x,z,angle=0) {
+  // BatchSet.frame 是绝对坐标系；滑梯的局部偏移必须叠加乐园的旋转/位移。
+  const parent=B.xf;
   const F=frame(x,z,angle);B.frame(F,()=>{
+    if(parent)B.xf.premultiply(parent);
     // 两座木构爬塔和高低平台，不使用一个盒子代替游具。
     for(const [cx,cy] of [[-2.2,1.8],[2,1.35]]) {
       for(const dx of [-.7,.7])for(const dz of [-.7,.7])B.get('wood').box(cx+dx,1.5,dz,.15,3,.15,C.wood);

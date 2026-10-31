@@ -39,7 +39,7 @@ test('二期与住宅之间接纳完整乐园与五间食集，轨道旋转且�
 
 test('乐园市集保持二期位置，一期旧庭院已由获批艺术街区替换',()=>{
   assert.ok(F.items.filter(i=>['family','market'].includes(i.zone)).every(i=>i.poly.every(p=>p[0]>0)));
-  assert.ok(F.paths.every(p=>p.points.every(([x])=>x>=-280)));
+  assert.ok(F.paths.filter(p=>p.id!=='P1-west-art-promenade').every(p=>p.points.every(([x])=>x>=-280)));
   for(const id of ['events','north-garden','east-garden'])assert.equal(F.zones.some(z=>z.id===id),false);
   for(const id of ['P1C','P1S','P1E','P1E2'])assert.ok(L.buildings.some(b=>b.id===id&&b.kind==='annex'));
   assert.equal(F.paths.some(p=>p.id==='square-west-recreation'),false);

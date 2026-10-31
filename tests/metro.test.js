@@ -16,11 +16,12 @@ test('地铁两层：站台 −12、站厅 −4.5，主题不同', () => {
 test('一期 B1M、二期 B1、三期 B1 各有通往站厅的连接口', () => {
   for (const id of ['P1-B1M', 'P2-B1', 'P3-B1']) {
     const es = L.entrances.filter((e) => e.level === id && e.to === 'M-B1');
-    assert.equal(es.length, 1, `${id} 缺少地铁连接口`);
-    const e = es[0];
+    assert.equal(es.length, id === 'P1-B1M' ? 2 : 1, `${id} 缺少地铁连接口`);
+    for (const e of es) {
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     assert.ok(inWalk(lvl(id), [mx - e.nx, mz - e.nz]), `${id} 连接口内侧不是走道`);
     assert.ok(inWalk(lvl('M-B1'), [mx + e.nx, mz + e.nz]), `${id} 连接口外侧不在站厅通道`);
+    }
   }
 });
 

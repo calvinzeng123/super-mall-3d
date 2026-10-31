@@ -7,6 +7,7 @@ import { addCutSurfaceSlab } from './surface-shapes.js';
 import { bench, roundTable } from './props.js';
 import { BatchSet } from '../batch.js';
 import { buildMallFlightGeometry } from './mall-stairs.js';
+import { buildCourtFurniture, buildCourtInlaysAndSigns } from './p1-public-realm.js';
 
 const PALETTES = {
   main: { stone: '#e9e2d4', trim: '#8f7553', dark: '#4f4a42', fin: '#a98a62', glow: '#ffe2b2', material: 'facadeTravertine' },
@@ -275,19 +276,19 @@ function sunkenCourtExterior(ctx) {
   const court = ctx.layout.expansion?.sunkenCourt;
   if (!court) return;
   const B = ctx.levels[court.level].shellBatch, r = court.bounds, y = court.elev, p = PALETTES.dining;
-  const north = { level: court.level, seg: { x0: -110.9, z0: r.z0, x1: -106.1, z1: r.z0 } };
   const south = { level: court.level, seg: { x0: court.stair.top.x - court.stair.width / 2 - .15, z0: r.z1,
     x1: court.stair.top.x + court.stair.width / 2 + .15, z1: r.z1 } };
   for (const e of outlineEdges(court.poly)) B.frame(e.F, () => {
     // The north opening is a covered B1M passage; the south slot contains the
     // real rising stair. Its ground rail must open at the stair, not at B1M.
-    for (const [a, b] of edgeSpans(e, [north, south], 0)) {
+    for (const [a, b] of edgeSpans(e, [...court.portals, south], 0)) {
       B.get('facadeTravertine').box((a + b) / 2, (y - .12) / 2, -.12, b - a, -y - .12, .28, '#d5c6ae');
       B.get('glow').box((a + b) / 2, -.6, -.275, b - a, .035, .035, p.glow);
     }
-    const northAt = [toL(e.F, north.seg.x0, north.seg.z0), toL(e.F, north.seg.x1, north.seg.z1)];
-    if (northAt.every(q => Math.abs(q[1]) < .05)) {
-      const a = Math.min(northAt[0][0], northAt[1][0]), b = Math.max(northAt[0][0], northAt[1][0]);
+    for (const portal of court.portals) {
+      const at = [toL(e.F, portal.seg.x0, portal.seg.z0), toL(e.F, portal.seg.x1, portal.seg.z1)];
+      if (!at.every(q => Math.abs(q[1]) < .05)) continue;
+      const a = Math.min(at[0][0], at[1][0]), b = Math.max(at[0][0], at[1][0]);
       B.get('facadeTravertine').box((a + b) / 2, (y + 3.2 - .12) / 2, -.12, b - a, -y - 3.2 - .12, .28, '#d5c6ae');
       B.get('glow').box((a + b) / 2, y + 3.24, -.29, b - a - .2, .04, .05, p.glow);
     }
@@ -303,17 +304,21 @@ function sunkenCourtExterior(ctx) {
   B.get('facadeTimber').box(sx, y + .16, sz, s.x1 - s.x0, .32, s.z1 - s.z0, '#a68b63');
   B.get('glow').box(s.x1 + .01, y + .25, sz, .025, .035, s.z1 - s.z0 - .25, '#ffe4a8');
   for (let z = s.z0 + .25; z <= s.z1 - .25; z += .32) B.get('facadeTimber').box(s.x0 - .12, y + 1.65, z, .18, 3, .12, '#9a7957');
-  B.get('extMetal').box(sx, y + 3.15, sz, s.x1 - s.x0 + .2, .13, s.z1 - s.z0 + .2, p.trim);
-  for (let z = s.z0 + .5; z < s.z1; z += 1.2) B.get('glow').box(sx, y + 3.07, z, s.x1 - s.x0 - .4, .025, .055, p.glow);
+  for (const x of [s.x0, s.x1]) B.get('extMetal').box(x, y + 3.15, sz, .12, .16, s.z1 - s.z0 + .2, p.trim);
+  for (let z = s.z0; z <= s.z1; z += 1.2) {
+    B.get('facadeBronze').box(sx, y + 3.15, z, s.x1 - s.x0 + .2, .16, .12, p.trim);
+    B.get('glowSoft').box(sx, y + 3.05, z, s.x1 - s.x0 - .4, .025, .055, p.glow);
+  }
   // The site opening is visible even when the underground floor's base is
   // hidden in overview. A shell preview uses the same stair/furniture geometry
   // and switches off whenever the complete B1M base is shown.
+  buildCourtInlaysAndSigns(ctx, court);
   const L = ctx.levels[court.level];
   if (L.shell && ctx.mats?.base) {
     const preview = new THREE.Group(), PB = new BatchSet(ctx.mats.base);
     preview.name = 'P1-sunken-court-outdoor-preview';
     PB.frame(court.stair.frame, () => buildMallFlightGeometry(PB, court.stair));
-    sunkenCourtFurniture(PB, court);
+    buildCourtFurniture(PB, court);
     PB.flush(preview); L.shell.add(preview);
     const update = (_dt, _elapsed, app) => {
       const state = app?.state, focused = state?.focus && ctx.levels[state.focus]?.lv;
@@ -324,23 +329,10 @@ function sunkenCourtExterior(ctx) {
   }
 }
 
-function sunkenCourtFurniture(B, court) {
-  const r = court.seating, y = court.elev;
-  for (let z = r.z0 + 1; z < r.z1 - .7; z += 2.6) {
-    for (let i = 0; i < 2; i++) {
-      const x = r.x1 - .5 - i * .8, h = .8 - i * .4;
-      B.get('stone').box(x, y + h / 2, z, .7, h, 2.0, '#d0c1a5');
-      B.get('wood').box(x, y + h + .035, z, .74, .07, 2.0, '#b49367');
-    }
-  }
-  gardenPlanter(B, -114.6, y, -34.4, PALETTES.dining, true);
-  gardenPlanter(B, -102.7, y, -33.6, PALETTES.dining, true);
-}
-
 function sunkenCourtDetail(ctx, lv) {
   const court = ctx.layout.expansion?.sunkenCourt;
   if (!court || court.level !== lv.id) return;
-  sunkenCourtFurniture(ctx.levels[lv.id].batch, court);
+  buildCourtFurniture(ctx.levels[lv.id].batch, court);
 }
 
 /** Furniture islands are authored in layout and also reserve navigation space.

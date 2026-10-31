@@ -475,9 +475,15 @@ function passages(ctx, b, lv, L, atlas, S) {
       const uStart = s > 0 ? p.lpoly[3][0] : p.lpoly[0][0];
       let ivs = [[uStart, p.uEnd]];
       if (gap && s === side) ivs = subtractInterval(ivs, gap);
+      const galleryGaps = ctx.layout.entrances.filter(e => e.to === lv.id && e.metroPassage === p.id).flatMap(e => {
+        const a = toL(F, e.seg.x0, e.seg.z0), c = toL(F, e.seg.x1, e.seg.z1);
+        return Math.abs(a[1] - v) < .05 && Math.abs(c[1] - v) < .05 ? [[Math.min(a[0], c[0]) - .03, Math.max(a[0], c[0]) + .03]] : [];
+      });
+      for (const opening of galleryGaps) ivs = subtractInterval(ivs, opening);
       for (const [a, c] of ivs) wallRun(W, F, a, c, v, -s, y0, HW, { band: info.color });
       for (let u = uMouth + 6; u < p.uEnd - 5; u += 9) {
         if (gap && s === side && u > gap[0] - 3 && u < gap[1] + 3) continue;
+        if (galleryGaps.some(([a, c]) => u > a - 2 && u < c + 2)) continue;
         wallSign(B, S, atlas, F, u, v - s * 0.02, y0 + 1.55, 0, -s, `ad${ad++ % ADS.length}`, 1.5, true);
       }
     }

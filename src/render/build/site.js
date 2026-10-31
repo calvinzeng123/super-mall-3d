@@ -12,6 +12,7 @@ import { buildUrbanDistrict } from './urban.js';
 import { buildContextBuildings } from './context-buildings.js';
 import { buildForecourt } from './forecourt.js';
 import { buildWestParkingDetails } from './west-parking.js';
+import { buildWestArrival } from './p1-public-realm.js';
 import { buildPlayableSite } from './playable-site.js';
 import { p1PavingCutouts, buildP1PavingInlays } from './floor-finishes.js';
 
@@ -131,6 +132,7 @@ export function buildSite(ctx) {
   greenery(ctx, S, B, G);
   buildForecourt(ctx);
   buildWestParkingDetails(ctx);
+  buildWestArrival(ctx);
 }
 
 /** 商场地块景观：与建筑同形的外扩铺装带（裁到地块内）、入口步道（直通人行道或地块边）、草坪上的树阵与路灯 */
@@ -162,7 +164,7 @@ function landscape(ctx, b, holes, G, B) {
   const towers = ctx.layout.buildings.filter(other => ['tower', 'annex'].includes(other.kind) && !other.undergroundOnly).map(other => other.outline);
   const allowLamp = siteLampPlacement(ctx.layout);
   for (const e of ctx.layout.entrances) {
-    if (e.building !== b.id || e.to !== 'site') continue;
+    if (e.building !== b.id || e.to !== 'site' || e.westArrival) continue;
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     const F = frame(mx, mz, Math.atan2(e.nz, e.nx) * DEG);
     const hw = Math.max(3, e.width / 2);

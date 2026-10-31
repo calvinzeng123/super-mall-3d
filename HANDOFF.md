@@ -2,7 +2,16 @@
 
 > 最后更新：2026-10-31。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
-## 2026-10-31 最新交接：一期室外地砖与室内设计地毯
+## 2026-10-31 最新交接：西门、云谷艺术广场与云环路口修复
+
+默认正式站仍为 [云澜汇 Netlify](https://yunlan-mall-calvin.netlify.app/)，site ID `3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。实施、测试与发布证据见 [本次 QA](docs/qa-2026-10-31-p1-public-realm.md)。
+
+- 新增 `layout/p1-public-realm.js` / `render/build/p1-public-realm.js`：西侧石材大门、连接西外环与喷泉的步道、一期主楼真实门厅；约 990m² 下沉艺术广场、宽台阶、弧形座席和双环雕塑。北接 B1M，东侧新通廊直达地铁 A 通道侧墙。家具、墙洞与导航碰撞同步。
+- `metro.js` 必须按 `metroPassage` 门记录扣除墙面与广告；不要只增加导航入口。新门厅缩短既有 NWR4 铺位，不删除商铺。新西门路径的铺装由独立构建器负责，原地块入口直线铺装跳过该门。
+- 云环路口滑梯错位修复在 `forecourt.js`：滑梯的局部变换叠加其乐园父变换。保持 `BatchSet.frame` 的全局绝对语义；回归检查真实顶点，避免只查布局记录而漏掉渲染错位。
+- 335 项测试通过，实际浏览器控制器完成三路线双向行走，手机尺寸玻璃导航检查通过。发布包入口 `assets/main.GVZUEVHW.js`。生产部署状态以本次 QA 的发布段为准。
+
+## 历史 · 2026-10-31：一期室外地砖与室内设计地毯
 
 用户指定后续默认发布到 **https://yunlan-mall-calvin.netlify.app/**，Netlify site ID 为 `3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。README 已统一入口；旧 Cloudflare 地址独立存在，不自动同步。当前仍需显式构建 `npm run build:netlify` 后手动执行 `netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。
 
