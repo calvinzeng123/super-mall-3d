@@ -211,6 +211,28 @@ function streetPaths(layout, b, lv, P) {
 function metroPaths(b, lv, P) {
   const y = lv.elev + 0.07;
   const line = (pts, name, extra = {}) => P.people.push({ loop: false, name, pts: pts.map(([x, z, yy = y]) => [x, yy, z]), ...extra });
+  if(b.interchange){
+    const route=b.interchange.lines.find(l=>l.level===lv.id);
+    if(route){
+      for(const platform of route.platforms){
+        const r=platform.rect,cz=(r.z0+r.z1)/2;
+        for(const side of [-1,1])P.people.push({loop:false,name:platform.role==='alight'?'下车分流':'侧站台候车',
+          pts:[W3(route.frame,-55,cz+side*3.3,y),W3(route.frame,55,cz+side*3.3,y)]});
+      }
+      return;
+    }
+    if(lv.short==='B3'){
+      for(const side of [-1,1]){
+        line([[-56,side*4.5],[56,side*4.5]],'换乘 7 号线');
+        line([[side*4.5,-56],[side*4.5,56]],'换乘 12 号线');
+      }
+      return;
+    }
+    for(const z of [-23,23])line([[-54,z],[54,z]],'站厅公共通廊');
+    for(const side of [-1,1])for(const z of [-13.33,13.33]){
+      line([[side*63,z],[side*55,z],[side*55,z+(z<0?3.4:-3.4)],[side*28,z+(z<0?3.4:-3.4)]],'闸机进站');
+    }
+  } else {
   if (lv.short === 'B2') {
     for (const s of [-1, 1]) {
       line([[-56, s * 3.9], [56, s * 3.9]], '站台候车');
@@ -227,6 +249,7 @@ function metroPaths(b, lv, P) {
   line([[58, -1.5], [36, -1.5], [27.5, -0.9]], '闸机进站');
   line([[-27.5, -0.9], [-36, -2.5], [-56, -2.5]], '闸机出站');
   line([[27.5, 0.9], [36, 2.5], [56, 2.5]], '闸机出站');
+  }
   for (const p of b.passages) {
     const u0 = Math.max(p.lpoly[0][0], p.lpoly[3][0]) - 4;
     const end = p.uEnd - 1.5;

@@ -166,7 +166,27 @@ function carpetJacquard(u, v, S) {
   return [l * 1.015, l, l * .98, .5, .98];
 }
 
+function metroTerrazzo(u,v,seed){
+  const h=hash(Math.floor(u*210),Math.floor(v*210),seed),n=fbm(u,v,12,12,seed,2);
+  const joint=Math.min((u*2)%1,1-(u*2)%1,(v*2)%1,1-(v*2)%1)<.007;
+  const value=joint?.61:h>.91?.64+h*.1:.9+(n-.5)*.07;
+  return [value,value*.995,value*.98,joint?-.15:(h-.5)*.025,.72];
+}
+function metroCeramic(u,v,seed){
+  const row=Math.floor(v*4),x=(u*2+(row%2)*.5)%1,y=(v*4)%1;
+  const edge=Math.min(x,1-x,y,1-y),seam=edge<.014,n=fbm(u,v,8,8,seed,2);
+  const value=seam?.63:.94+(n-.5)*.025;
+  return [value,value,value*.995,seam?-.22:Math.min(edge,.06)*.4,seam?.9:.29];
+}
+function tunnelLiner(u,v,seed){
+  const x=u%1,y=(v*4+Math.floor(u*2)*.5)%1,n=fbm(u,v,16,12,seed,3);
+  const seam=Math.min(x,1-x,y,1-y)<.012,value=seam?.45:.78+(n-.5)*.12;
+  return [value,value*.99,value*.97,seam?-.2:(n-.5)*.06,.92];
+}
 export const PROCEDURAL_SURFACES = Object.freeze({
+  metro_terrazzo: {label:'地铁 · 细骨料水磨石',meters:[2.4,2.4],sample:metroTerrazzo,normal:1.2,seed:151},
+  metro_ceramic: {label:'地铁 · 釉面陶瓷墙砖',meters:[2.4,2.4],sample:metroCeramic,normal:1.3,seed:157},
+  tunnel_liner: {label:'地铁 · 盾构混凝土管片',meters:[2,6],sample:tunnelLiner,normal:1.5,seed:163},
   limestone_pavers: { label: '一期 · 浅石色错缝地砖', meters: [4.8, 4.8], sample: limestonePavers, normal: 1.8, seed: 101 },
   woven_carpet: { label: '一期 · 圈绒编织地毯', meters: [.6, .6], sample: wovenCarpet, normal: 1.0, seed: 113 },
   carpet_jacquard: { label: '一期 · 云纹弧线提花', meters: [4.8, 4.8], sample: carpetJacquard, normal: .2, seed: 127 },

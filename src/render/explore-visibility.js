@@ -50,7 +50,7 @@ export function createExploreVisibility(layout) {
       if (byId.get(other)?.elev < 0) add(other);
     }
     if (ex.metro || regions.has('M')) {
-      add('M-B1'); add('M-B2');
+      for(const lv of layout.levels.filter(l=>l.building==='M'))add(lv.id);
     }
     if (current?.elev < 0) {
       const upper = layout.levels.filter(l => l.building === current.building && l.elev > current.elev)

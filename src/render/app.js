@@ -232,7 +232,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       buildPublic(eagerCtx, { art: false });
     } else await builder(currentCtx);
     // 构建器注册的动态接口（outlineEdges、metroSync等）回传给完整场景。
-    if (currentCtx === legacyCtx) for (const key of ['outlineEdges', 'metroSync', 'bridgeGroup', 'paths', 'ferris', 'carGeo', 'carMat', 'peopleQuality', 'mallStairStats']) if (legacyCtx[key]) ctx[key] = legacyCtx[key];
+    if (currentCtx === legacyCtx) for (const key of ['outlineEdges', 'metroSync', 'metroServices', 'bridgeGroup', 'paths', 'ferris', 'carGeo', 'carMat', 'peopleQuality', 'mallStairStats']) if (legacyCtx[key]) ctx[key] = legacyCtx[key];
   }
   buildP1ExpansionExterior(ctx);
   buildP1Fidelity(ctx);

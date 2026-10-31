@@ -3,8 +3,110 @@
   "source": "Generated in this repository by scripts/procedural-textures.mjs from scripts/procedural-surfaces.mjs",
   "license": "CC0-1.0",
   "credit": "程序化生成，无外部图片",
-  "totalImageBytes": 1915882,
+  "totalImageBytes": 2086719,
   "assets": [
+    {
+      "id": "metro_terrazzo",
+      "label": "地铁 · 细骨料水磨石",
+      "meters": [
+        2.4,
+        2.4
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/metro_terrazzo/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 67090,
+          "sha256": "9416ba66624fd31f57b80b71416b5b0bccbf337173a0e62e6f2fdf32375481a7"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/metro_terrazzo/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 31924,
+          "sha256": "dc2d5df003bcd59fd8630847614d16d0f3af56c39f0d7645e0b19d950bc31ab1"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/metro_terrazzo/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 3355,
+          "sha256": "802dcc0d09d9c1613a9db8c41bf443ca67c03602e2d687c6f34812c829fe5b44"
+        }
+      }
+    },
+    {
+      "id": "metro_ceramic",
+      "label": "地铁 · 釉面陶瓷墙砖",
+      "meters": [
+        2.4,
+        2.4
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/metro_ceramic/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 10722,
+          "sha256": "3e8114d489d28824e1f5ebd3483ca769bcd9cfdd305c9f3b3d556d4128614607"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/metro_ceramic/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 14014,
+          "sha256": "f3a3f80fe0a4997577c2ba6d100fc585ba096d18a88bbe9e5fa7507fabf27620"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/metro_ceramic/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 9224,
+          "sha256": "eb0087877e261d707b846f7627c64777ea0e7bdeb0c02cb5d6e2d54fcf357a49"
+        }
+      }
+    },
+    {
+      "id": "tunnel_liner",
+      "label": "地铁 · 盾构混凝土管片",
+      "meters": [
+        2,
+        6
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/procedural/tunnel_liner/color.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "srgb",
+          "bytes": 15807,
+          "sha256": "ed4c9da55b54d11aac5e13bfb0d6763a98da3329a3cd98299743862aa4c7ca37"
+        },
+        "normal": {
+          "path": "assets/textures/procedural/tunnel_liner/normal.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 15345,
+          "sha256": "5d45b3969bd13c95189f443522bd78a5364d789f86a035ddc2cef4476e82085f"
+        },
+        "roughness": {
+          "path": "assets/textures/procedural/tunnel_liner/roughness.jpg",
+          "width": 512,
+          "height": 512,
+          "colorSpace": "linear",
+          "bytes": 3356,
+          "sha256": "43b8818f2db2311dad10bc373ea28eb05f6a4bc6d41de6aaff6b84e48def1c7b"
+        }
+      }
+    },
     {
       "id": "limestone_pavers",
       "label": "一期 · 浅石色错缝地砖",

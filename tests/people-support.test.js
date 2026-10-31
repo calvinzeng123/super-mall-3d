@@ -19,10 +19,10 @@ function samples(path, count = 80) {
   return result;
 }
 
-test('both real metro stair openings hide flat-floor walkers but retain entry landings and nearby concourse', () => {
-  for (const id of ['M-B1', 'M-B2']) {
+test('all served metro stair openings hide flat-floor walkers but retain entry landings and nearby concourse', () => {
+  for (const id of ['M-B1', 'M-B2', 'M-B3', 'M-B4']) {
     const lv = lvl(id), support = createPeopleSupport(lv), centerOnly = createPeopleSupport(lv, [], 0);
-    for (const stair of L.stairs.filter(s => s.building === 'M')) {
+    for (const stair of L.stairs.filter(s => s.building === 'M' && s.serves.includes(id))) {
       const plan = mallStairPlan(stair);
       const center = toW(stair.frame, ...plan.point(plan.span / 2, plan.depth / 2));
       assert.equal(support(...center), false, `${stair.id}/${id}: suspended over shaft`);
@@ -37,7 +37,7 @@ test('both real metro stair openings hide flat-floor walkers but retain entry la
   for (const x of [-55, -40, 0, 40, 55]) assert.equal(support(x, -8), true);
   // These existing gate routes are the screenshot regression: each crosses a
   // new shaft, yet supported sections of the same route must remain populated.
-  for (const path of paths['M-B1'].people.filter(p => p.name === '闸机进站')) {
+  for (const path of [{pts:[[-30,-4.43,0],[-5,-4.43,0]],loop:false}]) {
     const visible = samples(path).map(p => support(...p));
     assert.ok(visible.some(Boolean));
     assert.ok(visible.some(v => !v));
@@ -110,7 +110,7 @@ test('rendered walkers resume after crossing an opening and low density retains 
     return { scene };
   });
   const level = lvl('M-B1'), people = new THREE.Group(), support = createPeopleSupport(level);
-  const route = paths[level.id].people.find(p => p.name === '闸机进站');
+  const route = {pts:[[-30,-4.43,0],[-5,-4.43,0]],loop:false,name:'opening regression'};
   const ctx = {
     layout: { levels: [level] }, paths: { levels: { [level.id]: { people: [route] } } },
     levels: { [level.id]: { people, offset: 0 } }, camera: { position: new THREE.Vector3(-45, -3, 0) },

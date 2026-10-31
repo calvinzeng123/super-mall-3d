@@ -4,6 +4,8 @@ import { pbrOptions } from './pbr.js';
 // Outdoor versions share the exact local CC0 texture objects with the interior
 // library. They never glow as stone/brick at night and allocate no new images.
 export const FACADE_SURFACES = Object.freeze({
+  metroTile: {id:'metro_ceramic',roughness:.9,normal:.38},
+  metroTunnel: {id:'tunnel_liner',roughness:1,normal:.45},
   facadeStone: { id: 'marble_01', roughness: 0.72, normal: 0.18 },
   facadeConcrete: { id: 'concrete_pavement_02', roughness: 0.95, normal: 0.24 },
   facadeBrick: { id: 'brick_wall_09', roughness: 0.96, normal: 0.5 },

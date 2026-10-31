@@ -9,6 +9,7 @@ import { BatchSet, SignBatch } from '../batch.js';
 import { drawEscalator, stripGeometry } from './escalators.js';
 import { makeCanvas, canvasTexture, scaled, releaseAfterUpload, FONT_CN, FONT_EN } from '../textures.js';
 import { clearHeight } from './shell.js';
+import { buildMetroInterchangePlatforms, buildInterchangeCeiling } from './metro-interchange.js';
 
 const RED = '#c8352b';
 const LINE = '7';
@@ -151,6 +152,18 @@ function drawLineMap(g, x, y, w, h) {
   });
 }
 
+function drawInterchangeMap(g,x,y,w,h){
+  g.fillStyle='#f4f5ed';g.fillRect(x,y,w,h);
+  g.textAlign='left';g.textBaseline='middle';g.fillStyle='#163239';g.font=`700 30px ${FONT_CN}`;
+  g.fillText('云澜汇站 · 双线十字换乘',x+28,y+35);
+  const lines=[['7','#b43d42',['星湾','云澜汇','云澜里']],['12','#187b9f',['北环新城','云澜汇','南站']]];
+  lines.forEach(([id,color,names],row)=>{
+    const yy=y+115+row*145;g.fillStyle=color;g.fillRect(x+80,yy-5,w-160,10);
+    g.textAlign='left';g.font=`700 24px ${FONT_CN}`;g.fillText(id+' 号线',x+30,yy-32);
+    names.forEach((name,i)=>{const xx=x+160+i*(w-320)/2;g.beginPath();g.arc(xx,yy,12,0,Math.PI*2);g.fillStyle='#f4f5ed';g.fill();g.strokeStyle=color;g.lineWidth=5;g.stroke();g.fillStyle='#163239';g.textAlign='center';g.font=`600 24px ${FONT_CN}`;g.fillText(name,xx,yy+38);});
+  });
+}
+
 /** 货架式装箱：返回 cell(id) → [u0,v0,u1,v1] 与 aspect(id) */
 function makeAtlas(entries) {
   const W = 2048;
@@ -179,14 +192,14 @@ function makeAtlas(entries) {
 function signEntries(b) {
   const out = [];
   const sign = (id, s, w = 1024, h = 192) => out.push({ id, w, h, draw: (g, x, y, cw, ch) => drawSignCell(g, x, y, cw, ch, s) });
-  sign('name', { text: '云澜汇站', sub: `YUNLAN HUI STATION · 地铁 ${LINE} 号线`, badge: LINE });
+  sign('name', { text: '云澜汇站', sub: `YUNLAN HUI · ${b.interchange?'7 / 12 号线':LINE+' 号线'}`, badge: b.interchange?'M':LINE });
   sign('in', { text: '进站', sub: 'ENTRANCE · 刷卡 / 扫码', arrow: 'up', color: '#2e9c6a' }, 640, 160);
   sign('out', { text: '出站 · A B C D 口', sub: 'EXIT', arrow: 'up', color: '#e7b416' }, 768, 160);
   sign('service', { text: '客服中心', sub: 'CUSTOMER SERVICE', color: '#0f6f86' }, 640, 160);
   sign('tvm', { text: '自动售票', sub: 'TICKETS · 扫码 / 现金', color: '#0f6f86' }, 640, 160);
-  sign('station', { text: '往 站厅 · 进站', sub: `TO STATION · LINE ${LINE}`, arrow: 'up', badge: LINE });
+  sign('station', { text: '往 站厅 · 进站', sub: `TO STATION · LINE ${b.interchange?'7 / 12':LINE}`, arrow: 'up', badge: 'M' });
   sign('equip', { text: '设备区 · 闲人免进', sub: 'STAFF ONLY', color: '#e7b416', line: true }, 640, 160);
-  sign('portal', { text: '地铁 云澜汇站', sub: `METRO LINE ${LINE} · YUNLAN HUI`, badge: 'M' });
+  sign('portal', { text: '地铁 云澜汇站', sub: `METRO LINE ${b.interchange?'7 / 12':LINE} · YUNLAN HUI`, badge: 'M' });
   for (const ex of b.exits) {
     const p = PASSAGE[ex.passage];
     sign(`mouth-${ex.id}`, { text: `${ex.id} 口 · ${p.cn}`, sub: `EXIT ${ex.id} · ${p.en}`, arrow: 'up', color: p.color });
@@ -202,7 +215,7 @@ function signEntries(b) {
   sign('m', { text: 'M', bg: RED, line: false, center: true }, 192, 192);
   for (const ex of b.exits) sign(`letter-${ex.id}`, { text: ex.id, bg: '#ffffff', fg: '#23282d', line: false, center: true }, 192, 192);
   ADS.forEach((a, i) => out.push({ id: `ad${i}`, w: 512, h: 320, draw: (g, x, y, w, h) => drawAd(g, x, y, w, h, a) }));
-  out.push({ id: 'linemap', w: 1024, h: 256, draw: drawLineMap });
+  out.push({ id: 'linemap', w: 1024, h: b.interchange?384:256, draw: b.interchange?drawInterchangeMap:drawLineMap });
   return out;
 }
 
@@ -214,7 +227,7 @@ function wallRun(B, F, u0, u1, v, inward, y0, H, { color = WALL, band = RED, t =
   if (u1 - u0 < 0.05) return;
   const cu = (u0 + u1) / 2, len = u1 - u0;
   B.frame(F, () => {
-    B.get('satin').box(cu, y0 + H / 2, v - (inward * t) / 2, len, H, t, color);
+    B.get('metroTile').box(cu, y0 + H / 2, v - (inward * t) / 2, len, H, t, color);
     B.get('matte').box(cu, y0 + 0.08, v + inward * 0.012, len, 0.16, 0.024, '#5c6369');
     if (band) B.get('satin').box(cu, y0 + 2.45, v + inward * 0.012, len, 0.1, 0.024, band);
   });
@@ -269,19 +282,26 @@ export function buildMetro(ctx) {
   const signMat = ctx.mats.screen(atlas.texture, 0.92, 1.3);
   const signs = { b1: new SignBatch(), b2: new SignBatch(), shell: new SignBatch() };
   const stairs = ctx.layout.stairs.filter(s => s.building === b.id);
-  for (const lv of [lv2, lv1]) buildMallStairLevel(ctx.levels[lv.id].batch, lv, stairs, b.access, { flights: true });
+  for (const lv of ctx.layout.levels.filter(l=>l.building==='M')) buildMallStairLevel(ctx.levels[lv.id].batch, lv, stairs, b.access, { flights: true });
   buildStairApproach(ctx, lv1.id, lv2.id, stairs, b.access);
   ctx.renderer.localClippingEnabled = true;
 
   concourse(ctx, b, lv1, L1, atlas, signs.b1);
   passages(ctx, b, lv1, L1, atlas, signs.b1);
-  platform(ctx, b, lv2, L2, atlas, signs.b2);
-  const ceilings = [ceiling(ctx, b, lv1, L1), platformCeiling(ctx, b, lv2, L2)];
+  if(!b.interchange)platform(ctx, b, lv2, L2, atlas, signs.b2);
+  const ceilings = [ceiling(ctx, b, lv1, L1)];
+  if(!b.interchange)ceilings.push(platformCeiling(ctx, b, lv2, L2));
   const strips = b.exits.map((ex) => exitKiosk(ctx, b, lv1, L1, ex, atlas, signs.shell));
   const steps = new THREE.Mesh(stripGeometry(strips), ctx.mats.steps.up);
   steps.receiveShadow = true;
   L1.shell.add(steps);
   portals(ctx, b, atlas, signMat);
+  if(b.interchange){
+    buildMetroInterchangePlatforms(ctx,{train,screenDoors});
+    signs.b1.flush(L1.base,signMat);signs.shell.flush(L1.shell,signMat);
+    ctx.dynamic.push({update(_dt,_t,a){for(const c of ceilings)c.group.visible=!!(c.L.base.visible&&c.L.group.visible)&&a.camera.position.y<c.y-.05;}});
+    return;
+  }
   const trains = [train(ctx, b, lv2, L2, 1), train(ctx, b, lv2, L2, -1)];
   const psd = [screenDoors(ctx, b, lv2, L2, 1), screenDoors(ctx, b, lv2, L2, -1)];
 
@@ -371,7 +391,7 @@ function concourse(ctx, b, lv, L, atlas, S) {
   // 闸机、付费区栏杆、售票机
   for (const f of lv.features) {
     if (f.type === 'gates') {
-      const n = Math.max(2, Math.round((f.z1 - f.z0) / 0.95));
+      const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95)));
       const pitch = (f.z1 - f.z0) / n;
       for (let i = 0; i <= n; i++) {
         const z = f.z0 + i * pitch;
@@ -405,6 +425,10 @@ function concourse(ctx, b, lv, L, atlas, S) {
     }
   }
   // 客服中心：跨闸机线的玻璃岗亭
+  for(const w of lv.navWalls?.filter(w=>w.metroFence)||[]){
+    B.get('glass').box(w.x0,y0+.65,(w.z0+w.z1)/2,.04,1.2,w.z1-w.z0,0xffffff);
+    B.get('metal').box(w.x0,y0+1.26,(w.z0+w.z1)/2,.06,.06,w.z1-w.z0,'#aab2b9');
+  }
   for (const r of lv.rooms.filter((m) => m.type === 'service')) {
     const g = r.rects[0];
     const cx = (g.x0 + g.x1) / 2, cz = (g.z0 + g.z1) / 2, w = g.x1 - g.x0, d = g.z1 - g.z0;
@@ -597,6 +621,7 @@ function platform(ctx, b, lv, L, atlas, S) {
 
 /** 站台吊顶：灯带沿站台纵向 */
 export function platformCeiling(ctx, b, lv, L) {
+  if(b.interchange)return buildInterchangeCeiling(ctx,b,lv,L);
   const group = new THREE.Group();
   const B = new BatchSet(ctx.mats.base);
   const y = lv.elev + 4.6;
@@ -632,14 +657,14 @@ export function platformCeiling(ctx, b, lv, L) {
 function screenDoors(ctx, b, lv, L, s) {
   const B = L.batch;
   const y0 = lv.elev;
-  const z = s * b.platform.z1;
+  const z = b.psdZ ?? s * b.platform.z1;
   const doors = [];
   for (let k = 0; k < b.train.cars; k++) for (const d of DOORS) doors.push((k - (b.train.cars - 1) / 2) * CAR + d);
   const half = 1.0;
   B.get('metal').box(0, y0 + 2.75, z, 115, 0.5, 0.3, '#2b3036');
   // 门楣以上的封板（到吊顶）
   B.get('satin').box(0, y0 + 3.8, z, 120, 1.6, 0.16, '#e3e6e9');
-  B.get('satin').box(0, y0 + 3.4, z - s * 0.09, 120, 0.1, 0.02, RED);
+  B.get('satin').box(0, y0 + 3.4, z - s * 0.09, 120, 0.1, 0.02, b.color||RED);
   B.get('glow').box(0, y0 + 2.48, z - s * 0.16, 115, 0.04, 0.02, '#e8f3ff');
   let x = -57.5;
   for (const dx of [...doors, 57.5 + half]) {
@@ -670,7 +695,8 @@ function screenDoors(ctx, b, lv, L, s) {
 // 列车（s = 行驶方向：+1 东行在南侧轨道 z>0，−1 西行在北侧轨道 z<0）
 
 function train(ctx, b, lv, L, s) {
-  const clip = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), XCLIP), new THREE.Plane(new THREE.Vector3(1, 0, 0), XCLIP)];
+  const c=b.frame?.c??1,ss=b.frame?.s??0;
+  const clip = [new THREE.Plane(new THREE.Vector3(-c, 0, -ss), b.span||XCLIP), new THREE.Plane(new THREE.Vector3(c, 0, ss), b.span||XCLIP)];
   const mats = {
     satin: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.2, clippingPlanes: clip }),
     matte: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1, clippingPlanes: clip }),
@@ -688,22 +714,24 @@ function train(ctx, b, lv, L, s) {
   for (let k = 0; k < n; k++) {
     const cx = (k - (n - 1) / 2) * CAR;
     // 车体：裙部、窗带立柱、上部、车顶
-    B.get('satin').box(cx, 0.32, 0, len, 1.25, hw * 2, '#eef1f3');
+    if(!b.dualDoors)B.get('satin').box(cx, 0.32, 0, len, 1.25, hw * 2, '#eef1f3');
+    else B.get('satin').box(cx,-.11,0,len,.22,hw*2,'#b7bfc0');
     B.get('satin').box(cx, 2.3, 0, len, 0.6, hw * 2, '#eef1f3');
     B.get('satin').box(cx, 2.72, 0, len - 0.3, 0.25, hw * 2 - 0.3, '#c9cfd4');
-    B.get('glow').box(cx, 1.48, 0, len - 0.4, 1.05, hw * 2 - 0.25, '#fff2d8');
+    B.get('glow').box(cx, b.dualDoors?2.26:1.48, 0, len - 0.4, b.dualDoors?.035:1.05, hw * 2 - 0.25, '#fff2d8');
     for (const z of [-1, 1]) {
-      B.get('satin').box(cx, 0.7, z * (hw + 0.006), len, 0.16, 0.012, RED);
-      B.get('satin').box(cx, 2.08, z * (hw + 0.006), len, 0.05, 0.012, RED);
+      if(!b.dualDoors)B.get('satin').box(cx, 0.7, z * (hw + 0.006), len, 0.16, 0.012, b.color||RED);
+      B.get('satin').box(cx, 2.08, z * (hw + 0.006), len, 0.05, 0.012, b.color||RED);
       // 窗与立柱
       const segs = [[-len / 2 + 0.3, DOORS[0] - 0.85], [DOORS[0] + 0.85, DOORS[1] - 0.85], [DOORS[1] + 0.85, DOORS[2] - 0.85], [DOORS[2] + 0.85, DOORS[3] - 0.85], [DOORS[3] + 0.85, len / 2 - 0.3]];
       for (const [a, c] of segs) {
+        if(b.dualDoors){B.get('satin').box(cx+(a+c)/2,.47,z*hw,c-a,.94,.045,'#eef1f3');B.get('satin').box(cx+(a+c)/2,.7,z*(hw+.03),c-a,.16,.012,b.color||RED);}
         B.get('glassTint').box(cx + (a + c) / 2, 1.48, z * (hw + 0.004), c - a, 1.0, 0.02, 0xffffff);
         B.get('satin').box(cx + a - 0.04, 1.48, z * hw, 0.1, 1.05, 0.03, '#e3e7ea');
         B.get('satin').box(cx + c + 0.04, 1.48, z * hw, 0.1, 1.05, 0.03, '#e3e7ea');
       }
       // 非站台一侧的车门（关闭）
-      if (z !== plat) for (const d of DOORS) door(B, cx + d, z * (hw + 0.01), 0, 0);
+      if (!b.dualDoors && z !== plat) for (const d of DOORS) door(B, cx + d, z * (hw + 0.01), 0, 0);
     }
     // 转向架、车下设备、车顶空调、贯通道
     for (const e of [-6.4, 6.4]) B.get('matte').box(cx + e, -0.62, 0, 2.6, 0.7, hw * 2 - 0.4, '#25292d');
@@ -716,7 +744,7 @@ function train(ctx, b, lv, L, s) {
     const x = e * ((n * CAR) / 2 - 0.25);
     B.get('satin').box(x - e * 0.25, 1.4, 0, 0.5, 2.9, hw * 2 - 0.2, '#d9dee2');
     B.get('glassTint').box(x + e * 0.02, 1.55, 0, 0.04, 1.05, hw * 2 - 0.6, 0xffffff);
-    B.get('satin').box(x + e * 0.02, 0.62, 0, 0.04, 0.28, hw * 2 - 0.2, RED);
+    B.get('satin').box(x + e * 0.02, 0.62, 0, 0.04, 0.28, hw * 2 - 0.2, b.color||RED);
     for (const z of [-1, 1]) {
       B.get('glow').box(x + e * 0.03, 0.42, z * 0.95, 0.03, 0.14, 0.34, e === s ? '#ffffff' : '#ff3b30');
     }
@@ -734,9 +762,19 @@ function train(ctx, b, lv, L, s) {
     DB.flush(grp);
     group.add(grp);
   }
+  let board=null;
+  if(b.dualDoors){
+    board={left:new THREE.Group(),right:new THREE.Group()};
+    for(const [grp,k]of [[board.left,-1],[board.right,1]]){
+      const DB=new BatchSet(mats);
+      for(let c=0;c<n;c++)for(const d of DOORS)door(DB,(c-(n-1)/2)*CAR+d+k*.33,-plat*(hw+.01),k,1);
+      DB.flush(grp);group.add(grp);
+    }
+  }
+  group.name=`M-train-${b.id||'7'}-${s}`;
   group.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; } });
   L.base.add(group);
-  return { group, left, right, dir: s };
+  return { group, left, right, board, dir: s };
 }
 
 /** 车门（单扇 k=±1 或整樘 k=0）：门板 + 门窗 */

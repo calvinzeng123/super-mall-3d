@@ -8,7 +8,7 @@ import { toW } from '../layout/geom.js';
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
-function steps(layout) {
+export function buildTourSteps(layout) {
   if (layout.playable) {
     const r = layout.site.bounds;
     const c = V((r.x0+r.x1)/2, 12, (r.z0+r.z1)/2);
@@ -53,7 +53,8 @@ function steps(layout) {
   const k4 = ride(esc('P1-K4'));
   const sq = p1.square;
   const SQ = (u, y, v) => { const [x, z] = toW(sq.F, u, v); return V(x, y, z); };
-  const mb = esc('M-MB', 'down');
+  const interchange=B('M').interchange;
+  const mb = esc(interchange?'M-7-H-0-1':'M-MB', 'down');
   return [
     { caption: '云澜汇园区 · 三期商业 + 云环天桥 + 中央公园', pos: V(150, 300, 330), target: V(0, 0, 0), dur: 5, shadow: 380 },
     { caption: '一期东南主入口 · 正对路口', building: 'P1', pos: W(p1, 'SE', SE.uEnd + 46, 9, 0), target: W(p1, 'SE', SE.uEnd, 7, 0), dur: 4.5, shadow: 120 },
@@ -70,10 +71,14 @@ function steps(layout) {
     { caption: '中翼 2F → 冰场圆厅', pos: W(p2, 'M', 40, 9.6, 3), target: K(p2, 'B', 0, 4, 0), dur: 5 },
     { caption: '星湾真冰场 · 圆厅俯瞰', pos: K(p2, 'B', 19, 10.4, 13), target: K(p2, 'B', 0, 0.2, 0), dur: 4.5 },
     { caption: '二期天台 · 天空跑道与篮球场', pos: C(52, rf2.elev + 22, -42), target: C(52, rf2.elev, 0), dur: 5, shadow: 160 },
-    { caption: '地铁云澜汇站 · 站厅与闸机', building: 'M', pos: V(47, -2.2, -8.5), target: V(5, -3.6, 0.5), dur: 5.5, shadow: 120 },
-    { caption: '乘扶梯下站台', pos: V(mb.top.x + 3.4, mb.top.y + 2.3, mb.top.z - 0.4), target: V(mb.bottom.x, mb.bottom.y + 1.2, mb.bottom.z), dur: 3.5 },
-    { caption: '乘扶梯下站台', pos: V(mb.bottom.x - 1.5, mb.bottom.y + 1.75, mb.bottom.z), target: V(-20, mb.bottom.y + 1.4, 3), dur: 4 },
-    { caption: '岛式站台 · 列车进站，屏蔽门开启', pos: V(-24, -10.3, 3.6), target: V(6, -10.9, 6.5), dur: 10, train: 16 },
+    { caption: '地铁云澜汇站 · 站厅与闸机', building: 'M', focus:'M-B1', pos: V(47, -2.2, -8.5), target: V(5, -3.6, 0.5), dur: 5.5, shadow: 120 },
+    { caption: '乘扶梯下站台', focus:'M-B1', pos: V(mb.top.x + 3.4, mb.top.y + 2.3, mb.top.z - 0.4), target: V(mb.bottom.x, mb.bottom.y + 1.2, mb.bottom.z), dur: 3.5 },
+    { caption: '乘扶梯下站台', focus:'M-B2', pos: V(mb.bottom.x - 1.5, mb.bottom.y + 1.75, mb.bottom.z), target: V(-20, mb.bottom.y + 1.4, 3), dur: 4 },
+    { caption: interchange?'7 号线 · 中央下车、两侧上车':'岛式站台 · 列车进站，屏蔽门开启', focus:'M-B2', pos: V(-24, -10.3, 3.6), target: V(6, -10.9, 6.5), dur: 10, train: 16 },
+    ...(interchange?[
+      {caption:'B3 十字换乘厅 · 7 ↔ 12 号线',focus:'M-B3',pos:V(20,-17.7,4),target:V(0,-18,15),dur:6},
+      {caption:'12 号线 · 更深一层，南北双向列车',focus:'M-B4',pos:V(-3.7,-25.3,-30),target:V(-7.6,-25.7,10),dur:10,train:0},
+    ]:[]),
     { caption: '俯瞰三期 云澜里 · 开放街区', building: 'P3', pos: V(-40, 80, 20), target: V(-130, 4, 110), dur: 5.5, shadow: 170 },
     { caption: '三期街巷 · 店铺、外摆与串灯', pos: V(-58, 2.4, 44.5), target: V(-140, 3, 43), dur: 5, shadow: 90 },
     { caption: '中心广场 · 街区舞台与旱喷', pos: V(plaza.x - 10, 7, plaza.z - 8), target: V(plaza.x + 3, 2, plaza.z - 1), dur: 4.5 },
@@ -86,12 +91,15 @@ function steps(layout) {
 
 export function attachTour(app, ui) {
   const { camera, controls } = app;
-  const TOUR = steps(app.ctx.layout);
+  const TOUR = buildTourSteps(app.ctx.layout);
   let run = null;
   const enter = (seg) => {
     if (seg.building && app.state.building !== seg.building) {
       app.state.building = seg.building;
+      app.state.focus = seg.focus||null;
       app.refresh();
+    } else if(seg.focus && app.state.focus!==seg.focus){
+      app.state.focus=seg.focus;app.refresh();
     }
     if (seg.shadow) app.env.setShadowFocus(seg.target.clone(), seg.shadow);
     if (seg.train !== undefined && app.ctx.metroSync) app.ctx.metroSync(seg.train);

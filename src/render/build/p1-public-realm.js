@@ -82,5 +82,5 @@ export function buildCourtInlaysAndSigns(ctx, court) {
   }
   sign(L.shell, '云谷艺术广场', 'ECHO COURT · B1M', -123.72, y + 2.45, -44, 7, 1.45, Math.PI / 2);
   sign(L.shell, 'B1M 美食广场', 'FOOD HALL ↑', -108.5, y + 3.55, -55.69, 4.3, .75);
-  sign(L.shell, '地铁云澜汇站 →', 'METRO · 7 号线', -86.31, y + 3.55, -38.5, 4.8, .75, -Math.PI / 2);
+  sign(L.shell, '地铁云澜汇站 →', 'METRO · 7 / 12 号线', -86.31, y + 3.55, -38.5, 4.8, .75, -Math.PI / 2);
 }

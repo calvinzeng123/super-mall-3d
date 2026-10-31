@@ -27,7 +27,7 @@ test('二三期下行前保留相邻地下层，地铁站在连接通道处提�
     assert.ok(ids.has(`${building}-B1`)); assert.ok(ids.has(`${building}-B2`));
   }
   const ids = visible({ building: 'P1', level: 'P1-B1M', under: true, metro: true });
-  assert.ok(ids.has('M-B1')); assert.ok(ids.has('M-B2'));
+  for(const id of ['M-B1','M-B2','M-B3','M-B4'])assert.ok(ids.has(id));
 });
 
 test('地面坡口接近时预显目的地，升降行程到达层预先显示', () => {

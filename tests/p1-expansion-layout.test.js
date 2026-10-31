@@ -15,14 +15,14 @@ function move(s,p) {
   if(p.floor)assert.equal(s.floor,p.floor);return s;
 }
 
-test('tour adds six-storey main mall and eight stepped annexes while FPS and the other phases retain their original data',()=>{
+test('tour adds six-storey main mall and eight stepped annexes while compact FPS and unrelated phases retain their original data',()=>{
   assert.equal(annexes.length,8);
   assert.deepEqual(L.levels.filter(l=>l.building==='P1'&&l.elev>=0).map(l=>l.short),['1F','2F','3F','4F','5F','6F','RF']);
   assert.equal(L.levels.find(l=>l.id==='P1-RF').elev,34);
   assert.equal(L.levels.find(l=>l.id==='P1C-7F').elev,34);
   assert.equal(L.levels.find(l=>l.id==='P1C-RF').elev,39.5);
   assert.equal(old.expansion,undefined);assert.equal(old.levels.find(l=>l.id==='P1-RF').elev,17.5);
-  for(const bid of ['P2','P3','M','H','A','R1','R2','R3','R4','WPG']) {
+  for(const bid of ['P2','P3','H','A','R1','R2','R3','R4','WPG']) {
     assert.deepEqual(L.buildings.find(b=>b.id===bid),old.buildings.find(b=>b.id===bid),`${bid} building changed`);
     assert.deepEqual(L.levels.filter(l=>l.building===bid),old.levels.filter(l=>l.building===bid),`${bid} levels changed`);
   }

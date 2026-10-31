@@ -23,9 +23,9 @@ function move(state,p,audit=()=>{}) {
   assert.equal(state.floor,p.floor);assert.ok(Math.abs(state.y-p.y)<1e-6);return state;
 }
 
-test('地铁与桥塔4座连续楼梯16梯段12平台，真实门口开始逐步双向走通',()=>{
-  assert.equal(routes.length,4);assert.equal(metro.access.flights.length+br.access.flights.length,16);
-  assert.equal(metro.access.surfaces.length+br.access.surfaces.length,12);
+test('双线地铁与桥塔全部连续楼梯，真实门口开始逐步双向走通',()=>{
+  assert.equal(routes.length,20);assert.equal(metro.access.flights.length+br.access.flights.length,80);
+  assert.equal(metro.access.surfaces.length+br.access.surfaces.length,60);
   for(const route of routes)for(const reverse of [false,true]) {
     const path=pathOf(route);if(reverse)path.reverse();let s={...path[0],slope:null},slopes=0;
     assert.ok(clear(nav,s),`${route.id}: blocked entrance`);
@@ -41,7 +41,7 @@ test('地铁与桥塔4座连续楼梯16梯段12平台，真实门口开始逐步
 test('地铁楼板、桥板真实切洞且地面不能横穿梯底；入口仍接现有走道',()=>{
   for(const stair of L.stairs.filter(s=>s.building==='M')) {
     const p=mallStairPlan(stair),center=toW(stair.frame,...p.point(p.span/2,p.depth/2));
-    for(const lv of L.levels.filter(l=>l.building==='M')) {
+    for(const lv of L.levels.filter(l=>stair.serves.includes(l.id))) {
       assert.ok(!onSlab(lv,center));assert.equal(lv.slab.pieces.find(piece=>piece.stair===stair.id).thickness,.12);
       const d=stairDoor(stair,lv.id),m=midOf(d);assert.ok(inWalk(lv,[m[0]+d.nx*.55,m[1]+d.nz*.55]));
     }
@@ -76,8 +76,8 @@ test('地铁实梯、墙、B1厚板及悬吊顶灯具均保留2米头部净空',
   const {B,boxes}=recordBoxes(),levels=L.levels.filter(l=>l.building==='M'),stairs=L.stairs.filter(s=>s.building==='M');
   for(const lv of levels)buildMallStairLevel(B,lv,stairs,metro.access,{flights:true});
   const mats=Object.fromEntries(['glowSoft','satin','glow'].map(k=>[k,new THREE.MeshBasicMaterial({side:THREE.DoubleSide})]));
-  const ceiling=platformCeiling({mats:{base:mats},lvById:Object.fromEntries(levels.map(l=>[l.id,l]))},metro,levels[0],{group:new THREE.Group()});
-  const ray=new THREE.Raycaster();ray.far=1.6;ceiling.group.updateMatrixWorld(true);
+  const ceilings=levels.filter(l=>l.short!=='B1').map(lv=>platformCeiling({mats:{base:mats},lvById:Object.fromEntries(levels.map(l=>[l.id,l]))},metro,lv,{group:new THREE.Group()}));
+  const ray=new THREE.Raycaster();ray.far=1.6;for(const c of ceilings)c.group.updateMatrixWorld(true);
   for(const route of metro.access.routes) {
     const path=pathOf(route);let state={...path[0],slope:null};
     for(const p of path.slice(1))state=move(state,p,s=>{
@@ -91,11 +91,11 @@ test('地铁实梯、墙、B1厚板及悬吊顶灯具均保留2米头部净空',
       }
       for(const [dx,dz]of [[0,0],[.24,0],[-.24,0],[0,.24],[0,-.24]]) {
         ray.set(new THREE.Vector3(s.x+dx,s.y+.4,s.z+dz),new THREE.Vector3(0,1,0));
-        assert.equal(ray.intersectObjects(ceiling.group.children).length,0,`${route.id}: suspended ceiling/light clips head at ${s.y}`);
+        assert.equal(ray.intersectObjects(ceilings.flatMap(c=>c.group.children)).length,0,`${route.id}: suspended ceiling/light clips head at ${s.y}`);
       }
     });
   }
-  for(const mesh of ceiling.group.children)mesh.geometry.dispose();for(const m of Object.values(mats))m.dispose();
+  for(const mesh of ceilings.flatMap(c=>c.group.children))mesh.geometry.dispose();for(const m of Object.values(mats))m.dispose();
 });
 
 test('桥塔实际玻璃入口、1米厚桥板、钢梁及实梯全路线留出身体净空',()=>{

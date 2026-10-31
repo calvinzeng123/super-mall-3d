@@ -220,7 +220,7 @@ export function buildNav(layout) {
     for (const o of lv.navObstacles || []) polygonObstacle(F, frame(0, 0, 0), o);
     for (const f of lv.features) {
       if (f.type === 'gates') {
-        const n = Math.max(2, Math.round((f.z1 - f.z0) / 0.95));
+        const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95)));
         for (let i = 0; i <= n; i++) { const z = f.z0 + ((f.z1 - f.z0) * i) / n; wall(F, f.x - 0.85, z, f.x + 0.85, z); }
       } else if (f.type === 'market-stall') {
         obstacle(F, frame(0, 0, 0), rect(f.x - f.w / 2, f.z - f.d / 2, f.x + f.w / 2, f.z + f.d / 2));

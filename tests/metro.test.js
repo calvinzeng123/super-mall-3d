@@ -6,11 +6,11 @@ import { pointInPoly, convexOverlap } from '../src/layout/geom.js';
 
 const M = () => L.buildings.find((b) => b.id === 'M');
 
-test('地铁两层：站台 −12、站厅 −4.5，主题不同', () => {
+test('地铁四层：两线站台 −12 / −27，中间换乘厅 −19.5、站厅 −4.5', () => {
   assert.ok(M(), '缺少地铁');
   const ls = levelsOf('M');
-  assert.deepEqual(ls.map((l) => [l.short, l.elev]), [['B2', -12], ['B1', -4.5]]);
-  assert.equal(new Set(ls.map((l) => l.theme.key)).size, 2);
+  assert.deepEqual(ls.map((l) => [l.short, l.elev]), [['B4', -27], ['B3', -19.5], ['B2', -12], ['B1', -4.5]]);
+  assert.equal(new Set(ls.map((l) => l.theme.key)).size, 4);
 });
 
 test('一期 B1M、二期 B1、三期 B1 各有通往站厅的连接口', () => {

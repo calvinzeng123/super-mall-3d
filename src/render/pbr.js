@@ -32,6 +32,8 @@ export async function loadSurfaceTextures(anisotropy = 4) {
 }
 
 export const FLOOR_SURFACES = {
+  'metro-terrazzo': {id:'metro_terrazzo',tint:'#e5e5df',roughness:.9,normal:.24,glow:.22},
+  'metro-platform': {id:'metro_terrazzo',tint:'#cbd4d6',roughness:.92,normal:.24,glow:.22},
   'p1-paving': { id: 'limestone_pavers', tint: '#e6e0d3', roughness: 1, outdoor: true },
   'p1-paving-border': { id: 'limestone_pavers', tint: '#677575', roughness: 1, outdoor: true },
   'p1-paving-inlay': { id: 'limestone_pavers', tint: '#c7b18c', roughness: 1, outdoor: true },

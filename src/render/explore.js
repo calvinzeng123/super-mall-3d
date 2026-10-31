@@ -3,7 +3,7 @@
 // 楼梯 / 电梯 / 落地塔在门口弹出互动面板；目录可传送；准星对准铺位或设施时显示名称。
 import * as THREE from 'three';
 import { buildNav, step, clear, landAt, linksNear, spawn, floorLabel, sightBlocked, NAV, yawOf } from '../layout/nav.js';
-import { pointInPoly, distToPolyEdge } from '../layout/geom.js';
+import { pointInPoly, distToPolyEdge, toL } from '../layout/geom.js';
 import { createElevatorRide, sampleElevatorRide } from '../layout/elevator-ride.js';
 
 const WALK = 2.8, RUN = 6, FLY = 8, FLY_MAX = 30;
@@ -17,6 +17,8 @@ const METRO_LINKED = new Set(['P1-B1M', 'P2-B1', 'P3-B1']);
 export function attachExplore(app, ui) {
   const { ctx, camera, controls, renderer } = app;
   const layout = ctx.layout;
+  const flyFloor = Math.min(-14,...layout.levels.map(l=>l.elev-3));
+  const metroLines = layout.buildings.find(b=>b.id==='M')?.interchange?.lines || [];
   const canvas = renderer.domElement;
   const $ = (id) => document.getElementById(id);
   const hud = {
@@ -170,7 +172,8 @@ export function attachExplore(app, ui) {
     }
     const sourceLevel = F?.parentFloor || F?.level?.id || F?.id;
     let metro = !!F && (F.building === 'M' || METRO_LINKED.has(sourceLevel) || (F.building && (ctx.bById[F.building]?.kind === 'tower' || ctx.bById[F.building]?.undergroundOnly) && F.y < 0));
-    if (flying) metro = camera.position.y < -1 && Math.abs(x) < 120 && Math.abs(z) < 120;
+    if (flying) metro = camera.position.y < -1 && ((Math.abs(x) < 120 && Math.abs(z) < 120)
+      || metroLines.some(line=>{const [u,v]=toL(line.frame,x,z);return Math.abs(u)<line.tunnelEnd+5&&Math.abs(v)<21;}));
     let nearB = null;
     if (!building || building === 'P3') {
       let best = 30;
@@ -532,7 +535,7 @@ export function attachExplore(app, ui) {
         camera.position.x += wx * sp * dt;
         camera.position.z += wz * sp * dt;
         const up = (keys.has(' ') || input.up ? 1 : 0) - (keys.has('c') || keys.has('Control') || input.down ? 1 : 0);
-        flyY = Math.max(-14, Math.min(400, flyY + up * sp * 0.7 * dt));
+        flyY = Math.max(flyFloor, Math.min(400, flyY + up * sp * 0.7 * dt));
         eyeY = flyY;
       } else {
         const sp = run ? RUN : WALK;
