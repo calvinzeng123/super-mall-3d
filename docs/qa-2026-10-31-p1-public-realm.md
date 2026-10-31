@@ -21,4 +21,14 @@
 
 ## 发布
 
-完成本地验收，待记录生产部署及线上复核结果。
+- 应用提交 `e96d680` 已推送 GitHub `feat/explore-v4`；祖先历史含 PR #1 的合并提交及 `f3517a6`。
+- 执行 `netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。
+- 生产部署 ID：`6ae5a5056beff0f27b02d2f3`。Netlify API 为 `ready`，站点正式发布指针一致，见 [发布状态](qa/p1-public-realm-published-20261031.json)。
+- 正式 HTML 引用 `assets/main.GVZUEVHW.js`。全部 75 个 `assets/` 资源的 SHA-256 与本地生产包一致，见 [线上资源校验](qa/p1-public-realm-live-assets-20261031.json)。其中三个住宅大模型首次在 30 秒下载时限内未完成，延长传输时限后均校验通过。
+- 正式站运行时确认西门入口、990m² 广场、6.4m 台阶和 5.2m 地铁通廊；34 层地毯、屋面玻璃穹顶、四条北/东坡道及西停车场三个车行口均保留。390×844 玻璃导航、滑动透镜、文字无发光及页面宽度检查通过，无楼层细节错误或 WebGL 上下文丢失。见 [正式站检查](qa/p1-public-realm-live-check-20261031.json)。
+- 正式站再次执行三条路线六趟双向漫游，全部通过，见 [线上步行记录](qa/p1-public-realm-live-walk-20261031.json)。新会话最终控制台为 0 errors / 0 warnings。
+- 正式站截图已保存到本次任务 `outputs/Netlify_20261031_*.png`：西门、主楼西门、云谷艺术广场、广场地铁口、清空后的云环路口、恢复到乐园的滑梯及手机玻璃导航。
+
+## 网络与设备说明
+
+第一次旧浏览器会话加载遇到多张既有材质的 `ERR_NETWORK_IO_SUSPENDED`，随后报图片解码失败；重试期间该会话被重置到空白页。新建浏览器会话后完整导览与移动尺寸检查通过。本次没有把暂时网络中断当作部署文件损坏，也不宣称首次加载速度或实体 iPhone 稳定性已经保证。
