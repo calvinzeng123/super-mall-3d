@@ -43,6 +43,7 @@ function tunnels(ctx,line,lv,B,G){
   const source=ctx.mats.base.metroTunnel||ctx.mats.base.concrete;
   const mat=source.clone();mat.side=THREE.DoubleSide;mat.vertexColors=false;mat.color.set('#b7b8b2');
   for(const s of [-1,1]){
+    if(s<0)for(const e of [-1,1]){const wall=new THREE.Mesh(endBulkhead(line,lv.elev,e),mat);wall.name=`M-${line.id}-end-wall-${e}`;wall.receiveShadow=true;G.add(wall);}
     for(const e of [-1,1])for(const upper of [false,true]){
       const mesh=new THREE.Mesh(tunnelSkin(line,lv.elev,e,s,upper),mat);mesh.name=`M-${line.id}-tunnel-${s}-${e}-${upper?'crown':'invert'}`;mesh.receiveShadow=true;G.add(mesh);if(upper)tops.push(mesh);
     }
@@ -74,6 +75,29 @@ export function buildInterchangeCeiling(ctx,b,lv,L){
   }
   B.flush(group);group.name=`${lv.id}-cutaway-ceiling`;group.visible=false;L.group.add(group);return {group,y,L};
 }
+/** Closes the station box below platform level: trench walls under every platform edge and a
+ *  track-level floor in the 6m between each platform end and the tunnel mouth. */
+function closeStation(B,line,y){
+  for(const z of [-9.2,-6,6,9.2]){
+    const inward=Math.abs(z)<7.6?-1:1,zc=z+Math.sign(z)*inward*.1;
+    B.get('metroTunnel').box(0,y-.69,zc,120,1.32,.2,'#b9bcb5');
+  }
+  // A wider bed 2cm under the rails tucks beneath both trench walls, so no crack shows the level below.
+  for(const s of [-1,1])B.get('metroTunnel').box(0,y-1.37,s*line.track,132,.3,3.6,'#a3aaa6');
+  for(const e of [-1,1])B.get('metroTunnel').box(e*63,y-1.37,0,6.1,.3,41.32,'#a3aaa6');
+}
+/** Station end wall at each tunnel mouth with round openings for the two running tunnels. */
+export function endBulkhead(line,elev,e){
+  const H=20.66,bottom=elev-1.5,top=elev+4.65,shape=new THREE.Shape([[-H,bottom],[H,bottom],[H,top],[-H,top]].map(([u,v])=>new THREE.Vector2(u,v)));
+  for(const s of [-1,1]){
+    const cz=s*line.track,cy=elev+1.5,pts=[];
+    for(let i=0;i<40;i++){const t=i/40*Math.PI*2;pts.push(new THREE.Vector2(cz+Math.cos(t)*3.2,Math.max(bottom+.05,cy+Math.sin(t)*3.2)));}
+    shape.holes.push(new THREE.Path(pts));
+  }
+  const g=new THREE.ShapeGeometry(shape,4);
+  g.rotateY(-Math.PI/2);g.translate(e*66,0,0);
+  return g;
+}
 function platform(ctx,line,lv,L,signs){
   const B=L.batch,S=new SignBatch(),P=line.platform;
   const y=lv.elev;
@@ -91,7 +115,10 @@ function platform(ctx,line,lv,L,signs){
     B.get('extSatin').box(0,y+2.6,s*20.64,132,.23,.025,line.color);
     for(const x of [-42,-18,18,42])panel(B,S,signs.atlas,line.id,x,y+2.2,s*20.63,5,-s);
   }
-  for(const e of [-1,1])for(const p of line.platforms){const r=p.rect;B.get('metroTile').box(e*60,y+2.3,(r.z0+r.z1)/2,.28,4.6,r.z1-r.z0,'#dde5e1');}
+  // Platform end walls reach down to the track bed, so the gap under each slab end is closed too.
+  for(const e of [-1,1])for(const p of line.platforms){const r=p.rect,z0=p.role==='board'?Math.sign(r.z0)*Math.min(Math.abs(r.z0),Math.abs(r.z1)):r.z0,
+    z1=p.role==='board'?Math.sign(r.z0)*20.66:r.z1;B.get('metroTile').box(e*60,y+1.625,(z0+z1)/2,.28,5.95,Math.abs(z1-z0),'#dde5e1');}
+  closeStation(B,line,y);
   S.flush(L.base,signs.material);
 }
 function transfer(ctx,b,signs){

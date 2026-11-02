@@ -9,7 +9,7 @@ import { addMetroAccess } from './metro-access.js';
 export const INTERCHANGE = {
   concourse: rect(-68,-26,68,26), platform: rect(-60,-6,60,6),
   sides: [rect(-60,-19,-60+120,-9.2),rect(-60,9.2,60,19)],
-  station: rect(-66,-20.8,66,20.8), track: 7.6, tunnelEnd: 260,
+  station: rect(-66,-20.8,66,20.8), wallFace: 20.66, track: 7.6, tunnelEnd: 260,
 };
 const level = (short,name,kind,elev,accent) => ({id:`M-${short}`,building:'M',short,name,kind,elev,height:7.5,
   theme:{key:`metro-${short}`,floor:'metro-terrazzo',accent,label:name},outline:[],units:[],rooms:[],walk:[],voids:[],features:[],slab:{pieces:[]}});
@@ -33,7 +33,10 @@ export function applyMetroInterchange(layout) {
     .map(l=>({...l,box:INTERCHANGE.station,platform:INTERCHANGE.platform,platforms,track:7.6,train:{cars:6,len:19,w:3},tunnelEnd:260,span:260,dualDoors:true}));
   for(const line of lines){
     const lv=byId[line.level];lv.metroLine=line.id;lv.theme.floor='metro-platform';lv.outline=lrectPoly(line.frame,line.box);
-    lv.slab.pieces=platforms.map(p=>({outer:lrectPoly(line.frame,p.rect),holes:[]}));
+    // Boarding-platform slabs run to the outer tiled wall (inner face 20.66m) so no strip
+    // beside the wall looks down into the level below; the walkable area still stops at 19m.
+    const toWall=r=>r.z0<0?{...r,z0:-INTERCHANGE.wallFace}:{...r,z1:INTERCHANGE.wallFace};
+    lv.slab.pieces=platforms.map(p=>({outer:lrectPoly(line.frame,p.role==='board'?toWall(p.rect):p.rect),holes:[]}));
     lv.walk=platforms.map(p=>walk(`M-${line.id}-${p.id}`,'platform',lrectPoly(line.frame,p.rect)));
     for(const z of [-9.2,-6,6,9.2]){
       const a=toW(line.frame,-60,z),c=toW(line.frame,60,z);

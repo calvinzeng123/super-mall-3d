@@ -122,6 +122,9 @@ export function buildShell(ctx) {
       L.shell.add(body);
     }
     const b = ctx.bById[lv.building];
+    // Metro escalator openings get the same glass guard as mall voids; otherwise the slots
+    // read as unguarded holes straight down to the next station level.
+    if (b.kind === 'metro' && lv.voids.length) railings(ctx, lv);
     if (b.kind !== 'mall') continue;
     if (lv.kind === 'retail' || lv.kind === 'food') {
       columns(ctx, lv);
