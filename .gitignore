@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 .DS_Store
 shots/
 # 停车地图引用的截图要随文档提交
