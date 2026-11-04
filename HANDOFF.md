@@ -1,8 +1,24 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-10-31。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-04。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
-## 2026-10-31 最新交接：地铁八口与四象限覆盖
+## 2026-11-04 最新交接：全园出入口排查、西门步行轴、二期星湾广场站
+
+本次分支 `claude/wonderful-thompson-olaaxb`，还没有部署（云端会话没有 Netlify 凭据）。实现与证据见 [出入口 QA](docs/qa-2026-11-04-entrances-bus-west-gate.md) 和 [下沉广场门洞 QA](docs/qa-2026-11-04-sunken-court-doorway.md)；一期加楼 / 上盖物业分析见 [规划决策文件](docs/planning/2026-11-04-p1-air-rights/PLAN.md)。
+
+- **出入口**：四组（地铁、地下、地面、天桥）共 53 条发现，复核成立 52 条，已修 45 条，剩下 7 条低优先级，列在 QA 里。
+  - 门洞开洞统一按门的弦线或门带计算：`shell.js chordGap`，`geom.js doorwayBand`。
+  - 附楼和一期 3F 以上的幕墙碰撞来自 `p1-expansion.js expansionFacadeWalls`，与渲染共用同一套门洞计算。
+  - 导航 `segCross` 改为半开区间，门线上的一步不再来回切换楼层。
+- **西门**：轴线 z = −123.5（`west-parking.js WEST_GATE_AXIS`）。
+  - `west-gate-promenade` 从斑马线通到步行脊，西地面车位 551。
+  - 门架立柱的碰撞由 `gantryPosts` 生成；压在步道上的立柱自动取消，横梁改为悬臂。
+- **星湾广场站**：
+  - `layout/bus-stops.js` 登记港湾、站台、候车亭、碰撞、横道和公交时刻；渲染在 `render/build/bus-stops.js`，公交车在 `traffic.js`，用一个实例化网格。
+  - 港湾不进 `site.roads` / `extensions.roads`。
+  - 一期大道旁的老候车亭也改由这份记录绘制，并带碰撞。
+
+## 2026-10-31 历史：地铁八口与四象限覆盖
 
 默认正式站仍为 [云澜汇 Netlify](https://yunlan-mall-calvin.netlify.app/)，site ID `3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。本次新增 E/F/G/H 口，A–H 合计八个，每个象限两个。实现与发布证据见 [八口 QA](docs/qa-2026-10-31-metro-access.md)。
 
