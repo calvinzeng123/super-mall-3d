@@ -7,7 +7,7 @@ import { buildTowerStairGeometry } from '../src/render/build/tower-stairs.js';
 import { buildTowerStairInstances } from '../src/render/build/tower-stairs.js';
 import * as THREE from 'three';
 
-const nav=buildNav(L),towers=L.buildings.filter(b=>b.kind==='tower'&&b.access?.protected);
+const nav=buildNav(L),towers=L.buildings.filter(b=>b.kind==='tower'&&b.access?.protected&&!b.community);
 function move(s,p,audit=()=>{}) {
   const n=Math.max(1,Math.ceil(Math.hypot(p.x-s.x,p.z-s.z)/.06)),dx=(p.x-s.x)/n,dz=(p.z-s.z)/n;
   for(let i=0;i<n;i++) {

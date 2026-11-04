@@ -28,7 +28,8 @@ test('各期外轮廓互不重叠（地下的地铁不计）', () => {
   const above = L.buildings.filter((x) => x.kind !== 'metro' && !x.undergroundOnly);
   for (const a of above) {
     for (const b of above) {
-      if (a === b) continue;
+      // 叠建于裙房屋面的塔楼（北苑立于一期之上）与其下的建筑竖向不重叠
+      if (a === b || a.stackedOn === b.id || b.stackedOn === a.id) continue;
       for (const p of polySamples(a.outline, 4, 0.05)) assert.ok(!pointInPoly(p, b.outline), `${a.id} 与 ${b.id} 重叠`);
     }
   }

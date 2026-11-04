@@ -21,6 +21,10 @@ import { applyP1VehicleAccess } from './p1-access.js';
 import { applyP1Fidelity } from './p1-fidelity.js';
 import { applyP1Finishes } from './p1-finishes.js';
 import { applyMetroInterchange } from './metro-interchange.js';
+import { addRiver } from './river.js';
+import { applyRiverTerrace } from './river-terrace.js';
+import { applyNorthResidences } from './north-residences.js';
+import { COMMUNITY_CATEGORY } from './community-units.js';
 
 /** expansion: the full phase-one tour (false builds the compact FPS authoring
  * layout). fidelity: the concept A scheme on top of it — extra vehicle access,
@@ -40,10 +44,11 @@ export function buildLayout({ expansion = true, fidelity = expansion } = {}) {
   const parts = [expandedP1, buildMall(P2, site, picker), buildP3(site, picker)];
   addPark(site);
   parts.push(buildMetro(parts, site, picker));
-  const hospitality = buildHospitality(parts, site);
+  const hospitality = buildHospitality(parts, site, { expansion });
   parts.push(...hospitality.parts);
   addForecourt(site);
-  addUrbanDistrict(site);
+  addUrbanDistrict(site, { river: expansion });
+  if (expansion) addRiver(site);
   const all = (k) => parts.flatMap((p) => p[k]);
   const buildings = parts.map((p) => p.building);
   const layout = {
@@ -56,12 +61,19 @@ export function buildLayout({ expansion = true, fidelity = expansion } = {}) {
     ramps: all('ramps'),
     site,
     bridges: buildBridges(buildings),
-    categories: { ...CATEGORIES, hotel: { label: '酒店套房', color: '#a27d49' }, apartment: { label: '服务公寓', color: '#537b78' }, residential: { label: '住宅', color: '#7b8470' } },
+    categories: { ...CATEGORIES, hotel: { label: '酒店套房', color: '#a27d49' }, apartment: { label: '服务公寓', color: '#537b78' }, residential: { label: '住宅', color: '#7b8470' },
+      ...(expansion ? { community: COMMUNITY_CATEGORY } : {}) },
     extensions: hospitality.extensions,
+    // 住户门禁（刷卡闸机 / 玻璃门）只在游览布局中存在
+    ...(expansion ? { accessControl: { version: 1, zones: [...(hospitality.access?.zones || [])], gates: [...(hospitality.access?.gates || [])] } } : {}),
   };
   applySharedGarages(layout);
   if (expansion) applyP1Expansion(layout, picker);
-  if (expansion && fidelity) { applyP1VehicleAccess(layout); applyP1Fidelity(layout); }
+  if (expansion && fidelity) {
+    applyP1VehicleAccess(layout); applyP1Fidelity(layout);
+    applyNorthResidences(layout);
+    applyRiverTerrace(layout);
+  }
   if (expansion) applyP1Finishes(layout);
   if (expansion) applyMetroInterchange(layout);
   addTransitCenter(layout.site, layout.extensions);

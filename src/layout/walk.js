@@ -37,6 +37,8 @@ export function buildWalkGraph(L) {
       const id = node(`unit:${u.id}`);
       for (const f of u.wfronts) for (const p of segProbes(f)) for (const w of walksAt(lv.id, p)) link(id, w);
     }
+    // 复式上下两层由套内楼梯相连
+    for (const u of lv.units) if (u.residence?.partner) link(`unit:${u.id}`, `unit:${u.residence.partner}`);
     if (lv.ground) {
       for (const w of lv.walk) for (const s of L.site.walk) if (polysConnect(w.poly, s.poly, 1)) link(`walk:${lv.id}:${w.id}`, `site:${s.id}`);
     }

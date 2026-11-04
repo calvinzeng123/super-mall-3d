@@ -14,6 +14,7 @@ import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 import { buildHospitalityLobby } from './hospitality-lobby.js';
 import { garageCeilingPanels } from '../../layout/garage-ceiling.js';
 import { buildExpansionConnections } from './expansion-connections.js';
+import { buildCommunityTower } from './community.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -75,10 +76,11 @@ export function setHospitalityCut(ctx, buildingId, elevation=FULL_HEIGHT) {
 }
 
 export function buildHospitality(ctx) {
-  const towers=ctx.layout.buildings.filter(b=>b.kind==='tower');
+  const towers=ctx.layout.buildings.filter(b=>b.kind==='tower'&&!b.community);
+  const community=ctx.layout.buildings.filter(b=>b.community);
   const records=new Map();
   ctx.hospitality={buildings:records};
-  if(!towers.length)return ctx.hospitality;
+  if(!towers.length&&!community.length)return ctx.hospitality;
   ctx.renderer.localClippingEnabled=true;
   for(const b of towers) {
     const F=b.frame,r=b.footprint,pal=PALETTES[b.usage]||PALETTES.residential;
@@ -124,6 +126,9 @@ export function buildHospitality(ctx) {
     if(sign)group.add(sign);
     records.set(b.id,{group,plane,groundGroup,roofGroup,materials,residentialShells,detailLevel:null});
   }
+  // 云澜社区住宅（西苑 / 北苑）由社区渲染器按 community-contract 字段绘制
+  for(const b of community)buildCommunityTower(ctx,b,records);
+  if(!towers.length)return ctx.hospitality;
   buildPublicGarageShells(ctx);
   landscape(ctx,towers);
   connections(ctx);

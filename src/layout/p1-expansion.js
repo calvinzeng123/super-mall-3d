@@ -122,7 +122,7 @@ function subtractRect(source,cut) {
   if(x0>=x1||z0>=z1)return [source];
   return [rect(source.x0,source.z0,x0,source.z1),rect(x1,source.z0,source.x1,source.z1),rect(x0,source.z0,x1,z0),rect(x0,z1,x1,source.z1)].filter(r=>r.x1-r.x0>.05&&r.z1-r.z0>.05);
 }
-function trimUnits(lv,cuts) {
+export function trimUnits(lv,cuts) {
   for(const u of lv.units) {
     const localCuts=cuts.map(p=>polyBounds(p.map(q=>toL(u.frame,...q))));
     let rs=u.rects;

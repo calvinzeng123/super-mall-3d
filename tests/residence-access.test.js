@@ -6,7 +6,8 @@ import { toW, toL } from '../src/layout/geom.js';
 import { buildNav, clear, step, NAV } from '../src/layout/nav.js';
 
 const nav = buildNav(L);
-const homes = L.levels.flatMap((lv) => lv.units.filter((u) => u.residence).map((u) => ({ lv, u })));
+// 云澜社区住宅（西苑 / 北苑）的户型由各自测试核验。
+const homes = L.levels.flatMap((lv) => lv.units.filter((u) => u.residence && !u.residence.community).map((u) => ({ lv, u })));
 const state = (lv, u, x, z) => {
   const p = toW(u.frame, x, z);
   return { floor: lv.id, x: p[0], z: p[1], y: lv.elev, slope: null };

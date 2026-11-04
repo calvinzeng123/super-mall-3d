@@ -876,11 +876,11 @@ function buildPicks(ctx) {
     const H = lv.kind === 'roof' ? 4.2 : clearHeight(lv);
     for (const u of lv.units) for (const r of u.rects) pickBox(G, geo, mat, u.frame, r, lv.elev, H, { kind: 'unit', unit: u });
     for (const m of lv.rooms) {
-      const info = INFO[m.type];
+      const info = m.pickInfo || INFO[m.type];
       if (info) for (const r of m.rects) pickBox(G, geo, mat, m.frame, r, lv.elev, H, { kind: 'facility', title: info[0], desc: m.label && m.type === 'equip' ? m.label : info[1] });
     }
     for (const f of lv.features) {
-      const t = {
+      const t = f.pickInfo || {
         ferris: ['云澜之眼 摩天轮', '直径 30m · 24 个轿厢 · 天台网红打卡点'],
         ip: ['IP「云宝」', '云澜汇原创形象 · 打卡点'],
         mirror: ['天空之镜', '浅水镜面 · 拍照打卡'],

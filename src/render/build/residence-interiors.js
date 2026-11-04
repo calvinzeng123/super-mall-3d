@@ -29,6 +29,7 @@ export function buildResidenceFloor(ctx, L) {
   for (const u of lv.units) {
     const residence = u.residence;
     if (!residence) continue;
+    if (residence.kind === 'community') continue;   // community homes: render/build/community.js
     if (residence.prototype || (residence.suitePlan && ctx.suiteAsset)) {
       const entry = residence.entryDoor;
       const [x,z] = toW(u.frame, entry.at - entry.width / 2 - .24, -.12);

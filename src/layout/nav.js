@@ -26,7 +26,8 @@ const CAMPUS = rect(-298, -298, 298, 298);
 // ---------------------------------------------------------------------------
 // 构建
 
-export function buildNav(layout) {
+/** options: reserved for the access-control engine ({ gates: 'open' }). */
+export function buildNav(layout, options = {}) {
   const floors = new Map();
   const mk = (id, y, kind, extra = {}) => {
     const F = { id, y, kind, building: null, level: null, pieces: [], zones: [], walls: [], obstacles: [], grid: new Map(), portals: [], slopes: [], ...extra };
@@ -39,6 +40,7 @@ export function buildNav(layout) {
   for (const lv of layout.levels) {
     const F = mk(lv.id, lv.elev, 'level', { building: lv.building, level: lv });
     for (const p of lv.slab.pieces) F.pieces.push(piece(p.outer, [...p.holes, ...lv.voids.map((v) => v.poly)]));
+    for (const p of lv.navSurfaces || []) F.pieces.push(piece(p.outer, p.holes || []));
     // 夹层属于原楼层的某一户，不新增建筑楼层或住户。独立导航面仅由套内楼梯进入；
     // 仍站在原楼面的人经过其下方时不会被自动投影到较高的支撑面。
     for (const u of lv.units) {
@@ -75,6 +77,7 @@ export function buildNav(layout) {
     ...(S.park ? [S.park.lake] : []),
     ...S.trenches,
     ...(S.openings || []),
+    ...(S.river?.navHoles || []),
   ];
   ground.pieces.push(piece(rectPoly(S.bounds || CAMPUS), groundHoles));
   const br = layout.bridges;
@@ -124,6 +127,7 @@ export function buildNav(layout) {
     obstacle(floors.get(floor),record.frame,r);
   }
   for (const o of S.urban?.buildings || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  for (const o of S.river?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const stop of S.busStops || []) for (const o of stop.obstacles) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.transitCenter?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
@@ -347,7 +351,7 @@ export function buildNav(layout) {
   }
 
   for (const b of layout.buildings) for (const f of b.access?.flights || []) {
-    lane(f.id, b.access.protected || f.protected ? 'protected-stair' : 'exterior-stair', f.bottom.x, f.bottom.z, f.bottom.y,
+    lane(f.id, f.kind || (b.access.protected || f.protected ? 'protected-stair' : 'exterior-stair'), f.bottom.x, f.bottom.z, f.bottom.y,
       f.top.x, f.top.z, f.top.y, f.width / 2, f.from, f.to, 0);
   }
   for(const f of br?.access?.flights||[]) {
