@@ -8,6 +8,7 @@ import { shapeFromPoly } from './shell.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { segment, rectFinish, lobbyFurniture, clipMaterial } from './residential-shell.js';
 import { buildTowerStairInstances } from './tower-stairs.js';
+import { WEST_CANOPY } from '../../layout/community.js';
 import { planter, bench } from './props.js';
 
 export const COMMUNITY_PALETTES = {
@@ -183,12 +184,32 @@ function homeFacade(B, col, u, lv, pal) {
   if (!bal) return;
   for (const p of res.partitions) {
     if (!onRectEdge(p, bal.rect)) continue;
-    if (p.role === 'balcony-slider') {
-      pane(B, 'glassTint', p.a, p.b, y + .04, y + 2.4);
-      trim(B, p.a, p.b, y + 2.38, y + 2.44, [0, 0], pal.frame);
-      segment(B, 'facadePlaster', p.a, p.b, y + 2.44, y + h, .14, pal.wall);
-    } else col.wall(F, 'facadePlaster', p.a, p.b, y, y + h, .14, pal.wall);
+    if (p.role === 'balcony-slider') slider(B, p, y, h, pal);
+    else col.wall(F, 'facadePlaster', p.a, p.b, y, y + h, .14, pal.wall);
   }
+}
+
+/** Balcony sliding door: fixed glass beside the doorway (nav keeps that span open),
+ * the two sliding leaves stand open, stacked either side of the widest fixed panel. */
+function slider(B, p, y, h, pal) {
+  const len = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]) || 1, d = p.door, n = [-(p.b[1] - p.a[1]) / len, (p.b[0] - p.a[0]) / len];
+  const P = (s, off = 0) => along(p.a, p.b, s).map((v, i) => v + n[i] * off);
+  const open = d ? [Math.max(0, d.at - d.width / 2), Math.min(len, d.at + d.width / 2)] : null;
+  const fixed = open ? subtractInterval([[0, len]], open).filter(([s0, s1]) => s1 - s0 > .02) : [[0, len]];
+  for (const [s0, s1] of fixed) pane(B, 'glassTint', P(s0), P(s1), y + .04, y + 2.4);
+  if (open) {
+    for (const s of open) trim(B, P(s - .03), P(s + .03), y, y + 2.4, [0, 0], pal.frame);
+    const park = fixed.reduce((m, s) => !m || s[1] - s[0] > m[1] - m[0] ? s : m, null);
+    if (park) {
+      const w = Math.min((open[1] - open[0]) / 2, park[1] - park[0]), s0 = park[0] >= open[1] - 1e-6 ? park[0] : park[1] - w;
+      for (const off of [-.035, .035]) {
+        pane(B, 'glassTint', P(s0, off), P(s0 + w, off), y + .04, y + 2.36);
+        for (const s of [s0 + .03, s0 + w - .03]) trim(B, P(s - .03, off), P(s + .03, off), y + .02, y + 2.38, [0, 0], pal.frame);
+      }
+    }
+  }
+  trim(B, p.a, p.b, y + 2.38, y + 2.44, [0, 0], pal.frame);
+  segment(B, 'facadePlaster', p.a, p.b, y + 2.44, y + h, .14, pal.wall);
 }
 
 /** Lift shaft: three walls and door jambs as columns, a lintel and door head on each storey. */
@@ -205,13 +226,15 @@ function liftShaft(B, col, F, L, y, h, pal) {
   }
 }
 
-/** Protected stair enclosure: side and back walls as columns, the door wall with a lintel and exit sign. */
-function stairShell(B, col, F, s, y, h, pal) {
+/** Protected stair enclosure: side and back walls as columns, the door wall with a lintel and exit sign.
+ * A back wall on the outer edge (facade or retaining wall) is left to that wall, so the slot window shows. */
+function stairShell(B, col, F, s, y, h, pal, outer) {
   const r = s.rect, d = s.door, front = d.side === 'S' ? r.z1 : d.side === 'N' ? r.z0 : null;
   if (front == null) return;
   const back = d.side === 'S' ? r.z0 : r.z1, dz = d.side === 'S' ? -.08 : .08;
+  const onOuter = outer && [outer.z0, outer.z1].some((z) => Math.abs(back - z) < .05) && r.x0 >= outer.x0 - .05 && r.x1 <= outer.x1 + .05;
   for (const x of [r.x0, r.x1]) col.wall(F, 'facadePlaster', [x, r.z0], [x, r.z1], y, y + h, .2, pal.core);
-  col.wall(F, 'facadePlaster', [r.x0, back], [r.x1, back], y, y + h, .2, pal.core);
+  if (!onOuter) col.wall(F, 'facadePlaster', [r.x0, back], [r.x1, back], y, y + h, .2, pal.core);
   col.wall(F, 'facadePlaster', [r.x0, front], [d.x0, front], y, y + h, .2, pal.core);
   col.wall(F, 'facadePlaster', [d.x1, front], [r.x1, front], y, y + h, .2, pal.core);
   segment(B, 'facadePlaster', [d.x0, front], [d.x1, front], y + 2.3, y + h, .2, pal.core);
@@ -219,11 +242,11 @@ function stairShell(B, col, F, s, y, h, pal) {
 }
 
 /** Core fill, lift shafts, stair enclosures and the shared circulation finish on one storey. */
-function coreStorey(B, col, F, lv, pal, height = lv.height) {
+function coreStorey(B, col, F, lv, pal, height = lv.height, outer = null) {
   const cp = lv.corePlan, y = lv.elev;
   if (!cp) return;
   for (const L of cp.lifts) liftShaft(B, col, F, L, y, height, pal);
-  for (const s of cp.stairs) stairShell(B, col, F, s, y, height, pal);
+  for (const s of cp.stairs) stairShell(B, col, F, s, y, height, pal, outer);
   for (const c of coreCells(cp)) col.cell(F, 'facadePlaster', c, y, y + height, pal.core);
   for (const q of cp.landings.filter((q) => q.open)) {
     rectFinish(B, q.rect, y + .005, 'stone', pal.stone);
@@ -319,11 +342,12 @@ function canopy(B, layout, b, lv, pal) {
   for (const en of (layout.entrances || []).filter((q) => q.building === b.id && q.level === lv.id && q.to === 'site')) {
     const p = toL(b.frame, en.seg.x0, en.seg.z0), q = toL(b.frame, en.seg.x1, en.seg.z1), e = footprintEdges(b.footprint).find((x) => onEdge(x, p, q, .3));
     if (!e) continue;
-    const [a, z] = spanOn(e, p, q), m = (a + z) / 2, half = (z - a) / 2 + 1.3, depth = 3.2;
+    // Same constants as the layout's canopy-post obstacles (layout/community.js WEST_CANOPY).
+    const { overhang, depth, post } = WEST_CANOPY, [a, z] = spanOn(e, p, q), m = (a + z) / 2, half = (z - a) / 2 + overhang;
     const c = at(e, m, depth / 2), w = e.axis === 'x' ? 2 * half : depth, d = e.axis === 'x' ? depth : 2 * half;
     B.get('extMetal').box(c[0], 3.62, c[1], w, .18, d, pal.frame);
     lamp(B, c[0], 3.52, c[1], w - .5, d - .5, '#f7e8c4');
-    for (const s of [m - half + .15, m + half - .15]) { const o = at(e, s, depth - .15); B.get('extMetal').box(o[0], 1.8, o[1], .14, 3.6, .14, pal.frame); }
+    for (const s of [m - half + post, m + half - post]) { const o = at(e, s, depth - post); B.get('extMetal').box(o[0], 1.8, o[1], .14, 3.6, .14, pal.frame); }
   }
 }
 
@@ -370,10 +394,10 @@ export function buildCommunityTower(ctx, b, records) {
   B.frame(b.frame, () => {
     for (const lv of above) {
       slab(B, b, lv, pal.slab);
-      if (lv.kind === 'roof') { crown(B, b, lv, pal); coreStorey(B, col, b.frame, lv, pal, 4.2); roofGarden(XB, b, lv, pal); continue; }
+      if (lv.kind === 'roof') { crown(B, b, lv, pal); coreStorey(B, col, b.frame, lv, pal, 4.2, b.footprint); roofGarden(XB, b, lv, pal); continue; }
       if (lv.elev > 0) band(B, b, lv.elev, pal);
       perimeter(B, col, layout, b, lv, pal);
-      coreStorey(B, col, b.frame, lv, pal);
+      coreStorey(B, col, b.frame, lv, pal, lv.height, b.footprint);
       canopy(B, layout, b, lv, pal);
     }
   });
@@ -394,9 +418,9 @@ export function buildCommunityTower(ctx, b, records) {
     }
   });
   signs.flush(group, signMat);
-  // Protected stair flights stay hidden until a floor this core serves is visited.
+  // Protected stair flights are built and shown only once a floor this core serves is visited.
   const stairLevels = (b.stairLevelIds || b.levels).map((id) => byId.get(id)).filter(Boolean).sort((a, z) => a.elev - z.elev);
-  buildTowerStairInstances(ctx, b, stairLevels, stairs, materials, group, { idle: [], follow: b.community === 'north' });
+  buildTowerStairInstances(ctx, b, stairLevels, stairs, materials, group, { idle: [], follow: b.community === 'north', lazy: true });
   const B0 = ctx.buildings?.[b.id];
   if (B0) { B0.group.add(group); B0.exterior = group; B0.exteriorClip = plane; }
   const lobbyLevel = levels.find((l) => l.lobbyPlan);
@@ -437,17 +461,42 @@ export function buildCommunityLobby(ctx, b, lv, pal, signMat) {
     for (const o of plan.obstacles) lobbyFurniture(B, o, y);
   });
   raw.flush(group);
-  // 接待处背墙：大堂标识（招牌图集第二格，与外立面共用一张贴图）
-  const desk = plan.obstacles.find((o) => o.id === 'reception-back-cabinet') || plan.obstacles[0];
-  if (desk && signMat) {
-    const signs = new SignBatch(), r = desk.rect;
-    signs.frame(plan.frame || b.frame, () => signs.place((r.x0 + r.x1) / 2, y + 2.75, r.z0 - .02, 3.2, .65, 'N', CELL[1]));
+  // 大堂 / 会所标识（招牌图集第二格，与外立面共用一张贴图）：接待处背墙，否则挂在核心筒墙面上。
+  const spot = lobbySignSpot(lv, plan, b);
+  if (spot && signMat) {
+    const signs = new SignBatch();
+    signs.frame(spot.frame, () => signs.place(spot.x, y + 2.75, spot.z, 3.2, .65, spot.side, CELL[1]));
     signs.flush(group, signMat);
   }
   // Seen only when the floor is visited or the tower selected; the campus view pays nothing.
   const L = ctx.levels?.[lv.id];
   (L?.shell || L?.base)?.add(group);
   return group;
+}
+
+/** Where the lobby / club sign hangs: on the reception back cabinet, else centred on the longest
+ * solid stretch (≥ 3.4 m, clear of stair doors, lift doors and open landings) of the core wall
+ * that faces the most club floor area. Null when no such wall exists. */
+export function lobbySignSpot(lv, plan, b) {
+  const desk = plan.obstacles.find((o) => o.id === 'reception-back-cabinet');
+  if (desk) return { frame: plan.frame || b.frame, x: (desk.rect.x0 + desk.rect.x1) / 2, z: desk.rect.z0 - .02, side: 'N' };
+  const cp = lv.corePlan, F = cp?.frame || b.frame, P = plan.frame || b.frame;
+  if (!cp || ['ox', 'oz', 'deg'].some((k) => Math.abs((F[k] || 0) - (P[k] || 0)) > 1e-6)) return null;
+  let best = null;
+  for (const e of footprintEdges(cp.core)) {
+    const beyond = (r) => e.axis === 'x' ? e.n[1] * ((r.z0 + r.z1) / 2 - e.c) > 0 : e.n[0] * ((r.x0 + r.x1) / 2 - e.c) > 0;
+    const area = plan.zones.filter((z) => beyond(z.rect)).reduce((n, z) => n + (z.rect.x1 - z.rect.x0) * (z.rect.z1 - z.rect.z0), 0);
+    const busy = [...cp.stairs.map((s) => s.door).filter((d) => d && onEdge(e, [d.x0, d.z0], [d.x1, d.z1], .05)).map((d) => spanOn(e, [d.x0, d.z0], [d.x1, d.z1])),
+      ...cp.lifts.filter((l) => l.door === e.side && rectTouches(l.rect, e)).map((l) => rectSpan(l.rect, e)),
+      ...cp.landings.filter((q) => q.open && rectTouches(q.rect, e)).map((q) => rectSpan(q.rect, e))];
+    const span = busy.reduce((iv, [a, z]) => subtractInterval(iv, [a - .2, z + .2]), [[e.lo, e.hi]])
+      .reduce((m, s) => !m || s[1] - s[0] > m[1] - m[0] ? s : m, null);
+    if (!area || !span || span[1] - span[0] < 3.4) continue;
+    if (!best || area > best.area) best = { area, e, t: (span[0] + span[1]) / 2 };
+  }
+  if (!best) return null;
+  const [x, z] = at(best.e, best.t, .02);
+  return { frame: F, x, z, side: best.e.side };
 }
 
 /** Roof garden (inside the building frame, exterior batches): deck, planters along the parapet
@@ -490,7 +539,7 @@ export function buildCommunityBasement(ctx, b, lv, pal, stairs) {
         }
       }
     }
-    coreStorey(B, col, b.frame, lv, pal, h - .3);
+    coreStorey(B, col, b.frame, lv, pal, h - .3, lv.slab.pieces[0]?.localRect);
     const same = (a, z) => ['x0', 'z0', 'x1', 'z1'].every((k) => Math.abs(a[k] - z[k]) < 1e-6);
     for (const w of lv.walk.filter((q) => q.rect && q.frame && !cp?.landings.some((l) => same(l.rect, q.rect)) && !(cp?.corridor && same(cp.corridor, q.rect))))
       rectFinish(B, w.rect, y + .005, 'stone', '#dcd8cd');

@@ -511,6 +511,9 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
   extensions.connections = all.flatMap(p => p.entrances.filter(e => e.extension).map(e => ({ id: e.id, from: e.level, to: e.to, seg: e.seg })));
   if (!community.length) return { parts, extensions };
   site.westGarden = westGardenSite(community);
+  // The walk model treats every west-parking island as solid ground furniture: the 西苑
+  // fence, 门楼 pillars, guard booth, posts, raised planters and bollards join them.
+  site.westParking.islands.push(...site.westGarden.obstacles.map(o => ({ ...o, rect: { ...o.rect }, x: (o.rect.x0 + o.rect.x1) / 2, z: (o.rect.z0 + o.rect.z1) / 2 })));
   const access = { zones: [], gates: [] };
   for (const p of community) { const a = westGates(p); access.zones.push(...a.zones); access.gates.push(...a.gates); }
   return { parts, extensions, access };

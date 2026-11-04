@@ -1,7 +1,7 @@
 // 云澜·西苑：西停车场北排的两栋 3梯5户 板式住宅（W1 / W2，云澜物业）。每层五户、户型各不相同，
 // 两部客梯 + 一部消防电梯、两部防烟楼梯、1.8 m 内走廊；1F 门禁社区大堂，B1/B2 为住户电梯厅，
 // 经刷卡门接西侧共享车库。坐标：塔楼局部 x 沿板长（东），z 向南；户型数据见 community-plan-data.js。
-import { frame, rect, rectPoly, lrectPoly, lseg, toW, polyBounds } from './geom.js';
+import { frame, rect, rectPoly, lrectPoly, lseg, toW, polyBounds, subtractInterval } from './geom.js';
 import { lift } from './mall.js';
 import { towerStairPlan, buildTowerStairAccess } from './tower-stairs.js';
 import { WEST_SITE } from './community-sites.js';
@@ -161,7 +161,8 @@ export function westTower(spec) {
     const below = d.elev < 0, slabRect = below ? K.basement : footprint;
     const lv = { ...d, id: ids[i], building: id, name: levelName(spec, d),
       theme: { key: 'loft', floor: below ? 'concrete-blue' : d.kind === 'roof' ? 'terrace-stone' : 'terrazzo', accent: spec.accent, label: levelLabel(spec, d) },
-      outline, units: [], rooms: [], walk: [], voids: [], features: [],
+      // A basement lobby level is only its slab; the deck around it belongs to WPG.
+      outline: below ? lrectPoly(F, slabRect) : outline, units: [], rooms: [], walk: [], voids: [], features: [],
       slab: { pieces: [{ outer: lrectPoly(F, slabRect), holes: [], localRect: slabRect }] } };
     const holes = lv.slab.pieces[0].holes;
     for (const s of stairs) {
@@ -268,19 +269,72 @@ export function westGates(part) {
 }
 const toCore = (b) => WEST_GARDEN.towers.find((t) => t.id === b.id).core[0];
 
-/** Site record for the renderer: fence lines (with the gate and path openings), fire road and hardstands. */
+/** Street-door canopy of a 西苑 lobby (render/build/community.js draws it; its posts are ground obstacles). */
+export const WEST_CANOPY = Object.freeze({ overhang: 1.3, depth: 3.2, post: .15 });
+const FENCE_T = .32;
+
+/** Site record shared by the renderer and the walk model: fence lines (with the gate and path
+ * openings), the 北门 G4 门楼 with its guard booth, the fire road, hardstands, garden beds and
+ * bollards. `obstacles` are what stands solid on the ground (fence, pillars, booth, posts,
+ * raised planters, canopy posts and bollards). */
 export function westGardenSite(towers) {
-  const g = WEST_GARDEN, P = g.plot, lane = g.gateLane, path = g.path;
+  const g = WEST_GARDEN, P = g.plot, lane = g.gateLane, path = g.path, fr = g.fireRoad, h = FENCE_T / 2;
+  // One 门楼 spans the community path and the G4 lane; its pillars stand outside both.
+  const span = [path.x0, lane.x1], gz = P.z0 + h;
+  // The plinths stand just inside the plot line, so the boundary is the fence's outer face.
   const fence = [
-    { id: 'south', a: [P.x0, P.z1], b: [P.x1, P.z1], gaps: [[path.x0, path.x1]] },
-    { id: 'north', a: [P.x0, P.z0], b: [P.x1, P.z0], gaps: [[lane.x0, lane.x1], [path.x0, path.x1]] },
-    { id: 'west', a: [P.x0, P.z0], b: [P.x0, P.z1], gaps: [] },
-    { id: 'east', a: [P.x1, P.z0], b: [P.x1, P.z1], gaps: [] },
+    { id: 'south', a: [P.x0, P.z1 - h], b: [P.x1, P.z1 - h], gaps: [[path.x0, path.x1]] },
+    { id: 'north', a: [P.x0, gz], b: [P.x1, gz], gaps: [span] },
+    { id: 'west', a: [P.x0 + h, P.z0], b: [P.x0 + h, P.z1], gaps: [] },
+    { id: 'east', a: [P.x1 - h, P.z0], b: [P.x1 - h, P.z1], gaps: [] },
   ];
+  const pillar = (x) => rect(x - .45, gz - .45, x + .45, gz + .45);
+  const gate = { ...g.gate, span, z: gz, pillars: [pillar(span[0] - .5), pillar(span[1] + .5)],
+    boom: { x: lane.x1 + .3, z: gz + 1.0 }, booth: rect(lane.x1 + 1.2, P.z0 + .7, lane.x1 + 4.0, P.z0 + 3.1) };
+  const pathGate = { z: P.z1 - .22, posts: [path.x0 - .2, path.x1 + .2].map((x) => rect(x - .2, P.z1 - .42, x + .2, P.z1 - .02)) };
+  // Garden: the band between the fence and the fire road, the gap between the towers, the strip
+  // behind each tower and raised planters in the 5 m rescue band (open in front of the door).
+  const bounds = towers.map((t) => t.building.bounds), [t0, t1] = bounds, beds = [];
+  for (const [x0, x1] of [[P.x0 + .6, path.x0 - .6], [path.x1 + .6, P.x1 - .6]]) beds.push({ rect: rect(x0, fr.z1 + .8, x1, P.z1 - .8), trees: true });
+  if (t0 && t1) {
+    beds.push({ rect: rect(t0.x1 + 1.2, t0.z0 + 1, path.x0 - .8, fr.z0 - 1), trees: true });
+    beds.push({ rect: rect(lane.x1 + 4.2, t0.z0 + 4, t1.x0 - 1.2, fr.z0 - 1), trees: false });
+  }
+  for (const b of bounds) {
+    beds.push({ rect: rect(b.x0 + .5, P.z0 + .7, b.x1 - .5, b.z0 - .6), trees: false });
+    const m = (b.x0 + b.x1) / 2;
+    for (const [x0, x1] of subtractInterval([[b.x0 + .5, b.x1 - .5]], [m - 3.6, m + 3.6])) beds.push({ rect: rect(x0, b.z1 + .7, x1, fr.z0 - .9), trees: false, raised: true });
+  }
+  const garden = beds.filter((q) => q.rect.x1 - q.rect.x0 >= 1.5 && q.rect.z1 - q.rect.z0 >= 1.2);
+  // Bollards line the path; along the G4 lane only on the path's west side.
+  const bollards = [];
+  for (let z = P.z0 + 4; z < P.z1 - 2; z += 8) for (const x of [path.x0 - .45, path.x1 + .45]) {
+    if (z + .2 > fr.z0 && z - .2 < fr.z1) continue;
+    if (x > path.x1 && z > lane.z0 - .5 && z < lane.z1 + .5) continue;
+    bollards.push([r2(x), r2(z)]);
+  }
+  const canopyPosts = towers.flatMap((t) => {
+    const e = t.entrances.find((q) => q.main), m = (e.seg.x0 + e.seg.x1) / 2, half = (e.seg.x1 - e.seg.x0) / 2 + WEST_CANOPY.overhang;
+    const z = e.seg.z0 + WEST_CANOPY.depth - WEST_CANOPY.post;
+    return [m - half + WEST_CANOPY.post, m + half - WEST_CANOPY.post].map((x) => [r2(x), r2(z)]);
+  });
+  const obstacles = [];
+  const solid = (id, kind, r) => obstacles.push({ id: `west-garden-${id}`, kind, rect: r, poly: rectPoly(r) });
+  for (const f of fence) {
+    const alongX = f.a[1] === f.b[1], c = alongX ? f.a[1] : f.a[0];
+    for (const [i, [t0, t1]] of f.gaps.reduce((iv, q) => subtractInterval(iv, q), [[alongX ? f.a[0] : f.a[1], alongX ? f.b[0] : f.b[1]]]).entries())
+      solid(`fence-${f.id}-${i}`, 'fence', alongX ? rect(t0, c - h, t1, c + h) : rect(c - h, t0, c + h, t1));
+  }
+  gate.pillars.forEach((r, i) => solid(`gate-pillar-${i}`, 'pillar', r));
+  solid('gate-boom-post', 'post', rect(gate.boom.x - .15, gate.boom.z - .15, gate.boom.x + .15, gate.boom.z + .15));
+  solid('guard-booth', 'booth', gate.booth);
+  pathGate.posts.forEach((r, i) => solid(`path-gate-post-${i}`, 'post', r));
+  garden.filter((q) => q.raised).forEach((q, i) => solid(`planter-${i}`, 'planter', q.rect));
+  canopyPosts.forEach(([x, z], i) => solid(`canopy-post-${i}`, 'post', rect(x - .1, z - .1, x + .1, z + .1)));
+  bollards.forEach(([x, z], i) => solid(`bollard-${i}`, 'bollard', rect(x - .12, z - .12, x + .12, z + .12)));
   return {
     id: g.id, name: g.name, en: g.en, operator: g.operator, plot: { ...P }, poly: rectPoly(P), fence,
-    fireRoad: { ...g.fireRoad }, gateLane: { ...lane }, path: { ...path },
-    gate: { ...g.gate, booth: rect(lane.x1 + .6, P.z0 + .6, lane.x1 + 3.4, P.z0 + 3.0) },
+    fireRoad: { ...fr }, gateLane: { ...lane }, path: { ...path }, gate, pathGate, garden, bollards, canopyPosts, obstacles,
     hardstands: towers.map((t) => ({ id: `HS-${t.building.id}`, tower: t.building.id, rect: { ...t.building.hardstand } })),
     towers: towers.map((t) => t.building.id),
   };

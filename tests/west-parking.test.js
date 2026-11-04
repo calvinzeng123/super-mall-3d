@@ -51,7 +51,9 @@ test('全部停车组两端连接循环车道，五个地面进出口与WPG坡�
 test('停车步行脊接一期西门、附库小厅及酒店门外，种植岛不挡车位和通道',()=>{
   for(const path of P.walks)for(const reverse of [false,true]){const points=path.points.map(p=>[p[0],p[2]]);if(reverse)points.reverse();follow(points);}
   for(const reverse of [false,true]){const pts=[[-303,-200],[-278,-200]];if(reverse)pts.reverse();assert.equal(follow(pts,reverse?'P1-1F':'ground').floor,reverse?'ground':'P1-1F');}
-  for(const island of P.islands)for(const p of [...P.roads.flatMap(r=>r.polys),...P.walks.flatMap(w=>w.polys),...P.lots.flatMap(l=>l.stalls.map(s=>s.poly)),...L.site.openings,...L.site.trenches])assert.ok(!convexOverlap(island.poly,p,.02),'种植岛占用动线');
+  // 带 kind 的岛是云澜·西苑的围墙、门柱、岗亭等地面实体（west-garden.test.js 另有规则），其余都是种植岛。
+  for(const island of P.islands.filter(i=>i.kind))assert.ok(island.id.startsWith('west-garden-')&&L.site.westGarden.obstacles.some(o=>o.id===island.id),`${island.id} 不是西苑场地实体`);
+  for(const island of P.islands.filter(i=>!i.kind))for(const p of [...P.roads.flatMap(r=>r.polys),...P.walks.flatMap(w=>w.polys),...P.lots.flatMap(l=>l.stalls.map(s=>s.poly)),...L.site.openings,...L.site.trenches])assert.ok(!convexOverlap(island.poly,p,.02),'种植岛占用动线');
   for(const x of [-332.5,-310.5])for(const reverse of [false,true]) {
     const pts=[[-427,-179],[x,-179],[x,-185.5]];if(reverse)pts.reverse();
     const out=follow(pts,reverse?'WPG-G':'ground');assert.equal(out.floor,reverse?'ground':'WPG-G');

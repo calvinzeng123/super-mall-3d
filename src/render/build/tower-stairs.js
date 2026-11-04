@@ -73,7 +73,7 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
 /** Repeated 3.4m flights share one geometry per material. Only the current,
  * preceding and following floors need visible flights inside an enclosed shaft;
  * the protective walls and roof housings remain in the permanent facade batch. */
-export function buildTowerStairInstances(ctx, building, levels, stairs, materials, exterior, { idle = null, follow = false } = {}) {
+export function buildTowerStairInstances(ctx, building, levels, stairs, materials, exterior, { idle = null, follow = false, lazy = false } = {}) {
   if (!building.access?.protected) return;
   const buckets=new Map(),records=[],flightsOf=id=>building.access.flights.filter(f=>f.parentFloor===id&&protectedFlight(f));
   for(const lv of levels.filter(l=>flightsOf(l.id).length)) {
@@ -81,8 +81,9 @@ export function buildTowerStairInstances(ctx, building, levels, stairs, material
     if(!buckets.has(key))buckets.set(key,[]);
     buckets.get(key).push(lv);
   }
-  for(const members of buckets.values()) {
-    const lv=members[0],offset=lv.elev;
+  // lazy: a storey-height bucket builds its flight geometry the first time one of its floors shows.
+  const instance=record=>{
+    const {members}=record,lv=members[0],offset=lv.elev;
     const access={protected:true,
       flights:flightsOf(lv.id).map(f=>({...f,
         bottom:{...f.bottom,y:f.bottom.y-offset},top:{...f.top,y:f.top.y-offset}})),
@@ -99,8 +100,9 @@ export function buildTowerStairInstances(ctx, building, levels, stairs, material
       mesh.userData.towerStairs=true;mesh.count=0;mesh.visible=false;
       exterior.add(mesh);meshes.push(mesh);
     }
-    template.clear();records.push({members,meshes});
-  }
+    template.clear();record.meshes=meshes;
+  };
+  for(const members of buckets.values()){const record={members,meshes:null};if(!lazy)instance(record);records.push(record);}
   let last='';
   const update=app=>{
     // follow: a core rising through host levels shows its flights wherever the visitor walks them.
@@ -110,9 +112,10 @@ export function buildTowerStairInstances(ctx, building, levels, stairs, material
     const active=index>=0?levels.slice(Math.max(0,index-1),index+(inside?2:1)).map(l=>l.id)
       : idle||[levels.find(l=>l.short==='1F')?.id,levels.at(-2).id];
     const signature=active.join('|');if(signature===last)return;last=signature;
-    for(const {members,meshes} of records) {
-      const selected=members.filter(l=>active.includes(l.id));
-      for(const mesh of meshes) {
+    for(const record of records) {
+      const selected=record.members.filter(l=>active.includes(l.id));
+      if(!record.meshes&&selected.length)instance(record);
+      for(const mesh of record.meshes||[]) {
         for(const [i,lv] of selected.entries()) {
           const matrix=frameMatrix(building.frame);matrix.elements[13]=lv.elev;
           mesh.setMatrixAt(i,matrix);

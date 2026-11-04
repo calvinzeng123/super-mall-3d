@@ -26,6 +26,11 @@ function walk(s, [x, z], floor) {
   return s;
 }
 const route = (s, points) => points.reduce((q, p) => walk(q, p.slice(0, 2), p[2]), s);
+function walkTo(s, [x, z]) {
+  const n = Math.max(1, Math.ceil(Math.hypot(x - s.x, z - s.z) / .08));
+  for (let i = 0; i < n; i++) s = step(nav, s, (x - s.x) / (n - i), (z - s.z) / (n - i), 0);
+  return s;
+}
 const linkStop = (id, floor) => nav.links.find((l) => l.id === id).stops.find((s) => s.floor === floor);
 
 test('云澜·西苑两栋塔楼满足社区契约，品牌为云澜物业', () => {
@@ -91,6 +96,42 @@ test('消防登高场地：10 m 宽、距南立面 5 m、贯通 43.4 m 长边，
     const hs = b.hardstand, cz = (hs.z0 + hs.z1) / 2;
     route(at('ground', -422, -258), [[-422, cz, 'ground'], [(hs.x0 + hs.x1) / 2, cz, 'ground']]);
   }
+});
+
+test('社区围合：围墙、门楼石柱、岗亭、种植池、雨棚柱与路桩在步行中是实体，北门与南侧步行口可通行', () => {
+  const S = L.site.westGarden, ids = new Set(P.islands.filter((i) => i.kind).map((i) => i.id));
+  assert.ok(S.obstacles.length >= 20);
+  for (const o of S.obstacles) assert.ok(ids.has(o.id), `${o.id} 未进入步行碰撞`);
+  // 围墙、门柱、岗亭、南门柱：从外侧走不进来（含沿围墙每 6 m 的抽查）
+  const blocked = (a, b) => {
+    const s0 = at('ground', ...a); assert.ok(clear(nav, s0), `起点 ${a} 不可站立`);
+    const s = walkTo(s0, b); return Math.hypot(s.x - b[0], s.z - b[1]) > .5;
+  };
+  for (let x = plot.x0 + 3; x < plot.x1 - 3; x += 6) {
+    if (x > S.path.x0 - 1 && x < S.gateLane.x1 + 1) continue;
+    assert.ok(blocked([x, plot.z1 + 2.5], [x, plot.z1 - 3]), `南围墙 x=${x} 可穿过`);
+    assert.ok(blocked([x, plot.z0 - 2.5], [x, plot.z0 + 1.5]), `北围墙 x=${x} 可穿过`);
+  }
+  for (let z = plot.z0 + 3; z < plot.z1 - 1; z += 6) {
+    assert.ok(blocked([plot.x1 + 1.5, z], [plot.x1 - 2, z]), `东围墙 z=${z} 可穿过`);
+    assert.ok(blocked([plot.x0 - 1.5, z], [plot.x0 + 2, z]), `西围墙 z=${z} 可穿过`);
+  }
+  for (const kind of ['pillar', 'booth', 'planter', 'post', 'bollard']) {
+    const o = S.obstacles.find((q) => q.kind === kind), [x, z] = [(o.rect.x0 + o.rect.x1) / 2, (o.rect.z0 + o.rect.z1) / 2];
+    assert.equal(clear(nav, at('ground', x, z)), false, `${o.id} 可站立`);
+  }
+  // 北门门楼跨社区步道与 G4 车道：两根石柱都在两者之外；南门步行口与北门都能走通
+  for (const r of S.gate.pillars) for (const q of [S.path, S.gateLane]) assert.ok(!(r.x0 < q.x1 && r.x1 > q.x0), '门楼石柱立在通道内');
+  route(at('ground', -427, plot.z0 - 3), [[-427, plot.z1 + 2.5, 'ground']]);
+  route(at('ground', -422, plot.z0 - 3), [[-422, S.fireRoad.z0 - 1, 'ground']]);
+  // 实体不占登高场地、消防车道（端头围墙除外）、北门车道、社区步道、主入口步道与南侧步道
+  const keepClear = [...S.hardstands.map((h) => rectPoly(h.rect)), rectPoly(S.gateLane), rectPoly(S.path),
+    rectPoly({ x0: S.fireRoad.x0 + .4, z0: S.fireRoad.z0, x1: S.fireRoad.x1 - .4, z1: S.fireRoad.z1 }),
+    ...L.extensions.paths.filter((q) => /^W[12]-main-approach$/.test(q.id) || q.id === 'west-mall-approach').flatMap((q) => q.polys)];
+  for (const o of S.obstacles) for (const q of keepClear) assert.ok(!convexOverlap(o.poly, q, .01), `${o.id} 占用通道`);
+  // G4 是社区北门：不再有停车场 P 门架立柱，门楼招牌取代停车标识
+  const g4 = P.gates.find((g) => g.id === 'WP-G4');
+  assert.equal(g4.community, 'west-garden'); assert.deepEqual(g4.posts, []);
 });
 
 test('3梯5户：每层三部电梯（含消防电梯）与两部防烟楼梯，每层至少两部客梯', () => {
@@ -230,6 +271,11 @@ test('西侧共享车库：门户落在住户大堂与车道之间，核心背�
       assert.ok(portal && portal.residentialCore === b.id);
       assert.ok(deck.walk.some((w) => w.id === `${b.id}-${short}-deck-arrival`));
     }
+    // 移位的 L1 井道两侧不留车辆无法通过的窄条车道
+    const shaft = polyBounds(L.elevators.find((e) => e.id === 'WPG-SHARED-L1').shaftPoly);
+    for (const w of deck.walk.filter((q) => q.kind === 'aisle' && q.rect && q.rect.x0 >= shaft.x0 - .3 && q.rect.x1 <= shaft.x1 + .3 && q.rect.z1 > shaft.z0 - 2 && q.rect.z0 < shaft.z1 + 2))
+      assert.ok(Math.min(w.rect.x1 - w.rect.x0, w.rect.z1 - w.rect.z0) >= 2, `${w.id} 是 L1 旁的窄条`);
+    for (const b of W) assert.deepEqual(polyBounds(lvl(`${b.id}-${short}`).outline), polyBounds(b.deckExclusions[0]), `${b.id}-${short} 轮廓不是住户大堂楼板`);
     // 北侧双车道被核心切断后，仍经三条南北向横通道连成一个网络
     const aisles = deck.walk.filter((w) => w.kind === 'aisle' && polyBounds(w.poly).z0 < -200);
     const seen = new Set([aisles[0].id]), queue = [aisles[0]];

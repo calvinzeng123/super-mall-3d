@@ -344,6 +344,17 @@ function westDeckPortals(layout, b, decks) {
   }
 }
 
+/** The moved WPG L1 shaft stands in the middle of the north double aisle: the 1.35 m
+ * strips left either side of it carry no car, so they are not aisle walks. */
+function dropLiftSlivers(layout, id, decks) {
+  const s = polyBounds(layout.elevators.find(e => e.id === id).shaftPoly);
+  for (const deck of decks) {
+    deck.walk = deck.walk.filter(w => !(w.kind === 'aisle' && w.rect && Math.min(w.rect.x1 - w.rect.x0, w.rect.z1 - w.rect.z0) < 2
+      && w.rect.x0 >= s.x0 - .3 && w.rect.x1 <= s.x1 + .3 && w.rect.z1 > s.z0 - 2 && w.rect.z0 < s.z1 + 2));
+    deck.parking.aisles = deck.walk.filter(w => w.kind === 'aisle');
+  }
+}
+
 function groundReservations(layout) {
   const all = [...layout.site.trenches, ...layout.site.openings];
   for (const lot of layout.extensions.surfaceParking) {
@@ -506,6 +517,7 @@ export function applySharedGarages(layout) {
   reserve(level(layout, 'A-B1'), 'A-extraction-arrival', rect(-43, -225, -32, -214));
   for (const lv of [P1, P2, W1, W2]) denseParking(layout, lv);
   for (const b of westTowers) westDeckPortals(layout, b, [W1, W2]);
+  if (west) dropLiftSlivers(layout, 'WPG-SHARED-L1', [W1, W2]);
   auditRampOpenings(layout);
   guardRampUndersides(layout);
   pairGateSides(layout);
