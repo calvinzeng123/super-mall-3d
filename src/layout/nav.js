@@ -515,7 +515,10 @@ function segCross(ax, az, bx, bz, s) {
   const d = (x0, z0, x1, z1, x2, z2) => (x1 - x0) * (z2 - z0) - (z1 - z0) * (x2 - x0);
   const d1 = d(s.x0, s.z0, s.x1, s.z1, ax, az), d2 = d(s.x0, s.z0, s.x1, s.z1, bx, bz);
   const d3 = d(ax, az, bx, bz, s.x0, s.z0), d4 = d(ax, az, bx, bz, s.x1, s.z1);
-  return d1 * d2 <= 0 && d3 * d4 <= 0 && !(d1 === 0 && d2 === 0);
+  // Half-open sides: a point exactly on the portal line counts as the d >= 0
+  // side, so a step that ends on the line and the next one that starts there
+  // cross once, instead of switching floors and straight back again.
+  return (d1 >= 0) !== (d2 >= 0) && d3 * d4 <= 0;
 }
 
 /** 扫掠：从 (x0,z0) 走到 (x1,z1)，碰到墙就停在墙前 */

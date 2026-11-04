@@ -1,7 +1,7 @@
 // 公共区域（数据驱动）：美食层圆厅用餐区与吊灯；云澜老街石板路、牌坊与灯笼串；1F 圆厅服务台、花池与长椅；
 // 口袋与端部休息区；2F 快闪店；圆厅"云朵"悬挂艺术装置。
 import * as THREE from 'three';
-import { pointInPoly, toW, toL, frame, NORMAL } from '../../layout/geom.js';
+import { pointInPoly, toW, toL, frame, NORMAL, rect, lrectPoly } from '../../layout/geom.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { tableSet, roundTable, bench, planter } from './props.js';
 import { interiorDetail } from './interior-detail.js';
@@ -240,6 +240,9 @@ function lounges(ctx, b, lv) {
     const cu = (r.x0 + r.x1) / 2, cv = (r.z0 + r.z1) / 2;
     const du = r.x1 - r.x0, dv = r.z1 - r.z0;
     if (du < 4 || dv < 4) continue;
+    // The set is laid out on the rect. A walk cut back by a terrace setback
+    // keeps its old rect, so dress it only while that rect is still all walk.
+    if (!lrectPoly(w.frame, rect(r.x0 + .05, r.z0 + .05, r.x1 - .05, r.z1 - .05)).every(p => pointInPoly(p, w.poly))) continue;
     const arrival = w.kind === 'lounge' && metroPortals.some(([x, z]) => {
       const [u, v] = toL(w.frame, x, z);
       return Math.hypot(Math.max(r.x0 - u, 0, u - r.x1), Math.max(r.z0 - v, 0, v - r.z1)) < 4;

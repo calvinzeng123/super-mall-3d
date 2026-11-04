@@ -2,7 +2,7 @@
 // 支柱（带柱帽的圆柱）、四条连廊、两座落地塔（钢框玻璃盒、折返楼梯、玻璃电梯、户外扶梯）与桥上行人。
 // 全部放在场地组（园区、单期、楼上楼层视角都可见）。
 import * as THREE from 'three';
-import { toW } from '../../layout/geom.js';
+import { toW, subtractInterval } from '../../layout/geom.js';
 import { COLORS } from '../theme.js';
 import { drawEscalator, stripGeometry } from './escalators.js';
 import { bridgePaths, polyline } from '../paths.js';
@@ -48,6 +48,13 @@ export function buildBridges(ctx) {
 
   const mouths = br.links.map((k) => (k.deg * Math.PI) / 180);
   const inMouth = (a, r) => mouths.some((m) => Math.abs(Math.atan2(Math.sin(a - m), Math.cos(a - m))) < Math.asin((br.linkWidth / 2 + 0.25) / r));
+  // The outer railing stops exactly on each link's side-glass line, so no pane
+  // stands across the walkable mouth and no unguarded gap is left at the ring.
+  const mouthCut = (r) => Math.asin((br.linkWidth / 2 - 0.1) / r);
+  const railSpans = (a0, a1, r) => mouths.reduce((ivs, m) => {
+    const d = Math.atan2(Math.sin((a0 + a1) / 2 - m), Math.cos((a0 + a1) / 2 - m)), c = (a0 + a1) / 2 - d;
+    return subtractInterval(ivs, [c - mouthCut(r), c + mouthCut(r)]);
+  }, [[a0, a1]]);
   const N = 120;
   for (let i = 0; i < N; i++) {
     const a = ((i + 0.5) / N) * Math.PI * 2;
@@ -57,19 +64,24 @@ export function buildBridges(ctx) {
       const seg = (2 * Math.PI * r) / N;
       // 侧面灯带（箱梁外侧中部）
       B.get('glow').box(ca * (r + side * 0.14), yb + thick * 0.45, sa * (r + side * 0.14), seg + 0.02, 0.06, 0.03, LED, ry);
-      if (side > 0 && inMouth(a, r)) continue;
-      B.get('glass').box(ca * r, y + 0.6, sa * r, seg + 0.01, 1.05, 0.03, 0xffffff, ry);
-      B.get('extMetal').box(ca * r, y + 1.12, sa * r, seg + 0.02, 0.06, 0.1, STEEL, ry);
-      if (i % 4 === 0) B.get('extMetal').box(ca * r, y + 0.56, sa * r, 0.06, 1.12, 0.06, STEEL);
+      const spans = side > 0 ? railSpans(a - Math.PI / N, a + Math.PI / N, r) : [[a - Math.PI / N, a + Math.PI / N]];
+      for (const [p, q] of spans) {
+        const whole = q - p > 2 * Math.PI / N - 1e-9, m = (p + q) / 2, len = r * (q - p), ext = whole ? 0.01 : 0;
+        if (len < 0.02) continue;
+        B.get('glass').box(Math.cos(m) * r, y + 0.6, Math.sin(m) * r, len + ext, 1.05, 0.03, 0xffffff, -m + Math.PI / 2);
+        B.get('extMetal').box(Math.cos(m) * r, y + 1.12, Math.sin(m) * r, len + (whole ? 0.02 : 0), 0.06, 0.1, STEEL, -m + Math.PI / 2);
+      }
+      if (i % 4 === 0 && !(side > 0 && inMouth(a, r))) B.get('extMetal').box(ca * r, y + 0.56, sa * r, 0.06, 1.12, 0.06, STEEL);
     }
   }
   // 顶棚：内外两圈立柱 + 径向檩条 + 玻璃环 + 檐口灯带
+  // Canopy posts stand on the railing lines, outside the walkable band.
   const yc = y + 3.6;
   for (let i = 0; i < 48; i++) {
     const a = (i / 48) * Math.PI * 2;
     const ca = Math.cos(a), sa = Math.sin(a);
-    B.get('extMetal').cyl(ca * (r0 + 0.35), y, sa * (r0 + 0.35), 0.09, yc - y, STEEL, 8);
-    if (!inMouth(a, r1)) B.get('extMetal').cyl(ca * (r1 - 0.35), y, sa * (r1 - 0.35), 0.09, yc - y, STEEL, 8);
+    B.get('extMetal').cyl(ca * (r0 + 0.12), y, sa * (r0 + 0.12), 0.09, yc - y, STEEL, 8);
+    if (!inMouth(a, r1)) B.get('extMetal').cyl(ca * (r1 - 0.12), y, sa * (r1 - 0.12), 0.09, yc - y, STEEL, 8);
     B.get('extMetal').bar({ x: ca * (r0 - 0.3), y: yc + 0.05, z: sa * (r0 - 0.3) }, { x: ca * (r1 + 0.3), y: yc + 0.25, z: sa * (r1 + 0.3) }, 0.12, WHITE);
   }
   const roofGeo = new THREE.ExtrudeGeometry(ringShape(r0 - 0.3, r1 + 0.3), { depth: 0.04, bevelEnabled: false, curveSegments: 96 }).rotateX(-Math.PI / 2).translate(0, yc + 0.2, 0);
@@ -108,7 +120,7 @@ export function buildBridges(ctx) {
         B.get('glass').box(ua + L / 2 + 0.3, y + 0.6, s * (hw - 0.1), L - 0.6, 1.05, 0.03, 0xffffff);
         B.get('extMetal').box(ua + L / 2 + 0.3, y + 1.12, s * (hw - 0.1), L - 0.6, 0.06, 0.1, STEEL);
         B.get('glow').box(ua + L / 2, yb + thick * 0.45, s * (hw + 0.02), L, 0.06, 0.03, LED);
-        for (let u = ua + 1.5; u < ub - 0.5; u += 4.5) B.get('extMetal').cyl(u, y, s * (hw - 0.3), 0.09, yc - y, STEEL, 8);
+        for (let u = ua + 1.5; u < ub - 0.5; u += 4.5) B.get('extMetal').cyl(u, y, s * (hw - 0.1), 0.09, yc - y, STEEL, 8);
         B.get('extMetal').box(ua + L / 2, yc + 0.12, s * (hw + 0.2), L, 0.18, 0.14, WHITE);
         B.get('glow').box(ua + L / 2, yc, s * (hw + 0.2), L, 0.04, 0.05, '#ffe2b0');
       }

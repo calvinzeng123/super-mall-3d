@@ -140,6 +140,29 @@ export function subtractInterval(ivs, [c0, c1]) {
   return res;
 }
 
+/** The stretch of wall segment a→b that a doorway seg opens: the part inside a
+ * thin band around the door line (|across| ≤ depth, along the door within
+ * [-padding, length + padding]). Works for diagonal and faceted (arc) walls
+ * whose facets only approximate the door line; walls meeting the door at a
+ * steep angle are never cut. Returns [lo, hi] in metres from a, or null. */
+export function doorwayBand(a, b, seg, padding = .04, depth = .2) {
+  const length = Math.hypot(seg.x1 - seg.x0, seg.z1 - seg.z0), dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
+  if (length < 1e-7 || len < 1e-7) return null;
+  const ux = (seg.x1 - seg.x0) / length, uz = (seg.z1 - seg.z0) / length;
+  if (Math.abs(dx * ux + dz * uz) < len * .7) return null;
+  const x = a[0] - seg.x0, z = a[1] - seg.z0;
+  let lo = 0, hi = 1;
+  for (const [origin, delta, min, max] of [
+    [x * ux + z * uz, dx * ux + dz * uz, -padding, length + padding],
+    [-x * uz + z * ux, -dx * uz + dz * ux, -depth, depth],
+  ]) {
+    if (Math.abs(delta) < 1e-9) { if (origin < min || origin > max) return null; continue; }
+    const p = (min - origin) / delta, q = (max - origin) / delta;
+    lo = Math.max(lo, Math.min(p, q)); hi = Math.min(hi, Math.max(p, q));
+  }
+  return hi - lo > 1e-6 ? [lo * len, hi * len] : null;
+}
+
 /** 互不重叠矩形并集的外轮廓线段（相邻矩形的公共边抵消） */
 export function unionOutline(rects) {
   const edges = rects.flatMap(rectEdges);

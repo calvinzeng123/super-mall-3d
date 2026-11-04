@@ -1,13 +1,15 @@
 // Phase-one tour expansion. Physical floorplates, entrances and protected stairs
 // are data shared by rendering/navigation; the FPS keeps the original spec.
 import clipping from 'polygon-clipping';
-import { IDENTITY, frame, rect, rectPoly, roundedRectPoly, polyBounds, polyArea, pointInPoly, lrectPoly, lseg, toW, toL, rectsOverlap, unionOutline, subtractOpenings, convexOverlap } from './geom.js';
+import { IDENTITY, frame, rect, rectPoly, roundedRectPoly, polyBounds, polyArea, pointInPoly, lrectPoly, lseg, toW, toL, rectsOverlap, unionOutline, subtractOpenings, convexOverlap, doorwayBand, subtractInterval } from './geom.js';
 import { lift } from './mall.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 import { CATEGORIES } from './constants.js';
 import { addSunkenArtCourt, addWestArrival } from './p1-public-realm.js';
 
 const ELEV = [0, 6.5, 12, 17.5, 23, 28.5, 34, 39.5];
+// Rendered skybridge ceiling height (expansion-connections.js draws 3.4 m).
+const DECK_CEILING = 3.4;
 const DEFINITIONS = [
   { id:'P1C', name:'云澜艺文馆', en:'CULTURE TERRACES', zone:'culture', bounds:[-153,-246,-105,-207], radius:12, floors:7, accent:'#b58a5b', cats:['books','studio','home','cafe','edu'], programs:['艺术书店 · 展览大厅','设计师集合 · 艺术长廊','手作工坊 · 生活美学','数字艺术 · 亲子展厅','小剧场 · 创意课堂','观景书吧 · 艺文餐厅','云端艺术沙龙'], inset:[0,0,1,2,3,4,6] },
   { id:'P1S', name:'南庭曲廊', en:'SOUTH DINING TERRACES', zone:'dining', bounds:[-183,-58,-130,-30], radius:12, floors:3, accent:'#a87856', cats:['restaurant','cafe','tea','bar'], programs:['餐饮市集 · 烘焙街','庭院餐厅 · 景观茶室','屋顶餐吧 · 日落露台'], inset:[0,0,2] },
@@ -19,6 +21,27 @@ const DEFINITIONS = [
   { id:'P1W4', name:'西里玻璃艺廊', en:'GLASS ART GALLERY', zone:'creative', bounds:[-230,-122,-210,-107], radius:4, floors:3, accent:'#688c91', cats:['studio','cafe','home'], programs:['艺术商店 · 咖啡','小型展厅 · 创作室','屋顶会客厅'], inset:[0,0,.6] },
 ];
 export const P1_EXPANSION_IDS = DEFINITIONS.map(d => d.id);
+/** Storeys enclosed by the inset glazed expansion envelope (annexes, main 3F+). */
+export const usesExpansionFacade = lv => !!lv.expansion && lv.elev >= 0 && lv.kind !== 'roof' &&
+  ((lv.expansion.zone || 'main') !== 'main' || (lv.expansion.storey || parseInt(lv.short, 10)) >= 3);
+/** Doorway openings [lo, hi] (metres from a) of envelope edge a→b. The renderer
+ * cuts the glazing with the same intervals that nav leaves open, so a doorway on
+ * a diagonal or a rounded corner is open, and solid, in exactly the same places. */
+export const facadeDoorGaps = (a, b, doors) => doors.map(en => doorwayBand(a, b, en.seg)).filter(Boolean);
+/** Solid envelope spans as world segments: every pane collides, every door opens. */
+export function expansionFacadeWalls(lv, entrances) {
+  const doors = entrances.filter(en => en.level === lv.id), out = [];
+  for (const poly of lv.expansion.facadePolys || [lv.expansion.facadePoly]) for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < .05) continue;
+    for (const [lo, hi] of facadeDoorGaps(a, b, doors).reduce((s, gap) => subtractInterval(s, gap), [[0, len]])) {
+      if (hi - lo < .02) continue;
+      const p = lo / len, q = hi / len;
+      out.push({ x0: a[0] + (b[0] - a[0]) * p, z0: a[1] + (b[1] - a[1]) * p, x1: a[0] + (b[0] - a[0]) * q, z1: a[1] + (b[1] - a[1]) * q, facade: true });
+    }
+  }
+  return out;
+}
 const strip = (a,b,width) => {
   const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz);
   return lrectPoly(frame(a[0],a[1],Math.atan2(dz,dx)*180/Math.PI),rect(-.03,-width/2,len+.03,width/2));
@@ -159,14 +182,17 @@ function addBridge(layout,id,owner,target,points,startSeg,endSeg,startNormal,end
   const path={id,kind:'skybridge',name:'一期二层艺术环廊',building:owner.building,level:owner.id,from:owner.id,to:target.id,width,height:3.7,points:points.map(([x,z])=>[x,owner.elev,z]),polys,slab,expansion:true};
   layout.extensions.paths.push(path);
   for(const [i,p]of slab.pieces.entries())owner.walk.push({id:`${id}-walk-${i}`,kind:'skybridge',frame:IDENTITY,lpoly:p.outer,poly:p.outer,extension:true});
-  entrance(layout,owner,owner.id,`${id}-start`,startSeg,...startNormal,{architecturalOpening:true,name:path.name});
-  entrance(layout,target,owner.id,`${id}-target`,endSeg,...endNormal,{name:path.name});
-  entrance(layout,owner,target.id,`${id}-arrival`,endSeg,-endNormal[0],-endNormal[1],{name:path.name});
+  // Façade openings stop at the deck's glazed ceiling (+3.4 m), so no slot of
+  // sky or void shows above the bridge where it meets a building.
+  const lintel=DECK_CEILING;
+  entrance(layout,owner,owner.id,`${id}-start`,startSeg,...startNormal,{architecturalOpening:true,name:path.name,lintel});
+  entrance(layout,target,owner.id,`${id}-target`,endSeg,...endNormal,{name:path.name,lintel});
+  entrance(layout,owner,target.id,`${id}-arrival`,endSeg,-endNormal[0],-endNormal[1],{name:path.name,lintel});
   for(const [lv,seg,n,key]of [[owner,startSeg,startNormal,'owner'],[target,endSeg,endNormal,'target']]) {
     if(!P1_EXPANSION_IDS.includes(lv.building))continue;
     const b=polyBounds(lv.expansion.facadePoly),vertical=Math.abs(seg.x1-seg.x0)<.1;
     const shifted=vertical?{...seg,x0:n[0]>0?b.x1:b.x0,x1:n[0]>0?b.x1:b.x0}:{...seg,z0:n[1]>0?b.z1:b.z0,z1:n[1]>0?b.z1:b.z0};
-    entrance(layout,lv,lv.id,`${id}-inner-${key}`,shifted,...n,{architecturalOpening:true,name:path.name});
+    entrance(layout,lv,lv.id,`${id}-inner-${key}`,shifted,...n,{architecturalOpening:true,name:path.name,lintel});
   }
   layout.extensions.connections.push({id,from:owner.id,to:target.id,seg:endSeg});
   layout.expansion.routes.push({id,from:owner.id,to:target.id,points:path.points,portal:endSeg});
@@ -210,23 +236,36 @@ function connectLoop(layout) {
   addBridge(layout,'P1-ART-C',p1,lv('P1C-2F'),[[-160,-200],[-129,-200],[-129,-207]],v(-160,-200),h(-129,-207),[1,0],[0,1]);
   addBridge(layout,'P1-ART-W2',p1,lv('P1W2-2F'),[[-221,-160],[-221,-152]],h(-221,-160),h(-221,-152),[0,1],[0,-1]);
   addBridge(layout,'P1-ART-W1',lv('P1W2-2F'),lv('P1W1-2F'),[[-232,-140.5],[-241,-140.5]],v(-232,-140.5,3),v(-241,-140.5,3),[-1,0],[1,0],3);
-  addBridge(layout,'P1-ART-W4',lv('P1W2-2F'),lv('P1W4-2F'),[[-221,-133],[-220,-122]],h(-221,-133),h(-220,-122),[0,1],[0,-1],3.8);
+  // Every bridge leaves and meets its façades square, and each doorway is as
+  // wide as its deck: an oblique end cap leaves an unsupported wedge and runs
+  // the deck and its side glass through the stone beside a narrower door.
+  addBridge(layout,'P1-ART-W4',lv('P1W2-2F'),lv('P1W4-2F'),[[-220.5,-133],[-220.5,-122]],h(-220.5,-133,3.8),h(-220.5,-122,3.8),[0,1],[0,-1],3.8);
   addBridge(layout,'P1-ART-W3',lv('P1W4-2F'),lv('P1W3-2F'),[[-230,-112.2],[-239,-112.2]],v(-230,-112.2,2.2),v(-239,-112.2,2.2),[-1,0],[1,0],2.2);
   const south=layout.entrances.find(e=>e.id==='P1-S'),east=layout.entrances.find(e=>e.id==='P1-E');
   const mid=s=>[(s.x0+s.x1)/2,(s.z0+s.z1)/2];
-  addBridge(layout,'P1-ART-S',p1,lv('P1S-2F'),[mid(south.seg),[-122,-62],[-156.5,-62],[-156.5,-58]],south.seg,h(-156.5,-58),[south.nx,south.nz],[0,-1]);
-  addBridge(layout,'P1-ART-E',p1,lv('P1E-2F'),[mid(east.seg),[-63,-120],[-42.5,-120],[-42.5,-128]],east.seg,h(-42.5,-128),[east.nx,east.nz],[0,1]);
+  // The 1F rotunda doors are 7.1 m chords. Upstairs the 4.8 m bridge gets a
+  // 4.8 m opening centred on the same chord and leaves it square for 3 m.
+  const chordStart=e=>{
+    const m=mid(e.seg),len=Math.hypot(e.seg.x1-e.seg.x0,e.seg.z1-e.seg.z0),ux=(e.seg.x1-e.seg.x0)/len,uz=(e.seg.z1-e.seg.z0)/len;
+    return {seg:{x0:m[0]-ux*2.4,z0:m[1]-uz*2.4,x1:m[0]+ux*2.4,z1:m[1]+uz*2.4},points:[m,[m[0]+e.nx*3,m[1]+e.nz*3]]};
+  };
+  const southStart=chordStart(south),eastStart=chordStart(east);
+  addBridge(layout,'P1-ART-S',p1,lv('P1S-2F'),[...southStart.points,[-122,-62],[-156.5,-62],[-156.5,-58]],southStart.seg,h(-156.5,-58),[south.nx,south.nz],[0,-1]);
+  addBridge(layout,'P1-ART-E',p1,lv('P1E-2F'),[...eastStart.points,[-63,-120],[-42.5,-120],[-42.5,-128]],eastStart.seg,h(-42.5,-128),[east.nx,east.nz],[0,1]);
   addBridge(layout,'P1-ART-E2',p1,lv('P1E2-2F'),[[-42.5,-120],[-42.5,-112]],h(-42.5,-120),h(-42.5,-112),[0,1],[0,-1]);
   const main=layout.buildings.find(b=>b.id==='P1'),n=main.wings.find(w=>w.id==='N');
   const north=toW(n.F,n.uEnd,0),northSeg=lseg(n.F,{x0:n.uEnd,z0:-2.4,x1:n.uEnd,z1:2.4,side:'E'});
-  addBridge(layout,'P1-ART-C-RETURN',lv('P1C-2F'),p1,[[-105,-220.5],[-99,-220.5],[-99,-201],[north[0],-201],north],v(-105,-220.5,2.8),northSeg,[1,0],[northSeg.nx,northSeg.nz]);
+  // The wing ends are turned 15°: bend where the approach line meets the door
+  // normal, so the last leg runs straight out of the doorway.
+  const square=(door,seg,z)=>{const k=(z-door[1])/seg.nz;return [door[0]+seg.nx*k,z];};
+  addBridge(layout,'P1-ART-C-RETURN',lv('P1C-2F'),p1,[[-105,-220.5],[-99,-220.5],[-99,-201],square(north,northSeg,-201),north],v(-105,-220.5),northSeg,[1,0],[northSeg.nx,northSeg.nz]);
   // West village rejoins the existing west-wing lounge beside the hotel's
   // already surveyed connector; the hotel itself stays at its original dock.
-  const w=main.wings.find(w=>w.id==='W'),west=toW(w.F,73,23),westSeg=lseg(w.F,{x0:70.6,z0:23,x1:75.4,z1:23,side:'S'});
+  const w=main.wings.find(w=>w.id==='W'),west=toW(w.F,73,23),westSeg=lseg(w.F,{x0:71.1,z0:23,x1:74.9,z1:23,side:'S'});
   const hall=rect(69.8,7,76.2,23),hallPoly=lrectPoly(w.F,hall);
   trimUnits(p1,[hallPoly]);
   p1.walk.push({id:'P1-art-west-return-hall',kind:'passage',frame:w.F,rect:hall,poly:hallPoly});
-  addBridge(layout,'P1-ART-W-RETURN',lv('P1W4-2F'),p1,[[-210,-114.5],[-197,-114.5],west],v(-210,-114.5),westSeg,[1,0],[westSeg.nx,westSeg.nz],3.8);
+  addBridge(layout,'P1-ART-W-RETURN',lv('P1W4-2F'),p1,[[-210,-114.5],[-197,-114.5],square(west,westSeg,-114.5),west],v(-210,-114.5,3.8),westSeg,[1,0],[westSeg.nx,westSeg.nz],3.8);
 }
 function reclaimForecourt(layout) {
   const s=layout.site,fc=s.forecourt,removed=new Set(['events','north-garden','east-garden']);
@@ -312,5 +351,9 @@ export function applyP1Expansion(layout,picker) {
   for(const d of DEFINITIONS){const p=buildAnnex(d,picker);layout.buildings.push(p.building);for(const k of ['levels','stairs','elevators','escalators','entrances','ramps'])layout[k].push(...p[k]);}
   groundEntrances(layout);integrateGarageKiosks(layout);connectLoop(layout);reclaimForecourt(layout);addSunkenArtCourt(layout);addWestArrival(layout);
   addPublicFixtures(layout);
+  // Upper-storey glass envelopes collide like the walls they are drawn as; the
+  // ground-floor envelope coincides with the slab edge and needs no walls.
+  for (const lv of layout.levels.filter(l => usesExpansionFacade(l) && l.elev > 1))
+    (lv.navWalls ||= []).push(...expansionFacadeWalls(lv, layout.entrances));
   return layout;
 }

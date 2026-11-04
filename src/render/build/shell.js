@@ -341,9 +341,15 @@ const PALETTE = {
 };
 const paletteOf = (bid) => PALETTE[bid] || PALETTE.P1;
 
+// Upper-floor doorways (skybridges, docks, the ring links) open exactly their
+// own width up to the connecting passage's ceiling; the bay keeps its glass or
+// stone beside and above. The ring links' canopy roof tops out at +3.84 m.
+const BRIDGE_LINK_HEAD = 3.85, DOOR_HEAD = 3.2;
+const doorHead = (lv, en) => lv.short === '1F' ? DOOR_HEAD : en.lintel ?? (en.to === 'bridge' ? BRIDGE_LINK_HEAD : DOOR_HEAD);
+
 function bayType(ctx, lv, e, center, idx) {
   const first = lv.short === '1F';
-  for (const en of ctx.layout.entrances) {
+  if (first) for (const en of ctx.layout.entrances) {
     if (en.level !== lv.id) continue;
     const dx = en.seg.x1 - en.seg.x0, dz = en.seg.z1 - en.seg.z0;
     const l2 = dx * dx + dz * dz;
@@ -371,19 +377,29 @@ function facade(ctx, lv) {
   for (const e of ctx.outlineEdges(lv)) {
     FB.frame(e.F, () => {
       // place(a0,a1,yA,yB,深度,外偏,材质,颜色)：u∈[a0,a1]，v 为外偏（+v 朝外）
+      // Each interval carries its doorway's head; upstairs a chord doorway on a
+      // rotunda is cut from every arc facet behind it.
       const doorwayIntervals=ctx.layout.entrances.filter(en=>en.level===lv.id).flatMap(en=>{
-        const a=toL(e.F,en.seg.x0,en.seg.z0),b=toL(e.F,en.seg.x1,en.seg.z1);
-        return Math.abs(a[1])<=.15&&Math.abs(b[1])<=.15?[[Math.min(a[0],b[0]),Math.max(a[0],b[0])]]:[];
+        const a=toL(e.F,en.seg.x0,en.seg.z0),b=toL(e.F,en.seg.x1,en.seg.z1),head=y0+doorHead(lv,en);
+        if(Math.abs(a[1])<=.15&&Math.abs(b[1])<=.15)return [[Math.min(a[0],b[0]),Math.max(a[0],b[0]),head]];
+        const arc=lv.short!=='1F'&&e.kind==='arc'&&chordGap(e,en.seg);
+        // A gap reaching a facet end also clears the fin/joint that straddles it.
+        return arc?[[arc[0]<.01?-.15:arc[0],arc[1]>e.len-.01?e.len+.15:arc[1],head]]:[];
       });
+      const heads=[...new Set(doorwayIntervals.map(d=>d[2]))].sort((p,q)=>p-q);
       const rawPlace=(a0,a1,yA,yB,depth,offset,key,color)=>{if(a1-a0>.008&&yB-yA>.008)FB.get(key).box((a0+a1)/2,(yA+yB)/2,offset,a1-a0,yB-yA,depth,color);};
       // A doorway may sit between facade-module centres. Clip every real low
       // facade piece at its surveyed jambs; a bay label alone is insufficient.
       const place=(a0,a1,yA,yB,depth,offset,key,color)=>{
-        const head=y0+3.2;
-        if(!doorwayIntervals.length||yA>=head)return rawPlace(a0,a1,yA,yB,depth,offset,key,color);
-        const spans=doorwayIntervals.reduce((ivs,gap)=>subtractInterval(ivs,gap),[[a0,a1]]);
-        for(const [a,b] of spans)rawPlace(a,b,yA,Math.min(yB,head),depth,offset,key,color);
-        if(yB>head)rawPlace(a0,a1,head,yB,depth,offset,key,color);
+        if(!doorwayIntervals.length||yA>=heads.at(-1))return rawPlace(a0,a1,yA,yB,depth,offset,key,color);
+        let lo=yA;
+        for(const head of heads){
+          if(head<=lo)continue;
+          const spans=doorwayIntervals.filter(d=>d[2]>=head).reduce((ivs,gap)=>subtractInterval(ivs,gap),[[a0,a1]]);
+          for(const [a,b] of spans)rawPlace(a,b,lo,Math.min(yB,head),depth,offset,key,color);
+          lo=head;if(lo>=yB)return;
+        }
+        rawPlace(a0,a1,lo,yB,depth,offset,key,color);
       };
       const clad = (a, b, ya, yb) => {
         place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'facadeConcrete' : 'facadeTravertine', pal.stone);

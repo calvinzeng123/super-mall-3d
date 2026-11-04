@@ -2,6 +2,7 @@
 // 外壳只写 shell/facade；室内只写本层 batch，允许楼层流式释放后重建。
 import * as THREE from 'three';
 import { frame, toW, toL, pointInPoly, distToPolyEdge, polyBounds, subtractInterval } from '../../layout/geom.js';
+import { usesExpansionFacade, facadeDoorGaps } from '../../layout/p1-expansion.js';
 import { outlineEdges, edgeSpans, clearHeight } from './shell.js';
 import { addCutSurfaceSlab } from './surface-shapes.js';
 import { bench, roundTable } from './props.js';
@@ -28,8 +29,7 @@ const paletteOf = lv => {
   return variant ? { ...base, ...variant } : base;
 };
 const isExpanded = lv => !!lv.expansion && lv.elev >= 0;
-export const usesExpansionFacade = lv => isExpanded(lv) && lv.kind !== 'roof' &&
-  (zoneOf(lv) !== 'main' || (lv.expansion.storey || parseInt(lv.short, 10)) >= 3);
+export { usesExpansionFacade };
 const facadePolys = lv => lv.expansion?.facadePolys || [lv.expansion?.facadePoly || lv.outline];
 const terracePieces = lv => {
   if (lv.expansion?.terrace?.pieces) return lv.expansion.terrace.pieces;
@@ -48,14 +48,15 @@ const segmentDistance = (p, s) => {
   return Math.hypot(p[0] - s.x0 - dx * t, p[1] - s.z0 - dz * t);
 };
 
+// Doorway intervals of one edge, clipped against each door's thin band (shared
+// with the layout's envelope nav walls), so doors running into a rounded
+// corner or across a faceted edge open every facet they actually cross.
+const doorGaps = (e, doors) => facadeDoorGaps(toW(e.F, 0, 0), toW(e.F, e.len, 0), doors);
+
 /** Portal intervals are cut from every low facade piece, including trims and fins. */
 export function expansionFacadeEdges(lv, entrances = []) {
-  return facadePolys(lv).flatMap(poly => outlineEdges(poly).map(e => ({ ...e,
-    gaps: entrances.filter(en => en.level === lv.id).flatMap(en => {
-      const a = toL(e.F, en.seg.x0, en.seg.z0), b = toL(e.F, en.seg.x1, en.seg.z1);
-      return Math.abs(a[1]) <= .18 && Math.abs(b[1]) <= .18 ? [[Math.min(a[0], b[0]) - .04, Math.max(a[0], b[0]) + .04]] : [];
-    }),
-  })));
+  const doors = entrances.filter(en => en.level === lv.id);
+  return facadePolys(lv).flatMap(poly => outlineEdges(poly).map(e => ({ ...e, gaps: doorGaps(e, doors) })));
 }
 
 function facade(ctx, lv) {
@@ -132,7 +133,7 @@ export function expansionTerraceEdges(lv, entrances = []) {
     const key = [e.mid[0].toFixed(2), e.mid[1].toFixed(2), e.len.toFixed(2)].join('/');
     if (seen.has(key)) continue;
     seen.add(key);
-    const spans = edgeSpans(e, entrances.filter(en => en.level === lv.id), 0);
+    const spans = doorGaps(e, entrances.filter(en => en.level === lv.id)).reduce((s, gap) => subtractInterval(s, gap), [[0, e.len]]);
     found.push({ ...e, spans });
   }
   return found;
