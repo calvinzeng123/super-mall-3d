@@ -18,4 +18,8 @@
 
 - 新增 `tests/arc-doorway-walls.test.js`：用真实矮墙和挡土墙网格做射线检查，两个弧墙门口全宽、全高都没有遮挡；门外的弧墙仍在；美食门上方有门楣；通廊垂直离开弦线，门洞与通廊同宽。修复前这个测试失败在 `P1-sunken-food-door wall blocks doorway`。
 - `node --test tests/*.test.js`：350/350 通过。
-- 截图见 `qa/sunken-court-doorway/`。
+- 第一人称实景截图（本地构建，Chromium 软件渲染）：
+
+![修复前后](qa/sunken-court-doorway/before-after.jpg)
+
+
