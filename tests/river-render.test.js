@@ -13,7 +13,7 @@ import { buildRiverTerrace, maskRects } from '../src/render/build/riverfront.js'
 import { buildP1ExpansionExterior } from '../src/render/build/p1-expansion.js';
 import { streetLanes } from '../src/render/build/traffic.js';
 import { skywalk } from '../src/render/build/roof.js';
-import { pointInPoly } from '../src/layout/geom.js';
+import { pointInPoly, polyBounds } from '../src/layout/geom.js';
 
 const R = L.site.river;
 const inChannel = (x, z) => z > -436 && z < -290 && x > -1500 && x < 1500;
@@ -71,6 +71,15 @@ test('星湾桥：两条拱肋各 28 段，吊杆 ≥ 40 且挑台开口内没�
     for (const b of of('balustrade').filter(p => Math.abs(p.x - mouth) < .01)) assert.ok(b.z + b.d / 2 <= r.z0 + .01 || b.z - b.d / 2 >= r.z1 - .01, '护栏封住挑台入口');
     assert.equal(of('lookout-rail').filter(p => p.x >= r.x0 - .01 && p.x <= r.x1 + .01 && p.z >= r.z0 - .01 && p.z <= r.z1 + .01).length, 3);
   }
+  // Crash barriers and name plates are drawn on the layout's footprints, which nav treats as obstacles.
+  const foot = p => ({ x0: p.x - p.w / 2, z0: p.z - p.d / 2, x1: p.x + p.w / 2, z1: p.z + p.d / 2 });
+  const near = (a, b) => ['x0', 'z0', 'x1', 'z1'].every(k => Math.abs(a[k] - b[k]) < 1e-9);
+  for (const [role, list] of [['barrier', xw.barriers], ['nameplate', xw.nameplates]]) {
+    assert.equal(of(role).length, list.length);
+    for (const r of list) assert.ok(of(role).some(p => near(foot(p), r)), `${role} ${JSON.stringify(r)}`);
+    for (const r of list) assert.ok(R.obstacles.some(o => near(polyBounds(o.poly), r)), `${role} 不是导航障碍`);
+  }
+  assert.equal(of('nameplate-plaque').length, 4);
   for (const b of R.bridges.filter(b => b.kind === 'girder')) {
     const piers = parts.filter(p => p.bridge === b.id && p.role === 'pier');
     assert.equal(piers.length, 4);
@@ -95,6 +104,8 @@ test('南岸玻璃栏杆 7 段，避开五座桥面与江景玻璃眺台；星�
 
 test('河道渲染：水面覆盖 ±1500 且排在玻璃之前，新增绘制调用 ≤ 12、三角形 ≤ 9 万、批次顶点 < 12 万，芦苇 ≤ 600 株', () => {
   const ctx = context();
+  // The real base water is transparent (materials.js); the river clone must not inherit that.
+  Object.assign(ctx.materials.water, { transparent: true, opacity: .9 });
   buildUrbanDistrict(ctx);
   const keysBefore = new Set(Object.keys(ctx.site.batch.sets)), verticesBefore = vertices(ctx.site.batch);
   const childrenBefore = ctx.site.group.children.length;
@@ -106,6 +117,11 @@ test('河道渲染：水面覆盖 ±1500 且排在玻璃之前，新增绘制调
   const bb = water.geometry.boundingBox;
   assert.ok(bb.min.x <= -1500 && bb.max.x >= 1500 && Math.abs(bb.min.y - R.water.y) < 1e-6);
   assert.equal(water.renderOrder, 1);
+  // Opaque, so it draws in the opaque pass before every transparent pane: the glass key (renderOrder 2) and
+  // the curtain-wall/window glassTint batches (renderOrder 0, no depth write) both composite over it.
+  assert.equal(water.material.transparent, false);
+  assert.equal(water.material.opacity, 1);
+  assert.notEqual(water.material, ctx.materials.water);
   const reeds = added.find(m => m.name === 'river-reeds');
   assert.ok(reeds.isInstancedMesh && reeds.count <= 600 && reeds.count >= 450, `${reeds.count} 株芦苇`);
   // Site batch keys the river uses all exist in the site batch already (glass, glow, stone come from
@@ -125,6 +141,15 @@ test('河道渲染：水面覆盖 ±1500 且排在玻璃之前，新增绘制调
   ctx.site.batch.flush(group);
   const glass = group.children.find(m => m.name === 'glass');
   assert.ok(glass && glass.renderOrder > water.renderOrder);
+  // Bridge sidewalks show their paving: the first surface under a walker is the paving at -0.135, not the
+  // deck slab (星湾桥 and a girder bridge alike).
+  const surfaces = [...ctx.site.group.children, ...group.children].filter(m => m.isMesh && !m.isInstancedMesh);
+  for (const [x, z] of [[13, -340], [-13, -400], [527, -340]]) {
+    const hits = new THREE.Raycaster(new THREE.Vector3(x, 1, z), new THREE.Vector3(0, -1, 0), 0, 1.5).intersectObjects(surfaces, false);
+    assert.ok(hits.length >= 2, `(${x}, ${z}) ${hits.length} 个面`);
+    assert.equal(hits[0].object.material.name, 'floor', `(${x}, ${z}) 最上层是 ${hits[0].object.name}@${hits[0].point.y.toFixed(3)}`);
+    assert.ok(Math.abs(hits[0].point.y - -0.135) < 1e-6 && hits[1].point.y <= -0.14 + 1e-6, `(${x}, ${z}) ${hits.slice(0, 2).map(h => h.point.y.toFixed(3))}`);
+  }
   group.traverse(m => m.geometry?.dispose());
   for (const m of added) m.geometry.dispose();
 });

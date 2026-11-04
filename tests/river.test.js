@@ -209,5 +209,32 @@ test('滨江家具：树、灯、长椅不占斑马线、桥面、车道或挑�
     assert.ok(Math.abs(r.x) <= 602 && r.z >= -416 && r.z <= -412, `芦苇 (${r.x}, ${r.z})`);
     for (const d of R.bridges) assert.ok(!inRect(d.deck, r.x, r.z, 1), '芦苇在桥下');
   }
-  assert.deepEqual(R.obstacles.length, 4);
+  // Obstacles: the 4 pavilion columns, 星湾桥's 2 crash barriers and the 4 name plates on their ends.
+  const ids = R.obstacles.map(o => o.id);
+  assert.deepEqual([ids.filter(i => i === 'RV-PAVILION-col').length, ids.filter(i => i === 'XW-BR-barrier').length,
+    ids.filter(i => i === 'XW-BR-nameplate').length, ids.length], [4, 2, 4, 10]);
+});
+
+test('星湾桥：防撞护栏与桥名牌立在车行道和人行道之间，人走不穿；桥名牌不占人行道', () => {
+  const xw = R.bridges.find(b => b.id === 'XW-BR'), car = xw.carriage;
+  assert.deepEqual(xw.barriers, [rect(-10.35, -436, -10.05, -290), rect(10.05, -436, 10.35, -290)]);
+  assert.equal(xw.nameplates.length, 4);
+  for (const r of xw.nameplates) {
+    // On the barrier line at an abutment, outside the carriageway and inside the first 0.4 m of the sidewalk.
+    assert.ok(r.x1 <= car.x0 + 1e-9 ? r.x0 >= car.x0 - .4 - 1e-9 : r.x0 >= car.x1 - 1e-9 && r.x1 <= car.x1 + .4 + 1e-9, JSON.stringify(r));
+    assert.ok(Math.min(Math.abs(r.z1 - -290), Math.abs(r.z0 - -436)) <= .1 + 1e-9, JSON.stringify(r));
+    assert.ok(xw.barriers.some(b => r.x0 <= b.x0 && r.x1 >= b.x1), '桥名牌在护栏端头');
+  }
+  const N = getNav(), S = (x, z) => standable(N, 'ground', x, z);
+  for (const r of [...xw.barriers, ...xw.nameplates]) assert.ok(!S((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), `护栏/桥名牌可站 ${JSON.stringify(r)}`);
+  // From the sidewalk towards the carriageway: stopped at the barrier, both sides, mid-span.
+  for (const [x0, x1] of [[13, 7], [-13, -7]]) {
+    const s = walkNav(N, 'ground', [x0, -340], [x1, -340]);
+    assert.ok(Math.abs(s.x) > 10.35, `穿过防撞护栏到 (${s.x.toFixed(2)}, ${s.z.toFixed(2)})`);
+  }
+  // The whole sidewalk stays walkable past the plates, at the balustrade and beside the barrier.
+  for (const x of [-15.6, -11, 11, 15.6]) for (const [a, b] of [[-286, -446], [-446, -286]]) {
+    const s = walkNav(N, 'ground', [x, a], [x, b]);
+    assert.ok(Math.hypot(s.x - x, s.z - b) < .05, `人行道 x ${x} 停在 (${s.x.toFixed(2)}, ${s.z.toFixed(2)})`);
+  }
 });

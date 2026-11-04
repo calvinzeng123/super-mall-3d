@@ -48,7 +48,8 @@ export function riverBridgeParts(river) {
     const d = b.deck, cx = (d.x0 + d.x1) / 2, w = d.x1 - d.x0, zc = (d.z0 + d.z1) / 2, len = d.z1 - d.z0, top = b.deckTop;
     if (b.kind === 'tied-arch') {
       const xr = b.ribs.map(r => r.x), half = Math.abs(xr[0]);
-      box(b.id, 'deck', 'ext', 0, top - .21, zc, 2 * (half + .8), .4, len, '#cfcac0');
+      // Slab top 2 cm under the deck (as on the girder bridges), so the sidewalk paving (-0.135) draws over it.
+      box(b.id, 'deck', 'ext', 0, top - .22, zc, 2 * (half + .8), .4, len, '#cfcac0');
       for (const x of xr) box(b.id, 'tie', 'extMetal', x, top - b.girderDepth / 2, zc, b.ribWidth, b.girderDepth, len, STEEL_WHITE);
       for (let z = d.z0 + 3; z < d.z1; z += 6) box(b.id, 'cross-girder', 'extMetal', 0, top - 1.15, z, 2 * half, .5, .5, '#d8dadb');
       const SEG = 28;
@@ -62,7 +63,14 @@ export function riverBridgeParts(river) {
       for (const x of xr) for (let z = d.z0 + 7; z < d.z1 - 6; z += b.hangerPitch) if (!open(z))
         bar(b.id, 'hanger', 'extMetal', { x, y: top, z }, { x, y: archY(b, z) - .8, z }, .12, '#d0d4d6');
       for (const dz of [-14, 0, 14]) box(b.id, 'strut', 'extMetal', 0, archY(b, zc + dz), zc + dz, 2 * half, .9, .9, STEEL_WHITE);
-      for (const x of [-10.2, 10.2]) box(b.id, 'barrier', 'extMetal', x, top + .45, zc, .3, .9, len, '#9aa0a4');
+      const foot = (role, key, r, y0, h, color) => box(b.id, role, key, (r.x0 + r.x1) / 2, y0 + h / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0, h, r.z1 - r.z0, color);
+      for (const r of b.barriers || []) foot('barrier', 'extMetal', r, top, .9, '#9aa0a4');
+      // Stone name plates on the barrier ends, a bronze plaque on the sidewalk face.
+      for (const r of b.nameplates || []) {
+        foot('nameplate', 'facadeStone', r, top, 1.2, '#8b8478');
+        const out = r.x0 < 0 ? r.x0 - .01 : r.x1 + .01;
+        foot('nameplate-plaque', 'extMetal', rect(out - .01, r.z0 + .2, out + .01, r.z1 - .2), top + .45, .55, '#8a6d45');
+      }
       // Glass balustrade at the walk edge, open at both lookouts.
       for (const x of [d.x0, d.x1]) {
         let runs = [[d.z0, d.z1]];
@@ -86,8 +94,6 @@ export function riverBridgeParts(river) {
         const s = z === d.z1 ? 1 : -1;
         box(b.id, 'abutment', 'facadeStone', 0, (BED_BOTTOM + b.soffit) / 2, z - s * 5.5, 2 * half + 4, b.soffit - BED_BOTTOM, 11, STONE);
         for (const x of xr) box(b.id, 'uplight', 'glow', x, top + .06, z - s * 1.2, .5, .1, .5, '#ffe9bf');
-        box(b.id, 'nameplate', 'facadeStone', d.x1 - .4, top + .6, z - s * .4, .5, 1.2, .5, '#8b8478');
-        box(b.id, 'nameplate', 'facadeStone', d.x0 + .4, top + .6, z - s * .4, .5, 1.2, .5, '#8b8478');
       }
     } else {
       box(b.id, 'girder', 'ext', cx, top - .02 - b.girderDepth / 2, zc, w, b.girderDepth, len, '#cfcac0');
@@ -175,10 +181,12 @@ export function buildRiver(ctx) {
     G.add(m); meshes.push(m);
     return m;
   };
-  // Water sorts below every glass railing and floor (renderOrder 1 vs 2). On a 112 m sheet the park-lake
-  // mirror finish shows the room environment's light panels as hard white patches: soften it.
+  // Opaque, so the river draws in the opaque pass before every transparent pane: the glass railings and
+  // floors (renderOrder 2) and the curtain-wall and window glassTint (renderOrder 0, no depth write), which
+  // a transparent sheet at renderOrder 1 painted over. Softened: on a 112 m sheet the park-lake mirror
+  // finish shows the room environment's light panels as hard white patches.
   const water = mats.base.water.clone();
-  Object.assign(water, { roughness: .3, metalness: .2, envMapIntensity: .3, opacity: .95 });
+  Object.assign(water, { roughness: .3, metalness: .2, envMapIntensity: .3, transparent: false, opacity: 1 });
   water.color?.set?.(0x245a72);
   add(flatShapeGeometry(shapeFromPoly(W.poly), W.y), water, 'river-water', 1);
   const bedMat = new THREE.MeshStandardMaterial({ color: 0x1f3d46, roughness: .95 });

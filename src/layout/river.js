@@ -33,7 +33,8 @@ export const RIVER = deepFreeze({
   },
   // 星湾桥: single-span tied arch, flat deck at road level
   arch: { deckTop: -0.12, girderDepth: 1.7, soffit: -1.9, ribX: 17, ribWidth: 1.4, ribDepth: 2.0, rise: 30,
-    segments: 28, hangerPitch: 6, hangerStart: 7, struts: [-14, 0, 14] },
+    segments: 28, hangerPitch: 6, hangerStart: 7, struts: [-14, 0, 14],
+    barrier: [.05, .35], plate: { off: [0, .4], ends: [.1, 1.7] } },   // crash barriers + name plates, off the carriage edge
   girder: { deckTop: -0.12, girderDepth: 2.2, soffit: -2.4, piers: [-339, -387], lampPitch: 30 },
   furniture: { treePitch: 12, secondRowPitch: 24, northPitch: 15, lampPitch: 24, benchPitch: 48, reedPitch: 6, reedHalf: 600 },
 });
@@ -56,6 +57,8 @@ function crossingsOf(site) {
     deck: rect(g.carriage.x0 - 6, CH.z0, g.carriage.x1 + 6, CH.z1) }));
 }
 
+// Strip [a, b] metres outside a carriageway edge (s = -1 west, +1 east).
+const offEdge = (car, s, [a, b], z0, z1) => s > 0 ? rect(car.x1 + a, z0, car.x1 + b, z1) : rect(car.x0 - b, z0, car.x0 - a, z1);
 const cut = (r0, list) => list.reduce((ps, c) => ps.flatMap(p => subtractRect(p, c)), [r0]);
 const zr = (id, x0, x1, z0 = -268, z1 = -256, axis = 'z') => ({ id, rect: rect(x0, z0, x1, z1), poly: rectPoly(rect(x0, z0, x1, z1)), axis, river: true });
 // Deterministic jitter, so tests and renders see the same furniture.
@@ -71,6 +74,10 @@ export function addRiver(site) {
     deckTop: A.deckTop, girderDepth: A.girderDepth, soffit: A.soffit,
     ribs: [{ x: -A.ribX }, { x: A.ribX }], ribWidth: A.ribWidth, ribDepth: A.ribDepth, rise: A.rise, hangerPitch: A.hangerPitch,
     abutments: [CH.z1, CH.z0], lookouts: [rect(-24, -369, -16, -357), rect(16, -369, 24, -357)],
+    // Steel crash barriers between the carriageway and the sidewalks; the 星湾桥 name plates stand on their ends.
+    barriers: [-1, 1].map(s => offEdge(c.carriage, s, A.barrier, CH.z0, CH.z1)),
+    nameplates: [-1, 1].flatMap(s => [[CH.z1 - A.plate.ends[1], CH.z1 - A.plate.ends[0]], [CH.z0 + A.plate.ends[0], CH.z0 + A.plate.ends[1]]]
+      .map(([z0, z1]) => offEdge(c.carriage, s, A.plate.off, z0, z1))),
   } : {
     id: `${c.road}-BR`, name: GIRDER_NAMES[c.road] || '城市桥', road: c.road, kind: 'girder',
     roads: c.roads, carriage: c.carriage, deck: c.deck, span: CH.z1 - CH.z0,
@@ -139,8 +146,11 @@ export function addRiver(site) {
     if (near(x, decks, 3)) continue;
     reeds.push({ x: x + jitter(x) * 3, z: -414 + jitter(x + 5) * 3, s: 0.8 + (jitter(x + 9) + 0.5) * 0.5 });
   }
-  // Only the pavilion columns block people; hangers stay outside the walk (none in the lookout openings).
-  const obstacles = pavilion.columns.map(([x, z]) => ({ id: 'RV-PAVILION-col', poly: rectPoly(rect(x - 0.2, z - 0.2, x + 0.2, z + 0.2)) }));
+  // The pavilion columns and 星湾桥's crash barriers and name plates block people; hangers stay outside
+  // the walk (none in the lookout openings).
+  const obstacles = [...pavilion.columns.map(([x, z]) => ({ id: 'RV-PAVILION-col', poly: rectPoly(rect(x - 0.2, z - 0.2, x + 0.2, z + 0.2)) })),
+    ...bridges.filter(b => b.barriers).flatMap(b => [...b.barriers.map(r => ({ id: `${b.id}-barrier`, poly: rectPoly(r) })),
+      ...b.nameplates.map(r => ({ id: `${b.id}-nameplate`, poly: rectPoly(r) }))])];
 
   site.river = {
     ...RIVER,
