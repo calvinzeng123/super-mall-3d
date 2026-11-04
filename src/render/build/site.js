@@ -335,17 +335,19 @@ function entrances(ctx) {
       FB.get('extMetal').box(depth / 2, y0 + hY + 0.18, 0, depth + 0.1, 0.28, cw + 0.2, COLORS.white);
       FB.get('glow').box(depth, y0 + hY + 0.05, 0, 0.08, 0.05, cw, COLORS.led);
       for (const k of [-1, 1]) FB.get('extMetal').cyl(depth - 0.4, y0, k * (cw / 2 - 0.6), 0.16, hY, COLORS.steel, 12);
-      const n = Math.max(2, Math.round(width / 2));
-      for (let i = 0; i < n; i++) {
-        const a = -width / 2 + (i + 0.5) * (width / n);
-        if (main && Math.abs(a) < 2.2) continue;
-        if (i % 3 !== 1) FB.get('glass').box(0, y0 + 2.0, a, 0.05, 3.9, width / n - 0.1, 0xffffff);
-        FB.get('extMetal').box(0, y0 + 2.0, a - width / n / 2, 0.08, 4.0, 0.08, COLORS.glassFrame);
+      // The doors stand open (nav walks straight through): sliding leaves are
+      // parked behind the jambs, so only the frame, jamb posts and a glazed
+      // transom above head height are drawn inside the door line.
+      // The transom glazing runs up to the façade's entrance band (+4.55).
+      FB.get('extMetal').box(0, y0 + 3.2, 0, 0.12, 0.1, width, COLORS.glassFrame);
+      FB.get('glass').box(0, y0 + 3.9, 0, 0.05, 1.3, width - 0.1, 0xffffff);
+      for (const k of [-1, 1]) {
+        FB.get('extMetal').box(0, y0 + 2.3, k * width / 2, 0.1, 4.6, 0.1, COLORS.glassFrame);
+        FB.get('glass').box(-0.14, y0 + 1.6, k * (width / 2 + 0.55), 0.04, 3.1, 1.0, 0xffffff);
       }
       if (main) {
-        FB.get('glass').cyl(0, y0 + 0.02, 0, 2.0, 3.0, 0xffffff, 24);
+        // Revolving-door crown only; the drum is parked open beneath it.
         FB.get('extMetal').cyl(0, y0 + 3.0, 0, 2.1, 0.35, COLORS.steel, 24);
-        for (let k = 0; k < 4; k++) FB.get('glass').box(0, y0 + 1.5, 0, 3.9, 2.9, 0.04, 0xffffff, (k / 4) * Math.PI + 0.3);
         ctx.site.batch.frame(F, () => ctx.site.batch.get('extSatin').box(2.6, -0.07, 0, 5, 0.14, width + 6, COLORS.stone));
       }
     });

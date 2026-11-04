@@ -374,7 +374,9 @@ export function buildHospitality(existing, site) {
   const parts = [...HOSPITALITY.towers.map(tower),publicWestGarage()];
   const all = [...existing, ...parts], by = Object.fromEntries(all.map(p => [p.building.id, p]));
   // Both attached towers use short canopies and surveyed docking lobbies. A generic seven-metre forecourt canopy would penetrate the neighbour.
-  for(const id of ['H','A'])by[id].entrances.find(e=>e.main).coveredConnection=true;
+  // R1-R4 lobbies draw their own portal and canopy too: no generic mall door
+  // (a revolving drum filling the whole 4 m doorway) is drawn over them.
+  for(const id of ['H','A','R1','R2','R3','R4'])by[id]?.entrances.find(e=>e.main)&&(by[id].entrances.find(e=>e.main).coveredConnection=true);
   const at = (bid, short) => ({ ...by[bid], level: by[bid].levels.find(l => l.short === short) });
   const extensions = { districts: [{ id: 'west-residences', name: '一期西翼连体酒店庭院', rect: HOSPITALITY.west, poly: rectPoly(HOSPITALITY.west), buildingIds: ['H'] }, { id: 'east-residences', name: '一期北翼连体公寓庭院', rect: HOSPITALITY.east, poly: rectPoly(HOSPITALITY.east), buildingIds: ['A'] }, { id: 'xingwan-residences', name: '云澜汇楼盘 · 星湾后区', rect: HOSPITALITY.residential, poly: rectPoly(HOSPITALITY.residential), buildingIds: ['R1', 'R2', 'R3', 'R4'] }], paths: [], roads: [], connections: [], surfaceParking: [], gateways: [] };
   for (const d of extensions.districts) {

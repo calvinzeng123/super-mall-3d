@@ -380,11 +380,15 @@ function buildingSign(ctx,b,pal,plane) {
   return mesh;
 }
 
-function landscape(ctx,towers) {
+export function landscape(ctx,towers) {
   const group=new THREE.Group();group.name='hospitality-landscape';
   const B=new BatchSet(ctx.mats.base),trees=[];
   // 道路和地块由布局提供，景观只落在楼边已有plot内，避开全部建筑轮廓。
   const occupied=p=>ctx.layout.buildings.some(b=>!b.undergroundOnly&&pointInPoly(p,b.outline))||ctx.layout.site.trenches.some(q=>pointInPoly(p,q))||(ctx.layout.extensions.roads||[]).some(r=>r.polys.some(q=>pointInPoly(p,q)))||(ctx.layout.extensions.surfaceParking||[]).some(r=>pointInPoly(p,r.poly));
+  // Planters, benches and bollards keep out of every street door's approach
+  // (6 m out, 1.5 m wider each side) and their footprints out of buildings.
+  const clearOf=doorMouths(ctx.layout);
+  const blocked=(F,x0,z0,x1,z1)=>[[x0,z0],[x1,z0],[x1,z1],[x0,z1],[(x0+x1)/2,(z0+z1)/2]].some(([x,z])=>{const p=toW(F,x,z);return occupied(p)||clearOf(p);});
   for(const b of towers) {
     const r=b.footprint,F=b.frame;
     B.frame(F,()=>{
@@ -403,23 +407,32 @@ function landscape(ctx,towers) {
           const p=toW(F,x,z);
           if(occupied(p))continue;
           if(b.plot&&(p[0]<b.plot.x0+1||p[0]>b.plot.x1-1||p[1]<b.plot.z0+1||p[1]>b.plot.z1-1))continue;
-          planter(B,x-1.25,z-0.75,x+1.25,z+0.75,0,b.storeys+x,false,'stone');
-          trees.push({x:p[0],y:0.65,z:p[1],s:b.usage==='residential'?1.05:1.3,kind:'round'});
-          if(x+6<r.x1-2) {
-            const seat=toW(F,x+5.3,z);
-            if(!occupied(seat))bench(B,x+5.3,0,z,side<0?Math.PI:0);
+          if(!blocked(F,x-1.25,z-0.75,x+1.25,z+0.75)) {
+            planter(B,x-1.25,z-0.75,x+1.25,z+0.75,0,b.storeys+x,false,'stone');
+            trees.push({x:p[0],y:0.65,z:p[1],s:b.usage==='residential'?1.05:1.3,kind:'round'});
           }
-          bollard(B,x+2,z-side*1.2);
+          if(x+6<r.x1-2&&!blocked(F,x+4.4,z-.35,x+6.2,z+.35))bench(B,x+5.3,0,z,side<0?Math.PI:0);
+          if(!blocked(F,x+1.9,z-side*1.2-.1,x+2.1,z-side*1.2+.1))bollard(B,x+2,z-side*1.2);
         }
       }
     });
   }
-  districtGarden(ctx,B,group,trees);
+  districtGarden(ctx,B,group,trees,clearOf);
   B.flush(group);addTrees(group,ctx.mats,trees,842);
   ctx.site.group.add(group);ctx.hospitality.landscape=group;
 }
 
-function districtGarden(ctx,B,group,trees) {
+/** Approach zones of the street doors: a planter or bench here would stand in a doorway. */
+export function doorMouths(layout) {
+  const quads=layout.entrances.filter(e=>e.to==='site'||e.coveredConnection).map(e=>{
+    const len=Math.hypot(e.seg.x1-e.seg.x0,e.seg.z1-e.seg.z0)||1,tx=(e.seg.x1-e.seg.x0)/len,tz=(e.seg.z1-e.seg.z0)/len,w=1.5,d=6;
+    const a=[e.seg.x0-tx*w,e.seg.z0-tz*w],b=[e.seg.x1+tx*w,e.seg.z1+tz*w];
+    return [a,b,[b[0]+e.nx*d,b[1]+e.nz*d],[a[0]+e.nx*d,a[1]+e.nz*d]];
+  });
+  return p=>quads.some(q=>pointInPoly(p,q));
+}
+
+function districtGarden(ctx,B,group,trees,clearOf=()=>false) {
   const lawn=(x,z,w,d)=>{
     const g=new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2);g.translate(x,0.015,z);
     const mat=ctx.mats.floor?ctx.mats.floor('grass',0.95):ctx.mats.base.foliage;
@@ -429,11 +442,16 @@ function districtGarden(ctx,B,group,trees) {
   };
   // The former remote hotel/apartment island has been vacated. Planting now
   // follows the attached tower forecourts, outside traffic and garage openings.
+  // A later annex may cover a planting spot: the planter and its crown keep
+  // 2.6 m from every building, and nothing stands in a door's approach.
+  const built=(x,z)=>ctx.layout.buildings.some(b=>!b.undergroundOnly&&(pointInPoly([x,z],b.outline)||distToPolyEdge([x,z],b.outline)<2.6));
   for(const [x,z] of [[-282,ctx.layout.expansion?.westArrival?-114:-121],[-252,-112]]) {
+    if(built(x,z)||clearOf([x,z]))continue;
     planter(B,x-1.25,z-.7,x+1.25,z+.7,0,x+z,true,'stone');
     trees.push({x,y:.65,z,s:1.2,kind:'round'});
   }
-  for(const [x,z] of [[-254,-105]])bench(B,x,0,z,Math.PI);
+  // Beside the P1W3 annex, alongside its façade and clear of the P1W3-S door.
+  for(const [x,z] of [[-245.5,-104.6]])if(![[x-.9,z],[x+.9,z]].some(p=>clearOf(p)))bench(B,x,0,z,Math.PI);
   // 四栋住宅之间的口袋花园：不占南侧主入口轴线、消防路或地库坡道。
   for(const x of [82,148,214]) {
     lawn(x,-219,17,15);
@@ -677,6 +695,9 @@ export function attachedDockLobbies(ctx) {
     for(const a of p)B.get('extMetal').box(a[0],y+1.65,a[1],.12,3.3,.12,'#778378');
     const e=dock.outerSeg;
     segmentBox(B,'wood',[e.x0,y,e.z0],[e.x1,y,e.z1],.35,.18,3.25,'#d3b993');
+    // At grade the mall façade's entrance band starts at +4.55: close the
+    // band between the dock roof and it, along the inner opening.
+    if(!below){const s=dock.innerSeg;segmentBox(B,'facadeTravertine',[s.x0,y,s.z0],[s.x1,y,s.z1],.3,1.32,3.94,'#efe9dd');}
     B.flush(group);
     const roof=new THREE.ShapeGeometry(shapeFromPoly(dock.poly,[]));roof.rotateX(-Math.PI/2);roof.translate(0,y+3.35,0);
     const ceiling=new THREE.Mesh(roof,ctx.mats.base[below?'concrete':'glassTint']);ceiling.name='dock-camera-aware-ceiling';group.add(ceiling);

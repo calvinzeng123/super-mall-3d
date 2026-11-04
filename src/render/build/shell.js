@@ -440,6 +440,11 @@ function facade(ctx, lv) {
           place(a, b, y0 + 4.3, y0 + 4.39, 0.48, 0.26, 'extMetal', pal.frame);
           place(a + 0.1, b - 0.1, y0 + 4.28, y0 + 4.3, 0.12, 0.34, 'glow', '#ffe9c7');
         } else if (type === 'entrance') {
+          // Clad the part of the bay beside the door up to the entrance band,
+          // so no unglazed slot opens past the jamb. Oblique and arc doors
+          // that match no interval on this edge keep the open bay.
+          const hit = doorwayIntervals.filter(([p, q]) => q > a && p < b);
+          if (hit.length) for (const [p, q] of hit.reduce((iv, g) => subtractInterval(iv, [g[0], g[1]]), [[a, b]])) if (q - p > .01) clad(p, q, y0, y0 + 4.55);
           place(a, b, y0 + 4.6, y0 + H, 0.05, 0.06, 'glassTint', 0xffffff);
           place(a, b, y0 + 4.55, y0 + 4.65, 0.3, 0.16, 'extMetal', pal.frame);
         }

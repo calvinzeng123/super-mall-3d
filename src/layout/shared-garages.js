@@ -485,6 +485,11 @@ export function applySharedGarages(layout) {
   auditRampOpenings(layout);
   guardRampUndersides(layout);
   pairGateSides(layout);
+  // H-IN's outer side faces the ST2 shared-stair kiosk exit (z -50.5): its
+  // barrier post stands in the 3 m median between the hotel lanes instead,
+  // and no booth is built (hospitality dresses the hotel ramp portals).
+  const hIn = layout.ramps.find(r => r.id === 'H-IN');
+  if (hIn?.gate) hIn.gate = { ...hIn.gate, side: -hIn.gate.side, booth: false };
   groundReservations(layout);
   layout.sharedGarages = {
     version: 1, buildingIds: ['P1', 'H', 'A', 'WPG'],
