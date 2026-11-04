@@ -45,9 +45,11 @@ export function buildWestParkingDetails(ctx) {
     const [sx,sz]=toW(F,.17,0);
     sign(sx,4.1,sz,`西侧停车 · ${gate.name}`,'IN  ←     P     →  OUT',7.8,1.3,Math.atan2(fx,fz));
   }
-  sign(-438,4.8,-248,'云澜汇 · 西侧公共停车',`${plan.stallCount} SPACES  ·  EV ${plan.evCount}  ·  B1 / B2`,15,2.7);
-  for(const x of [-444,-432])B.get('extMetal').box(x,2.3,-248,.2,4.6,.2,'#49645a');
-  for(const z of [-205,-179,-35])sign(-426.9,2.7,z,'步行通道 → 一期 / 酒店','MALL · HOTEL · UNDERGROUND PARKING',5,.9,Math.PI/2);
+  // With 云澜·西苑 on the north strip the district sign stands at the public east lots.
+  const ns=plan.northStrip,signX=ns?-330:-438;
+  sign(signX,4.8,-248,'云澜汇 · 西侧公共停车',`${plan.stallCount} SPACES  ·  EV ${plan.evCount}  ·  B1 / B2`,15,2.7);
+  for(const x of [signX-6,signX+6])B.get('extMetal').box(x,2.3,-248,.2,4.6,.2,'#49645a');
+  for(const z of [ns?ns.z1+2.6:-205,-179,-35])sign(-426.9,2.7,z,'步行通道 → 一期 / 酒店','MALL · HOTEL · UNDERGROUND PARKING',5,.9,Math.PI/2);
   const gw=plan.gateWalk;
   if(gw) {
     // 西门步行轴：南侧路灯，脊口和斑马线口各一块指示牌。

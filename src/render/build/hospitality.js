@@ -8,13 +8,14 @@ import { shapeFromPoly } from './shell.js';
 import { addCutSurfaceSlab } from './surface-shapes.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bollard, bench, planter } from './props.js';
-import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden } from './residential-shell.js';
+import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden, clipMaterial } from './residential-shell.js';
 import { buildTowerStairGeometry, buildTowerStairInstances } from './tower-stairs.js';
 import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 import { buildHospitalityLobby } from './hospitality-lobby.js';
 import { garageCeilingPanels } from '../../layout/garage-ceiling.js';
 import { buildExpansionConnections } from './expansion-connections.js';
 import { buildCommunityTower } from './community.js';
+import { buildCommunitySite } from './community-site.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -53,20 +54,7 @@ function edgeInterval(e, F, worldA, worldB, tolerance=0.3) {
 /** 只克隆材质实例，共用全部PBR图片；夜景参数同步到克隆实例。 */
 function clippedMaterials(ctx, plane) {
   const materials={};
-  for(const [key,base] of Object.entries(ctx.mats.base)) {
-    const m=base.clone();
-    m.onBeforeCompile=base.onBeforeCompile;
-    m.customProgramCacheKey=base.customProgramCacheKey;
-    m.clippingPlanes=[plane];m.clipShadows=true;
-    if(['glass','glassTint','ext','glowSoft','extMetal'].includes(key))m.side=THREE.DoubleSide;
-    ctx.mats.onNight(()=>{
-      m.color.copy(base.color);
-      if(m.emissive)m.emissive.copy(base.emissive);
-      m.emissiveIntensity=base.emissiveIntensity;
-      m.opacity=base.opacity;
-    });
-    materials[key]=m;
-  }
+  for(const [key,base] of Object.entries(ctx.mats.base))materials[key]=clipMaterial(ctx,key,base,plane);
   return materials;
 }
 
@@ -128,6 +116,7 @@ export function buildHospitality(ctx) {
   }
   // 云澜社区住宅（西苑 / 北苑）由社区渲染器按 community-contract 字段绘制
   for(const b of community)buildCommunityTower(ctx,b,records);
+  if(community.length)buildCommunitySite(ctx);
   if(!towers.length)return ctx.hospitality;
   buildPublicGarageShells(ctx);
   landscape(ctx,towers);

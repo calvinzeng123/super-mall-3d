@@ -13,6 +13,8 @@ const rail = (B, a, b) => {
   }
 };
 
+const protectedFlight = f => f.kind !== 'interior-stair' && !!f.localBottom;
+
 /** Called inside the building frame, batched into its permanent clipped shell.
  * Mid-flight geometry must survive loading the next visited dwelling floor. */
 export function buildTowerStairGeometry(B, building, levels, stairs, { enclosures = true, flights = true } = {}) {
@@ -44,7 +46,8 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
     }
   }
   if (!flights) return;
-  for(const f of building.access.flights) {
+  // Duplex 套内楼梯 flights belong to the home interiors, not the protected stair shells.
+  for(const f of building.access.flights.filter(protectedFlight)) {
     const [x0,z0]=f.localBottom,[x1,z1]=f.localTop,dy=f.top.y-f.bottom.y;
     for(let i=0;i<f.steps;i++) {
       const t=(i+.5)/f.steps,x=x0+(x1-x0)*t,z=z0+(z1-z0)*t,y=f.bottom.y+dy*(i+1)/f.steps;
@@ -58,8 +61,10 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
       {x:x1+sign*f.width/2,y:f.top.y+1.05,z:z1});
   }
   for(const s of building.access.surfaces) {
+    const stair=stairs.find(q=>q.id===s.stair);
+    if(!stair||!s.rect)continue;
     box(B,'concrete',s.rect,s.elev-.15,.15,STEP);
-    const stair=stairs.find(q=>q.id===s.stair),dir=towerStairPlan(stair).direction;
+    const dir=towerStairPlan(stair).direction;
     const z=dir<0?s.rect.z0:s.rect.z1;
     rail(B,{x:s.rect.x0,y:s.elev+1.05,z},{x:s.rect.x1,y:s.elev+1.05,z});
   }
@@ -68,10 +73,10 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
 /** Repeated 3.4m flights share one geometry per material. Only the current,
  * preceding and following floors need visible flights inside an enclosed shaft;
  * the protective walls and roof housings remain in the permanent facade batch. */
-export function buildTowerStairInstances(ctx, building, levels, stairs, materials, exterior) {
+export function buildTowerStairInstances(ctx, building, levels, stairs, materials, exterior, { idle = null, follow = false } = {}) {
   if (!building.access?.protected) return;
-  const buckets=new Map(),records=[];
-  for(const lv of levels.filter(l=>building.access.flights.some(f=>f.parentFloor===l.id))) {
+  const buckets=new Map(),records=[],flightsOf=id=>building.access.flights.filter(f=>f.parentFloor===id&&protectedFlight(f));
+  for(const lv of levels.filter(l=>flightsOf(l.id).length)) {
     const key=lv.height.toFixed(4);
     if(!buckets.has(key))buckets.set(key,[]);
     buckets.get(key).push(lv);
@@ -79,7 +84,7 @@ export function buildTowerStairInstances(ctx, building, levels, stairs, material
   for(const members of buckets.values()) {
     const lv=members[0],offset=lv.elev;
     const access={protected:true,
-      flights:building.access.flights.filter(f=>f.parentFloor===lv.id).map(f=>({...f,
+      flights:flightsOf(lv.id).map(f=>({...f,
         bottom:{...f.bottom,y:f.bottom.y-offset},top:{...f.top,y:f.top.y-offset}})),
       surfaces:building.access.surfaces.filter(s=>s.parentFloor===lv.id).map(s=>({...s,elev:s.elev-offset})),
     };
@@ -98,11 +103,12 @@ export function buildTowerStairInstances(ctx, building, levels, stairs, material
   }
   let last='';
   const update=app=>{
-    const state=app.state,inside=state.explore?.building===building.id;
+    // follow: a core rising through host levels shows its flights wherever the visitor walks them.
+    const state=app.state,inside=state.explore?.building===building.id||(follow&&!!state.explore&&levels.some(l=>l.id===state.explore.level));
     const current=inside?state.explore.level:state.building===building.id?state.focus:null;
     const index=levels.findIndex(l=>l.id===current);
     const active=index>=0?levels.slice(Math.max(0,index-1),index+(inside?2:1)).map(l=>l.id)
-      : [levels.find(l=>l.short==='1F')?.id,levels.at(-2).id];
+      : idle||[levels.find(l=>l.short==='1F')?.id,levels.at(-2).id];
     const signature=active.join('|');if(signature===last)return;last=signature;
     for(const {members,meshes} of records) {
       const selected=members.filter(l=>active.includes(l.id));
