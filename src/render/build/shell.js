@@ -493,22 +493,45 @@ function facadeSigns(ctx, lv) {
 
 // ---------- 屋面 ----------
 
+/** Stretches [a, b] of a roof edge clear of the towers standing on the roof (lv.towerPlates): no parapet runs under a tower. */
+function plateFreeSpans(e, plates) {
+  let ivs = [[0, e.len]];
+  for (const poly of plates) {
+    const cut = clipConvex(poly.map(p => toL(e.F, ...p)), [[-.5, -.06], [e.len + .5, -.06], [e.len + .5, .06], [-.5, .06]]);
+    if (cut.length < 3) continue;
+    const along = cut.map(p => p[0]);
+    ivs = subtractInterval(ivs, [Math.max(0, Math.min(...along)), Math.min(e.len, Math.max(...along))]);
+  }
+  return ivs.filter(([a, b]) => b - a > 0.01);
+}
+
 function roofTop(ctx, lv) {
   const B = ctx.levels[lv.id].batch;
   const y = lv.elev;
   const skywalks = lv.features.filter((f) => f.type === 'skywalk');
+  const plates = (lv.towerPlates || []).map((t) => t.poly);
   for (const e of ctx.outlineEdges(lv)) {
     const crown = e.kind === 'arc';
+    const spans = plates.length ? plateFreeSpans(e, plates) : [[0, e.len]];
+    if (!spans.length) continue;
+    const whole = spans.length === 1 && spans[0][0] === 0 && spans[0][1] === e.len;
     B.frame(e.F, () => {
       const n = Math.max(1, Math.round(e.len / 2));
       for (let i = 0; i < n; i++) {
         const a = (i + 0.5) * (e.len / n);
         const [wx, wz] = toW(e.F, a, 0);
         if (skywalks.some((f) => { const [u, v] = toL(f.frame, wx, wz); return u > f.rect.x0 - 1 && u < f.rect.x1 + 1 && v > f.rect.z0 - 0.5 && v < f.rect.z1 + 0.5; })) continue;
-        B.get('glass').box(a, y + 0.75, -0.05, e.len / n, 1.1, 0.04, 0xffffff);
+        if (whole) { B.get('glass').box(a, y + 0.75, -0.05, e.len / n, 1.1, 0.04, 0xffffff); continue; }
+        const a0 = i * (e.len / n), a1 = a0 + e.len / n;
+        for (const [p, q] of spans) {
+          const lo = Math.max(p, a0), hi = Math.min(q, a1);
+          if (hi - lo > 0.01) B.get('glass').box((lo + hi) / 2, y + 0.75, -0.05, hi - lo, 1.1, 0.04, 0xffffff);
+        }
       }
-      B.get('metal').box(e.len / 2, y + 1.32, -0.05, e.len, 0.07, 0.12, COLORS.steel);
-      B.get('satin').box(e.len / 2, y + 0.12, -0.2, e.len, 0.24, 0.4, COLORS.stoneDark);
+      for (const [p, q] of spans) {
+        B.get('metal').box((p + q) / 2, y + 1.32, -0.05, q - p, 0.07, 0.12, COLORS.steel);
+        B.get('satin').box((p + q) / 2, y + 0.12, -0.2, q - p, 0.24, 0.4, COLORS.stoneDark);
+      }
       if (crown) {
         // 圆厅顶部金属冠：竖向翼片 + 顶环
         B.get('extMetal').box(e.len / 2, y + 2.6, 0.1, e.len, 0.25, 0.5, COLORS.white);

@@ -26,7 +26,8 @@ test('方庭在一期地块内、离道路 ≥5m；东南斜面与西北翼末�
 });
 
 test('方庭与西北翼铺位数量', () => {
-  const need = { '1F': 22, '2F': 22, '3F': 14, B1M: 18 };
+  // 1F 方庭让出 4 铺：北苑 T1 住户大堂（SQ-NW）、两座住户核心筒（SQ-N1/N5）与西移的方庭北门（SQ-N3）
+  const need = { '1F': 20, '2F': 22, '3F': 14, B1M: 18 };
   for (const [s, n] of Object.entries(need)) {
     const lv = lvl(`P1-${s}`);
     const k = lv.units.filter((u) => u.square).length;

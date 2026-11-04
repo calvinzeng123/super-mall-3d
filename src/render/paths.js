@@ -62,7 +62,8 @@ export function levelPaths(layout) {
         P(lv.id).people.push({ loop: false, pts: [W3(w.F, u0, v, y), W3(w.F, u1, v, y)], name: roof ? '屋面步道' : '商业街' });
       }
     }
-    for (const e of layout.entrances.filter((x) => x.level === lv.id)) {
+    // Residents' street doors open onto card-gated vestibules: no passers-by walk in.
+    for (const e of layout.entrances.filter((x) => x.level === lv.id && !x.residentialCore)) {
       const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
       P(lv.id).people.push({ loop: false, pts: [[mx - e.nx * 1, y, mz - e.nz * 1], [mx - e.nx * 12, y, mz - e.nz * 12]], name: '入口 → 商场' });
     }
@@ -72,7 +73,9 @@ export function levelPaths(layout) {
       const ring = roof ? [[-50, -30], [10, -30], [30, -16], [30, 16], [-10, 30], [-50, 30]] : [[-41, -21], [41, -21], [41, 21], [-41, 21]];
       P(lv.id).people.push({ loop: true, pts: ring.map(([u, v]) => W3(F, u, v, y)), name: roof ? '方庭天台' : '方庭环廊' });
       if (!roof) {
-        for (const [a, c] of [[[0, -36], [0, -21]], [[3, 36], [3, 21]], [[-56, 0], [-41, 0]], [[56, 0], [41, 0]]]) {
+        // The north door axis follows the 方庭北门 entrance (it moves west when 北苑 takes its hall).
+        const north = layout.entrances.find((x) => x.id === `${b.id}-SQ-N`), nu = north ? toL(F, (north.seg.x0 + north.seg.x1) / 2, north.seg.z0)[0] : 0;
+        for (const [a, c] of [[[nu, -36], [nu, -21]], [[3, 36], [3, 21]], [[-56, 0], [-41, 0]], [[56, 0], [41, 0]]]) {
           P(lv.id).people.push({ loop: false, pts: [W3(F, a[0], a[1], y), W3(F, c[0], c[1], y)], name: '方庭入口 → 环廊' });
         }
       }
