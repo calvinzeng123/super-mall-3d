@@ -12,6 +12,16 @@ import { clearHeight } from './shell.js';
 import { buildMetroInterchangePlatforms, buildInterchangeCeiling } from './metro-interchange.js';
 import { addCutSurfaceSlab } from './surface-shapes.js';
 
+/** Normally-open fare gates: each lane's two flaps parked flat against its cabinet faces. */
+export function fareGateFlaps(f) {
+  const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95))), pitch = (f.z1 - f.z0) / n, out = [];
+  for (let i = 0; i < n; i++) {
+    const z = f.z0 + i * pitch;
+    out.push({ x: f.x, z: z + 0.14, w: 0.5, d: 0.03 }, { x: f.x, z: z + pitch - 0.14, w: 0.5, d: 0.03 });
+  }
+  return out;
+}
+
 const RED = '#c8352b';
 const LINE = '7';
 const WALL = '#e9ecef';
@@ -428,12 +438,9 @@ function concourse(ctx, b, lv, L, atlas, S) {
         B.get('satin').box(f.x, y0 + 0.5, z, 1.7, 1.0, 0.24, '#d7dce1');
         B.get('metal').box(f.x, y0 + 1.02, z, 1.74, 0.05, 0.27, '#2b3036');
         for (const s of [-1, 1]) B.get('glow').box(f.x + s * 0.87, y0 + 0.92, z, 0.02, 0.14, 0.12, s < 0 ? '#3ddc84' : '#ff5a4f');
-        if (i < n) {
-          const w = pitch / 2 - 0.2;
-          B.get('glass').box(f.x, y0 + 0.82, z + 0.12 + w / 2, 0.03, 0.55, w, 0xffffff);
-          B.get('glass').box(f.x, y0 + 0.82, z + pitch - 0.12 - w / 2, 0.03, 0.55, w, 0xffffff);
-        }
       }
+      // 常开式闸机：扇门收在两侧机柜面上，与导航（通道可走）一致
+      for (const q of fareGateFlaps(f)) B.get('glass').box(q.x, y0 + 0.82, q.z, q.w, 0.55, q.d, 0xffffff);
       const cz = (f.z0 + f.z1) / 2;
       const s = Math.sign(f.x);
       hangSign(B, S, atlas, IDF, f.x + s * 0.6, cz, y0 + 2.7, s, 0, 'in', 'out', 0.42, y0 + H);

@@ -2,7 +2,7 @@
 // 步行时由导航模型挡墙、换楼面、上下扶梯与坡道；飞行时自由穿行，关掉飞行落到下方楼面。
 // 楼梯 / 电梯 / 落地塔在门口弹出互动面板；目录可传送；准星对准铺位或设施时显示名称。
 import * as THREE from 'three';
-import { buildNav, step, clear, landAt, linksNear, spawn, floorLabel, sightBlocked, NAV, yawOf } from '../layout/nav.js';
+import { buildNav, step, clear, landAt, linksNear, spawn, floorLabel, sightBlocked, NAV, yawOf, tapGate, updateGates, gateBlocking, resetGates } from '../layout/nav.js';
 import { pointInPoly, distToPolyEdge, toL } from '../layout/geom.js';
 import { createElevatorRide, sampleElevatorRide } from '../layout/elevator-ride.js';
 
@@ -46,6 +46,8 @@ export function attachExplore(app, ui) {
   let label = '';
   let busy = false;
   let liftRide = null;
+  // 门禁时钟：刷卡开门 4 秒、出门感应与防夹都按漫游时间计
+  let clock = 0, hintAt = -10;
   const raycaster = new THREE.Raycaster();
   raycaster.far = 25;
   const center = new THREE.Vector2(0, 0);
@@ -84,6 +86,8 @@ export function attachExplore(app, ui) {
     on = false;
     liftRide = null;
     busy = false;
+    if (nav) resetGates(nav);
+    ctx.accessGates?.resetAll();
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     closePrompt();
     keys.clear();
@@ -347,6 +351,8 @@ export function attachExplore(app, ui) {
   function togglePrompt() {
     if (promptOpen) { closePrompt(); return; }
     if (!near.length) return;
+    // 门禁读卡器：按 E（触屏点「刷卡」）直接刷卡，不弹出楼层面板
+    if (near[0].link.kind === 'gate') { tap(near[0].link.gate.id); return; }
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     promptOpen = true;
     hud.card.hidden = true; // 选楼层时名称卡会和面板叠在一起（横屏尤其）
@@ -356,9 +362,17 @@ export function attachExplore(app, ui) {
     promptOpen = false;
     renderPrompt();
   }
+  function tap(id) {
+    if (!tapGate(nav, id, clock)) return;
+    ctx.accessGates?.set(id, true);
+    ctx.accessGates?.flash(id, 'granted');
+    toast('刷卡成功 · 欢迎回家（4 秒后自动关闭）');
+    renderPrompt();
+  }
   function options() {
     const out = [];
     for (const n of near) {
+      if (n.link.kind === 'gate') { out.push({ text: `刷卡 · ${n.link.name}`, gate: n.link.gate.id, link: n.link }); continue; }
       for (const o of n.options) {
         const F = nav.floors.get(o.floor);
         const here = nav.floors.get(n.stop.floor);
@@ -376,7 +390,9 @@ export function attachExplore(app, ui) {
     // 触屏上面板本身就是「互动」按钮：点开选楼层，再点空白处收起
     const touch = isTouch();
     if (!promptOpen) {
-      hud.prompt.innerHTML = `<span class="ex-key">${touch ? '⇅' : 'E'}</span>${esc(near[0].link.name)} · 换楼层`;
+      hud.prompt.innerHTML = near[0].link.kind === 'gate'
+        ? `<span class="ex-key">${touch ? '卡' : 'E'}</span>刷卡 · ${esc(near[0].link.name)}`
+        : `<span class="ex-key">${touch ? '⇅' : 'E'}</span>${esc(near[0].link.name)} · 换楼层`;
       return;
     }
     hud.prompt.innerHTML = list.map((o, i) => `<button type="button" class="ex-opt" data-i="${i}">${touch ? '' : `<span class="ex-key">${i + 1}</span>`}${esc(o.text)}</button>`).join('');
@@ -389,6 +405,7 @@ export function attachExplore(app, ui) {
   function choose(i) {
     const o = options()[i];
     if (!o) return;
+    if (o.gate) { closePrompt(); tap(o.gate); return; }
     const st = o.stop;
     if (o.link.kind === 'lift' && ctx.elevatorCars?.has(o.link.id)) { startLift(o.link, st); return; }
     jump({ floor: st.floor, x: st.x, z: st.z, y: nav.floors.get(st.floor).y, slope: null, yaw: yawOf(st.face[0], st.face[1]) });
@@ -450,7 +467,7 @@ export function attachExplore(app, ui) {
     eyeY = p.y + NAV.eye;
     r.car.set(p.y, p.door, `${Math.round(p.y)}m`);
     hud.mode.textContent = p.phase;
-    hud.where.textContent = `观光电梯 · ${nav.floors.get(r.to.floor).level.short} · ${Math.round(p.y)}m`;
+    hud.where.textContent = `${r.link.name} · ${nav.floors.get(r.to.floor).level.short} · ${Math.round(p.y)}m`;
     syncCamera();
     if (p.done) {
       r.car.set(r.to.y, 1, nav.floors.get(r.to.floor).level.short);
@@ -507,6 +524,7 @@ export function attachExplore(app, ui) {
     update(dt) {
       if (!on) return;
       dt = Math.min(dt, 0.05);
+      clock += dt;
       // 视角
       yaw -= lookYaw;
       pitch = Math.max(-PITCH, Math.min(PITCH, pitch - lookPitch));
@@ -543,6 +561,13 @@ export function attachExplore(app, ui) {
         const n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.1));
         const prev = s.floor;
         for (let i = 0; i < n; i++) s = step(nav, s, dx / n, dz / n, dt / n);
+        // 门禁：出门感应、到时关门（通道里有人不关）；贴着关闭的门扇时提示刷卡
+        for (const g of updateGates(nav, s, clock)) ctx.accessGates?.set(g.id, g.open);
+        const blocked = gateBlocking(nav, s);
+        if (blocked && mag > .05 && clock - hintAt > 3) {
+          hintAt = clock; ctx.accessGates?.flash(blocked.id, 'denied');
+          toast(isTouch() ? '住户专用通道 · 点「刷卡」开门' : '住户专用通道 · 请走到读卡器前按 E 刷卡');
+        }
         if (input.jump && jumpY === 0 && !s.slope) vy = JUMP;
         if (vy || jumpY) {
           jumpY = Math.max(0, jumpY + vy * dt);

@@ -81,8 +81,8 @@ test('一期屋面：塔楼底板下的六部商场竖向交通止于 6F，屋�
     const v = L.elevators.find((e) => e.id === id) || L.stairs.find((s) => s.id === id);
     assert.ok(!v.serves.includes('P1-RF') && v.serves.includes('P1-6F'), id);
   }
-  assert.ok(L.elevators.filter((e) => e.type === 'passenger' && e.serves.includes('P1-RF')).length >= 2);
-  assert.ok(L.stairs.filter((s) => s.serves.includes('P1-RF')).length >= 2);
+  assert.equal(L.elevators.filter((e) => e.type === 'passenger' && e.serves.includes('P1-RF')).length, 11);
+  assert.equal(L.stairs.filter((s) => s.serves.includes('P1-RF')).length, 16);
   const feature = (t) => rf.features.find((f) => f.type === t);
   assert.deepEqual(feature('farm').rect, rect(-278, -222.5, -260, -211));
   assert.deepEqual(feature('viewdeck').rect, rect(-239, -228, -229, -219.5));
