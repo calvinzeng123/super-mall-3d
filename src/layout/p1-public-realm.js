@@ -3,6 +3,7 @@
 import clipping from 'polygon-clipping';
 import { IDENTITY, frame, rect, rectPoly, lrectPoly, lseg, toW, circlePoly } from './geom.js';
 import { ACCESS, ACCESS_HW } from './metro-access.js';
+import { WEST_GATE_AXIS } from './west-parking.js';
 
 const strip = (a, b, width) => {
   const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -100,17 +101,23 @@ export function addWestArrival(layout) {
   const seg = lseg(F, { x0: 81.5, z0: -23, x1: 87, z1: -23, side: 'N' });
   const e = portal(layout, 'P1-WEST-ART', seg, F.s, -F.c, { level: lv.id, to: 'site', name: '西门 · 喷泉艺术街', main: false, westArrival: true });
   const middle = toW(F, 84.25, -23), approach = toW(F, 84.25, -31);
-  const points = [[-303, -124.5], [-298, -124.5], [-286, -124.5], [-269, -124.5], [-264, -127.5], [-205, -127.5], [-198, -143.5], approach, middle].reverse();
+  // The axis sits 1 m south of the old line so the walk clears the WP-G2 driveway;
+  // past the zebra it continues as the parking-lot walk (west-gate-promenade).
+  const Z = WEST_GATE_AXIS;
+  const points = [[-298, Z], [-286, Z], [-269, Z], [-264, -127.5], [-205, -127.5], [-198, -143.5], approach, middle].reverse();
   const width = 5.6, polys = points.slice(1).map((p, i) => strip(points[i], p, width));
   const P = { id: 'P1-west-art-promenade', name: '西门艺术步道', entrance: e.id, points, width, polys, crossingSegments: [6], pavedBy: 'p1-public-realm' };
   const S = layout.site;
   S.forecourt.paths.push(P);
   polys.forEach((poly, i) => S.walk.push({ id: `${P.id}-${i}`, kind: 'promenade', poly, outdoor: true }));
-  const crossing = rect(-298, -127.3, -286, -121.7);
+  const crossing = rect(-298, Z - 2.8, -286, Z + 2.8);
   S.crossings.push({ id: 'west-cross-art-gate', axis: 'x', rect: crossing, poly: rectPoly(crossing) });
-  const gate = { x: -283, z: -124.5, width: 10, height: 5.8, name: '西门', en: 'WEST ENTRANCE', piers: [-1, 1].map(s => rect(-283.55, -124.5 + s * 4.65 - .55, -282.45, -124.5 + s * 4.65 + .55)) };
+  const gate = { x: -283, z: Z, width: 10, height: 5.8, name: '西门', en: 'WEST ENTRANCE', piers: [-1, 1].map(s => rect(-283.55, Z + s * 4.65 - .55, -282.45, Z + s * 4.65 + .55)) };
   gate.piers.forEach((r, i) => S.forecourt.obstacles.push({ id: `P1-west-gate-pier-${i}`, poly: rectPoly(r) }));
   gate.canopyPoly = rectPoly(rect(gate.x - 1.5, gate.z - 5.65, gate.x + 1.5, gate.z + 5.65));
-  S.activityExclusions.push(...polys, gate.canopyPoly);
-  layout.expansion.westArrival = { gate, path: P, entry: e.id, hall: hallPoly, approach, middle, interior: toW(F, 84.25, -3) };
+  const lotWalk = S.westParking?.gateWalk;
+  S.activityExclusions.push(...polys, gate.canopyPoly, ...(lotWalk?.polys || []));
+  if (lotWalk) for (const [i, l] of lotWalk.lamps.entries())
+    S.forecourt.obstacles.push({ id: `west-gate-walk-lamp-${i}`, poly: rectPoly(rect(l.x - .15, l.z - .15, l.x + .15, l.z + .15)) });
+  layout.expansion.westArrival = { gate, path: P, entry: e.id, hall: hallPoly, approach, middle, interior: toW(F, 84.25, -3), lotWalk: lotWalk?.id };
 }

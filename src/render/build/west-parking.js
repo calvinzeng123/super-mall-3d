@@ -3,6 +3,7 @@ import { BatchSet } from '../batch.js';
 import { addTrees, streetLamp } from './props.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { frame, toW } from '../../layout/geom.js';
+import { gantryPosts } from '../../layout/west-parking.js';
 
 /** District-scale wayfinding, planted row dividers and open gate gantries.
  * Stalls and cars are drawn by the existing sharedSurfaceParking renderer. */
@@ -31,7 +32,7 @@ export function buildWestParkingDetails(ctx) {
     // u points from the gantry to the public street; the original gates face 西外环 (+x).
     const [fx,fz]=gate.facing||[1,0],F=frame(gate.x,gate.z,Math.atan2(fz,fx)*180/Math.PI);
     B.frame(F,()=>{
-      for(const dz of [-gate.width/2-.75,gate.width/2+.75]) {
+      for(const dz of gantryPosts(gate)) {
         B.get('extMetal').box(0,2.5,dz,.25,5,.25,'#49645a');
         B.get('glowSoft').box(.14,1.2,dz,.04,.8,.13,'#9bddb8');
       }
@@ -47,5 +48,12 @@ export function buildWestParkingDetails(ctx) {
   sign(-438,4.8,-248,'云澜汇 · 西侧公共停车',`${plan.stallCount} SPACES  ·  EV ${plan.evCount}  ·  B1 / B2`,15,2.7);
   for(const x of [-444,-432])B.get('extMetal').box(x,2.3,-248,.2,4.6,.2,'#49645a');
   for(const z of [-205,-179,-35])sign(-426.9,2.7,z,'步行通道 → 一期 / 酒店','MALL · HOTEL · UNDERGROUND PARKING',5,.9,Math.PI/2);
+  const gw=plan.gateWalk;
+  if(gw) {
+    // 西门步行轴：南侧路灯，脊口和斑马线口各一块指示牌。
+    for(const l of gw.lamps)streetLamp(B,l.x,l.z,0,[0,-1],5.5);
+    sign(-426.9,2.7,gw.points[0][2],'西门 · 一期商场 →','WEST GATE · P1 MALL · 130 m',5,.9,Math.PI/2);
+    for(const z of [gw.rect.z0+.12,gw.rect.z1-.12])B.get('extSatin').box((gw.rect.x0+gw.rect.x1)/2,.012,z,gw.rect.x1-gw.rect.x0-1,.012,.08,'#9c8662');
+  }
   B.flush(group);addTrees(group,ctx.mats,trees,913);ctx.site.group.add(group);
 }

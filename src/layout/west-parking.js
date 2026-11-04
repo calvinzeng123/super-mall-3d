@@ -1,7 +1,13 @@
 // 西侧公共地面停车：真实车位、车行网、步行脊与原地下附库共用总图。
-import { IDENTITY, rect, rectPoly, convexOverlap } from './geom.js';
+import { IDENTITY, rect, rectPoly, convexOverlap, pointInPoly } from './geom.js';
 import { fillRows, markSpecial } from './parking.js';
 import { addPlaza } from './campus.js';
+
+// 一期西门艺术步道过西外环后，沿这条轴线一直走进停车场，接上场内步行脊。
+export const WEST_GATE_AXIS = -123.5, WEST_GATE_WIDTH = 5.6;
+/** Gantry post offsets (local z in the gantry frame). A post that would stand
+ * inside a pedestrian walk is dropped and the beam cantilevers over the walk. */
+export const gantryPosts = gate => gate.posts || [-gate.width / 2 - .75, gate.width / 2 + .75];
 
 export function buildWestParking(site, ext) {
   const bounds=rect(-484,-250,-301,-33),poly=rectPoly(bounds);
@@ -38,6 +44,14 @@ export function buildWestParking(site, ext) {
   walk('mall-approach',[[-427,0,-206],[-303,0,-206],[-303,0,-200],[-282,0,-200]],4);
   walk('east-promenade',[[-303,0,-248],[-303,0,-29]],3);
   walk('hotel-promenade',[[-303,0,-29],[-204,0,-29],[-204,0,-72]],3);
+  // 西门 · 停车场步行轴：5.6 m 石材步道，从西外环斑马线 (x=-298) 一直通到场内步行脊 (x=-427)。
+  const gh=WEST_GATE_WIDTH/2,gateRect=rect(-427,WEST_GATE_AXIS-gh,-298,WEST_GATE_AXIS+gh),gatePoly=rectPoly(gateRect);
+  const gateWalk={id:'west-gate-promenade',name:'西门 · 停车场步行轴',kind:'ground',width:WEST_GATE_WIDTH,
+    points:[[-427,0,WEST_GATE_AXIS],[-298,0,WEST_GATE_AXIS]],polys:[gatePoly],westGate:true};
+  ext.paths.push(gateWalk);plan.walks.push(gateWalk);addPlaza(site,`${gateWalk.id}-0`,gatePoly,null);
+  // Lamps stand just inside the south edge, clear of the four painted lot crossings.
+  plan.gateWalk={...gateWalk,rect:gateRect,lamps:[-318,-334,-362,-390,-406].map(x=>({x,z:WEST_GATE_AXIS+gh-.35}))};
+  for(const gate of plan.gates)gate.posts=gantryPosts(gate).filter(dz=>!pointInPoly([gate.x,gate.z+dz],gatePoly));
   const centers=[-239,-217,-195,-163,-143,-117,-97,-75,-53];
   const blocks=[...site.trenches,...site.openings,...plan.walks.flatMap(p=>p.polys),...plan.roads.flatMap(p=>p.polys)];
   for(const [ci,x0,x1,label] of [[0,-476,-430,'A'],[1,-416,-380,'B'],[2,-346,-314,'C']]) {
@@ -47,7 +61,11 @@ export function buildWestParking(site, ext) {
       const id=`WP-${label}${ri+1}`,r=rect(x0-0.25,z-8.9,x1+.25,z+8.9),aisle=rect(x0-4,z-3.5,x1+4,z+3.5);
       const rows=[{id:`${id}-N`,u0:x0,u1:x1,v0:z-8.5,v1:z-3.5,face:'S'},{id:`${id}-S`,u0:x0,u1:x1,v0:z+3.5,v1:z+8.5,face:'N'}];
       const filled=fillRows(IDENTITY,rows,blocks,id);
-      markSpecial(filled.stalls,[[-334,-179],[-312,-179]],rows[0].id,ci===2?4:2);
+      // A row removed by the west-gate walk hands its charging bays to the opposite row.
+      const evRow=filled.stalls.some(s=>s.row===rows[0].id)?rows[0].id:rows[1].id;
+      markSpecial(filled.stalls,[[-334,-179],[-312,-179]],evRow,ci===2?4:2);
+      // The lot surface stops short of the walk so its raised finish never covers the stone.
+      if(r.z0<gateRect.z1&&r.z1>gateRect.z0&&r.x1>gateRect.x0&&r.x0<gateRect.x1)r.z0=gateRect.z1+.1;
       // Extra accessible bays flank the continuous pedestrian spine.
       if(ci===0&&[-195,-163,-117].includes(z))for(const row of rows){const s=filled.stalls.filter(s=>s.row===row.id&&s.type==='normal').at(-1);if(s)s.type='accessible';}
       const lot={id,name:`西侧 ${label}${ri+1} 区`,rect:r,poly:rectPoly(r),aisle,aislePoly:rectPoly(aisle),rows,...filled,district:plan.id};

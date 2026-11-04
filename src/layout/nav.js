@@ -13,6 +13,7 @@ import {
 } from './geom.js';
 import { storeStyle, doorGaps } from './frontage.js';
 import { ESC } from './constants.js';
+import { gantryPosts } from './west-parking.js';
 
 export const NAV = { r: 0.3, eye: 1.62, reach: 1.6, cell: 8, zone: 0.6 };
 const DEG = 180 / Math.PI;
@@ -125,6 +126,11 @@ export function buildNav(layout) {
   for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.transitCenter?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.westParking?.islands || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  // Gantry posts are solid; a post over a walk is dropped by the layout (cantilevered beam).
+  for (const g of S.westParking?.gates || []) {
+    const [fx, fz] = g.facing || [1, 0], Fr = frame(g.x, g.z, Math.atan2(fz, fx) * 180 / Math.PI);
+    for (const dz of gantryPosts(g)) obstacle(ground, Fr, rect(-.18, dz - .18, .18, dz + .18));
+  }
   for (const lot of layout.extensions?.surfaceParking || []) {
     for (const [i, s] of lot.stalls.entries()) {
       if (i % 4 === 0) continue;
