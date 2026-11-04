@@ -60,7 +60,8 @@ test('坡脚接 B1 到达车道；坡板进入 B1 层高后的投影内不留车
   for (const w of deck.walk.filter(w => /^P1-[NE]-arrival/.test(w.id)))
     for (const room of deck.rooms) assert.ok(!room.polys.some(p => convexOverlap(p, w.poly)), `${w.id} 压 ${room.id}`);
   // 北口两坡板在 B1 的南侧护线：从南侧车道往北走会被挡在板外。
-  const s = walk('P1-B1', [-210, -238], [-210, -250]);
+  // x −210 is now inside the 北苑 T2 residential core; test the same guard line just east of it.
+  const s = walk('P1-B1', [-204, -238], [-204, -250]);
   assert.ok(s.z > -243.9, `从侧面钻进北口坡板下 ${s.z}`);
   assert.ok(deck.parking.stalls.length > 850 && deck.parking.stalls.length < 914, `B1 车位 ${deck.parking.stalls.length}`);
 });

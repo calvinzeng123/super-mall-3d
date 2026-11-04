@@ -106,5 +106,12 @@ test('sunken art courtyard opens the ground, connects B1M by passage and real st
   assert.ok(L.site.openings.some(p=>pointInPoly([-108.5,-36],p)));
   const r=L.buildings.find(b=>b.id==='P1').access.routes.find(r=>r.id==='P1-SUNKEN-ACCESS');
   for(const reverse of [false,true]){const pts=reverse?[...r.waypoints].reverse():r.waypoints;let s={...pts[0],slope:null};for(const p of pts.slice(1))s=move(s,p);}
-  for(const id of ['P1-B1','P1-B2'])assert.deepEqual(L.levels.find(l=>l.id===id).slab,old.levels.find(l=>l.id===id).slab);
+  // 北苑住户核心筒穿过 B1/B2：它们的梯井与电梯井洞口之外，停车楼板与紧凑布局完全一致。
+  const residentialHole=(lv,h)=>lv.voids.some(v=>(v.residentialCore||L.elevators.find(e=>e.id===v.elevator)?.residentialCore)&&v.poly===h);
+  for(const id of ['P1-B1','P1-B2']) {
+    const lv=L.levels.find(l=>l.id===id),slab=structuredClone(lv.slab),cut=lv.slab.pieces.map(p=>p.holes.filter(h=>residentialHole(lv,h)).length);
+    slab.pieces.forEach((p,i)=>{p.holes=p.holes.filter((h,j)=>!residentialHole(lv,lv.slab.pieces[i].holes[j]));});
+    assert.equal(cut.reduce((a,b)=>a+b,0),10,`${id} residential shafts`);
+    assert.deepEqual(slab,old.levels.find(l=>l.id===id).slab);
+  }
 });

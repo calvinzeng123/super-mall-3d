@@ -38,6 +38,7 @@ test('每个铺位都能从门口走进去（冰场除外）', () => {
     for (const u of lv.units) {
       const style = storeStyle(lv, u);
       if (style === 'rink') continue;
+      if (u.residence?.level === 'upper') continue;   // 复式上层经套内楼梯进出，没有门面（north-residences 测试走楼梯）
       const ok = u.fronts.some((f, i) => {
         const w = u.wfronts[i];
         const len = Math.hypot(w.x1 - w.x0, w.z1 - w.z0);

@@ -15,7 +15,8 @@ function landscapeMeshes() {
   const materials = new Proxy({}, { get: (m, k) => m[k] ||= new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }) });
   const group = new THREE.Group();
   const ctx = { layout: L, mats: { base: materials, floor: () => materials.floor }, site: { group }, hospitality: {} };
-  landscape(ctx, L.buildings.filter(b => b.kind === 'tower'));
+  // The tower renderer lands its legacy H/A/R towers; community towers draw their own site.
+  landscape(ctx, L.buildings.filter(b => b.kind === 'tower' && !b.community));
   group.updateMatrixWorld(true);
   const meshes = []; group.traverse(o => { if (o.isMesh) meshes.push(o); });
   return meshes;
