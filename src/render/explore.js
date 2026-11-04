@@ -2,7 +2,7 @@
 // 步行时由导航模型挡墙、换楼面、上下扶梯与坡道；飞行时自由穿行，关掉飞行落到下方楼面。
 // 楼梯 / 电梯 / 落地塔在门口弹出互动面板；目录可传送；准星对准铺位或设施时显示名称。
 import * as THREE from 'three';
-import { buildNav, step, clear, landAt, linksNear, spawn, floorLabel, sightBlocked, NAV, yawOf, tapGate, updateGates, gateBlocking, resetGates } from '../layout/nav.js';
+import { buildNav, step, landAt, linksNear, spawn, unitSpawn, floorLabel, sightBlocked, NAV, yawOf, tapGate, updateGates, gateBlocking, resetGates } from '../layout/nav.js';
 import { pointInPoly, distToPolyEdge, toL } from '../layout/geom.js';
 import { createElevatorRide, sampleElevatorRide } from '../layout/elevator-ride.js';
 
@@ -121,20 +121,8 @@ export function attachExplore(app, ui) {
     /** 目录传送：楼栋 → 主入口内侧；楼层 → 该层出生点；铺位 → 店门外 2m 面朝店 */
     teleport(t) {
       if (!nav) nav = buildNav(layout);
-      let st = null;
-      if (t.unit) {
-        // 店门外 2m 面朝店；门口外是中庭洞口或窄走道时往近处找可站立的点
-        const u = t.unit;
-        const w = u.wfronts[0];
-        const y = nav.floors.get(u.level).y;
-        const entry = u.residence?.entryDoor;
-        const tDoor = entry ? entry.at / Math.hypot(w.x1-w.x0,w.z1-w.z0) : .5;
-        const doorX = w.x0 + (w.x1-w.x0)*tDoor, doorZ = w.z0 + (w.z1-w.z0)*tDoor;
-        for (const d of entry ? [.85, 1.15, 1.5, 2] : [2, 1.5, 1, 2.5, 3]) {
-          const q = { floor: u.level, x: doorX + w.nx * d, z: doorZ + w.nz * d, y, slope: null, yaw: yawOf(-w.nx, -w.nz) };
-          if (clear(nav, q)) { st = q; break; }
-        }
-      } else st = spawn(nav, layout, t);
+      // 铺位 → 店门外面朝店（复式上层 → 户内楼梯上层到达口外）；楼栋 / 楼层 → 出生点
+      const st = t.unit ? unitSpawn(nav, layout, t.unit) : spawn(nav, layout, t);
       if (!st) return;
       if (!on) app.enterExplore({ state: st });
       else jump(st);

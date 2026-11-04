@@ -40,6 +40,7 @@ import { createSuiteLighting } from './suite-lighting.js';
 import { loadResidentialAssets } from './residential-asset.js';
 import { createResidentialLighting } from './residential-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
+import { unitFront } from '../layout/nav.js';
 import { createExploreVisibility } from './explore-visibility.js';
 import { buildTransitCenter } from './build/transit-center.js';
 import { buildBusStops } from './build/bus-stops.js';
@@ -695,7 +696,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       state.focus = unit.level;
       state.selected = unit.id;
       applyVisibility();
-      const f = unit.wfronts[0];
+      // 复式上层没有门面：借用同户下层的入户门面，镜头仍对准本层
+      const f = unitFront(layout, unit);
       const lv = ctx.lvById[unit.level];
       const mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2;
       const target = V(mx - f.nx * 3, lv.elev + 2.2, mz - f.nz * 3);

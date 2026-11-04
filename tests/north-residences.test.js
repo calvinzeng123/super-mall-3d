@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { L, lvl, onSlab } from './helpers.js';
-import { buildNav, step, clear } from '../src/layout/nav.js';
+import { buildNav, step, clear, unitFront, unitSpawn } from '../src/layout/nav.js';
 import { rect, rectPoly, lrectPoly, polyBounds, convexOverlap, pointInPoly, polySamples, toW } from '../src/layout/geom.js';
 import { communityContractErrors } from '../src/layout/community-contract.js';
 import { planSignature } from '../src/layout/community-plan.js';
@@ -209,5 +209,27 @@ test('消防登高场地 HS1/HS2：36/32 × 10 m，距塔楼北立面 5 m、贴�
     assert.ok(!L.site.trenches.some((t) => convexOverlap(t, hs.poly)), `${hs.id} 压坡口`);
     assert.ok(!obstacles.some((p) => convexOverlap(p, hs.poly)), `${hs.id} 有障碍`);
     assert.ok(polySamples(hs.poly, 2, .2).every((q) => clear(nav, { floor: 'ground', x: q[0], z: q[1], y: 0, slope: null })), `${hs.id} 地面不可通行`);
+  }
+});
+
+test('目录定位与传送：每个铺位都有门面可对准；北苑每户（含复式上层）都能落在本层户内或入户门外', () => {
+  const all = L.levels.flatMap((l) => l.units);
+  for (const u of all) {
+    const f = unitFront(L, u);
+    assert.ok(f && [f.x0, f.z0, f.x1, f.z1, f.nx, f.nz].every(Number.isFinite), `${u.id} 没有门面`);
+    assert.ok(Math.abs(Math.hypot(f.nx, f.nz) - 1) < 1e-6, `${u.id} 法线`);
+  }
+  const homes = towers.flatMap(unitsOf);
+  const uppers = homes.filter((u) => !u.wfronts.length);
+  assert.equal(uppers.length, 20);
+  for (const u of homes) {
+    const st = unitSpawn(nav, L, u);
+    assert.ok(st && st.floor === u.level && clear(nav, st), `${u.id} 传送不到`);
+    if (!u.wfronts.length) {
+      // 上层借用下层入户门面定位，落点在本户上层平面内、背对楼梯
+      const partner = homes.find((q) => q.id === u.residence.partner);
+      assert.deepEqual(unitFront(L, u), partner.wfronts[0]);
+      assert.ok(u.polys.some((P) => pointInPoly([st.x, st.z], P)), `${u.id} 落点 ${st.x.toFixed(2)},${st.z.toFixed(2)} 不在户内`);
+    }
   }
 });

@@ -738,6 +738,64 @@ export function spawn(nav, layout, { building, level } = {}) {
 
 const featurePoint = (lv, type) => { const f = lv.features.find((q) => q.type === type); return f && f.x !== undefined ? [f.x, f.z] : null; };
 
+/**
+ * 铺位门面（世界坐标，带外法线 nx/nz）。复式上层没有门面：借用同户下层的入户门面
+ * （两层平面位置相同）；都没有时取铺位轮廓第一条边、法线朝外。
+ */
+export function unitFront(layout, u) {
+  if (u.wfronts?.length) return u.wfronts[0];
+  const partner = u.residence?.partner;
+  if (partner) for (const lv of layout.levels) {
+    if (!u.residence.homeLevels?.includes(lv.id)) continue;
+    const p = lv.units.find((q) => q.id === partner);
+    if (p?.wfronts?.length) return p.wfronts[0];
+  }
+  const P = u.polys[0], [a, b] = [P[0], P[1]], c = polyCentroid(P), len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  let nx = (b[1] - a[1]) / len, nz = -(b[0] - a[0]) / len;
+  if (nx * ((a[0] + b[0]) / 2 - c[0]) + nz * ((a[1] + b[1]) / 2 - c[1]) < 0) { nx = -nx; nz = -nz; }
+  return { x0: a[0], z0: a[1], x1: b[0], z1: b[1], nx, nz };
+}
+
+/**
+ * 目录传送到铺位：店门外 2 m 面朝店（住宅在入户门外 0.85 m 起）；门口外是中庭洞口或窄走道时往近处找。
+ * 复式上层没有入户门：落在户内楼梯上层到达口外、背对楼梯；再不行取户内任一站得住的点。
+ */
+export function unitSpawn(nav, layout, u) {
+  const F = nav.floors.get(u.level);
+  if (!F) return null;
+  const at = (x, z, yaw) => (clearAt(nav, F, x, z) ? { floor: u.level, x, z, y: F.y, slope: null, yaw } : null);
+  const w = u.wfronts?.[0];
+  if (w) {
+    const entry = u.residence?.entryDoor;
+    const t = entry ? entry.at / Math.hypot(w.x1 - w.x0, w.z1 - w.z0) : .5;
+    const dx = w.x0 + (w.x1 - w.x0) * t, dz = w.z0 + (w.z1 - w.z0) * t;
+    for (const d of entry ? [.85, 1.15, 1.5, 2] : [2, 1.5, 1, 2.5, 3]) {
+      const q = at(dx + w.nx * d, dz + w.nz * d, yawOf(-w.nx, -w.nz));
+      if (q) return q;
+    }
+    return null;
+  }
+  const hs = u.residence?.homeStair, arr = hs?.upperArrival, blk = hs?.block;
+  if (arr && blk && u.frame) {
+    const m = [(arr.a[0] + arr.b[0]) / 2, (arr.a[1] + arr.b[1]) / 2], e = 1e-6;
+    const dir = Math.abs(m[1] - blk.z1) < e ? [0, 1] : Math.abs(m[1] - blk.z0) < e ? [0, -1] : Math.abs(m[0] - blk.x1) < e ? [1, 0] : [-1, 0];
+    const [ox, oz] = toW(u.frame, 0, 0), [fx, fz] = toW(u.frame, dir[0], dir[1]);
+    for (const d of [.6, .9, 1.2, 1.6, 2]) {
+      const [x, z] = toW(u.frame, m[0] + dir[0] * d, m[1] + dir[1] * d);
+      const q = at(x, z, yawOf(fx - ox, fz - oz));
+      if (q) return q;
+    }
+  }
+  for (const P of u.polys) {
+    const c = polyCentroid(P);
+    for (const p of polySamples(P, 1, .4).sort((a, b) => dist(a, c) - dist(b, c))) {
+      const q = at(p[0], p[1], 0);
+      if (q) return q;
+    }
+  }
+  return null;
+}
+
 function levelSpawn(nav, layout, levelId, prefer = null) {
   const lv = layout.levels.find((l) => l.id === levelId);
   const F = nav.floors.get(levelId);
