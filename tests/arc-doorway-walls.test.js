@@ -27,6 +27,8 @@ test('圆厅弧墙上的门（下沉广场美食通廊）retaining 与矮墙实�
     for (let along = .3; along < len - .25; along += .4) for (const h of [.3, 1.6, 2.6])
       assert.equal(cast(along, h).length, 0, `${id} wall blocks doorway at ${along.toFixed(2)},${h}`);
     for (const along of [-1.2, len + 1.2]) assert.ok(cast(along, 1.6).length > 0, `${id} adjacent arc wall missing`);
+    if (e.lintel) for (let along = .3; along < len - .25; along += .4)
+      assert.ok(cast(along, e.lintel + .4).length > 0, `${id} lintel missing above the tunnel ceiling at ${along.toFixed(2)}`);
     for (const mesh of group.children) mesh.geometry.dispose();
     material.dispose();
   }

@@ -37,8 +37,14 @@ export function addSunkenArtCourt(layout) {
   lv.slab.pieces.push({ outer: poly, holes: [] });
   lv.walk.push({ id: 'P1-sunken-court', kind: 'plaza', frame: IDENTITY, lpoly: poly, poly, outdoor: true });
   const door = layout.entrances.find(e => e.id === 'P1-S'), mid = [(door.seg.x0 + door.seg.x1) / 2, (door.seg.z0 + door.seg.z1) / 2];
-  const food = path(layout, 'P1-sunken-food-passage', '云谷艺术广场 · B1M 美食广场', [mid, [-108.5, -64], [-108.5, -56]], 4.8);
-  portal(layout, 'P1-sunken-food-door', door.seg, door.nx, door.nz, { architecturalOpening: true, name: food.name });
+  // Leave the rotunda square to its chord, then turn for the court. The B1M
+  // wall opening is exactly the passage width and keeps a lintel above the
+  // passage ceiling, so no void or sky shows around the tunnel mouth.
+  const foodWidth = 4.8, out = [mid[0] + door.nx * 3, mid[1] + door.nz * 3];
+  const food = path(layout, 'P1-sunken-food-passage', '云谷艺术广场 · B1M 美食广场', [mid, out, [-108.5, -64], [-108.5, -56]], foodWidth);
+  const tx = -door.nz, tz = door.nx, half = foodWidth / 2;
+  portal(layout, 'P1-sunken-food-door', { x0: mid[0] - tx * half, z0: mid[1] - tz * half, x1: mid[0] + tx * half, z1: mid[1] + tz * half },
+    door.nx, door.nz, { architecturalOpening: true, name: food.name, lintel: food.height - .1 });
 
   const bottom = { x: -108.5, z: -44, y: -4.5, floor: lv.id }, top = { x: -108.5, z: bounds.z1, y: 0, floor: 'ground' };
   const flight = { id: 'P1-SUNKEN-ST', stair: 'P1-SUNKEN-ST', building: 'P1', parentFloor: lv.id, frame: IDENTITY,

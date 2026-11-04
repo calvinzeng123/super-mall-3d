@@ -313,6 +313,12 @@ export function retaining(ctx, lv) {
   const ramps = ctx.layout.ramps.filter(r => r.building === lv.building && [r.from.level, r.to.level].includes(lv.id));
   for (const e of ctx.outlineEdges(lv)) {
     for (const [a, b] of edgeSpans(e, ents, .2, ramps)) F.frame(e.F, () => F.get('concrete').box((a + b) / 2, lv.elev + h / 2 - 0.05, 0.2, b - a, h, 0.4, '#ced0cc'));
+    // Tunnel doorways lower than the storey keep the wall above their ceiling.
+    for (const en of ents.filter(en => en.lintel && en.lintel < h)) {
+      const spans = edgeSpans(e, [en], 0);
+      const gaps = spans.reduce((ivs, gap) => subtractInterval(ivs, gap), [[0, e.len]]).filter(([a, b]) => b - a > .01);
+      for (const [a, b] of gaps) F.frame(e.F, () => F.get('concrete').box((a + b) / 2, lv.elev + (en.lintel + h) / 2 - 0.05, 0.2, b - a, h - en.lintel, 0.4, '#ced0cc'));
+    }
   }
 }
 
