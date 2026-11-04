@@ -7,7 +7,7 @@ import { rect, rectPoly, polyBounds, polyArea, pointInPoly, toW, distToPolyEdge 
 import { NORTH_SITE } from '../src/layout/community-sites.js';
 import { RIVER_TERRACE, freeIntervals, riverTerraceGeometry, riverTerraceFrontages } from '../src/layout/river-terrace.js';
 import { buildNav } from '../src/layout/nav.js';
-import { expansionTerraceEdges, terraceSupports } from '../src/render/build/p1-expansion.js';
+import { expansionTerraceEdges, terraceSupports, terraceEnclosed } from '../src/render/build/p1-expansion.js';
 
 const lv = lvl('P1-3F'), T = lv.riverTerrace, p1c3 = lvl('P1C-3F');
 const ring = p => [...p, p[0]];
@@ -122,7 +122,9 @@ test('栏杆审计：每段真实落差都有栏杆，北立面、挑台口与 P
   }
   // Continuity: every boundary sample that drops to open air is railed.
   const onSlab = q => lv.slab.pieces.some(s => pointInPoly(q, s.outer) && !s.holes.some(h => pointInPoly(q, h))) && !lv.voids.some(v => pointInPoly(q, v.poly));
-  const enclosed = q => lv.expansion.facadePolys.some(f => pointInPoly(q, f));
+  // Behind the facade, a core/stair room or a walled shaft is not open air (after merge the T2 core stands in the notch).
+  const enclosed = q => terraceEnclosed(lv, q);
+  assert.ok(enclosed([-252, -239.8]) && !enclosed([-156, -239.8]));
   const near = q => railAt.some(r => Math.hypot(r[0] - q[0], r[1] - q[1]) < .3);
   let drops = 0;
   for (const p of T.pieces) for (let i = 0; i < p.outer.length; i++) {

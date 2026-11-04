@@ -125,9 +125,13 @@ function canopies(ctx, lv) {
 }
 
 const RAIL_STEP = .25;
+/** Behind a wall rather than over open air: inside the envelope, a room (cores, stairs) or a walled shaft. */
+export const terraceEnclosed = (lv, p) => (lv.kind !== 'roof' && facadePolys(lv).some(q => pointInPoly(p, q)))
+  || (lv.rooms || []).some(r => (r.polys || []).some(q => pointInPoly(p, q)))
+  || (lv.voids || []).some(v => ['stair', 'shaft'].includes(v.kind) && pointInPoly(p, v.poly));
 /** Sample-wise drop spans of edge e: inside on this slab, outside neither slab, support nor enclosed. */
 function dropSpans(lv, e, held) {
-  const spans = [], enclosed = p => lv.kind !== 'roof' && facadePolys(lv).some(q => pointInPoly(p, q));
+  const spans = [], enclosed = p => terraceEnclosed(lv, p);
   for (let u = 0; u < e.len - 1e-6; u += RAIL_STEP) {
     const b = Math.min(e.len, u + RAIL_STEP), m = (u + b) / 2, o = toW(e.F, m, .18);
     if (!onSlab(lv, toW(e.F, m, -.18)) || onSlab(lv, o) || held(o) || enclosed(o)) continue;
