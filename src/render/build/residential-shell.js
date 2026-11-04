@@ -8,12 +8,30 @@ import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { planter, bench } from './props.js';
 
 const C = { wall: '#ede9df', trim: '#77766b', stone: '#e9e3d6', timber: '#b89770', green: '#4c6356' };
+const SHEER = new Set(['glass','glassTint','ext','glowSoft','extMetal']);
+
+/** A per-building clone of a shared material, cut by that building's horizontal
+ * plane. Textures are shared; night parameters follow the base material. */
+export function clipMaterial(ctx,key,base,plane) {
+  const m=base.clone();
+  m.onBeforeCompile=base.onBeforeCompile;
+  m.customProgramCacheKey=base.customProgramCacheKey;
+  m.clippingPlanes=[plane];m.clipShadows=true;
+  if(SHEER.has(key))m.side=THREE.DoubleSide;
+  ctx.mats.onNight?.(()=>{
+    m.color.copy(base.color);
+    if(m.emissive)m.emissive.copy(base.emissive);
+    m.emissiveIntensity=base.emissiveIntensity;
+    m.opacity=base.opacity;
+  });
+  return m;
+}
 const edges = r => [
   [[r.x0,r.z0],[r.x1,r.z0]], [[r.x1,r.z0],[r.x1,r.z1]],
   [[r.x1,r.z1],[r.x0,r.z1]], [[r.x0,r.z1],[r.x0,r.z0]],
 ];
 
-function segment(B,key,a,b,y0,y1,thickness,color) {
+export function segment(B,key,a,b,y0,y1,thickness,color) {
   const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
   if(length<.002||y1-y0<.002)return;
   B.get(key).box((a[0]+b[0])/2,(y0+y1)/2,(a[1]+b[1])/2,length,y1-y0,thickness,color,-Math.atan2(dz,dx));
@@ -23,7 +41,7 @@ function wallPart(B,w,key,a,b,y0,y1,color,depth=w.thickness||.18) {
   const p=t=>[w.a[0]+dx*t/length,w.a[1]+dz*t/length];
   segment(B,key,p(a),p(b),y0,y1,depth,color);
 }
-function openingWall(B,w,y,height,glass=true) {
+export function openingWall(B,w,y,height,glass=true) {
   const length=Math.hypot(w.b[0]-w.a[0],w.b[1]-w.a[1]);
   const openings=w.openings||(w.door?[{...w.door,type:'door',bottom:0,top:2.5}]:[]);
   const spans=openings.map(o=>[Math.max(0,o.at-o.width/2),Math.min(length,o.at+o.width/2)]);
@@ -45,13 +63,13 @@ function openingWall(B,w,y,height,glass=true) {
     }
   }
 }
-function railing(B,a,b,y,glassKey='glass') {
+export function railing(B,a,b,y,glassKey='glass') {
   segment(B,glassKey,a,b,y+.14,y+1.08,.028,'#ffffff');
   segment(B,'extMetal',a,b,y+1.1,y+1.15,.055,C.trim);
   const length=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.max(1,Math.ceil(length/2.5));
   for(let i=0;i<=n;i++)B.get('extMetal').box(a[0]+(b[0]-a[0])*i/n,y+.59,a[1]+(b[1]-a[1])*i/n,.045,1.12,.045,C.trim);
 }
-function rectFinish(B,r,y,key='stone',color=C.stone) {
+export function rectFinish(B,r,y,key='stone',color=C.stone) {
   B.get(key).box((r.x0+r.x1)/2,y-.02,(r.z0+r.z1)/2,r.x1-r.x0,.04,r.z1-r.z0,color);
 }
 function stairShell(B,core,height) {
@@ -158,7 +176,7 @@ function label(ctx,group,F,text,x,y,z,width=2.8,angle=0,sub='',plane=null) {
   m.position.set(p[0],y,p[1]);m.rotation.y=angle-F.a;m.name=`residential-sign-${text}`;group.add(m);
 }
 
-function lobbyFurniture(B,o,y) {
+export function lobbyFurniture(B,o,y) {
   const r=o.rect,x=(r.x0+r.x1)/2,z=(r.z0+r.z1)/2,w=r.x1-r.x0,d=r.z1-r.z0,h=o.height;
   if(o.type==='sofa') {
     B.get('wood').box(x,y+.16,z,w,.16,d,'#8b7255');

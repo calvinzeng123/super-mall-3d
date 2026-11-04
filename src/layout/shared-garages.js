@@ -327,6 +327,34 @@ function pairGateSides(layout) {
   }
 }
 
+/** 云澜·西苑 G2 link: each basement lobby meets its deck through a 3 m card-door
+ * portal, with an apron to the z −228 aisle. The strip left between a lobby and
+ * the deck's north wall is no aisle; the remaining aisles stay one network. */
+function westDeckPortals(layout, b, decks) {
+  const seg = b.deckPortal, n = b.id.replace(/\D/g, ''), exclusion = polyBounds(b.deckExclusions[0]);
+  for (const deck of decks) {
+    const short = deck.id.split('-').at(-1), lv = level(layout, `${b.id}-${short}`);
+    if (!lv) continue;
+    reserve(deck, `${b.id}-${short}-deck-arrival`, rect(seg.x0, seg.z0, seg.x1, -228));
+    pairedPortal(layout, lv, deck, `${b.id}-${short}-deck`, { x0: seg.x0, z0: seg.z0, x1: seg.x1, z1: seg.z1 }, 0, 1,
+      `西苑${n}号楼地下大堂 · 住户刷卡`, { residentialCore: b.id });
+    deck.walk = deck.walk.filter(w => !(w.rect && w.kind === 'aisle' && w.rect.z1 <= exclusion.z0 + 1e-6
+      && w.rect.x0 >= exclusion.x0 - .3 && w.rect.x1 <= exclusion.x1 + .3));
+    deck.parking.aisles = deck.walk.filter(w => w.kind === 'aisle');
+  }
+}
+
+/** The moved WPG L1 shaft stands in the middle of the north double aisle: the 1.35 m
+ * strips left either side of it carry no car, so they are not aisle walks. */
+function dropLiftSlivers(layout, id, decks) {
+  const s = polyBounds(layout.elevators.find(e => e.id === id).shaftPoly);
+  for (const deck of decks) {
+    deck.walk = deck.walk.filter(w => !(w.kind === 'aisle' && w.rect && Math.min(w.rect.x1 - w.rect.x0, w.rect.z1 - w.rect.z0) < 2
+      && w.rect.x0 >= s.x0 - .3 && w.rect.x1 <= s.x1 + .3 && w.rect.z1 > s.z0 - 2 && w.rect.z0 < s.z1 + 2));
+    deck.parking.aisles = deck.walk.filter(w => w.kind === 'aisle');
+  }
+}
+
 function groundReservations(layout) {
   const all = [...layout.site.trenches, ...layout.site.openings];
   for (const lot of layout.extensions.surfaceParking) {
@@ -396,8 +424,11 @@ export function applySharedGarages(layout) {
 
   expandDeck(P1, SHARED_GARAGE_BOUNDS.mall, [H2.outline, A2.outline]);
   expandDeck(P2, SHARED_GARAGE_BOUNDS.mall);
-  expandDeck(W1, SHARED_GARAGE_BOUNDS.west);
-  expandDeck(W2, SHARED_GARAGE_BOUNDS.west);
+  // 云澜·西苑 basement lobbies stand in the west decks (G2): each tower owns its lobby slab.
+  const westTowers = layout.buildings.filter(b => b.community === 'west');
+  const westExclusions = westTowers.flatMap(b => b.deckExclusions || []);
+  expandDeck(W1, SHARED_GARAGE_BOUNDS.west, westExclusions);
+  expandDeck(W2, SHARED_GARAGE_BOUNDS.west, westExclusions);
   // The poured decks absorb the tunnel stubs and the B1 dock lobbies that
   // now lie inside them: open floor, with no walls or ceilings left standing.
   for (const lv of [P1, P2, W1, W2]) openLegacyTunnels(layout, lv);
@@ -471,17 +502,22 @@ export function applySharedGarages(layout) {
   // identities, not teleport buttons floating over an uncut ground plane.
   for (const [i, x, z] of [[1, -138, -228], [2, -190, -42], [3, -274, -133], [4, -38, -147]])
     addGarageLift(layout, 'P1', `P1-SHARED-L${i}`, x, z, ['P1-B2', 'P1-B1', 'P1-1F'], 'P1-1F');
-  for (const [i, x, z] of [[1, -439, -227], [2, -439, -109]])
+  // Under 云澜·西苑 the north kiosks give way: ST1 goes (W1's own stairs serve the NW
+  // band through its deck portal), L1 and ST2 move east of the community plot.
+  const west = westTowers.length > 0;
+  for (const [i, x, z] of [[1, ...(west ? [-359, -241] : [-439, -227])], [2, -439, -109]])
     addGarageLift(layout, 'WPG', `WPG-SHARED-L${i}`, x, z, ['WPG-B2', 'WPG-B1', 'WPG-G'], 'WPG-G');
   for (const [i, x, z] of [[1, -65, -245], [2, -276, -57], [3, -274, -146], [4, -38, -160]])
     addGarageStair(layout, 'P1', `P1-SHARED-ST${i}`, x, z, ['P1-B2', 'P1-B1', 'P1-1F'], 'P1-1F');
-  for (const [i, x, z] of [[1, -470, -228], [2, -391, -228], [3, -470, -155],
+  for (const [i, x, z] of [[1, -470, -228], [2, ...(west ? [-359, -226] : [-391, -228])], [3, -470, -155],
     [4, -458, -87], [5, -361, -41], [6, -318, -87], [7, -318, -228]])
-    addGarageStair(layout, 'WPG', `WPG-SHARED-ST${i}`, x, z, ['WPG-B2', 'WPG-B1', 'WPG-G'], 'WPG-G');
+    if (!(west && i === 1)) addGarageStair(layout, 'WPG', `WPG-SHARED-ST${i}`, x, z, ['WPG-B2', 'WPG-B1', 'WPG-G'], 'WPG-G');
   // Keep the extraction staging aisle and vehicle rectangle free of parked
   // cars/columns. The FPS layer owns the actual pickup car.
   reserve(level(layout, 'A-B1'), 'A-extraction-arrival', rect(-43, -225, -32, -214));
   for (const lv of [P1, P2, W1, W2]) denseParking(layout, lv);
+  for (const b of westTowers) westDeckPortals(layout, b, [W1, W2]);
+  if (west) dropLiftSlivers(layout, 'WPG-SHARED-L1', [W1, W2]);
   auditRampOpenings(layout);
   guardRampUndersides(layout);
   pairGateSides(layout);

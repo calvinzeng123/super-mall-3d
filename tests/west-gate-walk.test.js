@@ -46,7 +46,8 @@ test('西门步道过西外环后一直延伸到停车场步行脊，车位与�
     const cx = q.reduce((a, p) => a + p[0], 0) / q.length;
     assert.ok(L.site.crossings.some(c => pointInPoly([cx, WEST_GATE_AXIS], c.poly)), `车道 x=${cx} 缺少斑马线`);
   }
-  assert.ok(P.stallCount > 540 && P.evCount >= 57 && P.accessibleCount >= 10);
+  // 北排车位让给云澜·西苑后仍保留 427 个车位、49 个以上充电位和 9 个无障碍位
+  assert.ok(P.stallCount > 420 && P.evCount >= 49 && P.accessibleCount >= 9);
 });
 
 test('从西门门厅经斑马线和停车场步行轴走到步行脊，双向、全宽可走', () => {

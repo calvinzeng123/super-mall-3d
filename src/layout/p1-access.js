@@ -29,9 +29,9 @@ export const P1_GARAGE_ARRIVALS = [
   { id: 'P1-E-arrival-west', rect: rect(-56, -36, -27.3, -29) },
 ];
 
+// WP-G4 is also the 云澜·西苑 community gate; the former 北环东口 (x −375) would end on W2's north face.
 export const WEST_LOT_GATES = [
   { id: 'WP-G4', name: '北环西口', x: -422, street: -256, lot: -246, z: -251 },
-  { id: 'WP-G5', name: '北环东口', x: -375, street: -256, lot: -246, z: -251 },
   { id: 'WP-G6', name: '大道口', x: -375, street: -14, lot: -37, z: -28 },
 ];
 
@@ -84,10 +84,13 @@ function addWestLotGates(layout) {
   if (!plan) return;
   for (const g of WEST_LOT_GATES) {
     const r = rect(g.x - 3.5, Math.min(g.street, g.lot), g.x + 3.5, Math.max(g.street, g.lot)), poly = rectPoly(r);
+    // With 云澜·西苑 on the north strip, G4 opens into the community: its 门楼 (community-site.js)
+    // replaces the parking gantry, so the record carries no gantry posts.
+    const community = plan.northStrip && g.id === 'WP-G4' ? { community: 'west-garden', posts: [] } : {};
     // Facing points from the gantry to the public street.
-    plan.gates.push({ id: g.id, name: g.name, x: g.x, z: g.z, width: 7, facing: [0, Math.sign(g.street - g.lot)] });
+    plan.gates.push({ id: g.id, name: g.name, x: g.x, z: g.z, width: 7, facing: [0, Math.sign(g.street - g.lot)], ...community });
     layout.site.driveways.push(poly);
-    const road = { id: `west-gate-${g.id}`, name: '西侧停车场城市道路接入', width: 7, points: [[g.x, 0, g.street], [g.x, 0, g.lot]], polys: [poly] };
+    const road = { id: `west-gate-${g.id}`, name: community.community ? '云澜·西苑 北门 · 城市道路接入' : '西侧停车场城市道路接入', width: 7, points: [[g.x, 0, g.street], [g.x, 0, g.lot]], polys: [poly] };
     ext.roads.push(road); plan.roads.push(road);
   }
 }

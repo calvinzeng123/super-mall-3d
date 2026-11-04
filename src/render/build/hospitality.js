@@ -8,13 +8,15 @@ import { shapeFromPoly } from './shell.js';
 import { addCutSurfaceSlab } from './surface-shapes.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bollard, bench, planter } from './props.js';
-import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden } from './residential-shell.js';
+import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden, clipMaterial } from './residential-shell.js';
 import { buildTowerStairGeometry, buildTowerStairInstances } from './tower-stairs.js';
 import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 import { buildHospitalityLobby } from './hospitality-lobby.js';
 import { garageCeilingPanels } from '../../layout/garage-ceiling.js';
+import { subtractRect } from '../../layout/urban.js';
 import { buildExpansionConnections } from './expansion-connections.js';
 import { buildCommunityTower } from './community.js';
+import { buildCommunitySite } from './community-site.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -53,20 +55,7 @@ function edgeInterval(e, F, worldA, worldB, tolerance=0.3) {
 /** 只克隆材质实例，共用全部PBR图片；夜景参数同步到克隆实例。 */
 function clippedMaterials(ctx, plane) {
   const materials={};
-  for(const [key,base] of Object.entries(ctx.mats.base)) {
-    const m=base.clone();
-    m.onBeforeCompile=base.onBeforeCompile;
-    m.customProgramCacheKey=base.customProgramCacheKey;
-    m.clippingPlanes=[plane];m.clipShadows=true;
-    if(['glass','glassTint','ext','glowSoft','extMetal'].includes(key))m.side=THREE.DoubleSide;
-    ctx.mats.onNight(()=>{
-      m.color.copy(base.color);
-      if(m.emissive)m.emissive.copy(base.emissive);
-      m.emissiveIntensity=base.emissiveIntensity;
-      m.opacity=base.opacity;
-    });
-    materials[key]=m;
-  }
+  for(const [key,base] of Object.entries(ctx.mats.base))materials[key]=clipMaterial(ctx,key,base,plane);
   return materials;
 }
 
@@ -128,6 +117,7 @@ export function buildHospitality(ctx) {
   }
   // 云澜社区住宅（西苑 / 北苑）由社区渲染器按 community-contract 字段绘制
   for(const b of community)buildCommunityTower(ctx,b,records);
+  if(community.length)buildCommunitySite(ctx);
   if(!towers.length)return ctx.hospitality;
   buildPublicGarageShells(ctx);
   landscape(ctx,towers);
@@ -394,7 +384,8 @@ export function landscape(ctx,towers) {
   // (6 m out, 1.5 m wider each side) and their footprints out of buildings.
   const clearOf=doorMouths(ctx.layout);
   const blocked=(F,x0,z0,x1,z1)=>[[x0,z0],[x1,z0],[x1,z1],[x0,z1],[(x0+x1)/2,(z0+z1)/2]].some(([x,z])=>{const p=toW(F,x,z);return occupied(p)||clearOf(p);});
-  for(const b of towers) {
+  // 云澜社区住宅的雨棚与花园由 community.js / community-site.js 绘制。
+  for(const b of towers.filter(b=>!b.community)) {
     const r=b.footprint,F=b.frame;
     B.frame(F,()=>{
       const edge=rectEdges(r).find(e=>e.side===(b.usage==='residential'?'S':'E')),middle=edge.len/2,half=b.usage==='residential'?3.1:3.4,canopyY=b.usage==='residential'?3:3.65;
@@ -601,6 +592,8 @@ export function connections(ctx) {
     if(ctx.layout.site.roads?.some(r=>r.id===road.id))continue;
     const {cells}=corridorUnion(road.polys.map(polyBounds));
     for(const r of cells)addCutSurfaceSlab(B,'ext',rectPoly(r),openings,.015,.08,'#50585b');
+    // Fire lanes carry no centre line: the 消防登高场地 paint and legend lie on them.
+    if(road.kind==='fire')continue;
     for(let i=1;i<road.points.length;i++) {
       const a=road.points[i-1],b=road.points[i],len=Math.hypot(b[0]-a[0],b[2]-a[2]);
       for(let t=1;t<len-1;t+=5) {
@@ -718,7 +711,10 @@ export function attachedDockLobbies(ctx) {
  * shell and opaque park-support roof are added here. */
 export function buildPublicGarageShells(ctx) {
   for(const b of ctx.layout.buildings.filter(b=>b.undergroundOnly)) {
-    const roofPanels=garageCeilingPanels(b,ctx.layout.site,ctx.layout.levels.filter(l=>l.building===b.id));
+    // 云澜·西苑 basement lobbies stand inside the decks: they own their slab, ceiling and lights.
+    const lobbies=ctx.layout.buildings.flatMap(q=>q.deckExclusions||[]).map(p=>polyBounds(p.map(v=>toL(b.frame,...v))));
+    const roofPanels=lobbies.reduce((panels,cut)=>panels.flatMap(r=>subtractRect(r,cut)),
+      garageCeilingPanels(b,ctx.layout.site,ctx.layout.levels.filter(l=>l.building===b.id)));
     if(b.access?.protected)buildStairApproach(ctx,`${b.id}-G`,`${b.id}-B1`,
       ctx.layout.stairs.filter(s=>s.building===b.id),b.access);
     for(const lv of ctx.layout.levels.filter(l=>l.building===b.id)) {
@@ -750,6 +746,7 @@ export function buildPublicGarageShells(ctx) {
         }
         if(lv.short==='B1')for(let x=b.footprint.x0+8;x<b.footprint.x1-5;x+=14)for(let z=b.footprint.z0+8;z<b.footprint.z1-5;z+=16) {
           if(!roofPanels.some(r=>x>r.x0&&x<r.x1&&z>r.z0&&z<r.z1))continue;
+          if(lobbies.some(r=>x+1.6>r.x0&&x-1.6<r.x1&&z+.1>r.z0&&z-.1<r.z1))continue;
           B.get('extMetal').box(x,-.65,z,3.2,.09,.2,'#68736f');
           B.get('glowSoft').box(x,-.71,z,3.0,.025,.16,'#e6eedc');
         }

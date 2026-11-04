@@ -22,9 +22,10 @@ function move(s,p,audit=()=>{}) {
   assert.equal(s.floor,p.floor);assert.ok(Math.abs(s.y-p.y)<1e-6);return s;
 }
 
-test('西侧共享地库和三期小厅共13座楼梯26条层间路线完整双向步行',()=>{
-  assert.equal(groups.reduce((n,g)=>n+g.stairs.length,0),13);
-  assert.equal(groups.reduce((n,g)=>n+g.access.routes.length,0),26);
+test('西侧共享地库和三期小厅共12座楼梯24条层间路线完整双向步行',()=>{
+  // WPG-SHARED-ST1 让给云澜·西苑 1 号楼（车库西北角经其地下大堂楼梯疏散）
+  assert.equal(groups.reduce((n,g)=>n+g.stairs.length,0),12);
+  assert.equal(groups.reduce((n,g)=>n+g.access.routes.length,0),24);
   for(const {access}of groups)for(const route of access.routes)for(const reversed of [false,true]) {
     const points=reversed?[...route.waypoints].reverse():route.waypoints;
     let s={...points[0],slope:null},flightSteps=0;
