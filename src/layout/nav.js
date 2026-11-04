@@ -14,6 +14,7 @@ import {
 import { storeStyle, doorGaps } from './frontage.js';
 import { ESC } from './constants.js';
 import { gantryPosts } from './west-parking.js';
+import { EXIT } from './metro.js';
 
 export const NAV = { r: 0.3, eye: 1.62, reach: 1.6, cell: 8, zone: 0.6 };
 const DEG = 180 / Math.PI;
@@ -251,6 +252,13 @@ export function buildNav(layout) {
     const F = floors.get(groundAt(kx, kz));
     for (const v of [-3.45, 3.45]) wallL(F, G, { x0: -0.5, z0: v, x1: 12, z1: v });
     wallL(F, G, { x0: -0.5, z0: -3.45, x1: -0.5, z1: 3.45 });
+    // M 标识柱（布局登记，渲染同一位置）
+    const p = e.kiosk.pylon;
+    if (p) obstacle(floors.get(groundAt(...toW(G, p.u, p.v))), G, rect(p.u - p.w / 2, p.v - p.w / 2, p.u + p.w / 2, p.v + p.w / 2));
+    // 梯井在站厅层的外皮：A / C 梯井顶端伸进扩大后的站厅角部，侧墙与顶端墙都要挡人
+    const sh = EXIT.shaft, M = floors.get(e.level);
+    for (const v of [sh.z0, sh.z1]) wallL(M, G, { x0: 0, z0: v, x1: sh.x1, z1: v });
+    wallL(M, G, { x0: sh.x1, z0: sh.z0, x1: sh.x1, z1: sh.z1 });
   }
 
   // ---------- 坡道 ----------
@@ -297,11 +305,33 @@ export function buildNav(layout) {
     for (const [a, b] of ent) { if (a > v) wallL(F, Fr, { x0: 0, z0: v, x1: 0, z1: a }); v = Math.max(v, b); }
     if (v < half) wallL(F, Fr, { x0: 0, z0: v, x1: 0, z1: half });
   }
-  // 地铁地面出入口：楼梯 + 扶梯整段
+  // 地铁地面出入口：楼梯踏步带一段（扶手之间）+ 上行扶梯一段（30°，与 exitKiosk 同一几何）
   for (const e of layout.entrances.filter((x) => x.kiosk)) {
-    const G = e.kiosk.frame;
+    const G = e.kiosk.frame, St = EXIT.stair, X = EXIT.escalator;
     const [kx, kz] = toW(G, e.kiosk.run + 1.5, 0);
-    slope({ id: `exit-${e.exit}`, kind: 'exit', F: G, len: e.kiosk.run, hw: e.kiosk.hw, y0: floors.get(e.level).y, y1: 0, low: e.level, high: groundAt(kx, kz) });
+    const high = groundAt(kx, kz), y0 = floors.get(e.level).y;
+    slope({ id: `exit-${e.exit}`, kind: 'exit', F: frame(...toW(G, 0, (St.v0 + St.v1) / 2), G.deg), len: e.kiosk.run,
+      hw: (St.v1 - St.v0) / 2 - 0.05, y0, y1: 0, low: e.level, high });
+    const run = -y0 * Math.sqrt(3), half = X.width / 2, top = X.u + run;
+    lane(`exit-${e.exit}-escalator`, 'escalator', ...toW(G, X.u, X.v), y0, ...toW(G, top, X.v), 0, half, e.level, high, 1);
+    // 梳齿板：站厅侧（梯井内 u<X.u）与地面侧（地面开洞内 u>top）各补一块落脚面
+    const lo = X.v - half - 0.02, hi = X.v + half + 0.02;
+    floors.get(e.level).pieces.push(piece(lrectPoly(G, rect(-0.1, lo, X.u + 0.05, hi))));
+    floors.get(high).pieces.push(piece(lrectPoly(G, rect(top - 0.05, lo, e.kiosk.run + 0.1, hi))));
+    // 两端栏板、扶手回转：沿梯道两侧各 1.8m 护墙，梯道口敞开
+    for (const v of [lo, hi]) {
+      wallL(floors.get(e.level), G, { x0: X.u - 1.8, z0: v, x1: X.u, z1: v });
+      wallL(floors.get(high), G, { x0: top, z0: v, x1: top + 1.8, z1: v });
+    }
+  }
+  // 与站厅不同标高的地铁连接口（二期 B1 −4.2）：站厅侧 3m 缓坡板（metro.js portals() 所画）。
+  // 坡道越过门线 0.5m 落到对方楼面，两个方向都先进坡道、不在门线上跳 0.3m。
+  const metroB1 = floors.get('M-B1');
+  for (const e of layout.entrances.filter((x) => x.to === 'M-B1' && metroB1)) {
+    const hi = floors.get(e.level);
+    if (!hi || Math.abs(hi.y - metroB1.y) < 0.05) continue;
+    const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
+    lane(`${e.id}-ramp`, 'ramp', mx + e.nx * 3, mz + e.nz * 3, metroB1.y, mx - e.nx * 0.5, mz - e.nz * 0.5, hi.y, e.width / 2 - 0.1, metroB1.id, hi.id, 0);
   }
   // 车库坡道、一期 B1↔B2 坡道
   for (const r of layout.ramps) {

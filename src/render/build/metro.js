@@ -2,7 +2,7 @@
 // 尽端连接口）、站台（屏蔽门、轨道、隧道口、两列往返列车、到站屏、长椅）、地面出入口（玻璃雨棚、楼梯、上行扶梯、M 标识柱）、
 // 各期地下层的地铁连接口（门框 + 灯箱）。吊顶只在相机进入地下时显示，俯视时露出站内；列车在隧道口用裁剪平面截断。
 import * as THREE from 'three';
-import { frame, toW, toL, subtractInterval } from '../../layout/geom.js';
+import { frame, toW, toL, lrectPoly, subtractInterval } from '../../layout/geom.js';
 import { EXIT, carve } from '../../layout/metro.js';
 import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 import { BatchSet, SignBatch } from '../batch.js';
@@ -272,6 +272,17 @@ function wallSign(B, S, atlas, F, u, v, y, nu, nv, id, h, glowFrame = false) {
 
 const IDF = frame(0, 0, 0, 'metro-world');
 
+/** 凸多边形与直线 axis=value（axis 0 → x、1 → z）的交段，返回另一坐标的 [min, max]；不相交为 null */
+function lineCut(P, axis, value) {
+  const o = 1 - axis, hits = [];
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i], q = P[(i + 1) % P.length];
+    if ((p[axis] - value) * (q[axis] - value) > 0 || p[axis] === q[axis]) continue;
+    hits.push(p[o] + ((value - p[axis]) / (q[axis] - p[axis])) * (q[o] - p[o]));
+  }
+  return hits.length < 2 ? null : [Math.min(...hits), Math.max(...hits)];
+}
+
 // ---------------------------------------------------------------------------
 
 export function buildMetro(ctx) {
@@ -365,9 +376,15 @@ function concourse(ctx, b, lv, L, atlas, S) {
     const a = toW(p.F, ...p.lpoly[0]), c = toW(p.F, ...p.lpoly[3]);
     (a[1] < 0 ? mouths.N : mouths.S).push({ p, x0: Math.min(a[0], c[0]), x1: Math.max(a[0], c[0]), z: a[1] < 0 ? z0 : z1 });
   }
-  for (const [z, inward, ms] of [[z0, 1, mouths.N], [z1, -1, mouths.S]]) {
+  // 出入口梯井（A / C）顶端伸进站厅角部的那一段由梯井自身的侧墙与顶端墙围合，站厅外墙在此断开
+  const shafts = b.exits.map((ex) => lrectPoly(ex.kiosk.frame, EXIT.shaft));
+  const cuts = (axis, value) => shafts.map((P) => lineCut(P, axis, value)).filter(Boolean);
+  const ivsNS = {};
+  for (const [z, inward, ms, key] of [[z0, 1, mouths.N, 'N'], [z1, -1, mouths.S, 'S']]) {
     let ivs = [[x0, x1]];
     for (const m of ms) ivs = subtractInterval(ivs, [m.x0, m.x1]);
+    for (const cut of cuts(1, z)) ivs = subtractInterval(ivs, cut);
+    ivsNS[key] = ivs;
     for (const [a, c] of ivs) wallRun(W, IDF, a, c, z, inward, y0, HW);
   }
   const FZ = frame(0, 0, 90, 'metro-z');
@@ -375,28 +392,31 @@ function concourse(ctx, b, lv, L, atlas, S) {
   for(const [x,inward,ms] of [[x0,-1,mouths.W],[x1,1,mouths.E]]){
     let ivs=[[z0-.3,z1+.3]];
     for(const m of ms)ivs=subtractInterval(ivs,[m.z0,m.z1]);
+    for(const cut of cuts(0,x))ivs=subtractInterval(ivs,cut);
     for(const [a,c] of ivs)wallRun(W,FZ,a,c,-x,inward,y0,HW);
   }
-  // 站名墙（两端）与线路图
+  // 站名墙（两端）与线路图：线路图只挂在实墙段上（紧凑站厅在 ∓30，扩建后 ∓30 正好是对角通道口，改挂站厅中部）
   wallSign(B, S, atlas, IDF, x0 + 0.02, mouths.W.length?9:0, y0 + 1.9, 1, 0, 'name', 1.1, true);
   wallSign(B, S, atlas, IDF, x1 - 0.02, mouths.E.length?-9:0, y0 + 1.9, -1, 0, 'name', 1.1, true);
-  wallSign(B, S, atlas, IDF, -30, z0 + 0.02, y0 + 1.75, 0, 1, 'linemap', 1.2);
-  wallSign(B, S, atlas, IDF, 30, z1 - 0.02, y0 + 1.75, 0, -1, 'linemap', 1.2);
-  // 长廊广告灯箱（避开通道口与用房）
+  const mapHalf = (1.2 * atlas.get('linemap').aspect) / 2 + 0.06;
+  const onSolid = (ivs, x) => ivs.some(([a, c]) => x - mapHalf >= a + 1 && x + mapHalf <= c - 1);
+  const mapX = { N: [-30, 4, -4, 30].find((x) => onSolid(ivsNS.N, x)), S: [30, 4, -4, -30].find((x) => onSolid(ivsNS.S, x)) };
+  if (mapX.N !== undefined) wallSign(B, S, atlas, IDF, mapX.N, z0 + 0.02, y0 + 1.75, 0, 1, 'linemap', 1.2);
+  if (mapX.S !== undefined) wallSign(B, S, atlas, IDF, mapX.S, z1 - 0.02, y0 + 1.75, 0, -1, 'linemap', 1.2);
+  // 长廊广告灯箱（避开通道口、梯井与线路图）
   let k = 0;
-  for (const [z, nz, ms] of [[z0, 1, mouths.N], [z1, -1, mouths.S]]) {
+  for (const [z, nz, ms, key] of [[z0, 1, mouths.N, 'N'], [z1, -1, mouths.S, 'S']]) {
+    const busy = [...ms.map((m) => [m.x0, m.x1]), ...cuts(1, z)];
     for (let x = -50; x <= 50; x += 12) {
-      if (Math.abs(x - (nz > 0 ? -30 : 30)) < 6 || ms.some((m) => x > m.x0 - 3 && x < m.x1 + 3)) continue;
+      if ((mapX[key] !== undefined && Math.abs(x - mapX[key]) < 6) || busy.some(([a, c]) => x > a - 3 && x < c + 3)) continue;
       wallSign(B, S, atlas, IDF, x, z + nz * 0.02, y0 + 1.6, 0, nz, `ad${k++ % ADS.length}`, 1.5, true);
     }
   }
-  // 圆柱
-  for (const x of [-48, -24, -12, 0, 12, 24, 48]) {
-    for (const z of [-5, 5]) {
-      B.get('satin').cyl(x, y0, z, 0.42, H, '#eceef0', 20);
-      B.get('metal').cyl(x, y0, z, 0.47, 0.14, '#9aa1a8', 20);
-      B.get('metal').cyl(x, y0 + H - 0.12, z, 0.47, 0.12, '#9aa1a8', 20);
-    }
+  // 圆柱：位置与碰撞八边形同取自布局 lv.navObstacles
+  for (const { column: c } of (lv.navObstacles || []).filter((o) => o.column)) {
+    B.get('satin').cyl(c.x, y0, c.z, c.r, H, '#eceef0', 20);
+    B.get('metal').cyl(c.x, y0, c.z, c.base, 0.14, '#9aa1a8', 20);
+    B.get('metal').cyl(c.x, y0 + H - 0.12, c.z, c.base, 0.12, '#9aa1a8', 20);
   }
   // 闸机、付费区栏杆、售票机
   for (const f of lv.features) {
@@ -489,9 +509,18 @@ function ceiling(ctx, b, lv, L) {
       continue;
     }
     const u0 = Math.min(p.lpoly[0][0], p.lpoly[3][0]);
+    const ex = b.exits.find((e) => e.passage === p.id);
+    const [eu, ev] = ex ? toL(p.F, ex.kiosk.frame.ox, ex.kiosk.frame.oz) : [0, 0];
+    const side = Math.abs(ev) > 1 ? Math.sign(ev) : 0;
     B.frame(p.F, () => {
       B.get('glowSoft').box((u0 + p.uEnd) / 2, y + 0.02, 0, p.uEnd - u0, 0.06, p.hw * 2, '#dfe3e7');
       for (let u = u0 + 2; u < p.uEnd - 1; u += 4) B.get('glow').box(u + 1.5, y - 0.01, 0, 3.2, 0.03, 0.16, '#f2f8ff');
+      // 侧向出入口平台（A / C / D）：与通道同高的吊顶，平台上抬头不再看到地面背面外的天空
+      if (side) {
+        const w = 6.5;
+        B.get('glowSoft').box(eu + EXIT.landing / 2, y + 0.02, side * (p.hw + w / 2), EXIT.landing, 0.06, w, '#dfe3e7');
+        B.get('glow').box(eu + EXIT.landing / 2, y - 0.01, side * (p.hw + w / 2), 0.16, 0.03, w - 1.2, '#f2f8ff');
+      }
     });
   }
   B.flush(group);
@@ -533,6 +562,11 @@ function passages(ctx, b, lv, L, atlas, S) {
         if (galleryGaps.some(([a, c]) => u > a - 2 && u < c + 2)) continue;
         wallSign(B, S, atlas, F, u, v - s * 0.02, y0 + 1.55, 0, -s, `ad${ad++ % ADS.length}`, 1.5, true);
       }
+    }
+    // 尽端出入口（B）：梯井只有 ±(hw+0.45) 宽，通道两侧多出的部分用端墙封住
+    if (!side) {
+      const FE = frame(...toW(F, p.uEnd, 0), p.deg + 90, `${p.id}-end`);
+      for (const [a, c] of [[-p.hw - 0.3, -(EXIT.hw + 0.45)], [EXIT.hw + 0.45, p.hw + 0.3]]) wallRun(W, FE, a, c, 0, 1, y0, HW, { band: info.color });
     }
     // 出入口侧向平台：外墙与尽端墙
     if (side) {
@@ -849,14 +883,21 @@ function exitKiosk(ctx, b, lv, L, ex, atlas, S) {
       });
     }
   }
+  const yCeil = y0 + clearHeight(lv), sh = EXIT.shaft;
   B.frame(G, () => {
     // 梯井侧墙（地下）与地面压顶
     for (const s of [-1, 1]) {
       B.get('ext').box(R / 2, y0 + rise / 2 - 0.1, s * (hw + 0.3), R + 0.4, rise + 0.2, 0.3, '#c9ccd0');
       B.get('ext').box(R / 2 + 0.6, -0.04, s * (hw + 0.3), R + 2.0, 0.2, 0.7, '#b8b2a7');
     }
+    // 梯底洞口上方的过梁：通道 / 平台吊顶（y0+净高）到地面之间封死，沿梯回望不再看到地面背面外的天空
+    B.get('ext').box(-0.15, (yCeil + 0.01) / 2, 0, 0.3, 0.01 - yCeil, sh.z1 - sh.z0, '#c9ccd0');
+    // 梯井顶端墙（顶部平台下方）：A / C 梯井伸进站厅角部，从站厅看是一段实墙而非敞开的井
+    B.get('ext').box(sh.x1 - 0.15, (y0 - 0.2 - 0.15) / 2, 0, 0.3, -0.15 - (y0 - 0.2), sh.z1 - sh.z0, '#c9ccd0');
+    // 井底：踏步、扶梯与侧墙之间的窄缝向下看到的是深色井底，而不是虚空
+    B.get('ext').box((sh.x0 + R) / 2, y0 - 0.25, 0, R - sh.x0, 0.1, 2 * hw + 0.6, '#3a3f44');
     // 楼梯：两跑 + 中间平台，花岗岩踏步 + 深色防滑条
-    const v0 = -hw + 0.1, v1 = 0.7;
+    const { v0, v1 } = EXIT.stair;
     const sv = (v0 + v1) / 2, sw = v1 - v0;
     const steps = [];
     for (let i = 0; i < 14; i++) steps.push([i * 0.3, (i + 1) * 0.3, y0 + 0.15 * (i + 1)]);
@@ -888,11 +929,11 @@ function exitKiosk(ctx, b, lv, L, ex, atlas, S) {
     B.get('glow').box((r.x0 + r.x1) / 2, ch - 0.02, 0, r.x1 - r.x0 - 0.6, 0.03, 0.4, '#eaf6ff');
     for (const s of [-1, 1]) B.get('extMetal').box((r.x0 + r.x1) / 2, ch + 0.02, s * (hw + 0.75), r.x1 - r.x0 + 0.4, 0.08, 0.08, RED);
     B.get('extMetal').box(r.x1 + 0.2, ch + 0.02, 0, 0.08, 0.08, hw * 2 + 1.5, RED);
-    // M 标识柱
-    const pv = (ex.passage === 'PC' ? 1 : -1) * (hw + 1.6) * (ex.id === 'B' ? -1 : 1);
-    B.get('extMetal').box(r.x1 + 1.2, 2.1, pv, 0.5, 4.2, 0.5, '#2b3036');
-    B.get('extMetal').box(r.x1 + 1.2, 4.55, pv, 0.95, 0.95, 0.95, RED);
-    B.get('glow').box(r.x1 + 1.2, 4.03, pv, 0.97, 0.05, 0.97, '#ffe0dc');
+    // M 标识柱（位置与碰撞取自布局 kiosk.pylon）
+    const { u: pu, v: pv, w: pw } = ex.kiosk.pylon;
+    B.get('extMetal').box(pu, 2.1, pv, pw, 4.2, pw, '#2b3036');
+    B.get('extMetal').box(pu, 4.55, pv, 0.95, 0.95, 0.95, RED);
+    B.get('glow').box(pu, 4.03, pv, 0.97, 0.05, 0.97, '#ffe0dc');
   });
   S.frame(G, () => {
     const r = EXIT.roof;
@@ -901,19 +942,19 @@ function exitKiosk(ctx, b, lv, L, ex, atlas, S) {
     S.placeN(r.x1 + 0.23, 3.1, 0, h * c.aspect, h, 1, 0, c.uv);
     const back = atlas.get(`exit-${ex.id}`);
     S.placeN(r.x0 - 0.06, 2.3, 0, h * back.aspect, h, -1, 0, back.uv);
-    const pv = (ex.passage === 'PC' ? 1 : -1) * (hw + 1.6) * (ex.id === 'B' ? -1 : 1);
+    const { u: pu, v: pv, w: pw } = ex.kiosk.pylon;
     const m = atlas.get('m').uv, lt = atlas.get(`letter-${ex.id}`).uv;
     for (const [nu, nv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      S.placeN(r.x1 + 1.2 + nu * 0.48, 4.55, pv + nv * 0.48, 0.8, 0.8, nu, nv, m);
-      S.placeN(r.x1 + 1.2 + nu * 0.26, 3.45, pv + nv * 0.26, 0.42, 0.42, nu, nv, lt);
+      S.placeN(pu + nu * 0.48, 4.55, pv + nv * 0.48, 0.8, 0.8, nu, nv, m);
+      S.placeN(pu + nu * (pw / 2 + 0.01), 3.45, pv + nv * (pw / 2 + 0.01), 0.42, 0.42, nu, nv, lt);
     }
   });
   // 上行扶梯（世界坐标）
   const pt = (u, v) => toW(G, u, v);
-  const bu = 0.85, run = rise * Math.sqrt(3);
-  const [bx, bz] = pt(bu, hw - 1.1);
-  const [tx, tz] = pt(bu + run, hw - 1.1);
-  const e = { bottom: { x: bx, y: y0, z: bz }, top: { x: tx, y: 0, z: tz }, width: 1.8 };
+  const X = EXIT.escalator, run = rise * Math.sqrt(3);
+  const [bx, bz] = pt(X.u, X.v);
+  const [tx, tz] = pt(X.u + run, X.v);
+  const e = { bottom: { x: bx, y: y0, z: bz }, top: { x: tx, y: 0, z: tz }, width: X.width };
   return drawEscalator(B, e, '#c3c9cf');
 }
 

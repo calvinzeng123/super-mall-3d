@@ -1,6 +1,6 @@
 // Full-tour interchange: L7 (E/W) above L12 (N/S), with a separate paid transfer floor.
 import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, toW, pointInPoly } from './geom.js';
-import { carve } from './metro.js';
+import { carve, concourseColumns, approachPylon } from './metro.js';
 import { ESC } from './constants.js';
 import { lift } from './mall.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
@@ -62,6 +62,8 @@ export function applyMetroInterchange(layout) {
   for(const x of [-59,59])for(const [z0,z1]of [[-18,-10],[10,18]])B1.features.push({type:'gates',x,z0,z1,pitch:1.3,name:'进出站闸机'});
   for(const z of [-20,20])B1.features.push({type:'fence',x0:-59,x1:59,z});
   B1.navWalls=[];
+  // The 14 concourse columns keep their collision after the rebuild (render draws the same records).
+  B1.navObstacles=concourseColumns(B1.id);
   for(const x of [-59,59])for(const [a,c]of [[-20,-18],[-10,10],[18,20]])B1.navWalls.push({x0:x,z0:a,x1:x,z1:c,metroFence:true});
   B1.features.push({type:'tvm',x:-48,z:-24.5,n:6,face:'S'},{type:'tvm',x:48,z:24.5,n:6,face:'N'});
   // Cross-shaped intermediate concourse is wholly within the paid area.
@@ -108,4 +110,5 @@ export function applyMetroInterchange(layout) {
   layout.levels.splice(layout.levels.findIndex(l=>l.building==='M'),2,...levels);
   for(const [key,values]of [['escalators',escalators],['stairs',stairs],['elevators',elevators]])layout[key]=layout[key].filter(x=>x.building!=='M').concat(values);
   addMetroAccess(layout,b,B1);
+  for(const ex of b.exits)if(ex.approach&&!ex.kiosk.pylon)ex.kiosk.pylon=approachPylon(ex.kiosk,ex.approach);
 }
