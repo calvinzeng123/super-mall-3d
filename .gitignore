@@ -22,3 +22,6 @@ dist/netlify/
 
 # Temporary Superdesign drafts
 .superdesign/tmp/
+
+# Temporary agent worktrees
+.claude/worktrees/
