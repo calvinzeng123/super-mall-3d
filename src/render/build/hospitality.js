@@ -383,7 +383,8 @@ export function landscape(ctx,towers) {
   // (6 m out, 1.5 m wider each side) and their footprints out of buildings.
   const clearOf=doorMouths(ctx.layout);
   const blocked=(F,x0,z0,x1,z1)=>[[x0,z0],[x1,z0],[x1,z1],[x0,z1],[(x0+x1)/2,(z0+z1)/2]].some(([x,z])=>{const p=toW(F,x,z);return occupied(p)||clearOf(p);});
-  for(const b of towers) {
+  // 云澜社区住宅的雨棚与花园由 community.js / community-site.js 绘制。
+  for(const b of towers.filter(b=>!b.community)) {
     const r=b.footprint,F=b.frame;
     B.frame(F,()=>{
       const edge=rectEdges(r).find(e=>e.side===(b.usage==='residential'?'S':'E')),middle=edge.len/2,half=b.usage==='residential'?3.1:3.4,canopyY=b.usage==='residential'?3:3.65;

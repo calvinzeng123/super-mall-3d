@@ -22,7 +22,12 @@ test('tour adds six-storey main mall and eight stepped annexes while compact FPS
   assert.equal(L.levels.find(l=>l.id==='P1C-7F').elev,34);
   assert.equal(L.levels.find(l=>l.id==='P1C-RF').elev,39.5);
   assert.equal(old.expansion,undefined);assert.equal(old.levels.find(l=>l.id==='P1-RF').elev,17.5);
-  for(const bid of ['P2','P3','H','A','R1','R2','R3','R4','WPG']) {
+  // 游览布局中云澜·西苑占用西停车附库北排：WPG 的楼栋与楼层只允许楼梯、电梯小厅、车位、
+  // 车道、门户与板洞随之变化（west-garden.test.js 覆盖），其余属性与紧凑布局一致。
+  const keep=({access,...rest})=>rest, levelCore=l=>{const {rooms,walk,voids,slab,parking,sharedGarage,garageKiosks,...rest}=l;return rest;};
+  assert.deepEqual(keep(L.buildings.find(b=>b.id==='WPG')),keep(old.buildings.find(b=>b.id==='WPG')),'WPG building changed');
+  assert.deepEqual(L.levels.filter(l=>l.building==='WPG').map(levelCore),old.levels.filter(l=>l.building==='WPG').map(levelCore),'WPG levels changed');
+  for(const bid of ['P2','P3','H','A','R1','R2','R3','R4']) {
     assert.deepEqual(L.buildings.find(b=>b.id===bid),old.buildings.find(b=>b.id===bid),`${bid} building changed`);
     const levels=structuredClone(L.levels.filter(l=>l.building===bid));
     // The full-tour H exit intentionally cuts the street slab; every other
