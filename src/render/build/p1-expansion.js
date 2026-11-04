@@ -124,19 +124,58 @@ function canopies(ctx, lv) {
   }
 }
 
-/** Railing edges exist only at a physical drop, never along an interior terrace join. */
-export function expansionTerraceEdges(lv, entrances = []) {
+const RAIL_STEP = .25;
+/** Sample-wise drop spans of edge e: inside on this slab, outside neither slab, support nor enclosed. */
+function dropSpans(lv, e, held) {
+  const spans = [], enclosed = p => lv.kind !== 'roof' && facadePolys(lv).some(q => pointInPoly(p, q));
+  for (let u = 0; u < e.len - 1e-6; u += RAIL_STEP) {
+    const b = Math.min(e.len, u + RAIL_STEP), m = (u + b) / 2, o = toW(e.F, m, .18);
+    if (!onSlab(lv, toW(e.F, m, -.18)) || onSlab(lv, o) || held(o) || enclosed(o)) continue;
+    if (spans.length && Math.abs(spans[spans.length - 1][1] - u) < 1e-6) spans[spans.length - 1][1] = b;
+    else spans.push([u, b]);
+  }
+  return spans;
+}
+
+/** Railing edges exist only at a physical drop, never along an interior terrace join.
+ * supports: outer polygons that carry people beyond this slab at the same height (an
+ * adjoining building's slab, nav-only glass prows). Their stretches are subtracted per
+ * 0.25 m interval, so a prow mouth opens while the deck edge either side keeps its rail.
+ * Edges of the river terrace are audited sample by sample (a long facade-line edge can
+ * be mostly an interior join and still drop into the open gap between two buildings). */
+export function expansionTerraceEdges(lv, entrances = [], supports = []) {
   const found = [], seen = new Set();
+  const held = p => supports.some(s => pointInPoly(p, s));
+  const sampled = new Set((lv.riverTerrace?.pieces || []).map(p => p.outer));
   for (const poly of terracePolys(lv)) for (const e of outlineEdges(poly)) {
     const inside = toW(e.F, e.len / 2, -.18), outside = toW(e.F, e.len / 2, .18);
-    if (!onSlab(lv, inside) || onSlab(lv, outside)) continue;
+    let spans;
+    if (sampled.has(poly)) {
+      spans = dropSpans(lv, e, held);
+      if (!spans.length) continue;
+    } else {
+      if (!onSlab(lv, inside) || onSlab(lv, outside)) continue;
+      spans = [[0, e.len]];
+      if (supports.length) for (let u = 0; u < e.len - 1e-6; u += RAIL_STEP) {
+        const b = Math.min(e.len, u + RAIL_STEP);
+        if (held(toW(e.F, (u + b) / 2, .18))) spans = subtractInterval(spans, [u, b]);
+      }
+    }
     const key = [e.mid[0].toFixed(2), e.mid[1].toFixed(2), e.len.toFixed(2)].join('/');
     if (seen.has(key)) continue;
     seen.add(key);
-    const spans = doorGaps(e, entrances.filter(en => en.level === lv.id)).reduce((s, gap) => subtractInterval(s, gap), [[0, e.len]]);
+    spans = doorGaps(e, entrances.filter(en => en.level === lv.id)).reduce((s, gap) => subtractInterval(s, gap), spans);
     found.push({ ...e, spans });
   }
   return found;
+}
+
+/** Same-height surfaces that continue a terrace: the slabs a river terrace adjoins and its glass prows. */
+export function terraceSupports(layout, lv) {
+  if (!lv.riverTerrace && !lv.navSurfaces?.length) return [];
+  const adj = new Set(lv.riverTerrace?.adjoins || []);
+  return [...(lv.navSurfaces || []).map(s => s.outer),
+    ...layout.levels.filter(l => adj.has(l.id)).flatMap(l => l.slab.pieces.map(p => p.outer))];
 }
 
 /** Only wide, supported terrace pockets receive furniture; door approaches stay clear. */
@@ -184,7 +223,7 @@ function terraces(ctx, lv) {
     const holes = (piece.holes || []).concat((lv.voids || []).map(v => v.poly), lv.slab.pieces.flatMap(s => s.holes || []), lv.kind === 'roof' ? [] : facadePolys(lv));
     addCutSurfaceSlab(B, lv.finishes ? 'p1TerracePaving' : 'facadeStone', piece.outer, holes, y + .012, .018, lv.finishes ? '#ffffff' : '#d6d0bf');
   }
-  for (const e of expansionTerraceEdges(lv, ctx.layout.entrances)) B.frame(e.F, () => {
+  for (const e of expansionTerraceEdges(lv, ctx.layout.entrances, terraceSupports(ctx.layout, lv))) B.frame(e.F, () => {
     for (const [a, b] of e.spans) {
       if (b - a < .1) continue;
       B.get('glass').box((a + b) / 2, y + .67, -.12, b - a, 1.04, .035, '#ffffff');
