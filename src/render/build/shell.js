@@ -63,14 +63,35 @@ export function outlineEdges(poly, building) {
   return out;
 }
 
+/** A doorway on a rotunda is a straight chord across several short arc edges,
+ * so its ends are not on any single edge. Return the stretch of an arc edge
+ * that lies behind the chord (projection inside the door, within the bulge). */
+function chordGap(e, seg) {
+  const dx = seg.x1 - seg.x0, dz = seg.z1 - seg.z0, length = Math.hypot(dx, dz);
+  if (length < 0.5) return null;
+  const ux = dx / length, uz = dz / length;
+  const [ax, az] = toW(e.F, 0, 0), [bx, bz] = toW(e.F, e.len, 0);
+  const along = (x, z) => (x - seg.x0) * ux + (z - seg.z0) * uz;
+  const across = (x, z) => Math.abs(-(x - seg.x0) * uz + (z - seg.z0) * ux);
+  // Arc edges stay within the chord's sagitta; a 1.5 m band covers doorways up
+  // to ~9 m on the smallest rotunda without reaching unrelated walls.
+  if (across(ax, az) > 1.5 || across(bx, bz) > 1.5) return null;
+  if (Math.abs((bx - ax) * ux + (bz - az) * uz) < e.len * 0.8) return null;
+  const ta = along(ax, az), tb = along(bx, bz);
+  const t0 = -ta / (tb - ta), t1 = (length - ta) / (tb - ta);
+  const a = Math.max(0, Math.min(t0, t1)) * e.len, b = Math.min(1, Math.max(t0, t1)) * e.len;
+  return b - a > 0.01 ? [a, b] : null;
+}
+
 /** 外轮廓扣除人行门与车道穿墙区间，返回剩余墙段 [a,b]。 */
 export function edgeSpans(e, entrances, ext = 0.2, ramps = []) {
   let ivs = [[0, e.len]];
   for (const en of entrances) {
     const [u0, v0] = toL(e.F, en.seg.x0, en.seg.z0);
     const [u1, v1] = toL(e.F, en.seg.x1, en.seg.z1);
-    if (Math.abs(v0) > 0.15 || Math.abs(v1) > 0.15) continue;
-    ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]);
+    if (Math.abs(v0) <= 0.15 && Math.abs(v1) <= 0.15) { ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]); continue; }
+    const arcGap = e.kind === 'arc' && chordGap(e, en.seg);
+    if (arcGap) ivs = subtractInterval(ivs, arcGap);
   }
   // A ramp is already a continuous navigation slope, so its wall opening must
   // be cut separately from pedestrian portals. Intersect the actual lane with
