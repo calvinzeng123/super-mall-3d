@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import clipping from 'polygon-clipping';
 import { L, lvl, standable, walkNav } from './helpers.js';
-import { rect, rectPoly, polyBounds, polyArea, pointInPoly, toW } from '../src/layout/geom.js';
+import { rect, rectPoly, polyBounds, polyArea, pointInPoly, toW, distToPolyEdge } from '../src/layout/geom.js';
 import { NORTH_SITE } from '../src/layout/community-sites.js';
 import { RIVER_TERRACE, freeIntervals, riverTerraceGeometry, riverTerraceFrontages } from '../src/layout/river-terrace.js';
 import { buildNav } from '../src/layout/nav.js';
@@ -140,4 +140,14 @@ test('栏杆审计：每段真实落差都有栏杆，北立面、挑台口与 P
   assert.ok(drops > 300, `${drops} 个落差采样`);
   // The open gap between the 方庭 NE corner and P1C is railed along the facade line.
   assert.ok(railAt.some(([x, z]) => Math.abs(z + 240) < .01 && x > -160 && x < -153));
+  // P1C-3F's own perimeter rail stops where the river terrace continues beyond its slab edge.
+  const p1cEdges = expansionTerraceEdges(p1c3, L.entrances, terraceSupports(L, p1c3));
+  let p1cRail = 0;
+  for (const e of p1cEdges) for (const [a, b] of e.spans) for (let u = a + .05; u < b; u += .25) {
+    p1cRail++;
+    const out = toW(e.F, u, .18);
+    // 0.25 m sampling: a stub may remain only at the very end of the joint.
+    assert.ok(!T.pieces.some(p => pointInPoly(out, p.outer) && distToPolyEdge(out, p.outer) > .17), `P1C-3F 栏杆挡在江景台上 ${out.map(v => v.toFixed(2))}`);
+  }
+  assert.ok(p1cRail > 100, 'P1C-3F 其余外缘保留栏杆');
 });

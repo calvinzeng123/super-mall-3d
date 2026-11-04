@@ -9,7 +9,7 @@ import { flatShapeGeometry } from '../src/render/build/shell.js';
 import { cutSurfaceShapes } from '../src/render/build/surface-shapes.js';
 import { buildUrbanDistrict } from '../src/render/build/urban.js';
 import { buildRiver, riverBridgeParts, riverRailRuns, archY } from '../src/render/build/river.js';
-import { buildRiverTerrace } from '../src/render/build/riverfront.js';
+import { buildRiverTerrace, maskRects } from '../src/render/build/riverfront.js';
 import { buildP1ExpansionExterior } from '../src/render/build/p1-expansion.js';
 import { streetLanes } from '../src/render/build/traffic.js';
 import { skywalk } from '../src/render/build/roof.js';
@@ -127,6 +127,17 @@ test('河道渲染：水面覆盖 ±1500 且排在玻璃之前，新增绘制调
   assert.ok(glass && glass.renderOrder > water.renderOrder);
   group.traverse(m => m.geometry?.dispose());
   for (const m of added) m.geometry.dispose();
+});
+
+test('立体字栅格合并成矩形后不多不少覆盖全部亮像素', () => {
+  const w = 9, h = 6, lit = new Set(['1,0', '2,0', '1,1', '2,1', '1,2', '2,2', '5,1', '6,1', '7,1', '5,2', '6,2', '7,2', '4,4', '8,5']);
+  const mask = { data: new Uint8Array(w * h * 4) };
+  for (const k of lit) { const [i, j] = k.split(',').map(Number); mask.data[(j * w + i) * 4] = 255; }
+  const rects = maskRects(mask, w, h), covered = new Map();
+  for (const r of rects) for (let i = r.i0; i < r.i1; i++) for (let j = r.j0; j < r.j1; j++) covered.set(`${i},${j}`, (covered.get(`${i},${j}`) || 0) + 1);
+  assert.deepEqual([...covered.keys()].sort(), [...lit].sort());
+  assert.ok([...covered.values()].every(n => n === 1));
+  assert.equal(rects.length, 4);
 });
 
 test('江景台：托架、封边、两座玻璃挑台全部进 P1-3F 已有批次，挑台下没有铺装或楼板，挑台玻璃存在', () => {

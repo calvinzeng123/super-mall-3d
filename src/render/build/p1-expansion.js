@@ -170,12 +170,15 @@ export function expansionTerraceEdges(lv, entrances = [], supports = []) {
   return found;
 }
 
-/** Same-height surfaces that continue a terrace: the slabs a river terrace adjoins and its glass prows. */
+/** Same-height surfaces that continue a terrace: on the river-terrace level, the slabs it adjoins and
+ * its glass prows; on an adjoining level (P1C-3F), the river terrace and prows beyond its slab edge. */
 export function terraceSupports(layout, lv) {
-  if (!lv.riverTerrace && !lv.navSurfaces?.length) return [];
+  const hosts = (layout.levels || []).filter(l => l.riverTerrace?.adjoins?.includes(lv.id));
+  if (!lv.riverTerrace && !lv.navSurfaces?.length && !hosts.length) return [];
   const adj = new Set(lv.riverTerrace?.adjoins || []);
   return [...(lv.navSurfaces || []).map(s => s.outer),
-    ...layout.levels.filter(l => adj.has(l.id)).flatMap(l => l.slab.pieces.map(p => p.outer))];
+    ...layout.levels.filter(l => adj.has(l.id)).flatMap(l => l.slab.pieces.map(p => p.outer)),
+    ...hosts.flatMap(h => [...h.riverTerrace.pieces.map(p => p.outer), ...(h.navSurfaces || []).map(s => s.outer)])];
 }
 
 /** Only wide, supported terrace pockets receive furniture; door approaches stay clear. */

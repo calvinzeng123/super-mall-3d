@@ -3,6 +3,7 @@
 // LED 灯带写入同层 facadeBatch 已有的 glow。石材面层、栏杆和露台家具由 p1-expansion.js terraces() 绘制。
 import { bench } from './props.js';
 import { COLORS } from '../theme.js';
+import { textMask, FONT_CN } from '../textures.js';
 import { SLAB_T } from './shell.js';
 import { RIVER_TERRACE } from '../../layout/river-terrace.js';
 import { expansionTerraceEdges, terraceSupports } from './p1-expansion.js';
@@ -27,6 +28,34 @@ export function glassProw(B, FB, r, y) {
   rail(r.x0 + .05, r.z0, r.x0 + .05, r.z1);
   rail(r.x1 - .05, r.z0, r.x1 - .05, r.z1);
   rail(r.x0, r.z0 + .05, r.x1, r.z0 + .05);
+}
+
+/** Pixel mask → merged rectangles (runs that repeat row after row become one box). */
+export function maskRects(mask, w, h, on = (i, j) => mask.data[(j * w + i) * 4] > 120) {
+  const out = [], active = new Map();
+  for (let j = 0; j <= h; j++) {
+    const runs = new Map();
+    if (j < h) for (let i = 0, a = -1; i <= w; i++) {
+      const lit = i < w && on(i, j);
+      if (lit && a < 0) a = i;
+      if (!lit && a >= 0) { runs.set(`${a}:${i}`, [a, i]); a = -1; }
+    }
+    for (const [k, r] of active) if (!runs.has(k)) { out.push(r); active.delete(k); }
+    for (const [k, [a, b]] of runs) if (active.has(k)) active.get(k).j1 = j + 1; else active.set(k, { i0: a, i1: b, j0: j, j1: j + 1 });
+  }
+  return out;
+}
+
+/** 「云澜汇 · 江景台」 channel letters on a dark band under the P1C deck edge, facing the river. */
+function riverLetters(B, FB, cx, z, yTop, text = '云澜汇 · 江景台') {
+  if (typeof document === 'undefined') return 0;
+  const W = 288, H = 40, vox = .03, mask = textMask(text, `900 34px ${FONT_CN}`, W, H);
+  const xl = cx + W * vox / 2;                  // facing -z: the reader's right hand is -x
+  B.get('extMetal').box(cx, yTop - H * vox / 2, z + .06, W * vox + .8, H * vox + .3, .1, '#2c363c');
+  const rects = maskRects(mask, W, H);
+  for (const r of rects) B.get('extSatin').box(xl - (r.i0 + r.i1) / 2 * vox, yTop - (r.j0 + r.j1) / 2 * vox, z - .02, (r.i1 - r.i0) * vox, (r.j1 - r.j0) * vox, .12, '#f6f3ec');
+  FB?.get('glow').box(cx, yTop - H * vox - .2, z - .03, W * vox + .6, .04, .04, COLORS.led);
+  return rects.length;
 }
 
 export function buildRiverTerrace(ctx) {
@@ -63,5 +92,8 @@ export function buildRiverTerrace(ctx) {
     for (const x of [p.rect.x0 + .9, p.rect.x1 - .9]) seats.push([x, d.z0 + 4.5]);
   }
   for (const [x, z] of seats) bench(B, x, y + .012, z, Math.PI, 'ext');
-  return { edges: edges.length, prows: T.prows.length };
+  // The sign band hangs under the P1C deck fascia on the 1F P1C-N door axis.
+  const door = T.door ? (T.door.x0 + T.door.x1) / 2 : (T.p1cDeck.x0 + T.p1cDeck.x1) / 2;
+  const letters = riverLetters(B, FB, door, T.p1cDeck.z0 - .12, y - .7);
+  return { edges: edges.length, prows: T.prows.length, letters };
 }
