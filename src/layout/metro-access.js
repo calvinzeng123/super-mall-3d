@@ -67,7 +67,9 @@ export function addMetroAccess(layout, b, lv) {
   // Lead it around the canopy on the avenue sidewalk and keep both endpoints.
   const S=layout.site,promenade=S.forecourt.paths.find(p=>p.id==='south-promenade');
   const previous=promenade.polys;
-  promenade.points=[[-280,-23],[-94,-23],[-94,-17],[-70,-17],[-70,-23],[-61,-23]];
+  // The avenue bus shelter (x -74..-66) has a solid back panel: pass behind
+  // it along the sidewalk and return north east of it, not through it.
+  promenade.points=[[-280,-23],[-94,-23],[-94,-17],[-63,-17],[-63,-23],[-61,-23]];
   promenade.polys=promenade.points.slice(1).map((p,i)=>routePolygon([promenade.points[i],p],promenade.width/2));
   S.activityExclusions=S.activityExclusions.filter(p=>!previous.includes(p)).concat(promenade.polys);
   S.walk=S.walk.filter(w=>!w.id.startsWith(`${promenade.id}-`));

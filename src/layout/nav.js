@@ -124,6 +124,7 @@ export function buildNav(layout) {
   }
   for (const o of S.urban?.buildings || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  for (const stop of S.busStops || []) for (const o of stop.obstacles) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.transitCenter?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.westParking?.islands || []) polygonObstacle(ground, frame(0, 0, 0), o);
   // Gantry posts are solid; a post over a walk is dropped by the layout (cantilevered beam).

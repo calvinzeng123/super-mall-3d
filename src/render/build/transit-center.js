@@ -73,11 +73,12 @@ function coach(B, item) {
     }
   });
 }
-function waitingBench(B, seat) {
-  const { x, z, w, d } = seat;
+/** Slatted waiting bench; the backrest is on the seat's `back` side (-1 north, the default, or +1 south). */
+export function waitingBench(B, seat) {
+  const { x, z, w, d, back = -1 } = seat;
   for (const dx of [-w * .38, w * .38]) B.get('extMetal').box(x + dx, .24, z, .08, .48, d * .8, C.metal);
   for (let dz = -d / 2; dz < d / 2; dz += .11) B.get('wood').box(x, .48, z + dz, w, .09, .08, C.wood);
-  for (let yy = .7; yy < 1.1; yy += .13) B.get('wood').box(x, yy, z - d * .4, w, .1, .06, C.wood);
+  for (let yy = .7; yy < 1.1; yy += .13) B.get('wood').box(x, yy, z + back * d * .4, w, .1, .06, C.wood);
   for (const dx of [-w / 2, -w / 6, w / 6, w / 2]) B.get('extMetal').box(x + dx, .72, z, .04, .1, d, C.metal);
 }
 

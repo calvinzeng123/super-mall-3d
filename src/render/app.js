@@ -42,6 +42,7 @@ import { createResidentialLighting } from './residential-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 import { createExploreVisibility } from './explore-visibility.js';
 import { buildTransitCenter } from './build/transit-center.js';
+import { buildBusStops } from './build/bus-stops.js';
 import { createDeferredResource, createSerialTaskQueue, detailAssetKind, activeDetailFloor } from './deferred-resource.js';
 import { createFloorDetailSelector, createFloorDetailCache } from './floor-detail-streaming.js';
 import { buildOwnedFloorDetail, sceneResources, geometryStats } from './floor-detail-scene.js';
@@ -241,6 +242,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   await nextFrame();
   buildHospitality(ctx);
   buildTransitCenter(ctx);
+  buildBusStops(ctx);
   const towerIds = new Set(layout.buildings.filter(b => b.kind === 'tower').map(b => b.id));
   buildParking({ ...ctx, layout: { ...layout,
     buildings: layout.buildings.filter(b => towerIds.has(b.id)),

@@ -14,6 +14,7 @@ import { CATEGORIES } from './constants.js';
 import { prepareRideableElevators } from './elevator-shafts.js';
 import { applySharedGarages } from './shared-garages.js';
 import { addTransitCenter } from './transit-center.js';
+import { addBusStops } from './bus-stops.js';
 import { buildExpandedP1Spec } from './p1-expansion-spec.js';
 import { applyP1Expansion } from './p1-expansion.js';
 import { applyP1VehicleAccess } from './p1-access.js';
@@ -64,5 +65,6 @@ export function buildLayout({ expansion = true, fidelity = expansion } = {}) {
   if (expansion) applyP1Finishes(layout);
   if (expansion) applyMetroInterchange(layout);
   addTransitCenter(layout.site, layout.extensions);
+  if (expansion) addBusStops(layout);
   return prepareRideableElevators(layout);
 }

@@ -251,17 +251,28 @@ function roads(ctx, S, B, G) {
   const y = yR + 0.012;
   const white = '#ecebe6', yellow = '#e7b416';
   const inX = (x) => Math.abs(x) < 17 || Math.abs(x) > 284;
+  // 星湾广场站：港湾切开人行道和路缘石，信号灯横道在中央隔离带留出安全岛。
+  const busBays = (S.busStops || []).filter(s => s.kind === 'bay');
+  const busCrossings = S.crossings.filter(c => c.busStop);
+  const nearBusCrossing = (a, b) => busCrossings.some(c => b > c.rect.x0 - 2 && a < c.rect.x1 + 2);
   // 云澜大道：中央绿化隔离带 + 每向 3 车道
   const av = R.avenue;
-  for (const seg of [[av.x0, -17], [17, av.x1]]) {
+  const medianSegs = [[av.x0, -17], [17, av.x1]].flatMap(([a, b]) => {
+    const out = [];
+    for (const c of busCrossings.filter(c => c.rect.x0 > a && c.rect.x1 < b).sort((p, q) => p.rect.x0 - q.rect.x0)) {
+      out.push([a, c.rect.x0 + .5]); a = c.rect.x1 - .5;
+    }
+    return [...out, [a, b]];
+  });
+  for (const seg of medianSegs) {
     const len = seg[1] - seg[0], cx = (seg[0] + seg[1]) / 2;
     B.get('ext').box(cx, -0.02, 0, len - 2, 0.2, 4, COLORS.stoneDark);
     B.get('foliage').box(cx, 0.12, 0, len - 2.4, 0.24, 3.4, '#5e8f45');
   }
   for (const z of [-10, -6, 6, 10]) {
-    for (let x = av.x0 + 2; x < av.x1 - 4; x += 9) if (!inX(x) && !inX(x + 3)) B.get('ext').box(x + 1.5, y, z, 3, 0.02, 0.14, white);
+    for (let x = av.x0 + 2; x < av.x1 - 4; x += 9) if (!inX(x) && !inX(x + 3) && !nearBusCrossing(x, x + 3)) B.get('ext').box(x + 1.5, y, z, 3, 0.02, 0.14, white);
   }
-  for (const z of [-2.2, 2.2]) for (const seg of [[av.x0, -17], [17, av.x1]]) B.get('ext').box((seg[0] + seg[1]) / 2, y, z, seg[1] - seg[0] - 2, 0.02, 0.12, yellow);
+  for (const z of [-2.2, 2.2]) for (const seg of medianSegs) B.get('ext').box((seg[0] + seg[1]) / 2, y, z, seg[1] - seg[0] - 2, 0.02, 0.12, yellow);
   // 星湾路：双黄线 + 车道虚线
   for (const seg of [[-298, -20], [20, 298]]) {
     const cz = (seg[0] + seg[1]) / 2, len = seg[1] - seg[0];
@@ -280,6 +291,7 @@ function roads(ctx, S, B, G) {
   { const r = R['service-n']; B.get('ext').box((r.x0 + r.x1) / 2 + 4, y, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 12, 0.02, 0.12, yellow); }
   // 斑马线与停止线
   for (const c of S.crossings) {
+    if (c.busStop) continue; // zebra, stop lines and signals come with the bus station
     const r = c.rect;
     const paintY=(ctx.layout.extensions?.roads||[]).some(road=>road.polys.some(p=>convexOverlap(c.poly,p)))?.065:y;
     if(c.id.startsWith('west-cross-')){
@@ -292,12 +304,14 @@ function roads(ctx, S, B, G) {
   for (const z of [-21, 21]) B.get('ext').box(z < 0 ? -5 : 5, y, z, 10, 0.02, 0.3, white);
   // 人行道 + 路缘石
   const walk = ctx.mats.floor('paving', 0.8);
+  const pavingCuts = [...openings, ...busBays.map(s => s.bay)];
+  const curbCuts = [...openings, ...busBays.flatMap(s => [s.curbCut, ...s.curbGaps]), ...busCrossings.flatMap(c => c.curbGaps || [])];
   for (const s of S.sidewalks) {
-    flatRect(G, walk, s.rect, -0.135, 4.8, openings);
+    flatRect(G, walk, s.rect, -0.135, 4.8, pavingCuts);
     const r = s.rect;
     const horiz = r.x1 - r.x0 > r.z1 - r.z0;
-    if (horiz) for (const z of [r.z0, r.z1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(r.x0, z - .15, r.x1, z + .15)), openings, .02, .16, '#c9c5bc');
-    else for (const x of [r.x0, r.x1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(x - .15, r.z0, x + .15, r.z1)), openings, .02, .16, '#c9c5bc');
+    if (horiz) for (const z of [r.z0, r.z1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(r.x0, z - .15, r.x1, z + .15)), curbCuts, .02, .16, '#c9c5bc');
+    else for (const x of [r.x0, r.x1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(x - .15, r.z0, x + .15, r.z1)), curbCuts, .02, .16, '#c9c5bc');
   }
 }
 
@@ -398,7 +412,7 @@ function garageGates(ctx, S, B) {
   }
 }
 
-/** 一期广场：喷泉、IP 雕塑、立牌、卸货区货车、公交站；二期星湾广场：椭圆铺装、旱喷、座椅 */
+/** 一期广场：喷泉、IP 雕塑、立牌、卸货区货车；二期星湾广场：椭圆铺装、旱喷、座椅 */
 function plazaFeatures(ctx, B) {
   const y = -0.14;
   if (ctx.bById.P2) starBayPlaza(ctx, B);
@@ -451,13 +465,7 @@ function plazaFeatures(ctx, B) {
       for (const [du, dv] of [[-3, -1.2], [-3, 1.2], [1.5, -1.2], [1.5, 1.2], [4.8, -1.2], [4.8, 1.2]]) B.get('ext').box(tu + du, y + 0.45, tv + dv, 0.9, 0.9, 0.4, '#1d2023');
     });
   }
-  // 公交站：云澜大道北侧人行道
-  const bs = { x: -70, z: -17 };
-  B.get('extMetal').box(bs.x, y + 1.5, bs.z - 0.9, 8, 3, 0.08, '#4b5563');
-  B.get('glass').box(bs.x, y + 1.4, bs.z - 0.85, 7.8, 2.4, 0.04, '#ffffff');
-  B.get('extMetal').box(bs.x, y + 3.05, bs.z, 8.4, 0.12, 2.4, '#2f3439');
-  B.get('glow').box(bs.x + 3.2, y + 1.6, bs.z - 0.95, 1.2, 1.8, 0.05, '#cfe8ff');
-  bench(B, bs.x - 1.5, y, bs.z - 0.2, 0);
+  // 云澜大道北侧人行道的公交候车亭随 site.busStops 由 bus-stops.js 绘制（带碰撞）。
 }
 
 /** 二期星湾广场：三翼围合的椭圆铺装、旱喷水景、环形座椅与树池 */
