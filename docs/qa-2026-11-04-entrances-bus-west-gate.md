@@ -113,8 +113,17 @@
   - 去掉门口排除后，`ground-doors` 失败在 R1-MAIN 长椅；
   - 用旧的门扇绘制代码，失败在 P1-SE 门洞；
   - `nav` 测试按坡道门槛更新。
-- 全量 `node --test tests/*.test.js`：见本页末尾的结果。
+- 全量 `node --test tests/*.test.js`：**389/389 通过**（提交 `ab2882d`）。
 - 第一人称实景截图：本地构建，Chromium 软件渲染。
+
+![西门步行轴、星湾广场站、东南主入口与规划总图](qa/entrances-2026-11-04/overview.jpg)
+
+单张截图：
+- [西门往外看](qa/entrances-2026-11-04/west-gate-through-gate.jpg)
+- [停车场步行轴](qa/entrances-2026-11-04/west-gate-walk-into-lot.jpg)
+- [星湾广场站（西行）](qa/entrances-2026-11-04/bus-wb-platform.jpg)
+- [横道安全岛](qa/entrances-2026-11-04/bus-crossing-eb.jpg)
+- [一期东南主入口](qa/entrances-2026-11-04/p1-se-door.jpg)
 
 ## 5. 发布
 
