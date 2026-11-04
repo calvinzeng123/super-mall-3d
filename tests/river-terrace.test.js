@@ -105,7 +105,8 @@ test('栏杆审计：每段真实落差都有栏杆，北立面、挑台口与 P
   const supports = terraceSupports(L, lv);
   assert.ok(supports.length >= 3, 'P1C-3F 楼板与两座挑台');
   const edges = expansionTerraceEdges(lv, L.entrances, supports);
-  const river = edges.filter(e => T.pieces.some(p => p.outer.some(([x, z]) => Math.hypot(x - e.mid[0], z - e.mid[1]) < e.len / 2 + .01)) && e.mid[1] <= -239.99);
+  const river = edges.filter(e => e.riverTerrace);
+  assert.ok(river.length >= 10 && river.every(e => e.mid[1] <= -239.99));
   let total = 0;
   const railAt = [];
   for (const e of river) for (const [a, b] of e.spans) {

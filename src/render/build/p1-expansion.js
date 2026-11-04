@@ -165,7 +165,7 @@ export function expansionTerraceEdges(lv, entrances = [], supports = []) {
     if (seen.has(key)) continue;
     seen.add(key);
     spans = doorGaps(e, entrances.filter(en => en.level === lv.id)).reduce((s, gap) => subtractInterval(s, gap), spans);
-    found.push({ ...e, spans });
+    found.push(sampled.has(poly) ? { ...e, spans, riverTerrace: true } : { ...e, spans });
   }
   return found;
 }

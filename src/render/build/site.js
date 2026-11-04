@@ -9,6 +9,7 @@ import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from '
 import { COLORS } from '../theme.js';
 import { rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { buildUrbanDistrict } from './urban.js';
+import { buildRiver } from './river.js';
 import { buildContextBuildings } from './context-buildings.js';
 import { buildForecourt } from './forecourt.js';
 import { buildWestParkingDetails } from './west-parking.js';
@@ -90,7 +91,7 @@ export function siteGroundHoles(layout) {
   const S = layout.site;
   const outlines = layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline);
   // cutSurfaceShapes unions intersecting and duplicate cuts before triangulation.
-  return [...outlines, ...S.trenches, ...(S.openings || [])];
+  return [...outlines, ...S.trenches, ...(S.openings || []), ...(S.river ? [S.river.channel] : [])];
 }
 
 export function buildSite(ctx) {
@@ -124,6 +125,7 @@ export function buildSite(ctx) {
 
   roads(ctx, S, B, G);
   buildUrbanDistrict(ctx);
+  buildRiver(ctx);
   entrances(ctx);
   garageGates(ctx, S, B);
   plazaFeatures(ctx, B);

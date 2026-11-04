@@ -322,7 +322,7 @@ function mirror(B, r, y0) {
 }
 
 /** 玻璃悬挑观景台：沿 +u 悬挑出外墙 */
-function skywalk(B, r, y0) {
+export function skywalk(B, r, y0) {
   const cz = (r.z0 + r.z1) / 2, d = r.z1 - r.z0;
   B.get('glass').box((r.x0 - 0.5 + r.x1) / 2, y0 + 0.02, cz, r.x1 - r.x0 + 0.5, 0.06, d, 0xffffff);
   for (const z of [r.z0, r.z1]) B.get('metal').box((r.x0 + r.x1) / 2, y0 - 0.2, z, r.x1 - r.x0, 0.4, 0.25, COLORS.darkSteel);

@@ -20,6 +20,11 @@ const LANES = [
   { axis: 'z', c: 289, dir: 1, a0: -268, a1: 268, n: 3 }, { axis: 'z', c: 295, dir: -1, a0: -268, a1: 268, n: 3 },
 ];
 
+/** Street lanes of a layout. With 云澜江 the 星湾路 lanes run on over 星湾桥 and wrap at 滨江北路 (z -500). */
+export function streetLanes(layout) {
+  return layout?.site?.river ? LANES.map(ln => ln.axis === 'z' && Math.abs(ln.c) < 10 ? { ...ln, a0: -500, n: 7 } : ln) : LANES;
+}
+
 /** 12 m low-floor city bus as one vertex-coloured geometry (~1.2k vertices).
  * Front faces local +z; both doors are on local -x, the right-hand side.
  * White parts take the livery from the instance colour. */
@@ -116,7 +121,7 @@ export function buildTraffic(ctx) {
   const c = new THREE.Color();
 
   const street = [];
-  for (const ln of LANES) {
+  for (const ln of streetLanes(ctx.layout)) {
     const len = ln.a1 - ln.a0;
     for (let i = 0; i < ln.n; i++) street.push({ ...ln, pos: ln.a0 + (i / ln.n) * len + rand() * (len / ln.n) * 0.6, speed: 9 + rand() * 5, color: COLORS[Math.floor(rand() * COLORS.length)] });
   }

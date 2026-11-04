@@ -35,7 +35,7 @@ export const RIVER = deepFreeze({
   arch: { deckTop: -0.12, girderDepth: 1.7, soffit: -1.9, ribX: 17, ribWidth: 1.4, ribDepth: 2.0, rise: 30,
     segments: 28, hangerPitch: 6, hangerStart: 7, struts: [-14, 0, 14] },
   girder: { deckTop: -0.12, girderDepth: 2.2, soffit: -2.4, piers: [-339, -387], lampPitch: 30 },
-  furniture: { treePitch: 12, secondRowPitch: 24, northPitch: 15, lampPitch: 24, benchPitch: 24, reedPitch: 6, reedHalf: 600 },
+  furniture: { treePitch: 12, secondRowPitch: 24, northPitch: 15, lampPitch: 24, benchPitch: 48, reedPitch: 6, reedHalf: 600 },
 });
 const CH = { z0: RIVER.north.bankTop, z1: RIVER.south.bankTop };   // channel between the bank tops
 const GIRDER_NAMES = { 'city-v-890': '城西二桥', 'city-v-540': '城西桥', 'city-v540': '城东桥', 'city-v890': '城东二桥' };
@@ -127,7 +127,7 @@ export function addRiver(site) {
     if (!near(x, decks, 2) && !near(x, [lookoutS.rect], 1.5)) lamps.push({ x, z: -288.6, y: -0.14, dir: [0, 1], h: 6, bank: 'S' });
     if (!near(x, decks, 2) && !near(x, [pavilion.rect], 1.5)) lamps.push({ x, z: -438, y: -0.14, dir: [0, -1], h: 6, bank: 'N' });
   }
-  for (const x of xs(Fu.benchPitch, 12)) if (!near(x, decks, 2) && !near(x, [lookoutS.rect], 2)) benches.push({ x, z: -287, y: -0.14, ry: Math.PI });
+  for (const x of xs(Fu.benchPitch)) if (!near(x, decks, 2) && !near(x, [lookoutS.rect], 2)) benches.push({ x, z: -287, y: -0.14, ry: Math.PI });
   for (const b of bridges) {
     if (b.kind === 'tied-arch') {
       for (let z = b.deck.z0 + 9; z < b.deck.z1; z += 18) for (const x of [b.deck.x0 + 0.8, b.deck.x1 - 0.8]) lamps.push({ x, z, y: A.deckTop, dir: [x < 0 ? 1 : -1, 0], h: 6, bridge: b.id });
