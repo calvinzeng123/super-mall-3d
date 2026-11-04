@@ -11,7 +11,7 @@ const paint = new Proxy({}, {
 });
 globalThis.document ??= {createElement:()=>({width:0,height:0,getContext:()=>paint})};
 
-test('艺术通廊在地铁 A 通道的实际墙面、广告和门框均保留入口净空', () => {
+test('艺术通廊在地铁 E 口通道的实际侧墙上保留入口净空，门旁墙面仍在', () => {
   const materials = new Proxy({}, {get:(m,k)=>m[k] ||= new THREE.MeshBasicMaterial({side:THREE.DoubleSide})});
   const levels = Object.fromEntries(L.levels.map(lv=>[lv.id,{lv,batch:new BatchSet(materials),shellBatch:new BatchSet(materials),base:new THREE.Group(),shell:new THREE.Group(),group:new THREE.Group()}]));
   const ctx={layout:L,levels,bById:Object.fromEntries(L.buildings.map(b=>[b.id,b])),lvById:Object.fromEntries(L.levels.map(l=>[l.id,l])),renderer:{},dynamic:[],

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import clipping from 'polygon-clipping';
 import assert from 'node:assert/strict';
 import { buildLayout } from '../src/layout/layout.js';
 import { buildNav, step, clear } from '../src/layout/nav.js';
@@ -54,18 +55,27 @@ test('地面宽台阶、B1M 美食层和地铁站厅经过真实通廊连续双�
   s = travel(s, access.slice(0, -1).reverse()); assert.equal(s.floor, 'ground');
 });
 
-test('地铁新口错开 A 口真实楼梯和商场楼板，隧道两端的结构边界均开口', () => {
-  const M = L.buildings.find(b => b.id === 'M'), PA = M.passages.find(p => p.id === 'PA'), e = L.entrances.find(e => e.id === court.metroPortal);
-  const A = L.entrances.find(e => e.id === 'M-A'), u = toL(PA.F, A.kiosk.frame.ox, A.kiosk.frame.oz)[0];
-  assert.ok(Math.min(toL(PA.F, e.seg.x0, e.seg.z0)[0], toL(PA.F, e.seg.x1, e.seg.z1)[0]) > u + 2.5 + 1);
+test('艺术通廊接入地铁 E 口通道侧墙，不再横穿 E 口通道，且两端结构边界均开口', () => {
+  const M = L.buildings.find(b => b.id === 'M'), PE = M.passages.find(p => p.id === 'PE'), e = L.entrances.find(e => e.id === court.metroPortal);
+  assert.equal(e.metroPassage, 'PE');
   const p = L.extensions.paths.find(p => p.id === court.metroPath), P1 = L.buildings.find(b => b.id === 'P1');
   for (const poly of p.polys) assert.ok(!polysOverlap(poly, P1.outline), 'new tunnel crosses the main mall outside its portal');
+  for (const ex of M.exits) for (const poly of p.polys) assert.ok(!polysOverlap(poly, ex.kiosk.poly), `${ex.id} stair overlaps the art passage`);
+  // Only the 3 cm butt end of the last strip may reach into the E tunnel.
+  const inside = clipping.intersection(clipping.union(...p.polys.map(q => [q])), [PE.poly]);
+  const area = inside.reduce((sum, [ring]) => sum + Math.abs(polyArea(ring)), 0);
+  assert.ok(area < 5.2 * .05, `art passage runs through the E tunnel (${area.toFixed(2)} m²)`);
+  const len = Math.hypot(e.seg.x1 - e.seg.x0, e.seg.z1 - e.seg.z0);
+  for (let t = .1; t < .9; t += .1) {
+    const x = e.seg.x0 + (e.seg.x1 - e.seg.x0) * t, z = e.seg.z0 + (e.seg.z1 - e.seg.z0) * t;
+    assert.ok(!PE.walls.some(w => Math.abs(w.z0 - z) < .01 && Math.abs(w.z1 - z) < .01 && x > Math.min(w.x0, w.x1) && x < Math.max(w.x0, w.x1)), `E tunnel wall across doorway at ${x}`);
+  }
+  assert.ok(len >= 5 && PE.walls.some(w => Math.abs(w.z0 - e.seg.z0) < .01 && Math.max(w.x0, w.x1) <= Math.min(e.seg.x0, e.seg.x1) + .01), 'E tunnel wall beside the doorway');
   const network = expansionConnectionNetworks(L).find(n => n.paths.some(p => p.id === court.metroPath));
   assert.ok(network.levels.includes('M-B1') && network.levels.includes('P1-B1M'));
-  const point = p.points.at(-1), local = edge => [toL(PA.F, edge.x0, edge.z0), toL(PA.F, edge.x1, edge.z1)];
   for (const edge of network.boundary) {
-    const [a, b] = local(edge);
-    assert.ok(!(Math.abs(a[1] + 4) < .1 && Math.abs(b[1] + 4) < .1 && Math.min(a[0], b[0]) < 62 && Math.max(a[0], b[0]) > 62), 'station portal capped');
+    const onDoor = [edge.z0, edge.z1].every(z => Math.abs(z - e.seg.z0) < .1);
+    assert.ok(!(onDoor && Math.min(edge.x0, edge.x1) < (e.seg.x0 + e.seg.x1) / 2 && Math.max(edge.x0, edge.x1) > (e.seg.x0 + e.seg.x1) / 2), 'station portal capped');
   }
   const compact = buildLayout({ expansion: false });
   assert.equal(compact.expansion, undefined);

@@ -2,6 +2,7 @@
 // Path slabs, portals, furniture footprints and the renderer share these records.
 import clipping from 'polygon-clipping';
 import { IDENTITY, frame, rect, rectPoly, lrectPoly, lseg, toW, circlePoly } from './geom.js';
+import { ACCESS, ACCESS_HW } from './metro-access.js';
 
 const strip = (a, b, width) => {
   const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -53,12 +54,14 @@ export function addSunkenArtCourt(layout) {
   b.access.routes.push({ id: 'P1-SUNKEN-ACCESS', stair: flight.id, from: lv.id, to: 'ground', landings: [],
     waypoints: [{ ...bottom, z: -44.8 }, { ...top, z: top.z + .65 }, { ...top, z: -23.5 }] });
 
-  const PA = layout.buildings.find(b => b.id === 'M').passages.find(p => p.id === 'PA');
-  const width = 5.2, at = 62, end = toW(PA.F, at, -PA.hw), turn = toW(PA.F, at, -24);
+  // The art passage ends in the side wall of the metro E-exit tunnel. Running
+  // on to the station across that tunnel left its walls standing in the
+  // passage: rendered on M-B1, but walkable on B1M.
+  const E = ACCESS.find(a => a.id === 'E'), [ex, ez] = E.route.at(-2), wallZ = ez - ACCESS_HW;
+  const width = 5.2, stationDoor = { x0: ex - width / 2, z0: wallZ, x1: ex + width / 2, z1: wallZ };
   const metro = path(layout, 'P1-sunken-metro-passage', '云谷艺术通廊 · 地铁云澜汇站',
-    [[-86, -38.5], [-78, -38.5], [-74, turn[1]], turn, end], width, { to: 'M-B1', artGallery: true });
-  const seg = lseg(PA.F, { x0: at - width / 2, z0: -PA.hw, x1: at + width / 2, z1: -PA.hw, side: 'S' });
-  const entry = portal(layout, `${metro.id}-station`, seg, -PA.F.s, PA.F.c, { to: 'M-B1', name: metro.name, metroPassage: 'PA' });
+    [[-86, -38.5], [-78, -38.5], [ex, -38.5 + (ex + 78)], [ex, wallZ]], width, { to: 'M-B1', artGallery: true });
+  const entry = portal(layout, `${metro.id}-station`, stationDoor, 0, 1, { to: 'M-B1', name: metro.name, metroPassage: `P${E.id}` });
   (layout.extensions.connections ||= []).push({ id: metro.id, from: lv.id, to: 'M-B1', kind: 'underground' });
 
   const stage = rect(-122, -52, -116, -44.8);
