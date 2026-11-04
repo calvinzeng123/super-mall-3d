@@ -123,7 +123,7 @@ test('新增车位与结构、楼梯、电梯厅和车道分离，四张大盘�
     [[-43, -225], [-32, -225], [-32, -214], [-43, -214]])), 'extraction pickup lane is occupied');
 });
 
-test('新增六组电梯均有真实地面入口候梯楼板，十一组安全梯有连续实体梯段', () => {
+test('新增六组电梯均有真实地面入口候梯楼板，十组安全梯有连续实体梯段', () => {
   const lifts = L.elevators.filter(e => e.sharedGarage);
   assert.equal(lifts.length, 6);
   for (const e of lifts) {
@@ -140,7 +140,8 @@ test('新增六组电梯均有真实地面入口候梯楼板，十一组安全�
     assert.ok(lv(e.serves.at(-1)).slab.pieces.some(p => pointInPoly([e.x, e.z + 3.2], p.outer)));
   }
   const stairs = L.stairs.filter(s => s.sharedGarage);
-  assert.equal(stairs.length, 11);
+  // WPG-SHARED-ST1 让给云澜·西苑 1 号楼（其地下大堂楼梯经门户服务车库西北角）
+  assert.equal(stairs.length, 10);
   for (const s of stairs) {
     const b = L.buildings.find(b => b.id === s.building);
     const routes = b.access.routes.filter(r => r.stair === s.id);

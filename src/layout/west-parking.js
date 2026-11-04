@@ -9,7 +9,10 @@ export const WEST_GATE_AXIS = -123.5, WEST_GATE_WIDTH = 5.6;
  * inside a pedestrian walk is dropped and the beam cantilevers over the walk. */
 export const gantryPosts = gate => gate.posts || [-gate.width / 2 - .75, gate.width / 2 + .75];
 
-export function buildWestParking(site, ext) {
+/** northStrip: the 云澜·西苑 community plot. Its lots, aisles and road stubs go; the
+ * spines start at the A3/B3 aisle, a fence walk runs along its south edge and a
+ * fire road with the G4 community lane serves the towers. */
+export function buildWestParking(site, ext, { northStrip = null } = {}) {
   const bounds=rect(-484,-250,-301,-33),poly=rectPoly(bounds);
   const plan={id:'west-public-parking',name:'一期西侧大型公共停车场',rect:bounds,poly,lots:[],gates:[],islands:[],walks:[],roads:[]};
   site.westParking=plan;
@@ -28,20 +31,36 @@ export function buildWestParking(site, ext) {
     ext.paths.push(p);plan.walks.push(p);
     p.polys.forEach((q,i)=>addPlaza(site,`${p.id}-${i}`,q,null));return p;
   };
-  for(const x of [-480,-422,-375,-349])road(`spine-${-x}`,[[x,0,-246],[x,0,-37]]);
+  const ns=northStrip,inStrip=x=>ns&&x<ns.x1;
+  // Inside the community the spines start at the A3/B3 aisle (z ≥ -198); spine -349 stays public.
+  for(const x of [-480,-422,-375,-349])road(`spine-${-x}`,[[x,0,inStrip(x)?-195:-246],[x,0,-37]]);
   road('east-north',[[-309,0,-246],[-309,0,-206]]);
   road('east-south',[[-309,0,-175],[-309,0,-37]]);
   for(const [i,z] of [-239,-130,-53].entries()) {
-    const r=road(`access-${i+1}`,[[-480,0,z],[-292,0,z]],7);
+    // North access lane: only its public stub from spine -349 to the west ring road remains.
+    const r=road(`access-${i+1}`,[[ns&&i===0?-349:-480,0,z],[-292,0,z]],7);
     plan.gates.push({id:`WP-G${i+1}`,name:['北口','中央口','南口'][i],x:-302,z,width:r.width});
     site.driveways.push(rectPoly(rect(-306,z-3.5,-286,z+3.5)));
   }
   // Two separate level approaches stop at the existing descending street ramps.
   for(const x of [-363,-355])road(`basement-${-x}`,[[x,0,-130],[x,0,-144]],5);
-  road('north-link',[[-375,0,-217],[-309,0,-217]]);
-  walk('pedestrian-spine',[[-427,0,-248],[-427,0,-35]],3);
+  road('north-link',[[ns?-349:-375,0,-217],[-309,0,-217]]);
+  walk('pedestrian-spine',[[-427,0,ns?ns.z1+1.5:-248],[-427,0,-35]],3);
   walk('garage-promenade',[[-482,0,-179],[-303,0,-179]],4);
-  walk('mall-approach',[[-427,0,-206],[-303,0,-206],[-303,0,-200],[-282,0,-200]],4);
+  // 西苑南侧步道 along the community fence carries the mall approach.
+  walk('mall-approach',ns?[[-480,0,ns.z1+2],[-303,0,ns.z1+2],[-303,0,-200],[-282,0,-200]]:[[-427,0,-206],[-303,0,-206],[-303,0,-200],[-282,0,-200]],4);
+  if(ns) {
+    // The community's internal path continues the spine north of the fence; one fire road
+    // (消防登高场地 HS-W1/HS-W2) runs 5 m south of both towers, fed from gate G4.
+    walk('garden-path',[[-427,0,ns.z0+1.5],[-427,0,ns.z1-1.5]],3);
+    const fire={x0:ns.x0,z0:-221.8,x1:ns.x1,z1:-211.8},fz=(fire.z0+fire.z1)/2;
+    const lanes=[
+      {id:'west-garden-fire-road',name:'云澜·西苑 消防车道 · 登高场地',kind:'fire',width:10,points:[[fire.x0,0,fz],[fire.x1,0,fz]],polys:[rectPoly(rect(fire.x0,fire.z0,fire.x1,fire.z1))]},
+      {id:'west-garden-g4-lane',name:'云澜·西苑 北门 G4 车道',kind:'fire',width:7,points:[[-422,0,ns.z0+4],[-422,0,fire.z0]],polys:[rectPoly(rect(-425.5,ns.z0+4,-418.5,fire.z0))]},
+    ];
+    for(const r of lanes){ext.roads.push(r);plan.roads.push(r);}
+    plan.northStrip={...ns};
+  }
   walk('east-promenade',[[-303,0,-248],[-303,0,-29]],3);
   walk('hotel-promenade',[[-303,0,-29],[-204,0,-29],[-204,0,-72]],3);
   // 西门 · 停车场步行轴：5.6 m 石材步道，从西外环斑马线 (x=-298) 一直通到场内步行脊 (x=-427)。
@@ -58,8 +77,13 @@ export function buildWestParking(site, ext) {
     for(const [ri,z] of centers.entries()) {
       // C3 is occupied by the retained pair of underground access halls.
       if(ci===2&&z===-195)continue;
+      // The A/B lots under the community towers and fire road give way to 云澜·西苑.
+      if(ns&&ci<2&&[-239,-217].includes(z))continue;
       const id=`WP-${label}${ri+1}`,r=rect(x0-0.25,z-8.9,x1+.25,z+8.9),aisle=rect(x0-4,z-3.5,x1+4,z+3.5);
-      const rows=[{id:`${id}-N`,u0:x0,u1:x1,v0:z-8.5,v1:z-3.5,face:'S'},{id:`${id}-S`,u0:x0,u1:x1,v0:z+3.5,v1:z+8.5,face:'N'}];
+      const rows=[{id:`${id}-N`,u0:x0,u1:x1,v0:z-8.5,v1:z-3.5,face:'S'},{id:`${id}-S`,u0:x0,u1:x1,v0:z+3.5,v1:z+8.5,face:'N'}]
+        .filter(row=>!(ns&&ci<2&&row.v0<-198.5));
+      // Their north rows went for the fence walk; the lot surface stops short of it.
+      if(ns&&ci<2&&r.z0<ns.z1+4)r.z0=ns.z1+4.1;
       const filled=fillRows(IDENTITY,rows,blocks,id);
       // A row removed by the west-gate walk hands its charging bays to the opposite row.
       const evRow=filled.stalls.some(s=>s.row===rows[0].id)?rows[0].id:rows[1].id;

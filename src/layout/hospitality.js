@@ -10,6 +10,8 @@ import { createResidentialPlan, RESIDENTIAL_SLOTS } from './residential-plan.js'
 import { towerStairPlan, buildTowerStairAccess } from './tower-stairs.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 import { createHospitalityLobby } from './hospitality-lobby.js';
+import { WEST_GARDEN, westTower, westGates, westGardenSite } from './community.js';
+import { WEST_SITE } from './community-sites.js';
 
 export const HOSPITALITY = {
   west: rect(-286, -151, -203, -27),
@@ -368,10 +370,12 @@ function addTowerGarageRamps(part, site, extensions) {
   }
 }
 
-/** 返回新的 parts；同时在原商场的已验证走道端头登记真实门户，保持原主体布局不动。 */
-export function buildHospitality(existing, site) {
+/** 返回新的 parts；同时在原商场的已验证走道端头登记真实门户，保持原主体布局不动。
+ * expansion（游览布局）另建云澜·西苑 W1/W2 及其北排场地；紧凑 FPS 布局不变。 */
+export function buildHospitality(existing, site, { expansion = false } = {}) {
   site.bounds = rect(-495, -298, 298, 298);
-  const parts = [...HOSPITALITY.towers.map(tower),publicWestGarage()];
+  const community = expansion ? WEST_GARDEN.towers.map(westTower) : [];
+  const parts = [...HOSPITALITY.towers.map(tower),publicWestGarage(),...community];
   const all = [...existing, ...parts], by = Object.fromEntries(all.map(p => [p.building.id, p]));
   // Both attached towers use short canopies and surveyed docking lobbies. A generic seven-metre forecourt canopy would penetrate the neighbour.
   // R1-R4 lobbies draw their own portal and canopy too: no generic mall door
@@ -491,7 +495,23 @@ export function buildHospitality(existing, site) {
     by.R1.ramps.push({ id: `R1-${i ? 'OUT' : 'IN'}`, building: 'R1', type: i ? 'street-out' : 'street-in', name: i ? '住宅车库出口' : '住宅车库入口', width: 5, frame: F, lane, poly, from: i ? low : high, to: i ? high : low });
     site.trenches.push(poly); site.driveways.push(rectPoly(rect(16, z - 2.5, 20, z + 2.5)));
   }
-  buildWestParking(site,extensions);
+  if (community.length) {
+    // 云澜·西苑：门禁社区地块（围墙、北门 G4、消防登高场地）占用西停车场北排。
+    const plot = WEST_GARDEN.plot, poly = rectPoly(plot);
+    extensions.districts.push({ id: WEST_GARDEN.id, name: WEST_GARDEN.name, rect: plot, poly, buildingIds: community.map(p => p.building.id) });
+    site.plots.push({ id: WEST_GARDEN.id, name: `${WEST_GARDEN.name} · 云澜物业社区`, rect: plot, poly });
+    for (const p of community) {
+      const b = p.building, x = b.center[0];
+      p.entrances.find(e => e.main).coveredConnection = true;
+      const points = [[x, 0, b.bounds.z1], [x, 0, WEST_GARDEN.fireRoad.z0]];
+      extensions.paths.push({ id: `${b.id}-main-approach`, kind: 'ground', name: `${b.name}入口步道`, width: 4, points, polys: strips(points, 4).map(rectPoly) });
+    }
+  }
+  buildWestParking(site,extensions,community.length?{northStrip:WEST_SITE.plot}:{});
   extensions.connections = all.flatMap(p => p.entrances.filter(e => e.extension).map(e => ({ id: e.id, from: e.level, to: e.to, seg: e.seg })));
-  return { parts, extensions };
+  if (!community.length) return { parts, extensions };
+  site.westGarden = westGardenSite(community);
+  const access = { zones: [], gates: [] };
+  for (const p of community) { const a = westGates(p); access.zones.push(...a.zones); access.gates.push(...a.gates); }
+  return { parts, extensions, access };
 }

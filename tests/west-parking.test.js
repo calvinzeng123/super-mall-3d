@@ -14,26 +14,31 @@ function follow(points,floor='ground') {
   }
   return s;
 }
-test('西侧三列停车场保留500以上实体车位及充电无障碍位，入口和交通中心占地已让开',()=>{
+test('西侧三列停车场保留400以上实体车位及充电无障碍位，入口、交通中心和北排云澜·西苑占地已让开',()=>{
   const stalls=P.lots.flatMap(l=>l.stalls);
-  assert.equal(P.stallCount,stalls.length);assert.ok(P.stallCount>500);assert.equal(P.lots.length,24);
+  // 北排 A1/A2/B1/B2 及 A3/B3 北排车位让给云澜·西苑（551 → 427）
+  assert.equal(P.stallCount,stalls.length);assert.ok(P.stallCount>380);assert.equal(P.lots.length,20);
   assert.equal(P.evCount,stalls.filter(s=>s.type==='ev').length);assert.ok(P.evCount>=40);
   assert.equal(P.accessibleCount,stalls.filter(s=>s.type==='accessible').length);assert.ok(P.accessibleCount>=8);
   assert.equal(L.extensions.surfaceParking.reduce((n,l)=>n+l.stalls.length,0),
     P.stallCount+L.extensions.surfaceParking.find(l=>l.id==='hotel-shared-parking').stalls.length);
-  assert.equal(P.gates.length,6);
-  assert.deepEqual(P.gates.filter(g=>g.facing).map(g=>g.name),['北环西口','北环东口','大道口']);
+  assert.equal(P.gates.length,5);
+  assert.deepEqual(P.gates.filter(g=>g.facing).map(g=>g.name),['北环西口','大道口']);
   const solids=[...L.site.openings,...L.site.trenches,...L.buildings.filter(b=>!b.undergroundOnly).map(b=>b.outline)];
   for(const lot of P.lots)for(const stall of lot.stalls) {
     assert.ok(stall.poly.every(p=>pointInPoly(p,P.poly)));
     for(const p of [...solids,...P.walks.flatMap(w=>w.polys),...P.roads.flatMap(r=>r.polys)])assert.ok(!convexOverlap(stall.poly,p,.025),`${lot.id}车位压占动线/建筑`);
   }
 });
-test('全部停车组两端连接循环车道，六个地面进出口与WPG坡口可双向到达',()=>{
+test('全部停车组两端连接循环车道，五个地面进出口与WPG坡口可双向到达',()=>{
   for(const lot of P.lots){const z=(lot.aisle.z0+lot.aisle.z1)/2,west=lot.id.startsWith('WP-C')?-349:-480,east=lot.id.startsWith('WP-C')?-309:-375;
     for(const pts of [[[west,z],[east,z]],[[east,z],[west,z]]])follow(pts);
   }
-  for(const z of P.gates.filter(g=>!g.facing).map(g=>g.z))for(const pts of [[[-480,z],[-285,z]],[[-285,z],[-480,z]]])follow(pts);
+  // 西外环三个口沿各自进场车道走到车道西端（北口车道止于 −349 公共支路，西侧为云澜·西苑）
+  for(const z of P.gates.filter(g=>!g.facing).map(g=>g.z)) {
+    const road=P.roads.find(r=>r.id.startsWith('west-access-')&&r.points.every(p=>p[2]===z)),west=Math.min(...road.points.map(p=>p[0]));
+    for(const pts of [[[west,z],[-285,z]],[[-285,z],[west,z]]])follow(pts);
+  }
   // North and south gates run from the public street into a lot spine.
   for(const g of P.gates.filter(g=>g.facing)){const street=g.facing[1]<0?-258:-12,lot=g.facing[1]<0?-240:-45;
     for(const pts of [[[g.x,street],[g.x,lot]],[[g.x,lot],[g.x,street]]])follow(pts);

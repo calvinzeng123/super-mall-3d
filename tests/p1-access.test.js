@@ -80,9 +80,10 @@ test('车行口距离控制：东口距云澜大道红线 ≥70m，北口距两�
   }
 });
 
-test('西侧地面停车场新增北环两口与大道口，闸架朝向城市道路并接场内纵向车道', () => {
+test('西侧地面停车场新增北环西口与大道口，闸架朝向城市道路并接场内纵向车道', () => {
   const plan = L.site.westParking;
-  assert.equal(plan.gates.length, 6);
+  // 北环东口（x −375）取消：其车道会落在云澜·西苑 2 号楼北立面上
+  assert.equal(plan.gates.length, 5);
   for (const g of WEST_LOT_GATES) {
     const gate = plan.gates.find(x => x.id === g.id);
     assert.ok(gate && gate.facing, `${g.id} 缺少朝向`);

@@ -29,9 +29,9 @@ export const P1_GARAGE_ARRIVALS = [
   { id: 'P1-E-arrival-west', rect: rect(-56, -36, -27.3, -29) },
 ];
 
+// WP-G4 is also the 云澜·西苑 community gate; the former 北环东口 (x −375) would end on W2's north face.
 export const WEST_LOT_GATES = [
   { id: 'WP-G4', name: '北环西口', x: -422, street: -256, lot: -246, z: -251 },
-  { id: 'WP-G5', name: '北环东口', x: -375, street: -256, lot: -246, z: -251 },
   { id: 'WP-G6', name: '大道口', x: -375, street: -14, lot: -37, z: -28 },
 ];
 
