@@ -48,8 +48,11 @@ export function maskRects(mask, w, h, on = (i, j) => mask.data[(j * w + i) * 4] 
 
 /** 「云澜汇 · 江景台」 channel letters on a dark band under the P1C deck edge, facing the river. */
 function riverLetters(B, FB, cx, z, yTop, text = '云澜汇 · 江景台') {
-  if (typeof document === 'undefined') return 0;
-  const W = 288, H = 40, vox = .03, mask = textMask(text, `900 34px ${FONT_CN}`, W, H);
+  const W = 288, H = 40, vox = .03;
+  let mask = null;
+  // Rasterising needs a real 2D canvas; headless builds without one skip the letters.
+  try { if (typeof document !== 'undefined') mask = textMask(text, `900 34px ${FONT_CN}`, W, H); } catch { mask = null; }
+  if (!mask?.data?.length) return 0;
   const xl = cx + W * vox / 2;                  // facing -z: the reader's right hand is -x
   B.get('extMetal').box(cx, yTop - H * vox / 2, z + .06, W * vox + .8, H * vox + .3, .1, '#2c363c');
   const rects = maskRects(mask, W, H);
