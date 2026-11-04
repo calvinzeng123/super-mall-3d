@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { L } from './helpers.js';
 import { frame, rect, rectPoly, lrectPoly, toW, toL, pointInPoly, distToSeg, polyBounds } from '../src/layout/geom.js';
 import { BatchSet, SignBatch } from '../src/render/batch.js';
-import { buildCommunityTower, coreCells, facadeCoverage, lobbySignSpot } from '../src/render/build/community.js';
+import { buildCommunityTower, coreCells, facadeCoverage, lobbySignSpot, COMMUNITY_FAR_LOD } from '../src/render/build/community.js';
 import { buildPublicGarageShells, connections } from '../src/render/build/hospitality.js';
 import { buildCommunitySite } from '../src/render/build/community-site.js';
 import { buildWestParkingDetails } from '../src/render/build/west-parking.js';
@@ -57,6 +57,47 @@ test('每栋社区塔楼外壳可构建：≤ 8 次绘制（楼梯实例默认�
     if (b.community === 'west') { west.calls += meshes.length; west.tris += tris; assert.equal(rec.basements.length, 2); }
   }
   assert.ok(west.calls <= 16 && west.tris <= 170000, `西苑外壳 ${west.calls} 次 / ${west.tris} 三角形`);
+});
+
+/** Meshes the renderer would draw: the mesh and every ancestor up to `root` visible. */
+function drawnMeshes(root) {
+  const out = [];
+  root.traverse((o) => { if (!o.isMesh) return; for (let q = o; q && q !== root.parent; q = q.parent) if (!q.visible) return; out.push(o); });
+  return out;
+}
+/** World bounds of the meshes' vertices at or above height y0. */
+function boundsOf(meshes, y0 = -Infinity) {
+  const box = new THREE.Box3(), v = new THREE.Vector3();
+  for (const m of meshes) {
+    m.updateMatrixWorld(true);
+    const p = m.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) if (v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld).y >= y0) box.expandByPoint(v);
+  }
+  return box;
+}
+
+test('西苑塔楼远景替身：600 m 外只画 2 个网格、≤ 1,500 三角形，轮廓与完整外壳一致；回到近处恢复完整外壳', () => {
+  const ctx = context(L);
+  for (const b of L.buildings.filter((q) => q.community === 'west')) {
+    const rec = buildCommunityTower(ctx, b, ctx.hospitality.buildings), lod = rec.group.children.find((o) => o.isLOD);
+    assert.ok(lod, `${b.id} 缺少远景替身`);
+    const near = drawnMeshes(rec.group), roof = L.levels.find((l) => l.building === b.id && l.kind === 'roof');
+    const [cx, cz] = toW(b.frame, (b.footprint.x0 + b.footprint.x1) / 2, (b.footprint.z0 + b.footprint.z1) / 2);
+    const cam = new THREE.PerspectiveCamera();
+    const at = (d) => { cam.position.set(cx + d, roof.elev / 2, cz); cam.updateMatrixWorld(); lod.update(cam); return drawnMeshes(rec.group); };
+    assert.deepEqual(at(COMMUNITY_FAR_LOD - 50), near, `${b.id} 近处应显示完整外壳`);
+    const far = at(COMMUNITY_FAR_LOD + 50), tris = far.reduce((n, m) => n + triangles(m), 0);
+    assert.ok(far.length <= 2 && far.every((m) => !near.includes(m)), `${b.id} 远景 ${far.length} 个网格`);
+    assert.ok(tris <= 1500, `${b.id} 远景 ${tris} 三角形`);
+    assert.deepEqual(far.map((m) => m.material.name).sort(), ['facadePlaster', 'facadeWindow']);
+    // 轮廓：入口雨棚（3.6 m）以上的平面包围盒、以及总高度，与完整外壳相差不到 0.5 m。
+    const A = boundsOf(near, 5), F = boundsOf(far, 5), Ah = boundsOf(near), Fh = boundsOf(far);
+    for (const k of ['x', 'z']) for (const s of ['min', 'max']) assert.ok(Math.abs(A[s][k] - F[s][k]) <= .5, `${b.id} 远景轮廓 ${s}.${k} ${F[s][k].toFixed(2)} / ${A[s][k].toFixed(2)}`);
+    assert.ok(Math.abs(Ah.max.y - Fh.max.y) <= .5 && Math.abs(Ah.min.y - Fh.min.y) <= .5, `${b.id} 远景高度 ${Fh.min.y.toFixed(2)}–${Fh.max.y.toFixed(2)} / ${Ah.min.y.toFixed(2)}–${Ah.max.y.toFixed(2)}`);
+    // 5 % 回差：刚进 600 m 仍是远景，570 m 以内才换回完整外壳。
+    assert.deepEqual(at(COMMUNITY_FAR_LOD - 10), far);
+    assert.deepEqual(at(COMMUNITY_FAR_LOD * .95 - 5), near);
+  }
 });
 
 /** Vertices of the distinct geometries under the given groups (instanced geometry counted once). */

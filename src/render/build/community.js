@@ -1,6 +1,7 @@
 // 云澜社区住宅（西苑 / 北苑）常驻外壳：楼板与层间线脚、户型立面窗与阳台、核心筒、走廊端玻璃、
 // 1F 门禁大堂 / 7F 空中会所、屋顶花园与招牌。只依赖 layout/community-contract.js 列出的字段：
-// 每栋一个 BatchSet（7 个材质批次 + 1 块招牌），户内陈设由 residence-interiors.js 按楼层加载。
+// 每栋一个 BatchSet（7 个材质批次 + 1 块招牌），户内陈设由 residence-interiors.js 按楼层加载；
+// 西苑两栋在 600 m 外换成两个批次的远景替身（园区全景、对岸视角）。
 import * as THREE from 'three';
 import { BatchSet, SignBatch } from '../batch.js';
 import { rect, toW, toL, subtractInterval } from '../../layout/geom.js';
@@ -379,6 +380,111 @@ function signFacade(layout, b) {
   return footprintEdges(b.footprint)[b.community === 'north' ? 0 : 1];
 }
 
+// 西苑 towers beyond this distance (camera to tower centre, 5 % hysteresis) draw a two-batch stand-in instead of the
+// exterior batches: the campus overview and the far bank see them at ~1 m per pixel, where windows are 2 px tall.
+export const COMMUNITY_FAR_LOD = 600;
+const FAR_GLASS = '#8c9ca3', FAR_BALCONY = '#a08d6e', FAR_DECK = '#a8916c', FAR_PLANTER = '#647f52', FAR_ROOF = '#aaa395', FAR_PENTHOUSE = '#c4bcad';
+const _up = new THREE.Quaternion();
+
+/** Outward-facing quad on footprint edge e from t0 to t1 (building frame), `off` proud of the edge line. */
+function farFace(B, e, t0, t1, y0, y1, off, color, key = 'facadePlaster') {
+  let a = at(e, t0, off), b = at(e, t1, off);
+  // A 'plane' faces the left normal (−dz, dx) of a → b: flip it to face out of the footprint.
+  if (-(b[1] - a[1]) * e.n[0] + (b[0] - a[0]) * e.n[1] < 0) [a, b] = [b, a];
+  pane(B, key, a, b, y0, y1, color);
+}
+
+/** Distant stand-in of a tower (building frame; facadePlaster + facadeWindow batches, ~2k vertices): the footprint
+ * mass, the window / balcony / stair-slot / corridor glazing, party-wall pilasters and core fins merged up the tower,
+ * a spandrel and slab band per storey, the lobby glass, the crown, the roof deck and planters, the core penthouse. */
+function farFacade(B, b, above, pal) {
+  const fp = b.footprint, edges = footprintEdges(fp), roof = above.find((l) => l.kind === 'roof');
+  const last = above.filter((l) => l.kind !== 'roof').at(-1), top = roof ? roof.elev : last.elev + last.height;
+  const cx = (fp.x0 + fp.x1) / 2, cz = (fp.z0 + fp.z1) / 2, W = fp.x1 - fp.x0, D = fp.z1 - fp.z0;
+  B.get('facadePlaster').box(cx, top / 2, cz, W, top, D, pal.wall);
+  const strips = new Map();
+  const strip = (e, [t0, t1], y0, y1, color, off = .02) => {
+    if (t1 - t0 < .05 || y1 - y0 < .05) return;
+    const k = `${e.side}|${t0.toFixed(2)}|${t1.toFixed(2)}|${color}|${off}`;
+    if (!strips.has(k)) strips.set(k, { e, t0, t1, color, off, spans: [] });
+    strips.get(k).spans.push([y0, y1]);
+  };
+  const along1 = (e, p) => e.axis === 'x' ? p[0] : p[1];
+  for (const lv of above) {
+    if (lv.kind === 'roof') continue;
+    const y = lv.elev, h = lv.height, cp = lv.corePlan;
+    if (lv.lobbyPlan) { for (const e of edges) strip(e, [e.lo, e.hi], y + .16, y + h - .4, FAR_GLASS); continue; }
+    for (const u of lv.units) for (const w of u.residence?.facadeWalls || []) {
+      const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), P = (s) => toL(b.frame, ...toW(u.frame, ...along(w.a, w.b, s)));
+      const we = edges.find((x) => onEdge(x, P(0), P(len)));
+      if (we) for (const s of [0, len]) { const t = along1(we, P(s)); strip(we, [t - .15, t + .15], y, y + h, pal.band, .065); }
+      for (const o of w.openings || []) {
+        const p = P(Math.max(0, o.at - o.width / 2)), q = P(Math.min(len, o.at + o.width / 2)), e = edges.find((x) => onEdge(x, p, q));
+        if (!e) continue;
+        if (o.type === 'railing') strip(e, spanOn(e, p, q), y, y + h, FAR_BALCONY);
+        else strip(e, spanOn(e, p, q), y + Math.max(0, o.bottom ?? .6), y + Math.min(h - .25, o.top ?? 2.4), FAR_GLASS);
+      }
+    }
+    if (!cp) continue;
+    const cover = facadeCoverage(b, lv);
+    for (const e of edges) {
+      if (rectTouches(cp.core, e)) {
+        for (const s of cp.stairs.filter((q) => rectTouches(q.rect, e))) { const [a, z] = rectSpan(s.rect, e), m = (a + z) / 2; strip(e, [m - .5, m + .5], y, y + h, FAR_GLASS); }
+        for (const t of rectSpan(cp.core, e)) if (t > e.lo + .5 && t < e.hi - .5) strip(e, [t - .18, t + .18], y, y + h, pal.accent, .065);
+      }
+      if (!cp.corridor || !rectTouches(cp.corridor, e)) continue;
+      let free = cover[e.side].reduce((iv, s) => subtractInterval(iv, s), [[e.lo, e.hi]]);
+      if (rectTouches(cp.core, e)) free = subtractInterval(free, rectSpan(cp.core, e));
+      for (const s of clipSpans(free, rectSpan(cp.corridor, e))) strip(e, s, y, y + h, FAR_GLASS);
+    }
+  }
+  // Glazing on consecutive storeys becomes one strip; the spandrels below hide the slab zones between them.
+  for (const s of strips.values()) {
+    const spans = s.spans.sort((p, q) => p[0] - q[0]).reduce((out, [y0, y1]) => {
+      const l = out.at(-1);
+      if (l && y0 <= l[1] + 1.05) l[1] = Math.max(l[1], y1); else out.push([y0, y1]);
+      return out;
+    }, []);
+    for (const [y0, y1] of spans) farFace(B, s.e, s.t0, s.t1, y0, y1, s.off, s.color, s.color === FAR_GLASS ? 'facadeWindow' : 'facadePlaster');
+  }
+  for (const lv of above) if (lv.elev > 0 && lv.kind !== 'roof') for (const e of edges) {
+    farFace(B, e, e.lo - .05, e.hi + .05, lv.elev - .4, lv.elev + .6, .05, pal.wall);
+    farFace(B, e, e.lo - .08, e.hi + .08, lv.elev - .22, lv.elev + .04, .08, pal.band);
+  }
+  if (!roof) return;
+  for (const e of edges) farFace(B, e, e.lo - .11, e.hi + .11, top - .35, top + 1.23, .11, pal.accent);
+  B.get('facadePlaster').shape('planeUp', _p.set(cx, top + .02, cz), _up, _s.set(W - .4, 1, D - .4), FAR_ROOF);
+  for (const e of edges) {
+    const [x, z] = at(e, (e.lo + e.hi) / 2, -.95), len = e.hi - e.lo - 2;
+    B.get('facadePlaster').shape('planeUp', _p.set(x, top + .6, z), _up, e.axis === 'x' ? _s.set(len, 1, .5) : _s.set(.5, 1, len), FAR_PLANTER);
+  }
+  const deck = rect(fp.x0 + 3, cz + 1.6, fp.x1 - 3, fp.z1 - 2.2);
+  if (deck.z1 - deck.z0 > 1.5) B.get('facadePlaster').shape('planeUp', _p.set((deck.x0 + deck.x1) / 2, top + .05, (deck.z0 + deck.z1) / 2), _up, _s.set(deck.x1 - deck.x0, 1, deck.z1 - deck.z0), FAR_DECK);
+  const c = roof.corePlan?.core;
+  if (!c) return;
+  B.get('facadePlaster').box((c.x0 + c.x1) / 2, top + 2.2, (c.z0 + c.z1) / 2, c.x1 - c.x0, 4.4, c.z1 - c.z0, FAR_PENTHOUSE);
+  for (const { rect: r } of roof.corePlan.lifts) B.get('facadePlaster').box((r.x0 + r.x1) / 2, top + 5, (r.z0 + r.z1) / 2, r.x1 - r.x0, 1.2, r.z1 - r.z0, FAR_PENTHOUSE);
+}
+
+/** Swaps the exterior batches (`near`) for the stand-in meshes (`far`) by distance. The renderer calls update() on
+ * an isLOD object before it draws the object's children, with the main camera only; the shadow pass reuses that
+ * choice. The stand-in starts hidden, so the exterior reads as the full tower until a frame is drawn. */
+function farSwap(b, top, near, far) {
+  const lod = new THREE.LOD(), [cx, cz] = toW(b.frame, (b.footprint.x0 + b.footprint.x1) / 2, (b.footprint.z0 + b.footprint.z1) / 2);
+  const centre = new THREE.Vector3(cx, top / 2, cz), eye = new THREE.Vector3();
+  lod.name = `${b.id}-far-lod`;
+  lod.add(near, ...far);
+  for (const m of far) m.visible = false;
+  let distant = false;
+  lod.update = (camera) => {
+    const want = eye.setFromMatrixPosition(camera.matrixWorld).distanceTo(centre) > COMMUNITY_FAR_LOD * (distant ? .95 : 1);
+    if (want === distant) return;
+    distant = want; near.visible = !distant;
+    for (const m of far) m.visible = distant;
+  };
+  return lod;
+}
+
 /** Permanent exterior of one community tower, plus its lobby / club, roof garden and basement lobbies. */
 export function buildCommunityTower(ctx, b, records) {
   const pal = COMMUNITY_PALETTES[b.community] || COMMUNITY_PALETTES.west, layout = ctx.layout;
@@ -418,6 +524,15 @@ export function buildCommunityTower(ctx, b, records) {
     }
   });
   signs.flush(group, signMat);
+  if (b.community === 'west' && above.length) {
+    const near = new THREE.Group(), stand = new BatchSet(materials), far = new THREE.Group();
+    near.name = `${b.id}-near`;
+    near.add(...group.children);
+    stand.frame(b.frame, () => farFacade(stand, b, above, pal));
+    stand.flush(far);
+    for (const m of far.children) m.name = `${b.id}-far`;
+    group.add(farSwap(b, roof?.elev ?? 0, near, [...far.children]));
+  }
   // Protected stair flights are built and shown only once a floor this core serves is visited.
   const stairLevels = (b.stairLevelIds || b.levels).map((id) => byId.get(id)).filter(Boolean).sort((a, z) => a.elev - z.elev);
   buildTowerStairInstances(ctx, b, stairLevels, stairs, materials, group, { idle: [], follow: b.community === 'north', lazy: true });
