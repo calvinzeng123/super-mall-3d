@@ -15,6 +15,9 @@ import { storeStyle, doorGaps } from './frontage.js';
 import { ESC } from './constants.js';
 import { gantryPosts } from './west-parking.js';
 import { EXIT } from './metro.js';
+import { GATE } from './access-records.js';
+
+export { GATE };
 
 export const NAV = { r: 0.3, eye: 1.62, reach: 1.6, cell: 8, zone: 0.6 };
 const DEG = 180 / Math.PI;
@@ -26,7 +29,7 @@ const CAMPUS = rect(-298, -298, 298, 298);
 // ---------------------------------------------------------------------------
 // 构建
 
-/** options: reserved for the access-control engine ({ gates: 'open' }). */
+/** options.gates === 'open': every card gate stays open (pathfinding, AI walkers). */
 export function buildNav(layout, options = {}) {
   const floors = new Map();
   const mk = (id, y, kind, extra = {}) => {
@@ -385,10 +388,31 @@ export function buildNav(layout, options = {}) {
     }
   }
 
+  // ---------- 门禁：读卡闸机 / 玻璃门。机柜与侧挡常设；通道门扇是可开关的墙 ----------
+  const gates = new Map(), fixedOpen = options.gates === 'open';
+  for (const g of layout.accessControl?.gates || []) {
+    const state = { id: g.id, record: g, open: fixedOpen, fixed: fixedOpen, until: 0, frame: g.frame, floors: g.floors };
+    gates.set(g.id, state);
+    const cuts = [...g.lanes, ...(g.cabinets || [])].map((q) => [q.u0, q.u1]).sort((a, b) => a[0] - b[0]);
+    for (const id of g.floors) {
+      const F = floors.get(id);
+      if (!F) continue;
+      let u = g.line.u0;
+      for (const [a, b] of cuts) { if (a > u + 1e-6) wallL(F, g.frame, { x0: u, z0: 0, x1: a, z1: 0 }); u = Math.max(u, b); }
+      if (u < g.line.u1 - 1e-6) wallL(F, g.frame, { x0: u, z0: 0, x1: g.line.u1, z1: 0 });
+      for (const c of g.cabinets || []) box(F, g.frame, rect(c.u0, c.v0, c.u1, c.v1));
+      for (const l of g.lanes) {
+        const [ax, az] = toW(g.frame, l.u0, 0), [bx, bz] = toW(g.frame, l.u1, 0);
+        F.walls.push({ x0: ax, z0: az, x1: bx, z1: bz, gate: state }); F.gated = true;
+      }
+    }
+  }
+
   // ---------- 空间索引 ----------
   for (const F of floors.values()) indexWalls(F);
 
-  const nav = { floors, portals, slopes, slopeById: new Map(slopes.map((s) => [s.id, s])), links: [], groundAt };
+  const nav = { floors, portals, slopes, slopeById: new Map(slopes.map((s) => [s.id, s])), links: [], groundAt, gates,
+    zones: layout.accessControl?.zones || [] };
 
   // ---------- 互动点（楼梯、电梯、落地塔）：门外找一个站得住的点 ----------
   const stopAt = (floor, x, z, nx, nz) => {
@@ -400,7 +424,7 @@ export function buildNav(layout, options = {}) {
     return { floor, x: x + nx, z: z + nz, face: [nx, nz] };
   };
   for (const s of layout.stairs) {
-    const stops = s.serves.filter((id) => floors.has(id)).map((id) => {
+    const stops = s.serves.filter((id) => floors.has(id) && !(s.passLevels || []).includes(id)).map((id) => {
       const d = (s.wdoorByLevel && s.wdoorByLevel[id]) || s.wdoor;
       return stopAt(id, (d.x0 + d.x1) / 2, (d.z0 + d.z1) / 2, d.nx, d.nz);
     });
@@ -408,7 +432,7 @@ export function buildNav(layout, options = {}) {
   }
   for (const e of layout.elevators) {
     const stops = e.serves.filter((id) => floors.has(id)).map((id) => stopAt(id, e.x + e.nx * e.reach, e.z + e.nz * e.reach, e.nx, e.nz));
-    nav.links.push({ id: e.id, kind: 'lift', elevator: e, name: e.type === 'glass' || e.tower ? '观光电梯' : e.type === 'freight' ? '货梯' : '电梯', stops: sortStops(stops, floors) });
+    nav.links.push({ id: e.id, kind: 'lift', elevator: e, name: e.label || (e.type === 'glass' || e.tower ? '观光电梯' : e.type === 'freight' ? '货梯' : '电梯'), stops: sortStops(stops, floors) });
   }
   if (br) {
     for (const v of br.verticals.filter((x) => x.type !== 'escalator')) {
@@ -421,6 +445,12 @@ export function buildNav(layout, options = {}) {
         stops: [{ floor: groundAt(...v.ground), x: v.ground[0], z: v.ground[1], face }, { floor: 'bridge', x: v.deck[0], z: v.deck[1], face }],
       });
     }
+  }
+  // 读卡器：站在公共一侧（v < 0）面向门线
+  for (const g of gates.values()) {
+    const r = g.record.reader, [x, z] = toW(g.frame, r.u, r.v), [fx, fz] = toW(g.frame, r.u, 1);
+    const d = Math.hypot(fx - x, fz - z) || 1;
+    nav.links.push({ id: g.id, kind: 'gate', gate: g, name: g.record.name, stops: [{ floor: r.floor || g.floors[0], x, z, face: [(fx - x) / d, (fz - z) / d] }] });
   }
   return nav;
 }
@@ -444,14 +474,20 @@ function indexWalls(F) {
   });
 }
 
+// An open gate leaf is not a wall. Only gated floors pay for the filter.
+const live = (w) => !w.gate || !w.gate.open;
 function wallsNear(F, x0, z0, x1, z1) {
   const c = NAV.cell, pad = NAV.r + 0.05;
   const gx0 = Math.floor((Math.min(x0, x1) - pad) / c), gx1 = Math.floor((Math.max(x0, x1) + pad) / c);
   const gz0 = Math.floor((Math.min(z0, z1) - pad) / c), gz1 = Math.floor((Math.max(z0, z1) + pad) / c);
-  if (gx0 === gx1 && gz0 === gz1) return (F.grid.get(`${gx0},${gz0}`) || []).map((i) => F.walls[i]);
+  if (gx0 === gx1 && gz0 === gz1) {
+    const out = (F.grid.get(`${gx0},${gz0}`) || []).map((i) => F.walls[i]);
+    return F.gated ? out.filter(live) : out;
+  }
   const set = new Set();
   for (let gx = gx0; gx <= gx1; gx++) for (let gz = gz0; gz <= gz1; gz++) for (const i of F.grid.get(`${gx},${gz}`) || []) set.add(i);
-  return [...set].map((i) => F.walls[i]);
+  const out = [...set].map((i) => F.walls[i]);
+  return F.gated ? out.filter(live) : out;
 }
 
 // ---------------------------------------------------------------------------
@@ -656,6 +692,7 @@ export function linksNear(nav, floor, x, z) {
   for (const k of nav.links) {
     const i = k.stops.findIndex((st) => st.floor === floor && Math.hypot(st.x - x, st.z - z) <= NAV.reach);
     if (i < 0) continue;
+    if (k.kind === 'gate') { out.push({ link: k, stop: k.stops[i], options: [{ action: 'tap', gate: k.gate.id }] }); continue; }
     const options = k.kind === 'stair' ? [k.stops[i - 1], k.stops[i + 1]].filter(Boolean) : k.stops.filter((_, j) => j !== i);
     if (options.length) out.push({ link: k, stop: k.stops[i], options });
   }
@@ -672,6 +709,11 @@ export function spawn(nav, layout, { building, level } = {}) {
   };
   if (building) {
     const b = layout.buildings.find((x) => x.id === building);
+    // A tower stacked on the mall has no ground floor of its own: it names its lobby.
+    if (b?.spawn) {
+      const { floor, x, z, yaw = 0 } = b.spawn, F = nav.floors.get(floor);
+      if (F && clearAt(nav, F, x, z)) return { floor, x, z, y: F.y, slope: null, yaw };
+    }
     if (b && ['mall', 'tower', 'annex'].includes(b.kind)) {
       const e = layout.entrances.find((x) => x.building === building && x.main) || layout.entrances.find((x) => x.building === building && x.to === 'site');
       if (e) {
@@ -723,10 +765,57 @@ export function floorLabel(nav, layout, s) {
   if (!F) return '';
   if (F.kind === 'level' || F.kind === 'mezzanine') {
     const b = layout.buildings.find((x) => x.id === F.building);
+    const zone = F.kind === 'level' && nav.zones?.find((z) => z.floors.includes(F.id) && z.polys.some((p) => pointInPoly([s.x, s.z], p)));
+    if (zone) return `${zone.label}（${b.short} ${F.level.short}）`;
     const suffix = F.kind === 'mezzanine' ? (F.unit ? ` · ${F.unit.code} 夹层` : ' · 楼梯中间平台') : '';
     return `${b.short} · ${F.level.name}${suffix}`;
   }
   if (F.kind === 'bridge') return '云环天桥';
   const plot = layout.site.plots.find((p) => pointInPoly([s.x, s.z], p.poly));
   return `室外 · ${plot ? plot.name : '道路'}`;
+}
+
+
+// ---------------------------------------------------------------------------
+// 门禁状态（纯函数：explore 每帧调用 updateGates，刷卡调用 tapGate）
+
+/** 刷卡：门扇打开 hold 秒。未知门禁返回 false。 */
+export function tapGate(nav, id, now) {
+  const g = nav.gates?.get(id);
+  if (!g) return false;
+  g.open = true;
+  g.until = Math.max(g.until, now + (g.record.hold ?? GATE.hold));
+  return true;
+}
+
+/** 每帧：出门感应（住户一侧靠近门线自动开）、到时关门（人在通道里不关，防夹）。返回状态变化的门。 */
+export function updateGates(nav, s, now) {
+  const changed = [];
+  for (const g of nav.gates?.values() || []) {
+    if (g.fixed) continue;
+    const was = g.open;
+    const here = !!s && !s.slope && g.floors.includes(s.floor);
+    const [u, v] = here ? toL(g.frame, s.x, s.z) : [0, 0];
+    const across = here && u > g.record.line.u0 - 0.2 && u < g.record.line.u1 + 0.2;
+    if (across && v > 0 && v < GATE.exitSensor) { g.open = true; g.until = Math.max(g.until, now + GATE.exitHold); }
+    const inLane = across && Math.abs(v) < GATE.pinch;
+    if (g.open && now >= g.until && !inLane) g.open = false;
+    if (g.open !== was) changed.push(g);
+  }
+  return changed;
+}
+
+/** 在公共一侧贴着关闭的门扇（用于 HUD 提示“请刷卡”），否则 null。 */
+export function gateBlocking(nav, s) {
+  for (const g of nav.gates?.values() || []) {
+    if (g.open || !s || s.slope || !g.floors.includes(s.floor)) continue;
+    const [u, v] = toL(g.frame, s.x, s.z);
+    if (v < 0 && v > -0.75 && u > g.record.line.u0 && u < g.record.line.u1) return g;
+  }
+  return null;
+}
+
+/** 离开漫游：所有门禁复位为关闭（常开模式除外）。 */
+export function resetGates(nav) {
+  for (const g of nav.gates?.values() || []) if (!g.fixed) { g.open = false; g.until = 0; }
 }

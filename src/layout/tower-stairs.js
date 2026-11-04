@@ -20,6 +20,9 @@ export function towerStairPlan(stair) {
 export function buildTowerStairAccess(building, levels, stairs) {
   const access = { surfaces: [], flights: [], routes: [], protected: true };
   for (const stair of stairs) {
+    // Sealed host storeys keep flights and landings but have no door: their
+    // storey routes chain through the doorless landing to the next door level.
+    const passes = new Set(stair.passLevels || []), routes = passes.size ? [] : access.routes;
     const plan = towerStairPlan(stair), [left, right] = plan.centers;
     const world = (x, v, y, floor) => {
       const [wx, wz] = toW(stair.frame, ...plan.point(x, v));
@@ -42,13 +45,35 @@ export function buildTowerStairAccess(building, levels, stairs) {
       access.flights.push(flight('flight-1', left, start, end, lo.elev, mid, lo.id, landing),
         flight('flight-2', right, end, start, mid, hi.elev, landing, hi.id));
       const center = (stair.door.x0 + stair.door.x1) / 2;
-      access.routes.push({ id, stair: stair.id, from: lo.id, to: hi.id, landing, waypoints: [
+      routes.push({ id, stair: stair.id, from: lo.id, to: hi.id, landing, waypoints: [
         world(center, -.8, lo.elev, lo.id), world(center, .95, lo.elev, lo.id),
         world(left, .95, lo.elev, lo.id), world(left, end + .7, mid, landing),
         world(right, end + .7, mid, landing), world(right, .95, hi.elev, hi.id),
         world(center, .95, hi.elev, hi.id), world(center, -.8, hi.elev, hi.id),
       ] });
     }
+    if (passes.size) access.routes.push(...chainRoutes(stair, routes, passes));
   }
   return access;
+}
+
+/** Merge storey routes across pass levels: route(lo→p) loses its two door waypoints
+ * at p, route(p→hi) its two; the merged route runs door level to door level. */
+function chainRoutes(stair, routes, passes) {
+  const out = [];
+  let cur = null;
+  for (const r of routes) {
+    if (!cur) cur = { ...r, landings: [r.landing], waypoints: [...r.waypoints] };
+    else {
+      cur.waypoints = [...cur.waypoints.slice(0, -2), ...r.waypoints.slice(2)];
+      cur.landings.push(r.landing);
+      cur.to = r.to;
+    }
+    if (!passes.has(r.to)) {
+      const [lo, hi] = [cur.from, cur.to].map((id) => id.slice(id.lastIndexOf('-') + 1));
+      out.push({ ...cur, id: `${stair.id}-${lo}-${hi}` });
+      cur = null;
+    }
+  }
+  return out;
 }

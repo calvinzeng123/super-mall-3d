@@ -15,8 +15,10 @@ export function prepareRideableElevators(layout) {
     if (!stops.length) continue;
     e.shaftBottom = Math.min(...stops.map(l => l.elev));
     e.shaftTop = Math.max(...stops.map(l => l.elev));
+    // A residential core can rise through host levels of another building.
+    const shaft = e.shaftLevels && new Set(e.shaftLevels);
     for (const lv of layout.levels) {
-      if (lv.building !== e.building || lv.elev < e.shaftBottom || lv.elev > e.shaftTop) continue;
+      if ((shaft ? !shaft.has(lv.id) : lv.building !== e.building) || lv.elev < e.shaftBottom || lv.elev > e.shaftTop) continue;
       const hosts = lv.slab.pieces.filter(p => poly.every(q => pointInPoly(q, p.outer)));
       for (const piece of hosts) {
         if (!piece.holes.some(h => poly.every(q => inside(q, h)))) {
