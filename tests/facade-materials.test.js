@@ -76,11 +76,12 @@ test('context glass is physically inset behind the wall plane and frame, with no
   assert.ok(frontVertices > 0);
 });
 
-test('all 84 city buildings retain spatial batching within a measured geometry budget', () => {
+test('every city building (≥ 80; the 云澜江 replaces two riverside slabs) retains spatial batching within a measured geometry budget', () => {
   const { base } = library(), layout = buildLayout(), before = JSON.stringify(layout.site.urban.buildings);
   const ctx = { mats: { base }, site: { group: new THREE.Group() } };
   const stats = buildContextBuildings(ctx, layout.site.urban.buildings);
-  assert.equal(stats.buildings, 84);
+  assert.equal(stats.buildings, layout.site.urban.buildings.length);
+  assert.ok(stats.buildings >= 80, `${stats.buildings} city buildings`);
   assert.ok(stats.windows > 15000);
   assert.ok(stats.batches <= 128, `${stats.batches} draw batches`);
   assert.ok(stats.bufferBytes < 20 * 1024 * 1024, `${(stats.bufferBytes / 1024 / 1024).toFixed(2)} MiB`);
