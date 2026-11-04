@@ -11,8 +11,8 @@ import { buildWalls } from '../src/render/build/walls.js';
 import { buildResidentialCores } from '../src/render/build/residential-cores.js';
 import { buildAccessGates, gateLeafBoxes, GATE_COLORS } from '../src/render/build/access-gates.js';
 import { fareGateFlaps } from '../src/render/build/metro.js';
-import { shapeFromPoly, flatShapeGeometry } from '../src/render/build/shell.js';
-import { polyArea } from '../src/layout/geom.js';
+import { shapeFromPoly, flatShapeGeometry, buildShell } from '../src/render/build/shell.js';
+import { polyArea, polyBounds } from '../src/layout/geom.js';
 
 function context(layout) {
   const materials = new Proxy({}, { get: (m, k) => m[k] ||= new THREE.MeshBasicMaterial() });
@@ -135,4 +135,26 @@ test('一期屋面与 4F–6F 楼板三角剖分正确：塔楼底板处挖空�
   }
   for (const m of meshes) m.geometry.dispose();
   mat.dispose();
+});
+
+test('一期屋面女儿墙、玻璃栏板与压顶不进塔楼底板：底板范围内 34.05 m 以上没有屋面构件', () => {
+  const rf = L.levels.find((l) => l.id === 'P1-RF'), P1 = L.buildings.find((b) => b.id === 'P1');
+  const ctx = context({ ...L, buildings: [P1], levels: [rf] });
+  ctx.buildings = { P1: { b: P1, levels: [ctx.levels['P1-RF']] } };
+  buildShell(ctx);
+  const plates = rf.towerPlates.map((t) => polyBounds(t.poly));
+  assert.equal(plates.length, 2);
+  let tris = 0, inside = 0;
+  for (const B of [ctx.levels['P1-RF'].batch, ctx.levels['P1-RF'].shellBatch, ctx.levels['P1-RF'].facadeBatch]) for (const [key, s] of Object.entries(B.sets)) {
+    for (let i = 0; i + 2 < s.n; i += 3) {
+      const [x, y, z] = [0, 1, 2].map((k) => (s.pos[i * 3 + k] + s.pos[i * 3 + 3 + k] + s.pos[i * 3 + 6 + k]) / 3);
+      tris++;
+      if (y > 34.05 && plates.some((p) => x > p.x0 + .05 && x < p.x1 - .05 && z > p.z0 - .45 && z < p.z1 - .05)) { inside++; assert.fail(`${key} 三角形 (${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}) 在塔楼底板内`); }
+    }
+  }
+  assert.ok(tris > 1000 && inside === 0);
+  // 底板外的屋面边仍有栏板：T1 西侧 x[−280,−278] 与凹口 x[−239,−228]
+  const glass = ctx.levels['P1-RF'].batch.sets.glass;
+  const at = (x0, x1, z0, z1) => { for (let i = 0; i < glass.n; i++) { const x = glass.pos[i * 3], z = glass.pos[i * 3 + 2]; if (x > x0 && x < x1 && z > z0 && z < z1) return true; } return false; };
+  assert.ok(at(-280.1, -277.9, -240.2, -239.8) && at(-239.2, -227.9, -228.3, -227.8) && at(-239.2, -238.8, -240, -228));
 });
