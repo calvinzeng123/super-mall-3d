@@ -5,7 +5,7 @@ import { IDENTITY, rect, rectPoly, lseg, convexOverlap, clipConvex, pointInPoly,
 import { NORTH_SITE } from './community-sites.js';
 import { northTowers } from './north-towers.js';
 import { NORTH_ACCESS, addHostCore, addResidentsLobby, residentsStreetDoor, northAccessRecords, fillColumn, setRoomRects, clipWalkX,
-  setWalkRect, clearStalls } from './residential-access.js';
+  setWalkRect, clearStalls, exposedColumnFaces } from './residential-access.js';
 
 const CAPPED_LIFTS = ['P1-SQ-W-L1', 'P1-SQ-W-L2', 'P1-SQ-W-L3', 'P1-SQ-F1'];
 const CAPPED_STAIRS = ['P1-SQ-ST-W', 'P1-SQ-ST-SV'];
@@ -31,6 +31,9 @@ export function applyNorthResidences(layout) {
       const b = part.building, col = rectPoly(columns[b.id]);
       fillColumn(lv, col);
       addHostCore(lv, part, door);
+      // Column faces outside the mall envelope (T2 in the 3F–6F notch) are clad as exterior.
+      const faces = exposedColumnFaces(lv, col, b.id);
+      if (faces.length) (lv.residentialCoreFaces ||= []).push(...faces);
       if (door) addResidentsLobby(lv, b);
     }
     if (lv.parking) garageSurgery(lv);

@@ -73,9 +73,21 @@ function readerMount(g) {
   return { u, v: -.06 };
 }
 
-/** LED quads of a gate (glass door: its reader; speed gates: one per lane), local {u, v, y}. */
-const gateLeds = (g) => g.kind === 'speed-gates' ? g.lanes.map((l) => ({ u: (l.u0 + l.u1) / 2, v: -.69, y: 1.02 }))
-  : [{ ...readerMount(g), v: readerMount(g).v - .025, y: 1.29 }];
+/**
+ * LED quads of a gate, local {u, v, y}. Speed gates: one per lane, on the top of the cabinet
+ * to the lane's left, behind its reader pad; glass doors: on the wall reader.
+ */
+export const gateLeds = (g) => g.kind === 'speed-gates' ? g.lanes.map((l) => {
+  const c = g.cabinets.reduce((a, q) => (Math.abs(q.u1 - l.u0) < Math.abs(a.u1 - l.u0) ? q : a));
+  return { u: (c.u0 + c.u1) / 2, v: c.v0 + .32, y: 1.065 };
+}) : [{ ...readerMount(g), v: readerMount(g).v - .025, y: 1.29 }];
+
+/** Pick card [title, description] of a gate: named after the tower its zone belongs to (北苑 / 西苑). */
+export function gatePickInfo(layout, g) {
+  const zone = layout.accessControl?.zones?.find((z) => z.id === g.zone);
+  const b = layout.buildings.find((q) => q.id === (g.building || zone?.building));
+  return [b ? `${b.name} · 住户门禁` : '住户门禁', `${g.name} · 刷卡通行 · 出门自动感应 · 访客请联系礼宾`];
+}
 
 /**
  * Build all card gates of layout.accessControl. Static parts ride the existing

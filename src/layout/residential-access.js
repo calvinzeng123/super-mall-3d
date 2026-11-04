@@ -57,6 +57,26 @@ export function fillColumn(lv, column) {
   return true;
 }
 
+/**
+ * Faces of the column that stand outside the host's enclosed envelope (the T2
+ * column in the 3F–6F north notch): world segments on the column outline with
+ * the outward normal, for the exterior cladding drawn with the façade.
+ */
+export function exposedColumnFaces(lv, column, building) {
+  const env = lv.expansion?.facadePolys || [lv.expansion?.facadePoly || lv.outline];
+  const snap = (v) => Math.round(v * 1e5) / 1e5, ring = (P) => [...P, P[0]].map(([x, z]) => [snap(x), snap(z)]);
+  const out = polygonClipping.difference([ring(column)], ...env.map((P) => [ring(P)]));
+  const b = polyBounds(column), on = (v, a) => Math.abs(v - a) < 1e-4, faces = [];
+  for (const poly of out) for (const r of poly) for (let i = 0; i + 1 < r.length; i++) {
+    const [[x0, z0], [x1, z1]] = [r[i], r[i + 1]];
+    if (Math.hypot(x1 - x0, z1 - z0) < .05) continue;
+    const n = on(x0, x1) && on(x0, b.x0) ? [-1, 0] : on(x0, x1) && on(x0, b.x1) ? [1, 0]
+      : on(z0, z1) && on(z0, b.z0) ? [0, -1] : on(z0, z1) && on(z0, b.z1) ? [0, 1] : null;
+    if (n) faces.push({ building, x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), nx: n[0], nz: n[1] });
+  }
+  return faces;
+}
+
 /** Stair and core rooms of a residential column on a host level, plus the stair shaft voids and holes. */
 export function addHostCore(lv, part, door) {
   const b = part.building, F = b.frame, C = NORTH_CORE;

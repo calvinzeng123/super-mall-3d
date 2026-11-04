@@ -9,9 +9,12 @@ import { BatchSet, SignBatch } from '../src/render/batch.js';
 import { buildRooms } from '../src/render/build/rooms.js';
 import { buildWalls } from '../src/render/build/walls.js';
 import { buildResidentialCores } from '../src/render/build/residential-cores.js';
-import { buildAccessGates, gateLeafBoxes, GATE_COLORS } from '../src/render/build/access-gates.js';
+import { buildAccessGates, gateLeafBoxes, gateLeds, gatePickInfo, GATE_COLORS } from '../src/render/build/access-gates.js';
+import { clearHeight } from '../src/render/build/shell.js';
+import { toW } from '../src/layout/geom.js';
 import { fareGateFlaps } from '../src/render/build/metro.js';
 import { shapeFromPoly, flatShapeGeometry, buildShell } from '../src/render/build/shell.js';
+import { buildP1ExpansionExterior } from '../src/render/build/p1-expansion.js';
 import { polyArea, polyBounds } from '../src/layout/geom.js';
 
 function context(layout) {
@@ -38,15 +41,67 @@ test('住户核心筒与大堂只写入宿主楼层已有批次，不新建网�
     if (hosts.includes(id)) assert.ok(n > 300, `${id} 没有核心筒`);
     else assert.equal(n, 0, `${id} 不是宿主楼层`);
   }
-  // 只用宿主楼层本已使用的材质（石材、哑光、金属、缎面、发光），外立面只用玻璃与金属
-  const allowed = new Set(['stone', 'matte', 'metal', 'satin', 'glow']);
+  // 只用宿主楼层本已使用的材质（地上石材、地库混凝土、哑光、金属、缎面、玻璃、发光）；逐层核对见下一条
+  const allowed = new Set(['stone', 'concrete', 'matte', 'metal', 'satin', 'glass', 'glow']);
   for (const id of hosts) for (const k of keys(ctx.levels[id].batch)) assert.ok(allowed.has(k), `${id} 新材质 ${k}`);
+  for (const id of ['P1-B2', 'P1-B1']) assert.ok(!keys(ctx.levels[id].batch).has('stone'), `${id} 地库批次没有石材`);
   for (const k of keys(ctx.levels['P1-1F'].facadeBatch)) assert.ok(['glassTint', 'extMetal'].includes(k), k);
   assert.ok(vertices(ctx.levels['P1-1F'].facadeBatch) > 100, '街门雨棚');
   assert.ok(vertices(ctx.site.batch) > 100, '消防登高场地标线');
   assert.equal(stats.levels, 18);
   ctx.coreTriangles = stats.boxes * 12;
   assert.ok(ctx.coreTriangles < 30000, `核心筒 ${ctx.coreTriangles} 三角形`);
+});
+
+test('住户核心筒不给宿主楼层新增材质批次（绘制调用 +0）：每层只用该层外壳、用房与一期立面已有的材质', (t) => {
+  const previous = globalThis.document;
+  const paint = new Proxy({}, { get: (p, k) => (k in p ? p[k] : k === 'measureText' ? () => ({ width: 10 }) : String(k).startsWith('create') ? () => ({ addColorStop() {} }) : () => {}), set: (p, k, v) => { p[k] = v; return true; } });
+  globalThis.document = { createElement: () => ({ width: 0, height: 0, getContext: () => paint }) };
+  t.after(() => { if (previous) globalThis.document = previous; else delete globalThis.document; });
+  const P1 = L.buildings.find((b) => b.id === 'P1'), levels = L.levels.filter((l) => hosts.includes(l.id));
+  const ctx = context({ ...L, buildings: [P1], levels, stairs: L.stairs.filter((s) => s.building === 'P1'), elevators: L.elevators.filter((e) => e.building === 'P1') });
+  ctx.mats.screen = () => ctx.mats.base.screen;
+  ctx.buildings = { P1: { b: P1, levels: levels.map((l) => ctx.levels[l.id]) } };
+  buildShell(ctx); buildRooms(ctx); buildP1ExpansionExterior(ctx);
+  const sets = ['batch', 'facadeBatch'], before = Object.fromEntries(hosts.map((id) => [id, sets.map((k) => keys(ctx.levels[id][k]))]));
+  ctx.layout = L;
+  buildResidentialCores(ctx);
+  for (const id of hosts) sets.forEach((k, i) => {
+    const fresh = [...keys(ctx.levels[id][k])].filter((q) => !before[id][i].has(q));
+    assert.deepEqual(fresh, [], `${id} ${k} 新增材质批次 ${fresh.join(',')}`);
+  });
+});
+
+test('T2 核心筒立在 3F–6F 退台凹口里的外露面按外墙画进立面批次：外景从西、北两面都看到石材墙，不见旧立面与悬空楼板', () => {
+  const faces = Object.fromEntries(L.levels.filter((l) => l.residentialCoreFaces).map((l) => [l.id, l.residentialCoreFaces]));
+  assert.deepEqual(Object.keys(faces), ['P1-3F', 'P1-4F', 'P1-5F', 'P1-6F']);
+  for (const [id, list] of Object.entries(faces)) {
+    assert.ok(list.every((f) => f.building === 'T2'));
+    const south = id === 'P1-3F' ? -234 : -228;
+    assert.deepEqual(list.map((f) => [f.x0, f.z0, f.x1, f.z1, f.nx, f.nz]).sort(), [[-216, -240, -212, -240, 0, -1], [-216, -240, -216, south, -1, 0]].sort(), id);
+  }
+  const ctx = context(L);
+  buildResidentialCores(ctx);
+  const meshes = [];
+  for (const id of Object.keys(faces)) { const L2 = ctx.levels[id]; L2.facadeBatch.flush(L2.facade); L2.facade.updateMatrixWorld(true); meshes.push(...L2.facade.children); }
+  for (const m of meshes) m.material.side = THREE.DoubleSide;
+  const rc = new THREE.Raycaster();
+  for (const id of Object.keys(faces)) {
+    const lv = L.levels.find((l) => l.id === id), south = id === 'P1-3F' ? -234 : -228;
+    for (const y of [lv.elev + .2, lv.elev + lv.height / 2, lv.elev + lv.height - .2]) {
+      for (let z = -239.8; z < south - .2; z += 1.1) {
+        rc.set(new THREE.Vector3(-232, y, z), new THREE.Vector3(1, 0, 0)); rc.far = 30;
+        const hit = rc.intersectObjects(meshes, false)[0];
+        assert.ok(hit && hit.point.x > -216.15 && hit.point.x < -215.95, `${id} 西面 z ${z.toFixed(1)} y ${y.toFixed(1)} → ${hit?.point.x}`);
+      }
+      for (const x of [-215.8, -214, -212.2]) {
+        rc.set(new THREE.Vector3(x, y, -250), new THREE.Vector3(0, 0, 1)); rc.far = 30;
+        const hit = rc.intersectObjects(meshes, false)[0];
+        assert.ok(hit && hit.point.z > -240.15 && hit.point.z < -239.95, `${id} 北面 x ${x} y ${y.toFixed(1)} → ${hit?.point.z}`);
+      }
+    }
+  }
+  for (const m of meshes) m.geometry.dispose();
 });
 
 test('门禁：每个有门禁的楼层两个实例化网格，静态件进楼层批次；刷卡开门 0.35 s 动画、指示灯变色', () => {
@@ -60,7 +115,10 @@ test('门禁：每个有门禁的楼层两个实例化网格，静态件进楼�
     for (const m of inst) triangles += m.count * 12;
     triangles += vertices(ctx.levels[f].batch) / 3;
   }
-  assert.ok(floors.length <= 6);
+  // 本包（北苑）的门禁只在一期 B2/B1/1F；合并后西苑门禁在各自楼栋楼层上，单独计
+  const north = [...new Set(L.accessControl.gates.filter((g) => /^T[12]-/.test(g.zone)).flatMap((g) => g.floors))];
+  assert.ok(north.length >= 3 && north.length <= 6, `北苑门禁楼层 ${north.join(',')}`);
+  assert.ok(north.every((f) => f.startsWith('P1-')));
   assert.ok(triangles < 10000, `门禁 ${triangles} 三角形`);
   const id = 'T2-1F-GATE', st = api.states.get(id);
   api.set(id, true); api.step(.2); assert.ok(st.t > .5 && st.t < 1);
@@ -72,6 +130,56 @@ test('门禁：每个有门禁的楼层两个实例化网格，静态件进楼�
   // 漫游镜头经过 6 m 内时门禁打开
   ctx.dynamic[0].update(.5, 0, { state: { touring: true }, camera: { position: st.center.clone() } });
   assert.equal(st.target, 1);
+});
+
+test('门禁指示灯装在机柜顶面上（不悬在通道里）；拾取卡片按门禁所属楼栋命名', () => {
+  for (const g of L.accessControl.gates.filter((q) => q.kind === 'speed-gates')) {
+    const leds = gateLeds(g);
+    assert.equal(leds.length, g.lanes.length);
+    for (const d of leds) {
+      assert.ok(g.cabinets.some((c) => d.u > c.u0 && d.u < c.u1 && d.v > c.v0 && d.v < c.v1), `${g.id} 指示灯 u ${d.u} 不在机柜上`);
+      assert.ok(!g.lanes.some((l) => d.u > l.u0 && d.u < l.u1), `${g.id} 指示灯悬在通道里`);
+      assert.ok(d.y >= 1.05 && d.y < 1.1);
+    }
+  }
+  for (const g of L.accessControl.gates.filter((q) => /^T[12]-/.test(q.zone))) {
+    const [title, desc] = gatePickInfo(L, g);
+    assert.equal(title, `云澜·北苑 ${g.zone[1]} 号楼 · 住户门禁`);
+    assert.ok(desc.startsWith(g.name));
+  }
+  // 合并后的西苑门禁（记录带 building）不再被叫成北苑
+  const west = { id: 'W1-1F-GATE', zone: 'W1-1F-zone', building: 'W1', name: '西苑 1 号楼 · 住户门禁' };
+  const layout = { buildings: [{ id: 'W1', name: '云澜·西苑 1 号楼' }], accessControl: { zones: [{ id: 'W1-1F-zone', building: 'W1' }] } };
+  assert.equal(gatePickInfo(layout, west)[0], '云澜·西苑 1 号楼 · 住户门禁');
+  assert.equal(gatePickInfo(layout, { ...west, building: undefined })[0], '云澜·西苑 1 号楼 · 住户门禁');
+});
+
+test('门线上方封到吊顶：玻璃门框上有玻璃亮子、3.05 m 以上石材过梁；商场侧闸机口两樘玻璃门常开贴墙', () => {
+  const ctx = context(L);
+  buildResidentialCores(ctx); buildAccessGates(ctx);
+  const rc = new THREE.Raycaster(), meshes = (id) => { const L2 = ctx.levels[id]; if (!L2.flushed) { L2.batch.flush(L2.base); L2.base.updateMatrixWorld(true); L2.flushed = true; }
+    return L2.base.children.filter((m) => !m.isInstancedMesh); };
+  for (const g of L.accessControl.gates.filter((q) => /^T[12]-/.test(q.zone))) {
+    const lv = L.levels.find((l) => l.id === g.floors[0]), H = clearHeight(lv), list = meshes(lv.id);
+    for (const m of list) m.material.side = THREE.DoubleSide;
+    const ys = [...(g.kind === 'glass-door' ? [2.5, 2.9] : []), 3.2, H - .15].filter((y) => y < H);
+    for (const l of g.lanes) for (const y of ys) {
+      const c = (l.u0 + l.u1) / 2, [ax, az] = toW(g.frame, c, -1), [bx, bz] = toW(g.frame, c, 1);
+      rc.set(new THREE.Vector3(ax, lv.elev + y, az), new THREE.Vector3(bx - ax, 0, bz - az).normalize()); rc.far = 2;
+      const hit = rc.intersectObjects(list, false)[0];
+      assert.ok(hit && hit.distance > .7 && hit.distance < 1.2, `${g.id} 通道 ${c} 高 ${y.toFixed(2)} m 门线上方敞开`);
+    }
+    if (g.kind === 'speed-gates') {
+      // 常开的玻璃门折贴在门口两侧的大堂墙面上（住户一侧），不挡闸机通道
+      for (const u of [g.line.u0 - .8, g.line.u1 + .8]) {
+        const [ax, az] = toW(g.frame, u, .8), [bx, bz] = toW(g.frame, u, 0);
+        rc.set(new THREE.Vector3(ax, lv.elev + 1.5, az), new THREE.Vector3(bx - ax, 0, bz - az).normalize()); rc.far = 1;
+        const hit = rc.intersectObjects(list, false)[0];
+        assert.ok(hit && hit.distance > .6 && hit.distance < .72, `${g.id} 门口两侧没有常开玻璃门 (${hit?.distance})`);
+      }
+      for (const l of g.lanes) assert.ok(l.u0 >= g.line.u0 && l.u1 <= g.line.u1);
+    }
+  }
 });
 
 test('门扇：关闭时横跨每条通道中心线，打开后离通道中心 ≥ 0.25 m', () => {

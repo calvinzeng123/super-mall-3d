@@ -49,7 +49,7 @@ import { createFloorDetailSelector, createFloorDetailCache } from './floor-detai
 import { buildOwnedFloorDetail, sceneResources, geometryStats } from './floor-detail-scene.js';
 import { buildP1ExpansionExterior, buildP1ExpansionLevel, usesExpansionFacade } from './build/p1-expansion.js';
 import { buildP1Fidelity } from './build/p1-fidelity.js';
-import { buildAccessGates } from './build/access-gates.js';
+import { buildAccessGates, gatePickInfo } from './build/access-gates.js';
 import { buildResidentialCores } from './build/residential-cores.js';
 
 const EXPLODE_GAP = 13;
@@ -945,8 +945,8 @@ function buildPicks(ctx) {
   for (const g of layout.accessControl?.gates || []) for (const id of g.floors) {
     const G = ctx.levels[id]?.picks, lv = ctx.lvById[id];
     if (!G || !lv) continue;
-    pickBox(G, geo, mat, g.frame, { x0: g.line.u0, x1: g.line.u1, z0: Math.min(g.reader.v, -.4) - .3, z1: .4 }, lv.elev, 2.4,
-      { kind: 'facility', title: '北苑住户门禁', desc: `${g.name} · 刷卡通行 · 出门自动感应 · 访客请联系礼宾` });
+    const [title, desc] = gatePickInfo(layout, g);
+    pickBox(G, geo, mat, g.frame, { x0: g.line.u0, x1: g.line.u1, z0: Math.min(g.reader.v, -.4) - .3, z1: .4 }, lv.elev, 2.4, { kind: 'facility', title, desc });
   }
   for (const e of layout.escalators) {
     const lo = ctx.lvById[e.from], hi = ctx.lvById[e.to];
