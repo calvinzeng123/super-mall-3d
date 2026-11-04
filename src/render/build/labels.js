@@ -42,6 +42,7 @@ const FEATURE_LABEL = {
   track: ['fun', 'star', 2.4], court: ['fun', 'star', 4.4], lawn: ['fun', 'star', 1.6],
   'cinema-open': ['fun', 'star', 10.5], farm: ['fun', 'star', 5.0], viewdeck: ['fun', 'star', 3.0],
   plaza: ['fun', 'star', 7.5], stage: ['fun', 'star', 6.2], fountain: ['fun', 'star', 3.4], grove: ['fun', 'star', 6.5],
+  'river-terrace': ['fun', 'star', 3.2], 'glass-prow': ['fun', 'star', 2.6],
 };
 
 export function buildLabels(ctx) {
@@ -191,6 +192,11 @@ export function buildLabels(ctx) {
         put(G, u.brand.name, x, y + 5.0, z, 'food', 'cup', u.brand.en, 0.022);
       }
     }
+    // 云澜江景台（3F 室外露台，非天台层）
+    if (lv.riverTerrace) for (const f of lv.features.filter(q => q.riverTerrace && q.name)) {
+      const m = FEATURE_LABEL[f.type], [x, z] = featurePos(f);
+      put(G, f.name, x, y + m[2], z, m[0], m[1], f.en || null, 0.022);
+    }
     // 爆炸视图楼层名
     const b = ctx.bById[lv.building];
     const lw = b.wings[0];
@@ -235,5 +241,13 @@ export function buildLabels(ctx) {
   const pk = layout.site.park;
   if (pk) {
     put(S, '中央公园', pk.center[0], 16, pk.center[1], 'title', 'star', 'CENTRAL PARK', 0.03);
+  }
+  // 云澜江、星湾桥与南岸江景玻璃眺台
+  const rv = layout.site.river;
+  if (rv) {
+    for (const x of [-420, 420]) put(S, rv.name, x, 8, -356, 'title', 'star', rv.en, 0.03);
+    const xw = rv.bridges.find(b => b.kind === 'tied-arch');
+    if (xw) put(S, xw.name, (xw.deck.x0 + xw.deck.x1) / 2, 34, (xw.deck.z0 + xw.deck.z1) / 2, 'title', 'star', xw.en, 0.026);
+    for (const l of rv.lookouts) put(S, l.name, (l.rect.x0 + l.rect.x1) / 2, 3, (l.rect.z0 + l.rect.z1) / 2, 'fun', 'star', l.en || null, 0.022);
   }
 }

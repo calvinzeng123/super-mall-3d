@@ -9,16 +9,20 @@ export function subtractRect(a, b) {
   return [rect(a.x0,a.z0,a.x1,z0),rect(a.x0,z1,a.x1,a.z1),rect(a.x0,z0,x0,z1),rect(x1,z0,a.x1,z1)]
     .filter(r => r.x1-r.x0 > .001 && r.z1-r.z0 > .001);
 }
-export function addUrbanDistrict(site) {
+// With the riverfront (tour only) the north grid steps back so 云澜江 runs between
+// 北外环 and a new 滨江北路 (z = -500); block depths stay 118 m, counts stay equal.
+export const NORTH_GRID = Object.freeze({ plain: Object.freeze([-800,-520,-360]), river: Object.freeze([-800,-650,-500]) });
+export function addUrbanDistrict(site, { river = false } = {}) {
+  const north = river ? NORTH_GRID.river : NORTH_GRID.plain;
   const roads = [];
   const h = (id, z, x0, x1, w=20) => roads.push(parcel(id,x0,z-w/2,x1,z+w/2,{dir:'x',width:w,name:'云澜城市路网'}));
   const v = (id, x, z0, z1, w=20) => roads.push(parcel(id,x-w/2,z0,x+w/2,z1,{dir:'z',width:w,name:'云澜城市路网'}));
-  for (const z of [-800,-520,-360,360,520,800]) h(`city-h${z}`,z,-900,900);
+  for (const z of [...north,360,520,800]) h(`city-h${z}`,z,-900,900);
   h('city-avenue-west',0,-900,-298,28);h('city-avenue-east',0,298,900,28);
   for(const z of [-262,262]) {h(`city-ring-west${z}`,z,-540,-298,12);h(`city-ring-east${z}`,z,298,540,12);}
   for(const x of [-890,-540,540,890]) v(`city-v${x}`,x,-810,810);
-  for(const x of [-270,0,270]) {v(`city-n${x}`,x,-800,-360);v(`city-s${x}`,x,360,800);}
-  v('city-xingwan-n',0,-360,-298);v('city-xingwan-s',0,298,360);
+  for(const x of [-270,0,270]) {v(`city-n${x}`,x,-800,north[2]);v(`city-s${x}`,x,360,800);}
+  v('city-xingwan-n',0,north[2],-298);v('city-xingwan-s',0,298,360);
   // Subtract earlier asphalt rectangles: intersections have one surface, no z fighting.
   const covered = site.roads.map(r=>r.rect), surfaces=[];
   for(const road of roads) {
@@ -32,13 +36,15 @@ export function addUrbanDistrict(site) {
     blocks.push(parcel(id,x0+16,z0+16,x1-16,z1-16,{kind:kind || (blocks.length%6===0?'park':blocks.length%6===3?'sport':blocks.length%2?'office':'residential')}));
   }
   const xs=[-890,-540,-270,0,270,540,890];
-  for(const zs of [[-800,-520,-360],[360,520,800]])for(let z=0;z<zs.length-1;z++)for(let x=0;x<xs.length-1;x++)block(xs[x],zs[z],xs[x+1],zs[z+1]);
-  for(const [x0,x1] of [[-890,-540],[540,890]])for(const [z0,z1] of [[-360,-262],[-262,0],[0,262],[262,360]])block(x0,z0,x1,z1);
+  for(const zs of [north,[360,520,800]])for(let z=0;z<zs.length-1;z++)for(let x=0;x<xs.length-1;x++)block(xs[x],zs[z],xs[x+1],zs[z+1]);
+  // The riverside row of the side columns becomes 对岸滨江公园 north of the river.
+  for(const [x0,x1] of [[-890,-540],[540,890]])for(const [z0,z1] of [river?[-500,-436]:[-360,-262],[-262,0],[0,262],[262,360]])block(x0,z0,x1,z1,river&&z0===-500?'park':undefined);
   for(const [z0,z1] of [[-262,0],[0,262]])block(310,z0,540,z1);
   // Narrow transition strips remain landscaped, leaving all existing lots and ramps clear.
   block(-540,-262,-484,-14,'park');block(-540,14,-484,262,'park');
   block(-500,14,-310,262,'sport');
-  for(const [z0,z1] of [[-360,-278],[278,360]])for(const [x0,x1] of [[-500,0],[0,310],[310,540]])block(x0,z0,x1,z1,'park');
+  if(river) for(const [x0,x1] of [[-540,0],[0,540]])block(x0,-500,x1,-436,'park');
+  for(const [z0,z1] of river?[[278,360]]:[[-360,-278],[278,360]])for(const [x0,x1] of [[-500,0],[0,310],[310,540]])block(x0,z0,x1,z1,'park');
   const buildings=[],walks=[],trees=[],lamps=[];
   for(const [i,b] of blocks.entries()) {
     const r=b.rect,w=r.x1-r.x0,d=r.z1-r.z0,cx=(r.x0+r.x1)/2,cz=(r.z0+r.z1)/2;
