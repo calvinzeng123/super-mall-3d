@@ -23,3 +23,6 @@
 ![修复前后](qa/sunken-court-doorway/before-after.jpg)
 
 
+## 发布
+
+- 本次云端会话没有 Netlify 部署凭据，代码已推送到 `claude/wonderful-thompson-olaaxb`，尚未上线。
