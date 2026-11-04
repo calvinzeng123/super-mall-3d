@@ -196,7 +196,8 @@ function parking(short) {
   if (isB1) walk.push(W('escLobby', 'eschall', rect(-20, -40, -6, -24)));
   const eq = [
     ['EQ-1', rect(-60, -40, -36, -29), '配电房'], ['EQ-2', rect(-60, -29, -55, -24), '风机房'],
-    ['EQ-5', rect(-60, 24, -55, 29), '储藏间'], ['EQ-6', rect(-60, 29, 8, 40), '水泵房 · 消防水池'],
+    // On B1 the store stops short of the west shared-garage tunnel arrival.
+    ['EQ-5', rect(-60, isB1 ? 27 : 24, -55, 29), '储藏间'], ['EQ-6', rect(-60, 29, 8, 40), '水泵房 · 消防水池'],
     ...(isB1 ? [['EQ-3', rect(-6, -40, 3, -24), '管井'], ['EQ-4', rect(3, -40, 12, -35), '变配电室']]
       : [['EQ-3', rect(-20, -40, -3, -29), '设备房'], ['EQ-4', rect(3, -40, 12, -35), '变配电室']]),
   ];

@@ -167,7 +167,7 @@ export function buildShell(ctx) {
 }
 
 /** 楼板底面的灯具：商业层为筒灯点阵，停车层为沿车道的灯管（随上层楼板显示，从下方可见） */
-function ceilingLights(ctx) {
+export function ceilingLights(ctx) {
   for (const B of Object.values(ctx.buildings)) {
     if (B.b.kind === 'metro') continue;
     const levels = B.levels.map((L) => L.lv);
@@ -176,10 +176,20 @@ function ceilingLights(ctx) {
       const Bt = ctx.levels[above.id].batch;
       const y = above.elev - (SLAB_T[above.kind] || 0.45) - 0.04;
       const inVoid = (x, z) => above.voids.some((v) => pointInPoly([x, z], v.poly));
+      // No fixture over an open ramp trench, or so low over a sloped lane
+      // that someone on the ramp would walk or drive into it.
+      const trenches = ctx.layout.site?.trenches || [];
+      const lanes = (ctx.layout.ramps || []).filter((r) => [r.from.level, r.to.level].includes(below.id));
+      const overRamp = (x, z) => trenches.some((t) => pointInPoly([x, z], t)) || lanes.some((r) => {
+        if (!pointInPoly([x, z], r.poly)) return false;
+        const dx = r.to.x - r.from.x, dz = r.to.z - r.from.z;
+        const t = Math.max(0, Math.min(1, ((x - r.from.x) * dx + (z - r.from.z) * dz) / (dx * dx + dz * dz)));
+        return y - (r.from.y + (r.to.y - r.from.y) * t) < (r.headroom ?? 2.6);
+      });
       const seen = new Set();
       const once = (x, z, k = 2) => {
         const key = `${Math.round(x / k)},${Math.round(z / k)}`;
-        if (seen.has(key) || inVoid(x, z)) return false;
+        if (seen.has(key) || inVoid(x, z) || overRamp(x, z)) return false;
         // A stepped floorplate can expose part of the floor below. Fixtures
         // belong to an actual ceiling, not the previous storey's old outline.
         if (above.expansion && ![[0, 0], [.8, 0], [-.8, 0], [0, .8], [0, -.8]].every(([dx, dz]) =>

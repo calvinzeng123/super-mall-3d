@@ -9,6 +9,8 @@ import {
 import { lift } from './mall.js';
 import { fillRows, markSpecial } from './parking.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
+import { subtractRect } from './urban.js';
+import { TUNNEL_LINTEL } from './hospitality.js';
 
 export const SHARED_GARAGE_BOUNDS = Object.freeze({
   mall: { x0: -286, z0: -256, x1: -14, z1: -28 },
@@ -54,9 +56,9 @@ function entrance(layout, lv, to, id, seg, nx, nz, options = {}) {
   return e;
 }
 
-function pairedPortal(layout, from, to, id, seg, nx, nz, name) {
-  const a = entrance(layout, from, to.id, `${id}-from`, seg, nx, nz, { name });
-  entrance(layout, to, from.id, `${id}-to`, seg, -nx, -nz, { name });
+function pairedPortal(layout, from, to, id, seg, nx, nz, name, options = {}) {
+  const a = entrance(layout, from, to.id, `${id}-from`, seg, nx, nz, { name, ...options });
+  entrance(layout, to, from.id, `${id}-to`, seg, -nx, -nz, { name, ...options });
   layout.extensions.connections.push({ id, from: from.id, to: to.id, kind: 'garage', name });
   return a;
 }
@@ -119,6 +121,35 @@ function expandDeck(lv, bounds, exclusions = []) {
   }
   // Old connector pads become part of the continuous poured deck.
   lv.slab.pieces = [primary, ...lv.slab.pieces.slice(1).filter(p => p.thickness != null)];
+}
+
+/** Legacy tunnels that began at an old garage wall now start inside the
+ * poured deck. Inside the deck they are open floor (their walk rectangles stay
+ * as aisles), so their walls and ceiling go, and a tunnel that still leaves
+ * the deck starts at the new retaining wall, where its mouth is cut. */
+function openLegacyTunnels(layout, lv) {
+  const b = lv.sharedGarage.bounds, eps = 1e-6;
+  const within = r => r.x0 >= b.x0 - eps && r.x1 <= b.x1 + eps && r.z0 >= b.z0 - eps && r.z1 <= b.z1 + eps;
+  const inside = p => p[0] > b.x0 + eps && p[0] < b.x1 - eps && p[2] > b.z0 + eps && p[2] < b.z1 - eps;
+  // Axis-aligned segment from p (inside) to q (outside): its exit point.
+  const exit = (p, q) => Math.abs(q[0] - p[0]) > Math.abs(q[2] - p[2])
+    ? [q[0] > p[0] ? b.x1 : b.x0, p[1], p[2]] : [p[0], p[1], q[2] > p[2] ? b.z1 : b.z0];
+  const trimStart = pts => {
+    while (pts.length > 2 && inside(pts[0]) && inside(pts[1])) pts = pts.slice(1);
+    return inside(pts[0]) ? [exit(pts[0], pts[1]), ...pts.slice(1)] : pts;
+  };
+  layout.extensions.paths = layout.extensions.paths.filter(path => {
+    if (path.level !== lv.id || path.sharedGarage || path.expansion || !['underground', 'garage'].includes(path.kind)) return true;
+    const rects = path.polys.map(polyBounds);
+    if (rects.every(within)) return false;
+    const overlaps = r => Math.min(r.x1, b.x1) - Math.max(r.x0, b.x0) > eps && Math.min(r.z1, b.z1) - Math.max(r.z0, b.z0) > eps;
+    if (!rects.some(overlaps)) return true;
+    path.polys = rects.flatMap(r => subtractRect(r, b)).filter(r => r.x1 - r.x0 > .01 && r.z1 - r.z0 > .01).map(rectPoly);
+    path.slab = { pieces: path.polys.map(outer => ({ outer, holes: [] })) };
+    const head = trimStart([...path.points]);
+    path.points = trimStart(head.reverse()).reverse();
+    return true;
+  });
 }
 
 function denseParking(layout, lv) {
@@ -246,6 +277,56 @@ function addGarageStair(layout, bid, id, x, z, serves, surfaceId) {
   return s;
 }
 
+/** Nobody walks beneath a ramp slab on its low floor where the underside is
+ * under 2.1 m. Guard lines run along both sides from the foot to that point,
+ * with a cross wall there; the foot itself stays open for the slope. */
+function guardRampUndersides(layout) {
+  const SLAB = .4, CLEAR = 2.1;
+  for (const r of layout.ramps) {
+    const [lo, hi] = r.from.y <= r.to.y ? [r.from, r.to] : [r.to, r.from];
+    const lv = level(layout, lo.level);
+    if (!lv || hi.y - lo.y < .01) continue;
+    const len = Math.hypot(hi.x - lo.x, hi.z - lo.z);
+    const F = frame(lo.x, lo.z, Math.atan2(hi.z - lo.z, hi.x - lo.x) * 180 / Math.PI);
+    const end = Math.min(len - .2, len * (CLEAR + SLAB) / (hi.y - lo.y)), v = r.width / 2 + .15;
+    const seg = (u0, v0, u1, v1) => { const [x0, z0] = toW(F, u0, v0), [x1, z1] = toW(F, u1, v1); return { x0, z0, x1, z1 }; };
+    lv.navWalls ||= [];
+    lv.navWalls.push(seg(.2, -v, end, -v), seg(.2, v, end, v), seg(end, -v, end, v));
+  }
+}
+
+/** A paired street gate keeps its ticket post and booth on the outer side,
+ * never in the neighbouring lane's head, and its sign pole on whichever side
+ * is clear of that lane. A booth that would stand on a road is left out.
+ * Frames match the gate builder: origin at the street end, u pointing out. */
+function pairGateSides(layout) {
+  const street = layout.ramps.filter(r => r.type.startsWith('street'));
+  const roads = [...layout.site.roads.flatMap(r => r.poly ? [r.poly] : []), ...layout.extensions.roads.flatMap(r => r.polys)];
+  const gateFrame = r => {
+    const [s, o] = r.from.level === 'street' ? [r.from, r.to] : [r.to, r.from];
+    return frame(s.x, s.z, Math.atan2(s.z - o.z, s.x - o.x) * 180 / Math.PI);
+  };
+  for (const r of street) {
+    if (r.gate) continue;
+    const F = gateFrame(r), hw = r.width / 2;
+    const partner = street.filter(q => q !== r).map(q => {
+      const G = gateFrame(q);
+      return { q, G, d: Math.hypot(G.ox - F.ox, G.oz - F.oz), parallel: F.c * G.c + F.s * G.s, v: toL(F, G.ox, G.oz)[1] };
+    }).filter(p => p.d < 15 && p.parallel > .95).sort((a, b) => a.d - b.d)[0];
+    if (!partner) continue;
+    const head = lrectPoly(partner.G, rect(-2, -partner.q.width / 2, 8, partner.q.width / 2));
+    const box = (u, v, h) => lrectPoly(F, rect(u - h, v - h, u + h, v + h));
+    const hits = (poly, polys) => polys.some(p => convexOverlap(poly, p, .01));
+    const side = partner.v > 0 ? -1 : 1;
+    // Stable sort: the builder's default side (-1) wins a tie.
+    const sign = [-1, 1].map(s => {
+      const pole = box(7, s * (hw + 1.2), .12);
+      return { s, cost: (hits(pole, [head, partner.q.poly]) ? 2 : 0) + (hits(pole, roads) ? 1 : 0) };
+    }).sort((a, b) => a.cost - b.cost)[0].s;
+    r.gate = { side, sign, ...(hits(box(1.6, side * (hw + 2.4), 1.1), roads) ? { booth: false } : {}) };
+  }
+}
+
 function groundReservations(layout) {
   const all = [...layout.site.trenches, ...layout.site.openings];
   for (const lot of layout.extensions.surfaceParking) {
@@ -317,6 +398,10 @@ export function applySharedGarages(layout) {
   expandDeck(P2, SHARED_GARAGE_BOUNDS.mall);
   expandDeck(W1, SHARED_GARAGE_BOUNDS.west);
   expandDeck(W2, SHARED_GARAGE_BOUNDS.west);
+  // The poured decks absorb the tunnel stubs and the B1 dock lobbies that
+  // now lie inside them: open floor, with no walls or ceilings left standing.
+  for (const lv of [P1, P2, W1, W2]) openLegacyTunnels(layout, lv);
+  for (const g of layout.extensions.gateways.filter(g => g.level === P1.id)) g.openDeck = true;
   const westBuilding = layout.buildings.find(b => b.id === 'WPG');
   westBuilding.outline = rectPoly(SHARED_GARAGE_BOUNDS.west);
   const wl = westBuilding.outline.map(p => toL(westBuilding.frame, ...p));
@@ -350,7 +435,8 @@ export function applySharedGarages(layout) {
     { architecturalOpening: true, name: '西侧共享车库隧道口' });
   reserve(W2, 'shared-west-tunnel-arrival', rect(-317, -185, -301, -173));
   reserve(P1, 'shared-mall-tunnel-arrival', rect(-286, -185, -270, -173));
-  pairedPortal(layout, W2, P1, 'shared-west-mall', { x0: -286, z0: -185, x1: -286, z1: -173 }, 1, 0, '西侧停车与一期共享地下车库');
+  pairedPortal(layout, W2, P1, 'shared-west-mall', { x0: -286, z0: -185, x1: -286, z1: -173 }, 1, 0, '西侧停车与一期共享地下车库',
+    { lintel: TUNNEL_LINTEL });
 
   // The hotel gate is south of the hotel; its former pair cut across the mall
   // frontage. Straight, parallel ramps have separate surface approaches.
@@ -397,6 +483,8 @@ export function applySharedGarages(layout) {
   reserve(level(layout, 'A-B1'), 'A-extraction-arrival', rect(-43, -225, -32, -214));
   for (const lv of [P1, P2, W1, W2]) denseParking(layout, lv);
   auditRampOpenings(layout);
+  guardRampUndersides(layout);
+  pairGateSides(layout);
   groundReservations(layout);
   layout.sharedGarages = {
     version: 1, buildingIds: ['P1', 'H', 'A', 'WPG'],
