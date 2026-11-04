@@ -23,7 +23,9 @@
 - `node --test tests/*.test.js`：350/350 通过。
 - 第一人称实景截图（本地构建，Chromium 软件渲染）：
 
-![修复前后](qa/sunken-court-doorway/before-after.jpg)
+![美食广场门洞修复前后](qa/sunken-court-doorway/before-after.jpg)
+
+![地铁通廊修复前后](qa/sunken-court-doorway/metro-before-after.jpg)
 
 
 ## 发布
