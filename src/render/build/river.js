@@ -9,6 +9,7 @@ import { cutSurfaceShapes } from './surface-shapes.js';
 import { addTrees, streetLamp, bench } from './props.js';
 import { COLORS } from '../theme.js';
 import { buildRiverTerrace } from './riverfront.js';
+import { FONT_CN, FONT_EN } from '../textures.js';
 
 const BED_BOTTOM = -7.4;
 const STONE = '#bdb5a5', STONE_LIGHT = '#cfc8b8', STEEL_WHITE = '#eef0f1', GRILLAGE = '#8b949b';
@@ -31,6 +32,28 @@ export function riverBankRuns(river) {
 export function archY(b, z) {
   const z0 = b.deck.z0, z1 = b.deck.z1, half = (z1 - z0) / 2, zc = (z0 + z1) / 2;
   return b.deckTop + 0.9 + b.rise * (1 - ((z - zc) / half) ** 2);
+}
+
+/** 星湾桥 name plaques: one text quad 6 mm proud of each bronze plaque's sidewalk face (plaque y top+.45…+1.0). */
+export function riverPlaques(river) {
+  return river.bridges.flatMap(b => (b.nameplates || []).map(r => {
+    const s = r.x0 < 0 ? -1 : 1;
+    return { id: b.id, x: (s < 0 ? r.x0 : r.x1) + s * .026, y: b.deckTop + .725, z: (r.z0 + r.z1) / 2, w: 1.1, h: .275, nx: s, nz: 0 };
+  }));
+}
+/** The plaque text as a site sign cell: drawn into the forecourt sign atlas (a spare cell, no new texture or draw call). */
+function plaqueSigns(river) {
+  const quads = riverPlaques(river);
+  return [...new Set(quads.map(q => q.id))].map(id => {
+    const b = river.bridges.find(q => q.id === id);
+    return { id: `${id}-plaque`, quads: quads.filter(q => q.id === id), draw(g, x, y, w, h) {
+      g.fillStyle = '#6f5634'; g.fillRect(x, y, w, h);
+      g.strokeStyle = '#c9a86a'; g.lineWidth = 4; g.strokeRect(x + 6, y + 6, w - 12, h - 12);
+      g.fillStyle = '#f1e4c4'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = `700 56px ${FONT_CN}`; g.fillText(b.name, x + w / 2, y + h * .42, w - 40);
+      g.font = `600 18px ${FONT_EN}`; g.fillText(b.en, x + w / 2, y + h * .8, w - 40);
+    } };
+  });
 }
 
 /** Pure part list of the five bridges, so tests can audit them without three.js meshes.
@@ -265,6 +288,7 @@ export function buildRiver(ctx) {
   for (const b of R.furniture.benches) bench(B, b.x, b.y, b.z, b.ry);
 
   for (const p of riverBridgeParts(R)) emit(B, p);
+  (ctx.site.signs ||= []).push(...plaqueSigns(R));
   buildRiverTerrace(ctx);
   return { meshes };
 }

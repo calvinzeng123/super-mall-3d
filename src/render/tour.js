@@ -1,6 +1,7 @@
 // 一键导览（园区版，规格第 9 节）：园区全景 → 一期东南主入口 → 圆厅中庭 → 乘扶梯上 2F → 2F 天桥入口 → 经云环天桥
 // → 二期西翼 2F → 星湾真冰场圆厅 → 天空跑道 → 地铁站厅 → 乘扶梯下站台 → 站台列车 → 俯瞰三期街区 → 街巷与中心广场
-// → 一期方庭中庭 → 一期天台摩天轮 → 园区全景。
+// → 一期方庭中庭 → 一期天台摩天轮 → 云澜江与星湾桥 → 3F 江景台 → 云澜·北苑与商场住户通道 → 云澜·西苑 → 对岸看江景
+// → 园区全景。
 // 镜头位置全部由布局数据（套件 / 翼楼 / 连廊局部坐标）换算；每一步可指定要展开室内的那一期与阴影范围。
 import * as THREE from 'three';
 import { toW } from '../layout/geom.js';
@@ -55,6 +56,24 @@ export function buildTourSteps(layout) {
   const SQ = (u, y, v) => { const [x, z] = toW(sq.F, u, v); return V(x, y, z); };
   const interchange=B('M').interchange;
   const mb = esc(interchange?'M-7-H-0-1':'M-MB', 'down');
+  // 云澜江 · 星湾桥 · 云澜江景台 · 云澜物业北苑 / 西苑（规格 §7.3）。商场住户通道先在街上看方庭北门与北苑街门，
+  // 沿门轴穿过北门厅到方庭北环廊（剖切到 1F，住户大堂、闸机与门禁标识才画出来），再转身看 2 号楼刷卡闸机，镜头不穿墙；
+  // 西苑一步改选西苑 1 号楼，撤掉一期 1F 剖切，对岸远景里一期与北苑完整。
+  const riverside = () => {
+    if (!layout.site.river || !B('T2') || !B('W1')) return [];
+    const gate = '云澜·北苑 · 商场住户通道（刷卡门禁）';
+    return [
+      { caption: '云澜江 · 星湾桥连接一期与二期', pos: V(120, 46, -560), target: V(-120, 14, -300), dur: 6, shadow: 320 },
+      { caption: '星湾桥 · 146 m 系杆拱与跨中玻璃挑台', pos: V(13, 1.7, -300), target: V(0, 16, -380), dur: 5, shadow: 120 },
+      { caption: '云澜江景台 · 3F 江景露台与玻璃眺台', building: 'P1', pos: V(-236, 14.2, -242), target: V(-214, 7, -345), dur: 5, shadow: 120 },
+      { caption: '云澜·北苑 · 一梯一户江景大平层与错层复式', pos: V(-150, 115, -380), target: V(-236, 55, -232), dur: 5.5, shadow: 180 },
+      { caption: gate, building: 'P1', pos: V(-228, 1.7, -258), target: V(-228, 2.2, -236), dur: 4.5, shadow: 90 },
+      { caption: gate, focus: 'P1-1F', pos: V(-228, 1.7, -221), target: V(-212, 1.6, -221), dur: 4 },
+      { caption: gate, focus: 'P1-1F', pos: V(-220, 1.7, -217), target: V(-220, 1.2, -226), dur: 4 },
+      { caption: '云澜·西苑 · 3梯5户社区', building: 'W1', pos: V(-315, 105, -335), target: V(-425, 42, -236), dur: 5.5, shadow: 180 },
+      { caption: '对岸看江景商场与北苑', pos: V(-196, 1.7, -446), target: V(-215, 30, -245), dur: 5, shadow: 220 },
+    ];
+  };
   return [
     { caption: '云澜汇园区 · 三期商业 + 云环天桥 + 中央公园', pos: V(150, 300, 330), target: V(0, 0, 0), dur: 5, shadow: 380 },
     { caption: '一期东南主入口 · 正对路口', building: 'P1', pos: W(p1, 'SE', SE.uEnd + 46, 9, 0), target: W(p1, 'SE', SE.uEnd, 7, 0), dur: 4.5, shadow: 120 },
@@ -85,6 +104,7 @@ export function buildTourSteps(layout) {
     { caption: '一期方庭 · 原四方格商场的通高中庭', building: 'P1', pos: SQ(-21, 6.5 + 1.75, 14), target: SQ(6, 10.5, -3), dur: 5.5, shadow: 120 },
     dome ? { caption: '一期天台 · 云澜光穹与方庭玻璃天幕', building: 'P1', pos: W(p1, 'W', 72, 28, 10), target: hub, dur: 5.5, shadow: 160 }
       : { caption: '一期天台 · 云澜之眼摩天轮', building: 'P1', pos: W(p1, 'W', 72, 21.5, 10), target: hub, dur: 5.5, shadow: 140 },
+    ...riverside(),
     { caption: '园区全景', pos: V(110, 430, 480), target: V(0, 0, 0), dur: 5, shadow: 380 },
   ];
 }

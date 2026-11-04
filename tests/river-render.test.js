@@ -1,4 +1,4 @@
-// 云澜江渲染（Node three）：草地挖去河道、水面全宽、星湾桥构件、栏杆避让桥面、绘制调用与顶点预算、江景台挑台。
+// 云澜江渲染（Node three）：草地挖去河道、水面全宽、星湾桥构件、栏杆避让桥面、绘制调用与顶点预算、江景台挑台、星湾桥铭牌字。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -8,7 +8,8 @@ import { siteGroundHoles } from '../src/render/build/site.js';
 import { flatShapeGeometry } from '../src/render/build/shell.js';
 import { cutSurfaceShapes } from '../src/render/build/surface-shapes.js';
 import { buildUrbanDistrict } from '../src/render/build/urban.js';
-import { buildRiver, riverBridgeParts, riverRailRuns, archY } from '../src/render/build/river.js';
+import { buildRiver, riverBridgeParts, riverRailRuns, riverPlaques, archY } from '../src/render/build/river.js';
+import { buildForecourt } from '../src/render/build/forecourt.js';
 import { buildRiverTerrace, maskRects } from '../src/render/build/riverfront.js';
 import { buildP1ExpansionExterior } from '../src/render/build/p1-expansion.js';
 import { streetLanes } from '../src/render/build/traffic.js';
@@ -193,4 +194,34 @@ test('江景台：托架、封边、两座玻璃挑台全部进 P1-3F 已有批�
   const deck = new THREE.Raycaster(new THREE.Vector3(-235, lv.elev + .6, -246), new THREE.Vector3(0, -1, 0), 0, .7).intersectObjects(meshes, false);
   assert.ok(deck.some(h => ['p1TerracePaving', 'facadeStone'].includes(h.object.name)), `江景台石材面层缺失 ${deck.map(h => h.object.name)}`);
   Lv.shell.traverse(m => m.geometry?.dispose());
+});
+
+test('星湾桥铭牌：四块铜牌朝人行道一面各有“星湾桥”字牌，画进口袋乐园招牌图集的空格，不新增贴图或绘制调用', () => {
+  const xw = R.bridges.find(b => b.id === 'XW-BR'), q = riverPlaques(R);
+  assert.equal(q.length, 4);
+  for (const [i, r] of xw.nameplates.entries()) {
+    const p = q[i], s = r.x0 < 0 ? -1 : 1, face = s > 0 ? r.x1 + .02 : r.x0 - .02;
+    assert.equal(p.nx, s, '字牌没有朝人行道');
+    assert.ok(Math.abs(p.x - face) < .01 && Math.abs(p.x) > Math.abs(face), `字牌不在铜牌外表面 x=${p.x}`);
+    assert.ok(p.z - p.w / 2 >= r.z0 + .2 - 1e-9 && p.z + p.w / 2 <= r.z1 - .2 + 1e-9, '字牌超出铜牌');
+    assert.ok(p.y - p.h / 2 >= xw.deckTop + .45 && p.y + p.h / 2 <= xw.deckTop + 1.0, '字牌高度超出铜牌');
+  }
+  const paint = new Proxy({}, { get: (t, k) => k in t ? t[k] : k === 'measureText' ? () => ({ width: 10 }) : String(k).startsWith('create') ? () => ({ addColorStop() {} }) : () => {}, set: (t, k, v) => { t[k] = v; return true; } });
+  globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => paint }) };
+  const run = (river) => {
+    const ctx = { ...context(), dynamic: [] };
+    if (river) buildRiver(ctx);
+    const before = new Set(ctx.site.group.children);
+    buildForecourt(ctx);
+    const signs = ctx.site.group.children.filter(m => !before.has(m) && m.name === 'signs');
+    return { ctx, signs, maps: new Set(ctx.site.group.children.filter(m => !before.has(m)).map(m => m.material?.map).filter(Boolean)) };
+  };
+  const a = run(false), b = run(true);
+  assert.deepEqual(b.ctx.site.signs.map(e => [e.id, e.quads.length]), [['XW-BR-plaque', 4]]);
+  assert.equal(b.signs.length, 1); assert.equal(a.signs.length, 1);
+  assert.equal(b.maps.size, a.maps.size, '新增了贴图');
+  const img = (r) => r.signs[0].material.map.image;
+  assert.deepEqual([img(b).width, img(b).height], [img(a).width, img(a).height], '招牌图集变大了');
+  assert.equal(triangles(b.signs[0]) - triangles(a.signs[0]), 4 * 2, '应正好多 4 块字牌');
+  for (const r of [a, b]) r.ctx.site.group.traverse(m => m.geometry?.dispose());
 });

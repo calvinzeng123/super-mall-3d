@@ -15,8 +15,12 @@ const PHASES = [
 
 export function createUI(app, layout) {
   const annexes = layout.buildings.filter(b => b.kind === 'annex');
+  // 楼栋牌副标题：云澜物业社区写社区名与实际最高层（西苑 28 层、北苑 24 层），其余按用途。
+  const topFloor = (b) => Math.max(...layout.levels.filter(l => l.building === b.id).map(l => parseInt(l.short, 10)).filter(Number.isFinite));
+  const towerSub = (b) => b.community ? `${b.name.replace(/\s*\d+\s*号楼$/, '')} · ${topFloor(b)}层`
+    : b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅';
   const phases = [...PHASES.filter(p=>!layout.playable||!p.id||layout.buildings.some(b=>b.id===p.id)).flatMap(p => [p,
-    ...annexes.filter(b => b.campusGroup === p.id).map(b => ({ id: b.id, label: b.short, sub: '一期 · 艺术街区' }))]), ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅' })),
+    ...annexes.filter(b => b.campusGroup === p.id).map(b => ({ id: b.id, label: b.short, sub: '一期 · 艺术街区' }))]), ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: towerSub(b) })),
     ...layout.buildings.filter(b => b.undergroundOnly).map(b => ({ id: b.id, label: b.short, sub: '地下公共停车' }))];
   const built = new Set(layout.buildings.map((b) => b.id));
   const bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));

@@ -318,18 +318,19 @@ function zoneEdging(B,poly){
   }
 }
 
-function makeLabels(plan){
+/** 园区场地招牌图集：口袋乐园导览牌 + 其他场地构件登记的牌（如星湾桥铭牌，ctx.site.signs），共用一张贴图、一次绘制。 */
+function makeLabels(plan,extra=[]){
   const entries=[...plan.zones,...plan.items.filter(f=>f.name)].map(f=>({id:f.id,draw(g,x,y,w,h){
     g.fillStyle=C.dark;g.fillRect(x,y,w,h);g.fillStyle=C.cream;g.textAlign='center';g.textBaseline='middle';
     g.font=`600 ${f.name.length>10?30:38}px ${FONT_CN}`;g.fillText(f.name,x+w/2,y+h*.44,w-24);
     g.font=`500 16px ${FONT_EN}`;g.fillStyle='#c5b57c';g.fillText('YUNLAN COMMONS · GARDEN & PLAY',x+w/2,y+h*.82,w-24);
   }}));
-  return makeSignAtlas(entries);
+  return makeSignAtlas([...entries,...extra]);
 }
 
 export function buildForecourt(ctx){
   const plan=ctx.layout.site.forecourt;if(!plan)return;
-  const B=ctx.site.batch,S=new SignBatch(),atlas=makeLabels(plan);
+  const B=ctx.site.batch,S=new SignBatch(),extra=ctx.site.signs||[],atlas=makeLabels(plan,extra);
   B.materials.forecourtPaving=ctx.mats.floor('paving',.85);
   B.materials.forecourtStone=ctx.mats.floor('stone',.85);
   B.materials.forecourtGrass=ctx.mats.floor('grass',.9);
@@ -375,5 +376,6 @@ export function buildForecourt(ctx){
     if(rotated)B.frame(item.frame,draw);else draw();
   }
   addTrees(ctx.site.group,ctx.mats,trees,124);
+  for(const e of extra)for(const q of e.quads)S.placeN(q.x,q.y,q.z,q.w,q.h,q.nx,q.nz,atlas.cell(e.id));
   S.flush(ctx.site.group,new THREE.MeshBasicMaterial({map:atlas.texture}));
 }
