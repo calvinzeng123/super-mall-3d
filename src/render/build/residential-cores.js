@@ -151,7 +151,8 @@ function streetDoor(L, A, y0) {
   }
   F.get('extMetal').box(c, y0 + 3.05, -239.9, w + .12, .1, .12, BRONZE);
   F.get('glassTint').box(c, y0 + 3.6, -239.93, w + .12, 1.0, .03, 0xffffff);
-  const cw = w + 2.4, d = 2.4;
+  // Narrow enough to keep clear of the 方庭北门 canopy next to the T2 door.
+  const cw = w + 1.2, d = 2.4;
   F.get('glassTint').box(c, y0 + 4.2, -240 - d / 2, cw, .04, d, 0xffffff);
   F.get('extMetal').box(c, y0 + 4.16, -240 - d + .04, cw + .08, .14, .08, BRONZE);
   for (const s of [-1, 1]) {
