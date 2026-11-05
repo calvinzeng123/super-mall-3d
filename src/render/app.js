@@ -437,8 +437,11 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     B.group.visible = !hidden;
     setHospitalityCut(ctx, b.id, !explore && selectedLevel && selectedLevel.kind !== 'roof' ? selectedLevel.elev + 0.05 : Infinity);
     if (B.exterior) B.exterior.visible = true;
+    // In the orbit cutaway a duplex's upper storey would cover the focused floor (its rooms sit above
+    // the cut, its lift lobby is cut away): companions show only from inside, or below the focus.
+    const companionShown = (lv) => !!explore || !selectedLevel || lv.elev <= selectedLevel.elev;
     for (const L of B.levels) {
-      const active = L.lv.id === wanted || companions.has(L.lv.id) || (!!explore && visibleExploreLevels.has(L.lv.id) && L.lv.elev <= 0
+      const active = L.lv.id === wanted || (companions.has(L.lv.id) && companionShown(L.lv)) || (!!explore && visibleExploreLevels.has(L.lv.id) && L.lv.elev <= 0
         && !(L.lv.elev < 0 && !inside && !explore.under && (ctx.lvById[explore.level]?.elev ?? 0) > 4));
       const common = (!explore && !focus && (L.lv.short === '1F' || L.lv.kind === 'roof'))
         || (!!explore && !explore.under && L.lv.kind === 'roof');

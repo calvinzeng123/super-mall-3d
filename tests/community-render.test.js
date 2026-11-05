@@ -8,7 +8,7 @@ import { L } from './helpers.js';
 import { frame, rect, rectPoly, lrectPoly, toW, toL, pointInPoly, distToSeg, polyBounds } from '../src/layout/geom.js';
 import { BatchSet, SignBatch } from '../src/render/batch.js';
 import { buildCommunityTower, coreCells, facadeCoverage, lobbySignSpot, COMMUNITY_FAR_LOD } from '../src/render/build/community.js';
-import { buildPublicGarageShells, connections } from '../src/render/build/hospitality.js';
+import { buildPublicGarageShells, connections, setHospitalityCut } from '../src/render/build/hospitality.js';
 import { buildCommunitySite } from '../src/render/build/community-site.js';
 import { buildWestParkingDetails } from '../src/render/build/west-parking.js';
 import { buildResidenceFloor, communityFurniture, homePlate } from '../src/render/build/residence-interiors.js';
@@ -517,4 +517,22 @@ test('社区电梯层门：每个停靠层一对金属门扇，轿厢所在层�
   assert.ok(stops.every((st, i) => gap(i) < .6));
   car.group.visible = false; update.update(0, 0, {});
   assert.ok(!mesh.visible);
+});
+
+test('社区电梯层门随楼层剖切：门扇材质与塔楼外立面共用同一个剖切平面，聚焦某层时该层以上的层门随外立面切掉，下方保留', () => {
+  for (const [id, floor] of [['W1', 'W1-12F'], ['T1', 'T1-16F']]) {
+    const ctx = context(L), b = L.buildings.find((q) => q.id === id);
+    const rec = buildCommunityTower(ctx, b, ctx.hospitality.buildings), mat = rec.landing.mesh.material;
+    assert.ok(mat.clippingPlanes?.includes(rec.plane), `${id} 层门没有使用塔楼剖切平面`);
+    // 与 app.js 聚焦时相同：剖切面在聚焦层楼面以上 5 cm。
+    const lv = L.levels.find((l) => l.id === floor);
+    setHospitalityCut(ctx, id, lv.elev + .05);
+    const [plane] = mat.clippingPlanes, kept = (s) => plane.distanceToPoint(new THREE.Vector3(0, s.y + 1.14, 0)) >= 0;
+    const above = rec.landing.stops.filter((s) => s.y >= lv.elev - .01), below = rec.landing.stops.filter((s) => s.y < lv.elev - .01);
+    assert.ok(above.length > 0 && below.length > 0);
+    assert.ok(above.every((s) => !kept(s)), `${id} 聚焦 ${floor} 后上方层门仍然显示`);
+    assert.ok(below.every(kept), `${id} 聚焦 ${floor} 后下方层门被切掉`);
+    setHospitalityCut(ctx, id);
+    assert.ok(rec.landing.stops.every(kept), `${id} 取消聚焦后层门仍被切掉`);
+  }
 });

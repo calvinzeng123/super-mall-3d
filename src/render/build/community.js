@@ -250,6 +250,8 @@ export function landingDoors(ctx, b, levels, material, group) {
   // Batch materials take vertex colours; the instanced leaves carry none, so use a plain brushed-steel copy.
   const steel = material.clone();
   steel.vertexColors = false; steel.color?.set?.('#aab1b6'); steel.metalness = Math.min(steel.metalness ?? .6, .6); steel.roughness = Math.max(steel.roughness ?? .35, .35);
+  // clone() copies the clipping planes; share the tower's own plane so a floor cutaway also cuts the doors above it.
+  steel.clippingPlanes = material.clippingPlanes;
   const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), steel, stops.length * 2);
   mesh.name = `${b.id}-landing-doors`; mesh.visible = false; mesh.castShadow = false;
   const F = frameMatrix(b.frame), m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
