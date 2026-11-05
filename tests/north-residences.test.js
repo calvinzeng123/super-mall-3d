@@ -85,7 +85,9 @@ test('一期屋面：塔楼底板下的六部商场竖向交通止于 6F，屋�
   assert.equal(L.stairs.filter((s) => s.serves.includes('P1-RF')).length, 16);
   const feature = (t) => rf.features.find((f) => f.type === t);
   assert.deepEqual(feature('farm').rect, rect(-278, -222.5, -260, -211));
-  assert.deepEqual(feature('viewdeck').rect, rect(-239, -228, -229, -219.5));
+  // 观景台第三次移位（7F 空中大堂落地）：与屋面齐平，夹在两座空中大堂的缝侧门之间，离两侧外立面各 3.5 m。
+  assert.deepEqual(feature('viewdeck').rect, rect(-238.5, -228, -231.5, -221.5));
+  assert.equal(feature('viewdeck').flush, true);
   const plates = towers.map((b) => b.outline);
   const hits = (P) => plates.some((pl) => convexOverlap(P, pl));
   for (const w of rf.walk) assert.ok(!hits(w.poly), `屋面走道 ${w.id} 压塔楼底板`);

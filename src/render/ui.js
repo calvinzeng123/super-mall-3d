@@ -1,6 +1,7 @@
 import { attachViewportUI } from './viewport-ui.js';
 import { attachQualityUI } from './quality-ui.js';
 import { attachGlassLens } from './liquid-glass.js';
+import { floorRows, podiumOf, podiumDirectoryRow } from './floor-rows.js';
 // 界面：分期切换（园区 / 一期 / 二期 / 三期 / 地铁）、所选期的楼层牌、工具条、全园区店铺目录与搜索、悬停提示。
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -39,19 +40,18 @@ export function createUI(app, layout) {
     app.setBuilding(b.dataset.building || null);
   });
   let floorsFor = undefined;
+  /** Re-renders the rail when the building changes; true when it did. */
   function renderFloors(bid) {
-    if (floorsFor === bid) return;
+    if (floorsFor === bid) return false;
     floorsFor = bid;
     if (!bid) {
       floorList.innerHTML = '';
       floorList.hidden = true;
-      return;
+      return true;
     }
     floorList.hidden = false;
-    const levels = layout.levels.filter((l) => l.building === bid).reverse();
-    floorList.innerHTML =
-      `<button class="floor all" data-level="" aria-pressed="true"><span class="fl-num">${bById[bid].undergroundOnly ? '全部' : '全楼'}</span><span class="fl-name">${esc(bById[bid].short)}${bById[bid].undergroundOnly ? '总览' : '外观'}</span></button>` +
-      levels.map((lv) => `<button class="floor" data-level="${lv.id}" aria-pressed="false" style="--fc:${lv.theme.accent}"><span class="fl-num">${lv.short}</span><span class="fl-name">${esc(lv.theme.label.split(' · ')[0])}</span></button>`).join('');
+    floorList.innerHTML = floorRows(layout, bid);
+    return true;
   }
   floorList.addEventListener('click', (e) => {
     const b = e.target.closest('.floor');
@@ -108,7 +108,9 @@ export function createUI(app, layout) {
     const levels = bid ? layout.levels.filter((l) => l.building === bid) : layout.levels;
     const ids = new Set(levels.map((l) => l.id));
     const units = levels.reduce((n, l) => n + l.units.length, 0);
-    const out = [[bid && bById[bid]?.kind === 'tower' ? '房间 / 户' : bid ? '店铺' : '店铺 / 房间', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', layout.elevators.filter((e) => ids.has(e.serves[0])).length],
+    // 北苑的住户电梯从一期 B2 起停，按所属核心筒计入本楼。
+    const lifts = layout.elevators.filter((e) => ids.has(e.serves[0]) || (!!bid && (e.residentialCore === bid || e.building === bid))).length;
+    const out = [[bid && bById[bid]?.kind === 'tower' ? '房间 / 户' : bid ? '店铺' : '店铺 / 房间', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', lifts],
       ['人行入口', layout.entrances.filter((e) => ids.has(e.level) && e.to === 'site').length], ['车位', stallsOf(levels)]];
     if (!bid) out.unshift(['园区', layout.playable ? '一期商场 · 酒店 · 公寓' : '商场 · 酒店 · 公寓 · 住宅 · 地铁']);
     return out;
@@ -140,7 +142,7 @@ export function createUI(app, layout) {
       } else {
         html = layout.levels.filter((l) => l.building === b.id).reverse()
           .map((l) => `<li><button class="shop" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + (b.kind === 'tower' ? ' 户/间' : ' 家') : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`)
-          .join('');
+          .join('') + podiumDirectoryRow(layout, b.id);
         const linked = annexes.filter(a => a.campusGroup === b.id);
         if (linked.length) html += '<li class="dir-group">一期 · 艺术街区</li>' + linked.map(a =>
           `<li><button class="shop" data-building="${a.id}"><span class="shop-code">${esc(a.short)}</span><span class="shop-name"><b>${esc(a.name)}</b><span>连廊接入主商场 · 可进入各层</span></span><span class="shop-cat">${layout.levels.filter(l => l.building === a.id && l.kind !== 'roof').length} 层</span></button></li>`).join('');
@@ -197,15 +199,22 @@ export function createUI(app, layout) {
   });
 
   // ---------- 状态同步 ----------
+  let railFocus = null;
   function sync(s) {
     viewport.sync(s);
     for (const t of phaseTabs.querySelectorAll('.phase')) t.setAttribute('aria-pressed', String((t.dataset.building || null) === s.building));
-    renderFloors(s.building);
+    const fresh = renderFloors(s.building);
     for (const f of floorList.querySelectorAll('.floor')) f.setAttribute('aria-pressed', String((f.dataset.level || null) === s.focus && !s.exploded));
     phaseGlass.sync();
     floorGlass.sync();
     const activeFloor = floorList.querySelector('[aria-pressed="true"]');
     if (activeFloor && s.focus) activeFloor.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // A tower on the mall roof lists RF … 7F and the podium row: with no floor focused, show the
+    // bottom first (7F 空中大堂, 8F–13F and 一期商场 1–6F), not only the top floors.
+    else if (!s.focus && (fresh || railFocus) && podiumOf(layout, s.building)) {
+      floorList.scrollTop = floorList.scrollHeight; floorList.scrollLeft = floorList.scrollWidth;
+    }
+    railFocus = s.focus || null;
     const press = (act, on) => toolbar.querySelector(`[data-act="${act}"]`)?.setAttribute('aria-pressed', String(!!on));
     press('directory', !directory.classList.contains('collapsed'));
     press('explode', s.exploded);

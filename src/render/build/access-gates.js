@@ -36,7 +36,7 @@ export function gateLeafBoxes(g, t) {
 }
 
 /** Static parts of a gate in its frame (cabinets, track, sidelights, reader) into the level batch. */
-function gateStatics(B, g, y0) {
+export function gateStatics(B, g, y0) {
   B.frame(g.frame, () => {
     if (g.kind === 'speed-gates') {
       for (const c of g.cabinets) {
@@ -108,7 +108,8 @@ export function buildAccessGates(ctx) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
   for (const [floor, list] of byFloor) {
     const L = ctx.levels[floor], y0 = ctx.lvById?.[floor]?.elev ?? L.lv?.elev ?? 0;
-    for (const g of list) gateStatics(L.batch, g, y0);
+    // 7F 空中大堂的闸机静态件随会所批次画（buildCommunityLobby），不给塔楼层新增批次。
+    if (!ctx.lvById?.[floor]?.skyLobby) for (const g of list) gateStatics(L.batch, g, y0);
     const leafCount = list.reduce((n, g) => n + gateLeafBoxes(g, 0).length, 0), ledCount = list.reduce((n, g) => n + gateLeds(g).length, 0);
     const leaves = new THREE.InstancedMesh(leafGeo, leafMat, leafCount), leds = new THREE.InstancedMesh(ledGeo, ledMat, ledCount);
     leaves.name = `access-gate-leaves ${floor}`; leds.name = `access-gate-leds ${floor}`;

@@ -65,3 +65,27 @@ export function createExploreVisibility(layout) {
     return interiors;
   };
 }
+
+/**
+ * 7F 空中大堂与一期天台同高相通（规格 §8.3）。返回 (b, state) → 该塔要画出的空中大堂楼层 id 或 null：
+ * - 漫游：人不在这栋塔里、站在天台或任一空中大堂，且离塔心 radius 以内（explore.position 按 24 m 分区更新）；
+ * - 俯瞰：选中一期且未聚焦楼层，或选中本塔且未聚焦楼层。
+ * 漫游时结果是“想看的楼层”（建室内），俯瞰时是额外显示的楼层（会所组在 L.shell 里，只能走 active）。
+ */
+export function skyLobbyVisibility(layout, { radius = 60 } = {}) {
+  const doors = layout.entrances.filter(e => e.skyLobby);
+  const skyOf = new Map(doors.map(e => [e.building, e.level]));
+  const linked = new Set(doors.flatMap(e => [e.level, e.to]));
+  const owner = new Map(layout.levels.map(l => [l.id, l.building]));
+  return (b, { explore = null, building = null, focus = null } = {}) => {
+    const sky = skyOf.get(b.id);
+    if (!sky) return null;
+    if (explore) {
+      const inside = explore.building === b.id || owner.get(explore.level) === b.id, at = explore.position;
+      if (inside || !linked.has(explore.level) || !at) return null;
+      return Math.hypot(at.x - b.center[0], at.z - b.center[1]) < radius ? sky : null;
+    }
+    if (focus) return null;
+    return building === b.id || (!!b.stackedOn && building === b.stackedOn) ? sky : null;
+  };
+}

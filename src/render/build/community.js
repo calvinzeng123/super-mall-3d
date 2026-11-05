@@ -1,5 +1,5 @@
 // 云澜社区住宅（西苑 / 北苑）常驻外壳：楼板与层间线脚、户型立面窗与阳台、核心筒、走廊端玻璃、
-// 1F 门禁大堂 / 7F 空中会所、屋顶花园与招牌。只依赖 layout/community-contract.js 列出的字段：
+// 1F 门禁大堂 / 7F 空中大堂与住户会所（天台两樘门、雨棚、速通闸机）、屋顶花园与招牌。只依赖 layout/community-contract.js 列出的字段：
 // 每栋一个 BatchSet（7 个材质批次 + 1 块招牌），户内陈设由 residence-interiors.js 按楼层加载；
 // 西苑两栋在 600 m 外换成两个批次的远景替身（园区全景、对岸视角）。
 import * as THREE from 'three';
@@ -11,6 +11,7 @@ import { segment, rectFinish, lobbyFurniture, clipMaterial } from './residential
 import { buildTowerStairInstances } from './tower-stairs.js';
 import { WEST_CANOPY } from '../../layout/community.js';
 import { planter, bench } from './props.js';
+import { gateStatics } from './access-gates.js';
 
 export const COMMUNITY_PALETTES = {
   west: { wall: '#ebe5d9', band: '#b6ad9b', accent: '#6f8a7a', frame: '#4f5759', core: '#d8d2c4', stone: '#e6e1d6', slab: '#e2ddd2', sign: '#2f4a40', ink: '#f2ead6', curtain: '#e8dcc4' },
@@ -408,6 +409,38 @@ function canopy(B, layout, b, lv, pal) {
   }
 }
 
+/** 7F 空中大堂 doors of a storey on their footprint edge: { en, e (edge), span [t0, t1] } in the building frame. */
+const skyDoors = (layout, b, lv) => (layout.entrances || []).filter((q) => q.building === b.id && q.level === lv.id && q.skyLobby).flatMap((en) => {
+  const p = toL(b.frame, en.seg.x0, en.seg.z0), q = toL(b.frame, en.seg.x1, en.seg.z1), e = footprintEdges(b.footprint).find((x) => onEdge(x, p, q, .3));
+  return e ? [{ en, e, span: spanOn(e, p, q) }] : [];
+});
+
+/**
+ * 空中大堂外门（外立面批次，+0 次绘制）：两扇自动推拉玻璃门常开、收在门洞两侧室内 8 cm；
+ * 南门上方 2.4 m 玻璃雨棚、铜色封边与两根拉杆。门洞与亮子由 perimeter() 按入口记录开出。
+ */
+function skyDoorway(B, layout, b, lv, pal) {
+  for (const { en, e, span: [a, z] } of skyDoors(layout, b, lv)) {
+    const m = (a + z) / 2, w = z - a, leaf = w / 2;
+    // Leaves park beside the opening; a side too short for its leaf (the gap door is 1 m from the
+    // south corner) stacks that leaf behind the other one, 4 cm further in.
+    const room = { lo: a - e.lo - .1, hi: e.hi - z - .1 };
+    const park = [-1, 1].map((sgn) => (sgn < 0 ? room.lo : room.hi) >= leaf + .05 ? sgn : -sgn);
+    park.forEach((sgn, i) => {
+      const stacked = park[1 - i] === sgn && i === 1, t = sgn < 0 ? a - .05 - leaf / 2 : z + .05 + leaf / 2;
+      const c = at(e, t, stacked ? -.12 : -.08);
+      B.get('glassTint').box(c[0], lv.elev + 1.52, c[1], e.axis === 'x' ? leaf : .03, 2.96, e.axis === 'x' ? .03 : leaf, 0xffffff);
+    });
+    if (en.skyLobby !== 'S') continue;
+    const half = w / 2 + .6, d = 2.4, y = lv.elev + 4.3;
+    const c = at(e, m, d / 2), cw = e.axis === 'x' ? 2 * half : d, cd = e.axis === 'x' ? d : 2 * half;
+    B.get('glassTint').box(c[0], y, c[1], cw, .04, cd, 0xffffff);
+    const o = at(e, m, d - .04);
+    B.get('extMetal').box(o[0], y - .04, o[1], e.axis === 'x' ? cw + .08 : .08, .14, e.axis === 'x' ? .08 : cd + .08, pal.frame);
+    for (const t of [m - half + .3, m + half - .3]) { const r = at(e, t, d / 2); B.get('extMetal').box(r[0], y + .7, r[1], .04, 1.4, .04, pal.frame); }
+  }
+}
+
 /** Two sign cells per tower in one texture: the crown name and the lobby / entrance plate.
  * A thin third strip carries the painted 消防登高场地 legend of the tower's hardstand. */
 function signAtlas(b, pal) {
@@ -417,8 +450,8 @@ function signAtlas(b, pal) {
   g.font = `600 92px ${FONT_CN}`; g.fillText(b.name, 512, 80, 980);
   g.font = `500 38px ${FONT_EN}`; g.fillText(b.en, 512, 168, 980);
   g.fillStyle = pal.accent; g.fillRect(0, 204, 1024, 6); g.fillStyle = pal.ink;
-  g.font = `600 76px ${FONT_CN}`; g.fillText(west ? '云澜·西苑 · 社区大堂' : '云澜·北苑 · 空中会所', 512, 284, 980);
-  g.font = `400 32px ${FONT_EN}`; g.fillText(`云澜物业 · YUNLAN PROPERTY · ${west ? 'RESIDENTS ONLY' : 'SKY CLUB'}`, 512, 368, 980);
+  g.font = `600 76px ${FONT_CN}`; g.fillText(west ? '云澜·西苑 · 社区大堂' : '云澜·北苑 空中大堂', 512, 284, 980);
+  g.font = `400 32px ${FONT_EN}`; g.fillText(west ? '云澜物业 · YUNLAN PROPERTY · RESIDENTS ONLY' : 'SKY LOBBY · 住户刷卡乘梯 · 访客请至礼宾台', 512, 368, 980);
   g.fillStyle = '#50585b'; g.fillRect(0, 416, 1024, 96);
   g.fillStyle = '#f2c230'; g.font = `700 64px ${FONT_CN}`; g.fillText('消防登高场地  禁止占用', 512, 466, 980);
   return canvasTexture(c, { clamp: true });
@@ -561,6 +594,7 @@ export function buildCommunityTower(ctx, b, records) {
       perimeter(B, col, layout, b, lv, pal);
       coreStorey(B, col, b.frame, lv, pal, lv.height, b.footprint);
       canopy(B, layout, b, lv, pal);
+      skyDoorway(B, layout, b, lv, pal);
     }
   });
   col.flush(B);
@@ -577,6 +611,12 @@ export function buildCommunityTower(ctx, b, records) {
       if (!f) continue;
       const [s0, s1] = spanOn(f, a, z), q = at(f, (s0 + s1) / 2, 3.32);
       signs.place(q[0], 4.08, q[1], 3.6, .73, f.side, CELL[1]);
+    }
+    // 空中大堂南门：门楣上方、亮子外 6 cm 的招牌（与会所内同一格）
+    for (const lv of above) for (const { en, e, span: [s0, s1] } of skyDoors(layout, b, lv)) {
+      if (en.skyLobby !== 'S') continue;
+      const q = at(e, (s0 + s1) / 2, .06);
+      signs.place(q[0], lv.elev + 3.86, q[1], 3.6, .73, e.side, CELL[1]);
     }
   });
   signs.flush(group, signMat);
@@ -606,7 +646,7 @@ export function buildCommunityTower(ctx, b, records) {
 
 const LOBBY_KEYS = { satin: 'matte', extSatin: 'matte', extMetal: 'metal', plaster: 'matte', glassTint: 'glass', glowSoft: 'glow', foliage: 'matte', concrete: 'stone', ext: 'matte' };
 const WOOD_ZONES = new Set(['lounge', 'reading', 'kids', 'management', 'gym', 'dining', 'library']);
-/** 1F 社区大堂 / 7F 空中会所 from lobbyPlan: zone floors, partitions, furniture and lighting. */
+/** 1F 社区大堂 / 7F 空中大堂与住户会所 from lobbyPlan: zone floors, partitions, furniture, gate statics and lighting. */
 export function buildCommunityLobby(ctx, b, lv, pal, signMat) {
   const group = new THREE.Group(); group.name = `${b.id}-community-${lv.lobbyPlan.kind}`;
   const plan = lv.lobbyPlan, raw = new BatchSet(ctx.mats.base), B = keyed(raw, LOBBY_KEYS), y = lv.elev, h = lv.height;
@@ -630,7 +670,26 @@ export function buildCommunityLobby(ctx, b, lv, pal, signMat) {
       for (const [s0, s1] of spans) segment(B, 'plaster', along(w.a, w.b, s0), along(w.a, w.b, s1), y, y + 3.3, .14, '#efebe2');
       if (d) segment(B, 'plaster', along(w.a, w.b, d.at - d.width / 2), along(w.a, w.b, d.at + d.width / 2), y + 2.3, y + 3.3, .14, '#efebe2');
     }
-    for (const o of plan.obstacles) lobbyFurniture(B, o, y);
+    for (const o of plan.obstacles) {
+      if (o.type === 'planter') { const r = o.rect; planter(B, r.x0, r.z0, r.x1, r.z1, y, Math.round(Math.abs(r.x0 * 7 + r.z0)) + 1, false, 'stone'); }
+      else lobbyFurniture(B, o, y);
+    }
+  });
+  // 空中大堂闸机：机柜、读卡器、闸机上方的横梁与招牌吊杆写进会所批次（门扇 / 指示灯仍是两组实例网格）；
+  // 整条门线（两侧玻璃隔断 + 闸机）上方用玻璃亮子封到吊顶，住户一侧与 1F 一样不可翻越。
+  const gates = lv.skyLobby ? (ctx.layout.accessControl?.gates || []).filter((g) => g.floors.includes(lv.id)) : [];
+  for (const g of gates) {
+    gateStatics(B, g, y);
+    const mid = (g.line.u0 + g.line.u1) / 2;
+    B.frame(g.frame, () => {
+      B.get('metal').box(mid, y + 3.25, 0, g.line.u1 - g.line.u0, .1, .08, pal.frame);
+      for (const du of [-1.1, 1.1]) B.get('metal').box(mid + du, y + 3.08, -.05, .02, .24, .02, pal.frame);
+    });
+  }
+  if (lv.skyLobby && plan.gateLine) B.frame(plan.frame || b.frame, () => {
+    const { a, b: z } = plan.gateLine;
+    pane(B, 'glass', a, z, y + 3.3, y + 4.6);
+    segment(B, 'metal', a, z, y + 4.6, y + 4.69, .08, pal.frame);
   });
   raw.flush(group);
   // 大堂 / 会所标识（招牌图集第二格，与外立面共用一张贴图）：接待处背墙，否则挂在核心筒墙面上。
@@ -638,6 +697,7 @@ export function buildCommunityLobby(ctx, b, lv, pal, signMat) {
   if (spot && signMat) {
     const signs = new SignBatch();
     signs.frame(spot.frame, () => signs.place(spot.x, y + 2.75, spot.z, 3.2, .65, spot.side, CELL[1]));
+    for (const g of gates) signs.frame(g.frame, () => signs.place((g.line.u0 + g.line.u1) / 2, y + 2.7, -.05, 2.6, .52, 'N', CELL[1]));
     signs.flush(group, signMat);
   }
   // Seen only when the floor is visited or the tower selected; the campus view pays nothing.
@@ -650,6 +710,7 @@ export function buildCommunityLobby(ctx, b, lv, pal, signMat) {
  * solid stretch (≥ 3.4 m, clear of stair doors, lift doors and open landings) of the core wall
  * that faces the most club floor area. Null when no such wall exists. */
 export function lobbySignSpot(lv, plan, b) {
+  if (plan.signSpot) return { frame: plan.frame || b.frame, ...plan.signSpot };
   const desk = plan.obstacles.find((o) => o.id === 'reception-back-cabinet');
   if (desk) return { frame: plan.frame || b.frame, x: (desk.rect.x0 + desk.rect.x1) / 2, z: desk.rect.z0 - .02, side: 'N' };
   const cp = lv.corePlan, F = cp?.frame || b.frame, P = plan.frame || b.frame;

@@ -161,6 +161,10 @@ test('会所 / 大堂标识：有接待背柜挂在背柜上，否则挂在面�
   assert.ok(spot.z - 1.6 >= -1.6 + .2 - 1e-6 && spot.z + 1.6 <= 8 + 1e-6, '标识压住候梯厅开口');
   // 没有可挂的实墙时不挂。
   assert.equal(lobbySignSpot({ ...lv, corePlan: { ...lv.corePlan, core: rect(-1, -1, 1, 1) } }, plan, { frame: F }), null);
+  // 平面给了 signSpot（7F 空中大堂：挂在礼宾台背景墙上、朝南门）就用它。
+  assert.deepEqual(lobbySignSpot(lv, { ...plan, signSpot: { x: 6.5, z: -.41, side: 'S' } }, { frame: F }), { frame: F, x: 6.5, z: -.41, side: 'S' });
+  const t1 = L.levels.find((l) => l.id === 'T1-7F');
+  assert.deepEqual(lobbySignSpot(t1, t1.lobbyPlan, L.buildings.find((b) => b.id === 'T1')), { frame: t1.lobbyPlan.frame, ...t1.lobbyPlan.signSpot });
 });
 
 test('西库停车顶盖与 B1 灯具让出西苑地下大堂：大堂内没有车库构件，楼梯井与电梯井向上不被遮挡', () => {

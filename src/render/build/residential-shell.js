@@ -226,6 +226,13 @@ export function lobbyFurniture(B,o,y) {
         B.get('extMetal').box(frontX?r.x0-.04:along,yy,frontX?along:r.z1+.04,frontX?.025:.12,.025,frontX?.12:.025,C.trim);
       }
     }
+  } else if(o.type==='treadmill') {
+    // 跑步机（5 个盒子）：底座、跑带、两根立柱与控制台；控制台在 z1 / x1 一端，跑步时面朝窗外。
+    const alongZ=d>=w,half=(alongZ?w:d)/2-.05,end=alongZ?r.z1-.12:r.x1-.12;
+    B.get('metal').box(x,y+.12,z,w,.2,d,'#2f3638');
+    B.get('satin').box(x,y+.23,z,alongZ?w-.16:w-.3,.03,alongZ?d-.3:d-.16,'#1d2426');
+    for(const sg of [-1,1]) B.get('metal').box(alongZ?x+sg*half:end,y+.72,alongZ?end:z+sg*half,.06,1.0,.06,'#9aa1a3');
+    B.get('metal').box(alongZ?x:end-.06,y+1.26,alongZ?end-.06:z,alongZ?w:.3,.12,alongZ?.3:d,'#273033');
   } else if(o.type==='vanity') {
     B.get('wood').box(x,y+.35,z,w-.05,.65,d-.05,C.timber);
     B.get('stone').box(x,y+.81,z,w,.08,d,'#e8e6df');

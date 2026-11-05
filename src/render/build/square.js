@@ -1,5 +1,6 @@
 // 方庭（一期延展）专属陈设：1F 中庭服务台与悬挂"云朵"灯组；天台露天星空影院（LED 银幕、阶梯木平台、懒人沙发、串灯）、
-// 屋顶农场（种植池、作物、玻璃温室、工具房、稻草人）、方庭观景台（抬高木平台、玻璃栏板、望远镜）。
+// 屋顶农场（种植池、作物、玻璃温室、工具房、稻草人）、方庭观景台（抬高木平台、玻璃栏板、望远镜；北苑落地后为齐平木铺装）、
+// 北苑两座空中大堂之间的玻璃连廊雨棚。
 // 其余（铺位、店面、走道、扶梯、观光梯、外立面、天窗）由通用模块生成。
 import * as THREE from 'three';
 import { toW } from '../../layout/geom.js';
@@ -19,6 +20,7 @@ export function buildSquare(ctx) {
       if (f.type === 'cinema-open') cinema(ctx, L, f, rf.elev);
       else if (f.type === 'farm') farm(L.batch, f, rf.elev);
       else if (f.type === 'viewdeck') viewdeck(L.batch, f, rf.elev);
+      else if (f.type === 'sky-link-canopy') skyLinkCanopy(L.batch, f, rf.elev);
     }
   }
 }
@@ -171,10 +173,45 @@ function farm(B, f, y0) {
   });
 }
 
+/**
+ * 空中大堂连廊雨棚：两座塔楼缝侧门之间的玻璃顶，挂在两侧外立面上（端部托梁 + 4 根斜拉杆到 8F 立面），
+ * 不落柱、不挡路。写进天台批次的 glass / extMetal（+0 次绘制）。
+ */
+function skyLinkCanopy(B, f, y0) {
+  const r = f.rect, y = y0 + (f.y ?? 4.3), cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, W = r.x1 - r.x0, D = r.z1 - r.z0;
+  const steel = COLORS.darkSteel;
+  B.frame(f.frame, () => {
+    B.get('glass').box(cx, y, cz, W, 0.04, D, 0xffffff);
+    for (const z of [r.z0 + 0.04, r.z1 - 0.04]) B.get('extMetal').box(cx, y - 0.06, z, W, 0.14, 0.08, steel);
+    for (const x of [r.x0 + 0.06, r.x1 - 0.06]) B.get('extMetal').box(x, y - 0.06, cz, 0.12, 0.14, D, steel);
+    for (const k of [1, 2, 3]) B.get('extMetal').box(r.x0 + (W * k) / 4, y - 0.05, cz, 0.06, 0.1, D - 0.1, steel);
+    // Tie rods from 2 m out on each edge beam up to the tower façades, 1.7 m above the canopy.
+    const rise = 1.7, run = 2.0, len = Math.hypot(rise, run), tilt = Math.atan2(rise, run);
+    for (const [x, sx] of [[r.x0, 1], [r.x1, -1]]) for (const z of [r.z0 + 0.3, r.z1 - 0.3]) {
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sx * (Math.PI / 2 - tilt));
+      B.get('extMetal').shape('box', new THREE.Vector3(x + sx * run / 2, y + rise / 2, z), q, new THREE.Vector3(0.03, len, 0.03), '#5b5f64');
+    }
+  });
+}
+
 /** 观景台：抬高木平台 + 台阶 + 外侧玻璃栏板 + 两台望远镜 + 长椅 */
 function viewdeck(B, f, y0) {
   const r = f.rect;
   const cx = (r.x0 + r.x1) / 2;
+  if (f.flush) {
+    // 北苑空中大堂之间的观景台：与屋面齐平的木铺装（导航本就按平地走），北沿玻璃栏板、两台望远镜、一张长椅。
+    B.frame(f.frame, () => {
+      B.get('ext').box(cx, y0 + 0.025, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.05, r.z1 - r.z0, '#9c6a43');
+      B.get('glass').box(cx, y0 + 0.6, r.z0 + 0.15, r.x1 - r.x0, 1.1, 0.04, 0xffffff);
+      B.get('extMetal').box(cx, y0 + 1.17, r.z0 + 0.15, r.x1 - r.x0, 0.06, 0.1, COLORS.darkSteel);
+      for (const x of [cx - 2.2, cx + 2.2]) {
+        B.get('extMetal').cyl(x, y0, r.z0 + 0.6, 0.06, 1.1, '#3b4046', 8);
+        B.get('extMetal').box(x, y0 + 1.2, r.z0 + 0.5, 0.25, 0.25, 0.7, '#c9ccd0', 0.3);
+      }
+      bench(B, cx, y0, r.z0 + 4.5, 0, 'ext');
+    });
+    return;
+  }
   B.frame(f.frame, () => {
     B.get('ext').box(cx, y0 + 0.3, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.6, r.z1 - r.z0, '#9c6a43');
     for (let k = 0; k < 3; k++) B.get('ext').box(cx, y0 + 0.1 + k * 0.2, r.z1 + 0.9 - k * 0.3, 6, 0.2 + k * 0.2, 0.3, '#8a5a36');

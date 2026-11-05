@@ -1,6 +1,6 @@
 // 滨江整合（规格 §7.2）：云澜江景台让开北苑消防登高面与登高场地；从 x-rn-sq 过街走到北苑 2 号楼街门，
 // 刷卡进大堂、乘私家梯 W 到 16F 入户门；商场环廊刷卡进候梯厅；西停车场地库刷卡进西苑 1 号楼电梯厅。
-// 全程用真实门禁（tapGate / updateGates / gateBlocking），不刷卡就过不去；一键导览的滨江七步；紧凑 FPS 布局不变；园区总数钉住。
+// 全程用真实门禁（tapGate / updateGates / gateBlocking），不刷卡就过不去；一键导览的滨江八步（含天台空中大堂）；紧凑 FPS 布局不变；园区总数钉住。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -157,11 +157,11 @@ test('西苑地库：西停车场 B1 车库 → 门户 → 刷 W1-B1-GATE → �
   resetGates(nav);
 });
 
-test('一键导览：一期天台之后依次是云澜江、星湾桥、江景台、北苑、商场住户通道、西苑、对岸，人视镜头都站在能站人的地方', () => {
+test('一键导览：一期天台之后依次是云澜江、星湾桥、江景台、北苑、天台空中大堂、商场住户通道、西苑、对岸，人视镜头都站在能站人的地方', () => {
   const steps = buildTourSteps(L), i = steps.findIndex((s) => s.caption.startsWith('一期天台')), added = steps.slice(i + 1, -1);
   assert.deepEqual([...new Set(added.map((s) => s.caption))], ['云澜江 · 星湾桥连接一期与二期', '星湾桥 · 146 m 系杆拱与跨中玻璃挑台',
-    '云澜江景台 · 3F 江景露台与玻璃眺台', '云澜·北苑 · 一梯一户江景大平层与错层复式', '云澜·北苑 · 商场住户通道（刷卡门禁）',
-    '云澜·西苑 · 3梯5户社区', '对岸看江景商场与北苑']);
+    '云澜江景台 · 3F 江景露台与玻璃眺台', '云澜·北苑 · 一梯一户江景大平层与错层复式', '云澜·北苑 · 商场天台空中大堂（刷卡直达住宅电梯）',
+    '云澜·北苑 · 商场住户通道（刷卡门禁）', '云澜·西苑 · 3梯5户社区', '对岸看江景商场与北苑']);
   assert.equal(steps.at(-1).caption, '园区全景');
   for (const s of added) {
     assert.ok([...s.pos.toArray(), ...s.target.toArray(), s.dur].every(Number.isFinite), s.caption);
@@ -172,6 +172,13 @@ test('一键导览：一期天台之后依次是云澜江、星湾桥、江景�
     if (F) assert.ok(y - F.y > 1.5 && y - F.y < 2.5 && clear(nav, S(F.floor, x, z)), `${s.caption} 镜头 (${x},${y},${z}) 脚下 ${F.floor}@${F.y}`);
   }
   assert.equal(added.filter((s) => s.pos.y < 20).length, 6, '应有 6 个人视机位');
+  // 天台空中大堂：第一步是一期天台（34 m）上的人视机位，选中一期、不剖切（7F 室内透过玻璃画出来）；
+  // 第二步选中 1 号楼剖到 7F 俯看；两步都在 1F 门禁三步之前，下一步改选一期即撤掉剖切。
+  const sky = added.filter((s) => s.caption.includes('天台空中大堂'));
+  assert.deepEqual(sky.map((s) => [s.building, s.focus ?? null]), [['P1', null], ['T1', 'T1-7F']]);
+  const [x, y, z] = sky[0].pos.toArray(), F = landAt(nav, x, z, y);
+  assert.ok(F && F.floor === 'P1-RF' && y - F.y > 1.5 && y - F.y < 2.5 && clear(nav, S(F.floor, x, z)), `天台人视机位 (${x},${y},${z}) 脚下 ${F?.floor}@${F?.y}`);
+  assert.ok(added.indexOf(sky[1]) < added.findIndex((s) => s.focus === 'P1-1F'), '空中大堂两步须排在 1F 门禁剖切之前');
   // 商场住户通道：沿方庭北门轴线进门，1F 剖切后才画出闸机，之后西苑一步撤掉剖切
   const gate = added.filter((s) => s.caption.includes('商场住户通道'));
   assert.deepEqual(gate.map((s) => [s.pos.x, s.focus ?? null]), [[RIVER_AXIS, null], [RIVER_AXIS, 'P1-1F'], [-220, 'P1-1F']]);
@@ -195,7 +202,8 @@ test('园区总数（游览布局，实测）：338 层、76 部电梯、106 部
   assert.equal(new Set(res.map((u) => u.residence.home ?? u.id)).size, 1046);
   const homes = (c) => new Set(res.filter((u) => u.residence.community === c).map((u) => u.residence.home ?? u.id)).size;
   assert.deepEqual([homes('west'), homes('north')], [270, 48]);
-  assert.deepEqual([gates.length, L.accessControl.zones.length], [14, 12]);
+  // 北苑 7F 空中大堂各加一道速通闸机与一个住户区（候梯厅 + 候梯带）：14 → 16 道门禁、12 → 14 个住户区。
+  assert.deepEqual([gates.length, L.accessControl.zones.length], [16, 14]);
   const P = L.site.westParking;
   assert.deepEqual([P.stallCount, P.lots.length, P.evCount, P.accessibleCount], [427, 20, 51, 9]);
   assert.deepEqual([L.site.urban.buildings.length, L.site.urban.trees.length], [82, 1314]);
