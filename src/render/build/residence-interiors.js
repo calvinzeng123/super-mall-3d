@@ -1,7 +1,8 @@
 // 住宅 / 公寓 / 酒店的单层内饰。调用方按当前楼层加载、移除，禁止全楼常驻。
 import * as THREE from 'three';
 import { BatchSet, SignBatch } from '../batch.js';
-import { toW, frame, subtractInterval } from '../../layout/geom.js';
+import { toW, toL, frame, subtractInterval } from '../../layout/geom.js';
+import { DOOR, partitionAxis, doorSpan, bedsideRect } from '../../layout/community-units.js';
 import { interiorDetail } from './interior-detail.js';
 import { buildSuiteModels } from './suite-models.js';
 import { buildResidentialModels } from './residential-models.js';
@@ -498,10 +499,6 @@ function doorSide(res, room) {
 }
 /** World frame centred on a unit-local point, turned so that canonical −z (front) faces `side`. */
 const roomFrame = (u, cx, cz, side) => frame(...toW(u.frame, cx, cz), u.frame.deg + ROT[side]);
-const centred = (r, side) => {
-  const w = r.x1 - r.x0, d = r.z1 - r.z0, [cw, cd] = side === 'E' || side === 'W' ? [d, w] : [w, d];
-  return { x0: -cw / 2, z0: -cd / 2, x1: cw / 2, z1: cd / 2 };
-};
 
 function communityHome(B, u, y0, height, labels, wallKeys) {
   const res = u.residence, W = res.width, D = res.depth, ext = new Set(res.exteriorSides || []);
@@ -539,7 +536,8 @@ function communityHome(B, u, y0, height, labels, wallKeys) {
     if (!ext.has('S')) wall([0, D], [W, D], null, '#ebe6db', .16);
     if (entry && door) {
       const [d0, d1] = door;
-      box('wood', d0 + .05, .48, 1.07, .05, .92, 2.1, '#cdb48f');
+      // 入户门：深色钢质门扇、门套与把手，按 entryDoor.leaf 贴墙停放（布局里选定）。
+      if (entry.leaf) doorSet(R, { axis: 'x', line: 0, g0: d0, g1: d1, tw: .16 }, entry.leaf, FRONT_DOOR);
       box('metal', d1 + .2, -.09, 1.6, .26, .02, .18, '#7b735c');
       const [lx, lz] = toW(u.frame, d1 + .2, -.105), [nx, nz] = toW(u.frame, 0, -1), [ox, oz] = toW(u.frame, 0, 0);
       labels.push({ x: lx, z: lz, nx: nx - ox, nz: nz - oz, text: homePlate(u.code) });
@@ -547,22 +545,56 @@ function communityHome(B, u, y0, height, labels, wallKeys) {
     for (const p of res.partitions) {
       if (p.role === 'railing') { glassRail(R, p.a, p.b); continue; }
       if (p.role === 'balcony-slider') {
-        // 推拉门玻璃在外壳；室内只留门槛与边框。
+        // 推拉门玻璃在外壳（剖切时随外立面切掉）；室内留门槛、两侧边框与上槛，剖切后读作门框而不是孤立的立柱。
         const [a, b] = [p.a, p.b];
         R.line('metal', a[0], a[1], .02, b[0], b[1], .02, .06, '#8d9188');
         for (const q of [a, b]) R.line('metal', q[0], q[1], 0, q[0], q[1], 2.4, .06, '#8d9188');
+        R.line('metal', a[0], a[1], 2.4, b[0], b[1], 2.4, .07, '#8d9188');
         continue;
       }
       const opened = wall(p.a, p.b, p.door ? p.door : null, p.role === 'stair-wall' ? '#e4ddd0' : '#eeeae1');
-      if (opened && p.role !== 'opening') {
-        const [d0, d1, dx, dz, angle] = opened, w = d1 - d0 - .06;
-        // 门扇开向房内、贴墙停放。
-        box('wood', p.a[0] + dx * (d0 + .03) + dz * w / 2, p.a[1] + dz * (d0 + .03) - dx * w / 2, 1.05, .04, w, 2.08, '#d8c4a3', angle);
+      // 户内门：门套、门扇与执手；门扇按布局记录（partition.door.leaf）开向所服务的房间、贴墙停放。
+      if (opened && p.role !== 'opening' && p.door.leaf) {
+        const s = partitionAxis(p), [g0, g1] = doorSpan(p);
+        doorSet(R, { axis: s.axis, line: s.c, g0, g1, tw: .12 }, p.door.leaf, INNER_DOOR);
       }
     }
     stairTreads(R, res);
   });
   communityFurniture(B, u, y0);
+}
+
+// 门：户内门为暖白色漆面门扇与门套（不是木地板纹理），入户门为深色钢质门；执手为金属拉手。
+const INNER_DOOR = { frameKey: 'matte', frame: '#f4f1ea', leafKey: 'matte', leaf: '#ebe5d8', handle: '#8d8576', lining: DOOR.lining, casing: .03 };
+const FRONT_DOOR = { frameKey: 'metal', frame: '#4b4844', leafKey: 'metal', leaf: '#615b54', handle: '#d9d2c3', lining: DOOR.frontLining, casing: .05 };
+/**
+ * One door in unit-local coordinates: jambs with their casings on both faces, the head casing, the leaf where the
+ * layout parked it (leaf.rect: open 90° or folded back 180°; a pocket leaf shows its edge in the opening) and a
+ * lever handle through the leaf near its free edge. About six boxes in the floor's existing batches.
+ */
+function doorSet(R, { axis, line, g0, g1, tw }, leaf, st) {
+  const slab = (a0, a1, n0, n1, y0, y1, key, color) => {
+    const r = axis === 'x' ? { x0: a0, x1: a1, z0: n0, z1: n1 } : { x0: n0, x1: n1, z0: a0, z1: a1 };
+    R.box(key, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, (y0 + y1) / 2, r.x1 - r.x0, r.z1 - r.z0, y1 - y0, color);
+  };
+  const d = tw / 2 + .015, top = leaf.h + .03;
+  slab(g0 - st.casing, g0 + st.lining, line - d, line + d, 0, top, st.frameKey, st.frame);
+  slab(g1 - st.lining, g1 + st.casing, line - d, line + d, 0, top, st.frameKey, st.frame);
+  slab(g0 - st.casing, g1 + st.casing, line - d, line + d, top, top + .08, st.frameKey, st.frame);
+  if (leaf.kind === 'pocket') {
+    // Pocket door slid into the wall: its edge and a flush pull show in the opening.
+    const e = leaf.side === 'lo' ? g0 + st.lining : g1 - st.lining, k = leaf.side === 'lo' ? 1 : -1;
+    slab(Math.min(e, e + k * .05), Math.max(e, e + k * .05), line - leaf.t / 2, line + leaf.t / 2, .012, .012 + leaf.h, st.leafKey, st.leaf);
+    slab(Math.min(e + k * .02, e + k * .04), Math.max(e + k * .02, e + k * .04), line - leaf.t / 2 - .006, line + leaf.t / 2 + .006, .95, 1.1, 'metal', st.handle);
+    return;
+  }
+  const q = leaf.rect;
+  R.box(st.leafKey, (q.x0 + q.x1) / 2, (q.z0 + q.z1) / 2, .012 + leaf.h / 2, q.x1 - q.x0, q.z1 - q.z0, leaf.h, st.leaf);
+  // Lever handle: a rose 6 cm from the free edge and the lever toward the hinge, through the leaf (both faces).
+  const [fx, fz] = leaf.free, [hx, hz] = leaf.hinge, L = Math.hypot(hx - fx, hz - fz) || 1, ux = (hx - fx) / L, uz = (hz - fz) / L;
+  const across = (len, thick, at, y, h) => R.box('metal', fx + ux * at, fz + uz * at, y, Math.abs(ux) * len + Math.abs(uz) * thick, Math.abs(uz) * len + Math.abs(ux) * thick, h, st.handle);
+  across(.05, leaf.t + .024, .06, 1.0, .07);
+  across(.13, leaf.t + .07, .12, 1.0, .022);
 }
 
 /** Door-plate text of a community home: 1201, 10W, or 14–15W for a duplex (both parts). */
@@ -572,49 +604,59 @@ export function homePlate(code) {
 }
 
 /**
- * Furniture of one community home. Living rooms, bedrooms and balconies are planned against the
- * room's solid walls (doors, openings, glass and open-plan edges removed) so that every piece stays
- * inside its room, clear of door swings and beds; the set and colours vary with the home type and code.
- * Returns a summary per room for tests.
+ * Furniture of one community home. Beds come from the plan (with the bedside tables the layout kept); every
+ * other piece is planned against its room's solid walls (doors, openings, glass and open-plan edges removed) so
+ * that it stays inside the room, clear of doorways, parked door leaves and beds; the set and colours vary with
+ * the home type and code. Returns a summary per room for tests.
  */
 export function communityFurniture(B, u, y0) {
   const res = u.residence, R = makeRoomTools(B, y0), ext = new Set(res.exteriorSides || []);
   // Per-home seed; the floor seed plus the slot keeps neighbours on one floor in different colours.
   const seed = hashCode(u.code), slot = /^\d+$/.test(u.slot) ? +u.slot - 1 : u.slot === 'E' ? 1 : 0;
   const tone = hashCode(u.level || u.code) + slot * 2, summary = { living: [], bedrooms: [], balconies: [] };
-  const beds = res.beds || [];
+  const beds = res.beds || [], leaves = (res.doorLeaves || []).filter((l) => l.rect);
   for (const [i, bed] of beds.entries()) {
     const side = bed.head || 'N', F = roomFrame(u, bed.x, bed.z, side);
     const [w, d] = side === 'E' || side === 'W' ? [bed.d, bed.w] : [bed.w, bed.d];
-    const room = res.rooms.find((r) => r.id === bed.room)?.rect;
-    const gap = room ? Math.min(...(side === 'N' || side === 'S' ? [bed.x - bed.w / 2 - room.x0, room.x1 - bed.x - bed.w / 2] : [bed.z - bed.d / 2 - room.z0, room.z1 - bed.z - bed.d / 2])) : 0;
-    B.frame(F, () => bedLean(R, w, d, PALETTE[(i + tone) % PALETTE.length], gap > .95));
+    // Bedside tables the layout kept (bed.tables: 'L' / 'R' = the lower / higher unit-local side, lower case = slim),
+    // as frame sides ±1.
+    const lat = side === 'N' || side === 'S', keep = bedTables(res, bed);
+    const sides = [-1, 1].map((k) => {
+      const [x, z] = toL(u.frame, ...toW(F, k * (w / 2 + .27), 0)), t = keep.find((q) => q.toUpperCase() === ((lat ? x < bed.x : z < bed.z) ? 'L' : 'R'));
+      return t ? { s: k, slim: t !== t.toUpperCase() } : null;
+    }).filter(Boolean);
+    B.frame(F, () => bedLean(R, w, d, PALETTE[(i + tone) % PALETTE.length], sides));
   }
-  for (const r of res.rooms) {
-    const q = r.rect, cx = (q.x0 + q.x1) / 2, cz = (q.z0 + q.z1) / 2;
-    const place = (side, fn) => B.frame(roomFrame(u, cx, cz, side), () => fn(centred(q, side)));
-    if (r.kind === 'bathroom' || r.kind === 'powder') {
-      const bath = res.bathrooms?.find((b) => b.id === r.id);
-      place(bath?.door?.side || doorSide(res, r), (c) => bathLean(R, c, r.kind === 'powder' || bath?.powder));
-    } else if (r.kind === 'kitchen') place(res.kitchen?.door?.side || doorSide(res, r), (c) => kitchenLean(R, c));
-    else if (r.kind === 'family') place(q.x1 - q.x0 >= q.z1 - q.z0 ? 'W' : 'N', (c) => familyLean(R, c));
-    else if (r.kind === 'dining') place('N', (c) => diningLean(R, c, res.entryDoor ? res.entryDoor.at - cx : null));
-    else if (r.kind === 'study') place(doorSide(res, r), (c) => studyLean(R, c, r.name));
-    else if (r.kind === 'closet') place(doorSide(res, r), (c) => closetLean(R, c));
-    else if (r.kind === 'laundry') place(doorSide(res, r), (c) => laundryLean(R, c));
-    else if (r.kind === 'storage') place(doorSide(res, r), (c) => storageLean(R, c));
-    else if (r.kind === 'entry') place('N', (c) => entryLean(R, c));
-  }
-  // 客厅、卧室与阳台按实墙规划（户内局部坐标，轴对齐）。
+  // Every room is planned against its solid walls (unit-local, axis-aligned): each piece clears the doorway
+  // zones, openings, windows, beds and the door leaves parked in the room (PV-5).
   B.frame(u.frame, () => {
     for (const r of res.rooms) {
-      const P = roomPlanner(res, ext, r, beds);
+      const P = roomPlanner(res, ext, r, beds, leaves);
       if (r.kind === 'living') { const s = livingPlan(R, P, res, seed, tone); if (s) summary.living.push({ room: r.id, ...s }); }
       else if (r.kind === 'bedroom') summary.bedrooms.push({ room: r.id, name: r.name, ...bedroomPlan(R, P, r, seed) });
       else if (r.kind === 'balcony') { const s = balconyPlan(R, P, seed); if (s) summary.balconies.push({ room: r.id, ...s }); }
+      else if (r.kind === 'dining') diningPlan(R, P, res.entryDoor?.at ?? null);
+      else if (r.kind === 'family') familyPlan(R, P);
+      else if (r.kind === 'bathroom' || r.kind === 'powder') {
+        const bath = res.bathrooms?.find((b) => b.id === r.id);
+        bathPlan(R, P, r.kind === 'powder' || bath?.powder, OPPOSITE[bath?.door?.side || doorSide(res, r)]);
+      }
+      else if (r.kind === 'entry') entryPlan(R, P);
+      else if (r.kind === 'study') studyPlan(R, P, r.name);
+      else if (r.kind === 'closet') closetPlan(R, P);
+      else if (r.kind === 'storage') storagePlan(R, P);
+      else if (r.kind === 'laundry') laundryPlan(R, P);
+      else if (r.kind === 'kitchen') kitchenPlan(R, P, OPPOSITE[res.kitchen?.door?.side || doorSide(res, r)]);
     }
   });
   return summary;
+}
+/** Bedside tables of a bed: the layout's choice (bed.tables), else both when both lateral gaps exceed 0.95 m. */
+function bedTables(res, bed) {
+  if (Array.isArray(bed.tables)) return bed.tables;
+  const room = res.rooms.find((r) => r.id === bed.room)?.rect, side = bed.head || 'N';
+  const gap = room ? Math.min(...(side === 'N' || side === 'S' ? [bed.x - bed.w / 2 - room.x0, room.x1 - bed.x - bed.w / 2] : [bed.z - bed.d / 2 - room.z0, room.z1 - bed.z - bed.d / 2])) : 0;
+  return gap > .95 ? ['L', 'R'] : [];
 }
 
 const hashCode = (s) => {
@@ -636,18 +678,18 @@ const mergeIv = (iv) => iv.sort((a, b) => a[0] - b[0]).reduce((out, [a, b]) => {
  * placer for wall-backed or free-standing pieces that keeps them inside the room and clear of
  * doors, beds and each other (all unit-local, axis-aligned).
  */
-function roomPlanner(res, ext, room, beds) {
+function roomPlanner(res, ext, room, beds, leaves = []) {
   const r = room.rect, sides = {}, zones = [], taken = [];
   for (const side of SIDES) {
     const horiz = side === 'N' || side === 'S', line = { N: r.z0, S: r.z1, W: r.x0, E: r.x1 }[side];
     const [s0, s1] = horiz ? [r.x0, r.x1] : [r.z0, r.z1], edge = { N: 0, S: res.depth, W: 0, E: res.width }[side];
-    const solid = [], cut = [];
+    const solid = [], cut = [], cutLow = [];
     let glass = false, exterior = false;
     const zone = (c, w, depth) => {
       const a = c - w / 2 - .1, b = c + w / 2 + .1;
       zones.push(horiz ? { x0: a, x1: b, z0: side === 'N' ? line : line - depth, z1: side === 'N' ? line + depth : line }
         : { z0: a, z1: b, x0: side === 'W' ? line : line - depth, x1: side === 'W' ? line + depth : line });
-      cut.push([a - .05, b + .05]);
+      cut.push([a - .05, b + .05]); cutLow.push([a - .05, b + .05]);
     };
     if (Math.abs(line - edge) < 1e-3) {
       solid.push([s0, s1]);
@@ -657,7 +699,11 @@ function roomPlanner(res, ext, room, beds) {
         for (const w of res.facadeWalls || []) {
           if (w.side !== side) continue;
           const dir = Math.sign((horiz ? w.b[0] - w.a[0] : w.b[1] - w.a[1]) || 1), a0 = horiz ? w.a[0] : w.a[1];
-          for (const o of w.openings || []) { const c = a0 + dir * o.at; cut.push([c - o.width / 2 - .1, c + o.width / 2 + .1]); if (o.type === 'railing' || (o.bottom ?? .6) < .3) glass = true; }
+          for (const o of w.openings || []) {
+            const c = a0 + dir * o.at, g = [c - o.width / 2 - .1, c + o.width / 2 + .1];
+            cut.push(g); if ((o.bottom ?? .6) < .95) cutLow.push(g);
+            if (o.type === 'railing' || (o.bottom ?? .6) < .3) glass = true;
+          }
         }
       } else if (side === 'N' && res.entryDoor) zone(res.entryDoor.at, res.entryDoor.width, 1.0);
     }
@@ -674,21 +720,21 @@ function roomPlanner(res, ext, room, beds) {
       solid.push([t0, t1]);
       if (p.door) zone(pa + Math.sign(pb - pa) * p.door.at, p.door.width, p.role === 'opening' ? 1.1 : 1.0);
     }
-    let iv = mergeIv(solid);
+    let iv = mergeIv(solid), low = mergeIv(solid.map((q) => [...q]));
     for (const c of cut) iv = subtractInterval(iv, c);
-    sides[side] = { side, horiz, line, exterior, glass, span: [s0, s1], stretches: iv.filter(([a, b]) => b - a > .4).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0])) };
+    for (const c of cutLow) low = subtractInterval(low, c);
+    sides[side] = { side, horiz, line, exterior, glass, onOutline: Math.abs(line - edge) < 1e-3, span: [s0, s1], stretches: iv.filter(([a, b]) => b - a > .4).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0])),
+      low: low.filter(([a, b]) => b - a > .4).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0])) };
   }
   const bed = beds.find((q) => q.room === room.id) || null;
   for (const b of beds.filter((q) => q.room === room.id)) {
     const q = { x0: b.x - b.w / 2, x1: b.x + b.w / 2, z0: b.z - b.d / 2, z1: b.z + b.d / 2 }, head = b.head || 'N';
     taken.push(q);
-    // Bedside tables (drawn when both lateral gaps exceed 0.95 m) flank the head end.
-    const lat = head === 'N' || head === 'S', gap = lat ? Math.min(q.x0 - r.x0, r.x1 - q.x1) : Math.min(q.z0 - r.z0, r.z1 - q.z1);
-    if (gap > .95) for (const s of [-1, 1]) {
-      const hz = { N: q.z0 + .25, S: q.z1 - .25, W: q.x0 + .25, E: q.x1 - .25 }[head], c = lat ? (s < 0 ? q.x0 - .27 : q.x1 + .27) : (s < 0 ? q.z0 - .27 : q.z1 + .27);
-      taken.push(lat ? { x0: c - .21, x1: c + .21, z0: hz - .2, z1: hz + .2 } : { z0: c - .21, z1: c + .21, x0: hz - .2, x1: hz + .2 });
-    }
+    // Bedside tables the layout kept flank the head end.
+    for (const t of bedTables(res, b)) taken.push(bedsideRect(b, t.toUpperCase() === 'L' ? -1 : 1, t !== t.toUpperCase()));
   }
+  // Door leaves parked open in this room.
+  for (const l of leaves) if (overlaps(l.rect, r, .01)) taken.push(l.rect);
   const inside = (q) => q.x0 >= r.x0 + .085 && q.x1 <= r.x1 - .085 && q.z0 >= r.z0 + .085 && q.z1 <= r.z1 - .085;
   const free = (q, clear = q) => inside(q) && inside(clear) && !zones.some((z) => overlaps(q, z)) && !taken.some((t) => overlaps(clear, t));
   /** Local rect of a piece backed on `side` at along-position s: len along the wall, depth inward from off. */
@@ -700,12 +746,12 @@ function roomPlanner(res, ext, room, beds) {
   };
   const grow = (side, q, d) => ({ N: { ...q, z1: q.z1 + d }, S: { ...q, z0: q.z0 - d }, W: { ...q, x1: q.x1 + d }, E: { ...q, x0: q.x0 - d } })[side];
   /** First fit along the given walls: longest stretch first, centred then at either end, shrinking to `min`. */
-  const onWall = (list, len, depth, { min = len, clear = .5, off = .09, exterior = false } = {}) => {
+  const onWall = (list, len, depth, { min = len, clear = .5, off = .09, exterior = false, ends = false, low = false } = {}) => {
     for (const side of list) {
       const S = sides[side];
       if (!S || (S.exterior && !exterior)) continue;
-      for (const [a, b] of S.stretches) for (let L = Math.min(len, b - a - .2); L >= min - 1e-6; L -= .2) {
-        for (const s of [(a + b) / 2, a + .1 + L / 2, b - .1 - L / 2]) {
+      for (const [a, b] of low ? S.low : S.stretches) for (let L = Math.min(len, b - a - .2); L >= min - 1e-6; L -= .2) {
+        for (const s of ends ? [a + .1 + L / 2, b - .1 - L / 2, (a + b) / 2] : [(a + b) / 2, a + .1 + L / 2, b - .1 - L / 2]) {
           const q = rectAt(side, s, L, depth, off);
           if (free(q, grow(side, q, clear))) { taken.push(q); return { side, s, len: L, ab: [a, b], rect: q }; }
         }
@@ -727,13 +773,33 @@ function roomPlanner(res, ext, room, beds) {
   return { room, rect: r, bed, closet, sides, zones, taken, free, inside, rectAt, onWall, frameOn };
 }
 
-/** Wardrobe with door seams and pulls, backed on its wall (frame from frameOn). */
-function wardrobe(f, len, color, depth = .6, h = 2.2) {
-  f.box('wood', 0, depth / 2, h / 2, len, depth, h, color);
-  const n = Math.max(2, Math.round(len / .55));
-  for (let k = 1; k < n; k++) f.box('metal', -len / 2 + len * k / n, depth + .004, h / 2, .012, .008, h - .12, '#8d8576');
-  for (let k = 0; k < n; k++) f.box('metal', -len / 2 + len * (k + (k % 2 ? .12 : .88)) / n, depth + .015, 1.05, .02, .025, .32, '#b7ae98');
-  f.box('wood', 0, depth / 2, .04, len - .02, depth - .04, .08, '#6e5d4c');
+/**
+ * Tall cabinet with door fronts: a lacquered body (matte, not the oak floor-plank texture), door seams, pulls and a
+ * recessed plinth, backed on its wall (frame from frameOn). Used for wardrobes, closets, stores, shoe and tea cabinets.
+ */
+function wardrobe(f, len, color, depth = .6, h = 2.2, { doors = .55, pull = 1.05, niche = null } = {}) {
+  f.box('matte', 0, depth / 2, h / 2 + .04, len, depth, h - .08, color);
+  const n = Math.max(2, Math.round(len / doors));
+  for (let k = 1; k < n; k++) f.box('metal', -len / 2 + len * k / n, depth + .004, h / 2 + .04, .012, .008, h - .2, '#8d8576');
+  for (let k = 0; k < n; k++) f.box('metal', -len / 2 + len * (k + (k % 2 ? .12 : .88)) / n, depth + .015, pull, .02, .025, .32, '#b7ae98');
+  f.box('matte', 0, depth / 2 - .03, .04, len - .02, depth - .06, .08, '#5f574e');
+  // An open niche across the fronts (shoe cabinet: keys and post at hand height).
+  if (niche) f.box('matte', 0, depth + .002, niche, len - .06, .006, .3, '#6e6458');
+}
+/** Bookcase: side panels, back, shelves and rows of books (two runs of spines) on every shelf. */
+function bookcase(f, len, depth = .35, h = 2.1, color = '#e9e2d4') {
+  f.box('matte', 0, .01, h / 2, len, .02, h, '#d8cfbf');
+  for (const s of [-1, 1]) f.box('matte', s * (len / 2 - .012), depth / 2, h / 2, .024, depth, h, color);
+  const rows = 5, gap = (h - .1) / rows;
+  for (let k = 0; k <= rows; k++) f.box('matte', 0, depth / 2, .05 + k * gap, len - .03, depth, .025, color);
+  const SPINE = ['#7d937c', '#b7846c', '#6f7f99', '#d0bfa9', '#8f6f52', '#a7b8ad'];
+  for (let k = 0; k < rows; k++) {
+    const y = .065 + k * gap, inner = len - .08;
+    for (const [a, b, i] of [[-.5, -.04, 0], [.06, .44, 1]]) {
+      const hb = gap * (.62 + ((k * 3 + i) % 3) * .08), w = (b - a) * inner;
+      f.box('matte', ((a + b) / 2) * inner, depth * .55, y + hb / 2, w, depth * .7, hb, SPINE[(k * 2 + i) % SPINE.length]);
+    }
+  }
 }
 
 /** 客厅：电视墙选最长的户内实墙（不在外墙或玻璃侧），沙发正对电视；按户型配 L 形沙发、单椅、边柜与江景角。 */
@@ -859,8 +925,12 @@ function livingPlan(R, P, res, seed, tone) {
       f.box('metal', 0, .455, .4, sb.len - .1, .01, .02, '#8d8576');
       f.cyl('satin', sb.len / 2 - .3, .22, .78, .09, .34, '#e9e1cf', 8);
       f.cyl('glow', sb.len / 2 - .3, .22, 1.12, .17, .2, '#f2d7a8', 8);
-      f.box('matte', -sb.len / 4, .22, 1.2, .5, .03, .7, RUG[(seed + 1) % RUG.length]);
-      pieces.push('sideboard');
+      // Picture hung on the wall above the sideboard: a dark frame and a two-tone canvas.
+      const face = wallFace(P, sb.side), px = -sb.len / 4;
+      f.box('matte', px, face + .015, 1.45, .56, .03, .76, '#3f3a34');
+      f.box('matte', px, face + .031, 1.5, .48, .004, .56, RUG[(seed + 1) % RUG.length]);
+      f.box('matte', px, face + .032, 1.235, .48, .004, .13, SOFA[(seed + 4) % SOFA.length]);
+      pieces.push('sideboard', 'picture');
     }
   }
   // River / garden corner by the glass: lounge chairs, a reading lamp, or a piano in the duplex hall.
@@ -895,6 +965,12 @@ function livingPlan(R, P, res, seed, tone) {
     }
   }
   return { kind, tvSide, sofa: sofaColor, pieces };
+}
+
+/** v (in a frameOn frame, off 0.09 from the wall line) of the room-side face of the wall on `side`. */
+function wallFace(P, side) {
+  const S = P.sides[side], half = S.exterior ? .1 : S.onOutline ? .08 : .06;
+  return half - .09;
 }
 
 /** 卧室：衣柜靠不带门的实墙；儿童房 / 次卧配书桌，老人房配单椅阅读角，主卧配梳妆台与床尾凳。 */
@@ -1019,110 +1095,223 @@ function stairTreads(R, res) {
   R.box('wood', (l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2, s.landingY - .04, l.x1 - l.x0, l.z1 - l.z0, .08, '#cdb48f');
 }
 
-function bedLean(R, w, d, color, tables) {
+function bedLean(R, w, d, color, sides = []) {
   const { box, cylinder } = R;
   box('wood', 0, 0, .17, w, d, .28, '#e3d3b8');
   box('matte', 0, .05, .4, w - .06, d - .12, .18, '#f3efe6');
   box('matte', 0, d * .14, .5, w - .02, d * .66, .07, color);
   for (let k = 0, n = w >= 1.4 ? 2 : 1; k < n; k++) box('matte', (k - (n - 1) / 2) * w / 2.2, -d * .34, .55, Math.min(.62, w / n - .12), .38, .13, '#fbf8f0');
   box('wood', 0, -d / 2 - .05, .62, w + .1, .08, 1.15, '#cbb48f');
-  if (!tables) return;
-  for (const s of [-1, 1]) {
-    box('wood', s * (w / 2 + .27), -d / 2 + .25, .27, .42, .4, .5, '#d9c6a6');
-    cylinder('glow', s * (w / 2 + .27), -d / 2 + .25, .52, .1, .26, '#f2d7a8', 8);
+  // Bedside tables (the layout makes one slim, or drops it, where it would stand in a doorway or a door's swing).
+  for (const { s, slim } of sides) {
+    const c = s * (w / 2 + (slim ? .17 : .27));
+    box('wood', c, -d / 2 + .25, .27, slim ? .3 : .42, .4, .5, '#d9c6a6');
+    cylinder('glow', c, -d / 2 + .25, .52, slim ? .08 : .1, .26, '#f2d7a8', 8);
   }
 }
-function bathLean(R, r, powder) {
-  const { box, cylinder } = R, w = r.x1 - r.x0, d = r.z1 - r.z0;
-  if (!powder && d > 1.6 && w > 1.2) {
+/**
+ * 卫生间：淋浴房靠墙角（玻璃隔断朝房间）、马桶与洗手台靠实墙，经 roomPlanner 摆放，所以避开所有门洞
+ * （含通往储藏间的第二樘门）、停放的门扇与窗。far 是正对房门的那面墙，淋浴房与马桶优先靠它。
+ */
+function bathPlan(R, P, powder, far) {
+  const r = P.rect, w = r.x1 - r.x0, d = r.z1 - r.z0, order = [far, ...bySpan(P, [far])];
+  let sh = null;
+  if (!powder && Math.min(w, d) > 1.2 && Math.max(w, d) > 1.6) {
     const s = Math.min(1.1, w * .45, d * .45);
-    box('stone', r.x1 - s / 2 - .06, r.z1 - s / 2 - .06, .05, s, s, .06, '#fafaf4');
-    box('glass', r.x1 - s - .06, r.z1 - s / 2 - .06, 1.05, .02, s, 1.95, '#ffffff');
-    cylinder('metal', r.x1 - s / 2 - .06, r.z1 - .2, 1.95, .1, .03, '#b8c0ba', 8);
+    sh = s >= .7 && P.onWall(order, s, s, { min: s, clear: .1, ends: true, exterior: true });
+    if (sh) {
+      // The glass screen on the tray's open side, away from the corner it is tucked into.
+      const f = P.frameOn(R, sh.side, sh.s), lo = Math.abs(sh.s - (sh.ab[0] + .1 + sh.len / 2)) < 1e-6, corner = lo ? sh.ab[0] : sh.ab[1];
+      const along = (u) => { const q = f.rect(u, 0, u, 0); return P.sides[sh.side].horiz ? q.x0 : q.z0; };
+      const su = Math.abs(along(s / 2) - corner) > Math.abs(along(-s / 2) - corner) ? s / 2 : -s / 2;
+      f.box('stone', 0, s / 2, .05, s, s, .06, '#fafaf4');
+      f.box('glass', su, s / 2, 1.05, .02, s, 1.95, '#ffffff');
+      f.cyl('metal', 0, .15, 1.95, .1, .03, '#b8c0ba', 8);
+    }
   }
-  // WC in the far corner, vanity and mirror on the side wall, clear of the door.
-  const tx = r.x0 + .42, tz = r.z1 - .45;
-  cylinder('satin', tx, tz, .02, .2, .4, '#f8f7ef', 10);
-  box('satin', tx, tz + .22, .55, .42, .2, .5, '#f8f7ef');
-  const vl = Math.min(.9, d - 1.4), vz = Math.max(r.z0 + .25 + vl / 2, (r.z0 + tz) / 2 - .1);
-  if (vl > .4) {
-    box('wood', r.x0 + .27, vz, .42, .5, vl, .78, '#e3d3b8');
-    cylinder('satin', r.x0 + .3, vz, .8, .18, .1, '#fbfaf3', 10);
-    box('mirror', r.x0 + .02, vz, 1.5, .02, Math.min(.8, vl), .8, '#ffffff');
+  const wc = P.onWall(order, .5, .72, { min: .5, clear: .45, exterior: true });
+  if (wc) {
+    const f = P.frameOn(R, wc.side, wc.s);
+    f.cyl('satin', 0, .45, .02, .2, .4, '#f8f7ef', 10);
+    f.box('satin', 0, .1, .55, .42, .2, .5, '#f8f7ef');
   }
+  const vl = Math.min(.9, Math.max(w, d) - 1.4);
+  const va = vl > .4 && P.onWall(bySpan(P), vl, .52, { min: .5, clear: .55 });
+  if (va) {
+    const f = P.frameOn(R, va.side, va.s), face = wallFace(P, va.side);
+    f.box('wood', 0, .25, .42, va.len, .5, .78, '#e3d3b8');
+    f.cyl('satin', 0, .28, .8, .18, .1, '#fbfaf3', 10);
+    f.box('mirror', 0, face + .012, 1.5, Math.min(.8, va.len), .02, .8, '#ffffff');
+  }
+  return { shower: !!sh, wc: !!wc, vanity: !!va };
 }
-function kitchenLean(R, r) {
-  const { box, cylinder } = R, w = r.x1 - r.x0, len = Math.max(1.2, w - .2), z = r.z1 - .33;
-  box('wood', 0, z, .44, len, .62, .86, '#e7dcc8');
-  box('stone', 0, z, .9, len + .04, .66, .05, '#fbfaf5');
-  box('metal', -len * .25, z, .93, .55, .4, .02, '#a6b0a8');
-  box('matte', len * .25, z, .93, .6, .45, .02, '#2a3530');
-  box('metal', len * .25, z + .1, 1.95, .7, .45, .14, '#b4bcb4');
-  box('wood', -len * .2, z + .08, 1.95, Math.min(1.4, len * .45), .42, .62, '#efe7d6');
-  if (r.z1 - r.z0 > 2.2 && w > 2) { box('metal', r.x0 + .42, r.z0 + .5, 1.0, .68, .68, 2.0, '#c3cbc3'); }
+/** 家庭起居厅：沙发靠最长的实墙，前面茶几与地毯（经 roomPlanner，避开门洞与门扇）。 */
+function familyPlan(R, P) {
+  const r = P.rect, w = r.x1 - r.x0, d = r.z1 - r.z0;
+  if (w < 2 || d < 2) return null;
+  const so = P.onWall(bySpan(P), Math.min(Math.max(w, d) - .8, 2.4), .8, { min: 1.6, clear: 1.3 });
+  if (!so) return null;
+  const f = P.frameOn(R, so.side, so.s), len = so.len;
+  f.box('matte', 0, .4, .25, len, .8, .3, '#b4a58f');
+  f.box('matte', 0, .1, .6, len, .2, .5, '#a8977f');
+  const t = f.rect(-.5, 1.3, .5, 1.85);
+  if (P.free(t)) { P.taken.push(t); f.box('wood', 0, 1.575, .2, 1.0, .55, .4, '#d9c6a6'); }
+  // Rug under the sofa front and the table, kept inside the room.
+  const q = f.rect(-Math.min(len + .4, 2.8) / 2, .5, Math.min(len + .4, 2.8) / 2, 2.2), k = .2;
+  const rg = { x0: Math.max(q.x0, r.x0 + k), x1: Math.min(q.x1, r.x1 - k), z0: Math.max(q.z0, r.z0 + k), z1: Math.min(q.z1, r.z1 - k) };
+  if (rg.x1 > rg.x0 + 1 && rg.z1 > rg.z0 + 1) R.box('matte', (rg.x0 + rg.x1) / 2, (rg.z0 + rg.z1) / 2, .015, rg.x1 - rg.x0, rg.z1 - rg.z0, .02, '#cfc9ba');
+  return { side: so.side };
 }
-function familyLean(R, r) {
-  const { box } = R, w = r.x1 - r.x0, d = r.z1 - r.z0;
-  if (w < 2 || d < 2) return;
-  const sw = Math.min(w - .8, 2.4), sz = r.z1 - .5;
-  box('matte', 0, sz, .25, sw, .8, .3, '#b4a58f');
-  box('matte', 0, sz + .3, .6, sw, .2, .5, '#a8977f');
-  box('wood', 0, sz - 1.1, .2, 1.0, .55, .4, '#d9c6a6');
-  box('matte', 0, sz - .9, .015, Math.min(w - .5, 2.8), Math.min(d - .6, 2.2), .02, '#cfc9ba');
-}
-function diningLean(R, r, entryX) {
-  const { box, cylinder } = R, w = r.x1 - r.x0, d = r.z1 - r.z0;
-  let x = 0;
-  // 桌子避开入户通道。
-  if (entryX != null && Math.abs(entryX) < .9) x = entryX > 0 ? Math.max(r.x0 + .9, entryX - 1.75) : Math.min(r.x1 - .9, entryX + 1.75);
+/** 餐厅：餐桌与四把椅子，离房间中心最近、且避开入户通道（0.9 m）与所有门洞通行区的位置。 */
+function diningPlan(R, P, entryAt) {
+  const { box, cylinder } = R, r = P.rect, w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
   const tw = Math.min(1.6, w - 1.1), td = Math.min(.9, d - 1.2);
-  if (tw < .8 || td < .6) return;
-  box('wood', x, 0, .75, tw, td, .06, '#d8c3a0');
-  box('wood', x, 0, .37, .12, .12, .72, '#b79b75');
-  for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
-    const cx = x + sx * tw * .25, cz = sz * (td / 2 + .3);
-    box('matte', cx, cz, .45, .42, .42, .06, '#a9b3a2');
-    box('matte', cx, cz + sz * .19, .7, .42, .05, .45, '#9aa792');
+  if (tw < .8 || td < .6) return null;
+  const xs = [];
+  for (let x = r.x0 + tw / 2 + .3; x <= r.x1 - tw / 2 - .3 + 1e-6; x += .1) xs.push(x);
+  xs.sort((a, b) => Math.abs(a - cx) - Math.abs(b - cx));
+  for (const x of xs) {
+    if (entryAt != null && entryAt > r.x0 && entryAt < r.x1 && Math.abs(x - entryAt) < tw / 2 + .45) continue;
+    const q = { x0: x - tw / 2 - .05, x1: x + tw / 2 + .05, z0: cz - td / 2 - .5, z1: cz + td / 2 + .5 };
+    if (!P.free(q)) continue;
+    P.taken.push(q);
+    box('wood', x, cz, .75, tw, td, .06, '#d8c3a0');
+    box('wood', x, cz, .37, .12, .12, .72, '#b79b75');
+    for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
+      const chx = x + sx * tw * .25, chz = cz + sz * (td / 2 + .3);
+      box('matte', chx, chz, .45, .42, .42, .06, '#a9b3a2');
+      box('matte', chx, chz + sz * .19, .7, .42, .05, .45, '#9aa792');
+    }
+    cylinder('glow', x, cz, 1.85, .3, .1, '#f6dfb2', 10);
+    return { x };
   }
-  cylinder('glow', x, 0, 1.85, .3, .1, '#f6dfb2', 10);
+  return null;
 }
-function studyLean(R, r, name = '') {
-  const { box } = R, w = r.x1 - r.x0, d = r.z1 - r.z0;
+
+// ---------------------------------------------------------------------------
+// 玄关、书房、衣帽间、储藏、家务间与冰箱：全部经 roomPlanner.onWall 靠实墙摆放，自动避开门洞通行区、
+// 开口、窗与停放的门扇（PV-5）；高柜都有门板缝与拉手（PV-4），书架有隔板和书。
+/** The room's sides, longest solid stretch first (optionally leaving some out). */
+const bySpan = (P, skip = []) => SIDES.filter((s) => !skip.includes(s)).sort((a, b) => span(P, b) - span(P, a));
+const span = (P, s) => { const t = P.sides[s].stretches[0]; return t ? t[1] - t[0] : 0; };
+
+/** 玄关：顶天鞋柜（门板、拉手、中部开放格）与穿衣镜，都靠实墙、不挡任何门洞。 */
+function entryPlan(R, P) {
+  const sc = P.onWall(bySpan(P), 1.4, .38, { min: .8, clear: .6 });
+  if (sc) wardrobe(P.frameOn(R, sc.side, sc.s), sc.len, '#e1d4bd', .38, 2.0, { doors: .45, pull: 1.3, niche: 1.0 });
+  const m = P.onWall(bySpan(P), .6, .04, { min: .5, clear: .5 });
+  if (m) {
+    const f = P.frameOn(R, m.side, m.s), face = wallFace(P, m.side);
+    f.box('matte', 0, face + .008, 1.3, m.len, .016, 1.4, '#6e6458');
+    f.box('mirror', 0, face + .02, 1.3, m.len - .06, .012, 1.32, '#ffffff');
+  }
+  return { cabinet: !!sc, mirror: !!m };
+}
+/** 书房：书桌与椅子、带隔板和书的书架；茶室：茶桌、坐垫与带门茶柜；影音室：幕布与正对的沙发。 */
+function studyPlan(R, P, name = '') {
+  const r = P.rect, w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
   if (/茶/.test(name)) {
-    box('wood', 0, 0, .2, Math.min(1.6, w - 1.2), Math.min(.9, d - 1.2), .4, '#b9966c');
-    for (const s of [-1, 1]) box('matte', s * (Math.min(1.6, w - 1.2) / 2 + .35), 0, .12, .5, .5, .2, '#d8ccb0');
-    box('wood', 0, r.z1 - .2, 1.0, Math.min(w - .4, 2.4), .32, 1.9, '#cdb48f');
+    const cab = P.onWall(bySpan(P), Math.min(2.4, Math.max(w, d) - .4), .4, { min: 1.0, clear: .7 });
+    if (cab) wardrobe(P.frameOn(R, cab.side, cab.s), cab.len, '#d9cdb6', .4, 1.9, { doors: .5, pull: 1.0, niche: 1.1 });
+    const long = w >= d, tw = Math.min(1.6, Math.max(w, d) - 1.6), td = Math.min(.9, Math.min(w, d) - 1.6);
+    const q = long ? { x0: cx - tw / 2 - .45, x1: cx + tw / 2 + .45, z0: cz - td / 2, z1: cz + td / 2 } : { z0: cz - tw / 2 - .45, z1: cz + tw / 2 + .45, x0: cx - td / 2, x1: cx + td / 2 };
+    if (tw >= .8 && td >= .5 && P.free(q)) {
+      P.taken.push(q);
+      R.box('wood', cx, cz, .2, long ? tw : td, long ? td : tw, .4, '#b9966c');
+      for (const s of [-1, 1]) R.box('matte', long ? cx + s * (tw / 2 + .3) : cx, long ? cz : cz + s * (tw / 2 + .3), .12, .5, .5, .2, '#d8ccb0');
+    }
     return;
   }
   if (/影音/.test(name)) {
-    box('matte', 0, r.z1 - .55, .3, Math.min(w - .6, 2.6), .9, .4, '#5d6b74');
-    box('matte', 0, r.z0 + .1, 1.4, Math.min(w - .6, 2.6), .04, 1.4, '#20262a');
+    const scr = P.onWall(bySpan(P), Math.min(2.6, Math.max(w, d) - .6), .06, { min: 1.6, clear: 2.4 });
+    if (!scr) return;
+    const f = P.frameOn(R, scr.side, scr.s), face = wallFace(P, scr.side);
+    f.box('matte', 0, face + .02, 1.45, scr.len, .04, 1.4, '#20262a');
+    f.box('matte', 0, face + .21, .2, Math.min(scr.len, 1.8), .4, .4, '#3e4448');
+    const so = P.onWall([OPPOSITE[scr.side]], Math.min(2.4, scr.len), .9, { min: 1.4, clear: .4 });
+    if (so) {
+      const g = P.frameOn(R, so.side, so.s);
+      g.box('matte', 0, .45, .22, so.len, .86, .3, '#5d6b74');
+      g.box('matte', 0, .1, .55, so.len, .2, .5, '#56636b');
+    }
     return;
   }
-  box('wood', 0, r.z1 - .4, .74, Math.min(1.6, w - .6), .65, .05, '#d8c3a0');
-  box('wood', 0, r.z1 - .4, .37, Math.min(1.5, w - .7), .55, .7, '#e3d3b8');
-  box('matte', 0, r.z1 - 1.0, .45, .48, .48, .1, '#5c6c63');
-  box('wood', r.x0 + .2, 0, 1.05, .35, Math.min(d - .5, 2.2), 2.1, '#cdb48f');
+  const order = bySpan(P).sort((a, b) => (P.sides[b].exterior ? 1 : 0) - (P.sides[a].exterior ? 1 : 0));
+  const dk = P.onWall(order, 1.5, .65, { min: 1.0, clear: .8, exterior: true });
+  if (dk) {
+    const f = P.frameOn(R, dk.side, dk.s);
+    f.box('wood', 0, .325, .74, dk.len, .65, .05, '#d8c3a0');
+    f.box('matte', 0, .3, .37, dk.len - .1, .55, .7, '#e3d3b8');
+    f.box('matte', 0, 1.0, .45, .48, .48, .1, '#5c6c63');
+    f.box('matte', 0, 1.22, .75, .48, .06, .55, '#5c6c63');
+    P.taken.push(f.rect(-.3, .7, .3, 1.3));
+  }
+  const bk = P.onWall(bySpan(P), Math.min(2.2, Math.max(w, d) - .5), .35, { min: .9, clear: .7 });
+  if (bk) bookcase(P.frameOn(R, bk.side, bk.s), bk.len, .35, 2.1);
 }
-function closetLean(R, r) {
-  const { box } = R, w = r.x1 - r.x0, d = r.z1 - r.z0;
-  box('wood', 0, r.z1 - .32, 1.1, w - .1, .6, 2.2, '#e6dac4');
-  if (w > 1.6 && d > 1.8) for (const s of [-1, 1]) box('wood', s * (w / 2 - .32), 0, 1.1, .6, Math.max(.4, d - 1.4), 2.2, '#e1d4bd');
+/** 衣帽间：最多三面墙的顶天衣柜（门板与拉手），中间留 ≥ 0.8 m 通道。 */
+function closetPlan(R, P) {
+  let n = 0;
+  for (let k = 0; k < 3; k++) {
+    const c = P.onWall(bySpan(P), 5, .6, { min: .9, clear: .8 });
+    if (!c) break;
+    wardrobe(P.frameOn(R, c.side, c.s), c.len, k ? '#e1d4bd' : '#e6dac4', .6, 2.2);
+    n++;
+  }
+  return n;
 }
-function laundryLean(R, r) {
-  const { box, cylinder } = R, w = r.x1 - r.x0;
-  box('matte', -Math.min(.5, w / 4), r.z1 - .35, .43, .6, .6, .86, '#f2f2ee');
-  cylinder('glass', -Math.min(.5, w / 4), r.z1 - .66, .45, .2, .02, '#ffffff', 10);
-  box('matte', -Math.min(.5, w / 4), r.z1 - .35, 1.3, .6, .6, .82, '#ecece8');
-  if (w > 1.5) box('stone', Math.min(.5, w / 4), r.z1 - .3, .9, Math.min(.8, w / 2 - .3), .55, .06, '#f8f7f1');
+/** 储藏间：一组带门高柜（大储藏间再加一组）。 */
+function storagePlan(R, P) {
+  const r = P.rect, area = (r.x1 - r.x0) * (r.z1 - r.z0);
+  for (let k = 0; k < (area > 8 ? 2 : 1); k++) {
+    const c = P.onWall(bySpan(P), 3, .45, { min: .6, clear: .6 });
+    if (!c) break;
+    wardrobe(P.frameOn(R, c.side, c.s), c.len, '#ddd0b8', .45, 2.0, { doors: .5 });
+  }
 }
-function storageLean(R, r) {
-  const { box } = R, w = r.x1 - r.x0;
-  box('wood', 0, r.z1 - .25, 1.0, Math.max(.4, w - .3), .45, 2.0, '#ddd0b8');
+/** 家务间：洗衣机与烘干机叠放、带台面的洗衣池。 */
+function laundryPlan(R, P) {
+  const wd = P.onWall(bySpan(P), .64, .64, { min: .64, clear: .6 });
+  if (wd) {
+    const f = P.frameOn(R, wd.side, wd.s);
+    f.box('matte', 0, .32, .43, .6, .6, .86, '#f2f2ee');
+    f.box('matte', 0, .32, 1.3, .6, .6, .82, '#ecece8');
+    for (const y of [.5, 1.32]) f.box('glass', 0, .625, y, .3, .01, .3, '#ffffff');
+  }
+  const sk = P.onWall(bySpan(P), .9, .55, { min: .7, clear: .6 });
+  if (sk) {
+    const f = P.frameOn(R, sk.side, sk.s);
+    f.box('matte', 0, .27, .43, sk.len, .54, .86, '#e8e4da');
+    f.box('stone', 0, .275, .9, sk.len + .02, .56, .06, '#f8f7f1');
+    f.box('metal', 0, .3, .935, .4, .32, .02, '#a6b0a8');
+  }
 }
-function entryLean(R, r) {
-  const { box } = R, w = r.x1 - r.x0, d = r.z1 - r.z0;
-  if (w < 1.6 || d < 1.2) return;
-  box('wood', r.x0 + .22, 0, 1.0, .38, Math.min(d - .4, 1.4), 2.0, '#e1d4bd');
-  box('mirror', r.x1 - .03, 0, 1.4, .02, .6, 1.1, '#ffffff');
+/**
+ * 厨房：台面（柜体、石材台面、水槽、灶台、油烟机、吊柜）优先靠正对房门的墙，可在窗台高于台面的窗下；
+ * 冰箱另靠一面实墙。都经 roomPlanner 摆放，不挡门洞（含储藏间门）与门扇。
+ */
+function kitchenPlan(R, P, far) {
+  const r = P.rect, w = r.x1 - r.x0, d = r.z1 - r.z0;
+  const k = P.onWall([far, ...bySpan(P, [far])], Math.max(w, d) - .2, .66, { min: 1.2, clear: .9, exterior: true, low: true });
+  if (k) {
+    const f = P.frameOn(R, k.side, k.s), len = k.len;
+    f.box('wood', 0, .31, .44, len, .62, .86, '#e7dcc8');
+    f.box('stone', 0, .33, .9, len + .02, .66, .05, '#fbfaf5');
+    f.box('metal', -len * .25, .33, .93, .55, .4, .02, '#a6b0a8');
+    f.box('matte', len * .25, .33, .93, .6, .45, .02, '#2a3530');
+    // Hood and wall cabinets above the run, unless a window sits behind it.
+    if (!P.sides[k.side].exterior) {
+      f.box('metal', len * .25, .23, 1.95, .7, .45, .14, '#b4bcb4');
+      f.box('wood', -len * .2, .21, 1.95, Math.min(1.4, len * .45), .42, .62, '#efe7d6');
+    }
+  }
+  if (w < 2 || d < 2.2) return { counter: !!k, fridge: false };
+  const fr = P.onWall(bySpan(P), .7, .7, { min: .7, clear: .7, exterior: true });
+  if (fr) {
+    const f = P.frameOn(R, fr.side, fr.s);
+    f.box('metal', 0, .34, 1.0, .68, .68, 2.0, '#c3cbc3');
+    f.box('matte', 0, .685, 1.32, .66, .006, .012, '#7a8d7d');
+    f.box('metal', -.26, .7, 1.05, .025, .04, .5, '#607868');
+  }
+  return { counter: !!k, fridge: !!fr };
 }
