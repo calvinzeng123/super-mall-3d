@@ -8,7 +8,7 @@ import { buildWalkGraph, components } from '../src/layout/walk.js';
 test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', () => {
   for (const lv of L.levels) {
     const items = [
-      ...lv.units.flatMap((u) => u.polys.map((p) => ({ id: `${u.code} ${u.brand.name}`, p }))),
+      ...lv.units.flatMap((u) => u.polys.map((p) => ({ id: `${u.code} ${u.brand.name}`, p, unit: u }))),
       ...lv.rooms.flatMap((m) => m.polys.map((p) => ({ id: m.id, p, room: m }))),
     ];
     for (let i = 0; i < items.length; i++) {
@@ -23,6 +23,8 @@ test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', ()
           || room?.type === 'core' && v.kind === 'shaft' && v.elevator
             && L.elevators.some(e => e.id === v.elevator && e.frame.id === room.frame.id
               && room.polys.some(p => pointInPoly([e.x, e.z], p)))
+          // 复式上层的套内楼梯洞口与挑空属于该户本身
+          || (v.kind === 'home-stair' || v.kind === 'home-void') && v.unit === items[i].unit?.id
         ));
         const cutShaft = ownShaft && lv.slab.pieces.some(s => s.holes.some(h =>
           ownShaft.poly.every(p => pointInPoly(p, h) || distToPolyEdge(p, h) < 1e-6) && pointInPoly(q, h)));
@@ -38,6 +40,7 @@ test('同层铺位、用房互不重叠，都在楼板内且不落入洞口', ()
 test('每个铺位至少有一段门面临走道', () => {
   for (const lv of L.levels) {
     for (const u of lv.units) {
+      if (u.residence?.level === 'upper') continue;   // 复式上层经套内楼梯进出，没有门面
       assert.ok(u.wfronts.length > 0, `${u.code} 没有门面`);
       const ok = u.wfronts.some((f) => segProbes(f, 0.5).some((p) => inWalk(lv, p)));
       assert.ok(ok, `${lv.id} ${u.code} ${u.brand.name} 的门面不临走道`);
@@ -100,7 +103,8 @@ test('同层扶梯（含上下平台）互不重叠', () => {
 
 test('主体与大型附楼保留双楼梯，小型附楼至少一梯；走道到楼梯或出口 ≤45m（停车层 ≤60m）', () => {
   for (const lv of L.levels) {
-    const st = L.stairs.filter((s) => s.serves.includes(lv.id));
+    // 住户核心筒楼梯穿过宿主楼层时不对该楼层开门
+    const st = L.stairs.filter((s) => s.serves.includes(lv.id) && !(s.residentialCore && s.building !== lv.building));
     const smallAnnex=['P1E','P1E2','P1W1','P1W2','P1W3','P1W4'].includes(lv.building);
     assert.ok(st.length >= (smallAnnex?1:2), `${lv.id} 楼梯只有 ${st.length} 部`);
     if (!['retail', 'food', 'parking'].includes(lv.kind)) continue;

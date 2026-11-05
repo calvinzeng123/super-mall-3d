@@ -22,7 +22,32 @@ test('tour adds six-storey main mall and eight stepped annexes while compact FPS
   assert.equal(L.levels.find(l=>l.id==='P1C-7F').elev,34);
   assert.equal(L.levels.find(l=>l.id==='P1C-RF').elev,39.5);
   assert.equal(old.expansion,undefined);assert.equal(old.levels.find(l=>l.id==='P1-RF').elev,17.5);
-  for(const bid of ['P2','P3','H','A','R1','R2','R3','R4','WPG']) {
+  // 游览布局中云澜·西苑占用西停车附库北排（地下大堂、门户坡道、让位的 ST1 与北移的 L1/ST2）：
+  // WPG 楼栋与楼层逐条记录与紧凑布局一致，只有触及 z < −216 北排的记录可以不同（west-garden.test.js 覆盖其内容）。
+  const north=-216,pts=(o,out=[])=>{
+    if(Array.isArray(o)&&o.length===2&&typeof o[0]==='number')out.push(o);
+    else if(o&&typeof o==='object'){if(typeof o.z==='number'&&typeof o.x==='number')out.push([o.x,o.z]);if(typeof o.lz==='number')out.push(o.frame?toW(o.frame,o.lx,o.lz):[o.lx,o.lz]);if(typeof o.z0==='number')out.push([o.x0,o.z0],[o.x1,o.z1]);for(const [k,v] of Object.entries(o))if(k!=='frame')pts(v,out);}
+    return out;
+  };
+  const inStrip=o=>{const p=pts(o);return p.length>0&&p.some(([,z])=>z<north);};
+  const same=(a,b,path)=>{
+    if(Array.isArray(a)&&Array.isArray(b)&&(a.some(v=>v&&typeof v==='object')||b.some(v=>v&&typeof v==='object'))) {
+      // Slab pieces with the same outer compare hole by hole; any other record is compared whole,
+      // except its id: split aisle pieces are numbered in order, so a split in the north renumbers the rest.
+      const key=v=>{if(v?.outer)return JSON.stringify({outer:v.outer});if(v&&typeof v==='object'&&!Array.isArray(v)){const {id,...r}=v;return JSON.stringify(r);}return JSON.stringify(v);};
+      const rest=(x,y)=>{const m=new Map();for(const v of y)m.set(key(v),[...(m.get(key(v))||[]),v]);return x.filter(v=>{const q=m.get(key(v));if(!q?.length)return true;const w=q.shift();if(v?.outer)same(v.holes,w.holes,`${path}.holes`);return false;});};
+      for(const v of [...rest(a,b),...rest(b,a)])assert.ok(inStrip(v),`${path}: ${JSON.stringify(v).slice(0,160)} 在西苑北排以外变化`);
+      return;
+    }
+    if(a&&b&&typeof a==='object'&&typeof b==='object'&&!Array.isArray(a)){for(const k of new Set([...Object.keys(a),...Object.keys(b)]))same(a[k],b[k],`${path}.${k}`);return;}
+    // The only scalar that may differ: deck stalls taken by the 西苑 lobbies and aprons.
+    if(/WPG-B[12]\.parking\.sharedAdded$/.test(path)){assert.ok(a<b&&a>b-30,`${path} ${a} / ${b}`);return;}
+    assert.deepEqual(a,b,path);
+  };
+  same(L.buildings.find(b=>b.id==='WPG'),old.buildings.find(b=>b.id==='WPG'),'WPG');
+  assert.deepEqual(L.levels.filter(l=>l.building==='WPG').map(l=>l.id),old.levels.filter(l=>l.building==='WPG').map(l=>l.id));
+  for(const lv of old.levels.filter(l=>l.building==='WPG'))same(L.levels.find(l=>l.id===lv.id),lv,lv.id);
+  for(const bid of ['P2','P3','H','A','R1','R2','R3','R4']) {
     assert.deepEqual(L.buildings.find(b=>b.id===bid),old.buildings.find(b=>b.id===bid),`${bid} building changed`);
     const levels=structuredClone(L.levels.filter(l=>l.building===bid));
     // The full-tour H exit intentionally cuts the street slab; every other
@@ -106,5 +131,12 @@ test('sunken art courtyard opens the ground, connects B1M by passage and real st
   assert.ok(L.site.openings.some(p=>pointInPoly([-108.5,-36],p)));
   const r=L.buildings.find(b=>b.id==='P1').access.routes.find(r=>r.id==='P1-SUNKEN-ACCESS');
   for(const reverse of [false,true]){const pts=reverse?[...r.waypoints].reverse():r.waypoints;let s={...pts[0],slope:null};for(const p of pts.slice(1))s=move(s,p);}
-  for(const id of ['P1-B1','P1-B2'])assert.deepEqual(L.levels.find(l=>l.id===id).slab,old.levels.find(l=>l.id===id).slab);
+  // 北苑住户核心筒穿过 B1/B2：它们的梯井与电梯井洞口之外，停车楼板与紧凑布局完全一致。
+  const residentialHole=(lv,h)=>lv.voids.some(v=>(v.residentialCore||L.elevators.find(e=>e.id===v.elevator)?.residentialCore)&&v.poly===h);
+  for(const id of ['P1-B1','P1-B2']) {
+    const lv=L.levels.find(l=>l.id===id),slab=structuredClone(lv.slab),cut=lv.slab.pieces.map(p=>p.holes.filter(h=>residentialHole(lv,h)).length);
+    slab.pieces.forEach((p,i)=>{p.holes=p.holes.filter((h,j)=>!residentialHole(lv,lv.slab.pieces[i].holes[j]));});
+    assert.equal(cut.reduce((a,b)=>a+b,0),10,`${id} residential shafts`);
+    assert.deepEqual(slab,old.levels.find(l=>l.id===id).slab);
+  }
 });

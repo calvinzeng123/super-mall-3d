@@ -114,7 +114,8 @@ export const P2 = {
     { id: 'SA', name: '星湾广场门', level: '1F', rot: 'A', a0: 60, a1: 72 },
     { id: 'SB', name: '冰场门', level: '1F', rot: 'B', a0: 105, a1: 117 },
     { id: 'N', name: '北门', level: '1F', rot: 'A', a0: 264, a1: 276 },
-    { id: 'BR', name: '天桥入口', level: '2F', wing: 'W', v0: -5, v1: 5, to: 'bridge' },
+    // The ring-bridge link is BRIDGE.linkWidth (5 m) wide; its door is no wider.
+    { id: 'BR', name: '天桥入口', level: '2F', wing: 'W', v0: -2.5, v1: 2.5, to: 'bridge' },
     { id: 'MT', name: '地铁通道口', level: 'B1', wing: 'W', v0: -4, v1: 4, to: 'M-B1' },
   ],
   ramps: [

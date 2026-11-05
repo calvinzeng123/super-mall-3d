@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 .DS_Store
 shots/
 # 停车地图引用的截图要随文档提交
@@ -22,3 +22,6 @@ dist/netlify/
 
 # Temporary Superdesign drafts
 .superdesign/tmp/
+
+# Temporary agent worktrees
+.claude/worktrees/

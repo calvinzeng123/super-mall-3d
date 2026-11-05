@@ -1,8 +1,121 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-10-31。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-04。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
-## 2026-10-31 最新交接：地铁八口与四象限覆盖
+## 2026-11-04 最新交接：云澜·西苑、云澜·北苑、云澜江与 3F 江景台
+
+本次分支 `claude/wonderful-thompson-olaaxb`，还没有部署（云端会话没有 Netlify 凭据）。需求、数量、性能、测试、出入和截图都在 [滨江社区 QA](docs/qa-2026-11-04-riverside-communities.md) 里。设计依据是三份研究（西苑 / 北苑户型、云澜江、独立核心筒与门禁）的整合规格。只改游览布局，`buildLayout({ expansion: false })` 的 FPS 布局逐字节不变，由 `tests/fps-frozen.test.js` 钉住哈希。
+
+### 新模块
+
+**布局 `src/layout/`**
+
+| 文件 | 内容 |
+|---|---|
+| `community-sites.js` | `WEST_SITE` / `NORTH_SITE`，两个小区的唯一几何来源，冻结 |
+| `community-plan.js` | 户型生成器和校验 |
+| `community-plan-data.js` | 生成好的户型数据，冻结；用 `scripts/prepare-community-plans.mjs` 重新生成 |
+| `community-units.js` | `communityUnit()`，把户型变成楼层单元记录 |
+| `community-contract.js` | 塔楼契约 `communityContractErrors(layout, b)` |
+| `access-records.js` | `gateRecord` / `zoneRecord`；`GATE`：开门 4 s、出门感应 1.4 m、防夹 0.6 m、离门洞 ≥ 2.0 m |
+| `community.js` | 西苑：`westTower()` 31 层、3梯5户核心筒、`westGates()`、`westGardenSite()`（围栏、门楼、岗亭、花园、消防车道，碰撞写进 `site.westParking.islands`） |
+| `north-towers.js` | 北苑 T1/T2 的楼层、户型、3 梯 2 楼及各自的停靠表 |
+| `north-residences.js`、`residential-access.js` | `applyNorthResidences`：一期改造（拆 16 铺、方庭北门移到 SQ-N3、核心筒穿过 B2…6F、住户大堂、街门、地库电梯厅、8 道门禁、HS1/HS2）。结果写在 `layout.northResidences` |
+| `river.js` | `addRiver`：`site.river`，包括水面、5 座桥、步道、眺台、观景亭、导航开洞、碰撞和横道 |
+| `river-terrace.js` | `applyRiverTerrace`：P1-3F 江景台，读取塔楼 `fireFrontage` / `hardstand` |
+| `urban.js` | `NORTH_GRID`，`addUrbanDistrict(site, { river })` |
+
+**渲染 `src/render/`**
+
+| 文件 | 内容 |
+|---|---|
+| `build/community.js` | `buildCommunityTower`，社区塔楼渲染器（见下） |
+| `build/community-site.js` | 西苑场地 |
+| `build/residence-interiors.js` | 社区分支：逐房地面、隔墙和门、成套家具、复式套内楼梯 |
+| `build/residential-cores.js` | 一期里的住户核心筒、门厅、街门、地库电梯厅、HS 地面标线，都在已有批次里，不加绘制调用 |
+| `build/access-gates.js` | 门禁静态件、门扇和 LED 的 InstancedMesh、0.35 s 开关动画、`ctx.accessGates` |
+| `build/river.js`、`build/riverfront.js` | 江、桥、驳岸、步道；江景台挂件、挑台、字 |
+| `label-declutter.js` | 被塔楼挡住的标注隐藏，屏幕上重叠的标注按远近和优先级剔除 |
+
+### 接缝
+
+`buildLayout` 的顺序：
+1. `buildHospitality(…, { expansion })` 生成西苑，并把西苑门禁写进 `layout.accessControl`；
+2. `addUrbanDistrict(site, { river })`；
+3. `addRiver(site)`；
+4. `applySharedGarages`；
+5. `applyP1Expansion`；
+6. `applyP1VehicleAccess` / `applyP1Fidelity`；
+7. **`applyNorthResidences`**；
+8. **`applyRiverTerrace`**；
+9. 其余照旧。
+
+江景台读取的是北苑真实的消防登高面，所以要放在北苑之后。
+
+- 社区塔楼带 `b.community = 'west' | 'north'`。旧的 H/A/R1–R4 断言都用 `!b.community` 过滤。
+- 北苑在 34 m 以下不拥有楼层，电梯、楼梯以 `building:'T1'` 穿过一期的宿主楼层。宿主楼层分两类：
+  - 停靠层 P1-B2 / B1 / 1F；
+  - 借道层 P1-B1M、2F–6F，井道封闭（`elevator-shafts.js shaftLevels`、`tower-stairs.js passLevels`）。
+- 复式代码是 `T1-1617W-L` / `-U`。`residence.homeLevels` 列出同户的各层。
+- 上层没有门面：用 `nav.js unitFront` / `unitSpawn` 借下层的入户门面，出生点落在套内楼梯口。
+- 一期 3F–6F 凹口里外露的 T2 柱面记在 `lv.residentialCoreFaces`。
+- 一期屋面被塔楼底板覆盖的边记在 `lv.towerPlates`，`shell.js roofTop` 不在那里画栏杆。
+
+### 门禁引擎（`layout/nav.js`）
+
+- 门关着就是实墙，读卡器是 `tap` 类型的互动点。
+- 接口：`tapGate(nav, id, now)`、`updateGates(nav, s, now)`（出门感应、到时关门、防夹）、`gateBlocking(nav, s)`（给 HUD 提示）、`resetGates(nav)`。
+- 测试里可以用 `buildNav(L, { gates: 'open' })` 绕开门禁。
+- `explore.js` 负责：
+  - 门禁时钟；
+  - E 键 / 手机「刷卡」；
+  - 提示「住户专用通道…」「刷卡成功…」；
+  - 退出漫游时复位。
+- 导览镜头经过时门自动打开。`floorLabel` 报住户区名（如 `北苑 2 号楼 · 住户门厅（一期 1F）`）。
+
+### 社区塔楼渲染器（`render/build/community.js`）
+
+- 只读契约字段，画所有 `b.community` 塔楼：
+  - 楼板（带洞）、楼板边带；
+  - 每户的外墙、窗和窗帘、凹阳台和玻璃栏板；
+  - 核心筒外墙和楼梯采光槽；
+  - 1F 大堂 / 7F 会所；
+  - 屋顶花园；
+  - 每栋一张招牌图集。
+- 一栋塔楼在 Node 里算 8 个批次。浏览器里是 10 次绘制调用，因为两种双面透明玻璃各画两遍。
+- 防烟楼梯梯段按层组延迟构建，第一次访问时才建。
+- **西苑远景 LOD**：`COMMUNITY_FAR_LOD = 600` m，回到 570 m 以内恢复。北苑没有 LOD。
+- **电梯层门**：每栋一个 InstancedMesh，只在塔楼使用中显示，轿厢所在层开门。层门材质和塔楼共用剖切平面 `record.plane`，`setHospitalityCut` 聚焦某层时上方层门一起切掉。
+- **复式同户楼层**：`app.js` 按 `homeLevels` 一起加载。总览聚焦时只显示聚焦层及其下方的同户楼层，漫游时上下层都显示，能透过楼梯洞和挑空看到。
+- **几何预算**：社区塔楼合计 ≤ 10 MB（现在 9.96 MB），一层室内 ≤ 1,500 盒、≤ 8 网格，`community-render.test.js` 覆盖。加家具前先跑这个测试。
+
+### 重新生成户型
+
+```sh
+node scripts/prepare-community-plans.mjs              # 西苑 + 北苑，约 80 s
+node scripts/prepare-community-plans.mjs --west-only  # 只重生西苑，保留文件里的北苑部分
+```
+
+- 脚本生成、按层堆叠、校验每一户，然后重写 `src/layout/community-plan-data.js`。
+- 改完要跑 `community-plans`、`community-render`、`north-residences`、`riverside-integration`。户型变了，入户门、楼梯洞和出生点也会跟着变。
+
+## 2026-11-04 历史：全园出入口排查、西门步行轴、二期星湾广场站
+
+本次分支 `claude/wonderful-thompson-olaaxb`，还没有部署（云端会话没有 Netlify 凭据）。实现与证据见 [出入口 QA](docs/qa-2026-11-04-entrances-bus-west-gate.md) 和 [下沉广场门洞 QA](docs/qa-2026-11-04-sunken-court-doorway.md)；一期加楼 / 上盖物业分析见 [规划决策文件](docs/planning/2026-11-04-p1-air-rights/PLAN.md)。
+
+- **出入口**：四组（地铁、地下、地面、天桥）共 53 条发现，复核成立 52 条，已修 45 条，剩下 7 条低优先级，列在 QA 里。
+  - 门洞开洞统一按门的弦线或门带计算：`shell.js chordGap`，`geom.js doorwayBand`。
+  - 附楼和一期 3F 以上的幕墙碰撞来自 `p1-expansion.js expansionFacadeWalls`，与渲染共用同一套门洞计算。
+  - 导航 `segCross` 改为半开区间，门线上的一步不再来回切换楼层。
+- **西门**：轴线 z = −123.5（`west-parking.js WEST_GATE_AXIS`）。
+  - `west-gate-promenade` 从斑马线通到步行脊，西地面车位 551。
+  - 门架立柱的碰撞由 `gantryPosts` 生成；压在步道上的立柱自动取消，横梁改为悬臂。
+- **星湾广场站**：
+  - `layout/bus-stops.js` 登记港湾、站台、候车亭、碰撞、横道和公交时刻；渲染在 `render/build/bus-stops.js`，公交车在 `traffic.js`，用一个实例化网格。
+  - 港湾不进 `site.roads` / `extensions.roads`。
+  - 一期大道旁的老候车亭也改由这份记录绘制，并带碰撞。
+
+## 2026-10-31 历史：地铁八口与四象限覆盖
 
 默认正式站仍为 [云澜汇 Netlify](https://yunlan-mall-calvin.netlify.app/)，site ID `3af33d60-6f93-4be3-a2e2-06f122ed5fc3`。本次新增 E/F/G/H 口，A–H 合计八个，每个象限两个。实现与发布证据见 [八口 QA](docs/qa-2026-10-31-metro-access.md)。
 
@@ -82,7 +195,7 @@
 
 **模式范围以本节为准：仅竞技 FPS 裁剪到一期、酒店、公寓；完整园区探索恢复二期、三期、住宅、地铁、西停车场及周边城市。** `buildPlayableLayout({mode:'tour'})` 返回完整布局，不写入 `layout.playable`。全园共 198 个楼层、475 个商铺、728 个居住单元（酒店与公寓各 190、住宅 348）。酒店和公寓首层原客房改为配套大堂，顶层 10 套公寓 LOFT 保留。
 
-- **共享地库**：`src/layout/shared-garages.js` 在原布局生成后调整 P1 B1/B2 与 WPG B1/B2，保留原楼层 ID 和酒店/公寓地下标高，以同层宽门连接。P1 B1 为 -8.4m，B2 为 -12m；西附库 B1=-4.5m、B2=-8.4m，西侧跨路隧道在 -8.4m。新增车行连接不接二期；原地铁步行连接保留。四个主楼面 4,149 车位，西地面 576 位、酒店地面 29 位。一期四方位 8 条街道坡道，新增 6 部电梯和 11 组双跑楼梯；全园共 32 坡道。
+- **共享地库**：`src/layout/shared-garages.js` 在原布局生成后调整 P1 B1/B2 与 WPG B1/B2，保留原楼层 ID 和酒店/公寓地下标高，以同层宽门连接。P1 B1 为 -8.4m，B2 为 -12m；西附库 B1=-4.5m、B2=-8.4m，西侧跨路隧道在 -8.4m。新增车行连接不接二期；原地铁步行连接保留。四个主楼面 4,149 车位，西地面 551 位、酒店地面 29 位。一期四方位 8 条街道坡道，新增 6 部电梯和 11 组双跑楼梯；全园共 32 坡道。
 - **地下可见性**：`src/render/explore-visibility.js` 按一期、二期、三期区域和实际门口邻接提前显示地下楼面；坡口 64m 接近范围、乘梯目标楼层及地铁连接区提前显示。不会经地铁邻接递归点亮所有分期。漫游状态携带实际位置与电梯 from/to。
 - **真实洞口**：`prepareRideableElevators` 为全园 52 部电梯建立井道，切开最低/最高停靠间经过的所有楼板。核心筒填充避开轿厢及门外通路。普通电梯也使用统一的进舱、关门、移动、开门和出舱流程。`surface-shapes.js` 使用 polygon-clipping 正确处理重叠洞口与跨边坡口，地表、连接道路、人行道、停车漆面均裁切，不能只向 Earcut 塞交叠 holes。许可随离线 HTML 和线上 `geometry-licenses.txt` 分发。
 - **大堂与接驳**：`hospitality-lobby.js` 提供酒店、公寓的接待、休息、餐厅、健身及服务空间，导航障碍和家具同源。`transit-center.js` 在西停车场南侧放置 2 辆大巴、4 辆的士、候车设施和无障碍车位，保留 z=-53 车行道与 x=-427 步行轴。
@@ -440,13 +553,14 @@ serve.py                  开发服务器：禁缓存；POST /__shot?name=xx 把
   - `sightBlocked(nav, a, b)`：视线穿过某楼面高度处若是楼板实体即被挡——准星拾取用它避免"看着地板却显示楼下的店"。
 - **显示规则**（`app.js` 的 `applyExploreVisibility`）：所在楼完整显示（不剖切），在地面以上时不画车库层；室外时 30m 内那栋楼只显示地上各层室内；在地铁或相连地下层时显示地铁；在坡道上按低端楼面算。视场角第一人称 60°（`fitFov`），近裁剪面 0.15m。
 - **性能与内存**（1280×800、像素比 2、本机强制同步计时，只看相对值）：俯瞰约 7.4ms/帧；漫游一期 1F 6.5、二期 1F 4.5、三期街巷 6.1、地铁 4.4、广场 7.0ms，绘制调用 255–367 次（含阴影与泛光），都不超过俯瞰。第一次走进某栋楼的室内会卡一下（几何上传显卡、编译着色器），之后正常。导航模型构建约 15ms，4030 条墙线段、72 段坡道、82 部楼梯电梯，JSON 约 450KB，不保留任何顶点数据。
+- **刷卡门禁**（2026-11-04）：14 道住户门禁在导航里是实墙，走到读卡器前按 E（手机点「刷卡」）开 4 s，从住户一侧出来自动开。**传送、「地点」目录、飞行和自动导览都不经过门禁**，这是有意的：它们本来就是非物理移动，所以门禁只约束步行。退出漫游时门禁复位。
 - **调试**：`app.explore.state`（位置、楼面、坡道、视角、是否飞行）、`app.explore.teleport({ unit } | { building, level })`。预览面板隐藏时没有 rAF：手动循环 `app.ctx.dynamic` 推进（漫游的 `update` 在里面），按键用 `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }))` 模拟；刚刷新、还没渲染过时拾取盒的世界矩阵未就位，先 `debugShot` 一帧。
 
 ## 8. 调试与验证技巧
 
 - 页面里 `window.__mall` 就是 app。`app.debugShot({ pos, target, w, h, steps })` 立即渲染一帧并返回 JPEG dataURL；配合 `fetch('/__shot?name=xx', { method: 'POST', body: url })` 存到 `shots/`（已 gitignore）。
 - **后台标签页没有 rAF**：预览面板隐藏时主循环不跑，动态内容只在 `debugShot` 的 `steps` 里更新。测地铁时先摆好相机，再手动调用 `app.ctx.dynamic.find(d => d.name === 'metro').update(0, t, app)`，然后 `debugShot({ steps: 0 })`。
-- 统计绘制调用要先设 `renderer.info.autoReset = false`（后期处理有多个 pass）。当前园区视角约 495 次。
+- 统计绘制调用要先设 `renderer.info.autoReset = false`（后期处理有多个 pass）。2026-11-04 实测园区视角 V(110, 430, 480)：常态帧 2,852 次（主 pass 2,817、标注 35），主 pass 3.75 M 三角形；阴影贴图重画的一帧另加 1,351 次。场景几何约 285 MB，显存贴图约 652 MB。早先记的"约 495 次"已经过时。
 - **内存预算（手机能否打开的关键）**：iOS 会直接结束内存超限的网页进程，Claude App 里表现为整页 "Something went wrong"。第 7 版几何体约 302 MB、贴图约 367 MB、构建峰值堆约 700 MB，在 iPhone 上打不开（判断为内存超限，未能在真机上抓到崩溃日志）。第 8 版的对策：
   - `batch.js` 顶点格式压缩为 18 字节/顶点（Float32 位置 + Int8 法线 + Uint8 颜色，只有招牌批次带 uv），几何体约 117 MB；
   - `app.js` 的 `releaseGeometryAfterUpload`：顶点数组上传显卡后释放（包围体提前算好；拾取盒的几何体排除在外——渲染器照样会上传它们，但射线拾取要读顶点）；

@@ -3,17 +3,20 @@
 import * as THREE from 'three';
 import { BatchSet } from '../batch.js';
 import { carGeometry } from './parking.js';
-import { toW, toL, subtractInterval, pointInPoly, polyBounds, unionOutline, mergeSegments, subtractOpenings, rectPoly } from '../../layout/geom.js';
+import { toW, toL, subtractInterval, pointInPoly, polyBounds, unionOutline, mergeSegments, subtractOpenings, rectPoly, distToSeg, distToPolyEdge } from '../../layout/geom.js';
 import { shapeFromPoly } from './shell.js';
 import { addCutSurfaceSlab } from './surface-shapes.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { addTrees, bollard, bench, planter } from './props.js';
-import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden } from './residential-shell.js';
+import { buildResidentialLevelShells, residentialCommon, residentialCrown, buildResidentialLobby, buildResidentialRoofGarden, clipMaterial } from './residential-shell.js';
 import { buildTowerStairGeometry, buildTowerStairInstances } from './tower-stairs.js';
 import { buildMallStairLevel, buildStairApproach } from './mall-stairs.js';
 import { buildHospitalityLobby } from './hospitality-lobby.js';
 import { garageCeilingPanels } from '../../layout/garage-ceiling.js';
+import { subtractRect } from '../../layout/urban.js';
 import { buildExpansionConnections } from './expansion-connections.js';
+import { buildCommunityTower } from './community.js';
+import { buildCommunitySite } from './community-site.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -52,20 +55,7 @@ function edgeInterval(e, F, worldA, worldB, tolerance=0.3) {
 /** 只克隆材质实例，共用全部PBR图片；夜景参数同步到克隆实例。 */
 function clippedMaterials(ctx, plane) {
   const materials={};
-  for(const [key,base] of Object.entries(ctx.mats.base)) {
-    const m=base.clone();
-    m.onBeforeCompile=base.onBeforeCompile;
-    m.customProgramCacheKey=base.customProgramCacheKey;
-    m.clippingPlanes=[plane];m.clipShadows=true;
-    if(['glass','glassTint','ext','glowSoft','extMetal'].includes(key))m.side=THREE.DoubleSide;
-    ctx.mats.onNight(()=>{
-      m.color.copy(base.color);
-      if(m.emissive)m.emissive.copy(base.emissive);
-      m.emissiveIntensity=base.emissiveIntensity;
-      m.opacity=base.opacity;
-    });
-    materials[key]=m;
-  }
+  for(const [key,base] of Object.entries(ctx.mats.base))materials[key]=clipMaterial(ctx,key,base,plane);
   return materials;
 }
 
@@ -75,10 +65,11 @@ export function setHospitalityCut(ctx, buildingId, elevation=FULL_HEIGHT) {
 }
 
 export function buildHospitality(ctx) {
-  const towers=ctx.layout.buildings.filter(b=>b.kind==='tower');
+  const towers=ctx.layout.buildings.filter(b=>b.kind==='tower'&&!b.community);
+  const community=ctx.layout.buildings.filter(b=>b.community);
   const records=new Map();
   ctx.hospitality={buildings:records};
-  if(!towers.length)return ctx.hospitality;
+  if(!towers.length&&!community.length)return ctx.hospitality;
   ctx.renderer.localClippingEnabled=true;
   for(const b of towers) {
     const F=b.frame,r=b.footprint,pal=PALETTES[b.usage]||PALETTES.residential;
@@ -124,6 +115,10 @@ export function buildHospitality(ctx) {
     if(sign)group.add(sign);
     records.set(b.id,{group,plane,groundGroup,roofGroup,materials,residentialShells,detailLevel:null});
   }
+  // 云澜社区住宅（西苑 / 北苑）由社区渲染器按 community-contract 字段绘制
+  for(const b of community)buildCommunityTower(ctx,b,records);
+  if(community.length)buildCommunitySite(ctx);
+  if(!towers.length)return ctx.hospitality;
   buildPublicGarageShells(ctx);
   landscape(ctx,towers);
   connections(ctx);
@@ -380,12 +375,17 @@ function buildingSign(ctx,b,pal,plane) {
   return mesh;
 }
 
-function landscape(ctx,towers) {
+export function landscape(ctx,towers) {
   const group=new THREE.Group();group.name='hospitality-landscape';
   const B=new BatchSet(ctx.mats.base),trees=[];
   // 道路和地块由布局提供，景观只落在楼边已有plot内，避开全部建筑轮廓。
   const occupied=p=>ctx.layout.buildings.some(b=>!b.undergroundOnly&&pointInPoly(p,b.outline))||ctx.layout.site.trenches.some(q=>pointInPoly(p,q))||(ctx.layout.extensions.roads||[]).some(r=>r.polys.some(q=>pointInPoly(p,q)))||(ctx.layout.extensions.surfaceParking||[]).some(r=>pointInPoly(p,r.poly));
-  for(const b of towers) {
+  // Planters, benches and bollards keep out of every street door's approach
+  // (6 m out, 1.5 m wider each side) and their footprints out of buildings.
+  const clearOf=doorMouths(ctx.layout);
+  const blocked=(F,x0,z0,x1,z1)=>[[x0,z0],[x1,z0],[x1,z1],[x0,z1],[(x0+x1)/2,(z0+z1)/2]].some(([x,z])=>{const p=toW(F,x,z);return occupied(p)||clearOf(p);});
+  // 云澜社区住宅的雨棚与花园由 community.js / community-site.js 绘制。
+  for(const b of towers.filter(b=>!b.community)) {
     const r=b.footprint,F=b.frame;
     B.frame(F,()=>{
       const edge=rectEdges(r).find(e=>e.side===(b.usage==='residential'?'S':'E')),middle=edge.len/2,half=b.usage==='residential'?3.1:3.4,canopyY=b.usage==='residential'?3:3.65;
@@ -403,23 +403,32 @@ function landscape(ctx,towers) {
           const p=toW(F,x,z);
           if(occupied(p))continue;
           if(b.plot&&(p[0]<b.plot.x0+1||p[0]>b.plot.x1-1||p[1]<b.plot.z0+1||p[1]>b.plot.z1-1))continue;
-          planter(B,x-1.25,z-0.75,x+1.25,z+0.75,0,b.storeys+x,false,'stone');
-          trees.push({x:p[0],y:0.65,z:p[1],s:b.usage==='residential'?1.05:1.3,kind:'round'});
-          if(x+6<r.x1-2) {
-            const seat=toW(F,x+5.3,z);
-            if(!occupied(seat))bench(B,x+5.3,0,z,side<0?Math.PI:0);
+          if(!blocked(F,x-1.25,z-0.75,x+1.25,z+0.75)) {
+            planter(B,x-1.25,z-0.75,x+1.25,z+0.75,0,b.storeys+x,false,'stone');
+            trees.push({x:p[0],y:0.65,z:p[1],s:b.usage==='residential'?1.05:1.3,kind:'round'});
           }
-          bollard(B,x+2,z-side*1.2);
+          if(x+6<r.x1-2&&!blocked(F,x+4.4,z-.35,x+6.2,z+.35))bench(B,x+5.3,0,z,side<0?Math.PI:0);
+          if(!blocked(F,x+1.9,z-side*1.2-.1,x+2.1,z-side*1.2+.1))bollard(B,x+2,z-side*1.2);
         }
       }
     });
   }
-  districtGarden(ctx,B,group,trees);
+  districtGarden(ctx,B,group,trees,clearOf);
   B.flush(group);addTrees(group,ctx.mats,trees,842);
   ctx.site.group.add(group);ctx.hospitality.landscape=group;
 }
 
-function districtGarden(ctx,B,group,trees) {
+/** Approach zones of the street doors: a planter or bench here would stand in a doorway. */
+export function doorMouths(layout) {
+  const quads=layout.entrances.filter(e=>e.to==='site'||e.coveredConnection).map(e=>{
+    const len=Math.hypot(e.seg.x1-e.seg.x0,e.seg.z1-e.seg.z0)||1,tx=(e.seg.x1-e.seg.x0)/len,tz=(e.seg.z1-e.seg.z0)/len,w=1.5,d=6;
+    const a=[e.seg.x0-tx*w,e.seg.z0-tz*w],b=[e.seg.x1+tx*w,e.seg.z1+tz*w];
+    return [a,b,[b[0]+e.nx*d,b[1]+e.nz*d],[a[0]+e.nx*d,a[1]+e.nz*d]];
+  });
+  return p=>quads.some(q=>pointInPoly(p,q));
+}
+
+function districtGarden(ctx,B,group,trees,clearOf=()=>false) {
   const lawn=(x,z,w,d)=>{
     const g=new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2);g.translate(x,0.015,z);
     const mat=ctx.mats.floor?ctx.mats.floor('grass',0.95):ctx.mats.base.foliage;
@@ -429,11 +438,16 @@ function districtGarden(ctx,B,group,trees) {
   };
   // The former remote hotel/apartment island has been vacated. Planting now
   // follows the attached tower forecourts, outside traffic and garage openings.
+  // A later annex may cover a planting spot: the planter and its crown keep
+  // 2.6 m from every building, and nothing stands in a door's approach.
+  const built=(x,z)=>ctx.layout.buildings.some(b=>!b.undergroundOnly&&(pointInPoly([x,z],b.outline)||distToPolyEdge([x,z],b.outline)<2.6));
   for(const [x,z] of [[-282,ctx.layout.expansion?.westArrival?-114:-121],[-252,-112]]) {
+    if(built(x,z)||clearOf([x,z]))continue;
     planter(B,x-1.25,z-.7,x+1.25,z+.7,0,x+z,true,'stone');
     trees.push({x,y:.65,z,s:1.2,kind:'round'});
   }
-  for(const [x,z] of [[-254,-105]])bench(B,x,0,z,Math.PI);
+  // Beside the P1W3 annex, alongside its façade and clear of the P1W3-S door.
+  for(const [x,z] of [[-245.5,-104.6]])if(![[x-.9,z],[x+.9,z]].some(p=>clearOf(p)))bench(B,x,0,z,Math.PI);
   // 四栋住宅之间的口袋花园：不占南侧主入口轴线、消防路或地库坡道。
   for(const x of [82,148,214]) {
     lawn(x,-219,17,15);
@@ -476,7 +490,15 @@ function subtractTraffic(rects, roads) {
   return rects;
 }
 
-function connections(ctx) {
+export function tunnelEndMeets(layout,path,[x,,z]) {
+  const ids=new Set([path.level,path.from,path.to]),p=[x,z],near=.3;
+  const touches=poly=>pointInPoly(p,poly)||distToPolyEdge(p,poly)<near;
+  return layout.entrances.some(e=>ids.has(e.level)&&distToSeg(p,[e.seg.x0,e.seg.z0],[e.seg.x1,e.seg.z1])<near)
+    ||layout.levels.some(l=>ids.has(l.id)&&l.outline&&touches(l.outline))
+    ||layout.ramps.some(r=>(ids.has(r.from.level)||ids.has(r.to.level))&&touches(r.poly));
+}
+
+export function connections(ctx) {
   const ext=ctx.layout.extensions;if(!ext)return;
   const openings=[...(ctx.layout.site.trenches||[]),...(ctx.layout.site.openings||[])];
   const group=new THREE.Group();group.name='hospitality-connections';
@@ -502,9 +524,12 @@ function connections(ctx) {
     const sourceRects=paths.flatMap(p=>p.polys.map(polyBounds));
     const {cells,edges}=corridorUnion(below||sky?sourceRects:subtractTraffic(sourceRects,trafficPolys.map(polyBounds)));
     // 门口端盖打开；转角、交叉及支路接入处由并集外边界自然消除内墙。
+    // An underground end opens only where it meets a doorway, a floor or a
+    // ramp; a dead end keeps its cap wall instead of showing the void beyond.
     const portals=[];
     for(const path of paths)for(const end of [0,path.points.length-1]) {
       const p=path.points[end],q=path.points[end===0?1:end-1],half=path.width/2;
+      if(below&&!tunnelEndMeets(ctx.layout,path,p))continue;
       portals.push(Math.abs(q[0]-p[0])>0.01?{x0:p[0],x1:p[0],z0:p[2]-half,z1:p[2]+half}:{x0:p[0]-half,x1:p[0]+half,z0:p[2],z1:p[2]});
     }
     const boundary=subtractOpenings(edges,portals);
@@ -567,6 +592,8 @@ function connections(ctx) {
     if(ctx.layout.site.roads?.some(r=>r.id===road.id))continue;
     const {cells}=corridorUnion(road.polys.map(polyBounds));
     for(const r of cells)addCutSurfaceSlab(B,'ext',rectPoly(r),openings,.015,.08,'#50585b');
+    // Fire lanes carry no centre line: the 消防登高场地 paint and legend lie on them.
+    if(road.kind==='fire')continue;
     for(let i=1;i<road.points.length;i++) {
       const a=road.points[i-1],b=road.points[i],len=Math.hypot(b[0]-a[0],b[2]-a[2]);
       for(let t=1;t<len-1;t+=5) {
@@ -644,8 +671,10 @@ function sharedSurfaceParking(ctx) {
 
 /** A small trapezoid joins the surveyed mall side entrance to an attached tower.
  * Its slab is generated by buildShell from the exact layout polygon. */
-function attachedDockLobbies(ctx) {
+export function attachedDockLobbies(ctx) {
   for(const dock of ctx.layout.extensions?.gateways||[]) {
+    // A lobby absorbed into a poured garage deck is open floor now.
+    if(dock.openDeck)continue;
     const group=new THREE.Group();group.name=dock.id;
     const B=new BatchSet(ctx.mats.base),y=dock.elev,p=dock.poly,below=y<0;
     const sides=[[p[1],p[2]],[p[3],p[0]]];
@@ -654,14 +683,19 @@ function attachedDockLobbies(ctx) {
     for(const [lo,hi] of [[outerMin,dock.outerSeg.z0],[dock.outerSeg.z1,outerMax]])if(hi-lo>.01)sides.push([[x,lo],[x,hi]]);
     for(const [a,b] of sides) {
       const aa=[a[0],y,a[1]],bb=[b[0],y,b[1]];
-      segmentBox(B,below?'concrete':'glass',aa,bb,below?.22:.035,3.1,1.6,below?'#d3d7d1':'#ffffff');
+      // Below grade the concrete side walls run up to the dock ceiling (y+3.35).
+      if(below){segmentBox(B,'concrete',aa,bb,.22,3.3,1.7,'#d3d7d1');continue;}
+      segmentBox(B,'glass',aa,bb,.035,3.1,1.6,'#ffffff');
       segmentBox(B,'extMetal',aa,bb,.15,.12,3.18,'#6b766e');
       segmentBox(B,'glowSoft',aa,bb,.1,.035,3.08,'#f1e6c8');
-      if(!below)segmentBox(B,'extMetal',aa,bb,.12,.07,1.13,'#8f998c');
+      segmentBox(B,'extMetal',aa,bb,.12,.07,1.13,'#8f998c');
     }
     for(const a of p)B.get('extMetal').box(a[0],y+1.65,a[1],.12,3.3,.12,'#778378');
     const e=dock.outerSeg;
     segmentBox(B,'wood',[e.x0,y,e.z0],[e.x1,y,e.z1],.35,.18,3.25,'#d3b993');
+    // At grade the mall façade's entrance band starts at +4.55: close the
+    // band between the dock roof and it, along the inner opening.
+    if(!below){const s=dock.innerSeg;segmentBox(B,'facadeTravertine',[s.x0,y,s.z0],[s.x1,y,s.z1],.3,1.32,3.94,'#efe9dd');}
     B.flush(group);
     const roof=new THREE.ShapeGeometry(shapeFromPoly(dock.poly,[]));roof.rotateX(-Math.PI/2);roof.translate(0,y+3.35,0);
     const ceiling=new THREE.Mesh(roof,ctx.mats.base[below?'concrete':'glassTint']);ceiling.name='dock-camera-aware-ceiling';group.add(ceiling);
@@ -675,9 +709,12 @@ function attachedDockLobbies(ctx) {
 /** The former hotel garage remains below the west parking district. Generic
  * buildShell/buildParking own its floors and bays; only the missing retaining
  * shell and opaque park-support roof are added here. */
-function buildPublicGarageShells(ctx) {
+export function buildPublicGarageShells(ctx) {
   for(const b of ctx.layout.buildings.filter(b=>b.undergroundOnly)) {
-    const roofPanels=garageCeilingPanels(b,ctx.layout.site,ctx.layout.levels.filter(l=>l.building===b.id));
+    // 云澜·西苑 basement lobbies stand inside the decks: they own their slab, ceiling and lights.
+    const lobbies=ctx.layout.buildings.flatMap(q=>q.deckExclusions||[]).map(p=>polyBounds(p.map(v=>toL(b.frame,...v))));
+    const roofPanels=lobbies.reduce((panels,cut)=>panels.flatMap(r=>subtractRect(r,cut)),
+      garageCeilingPanels(b,ctx.layout.site,ctx.layout.levels.filter(l=>l.building===b.id)));
     if(b.access?.protected)buildStairApproach(ctx,`${b.id}-G`,`${b.id}-B1`,
       ctx.layout.stairs.filter(s=>s.building===b.id),b.access);
     for(const lv of ctx.layout.levels.filter(l=>l.building===b.id)) {
@@ -709,6 +746,7 @@ function buildPublicGarageShells(ctx) {
         }
         if(lv.short==='B1')for(let x=b.footprint.x0+8;x<b.footprint.x1-5;x+=14)for(let z=b.footprint.z0+8;z<b.footprint.z1-5;z+=16) {
           if(!roofPanels.some(r=>x>r.x0&&x<r.x1&&z>r.z0&&z<r.z1))continue;
+          if(lobbies.some(r=>x+1.6>r.x0&&x-1.6<r.x1&&z+.1>r.z0&&z-.1<r.z1))continue;
           B.get('extMetal').box(x,-.65,z,3.2,.09,.2,'#68736f');
           B.get('glowSoft').box(x,-.71,z,3.0,.025,.16,'#e6eedc');
         }

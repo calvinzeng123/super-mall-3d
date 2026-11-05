@@ -1,7 +1,7 @@
 // 公共区域（数据驱动）：美食层圆厅用餐区与吊灯；云澜老街石板路、牌坊与灯笼串；1F 圆厅服务台、花池与长椅；
 // 口袋与端部休息区；2F 快闪店；圆厅"云朵"悬挂艺术装置。
 import * as THREE from 'three';
-import { pointInPoly, toW, frame, NORMAL } from '../../layout/geom.js';
+import { pointInPoly, toW, toL, frame, NORMAL, rect, lrectPoly } from '../../layout/geom.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { tableSet, roundTable, bench, planter } from './props.js';
 import { interiorDetail } from './interior-detail.js';
@@ -231,28 +231,40 @@ function popups(ctx, b, lv) {
 function lounges(ctx, b, lv) {
   const B = ctx.levels[lv.id].batch;
   const y0 = lv.elev;
+  // 地铁连接口落在翼楼端部休息区上（一期 B1M 的 P1-MT 等）：到站人流的正前方不摆沙发与茶几（它们没有碰撞），只保留地毯与两端绿植
+  const metroPortals = ctx.layout.entrances.filter((e) => e.level === lv.id && e.to === 'M-B1')
+    .map((e) => [(e.seg.x0 + e.seg.x1) / 2, (e.seg.z0 + e.seg.z1) / 2]);
   for (const w of lv.walk) {
     if (!w.rect || !(w.kind === 'pocket' || w.kind === 'lounge')) continue;
     const r = w.rect;
     const cu = (r.x0 + r.x1) / 2, cv = (r.z0 + r.z1) / 2;
     const du = r.x1 - r.x0, dv = r.z1 - r.z0;
     if (du < 4 || dv < 4) continue;
+    // The set is laid out on the rect. A walk cut back by a terrace setback
+    // keeps its old rect, so dress it only while that rect is still all walk.
+    if (!lrectPoly(w.frame, rect(r.x0 + .05, r.z0 + .05, r.x1 - .05, r.z1 - .05)).every(p => pointInPoly(p, w.poly))) continue;
+    const arrival = w.kind === 'lounge' && metroPortals.some(([x, z]) => {
+      const [u, v] = toL(w.frame, x, z);
+      return Math.hypot(Math.max(r.x0 - u, 0, u - r.x1), Math.max(r.z0 - v, 0, v - r.z1)) < 4;
+    });
     B.frame(w.frame, () => {
       const detail = flatDetail(B, y0);
       if (w.kind === 'lounge') {
         B.get(lv.finishes ? 'carpet' : 'satin').box(cu, y0 + 0.008, cv, du - 1.5, 0.016, Math.min(dv - 2, 8), '#d9cbb5');
-        for (const dz of [-2.4, 2.4]) {
-          B.get('matte').box(cu - 0.6, y0 + 0.25, cv + dz, 0.9, 0.5, 3.2, '#55707f');
-          B.get('matte').box(cu - 0.98, y0 + 0.62, cv + dz, 0.18, 0.5, 3.2, '#55707f');
-          for (const sz of [-1, 0, 1]) {
-            B.get('matte').box(cu - .50, y0 + .52, cv + dz + sz, .66, .075, .92, lv.short === '3F' ? '#b1b89b' : '#859c9c');
-            B.get('matte').box(cu - .83, y0 + .70, cv + dz + sz, .10, .27, .55, sz ? '#d6c5a7' : '#b98876');
+        if (!arrival) {
+          for (const dz of [-2.4, 2.4]) {
+            B.get('matte').box(cu - 0.6, y0 + 0.25, cv + dz, 0.9, 0.5, 3.2, '#55707f');
+            B.get('matte').box(cu - 0.98, y0 + 0.62, cv + dz, 0.18, 0.5, 3.2, '#55707f');
+            for (const sz of [-1, 0, 1]) {
+              B.get('matte').box(cu - .50, y0 + .52, cv + dz + sz, .66, .075, .92, lv.short === '3F' ? '#b1b89b' : '#859c9c');
+              B.get('matte').box(cu - .83, y0 + .70, cv + dz + sz, .10, .27, .55, sz ? '#d6c5a7' : '#b98876');
+            }
           }
+          B.get('satin').cyl(cu + 0.8, y0, cv, 0.5, 0.45, '#e9e2d6', 16);
+          B.get('matte').box(cu + .73, y0 + .477, cv - .08, .30, .052, .37, '#8b9b8d');
+          B.get('satin').box(cu + .73, y0 + .506, cv - .08, .27, .006, .34, '#eee6d3');
+          detail.bouquet(cu + 1.03, cv + .19, .45, '#b49570', .58);
         }
-        B.get('satin').cyl(cu + 0.8, y0, cv, 0.5, 0.45, '#e9e2d6', 16);
-        B.get('matte').box(cu + .73, y0 + .477, cv - .08, .30, .052, .37, '#8b9b8d');
-        B.get('satin').box(cu + .73, y0 + .506, cv - .08, .27, .006, .34, '#eee6d3');
-        detail.bouquet(cu + 1.03, cv + .19, .45, '#b49570', .58);
         for (const dz of [-dv / 2 + 1.2, dv / 2 - 1.2]) {
           B.get('matte').cyl(cu, y0, cv + dz, 0.45, 0.7, '#6b4426', 12);
           B.get('foliage').sphere(cu, y0 + 1.4, cv + dz, 0.7, '#4f8a3a');

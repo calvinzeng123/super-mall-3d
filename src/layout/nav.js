@@ -13,6 +13,11 @@ import {
 } from './geom.js';
 import { storeStyle, doorGaps } from './frontage.js';
 import { ESC } from './constants.js';
+import { gantryPosts } from './west-parking.js';
+import { EXIT } from './metro.js';
+import { GATE } from './access-records.js';
+
+export { GATE };
 
 export const NAV = { r: 0.3, eye: 1.62, reach: 1.6, cell: 8, zone: 0.6 };
 const DEG = 180 / Math.PI;
@@ -24,7 +29,8 @@ const CAMPUS = rect(-298, -298, 298, 298);
 // ---------------------------------------------------------------------------
 // 构建
 
-export function buildNav(layout) {
+/** options.gates === 'open': every card gate stays open (pathfinding, AI walkers). */
+export function buildNav(layout, options = {}) {
   const floors = new Map();
   const mk = (id, y, kind, extra = {}) => {
     const F = { id, y, kind, building: null, level: null, pieces: [], zones: [], walls: [], obstacles: [], grid: new Map(), portals: [], slopes: [], ...extra };
@@ -37,6 +43,7 @@ export function buildNav(layout) {
   for (const lv of layout.levels) {
     const F = mk(lv.id, lv.elev, 'level', { building: lv.building, level: lv });
     for (const p of lv.slab.pieces) F.pieces.push(piece(p.outer, [...p.holes, ...lv.voids.map((v) => v.poly)]));
+    for (const p of lv.navSurfaces || []) F.pieces.push(piece(p.outer, p.holes || []));
     // 夹层属于原楼层的某一户，不新增建筑楼层或住户。独立导航面仅由套内楼梯进入；
     // 仍站在原楼面的人经过其下方时不会被自动投影到较高的支撑面。
     for (const u of lv.units) {
@@ -73,6 +80,7 @@ export function buildNav(layout) {
     ...(S.park ? [S.park.lake] : []),
     ...S.trenches,
     ...(S.openings || []),
+    ...(S.river?.navHoles || []),
   ];
   ground.pieces.push(piece(rectPoly(S.bounds || CAMPUS), groundHoles));
   const br = layout.bridges;
@@ -122,9 +130,16 @@ export function buildNav(layout) {
     obstacle(floors.get(floor),record.frame,r);
   }
   for (const o of S.urban?.buildings || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  for (const o of S.river?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.forecourt?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  for (const stop of S.busStops || []) for (const o of stop.obstacles) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.transitCenter?.obstacles || []) polygonObstacle(ground, frame(0, 0, 0), o);
   for (const o of S.westParking?.islands || []) polygonObstacle(ground, frame(0, 0, 0), o);
+  // Gantry posts are solid; a post over a walk is dropped by the layout (cantilevered beam).
+  for (const g of S.westParking?.gates || []) {
+    const [fx, fz] = g.facing || [1, 0], Fr = frame(g.x, g.z, Math.atan2(fz, fx) * 180 / Math.PI);
+    for (const dz of gantryPosts(g)) obstacle(ground, Fr, rect(-.18, dz - .18, .18, dz + .18));
+  }
   for (const lot of layout.extensions?.surfaceParking || []) {
     for (const [i, s] of lot.stalls.entries()) {
       if (i % 4 === 0) continue;
@@ -244,6 +259,13 @@ export function buildNav(layout) {
     const F = floors.get(groundAt(kx, kz));
     for (const v of [-3.45, 3.45]) wallL(F, G, { x0: -0.5, z0: v, x1: 12, z1: v });
     wallL(F, G, { x0: -0.5, z0: -3.45, x1: -0.5, z1: 3.45 });
+    // M 标识柱（布局登记，渲染同一位置）
+    const p = e.kiosk.pylon;
+    if (p) obstacle(floors.get(groundAt(...toW(G, p.u, p.v))), G, rect(p.u - p.w / 2, p.v - p.w / 2, p.u + p.w / 2, p.v + p.w / 2));
+    // 梯井在站厅层的外皮：A / C 梯井顶端伸进扩大后的站厅角部，侧墙与顶端墙都要挡人
+    const sh = EXIT.shaft, M = floors.get(e.level);
+    for (const v of [sh.z0, sh.z1]) wallL(M, G, { x0: 0, z0: v, x1: sh.x1, z1: v });
+    wallL(M, G, { x0: sh.x1, z0: sh.z0, x1: sh.x1, z1: sh.z1 });
   }
 
   // ---------- 坡道 ----------
@@ -290,11 +312,33 @@ export function buildNav(layout) {
     for (const [a, b] of ent) { if (a > v) wallL(F, Fr, { x0: 0, z0: v, x1: 0, z1: a }); v = Math.max(v, b); }
     if (v < half) wallL(F, Fr, { x0: 0, z0: v, x1: 0, z1: half });
   }
-  // 地铁地面出入口：楼梯 + 扶梯整段
+  // 地铁地面出入口：楼梯踏步带一段（扶手之间）+ 上行扶梯一段（30°，与 exitKiosk 同一几何）
   for (const e of layout.entrances.filter((x) => x.kiosk)) {
-    const G = e.kiosk.frame;
+    const G = e.kiosk.frame, St = EXIT.stair, X = EXIT.escalator;
     const [kx, kz] = toW(G, e.kiosk.run + 1.5, 0);
-    slope({ id: `exit-${e.exit}`, kind: 'exit', F: G, len: e.kiosk.run, hw: e.kiosk.hw, y0: floors.get(e.level).y, y1: 0, low: e.level, high: groundAt(kx, kz) });
+    const high = groundAt(kx, kz), y0 = floors.get(e.level).y;
+    slope({ id: `exit-${e.exit}`, kind: 'exit', F: frame(...toW(G, 0, (St.v0 + St.v1) / 2), G.deg), len: e.kiosk.run,
+      hw: (St.v1 - St.v0) / 2 - 0.05, y0, y1: 0, low: e.level, high });
+    const run = -y0 * Math.sqrt(3), half = X.width / 2, top = X.u + run;
+    lane(`exit-${e.exit}-escalator`, 'escalator', ...toW(G, X.u, X.v), y0, ...toW(G, top, X.v), 0, half, e.level, high, 1);
+    // 梳齿板：站厅侧（梯井内 u<X.u）与地面侧（地面开洞内 u>top）各补一块落脚面
+    const lo = X.v - half - 0.02, hi = X.v + half + 0.02;
+    floors.get(e.level).pieces.push(piece(lrectPoly(G, rect(-0.1, lo, X.u + 0.05, hi))));
+    floors.get(high).pieces.push(piece(lrectPoly(G, rect(top - 0.05, lo, e.kiosk.run + 0.1, hi))));
+    // 两端栏板、扶手回转：沿梯道两侧各 1.8m 护墙，梯道口敞开
+    for (const v of [lo, hi]) {
+      wallL(floors.get(e.level), G, { x0: X.u - 1.8, z0: v, x1: X.u, z1: v });
+      wallL(floors.get(high), G, { x0: top, z0: v, x1: top + 1.8, z1: v });
+    }
+  }
+  // 与站厅不同标高的地铁连接口（二期 B1 −4.2）：站厅侧 3m 缓坡板（metro.js portals() 所画）。
+  // 坡道越过门线 0.5m 落到对方楼面，两个方向都先进坡道、不在门线上跳 0.3m。
+  const metroB1 = floors.get('M-B1');
+  for (const e of layout.entrances.filter((x) => x.to === 'M-B1' && metroB1)) {
+    const hi = floors.get(e.level);
+    if (!hi || Math.abs(hi.y - metroB1.y) < 0.05) continue;
+    const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
+    lane(`${e.id}-ramp`, 'ramp', mx + e.nx * 3, mz + e.nz * 3, metroB1.y, mx - e.nx * 0.5, mz - e.nz * 0.5, hi.y, e.width / 2 - 0.1, metroB1.id, hi.id, 0);
   }
   // 车库坡道、一期 B1↔B2 坡道
   for (const r of layout.ramps) {
@@ -310,7 +354,7 @@ export function buildNav(layout) {
   }
 
   for (const b of layout.buildings) for (const f of b.access?.flights || []) {
-    lane(f.id, b.access.protected || f.protected ? 'protected-stair' : 'exterior-stair', f.bottom.x, f.bottom.z, f.bottom.y,
+    lane(f.id, f.kind || (b.access.protected || f.protected ? 'protected-stair' : 'exterior-stair'), f.bottom.x, f.bottom.z, f.bottom.y,
       f.top.x, f.top.z, f.top.y, f.width / 2, f.from, f.to, 0);
   }
   for(const f of br?.access?.flights||[]) {
@@ -344,10 +388,31 @@ export function buildNav(layout) {
     }
   }
 
+  // ---------- 门禁：读卡闸机 / 玻璃门。机柜与侧挡常设；通道门扇是可开关的墙 ----------
+  const gates = new Map(), fixedOpen = options.gates === 'open';
+  for (const g of layout.accessControl?.gates || []) {
+    const state = { id: g.id, record: g, open: fixedOpen, fixed: fixedOpen, until: 0, frame: g.frame, floors: g.floors };
+    gates.set(g.id, state);
+    const cuts = [...g.lanes, ...(g.cabinets || [])].map((q) => [q.u0, q.u1]).sort((a, b) => a[0] - b[0]);
+    for (const id of g.floors) {
+      const F = floors.get(id);
+      if (!F) continue;
+      let u = g.line.u0;
+      for (const [a, b] of cuts) { if (a > u + 1e-6) wallL(F, g.frame, { x0: u, z0: 0, x1: a, z1: 0 }); u = Math.max(u, b); }
+      if (u < g.line.u1 - 1e-6) wallL(F, g.frame, { x0: u, z0: 0, x1: g.line.u1, z1: 0 });
+      for (const c of g.cabinets || []) box(F, g.frame, rect(c.u0, c.v0, c.u1, c.v1));
+      for (const l of g.lanes) {
+        const [ax, az] = toW(g.frame, l.u0, 0), [bx, bz] = toW(g.frame, l.u1, 0);
+        F.walls.push({ x0: ax, z0: az, x1: bx, z1: bz, gate: state }); F.gated = true;
+      }
+    }
+  }
+
   // ---------- 空间索引 ----------
   for (const F of floors.values()) indexWalls(F);
 
-  const nav = { floors, portals, slopes, slopeById: new Map(slopes.map((s) => [s.id, s])), links: [], groundAt };
+  const nav = { floors, portals, slopes, slopeById: new Map(slopes.map((s) => [s.id, s])), links: [], groundAt, gates,
+    zones: layout.accessControl?.zones || [] };
 
   // ---------- 互动点（楼梯、电梯、落地塔）：门外找一个站得住的点 ----------
   const stopAt = (floor, x, z, nx, nz) => {
@@ -359,7 +424,7 @@ export function buildNav(layout) {
     return { floor, x: x + nx, z: z + nz, face: [nx, nz] };
   };
   for (const s of layout.stairs) {
-    const stops = s.serves.filter((id) => floors.has(id)).map((id) => {
+    const stops = s.serves.filter((id) => floors.has(id) && !(s.passLevels || []).includes(id)).map((id) => {
       const d = (s.wdoorByLevel && s.wdoorByLevel[id]) || s.wdoor;
       return stopAt(id, (d.x0 + d.x1) / 2, (d.z0 + d.z1) / 2, d.nx, d.nz);
     });
@@ -367,7 +432,7 @@ export function buildNav(layout) {
   }
   for (const e of layout.elevators) {
     const stops = e.serves.filter((id) => floors.has(id)).map((id) => stopAt(id, e.x + e.nx * e.reach, e.z + e.nz * e.reach, e.nx, e.nz));
-    nav.links.push({ id: e.id, kind: 'lift', elevator: e, name: e.type === 'glass' || e.tower ? '观光电梯' : e.type === 'freight' ? '货梯' : '电梯', stops: sortStops(stops, floors) });
+    nav.links.push({ id: e.id, kind: 'lift', elevator: e, name: e.label || (e.type === 'glass' || e.tower ? '观光电梯' : e.type === 'freight' ? '货梯' : '电梯'), stops: sortStops(stops, floors) });
   }
   if (br) {
     for (const v of br.verticals.filter((x) => x.type !== 'escalator')) {
@@ -380,6 +445,12 @@ export function buildNav(layout) {
         stops: [{ floor: groundAt(...v.ground), x: v.ground[0], z: v.ground[1], face }, { floor: 'bridge', x: v.deck[0], z: v.deck[1], face }],
       });
     }
+  }
+  // 读卡器：站在公共一侧（v < 0）面向门线
+  for (const g of gates.values()) {
+    const r = g.record.reader, [x, z] = toW(g.frame, r.u, r.v), [fx, fz] = toW(g.frame, r.u, 1);
+    const d = Math.hypot(fx - x, fz - z) || 1;
+    nav.links.push({ id: g.id, kind: 'gate', gate: g, name: g.record.name, stops: [{ floor: r.floor || g.floors[0], x, z, face: [(fx - x) / d, (fz - z) / d] }] });
   }
   return nav;
 }
@@ -403,14 +474,20 @@ function indexWalls(F) {
   });
 }
 
+// An open gate leaf is not a wall. Only gated floors pay for the filter.
+const live = (w) => !w.gate || !w.gate.open;
 function wallsNear(F, x0, z0, x1, z1) {
   const c = NAV.cell, pad = NAV.r + 0.05;
   const gx0 = Math.floor((Math.min(x0, x1) - pad) / c), gx1 = Math.floor((Math.max(x0, x1) + pad) / c);
   const gz0 = Math.floor((Math.min(z0, z1) - pad) / c), gz1 = Math.floor((Math.max(z0, z1) + pad) / c);
-  if (gx0 === gx1 && gz0 === gz1) return (F.grid.get(`${gx0},${gz0}`) || []).map((i) => F.walls[i]);
+  if (gx0 === gx1 && gz0 === gz1) {
+    const out = (F.grid.get(`${gx0},${gz0}`) || []).map((i) => F.walls[i]);
+    return F.gated ? out.filter(live) : out;
+  }
   const set = new Set();
   for (let gx = gx0; gx <= gx1; gx++) for (let gz = gz0; gz <= gz1; gz++) for (const i of F.grid.get(`${gx},${gz}`) || []) set.add(i);
-  return [...set].map((i) => F.walls[i]);
+  const out = [...set].map((i) => F.walls[i]);
+  return F.gated ? out.filter(live) : out;
 }
 
 // ---------------------------------------------------------------------------
@@ -478,7 +555,10 @@ function segCross(ax, az, bx, bz, s) {
   const d = (x0, z0, x1, z1, x2, z2) => (x1 - x0) * (z2 - z0) - (z1 - z0) * (x2 - x0);
   const d1 = d(s.x0, s.z0, s.x1, s.z1, ax, az), d2 = d(s.x0, s.z0, s.x1, s.z1, bx, bz);
   const d3 = d(ax, az, bx, bz, s.x0, s.z0), d4 = d(ax, az, bx, bz, s.x1, s.z1);
-  return d1 * d2 <= 0 && d3 * d4 <= 0 && !(d1 === 0 && d2 === 0);
+  // Half-open sides: a point exactly on the portal line counts as the d >= 0
+  // side, so a step that ends on the line and the next one that starts there
+  // cross once, instead of switching floors and straight back again.
+  return (d1 >= 0) !== (d2 >= 0) && d3 * d4 <= 0;
 }
 
 /** 扫掠：从 (x0,z0) 走到 (x1,z1)，碰到墙就停在墙前 */
@@ -612,6 +692,7 @@ export function linksNear(nav, floor, x, z) {
   for (const k of nav.links) {
     const i = k.stops.findIndex((st) => st.floor === floor && Math.hypot(st.x - x, st.z - z) <= NAV.reach);
     if (i < 0) continue;
+    if (k.kind === 'gate') { out.push({ link: k, stop: k.stops[i], options: [{ action: 'tap', gate: k.gate.id }] }); continue; }
     const options = k.kind === 'stair' ? [k.stops[i - 1], k.stops[i + 1]].filter(Boolean) : k.stops.filter((_, j) => j !== i);
     if (options.length) out.push({ link: k, stop: k.stops[i], options });
   }
@@ -628,6 +709,11 @@ export function spawn(nav, layout, { building, level } = {}) {
   };
   if (building) {
     const b = layout.buildings.find((x) => x.id === building);
+    // A tower stacked on the mall has no ground floor of its own: it names its lobby.
+    if (b?.spawn) {
+      const { floor, x, z, yaw = 0 } = b.spawn, F = nav.floors.get(floor);
+      if (F && clearAt(nav, F, x, z)) return { floor, x, z, y: F.y, slope: null, yaw };
+    }
     if (b && ['mall', 'tower', 'annex'].includes(b.kind)) {
       const e = layout.entrances.find((x) => x.building === building && x.main) || layout.entrances.find((x) => x.building === building && x.to === 'site');
       if (e) {
@@ -651,6 +737,64 @@ export function spawn(nav, layout, { building, level } = {}) {
 }
 
 const featurePoint = (lv, type) => { const f = lv.features.find((q) => q.type === type); return f && f.x !== undefined ? [f.x, f.z] : null; };
+
+/**
+ * 铺位门面（世界坐标，带外法线 nx/nz）。复式上层没有门面：借用同户下层的入户门面
+ * （两层平面位置相同）；都没有时取铺位轮廓第一条边、法线朝外。
+ */
+export function unitFront(layout, u) {
+  if (u.wfronts?.length) return u.wfronts[0];
+  const partner = u.residence?.partner;
+  if (partner) for (const lv of layout.levels) {
+    if (!u.residence.homeLevels?.includes(lv.id)) continue;
+    const p = lv.units.find((q) => q.id === partner);
+    if (p?.wfronts?.length) return p.wfronts[0];
+  }
+  const P = u.polys[0], [a, b] = [P[0], P[1]], c = polyCentroid(P), len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  let nx = (b[1] - a[1]) / len, nz = -(b[0] - a[0]) / len;
+  if (nx * ((a[0] + b[0]) / 2 - c[0]) + nz * ((a[1] + b[1]) / 2 - c[1]) < 0) { nx = -nx; nz = -nz; }
+  return { x0: a[0], z0: a[1], x1: b[0], z1: b[1], nx, nz };
+}
+
+/**
+ * 目录传送到铺位：店门外 2 m 面朝店（住宅在入户门外 0.85 m 起）；门口外是中庭洞口或窄走道时往近处找。
+ * 复式上层没有入户门：落在户内楼梯上层到达口外、背对楼梯；再不行取户内任一站得住的点。
+ */
+export function unitSpawn(nav, layout, u) {
+  const F = nav.floors.get(u.level);
+  if (!F) return null;
+  const at = (x, z, yaw) => (clearAt(nav, F, x, z) ? { floor: u.level, x, z, y: F.y, slope: null, yaw } : null);
+  const w = u.wfronts?.[0];
+  if (w) {
+    const entry = u.residence?.entryDoor;
+    const t = entry ? entry.at / Math.hypot(w.x1 - w.x0, w.z1 - w.z0) : .5;
+    const dx = w.x0 + (w.x1 - w.x0) * t, dz = w.z0 + (w.z1 - w.z0) * t;
+    for (const d of entry ? [.85, 1.15, 1.5, 2] : [2, 1.5, 1, 2.5, 3]) {
+      const q = at(dx + w.nx * d, dz + w.nz * d, yawOf(-w.nx, -w.nz));
+      if (q) return q;
+    }
+    return null;
+  }
+  const hs = u.residence?.homeStair, arr = hs?.upperArrival, blk = hs?.block;
+  if (arr && blk && u.frame) {
+    const m = [(arr.a[0] + arr.b[0]) / 2, (arr.a[1] + arr.b[1]) / 2], e = 1e-6;
+    const dir = Math.abs(m[1] - blk.z1) < e ? [0, 1] : Math.abs(m[1] - blk.z0) < e ? [0, -1] : Math.abs(m[0] - blk.x1) < e ? [1, 0] : [-1, 0];
+    const [ox, oz] = toW(u.frame, 0, 0), [fx, fz] = toW(u.frame, dir[0], dir[1]);
+    for (const d of [.6, .9, 1.2, 1.6, 2]) {
+      const [x, z] = toW(u.frame, m[0] + dir[0] * d, m[1] + dir[1] * d);
+      const q = at(x, z, yawOf(fx - ox, fz - oz));
+      if (q) return q;
+    }
+  }
+  for (const P of u.polys) {
+    const c = polyCentroid(P);
+    for (const p of polySamples(P, 1, .4).sort((a, b) => dist(a, c) - dist(b, c))) {
+      const q = at(p[0], p[1], 0);
+      if (q) return q;
+    }
+  }
+  return null;
+}
 
 function levelSpawn(nav, layout, levelId, prefer = null) {
   const lv = layout.levels.find((l) => l.id === levelId);
@@ -677,12 +821,87 @@ export function floorLabel(nav, layout, s) {
   }
   const F = nav.floors.get(s.floor);
   if (!F) return '';
+  const at = [s.x, s.z], inRect = (r) => !!r && s.x >= r.x0 && s.x <= r.x1 && s.z >= r.z0 && s.z <= r.z1;
   if (F.kind === 'level' || F.kind === 'mezzanine') {
-    const b = layout.buildings.find((x) => x.id === F.building);
+    const b = layout.buildings.find((x) => x.id === F.building), lv = F.level;
+    // Community towers read by their full name (云澜·西苑 1 号楼), matching the signage.
+    const title = b.community ? b.name : b.short, where = b.community ? lv.short : `${b.short} ${lv.short}`;
+    const zone = F.kind === 'level' && nav.zones?.find((z) => z.floors.includes(F.id) && z.polys.some((p) => pointInPoly(at, p)));
+    if (zone) return `${zone.label}（${where}）`;
+    if (F.kind === 'level') {
+      // Residents' street vestibule (outside the card door): label only, no gate logic.
+      const vest = lv.residentsLobbies?.find((r) => inRect(r.vestibule));
+      if (vest) return `北苑 ${vest.building.slice(1)} 号楼 · 住户门厅（${where}）`;
+      const rt = lv.riverTerrace;
+      if (rt?.prows?.some((p) => inRect(p.rect))) return `云澜江景台 · 江景台玻璃挑台（${where}）`;
+      if (rt?.pieces?.some((p) => pointInPoly(at, p.outer))) return `云澜江景台（${where}）`;
+    }
     const suffix = F.kind === 'mezzanine' ? (F.unit ? ` · ${F.unit.code} 夹层` : ' · 楼梯中间平台') : '';
-    return `${b.short} · ${F.level.name}${suffix}`;
+    return `${title} · ${lv.name}${suffix}`;
   }
   if (F.kind === 'bridge') return '云环天桥';
-  const plot = layout.site.plots.find((p) => pointInPoly([s.x, s.z], p.poly));
+  const river = riverPlace(layout.site.river, s, inRect);
+  if (river) return `室外 · ${river}`;
+  const plot = layout.site.plots.find((p) => pointInPoly(at, p.poly));
   return `室外 · ${plot ? plot.name : '道路'}`;
+}
+
+/** Name of the riverside place at s: bridges and their lookouts, the glass lookout, pavilion and promenades. */
+function riverPlace(R, s, inRect) {
+  if (!R) return null;
+  for (const b of R.bridges || []) {
+    if ((b.lookouts || []).some(inRect)) return `${b.name} · 跨中玻璃挑台`;
+    if (inRect(b.deck)) return b.name;
+  }
+  for (const l of R.lookouts || []) if (inRect(l.rect)) return l.name;
+  if (inRect(R.pavilion?.rect)) return `${R.pavilion.name} · 对岸滨江公园`;
+  for (const p of R.promenades || []) if (p.bank && inRect(p.rect)) return p.bank === 'N' ? '北岸滨江绿道' : '南岸滨江步道';
+  const S = R.south;
+  if (S && s.z >= S.revetment[0] && s.z <= S.terrace[1] && (R.promenades || []).some((p) => p.bank === 'S' && s.x >= p.rect.x0 && s.x <= p.rect.x1)) return '南岸亲水平台';
+  return null;
+}
+
+
+// ---------------------------------------------------------------------------
+// 门禁状态（纯函数：explore 每帧调用 updateGates，刷卡调用 tapGate）
+
+/** 刷卡：门扇打开 hold 秒。未知门禁返回 false。 */
+export function tapGate(nav, id, now) {
+  const g = nav.gates?.get(id);
+  if (!g) return false;
+  g.open = true;
+  g.until = Math.max(g.until, now + (g.record.hold ?? GATE.hold));
+  return true;
+}
+
+/** 每帧：出门感应（住户一侧靠近门线自动开）、到时关门（人在通道里不关，防夹）。返回状态变化的门。 */
+export function updateGates(nav, s, now) {
+  const changed = [];
+  for (const g of nav.gates?.values() || []) {
+    if (g.fixed) continue;
+    const was = g.open;
+    const here = !!s && !s.slope && g.floors.includes(s.floor);
+    const [u, v] = here ? toL(g.frame, s.x, s.z) : [0, 0];
+    const across = here && u > g.record.line.u0 - 0.2 && u < g.record.line.u1 + 0.2;
+    if (across && v > 0 && v < GATE.exitSensor) { g.open = true; g.until = Math.max(g.until, now + GATE.exitHold); }
+    const inLane = across && Math.abs(v) < GATE.pinch;
+    if (g.open && now >= g.until && !inLane) g.open = false;
+    if (g.open !== was) changed.push(g);
+  }
+  return changed;
+}
+
+/** 在公共一侧贴着关闭的门扇（用于 HUD 提示“请刷卡”），否则 null。 */
+export function gateBlocking(nav, s) {
+  for (const g of nav.gates?.values() || []) {
+    if (g.open || !s || s.slope || !g.floors.includes(s.floor)) continue;
+    const [u, v] = toL(g.frame, s.x, s.z);
+    if (v < 0 && v > -0.75 && u > g.record.line.u0 && u < g.record.line.u1) return g;
+  }
+  return null;
+}
+
+/** 离开漫游：所有门禁复位为关闭（常开模式除外）。 */
+export function resetGates(nav) {
+  for (const g of nav.gates?.values() || []) if (!g.fixed) { g.open = false; g.until = 0; }
 }

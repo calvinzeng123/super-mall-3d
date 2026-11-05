@@ -1,0 +1,103 @@
+// 云澜·西苑 / 云澜·北苑 户型数据：生成器校验、户型多样性、面积、复式楼梯与挑空、冻结数据。
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { COMMUNITY_PLANS } from '../src/layout/community-plan-data.js';
+import { validateHome, planSignature, generateHome } from '../src/layout/community-plan.js';
+import { WEST, westTower, planDataText } from '../scripts/prepare-community-plans.mjs';
+
+const dataFile = new URL('../src/layout/community-plan-data.js', import.meta.url);
+const { west, north } = COMMUNITY_PLANS;
+const within = (outer, inner, eps = 1e-6) => inner.x0 >= outer.x0 - eps && inner.x1 <= outer.x1 + eps && inner.z0 >= outer.z0 - eps && inner.z1 <= outer.z1 + eps;
+const westSpec = (u) => ({ type: u.plan.type.toUpperCase(), lux: false, level: 'flat' });
+const northSpec = (p) => ({ type: p.type, lux: true, level: p.level });
+const homeSig = (hm) => hm.parts.map((p) => planSignature(p.plan)).join('|');
+// The data file is JSON: compare generator output after the same round trip (−0 → 0).
+const asData = (v) => JSON.parse(JSON.stringify(v));
+
+test('西苑 10 套与北苑 68 个楼层户型全部通过生成器校验', () => {
+  let n = 0;
+  for (const T of Object.values(west)) for (const u of T.units) {
+    assert.deepEqual(validateHome(u.plan, westSpec(u)), [], `${u.plan.plan}`);
+    n++;
+  }
+  assert.equal(n, 10);
+  n = 0;
+  for (const T of Object.values(north)) for (const hm of T.homes) for (const p of hm.parts) {
+    assert.ok(p.plan, `${p.id} 缺户型`);
+    assert.deepEqual(validateHome(p.plan, northSpec(p)), [], p.id);
+    n++;
+  }
+  assert.equal(n, 68);
+});
+
+test('3梯5户：西苑每栋 5 种互不相同的户型，两房一厅 / 三房一厅 / 四房一厅齐全，面积 90–160㎡', () => {
+  assert.deepEqual(Object.keys(west), ['W1', 'W2']);
+  for (const [id, T] of Object.entries(west)) {
+    assert.equal(T.units.length, 5, id);
+    assert.equal(new Set(T.units.map((u) => planSignature(u.plan))).size, 5, `${id} 户型重复`);
+    assert.deepEqual(new Set(T.units.map((u) => u.plan.label)), new Set(['两房一厅', '三房一厅', '四房一厅']), id);
+    for (const u of T.units) {
+      assert.ok(u.plan.area >= 90 && u.plan.area <= 160, `${u.plan.plan} ${u.plan.area}㎡`);
+      assert.equal(u.plan.kind, 'community');
+      assert.ok(u.plan.entryDoor, u.plan.plan);
+    }
+  }
+});
+
+test('一梯一户：北苑每栋 24 户各不相同，三房以上超大平层与错层复式，每层面积 ≥ 180㎡', () => {
+  assert.deepEqual(Object.keys(north), ['T1', 'T2']);
+  for (const [id, T] of Object.entries(north)) {
+    assert.equal(T.homes.length, 24, id);
+    assert.equal(new Set(T.homes.map(homeSig)).size, 24, `${id} 户型重复`);
+    assert.equal(T.homes.filter((h) => h.kind === 'duplex').length, 10, id);
+    assert.equal(T.homes.reduce((n, h) => n + h.parts.length, 0), 34, id);
+    for (const hm of T.homes) {
+      for (const p of hm.parts) assert.ok(p.plan.area >= 180, `${p.id} ${p.plan.area}㎡`);
+      const beds = hm.parts.reduce((n, p) => n + p.plan.bedrooms, 0);
+      assert.ok(beds >= 3, `${hm.id} 只有 ${beds} 房`);
+    }
+    // 交错复式：每层恰好两户的楼层（8F–24F）
+    const perFloor = new Map();
+    for (const hm of T.homes) for (const n of hm.levels) perFloor.set(n, (perFloor.get(n) || 0) + 1);
+    assert.deepEqual([...perFloor.keys()].sort((a, b) => a - b), Array.from({ length: 17 }, (_, i) => 8 + i));
+    for (const [n, k] of perFloor) assert.equal(k, 2, `${id} ${n}F 有 ${k} 户`);
+  }
+});
+
+test('复式上下层的套内楼梯位置一致，挑空位于下层客厅（含景观阳台）之上', () => {
+  for (const T of Object.values(north)) for (const hm of T.homes.filter((h) => h.kind === 'duplex')) {
+    const [lower, upper] = hm.parts.map((p) => p.plan);
+    assert.deepEqual(hm.parts.map((p) => p.level), ['lower', 'upper']);
+    assert.deepEqual(hm.levels.length, 2);
+    assert.equal(hm.levels[1], hm.levels[0] + 1);
+    assert.deepEqual(lower.homeStair.block, upper.homeStair.block, `${hm.id} 楼梯错位`);
+    assert.equal(lower.homeStair.role, 'lower');
+    assert.equal(upper.homeStair.role, 'upper');
+    assert.equal(upper.entryDoor, null, `${hm.id} 上层不应有入户门`);
+    assert.ok(lower.entryDoor, `${hm.id} 下层缺入户门`);
+    if (hm.voidRect) {
+      // 挑空为客厅靠窗的一半并延伸到外墙：下方只有客厅与客厅外的阳台
+      const below = lower.rooms.filter((r) => r.rect.x0 < hm.voidRect.x1 - 1e-6 && r.rect.x1 > hm.voidRect.x0 + 1e-6 && r.rect.z0 < hm.voidRect.z1 - 1e-6 && r.rect.z1 > hm.voidRect.z0 + 1e-6);
+      assert.ok(below.some((r) => r.kind === 'living'), `${hm.id} 挑空不在下层客厅之上`);
+      assert.ok(below.every((r) => r.kind === 'living' || r.kind === 'balcony'), `${hm.id} 挑空下方有 ${below.map((r) => r.kind)}`);
+      const span = below.reduce((a, r) => ({ x0: Math.min(a.x0, r.rect.x0), z0: Math.min(a.z0, r.rect.z0), x1: Math.max(a.x1, r.rect.x1), z1: Math.max(a.z1, r.rect.z1) }), { x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity });
+      assert.ok(within(span, hm.voidRect), `${hm.id} 挑空越出客厅`);
+      assert.deepEqual(upper.voids, [hm.voidRect]);
+    } else assert.equal(upper.voids, undefined);
+  }
+});
+
+test('冻结数据：与生成器输出一致，北苑部分锁定，文件 ≤ 600 kB', () => {
+  // 西苑可由生成器快速重算（P-homes 可能重新生成）；北苑数据在并行阶段冻结。
+  for (const T of WEST.towers) assert.deepEqual(asData(westTower(T)), west[T.id], T.id);
+  const first = north.T1.homes[0];
+  const g = generateHome({ w: 16, d: 14, exposed: { left: true, right: true }, lux: true, entryAt: 4.8, view: 'left', id: 'T1-8W', type: '3BR', variant: 8, exclude: [] });
+  assert.deepEqual(asData(g.residence), first.parts[0].plan, first.id);
+  assert.equal(createHash('sha256').update(JSON.stringify(north)).digest('hex'), '7b5fd4ed49c5987e6d18bdfe2f7e52b54288bb50618c19fb7957b8ffda17f2d3');
+  const text = readFileSync(dataFile, 'utf8');
+  assert.ok(text.startsWith('// Generated by scripts/prepare-community-plans.mjs; do not hand-edit.'));
+  assert.equal(text, planDataText(COMMUNITY_PLANS), '数据文件被手工修改');
+  assert.ok(statSync(dataFile).size <= 600 * 1024, `${statSync(dataFile).size} B`);
+});

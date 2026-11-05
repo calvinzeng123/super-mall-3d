@@ -2,7 +2,7 @@
 // 四条沿对角线的地下通道分别接一期 B1M、二期 B1、三期 B1 与公园 B 口，A / C / D 口自通道侧向出地面。
 // 约定：站厅、站台用世界坐标（x 沿云澜大道）；通道 frame(0,0,θ)，u 沿对角线向外，v = u 转 +90°；
 // 出入口 frame 原点在楼梯底端中线，u 指向上行方向（u∈[0,RUN] 由站厅标高升到地面）。
-import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, toW, polyBounds, subtractInterval, convexOverlap } from './geom.js';
+import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, toW, toL, polyBounds, subtractInterval, convexOverlap } from './geom.js';
 import { ESC, CATEGORIES } from './constants.js';
 import { lift } from './mall.js';
 import { PORTAL_U } from './p3.js';
@@ -18,6 +18,26 @@ export const METRO = {
 };
 /** 出入口：楼梯段长 RUN、两端平台、半宽 HW、雨棚范围（出入口 frame 局部） */
 export const EXIT = { run: 9.5, landing: 2.5, hw: 3, roof: rect(-0.5, -3.5, 12, 3.5), open: rect(0, -3.25, 9.5, 3.25) };
+/** 梯井外轮廓（侧墙外皮 ±3.45、顶端墙外皮 u=9.8）、楼梯踏步带、上行扶梯中线：渲染与导航共用 */
+EXIT.shaft = rect(-0.2, -(EXIT.hw + 0.45), EXIT.run + 0.3, EXIT.hw + 0.45);
+EXIT.stair = { v0: -EXIT.hw + 0.1, v1: 0.7 };
+EXIT.escalator = { u: 0.85, v: EXIT.hw - 1.1, width: 1.8 };
+/** M 标识柱：雨棚前端外 1.2m、侧向 hw+1.6，0.5m 见方 */
+const pylon = (v) => ({ u: EXIT.roof.x1 + 1.2, v, w: 0.5 });
+/** 新增出入口（E–H）的标识柱放在引导步道转向的另一侧、紧贴雨棚侧墙延长线外（|v|=hw+0.9），
+ *  不立在步道上，也让开 E 口旁下沉广场的玻璃栏板 */
+export function approachPylon(kiosk, approach) {
+  const [, v] = toL(kiosk.frame, ...approach.points[approach.points.length - 1]);
+  return pylon(-(Math.sign(v) || 1) * (EXIT.hw + 0.9));
+}
+/** 站厅圆柱：r=0.42，柱础 0.47；碰撞为外切柱础的正八边形。渲染（concourse）与导航（navObstacles）共用 */
+export function concourseColumns(level, xs = [-48, -24, -12, 0, 12, 24, 48], zs = [-5, 5]) {
+  const R = 0.47 / Math.cos(Math.PI / 8);
+  return xs.flatMap((x) => zs.map((z) => ({
+    id: `${level}-column-${x}-${z}`, column: { x, z, r: 0.42, base: 0.47 },
+    poly: Array.from({ length: 8 }, (_, i) => [x + R * Math.cos((i + 0.5) * Math.PI / 4), z + R * Math.sin((i + 0.5) * Math.PI / 4)]),
+  })));
+}
 const HW = 4;
 const C0 = 11 * Math.SQRT2;
 
@@ -158,6 +178,7 @@ export function buildMetro(parts, site, picker) {
   B1.features.push({ type: 'gates', x: -G, z0: -2, z1: 5, name: '西闸机' }, { type: 'gates', x: G, z0: -5, z1: 2, name: '东闸机' });
   B1.features.push({ type: 'fence', x0: -G + 2, x1: G, z: -5 }, { type: 'fence', x0: -G, x1: G - 2, z: 5 });
   B1.features.push({ type: 'tvm', x: -42, z: 4.2, n: 4, face: 'N' }, { type: 'tvm', x: 42, z: -4.2, n: 4, face: 'S' });
+  B1.navObstacles = concourseColumns(B1.id);
 
   // ---------- 四条通道（属于站厅层） ----------
   const passages = PASSAGES.map((p) => {
@@ -182,7 +203,8 @@ export function buildMetro(parts, site, picker) {
       B1.walk.push({ id: `X${x.id}`, kind: 'exit', poly: lrectPoly(P.F, r), frame: P.F, rect: r });
     }
     const [kx, kz] = toW(Gf, (EXIT.roof.x0 + EXIT.roof.x1) / 2, 0);
-    const kiosk = { x: kx, z: kz, deg: Gf.deg, frame: Gf, poly: lrectPoly(Gf, EXIT.roof), open: lrectPoly(Gf, EXIT.open), run: EXIT.run, rise: -B1.elev, hw: EXIT.hw };
+    const kiosk = { x: kx, z: kz, deg: Gf.deg, frame: Gf, poly: lrectPoly(Gf, EXIT.roof), open: lrectPoly(Gf, EXIT.open), run: EXIT.run, rise: -B1.elev, hw: EXIT.hw,
+      pylon: pylon((x.passage === 'PC' ? 1 : -1) * (EXIT.hw + 1.6) * (x.end ? -1 : 1)) };
     site.openings.push(kiosk.open);
     const seg = lseg(Gf, { x0: 0, z0: -EXIT.hw, x1: 0, z1: EXIT.hw, side: 'E' });
     return {

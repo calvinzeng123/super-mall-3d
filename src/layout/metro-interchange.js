@@ -1,6 +1,6 @@
 // Full-tour interchange: L7 (E/W) above L12 (N/S), with a separate paid transfer floor.
 import { frame, IDENTITY, rect, rectPoly, lrectPoly, lpoly, lseg, toW, pointInPoly } from './geom.js';
-import { carve } from './metro.js';
+import { carve, concourseColumns, approachPylon } from './metro.js';
 import { ESC } from './constants.js';
 import { lift } from './mall.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
@@ -9,7 +9,7 @@ import { addMetroAccess } from './metro-access.js';
 export const INTERCHANGE = {
   concourse: rect(-68,-26,68,26), platform: rect(-60,-6,60,6),
   sides: [rect(-60,-19,-60+120,-9.2),rect(-60,9.2,60,19)],
-  station: rect(-66,-20.8,66,20.8), track: 7.6, tunnelEnd: 260,
+  station: rect(-66,-20.8,66,20.8), wallFace: 20.66, track: 7.6, tunnelEnd: 260,
 };
 const level = (short,name,kind,elev,accent) => ({id:`M-${short}`,building:'M',short,name,kind,elev,height:7.5,
   theme:{key:`metro-${short}`,floor:'metro-terrazzo',accent,label:name},outline:[],units:[],rooms:[],walk:[],voids:[],features:[],slab:{pieces:[]}});
@@ -33,7 +33,10 @@ export function applyMetroInterchange(layout) {
     .map(l=>({...l,box:INTERCHANGE.station,platform:INTERCHANGE.platform,platforms,track:7.6,train:{cars:6,len:19,w:3},tunnelEnd:260,span:260,dualDoors:true}));
   for(const line of lines){
     const lv=byId[line.level];lv.metroLine=line.id;lv.theme.floor='metro-platform';lv.outline=lrectPoly(line.frame,line.box);
-    lv.slab.pieces=platforms.map(p=>({outer:lrectPoly(line.frame,p.rect),holes:[]}));
+    // Boarding-platform slabs run to the outer tiled wall (inner face 20.66m) so no strip
+    // beside the wall looks down into the level below; the walkable area still stops at 19m.
+    const toWall=r=>r.z0<0?{...r,z0:-INTERCHANGE.wallFace}:{...r,z1:INTERCHANGE.wallFace};
+    lv.slab.pieces=platforms.map(p=>({outer:lrectPoly(line.frame,p.role==='board'?toWall(p.rect):p.rect),holes:[]}));
     lv.walk=platforms.map(p=>walk(`M-${line.id}-${p.id}`,'platform',lrectPoly(line.frame,p.rect)));
     for(const z of [-9.2,-6,6,9.2]){
       const a=toW(line.frame,-60,z),c=toW(line.frame,60,z);
@@ -59,6 +62,8 @@ export function applyMetroInterchange(layout) {
   for(const x of [-59,59])for(const [z0,z1]of [[-18,-10],[10,18]])B1.features.push({type:'gates',x,z0,z1,pitch:1.3,name:'进出站闸机'});
   for(const z of [-20,20])B1.features.push({type:'fence',x0:-59,x1:59,z});
   B1.navWalls=[];
+  // The 14 concourse columns keep their collision after the rebuild (render draws the same records).
+  B1.navObstacles=concourseColumns(B1.id);
   for(const x of [-59,59])for(const [a,c]of [[-20,-18],[-10,10],[18,20]])B1.navWalls.push({x0:x,z0:a,x1:x,z1:c,metroFence:true});
   B1.features.push({type:'tvm',x:-48,z:-24.5,n:6,face:'S'},{type:'tvm',x:48,z:24.5,n:6,face:'N'});
   // Cross-shaped intermediate concourse is wholly within the paid area.
@@ -105,4 +110,5 @@ export function applyMetroInterchange(layout) {
   layout.levels.splice(layout.levels.findIndex(l=>l.building==='M'),2,...levels);
   for(const [key,values]of [['escalators',escalators],['stairs',stairs],['elevators',elevators]])layout[key]=layout[key].filter(x=>x.building!=='M').concat(values);
   addMetroAccess(layout,b,B1);
+  for(const ex of b.exits)if(ex.approach&&!ex.kiosk.pylon)ex.kiosk.pylon=approachPylon(ex.kiosk,ex.approach);
 }

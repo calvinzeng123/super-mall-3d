@@ -2,6 +2,7 @@
 // 外壳只写 shell/facade；室内只写本层 batch，允许楼层流式释放后重建。
 import * as THREE from 'three';
 import { frame, toW, toL, pointInPoly, distToPolyEdge, polyBounds, subtractInterval } from '../../layout/geom.js';
+import { usesExpansionFacade, facadeDoorGaps } from '../../layout/p1-expansion.js';
 import { outlineEdges, edgeSpans, clearHeight } from './shell.js';
 import { addCutSurfaceSlab } from './surface-shapes.js';
 import { bench, roundTable } from './props.js';
@@ -28,8 +29,7 @@ const paletteOf = lv => {
   return variant ? { ...base, ...variant } : base;
 };
 const isExpanded = lv => !!lv.expansion && lv.elev >= 0;
-export const usesExpansionFacade = lv => isExpanded(lv) && lv.kind !== 'roof' &&
-  (zoneOf(lv) !== 'main' || (lv.expansion.storey || parseInt(lv.short, 10)) >= 3);
+export { usesExpansionFacade };
 const facadePolys = lv => lv.expansion?.facadePolys || [lv.expansion?.facadePoly || lv.outline];
 const terracePieces = lv => {
   if (lv.expansion?.terrace?.pieces) return lv.expansion.terrace.pieces;
@@ -48,14 +48,15 @@ const segmentDistance = (p, s) => {
   return Math.hypot(p[0] - s.x0 - dx * t, p[1] - s.z0 - dz * t);
 };
 
+// Doorway intervals of one edge, clipped against each door's thin band (shared
+// with the layout's envelope nav walls), so doors running into a rounded
+// corner or across a faceted edge open every facet they actually cross.
+const doorGaps = (e, doors) => facadeDoorGaps(toW(e.F, 0, 0), toW(e.F, e.len, 0), doors);
+
 /** Portal intervals are cut from every low facade piece, including trims and fins. */
 export function expansionFacadeEdges(lv, entrances = []) {
-  return facadePolys(lv).flatMap(poly => outlineEdges(poly).map(e => ({ ...e,
-    gaps: entrances.filter(en => en.level === lv.id).flatMap(en => {
-      const a = toL(e.F, en.seg.x0, en.seg.z0), b = toL(e.F, en.seg.x1, en.seg.z1);
-      return Math.abs(a[1]) <= .18 && Math.abs(b[1]) <= .18 ? [[Math.min(a[0], b[0]) - .04, Math.max(a[0], b[0]) + .04]] : [];
-    }),
-  })));
+  const doors = entrances.filter(en => en.level === lv.id);
+  return facadePolys(lv).flatMap(poly => outlineEdges(poly).map(e => ({ ...e, gaps: doorGaps(e, doors) })));
 }
 
 function facade(ctx, lv) {
@@ -123,19 +124,65 @@ function canopies(ctx, lv) {
   }
 }
 
-/** Railing edges exist only at a physical drop, never along an interior terrace join. */
-export function expansionTerraceEdges(lv, entrances = []) {
+const RAIL_STEP = .25;
+/** Behind a wall rather than over open air: inside the envelope, a room (cores, stairs) or a walled shaft. */
+export const terraceEnclosed = (lv, p) => (lv.kind !== 'roof' && facadePolys(lv).some(q => pointInPoly(p, q)))
+  || (lv.rooms || []).some(r => (r.polys || []).some(q => pointInPoly(p, q)))
+  || (lv.voids || []).some(v => ['stair', 'shaft'].includes(v.kind) && pointInPoly(p, v.poly));
+/** Sample-wise drop spans of edge e: inside on this slab, outside neither slab, support nor enclosed. */
+function dropSpans(lv, e, held) {
+  const spans = [], enclosed = p => terraceEnclosed(lv, p);
+  for (let u = 0; u < e.len - 1e-6; u += RAIL_STEP) {
+    const b = Math.min(e.len, u + RAIL_STEP), m = (u + b) / 2, o = toW(e.F, m, .18);
+    if (!onSlab(lv, toW(e.F, m, -.18)) || onSlab(lv, o) || held(o) || enclosed(o)) continue;
+    if (spans.length && Math.abs(spans[spans.length - 1][1] - u) < 1e-6) spans[spans.length - 1][1] = b;
+    else spans.push([u, b]);
+  }
+  return spans;
+}
+
+/** Railing edges exist only at a physical drop, never along an interior terrace join.
+ * supports: outer polygons that carry people beyond this slab at the same height (an
+ * adjoining building's slab, nav-only glass prows). Their stretches are subtracted per
+ * 0.25 m interval, so a prow mouth opens while the deck edge either side keeps its rail.
+ * Edges of the river terrace are audited sample by sample (a long facade-line edge can
+ * be mostly an interior join and still drop into the open gap between two buildings). */
+export function expansionTerraceEdges(lv, entrances = [], supports = []) {
   const found = [], seen = new Set();
+  const held = p => supports.some(s => pointInPoly(p, s));
+  const sampled = new Set((lv.riverTerrace?.pieces || []).map(p => p.outer));
   for (const poly of terracePolys(lv)) for (const e of outlineEdges(poly)) {
     const inside = toW(e.F, e.len / 2, -.18), outside = toW(e.F, e.len / 2, .18);
-    if (!onSlab(lv, inside) || onSlab(lv, outside)) continue;
+    let spans;
+    if (sampled.has(poly)) {
+      spans = dropSpans(lv, e, held);
+      if (!spans.length) continue;
+    } else {
+      if (!onSlab(lv, inside) || onSlab(lv, outside)) continue;
+      spans = [[0, e.len]];
+      if (supports.length) for (let u = 0; u < e.len - 1e-6; u += RAIL_STEP) {
+        const b = Math.min(e.len, u + RAIL_STEP);
+        if (held(toW(e.F, (u + b) / 2, .18))) spans = subtractInterval(spans, [u, b]);
+      }
+    }
     const key = [e.mid[0].toFixed(2), e.mid[1].toFixed(2), e.len.toFixed(2)].join('/');
     if (seen.has(key)) continue;
     seen.add(key);
-    const spans = edgeSpans(e, entrances.filter(en => en.level === lv.id), 0);
-    found.push({ ...e, spans });
+    spans = doorGaps(e, entrances.filter(en => en.level === lv.id)).reduce((s, gap) => subtractInterval(s, gap), spans);
+    found.push(sampled.has(poly) ? { ...e, spans, riverTerrace: true } : { ...e, spans });
   }
   return found;
+}
+
+/** Same-height surfaces that continue a terrace: on the river-terrace level, the slabs it adjoins and
+ * its glass prows; on an adjoining level (P1C-3F), the river terrace and prows beyond its slab edge. */
+export function terraceSupports(layout, lv) {
+  const hosts = (layout.levels || []).filter(l => l.riverTerrace?.adjoins?.includes(lv.id));
+  if (!lv.riverTerrace && !lv.navSurfaces?.length && !hosts.length) return [];
+  const adj = new Set(lv.riverTerrace?.adjoins || []);
+  return [...(lv.navSurfaces || []).map(s => s.outer),
+    ...layout.levels.filter(l => adj.has(l.id)).flatMap(l => l.slab.pieces.map(p => p.outer)),
+    ...hosts.flatMap(h => [...h.riverTerrace.pieces.map(p => p.outer), ...(h.navSurfaces || []).map(s => s.outer)])];
 }
 
 /** Only wide, supported terrace pockets receive furniture; door approaches stay clear. */
@@ -183,7 +230,7 @@ function terraces(ctx, lv) {
     const holes = (piece.holes || []).concat((lv.voids || []).map(v => v.poly), lv.slab.pieces.flatMap(s => s.holes || []), lv.kind === 'roof' ? [] : facadePolys(lv));
     addCutSurfaceSlab(B, lv.finishes ? 'p1TerracePaving' : 'facadeStone', piece.outer, holes, y + .012, .018, lv.finishes ? '#ffffff' : '#d6d0bf');
   }
-  for (const e of expansionTerraceEdges(lv, ctx.layout.entrances)) B.frame(e.F, () => {
+  for (const e of expansionTerraceEdges(lv, ctx.layout.entrances, terraceSupports(ctx.layout, lv))) B.frame(e.F, () => {
     for (const [a, b] of e.spans) {
       if (b - a < .1) continue;
       B.get('glass').box((a + b) / 2, y + .67, -.12, b - a, 1.04, .035, '#ffffff');

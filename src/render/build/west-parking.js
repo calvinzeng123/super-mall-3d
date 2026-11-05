@@ -3,6 +3,7 @@ import { BatchSet } from '../batch.js';
 import { addTrees, streetLamp } from './props.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { frame, toW } from '../../layout/geom.js';
+import { gantryPosts } from '../../layout/west-parking.js';
 
 /** District-scale wayfinding, planted row dividers and open gate gantries.
  * Stalls and cars are drawn by the existing sharedSurfaceParking renderer. */
@@ -18,7 +19,8 @@ export function buildWestParkingDetails(ctx) {
     const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),ctx.mats.sign(canvasTexture(c,{clamp:true})));
     mesh.position.set(x,y,z);mesh.rotation.y=ry;group.add(mesh);
   };
-  for(const island of plan.islands) {
+  // Islands with a kind are other ground solids (the 云澜·西苑 fence, booth, posts), drawn by community-site.js.
+  for(const island of plan.islands.filter(i=>!i.kind)) {
     const r=island.rect,x=island.x,z=island.z;
     B.get('stone').box(x,.13,z,r.x1-r.x0,.26,r.z1-r.z0,'#c9c9b6');
     B.get('ext').box(x,.29,z,r.x1-r.x0-.18,.12,r.z1-r.z0-.18,'#65775d');
@@ -27,11 +29,18 @@ export function buildWestParkingDetails(ctx) {
     if(trees.length%3===0)streetLamp(B,x+1.8,z,.3,[0,-1],5.5);
   }
   for(const gate of plan.gates) {
+    const G=gate.community&&ctx.layout.site.westGarden?.gate;
+    if(G) {
+      // 云澜·西苑 北门：community-site.js draws the 门楼; only its fascia sign (in place of the P sign) is here.
+      const x=(G.pillars[0].x0+G.pillars[1].x1)/2;
+      sign(x,4.65,G.z-.27,'云澜·西苑 · 北门','YUNLAN WEST GARDEN  ·  云澜物业  ·  访客请登记',8.4,1.2,Math.PI);
+      continue;
+    }
     // Columns and kiosks stay outside the seven-metre carriageway. No closed boom blocks exploration.
     // u points from the gantry to the public street; the original gates face 西外环 (+x).
     const [fx,fz]=gate.facing||[1,0],F=frame(gate.x,gate.z,Math.atan2(fz,fx)*180/Math.PI);
     B.frame(F,()=>{
-      for(const dz of [-gate.width/2-.75,gate.width/2+.75]) {
+      for(const dz of gantryPosts(gate)) {
         B.get('extMetal').box(0,2.5,dz,.25,5,.25,'#49645a');
         B.get('glowSoft').box(.14,1.2,dz,.04,.8,.13,'#9bddb8');
       }
@@ -44,8 +53,17 @@ export function buildWestParkingDetails(ctx) {
     const [sx,sz]=toW(F,.17,0);
     sign(sx,4.1,sz,`西侧停车 · ${gate.name}`,'IN  ←     P     →  OUT',7.8,1.3,Math.atan2(fx,fz));
   }
-  sign(-438,4.8,-248,'云澜汇 · 西侧公共停车',`${plan.stallCount} SPACES  ·  EV ${plan.evCount}  ·  B1 / B2`,15,2.7);
-  for(const x of [-444,-432])B.get('extMetal').box(x,2.3,-248,.2,4.6,.2,'#49645a');
-  for(const z of [-205,-179,-35])sign(-426.9,2.7,z,'步行通道 → 一期 / 酒店','MALL · HOTEL · UNDERGROUND PARKING',5,.9,Math.PI/2);
+  // With 云澜·西苑 on the north strip the district sign stands at the public east lots.
+  const ns=plan.northStrip,signX=ns?-330:-438;
+  sign(signX,4.8,-248,'云澜汇 · 西侧公共停车',`${plan.stallCount} SPACES  ·  EV ${plan.evCount}  ·  B1 / B2`,15,2.7);
+  for(const x of [signX-6,signX+6])B.get('extMetal').box(x,2.3,-248,.2,4.6,.2,'#49645a');
+  for(const z of [ns?ns.z1+2.6:-205,-179,-35])sign(-426.9,2.7,z,'步行通道 → 一期 / 酒店','MALL · HOTEL · UNDERGROUND PARKING',5,.9,Math.PI/2);
+  const gw=plan.gateWalk;
+  if(gw) {
+    // 西门步行轴：南侧路灯，脊口和斑马线口各一块指示牌。
+    for(const l of gw.lamps)streetLamp(B,l.x,l.z,0,[0,-1],5.5);
+    sign(-426.9,2.7,gw.points[0][2],'西门 · 一期商场 →','WEST GATE · P1 MALL · 130 m',5,.9,Math.PI/2);
+    for(const z of [gw.rect.z0+.12,gw.rect.z1-.12])B.get('extSatin').box((gw.rect.x0+gw.rect.x1)/2,.012,z,gw.rect.x1-gw.rect.x0-1,.012,.08,'#9c8662');
+  }
   B.flush(group);addTrees(group,ctx.mats,trees,913);ctx.site.group.add(group);
 }

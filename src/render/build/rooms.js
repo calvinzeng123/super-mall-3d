@@ -39,6 +39,7 @@ export function buildRooms(ctx) {
     const street = ctx.bById[lv.building].kind === 'street' && lv.kind !== 'parking';
     for (const r of lv.rooms) {
       if (r.openStair) continue; // 连续消防梯/外挂梯由专用渲染器按导航同源坐标绘制。
+      if (r.residentialCore) continue; // 住户核心筒由 residential-cores.js 绘制（穿越层的楼梯没有门）。
       if (street && (r.type === 'core' || r.type === 'stair')) continue;
       B.frame(r.frame, () => L.signs.frame(r.frame, () => {
         if (r.type === 'core') coreShafts(B, lv, r, y0, hh, lifts.filter((e) => e.frame.id === r.frame.id));

@@ -23,9 +23,10 @@ function move(s,p,audit=()=>{}) {
   assert.equal(s.floor,p.floor);assert.ok(Math.abs(s.y-p.y)<1e-6);return s;
 }
 
-test('主楼和八个附楼43座消防梯271条层间线路双向连续可走，含地下、挑高层和屋顶',()=>{
+// 北苑 T1/T2 底板压住方庭西核心与服务核心：ST-W、ST-SV 止于 6F，少两条 6F→RF 线路。
+test('主楼和八个附楼43座消防梯269条层间线路双向连续可走，含地下、挑高层和屋顶',()=>{
   assert.equal(L.stairs.filter(s=>malls.some(b=>b.id===s.building)).length,43);
-  assert.equal(malls.reduce((n,b)=>n+protectedRoutes(b).length,0),271);
+  assert.equal(malls.reduce((n,b)=>n+protectedRoutes(b).length,0),269);
   for(const b of malls)for(const route of protectedRoutes(b))for(const reversed of [false,true]) {
     const path=reversed?[...route.waypoints].reverse():route.waypoints;
     let s={...path[0],slope:null},flightSteps=0;

@@ -9,6 +9,7 @@ import { addTrees, streetLamp, bench, planter, ipMascot, zebra, bollard } from '
 import { COLORS } from '../theme.js';
 import { rng, labelTexture, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { buildUrbanDistrict } from './urban.js';
+import { buildRiver } from './river.js';
 import { buildContextBuildings } from './context-buildings.js';
 import { buildForecourt } from './forecourt.js';
 import { buildWestParkingDetails } from './west-parking.js';
@@ -90,7 +91,7 @@ export function siteGroundHoles(layout) {
   const S = layout.site;
   const outlines = layout.buildings.filter(b => b.kind !== 'metro' && !b.undergroundOnly).map(b => b.outline);
   // cutSurfaceShapes unions intersecting and duplicate cuts before triangulation.
-  return [...outlines, ...S.trenches, ...(S.openings || [])];
+  return [...outlines, ...S.trenches, ...(S.openings || []), ...(S.river ? [S.river.channel] : [])];
 }
 
 export function buildSite(ctx) {
@@ -124,6 +125,7 @@ export function buildSite(ctx) {
 
   roads(ctx, S, B, G);
   buildUrbanDistrict(ctx);
+  buildRiver(ctx);
   entrances(ctx);
   garageGates(ctx, S, B);
   plazaFeatures(ctx, B);
@@ -251,17 +253,28 @@ function roads(ctx, S, B, G) {
   const y = yR + 0.012;
   const white = '#ecebe6', yellow = '#e7b416';
   const inX = (x) => Math.abs(x) < 17 || Math.abs(x) > 284;
+  // 星湾广场站：港湾切开人行道和路缘石，信号灯横道在中央隔离带留出安全岛。
+  const busBays = (S.busStops || []).filter(s => s.kind === 'bay');
+  const busCrossings = S.crossings.filter(c => c.busStop);
+  const nearBusCrossing = (a, b) => busCrossings.some(c => b > c.rect.x0 - 2 && a < c.rect.x1 + 2);
   // 云澜大道：中央绿化隔离带 + 每向 3 车道
   const av = R.avenue;
-  for (const seg of [[av.x0, -17], [17, av.x1]]) {
+  const medianSegs = [[av.x0, -17], [17, av.x1]].flatMap(([a, b]) => {
+    const out = [];
+    for (const c of busCrossings.filter(c => c.rect.x0 > a && c.rect.x1 < b).sort((p, q) => p.rect.x0 - q.rect.x0)) {
+      out.push([a, c.rect.x0 + .5]); a = c.rect.x1 - .5;
+    }
+    return [...out, [a, b]];
+  });
+  for (const seg of medianSegs) {
     const len = seg[1] - seg[0], cx = (seg[0] + seg[1]) / 2;
     B.get('ext').box(cx, -0.02, 0, len - 2, 0.2, 4, COLORS.stoneDark);
     B.get('foliage').box(cx, 0.12, 0, len - 2.4, 0.24, 3.4, '#5e8f45');
   }
   for (const z of [-10, -6, 6, 10]) {
-    for (let x = av.x0 + 2; x < av.x1 - 4; x += 9) if (!inX(x) && !inX(x + 3)) B.get('ext').box(x + 1.5, y, z, 3, 0.02, 0.14, white);
+    for (let x = av.x0 + 2; x < av.x1 - 4; x += 9) if (!inX(x) && !inX(x + 3) && !nearBusCrossing(x, x + 3)) B.get('ext').box(x + 1.5, y, z, 3, 0.02, 0.14, white);
   }
-  for (const z of [-2.2, 2.2]) for (const seg of [[av.x0, -17], [17, av.x1]]) B.get('ext').box((seg[0] + seg[1]) / 2, y, z, seg[1] - seg[0] - 2, 0.02, 0.12, yellow);
+  for (const z of [-2.2, 2.2]) for (const seg of medianSegs) B.get('ext').box((seg[0] + seg[1]) / 2, y, z, seg[1] - seg[0] - 2, 0.02, 0.12, yellow);
   // 星湾路：双黄线 + 车道虚线
   for (const seg of [[-298, -20], [20, 298]]) {
     const cz = (seg[0] + seg[1]) / 2, len = seg[1] - seg[0];
@@ -280,6 +293,7 @@ function roads(ctx, S, B, G) {
   { const r = R['service-n']; B.get('ext').box((r.x0 + r.x1) / 2 + 4, y, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 12, 0.02, 0.12, yellow); }
   // 斑马线与停止线
   for (const c of S.crossings) {
+    if (c.busStop) continue; // zebra, stop lines and signals come with the bus station
     const r = c.rect;
     const paintY=(ctx.layout.extensions?.roads||[]).some(road=>road.polys.some(p=>convexOverlap(c.poly,p)))?.065:y;
     if(c.id.startsWith('west-cross-')){
@@ -292,12 +306,14 @@ function roads(ctx, S, B, G) {
   for (const z of [-21, 21]) B.get('ext').box(z < 0 ? -5 : 5, y, z, 10, 0.02, 0.3, white);
   // 人行道 + 路缘石
   const walk = ctx.mats.floor('paving', 0.8);
+  const pavingCuts = [...openings, ...busBays.map(s => s.bay)];
+  const curbCuts = [...openings, ...busBays.flatMap(s => [s.curbCut, ...s.curbGaps]), ...busCrossings.flatMap(c => c.curbGaps || [])];
   for (const s of S.sidewalks) {
-    flatRect(G, walk, s.rect, -0.135, 4.8, openings);
+    flatRect(G, walk, s.rect, -0.135, 4.8, pavingCuts);
     const r = s.rect;
     const horiz = r.x1 - r.x0 > r.z1 - r.z0;
-    if (horiz) for (const z of [r.z0, r.z1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(r.x0, z - .15, r.x1, z + .15)), openings, .02, .16, '#c9c5bc');
-    else for (const x of [r.x0, r.x1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(x - .15, r.z0, x + .15, r.z1)), openings, .02, .16, '#c9c5bc');
+    if (horiz) for (const z of [r.z0, r.z1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(r.x0, z - .15, r.x1, z + .15)), curbCuts, .02, .16, '#c9c5bc');
+    else for (const x of [r.x0, r.x1]) addCutSurfaceSlab(B, 'ext', rectPoly(rect(x - .15, r.z0, x + .15, r.z1)), curbCuts, .02, .16, '#c9c5bc');
   }
 }
 
@@ -316,22 +332,34 @@ function entrances(ctx) {
     const F = frame(mx, mz, Math.atan2(e.nz, e.nx) * DEG);
     const cw = width + (main ? 8 : 4);
     const y0 = L.lv.elev;
+    // A residents' street door on the same façade line keeps its own canopy: this one stops 1.4 m short of it.
+    let [v0, v1] = [-cw / 2, cw / 2];
+    for (const o of ctx.layout.entrances) {
+      if (o === e || !o.residentialCore || o.level !== e.level) continue;
+      const ox = (o.seg.x0 + o.seg.x1) / 2 - mx, oz = (o.seg.z0 + o.seg.z1) / 2 - mz, off = ox * e.nx + oz * e.nz, v = -ox * e.nz + oz * e.nx;
+      if (Math.abs(off) > .3 || Math.abs(v) > cw / 2 + 6) continue;
+      const keep = (o.width + 1.2) / 2 + 1.4;
+      if (v > 0) v1 = Math.min(v1, v - keep); else v0 = Math.max(v0, v + keep);
+    }
+    const vc = (v0 + v1) / 2, vw = v1 - v0;
     if (!custom) FB.frame(F, () => {
-      FB.get('glass').box(depth / 2, y0 + hY, 0, depth, 0.06, cw, 0xffffff);
-      FB.get('extMetal').box(depth / 2, y0 + hY + 0.18, 0, depth + 0.1, 0.28, cw + 0.2, COLORS.white);
-      FB.get('glow').box(depth, y0 + hY + 0.05, 0, 0.08, 0.05, cw, COLORS.led);
-      for (const k of [-1, 1]) FB.get('extMetal').cyl(depth - 0.4, y0, k * (cw / 2 - 0.6), 0.16, hY, COLORS.steel, 12);
-      const n = Math.max(2, Math.round(width / 2));
-      for (let i = 0; i < n; i++) {
-        const a = -width / 2 + (i + 0.5) * (width / n);
-        if (main && Math.abs(a) < 2.2) continue;
-        if (i % 3 !== 1) FB.get('glass').box(0, y0 + 2.0, a, 0.05, 3.9, width / n - 0.1, 0xffffff);
-        FB.get('extMetal').box(0, y0 + 2.0, a - width / n / 2, 0.08, 4.0, 0.08, COLORS.glassFrame);
+      FB.get('glass').box(depth / 2, y0 + hY, vc, depth, 0.06, vw, 0xffffff);
+      FB.get('extMetal').box(depth / 2, y0 + hY + 0.18, vc, depth + 0.1, 0.28, vw + 0.2, COLORS.white);
+      FB.get('glow').box(depth, y0 + hY + 0.05, vc, 0.08, 0.05, vw, COLORS.led);
+      for (const v of [v0 + 0.6, v1 - (v1 < cw / 2 ? 0.8 : 0.6)]) FB.get('extMetal').cyl(depth - 0.4, y0, v, 0.16, hY, COLORS.steel, 12);
+      // The doors stand open (nav walks straight through): sliding leaves are
+      // parked behind the jambs, so only the frame, jamb posts and a glazed
+      // transom above head height are drawn inside the door line.
+      // The transom glazing runs up to the façade's entrance band (+4.55).
+      FB.get('extMetal').box(0, y0 + 3.2, 0, 0.12, 0.1, width, COLORS.glassFrame);
+      FB.get('glass').box(0, y0 + 3.9, 0, 0.05, 1.3, width - 0.1, 0xffffff);
+      for (const k of [-1, 1]) {
+        FB.get('extMetal').box(0, y0 + 2.3, k * width / 2, 0.1, 4.6, 0.1, COLORS.glassFrame);
+        FB.get('glass').box(-0.14, y0 + 1.6, k * (width / 2 + 0.55), 0.04, 3.1, 1.0, 0xffffff);
       }
       if (main) {
-        FB.get('glass').cyl(0, y0 + 0.02, 0, 2.0, 3.0, 0xffffff, 24);
+        // Revolving-door crown only; the drum is parked open beneath it.
         FB.get('extMetal').cyl(0, y0 + 3.0, 0, 2.1, 0.35, COLORS.steel, 24);
-        for (let k = 0; k < 4; k++) FB.get('glass').box(0, y0 + 1.5, 0, 3.9, 2.9, 0.04, 0xffffff, (k / 4) * Math.PI + 0.3);
         ctx.site.batch.frame(F, () => ctx.site.batch.get('extSatin').box(2.6, -0.07, 0, 5, 0.14, width + 6, COLORS.stone));
       }
     });
@@ -398,7 +426,7 @@ function garageGates(ctx, S, B) {
   }
 }
 
-/** 一期广场：喷泉、IP 雕塑、立牌、卸货区货车、公交站；二期星湾广场：椭圆铺装、旱喷、座椅 */
+/** 一期广场：喷泉、IP 雕塑、立牌、卸货区货车；二期星湾广场：椭圆铺装、旱喷、座椅 */
 function plazaFeatures(ctx, B) {
   const y = -0.14;
   if (ctx.bById.P2) starBayPlaza(ctx, B);
@@ -451,13 +479,7 @@ function plazaFeatures(ctx, B) {
       for (const [du, dv] of [[-3, -1.2], [-3, 1.2], [1.5, -1.2], [1.5, 1.2], [4.8, -1.2], [4.8, 1.2]]) B.get('ext').box(tu + du, y + 0.45, tv + dv, 0.9, 0.9, 0.4, '#1d2023');
     });
   }
-  // 公交站：云澜大道北侧人行道
-  const bs = { x: -70, z: -17 };
-  B.get('extMetal').box(bs.x, y + 1.5, bs.z - 0.9, 8, 3, 0.08, '#4b5563');
-  B.get('glass').box(bs.x, y + 1.4, bs.z - 0.85, 7.8, 2.4, 0.04, '#ffffff');
-  B.get('extMetal').box(bs.x, y + 3.05, bs.z, 8.4, 0.12, 2.4, '#2f3439');
-  B.get('glow').box(bs.x + 3.2, y + 1.6, bs.z - 0.95, 1.2, 1.8, 0.05, '#cfe8ff');
-  bench(B, bs.x - 1.5, y, bs.z - 0.2, 0);
+  // 云澜大道北侧人行道的公交候车亭随 site.busStops 由 bus-stops.js 绘制（带碰撞）。
 }
 
 /** 二期星湾广场：三翼围合的椭圆铺装、旱喷水景、环形座椅与树池 */

@@ -21,7 +21,9 @@ test('每个入口都能穿过，并切换到正确楼面', () => {
     const mx = (e.seg.x0 + e.seg.x1) / 2, mz = (e.seg.z0 + e.seg.z1) / 2;
     const s0 = at(e.level, mx - e.nx * 1.5, mz - e.nz * 1.5);
     assert.ok(clear(nav, s0), `${e.id} 内侧起点不可站立`);
-    const s1 = walk(s0, e.nx * 3, e.nz * 3);
+    let s1 = walk(s0, e.nx * 3, e.nz * 3);
+    // A sloped threshold (the P2-MT ramp plate) is walked to its end before the floor is checked.
+    if (s1.slope) s1 = walk(s1, e.nx * 3, e.nz * 3);
     // Architectural openings can sit just inside a second physical portal
     // (the inset glass line and outer bridge dock). Assert the full walk is
     // clear here; real cross-building portals still assert the exact floor.
@@ -36,6 +38,7 @@ test('每个铺位都能从门口走进去（冰场除外）', () => {
     for (const u of lv.units) {
       const style = storeStyle(lv, u);
       if (style === 'rink') continue;
+      if (u.residence?.level === 'upper') continue;   // 复式上层经套内楼梯进出，没有门面（north-residences 测试走楼梯）
       const ok = u.fronts.some((f, i) => {
         const w = u.wfronts[i];
         const len = Math.hypot(w.x1 - w.x0, w.z1 - w.z0);

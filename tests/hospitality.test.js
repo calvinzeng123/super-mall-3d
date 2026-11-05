@@ -6,12 +6,14 @@ import { convexOverlap, rect, rectPoly, polyBounds, polySamples, pointInPoly } f
 import { buildWalkGraph, components } from '../src/layout/walk.js';
 
 const towers = L.buildings.filter(b => b.kind === 'tower');
+// 云澜社区住宅（西苑 / 北苑）由各自测试覆盖；这里只核验酒店、公寓与四栋住宅。
+const legacyTowers = towers.filter(b => !b.community);
 const floors = bid => L.levels.filter(l => l.building === bid);
 const within = (outer, inner, eps = 1e-6) => inner.x0 >= outer.x0 - eps && inner.x1 <= outer.x1 + eps && inner.z0 >= outer.z0 - eps && inner.z1 <= outer.z1 + eps;
 
 test('酒店公寓各20层且首层为大堂、上层10套，四栋30层住宅2至30层各01/02/03三户', () => {
-  assert.deepEqual(towers.map(b => b.id), ['H', 'A', 'R1', 'R2', 'R3', 'R4']);
-  for (const b of towers) {
+  assert.deepEqual(legacyTowers.map(b => b.id), ['H', 'A', 'R1', 'R2', 'R3', 'R4']);
+  for (const b of legacyTowers) {
     const live = floors(b.id).filter(l => l.levelNumber);
     const n = b.usage === 'residential' ? 30 : 20;
     assert.equal(live.length, n, `${b.id} 层数`);
@@ -33,11 +35,11 @@ test('酒店公寓各20层且首层为大堂、上层10套，四栋30层住宅2�
     for (const old of L.buildings.filter(q => q.kind === 'mall' || q.kind === 'street'))
       for (const p of polySamples(b.outline,.75,.03)) assert.ok(!pointInPoly(p,old.outline), `${b.id} 不应改占原商场`);
   }
-  assert.equal(towers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 728);
+  assert.equal(legacyTowers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 728);
 });
 
 test('每套有床和独卫，套内隔间、门洞与床均在实际房间范围内', () => {
-  for (const b of towers) for (const lv of floors(b.id)) for (const u of lv.units) {
+  for (const b of legacyTowers) for (const lv of floors(b.id)) for (const u of lv.units) {
     const home = u.residence, outer = u.rects[0];
     assert.equal(u.style, 'residence');
     assert.ok(home.beds.length >= 1 && home.bathrooms.length >= 1, u.id);
@@ -121,7 +123,7 @@ test('住宅独立双坡道连接住客停车层，酒店公寓地库通过既�
     assert.equal(low.level, 'R1-B1');
     assert.ok(inWalk(L.levels.find(l => l.id === low.level), [low.x, low.z]));
   }
-  for (const b of towers) {
+  for (const b of legacyTowers) {
     const park = floors(b.id).find(l => l.kind === 'parking');
     assert.ok(park && park.parking.stalls.length >= 6, `${b.id} 缺真实停车位`);
   }
@@ -149,7 +151,7 @@ test('地下车行连廊和空桥整条中心线可实际步行，转角平台�
 });
 
 test('12部塔楼电梯逐层贯通井道，轿厢尺度在楼板洞内有余量', () => {
-  const lifts = L.elevators.filter(e => e.tower);
+  const lifts = L.elevators.filter(e => e.tower && !L.buildings.find(b => b.id === e.building)?.community);
   assert.equal(lifts.length, 12);
   for (const e of lifts) {
     for (const id of e.serves) {

@@ -9,6 +9,8 @@ import {
 import { lift } from './mall.js';
 import { fillRows, markSpecial } from './parking.js';
 import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
+import { subtractRect } from './urban.js';
+import { TUNNEL_LINTEL } from './hospitality.js';
 
 export const SHARED_GARAGE_BOUNDS = Object.freeze({
   mall: { x0: -286, z0: -256, x1: -14, z1: -28 },
@@ -54,9 +56,9 @@ function entrance(layout, lv, to, id, seg, nx, nz, options = {}) {
   return e;
 }
 
-function pairedPortal(layout, from, to, id, seg, nx, nz, name) {
-  const a = entrance(layout, from, to.id, `${id}-from`, seg, nx, nz, { name });
-  entrance(layout, to, from.id, `${id}-to`, seg, -nx, -nz, { name });
+function pairedPortal(layout, from, to, id, seg, nx, nz, name, options = {}) {
+  const a = entrance(layout, from, to.id, `${id}-from`, seg, nx, nz, { name, ...options });
+  entrance(layout, to, from.id, `${id}-to`, seg, -nx, -nz, { name, ...options });
   layout.extensions.connections.push({ id, from: from.id, to: to.id, kind: 'garage', name });
   return a;
 }
@@ -119,6 +121,35 @@ function expandDeck(lv, bounds, exclusions = []) {
   }
   // Old connector pads become part of the continuous poured deck.
   lv.slab.pieces = [primary, ...lv.slab.pieces.slice(1).filter(p => p.thickness != null)];
+}
+
+/** Legacy tunnels that began at an old garage wall now start inside the
+ * poured deck. Inside the deck they are open floor (their walk rectangles stay
+ * as aisles), so their walls and ceiling go, and a tunnel that still leaves
+ * the deck starts at the new retaining wall, where its mouth is cut. */
+function openLegacyTunnels(layout, lv) {
+  const b = lv.sharedGarage.bounds, eps = 1e-6;
+  const within = r => r.x0 >= b.x0 - eps && r.x1 <= b.x1 + eps && r.z0 >= b.z0 - eps && r.z1 <= b.z1 + eps;
+  const inside = p => p[0] > b.x0 + eps && p[0] < b.x1 - eps && p[2] > b.z0 + eps && p[2] < b.z1 - eps;
+  // Axis-aligned segment from p (inside) to q (outside): its exit point.
+  const exit = (p, q) => Math.abs(q[0] - p[0]) > Math.abs(q[2] - p[2])
+    ? [q[0] > p[0] ? b.x1 : b.x0, p[1], p[2]] : [p[0], p[1], q[2] > p[2] ? b.z1 : b.z0];
+  const trimStart = pts => {
+    while (pts.length > 2 && inside(pts[0]) && inside(pts[1])) pts = pts.slice(1);
+    return inside(pts[0]) ? [exit(pts[0], pts[1]), ...pts.slice(1)] : pts;
+  };
+  layout.extensions.paths = layout.extensions.paths.filter(path => {
+    if (path.level !== lv.id || path.sharedGarage || path.expansion || !['underground', 'garage'].includes(path.kind)) return true;
+    const rects = path.polys.map(polyBounds);
+    if (rects.every(within)) return false;
+    const overlaps = r => Math.min(r.x1, b.x1) - Math.max(r.x0, b.x0) > eps && Math.min(r.z1, b.z1) - Math.max(r.z0, b.z0) > eps;
+    if (!rects.some(overlaps)) return true;
+    path.polys = rects.flatMap(r => subtractRect(r, b)).filter(r => r.x1 - r.x0 > .01 && r.z1 - r.z0 > .01).map(rectPoly);
+    path.slab = { pieces: path.polys.map(outer => ({ outer, holes: [] })) };
+    const head = trimStart([...path.points]);
+    path.points = trimStart(head.reverse()).reverse();
+    return true;
+  });
 }
 
 function denseParking(layout, lv) {
@@ -246,6 +277,84 @@ function addGarageStair(layout, bid, id, x, z, serves, surfaceId) {
   return s;
 }
 
+/** Nobody walks beneath a ramp slab on its low floor where the underside is
+ * under 2.1 m. Guard lines run along both sides from the foot to that point,
+ * with a cross wall there; the foot itself stays open for the slope. */
+function guardRampUndersides(layout) {
+  const SLAB = .4, CLEAR = 2.1;
+  for (const r of layout.ramps) {
+    const [lo, hi] = r.from.y <= r.to.y ? [r.from, r.to] : [r.to, r.from];
+    const lv = level(layout, lo.level);
+    if (!lv || hi.y - lo.y < .01) continue;
+    const len = Math.hypot(hi.x - lo.x, hi.z - lo.z);
+    const F = frame(lo.x, lo.z, Math.atan2(hi.z - lo.z, hi.x - lo.x) * 180 / Math.PI);
+    const end = Math.min(len - .2, len * (CLEAR + SLAB) / (hi.y - lo.y)), v = r.width / 2 + .15;
+    const seg = (u0, v0, u1, v1) => { const [x0, z0] = toW(F, u0, v0), [x1, z1] = toW(F, u1, v1); return { x0, z0, x1, z1 }; };
+    lv.navWalls ||= [];
+    lv.navWalls.push(seg(.2, -v, end, -v), seg(.2, v, end, v), seg(end, -v, end, v));
+  }
+}
+
+/** A paired street gate keeps its ticket post and booth on the outer side,
+ * never in the neighbouring lane's head, and its sign pole on whichever side
+ * is clear of that lane. A booth that would stand on a road is left out.
+ * Frames match the gate builder: origin at the street end, u pointing out. */
+function pairGateSides(layout) {
+  const street = layout.ramps.filter(r => r.type.startsWith('street'));
+  const roads = [...layout.site.roads.flatMap(r => r.poly ? [r.poly] : []), ...layout.extensions.roads.flatMap(r => r.polys)];
+  const gateFrame = r => {
+    const [s, o] = r.from.level === 'street' ? [r.from, r.to] : [r.to, r.from];
+    return frame(s.x, s.z, Math.atan2(s.z - o.z, s.x - o.x) * 180 / Math.PI);
+  };
+  for (const r of street) {
+    if (r.gate) continue;
+    const F = gateFrame(r), hw = r.width / 2;
+    const partner = street.filter(q => q !== r).map(q => {
+      const G = gateFrame(q);
+      return { q, G, d: Math.hypot(G.ox - F.ox, G.oz - F.oz), parallel: F.c * G.c + F.s * G.s, v: toL(F, G.ox, G.oz)[1] };
+    }).filter(p => p.d < 15 && p.parallel > .95).sort((a, b) => a.d - b.d)[0];
+    if (!partner) continue;
+    const head = lrectPoly(partner.G, rect(-2, -partner.q.width / 2, 8, partner.q.width / 2));
+    const box = (u, v, h) => lrectPoly(F, rect(u - h, v - h, u + h, v + h));
+    const hits = (poly, polys) => polys.some(p => convexOverlap(poly, p, .01));
+    const side = partner.v > 0 ? -1 : 1;
+    // Stable sort: the builder's default side (-1) wins a tie.
+    const sign = [-1, 1].map(s => {
+      const pole = box(7, s * (hw + 1.2), .12);
+      return { s, cost: (hits(pole, [head, partner.q.poly]) ? 2 : 0) + (hits(pole, roads) ? 1 : 0) };
+    }).sort((a, b) => a.cost - b.cost)[0].s;
+    r.gate = { side, sign, ...(hits(box(1.6, side * (hw + 2.4), 1.1), roads) ? { booth: false } : {}) };
+  }
+}
+
+/** 云澜·西苑 G2 link: each basement lobby meets its deck through a 3 m card-door
+ * portal, with an apron to the z −228 aisle. The strip left between a lobby and
+ * the deck's north wall is no aisle; the remaining aisles stay one network. */
+function westDeckPortals(layout, b, decks) {
+  const seg = b.deckPortal, n = b.id.replace(/\D/g, ''), exclusion = polyBounds(b.deckExclusions[0]);
+  for (const deck of decks) {
+    const short = deck.id.split('-').at(-1), lv = level(layout, `${b.id}-${short}`);
+    if (!lv) continue;
+    reserve(deck, `${b.id}-${short}-deck-arrival`, rect(seg.x0, seg.z0, seg.x1, -228));
+    pairedPortal(layout, lv, deck, `${b.id}-${short}-deck`, { x0: seg.x0, z0: seg.z0, x1: seg.x1, z1: seg.z1 }, 0, 1,
+      `西苑${n}号楼地下大堂 · 住户刷卡`, { residentialCore: b.id });
+    deck.walk = deck.walk.filter(w => !(w.rect && w.kind === 'aisle' && w.rect.z1 <= exclusion.z0 + 1e-6
+      && w.rect.x0 >= exclusion.x0 - .3 && w.rect.x1 <= exclusion.x1 + .3));
+    deck.parking.aisles = deck.walk.filter(w => w.kind === 'aisle');
+  }
+}
+
+/** The moved WPG L1 shaft stands in the middle of the north double aisle: the 1.35 m
+ * strips left either side of it carry no car, so they are not aisle walks. */
+function dropLiftSlivers(layout, id, decks) {
+  const s = polyBounds(layout.elevators.find(e => e.id === id).shaftPoly);
+  for (const deck of decks) {
+    deck.walk = deck.walk.filter(w => !(w.kind === 'aisle' && w.rect && Math.min(w.rect.x1 - w.rect.x0, w.rect.z1 - w.rect.z0) < 2
+      && w.rect.x0 >= s.x0 - .3 && w.rect.x1 <= s.x1 + .3 && w.rect.z1 > s.z0 - 2 && w.rect.z0 < s.z1 + 2));
+    deck.parking.aisles = deck.walk.filter(w => w.kind === 'aisle');
+  }
+}
+
 function groundReservations(layout) {
   const all = [...layout.site.trenches, ...layout.site.openings];
   for (const lot of layout.extensions.surfaceParking) {
@@ -315,8 +424,15 @@ export function applySharedGarages(layout) {
 
   expandDeck(P1, SHARED_GARAGE_BOUNDS.mall, [H2.outline, A2.outline]);
   expandDeck(P2, SHARED_GARAGE_BOUNDS.mall);
-  expandDeck(W1, SHARED_GARAGE_BOUNDS.west);
-  expandDeck(W2, SHARED_GARAGE_BOUNDS.west);
+  // 云澜·西苑 basement lobbies stand in the west decks (G2): each tower owns its lobby slab.
+  const westTowers = layout.buildings.filter(b => b.community === 'west');
+  const westExclusions = westTowers.flatMap(b => b.deckExclusions || []);
+  expandDeck(W1, SHARED_GARAGE_BOUNDS.west, westExclusions);
+  expandDeck(W2, SHARED_GARAGE_BOUNDS.west, westExclusions);
+  // The poured decks absorb the tunnel stubs and the B1 dock lobbies that
+  // now lie inside them: open floor, with no walls or ceilings left standing.
+  for (const lv of [P1, P2, W1, W2]) openLegacyTunnels(layout, lv);
+  for (const g of layout.extensions.gateways.filter(g => g.level === P1.id)) g.openDeck = true;
   const westBuilding = layout.buildings.find(b => b.id === 'WPG');
   westBuilding.outline = rectPoly(SHARED_GARAGE_BOUNDS.west);
   const wl = westBuilding.outline.map(p => toL(westBuilding.frame, ...p));
@@ -350,7 +466,8 @@ export function applySharedGarages(layout) {
     { architecturalOpening: true, name: '西侧共享车库隧道口' });
   reserve(W2, 'shared-west-tunnel-arrival', rect(-317, -185, -301, -173));
   reserve(P1, 'shared-mall-tunnel-arrival', rect(-286, -185, -270, -173));
-  pairedPortal(layout, W2, P1, 'shared-west-mall', { x0: -286, z0: -185, x1: -286, z1: -173 }, 1, 0, '西侧停车与一期共享地下车库');
+  pairedPortal(layout, W2, P1, 'shared-west-mall', { x0: -286, z0: -185, x1: -286, z1: -173 }, 1, 0, '西侧停车与一期共享地下车库',
+    { lintel: TUNNEL_LINTEL });
 
   // The hotel gate is south of the hotel; its former pair cut across the mall
   // frontage. Straight, parallel ramps have separate surface approaches.
@@ -385,18 +502,30 @@ export function applySharedGarages(layout) {
   // identities, not teleport buttons floating over an uncut ground plane.
   for (const [i, x, z] of [[1, -138, -228], [2, -190, -42], [3, -274, -133], [4, -38, -147]])
     addGarageLift(layout, 'P1', `P1-SHARED-L${i}`, x, z, ['P1-B2', 'P1-B1', 'P1-1F'], 'P1-1F');
-  for (const [i, x, z] of [[1, -439, -227], [2, -439, -109]])
+  // Under 云澜·西苑 the north kiosks give way: ST1 goes (W1's own stairs serve the NW
+  // band through its deck portal), L1 and ST2 move east of the community plot.
+  const west = westTowers.length > 0;
+  for (const [i, x, z] of [[1, ...(west ? [-359, -241] : [-439, -227])], [2, -439, -109]])
     addGarageLift(layout, 'WPG', `WPG-SHARED-L${i}`, x, z, ['WPG-B2', 'WPG-B1', 'WPG-G'], 'WPG-G');
   for (const [i, x, z] of [[1, -65, -245], [2, -276, -57], [3, -274, -146], [4, -38, -160]])
     addGarageStair(layout, 'P1', `P1-SHARED-ST${i}`, x, z, ['P1-B2', 'P1-B1', 'P1-1F'], 'P1-1F');
-  for (const [i, x, z] of [[1, -470, -228], [2, -391, -228], [3, -470, -155],
+  for (const [i, x, z] of [[1, -470, -228], [2, ...(west ? [-359, -226] : [-391, -228])], [3, -470, -155],
     [4, -458, -87], [5, -361, -41], [6, -318, -87], [7, -318, -228]])
-    addGarageStair(layout, 'WPG', `WPG-SHARED-ST${i}`, x, z, ['WPG-B2', 'WPG-B1', 'WPG-G'], 'WPG-G');
+    if (!(west && i === 1)) addGarageStair(layout, 'WPG', `WPG-SHARED-ST${i}`, x, z, ['WPG-B2', 'WPG-B1', 'WPG-G'], 'WPG-G');
   // Keep the extraction staging aisle and vehicle rectangle free of parked
   // cars/columns. The FPS layer owns the actual pickup car.
   reserve(level(layout, 'A-B1'), 'A-extraction-arrival', rect(-43, -225, -32, -214));
   for (const lv of [P1, P2, W1, W2]) denseParking(layout, lv);
+  for (const b of westTowers) westDeckPortals(layout, b, [W1, W2]);
+  if (west) dropLiftSlivers(layout, 'WPG-SHARED-L1', [W1, W2]);
   auditRampOpenings(layout);
+  guardRampUndersides(layout);
+  pairGateSides(layout);
+  // H-IN's outer side faces the ST2 shared-stair kiosk exit (z -50.5): its
+  // barrier post stands in the 3 m median between the hotel lanes instead,
+  // and no booth is built (hospitality dresses the hotel ramp portals).
+  const hIn = layout.ramps.find(r => r.id === 'H-IN');
+  if (hIn?.gate) hIn.gate = { ...hIn.gate, side: -hIn.gate.side, booth: false };
   groundReservations(layout);
   layout.sharedGarages = {
     version: 1, buildingIds: ['P1', 'H', 'A', 'WPG'],

@@ -4,7 +4,8 @@ import { EXIT } from './metro.js';
 
 // Four new approaches fill the gaps between the retained diagonal A–D exits.
 // Route endpoints are the station wall and stair bottom, never the stair top.
-const ACCESS = [
+export const ACCESS_HW = 3.4;
+export const ACCESS = [
   { id:'E', name:'一期大道侧', en:'YUNLAN MALL · AVENUE', color:'#b08d4f', bottom:[-76,-24,180],
     route:[[-68,0],[-72,0],[-72,-24],[-76,-24]], approach:[[-85.5,-24],[-90,-24],[-90,-17]] },
   { id:'F', name:'二期星湾路侧', en:'XINGWAN · NORTH STREET', color:'#c2402f', bottom:[22,-82,270],
@@ -28,7 +29,7 @@ function routePolygon(points, hw) {
 
 export function addMetroAccess(layout, b, lv) {
   for(const spec of ACCESS) {
-    const id=`P${spec.id}`,hw=3.4,F=frame(...spec.bottom,`M-X${spec.id}`);
+    const id=`P${spec.id}`,hw=ACCESS_HW,F=frame(...spec.bottom,`M-X${spec.id}`);
     const [kx,kz]=toW(F,(EXIT.roof.x0+EXIT.roof.x1)/2,0);
     const kiosk={x:kx,z:kz,deg:F.deg,frame:F,poly:lrectPoly(F,EXIT.roof),open:lrectPoly(F,EXIT.open),run:EXIT.run,rise:-lv.elev,hw:EXIT.hw};
     const end=lseg(F,{x0:0,z0:-EXIT.hw,x1:0,z1:EXIT.hw,side:'E'});
@@ -38,7 +39,9 @@ export function addMetroAccess(layout, b, lv) {
     const edges=poly.map(([x0,z0],i)=>{
       const [x1,z1]=poly[(i+1)%poly.length];return {x0,z0,x1,z1};
     });
-    const walls=subtractOpenings(edges,[mouth,end]).map(w=>{
+    // Mall passages laid out earlier may open into this tunnel's side wall.
+    const side=layout.entrances.filter(e=>e.metroPassage===id).map(e=>e.seg);
+    const walls=subtractOpenings(edges,[mouth,end,...side]).map(w=>{
       const dx=w.x1-w.x0,dz=w.z1-w.z0,len=Math.hypot(dx,dz);
       const inward=pointInPoly([(w.x0+w.x1)/2-dz/len*.1,(w.z0+w.z1)/2+dx/len*.1],poly)?1:-1;
       return {...w,inward};
@@ -64,7 +67,9 @@ export function addMetroAccess(layout, b, lv) {
   // Lead it around the canopy on the avenue sidewalk and keep both endpoints.
   const S=layout.site,promenade=S.forecourt.paths.find(p=>p.id==='south-promenade');
   const previous=promenade.polys;
-  promenade.points=[[-280,-23],[-94,-23],[-94,-17],[-70,-17],[-70,-23],[-61,-23]];
+  // The avenue bus shelter (x -74..-66) has a solid back panel: pass behind
+  // it along the sidewalk and return north east of it, not through it.
+  promenade.points=[[-280,-23],[-94,-23],[-94,-17],[-63,-17],[-63,-23],[-61,-23]];
   promenade.polys=promenade.points.slice(1).map((p,i)=>routePolygon([promenade.points[i],p],promenade.width/2));
   S.activityExclusions=S.activityExclusions.filter(p=>!previous.includes(p)).concat(promenade.polys);
   S.walk=S.walk.filter(w=>!w.id.startsWith(`${promenade.id}-`));

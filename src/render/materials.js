@@ -41,7 +41,9 @@ export class MaterialLib {
       glowSoft: new THREE.MeshBasicMaterial({ vertexColors: true }),
       glass: std({ color: 0xc9e2ea, roughness: 0.05, metalness: 0.15, transparent: true, opacity: 0.24, depthWrite: false, envMapIntensity: 1.6 }),
       glassTint: std({ color: 0x7fa6b8, roughness: 0.04, metalness: 0.55, transparent: true, opacity: 0.62, depthWrite: false, envMapIntensity: 2.0 }),
-      water: std({ color: 0x356f8f, roughness: 0.04, metalness: 0.65, transparent: true, opacity: 0.9, envMapIntensity: 2.2 }),
+      // Opaque (park lake, fountains, the 'water' batch key): drawn in the opaque pass, so the curtain-wall glassTint
+      // (transparent, no depth write) seen in front of it is no longer painted over by a later transparent sheet.
+      water: std({ color: 0x356f8f, roughness: 0.04, metalness: 0.65, envMapIntensity: 2.2 }),
       mirror: std({ color: 0x8fb4c8, roughness: 0.02, metalness: 0.95, envMapIntensity: 2.4 }),
     };
     Object.assign(this.base, createFacadeMaterials(surfaces, fn => this.onNight(fn)));

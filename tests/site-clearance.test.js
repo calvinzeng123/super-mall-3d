@@ -10,7 +10,7 @@ import { BatchSet } from '../src/render/batch.js';
 import { addTrees, streetLamp } from '../src/render/build/props.js';
 
 const area = poly => Math.abs(polyArea(poly));
-const towers = L.buildings.filter(b => b.kind === 'tower' && !b.undergroundOnly).map(b => b.outline);
+const towers = L.buildings.filter(b => b.kind === 'tower' && !b.undergroundOnly && !b.stackedOn).map(b => b.outline);
 const accessKiosks = L.buildings.flatMap(b => (b.accessKiosks || []).map(r => lrectPoly(b.frame, r)));
 const garageKiosks = L.levels.flatMap(l => (l.garageKiosks || []).map(k => k.poly));
 function approaches() {

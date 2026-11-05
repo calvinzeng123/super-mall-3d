@@ -63,14 +63,35 @@ export function outlineEdges(poly, building) {
   return out;
 }
 
+/** A doorway on a rotunda is a straight chord across several short arc edges,
+ * so its ends are not on any single edge. Return the stretch of an arc edge
+ * that lies behind the chord (projection inside the door, within the bulge). */
+function chordGap(e, seg) {
+  const dx = seg.x1 - seg.x0, dz = seg.z1 - seg.z0, length = Math.hypot(dx, dz);
+  if (length < 0.5) return null;
+  const ux = dx / length, uz = dz / length;
+  const [ax, az] = toW(e.F, 0, 0), [bx, bz] = toW(e.F, e.len, 0);
+  const along = (x, z) => (x - seg.x0) * ux + (z - seg.z0) * uz;
+  const across = (x, z) => Math.abs(-(x - seg.x0) * uz + (z - seg.z0) * ux);
+  // Arc edges stay within the chord's sagitta; a 1.5 m band covers doorways up
+  // to ~9 m on the smallest rotunda without reaching unrelated walls.
+  if (across(ax, az) > 1.5 || across(bx, bz) > 1.5) return null;
+  if (Math.abs((bx - ax) * ux + (bz - az) * uz) < e.len * 0.8) return null;
+  const ta = along(ax, az), tb = along(bx, bz);
+  const t0 = -ta / (tb - ta), t1 = (length - ta) / (tb - ta);
+  const a = Math.max(0, Math.min(t0, t1)) * e.len, b = Math.min(1, Math.max(t0, t1)) * e.len;
+  return b - a > 0.01 ? [a, b] : null;
+}
+
 /** 外轮廓扣除人行门与车道穿墙区间，返回剩余墙段 [a,b]。 */
 export function edgeSpans(e, entrances, ext = 0.2, ramps = []) {
   let ivs = [[0, e.len]];
   for (const en of entrances) {
     const [u0, v0] = toL(e.F, en.seg.x0, en.seg.z0);
     const [u1, v1] = toL(e.F, en.seg.x1, en.seg.z1);
-    if (Math.abs(v0) > 0.15 || Math.abs(v1) > 0.15) continue;
-    ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]);
+    if (Math.abs(v0) <= 0.15 && Math.abs(v1) <= 0.15) { ivs = subtractInterval(ivs, [Math.min(u0, u1), Math.max(u0, u1)]); continue; }
+    const arcGap = e.kind === 'arc' && chordGap(e, en.seg);
+    if (arcGap) ivs = subtractInterval(ivs, arcGap);
   }
   // A ramp is already a continuous navigation slope, so its wall opening must
   // be cut separately from pedestrian portals. Intersect the actual lane with
@@ -122,6 +143,9 @@ export function buildShell(ctx) {
       L.shell.add(body);
     }
     const b = ctx.bById[lv.building];
+    // Metro escalator openings get the same glass guard as mall voids; otherwise the slots
+    // read as unguarded holes straight down to the next station level.
+    if (b.kind === 'metro' && lv.voids.length) railings(ctx, lv);
     if (b.kind !== 'mall') continue;
     if (lv.kind === 'retail' || lv.kind === 'food') {
       columns(ctx, lv);
@@ -143,7 +167,7 @@ export function buildShell(ctx) {
 }
 
 /** 楼板底面的灯具：商业层为筒灯点阵，停车层为沿车道的灯管（随上层楼板显示，从下方可见） */
-function ceilingLights(ctx) {
+export function ceilingLights(ctx) {
   for (const B of Object.values(ctx.buildings)) {
     if (B.b.kind === 'metro') continue;
     const levels = B.levels.map((L) => L.lv);
@@ -152,10 +176,20 @@ function ceilingLights(ctx) {
       const Bt = ctx.levels[above.id].batch;
       const y = above.elev - (SLAB_T[above.kind] || 0.45) - 0.04;
       const inVoid = (x, z) => above.voids.some((v) => pointInPoly([x, z], v.poly));
+      // No fixture over an open ramp trench, or so low over a sloped lane
+      // that someone on the ramp would walk or drive into it.
+      const trenches = ctx.layout.site?.trenches || [];
+      const lanes = (ctx.layout.ramps || []).filter((r) => [r.from.level, r.to.level].includes(below.id));
+      const overRamp = (x, z) => trenches.some((t) => pointInPoly([x, z], t)) || lanes.some((r) => {
+        if (!pointInPoly([x, z], r.poly)) return false;
+        const dx = r.to.x - r.from.x, dz = r.to.z - r.from.z;
+        const t = Math.max(0, Math.min(1, ((x - r.from.x) * dx + (z - r.from.z) * dz) / (dx * dx + dz * dz)));
+        return y - (r.from.y + (r.to.y - r.from.y) * t) < (r.headroom ?? 2.6);
+      });
       const seen = new Set();
       const once = (x, z, k = 2) => {
         const key = `${Math.round(x / k)},${Math.round(z / k)}`;
-        if (seen.has(key) || inVoid(x, z)) return false;
+        if (seen.has(key) || inVoid(x, z) || overRamp(x, z)) return false;
         // A stepped floorplate can expose part of the floor below. Fixtures
         // belong to an actual ceiling, not the previous storey's old outline.
         if (above.expansion && ![[0, 0], [.8, 0], [-.8, 0], [0, .8], [0, -.8]].every(([dx, dz]) =>
@@ -289,6 +323,12 @@ export function retaining(ctx, lv) {
   const ramps = ctx.layout.ramps.filter(r => r.building === lv.building && [r.from.level, r.to.level].includes(lv.id));
   for (const e of ctx.outlineEdges(lv)) {
     for (const [a, b] of edgeSpans(e, ents, .2, ramps)) F.frame(e.F, () => F.get('concrete').box((a + b) / 2, lv.elev + h / 2 - 0.05, 0.2, b - a, h, 0.4, '#ced0cc'));
+    // Tunnel doorways lower than the storey keep the wall above their ceiling.
+    for (const en of ents.filter(en => en.lintel && en.lintel < h)) {
+      const spans = edgeSpans(e, [en], 0);
+      const gaps = spans.reduce((ivs, gap) => subtractInterval(ivs, gap), [[0, e.len]]).filter(([a, b]) => b - a > .01);
+      for (const [a, b] of gaps) F.frame(e.F, () => F.get('concrete').box((a + b) / 2, lv.elev + (en.lintel + h) / 2 - 0.05, 0.2, b - a, h - en.lintel, 0.4, '#ced0cc'));
+    }
   }
 }
 
@@ -301,9 +341,15 @@ const PALETTE = {
 };
 const paletteOf = (bid) => PALETTE[bid] || PALETTE.P1;
 
+// Upper-floor doorways (skybridges, docks, the ring links) open exactly their
+// own width up to the connecting passage's ceiling; the bay keeps its glass or
+// stone beside and above. The ring links' canopy roof tops out at +3.84 m.
+const BRIDGE_LINK_HEAD = 3.85, DOOR_HEAD = 3.2;
+const doorHead = (lv, en) => lv.short === '1F' ? DOOR_HEAD : en.lintel ?? (en.to === 'bridge' ? BRIDGE_LINK_HEAD : DOOR_HEAD);
+
 function bayType(ctx, lv, e, center, idx) {
   const first = lv.short === '1F';
-  for (const en of ctx.layout.entrances) {
+  if (first) for (const en of ctx.layout.entrances) {
     if (en.level !== lv.id) continue;
     const dx = en.seg.x1 - en.seg.x0, dz = en.seg.z1 - en.seg.z0;
     const l2 = dx * dx + dz * dz;
@@ -331,19 +377,29 @@ function facade(ctx, lv) {
   for (const e of ctx.outlineEdges(lv)) {
     FB.frame(e.F, () => {
       // place(a0,a1,yA,yB,深度,外偏,材质,颜色)：u∈[a0,a1]，v 为外偏（+v 朝外）
+      // Each interval carries its doorway's head; upstairs a chord doorway on a
+      // rotunda is cut from every arc facet behind it.
       const doorwayIntervals=ctx.layout.entrances.filter(en=>en.level===lv.id).flatMap(en=>{
-        const a=toL(e.F,en.seg.x0,en.seg.z0),b=toL(e.F,en.seg.x1,en.seg.z1);
-        return Math.abs(a[1])<=.15&&Math.abs(b[1])<=.15?[[Math.min(a[0],b[0]),Math.max(a[0],b[0])]]:[];
+        const a=toL(e.F,en.seg.x0,en.seg.z0),b=toL(e.F,en.seg.x1,en.seg.z1),head=y0+doorHead(lv,en);
+        if(Math.abs(a[1])<=.15&&Math.abs(b[1])<=.15)return [[Math.min(a[0],b[0]),Math.max(a[0],b[0]),head]];
+        const arc=lv.short!=='1F'&&e.kind==='arc'&&chordGap(e,en.seg);
+        // A gap reaching a facet end also clears the fin/joint that straddles it.
+        return arc?[[arc[0]<.01?-.15:arc[0],arc[1]>e.len-.01?e.len+.15:arc[1],head]]:[];
       });
+      const heads=[...new Set(doorwayIntervals.map(d=>d[2]))].sort((p,q)=>p-q);
       const rawPlace=(a0,a1,yA,yB,depth,offset,key,color)=>{if(a1-a0>.008&&yB-yA>.008)FB.get(key).box((a0+a1)/2,(yA+yB)/2,offset,a1-a0,yB-yA,depth,color);};
       // A doorway may sit between facade-module centres. Clip every real low
       // facade piece at its surveyed jambs; a bay label alone is insufficient.
       const place=(a0,a1,yA,yB,depth,offset,key,color)=>{
-        const head=y0+3.2;
-        if(!doorwayIntervals.length||yA>=head)return rawPlace(a0,a1,yA,yB,depth,offset,key,color);
-        const spans=doorwayIntervals.reduce((ivs,gap)=>subtractInterval(ivs,gap),[[a0,a1]]);
-        for(const [a,b] of spans)rawPlace(a,b,yA,Math.min(yB,head),depth,offset,key,color);
-        if(yB>head)rawPlace(a0,a1,head,yB,depth,offset,key,color);
+        if(!doorwayIntervals.length||yA>=heads.at(-1))return rawPlace(a0,a1,yA,yB,depth,offset,key,color);
+        let lo=yA;
+        for(const head of heads){
+          if(head<=lo)continue;
+          const spans=doorwayIntervals.filter(d=>d[2]>=head).reduce((ivs,gap)=>subtractInterval(ivs,gap),[[a0,a1]]);
+          for(const [a,b] of spans)rawPlace(a,b,lo,Math.min(yB,head),depth,offset,key,color);
+          lo=head;if(lo>=yB)return;
+        }
+        rawPlace(a0,a1,lo,yB,depth,offset,key,color);
       };
       const clad = (a, b, ya, yb) => {
         place(a, b, ya, yb, 0.32, 0.16, pal.fin ? 'facadeConcrete' : 'facadeTravertine', pal.stone);
@@ -384,6 +440,11 @@ function facade(ctx, lv) {
           place(a, b, y0 + 4.3, y0 + 4.39, 0.48, 0.26, 'extMetal', pal.frame);
           place(a + 0.1, b - 0.1, y0 + 4.28, y0 + 4.3, 0.12, 0.34, 'glow', '#ffe9c7');
         } else if (type === 'entrance') {
+          // Clad the part of the bay beside the door up to the entrance band,
+          // so no unglazed slot opens past the jamb. Oblique and arc doors
+          // that match no interval on this edge keep the open bay.
+          const hit = doorwayIntervals.filter(([p, q]) => q > a && p < b);
+          if (hit.length) for (const [p, q] of hit.reduce((iv, g) => subtractInterval(iv, [g[0], g[1]]), [[a, b]])) if (q - p > .01) clad(p, q, y0, y0 + 4.55);
           place(a, b, y0 + 4.6, y0 + H, 0.05, 0.06, 'glassTint', 0xffffff);
           place(a, b, y0 + 4.55, y0 + 4.65, 0.3, 0.16, 'extMetal', pal.frame);
         }
@@ -432,22 +493,45 @@ function facadeSigns(ctx, lv) {
 
 // ---------- 屋面 ----------
 
+/** Stretches [a, b] of a roof edge clear of the towers standing on the roof (lv.towerPlates): no parapet runs under a tower. */
+function plateFreeSpans(e, plates) {
+  let ivs = [[0, e.len]];
+  for (const poly of plates) {
+    const cut = clipConvex(poly.map(p => toL(e.F, ...p)), [[-.5, -.06], [e.len + .5, -.06], [e.len + .5, .06], [-.5, .06]]);
+    if (cut.length < 3) continue;
+    const along = cut.map(p => p[0]);
+    ivs = subtractInterval(ivs, [Math.max(0, Math.min(...along)), Math.min(e.len, Math.max(...along))]);
+  }
+  return ivs.filter(([a, b]) => b - a > 0.01);
+}
+
 function roofTop(ctx, lv) {
   const B = ctx.levels[lv.id].batch;
   const y = lv.elev;
   const skywalks = lv.features.filter((f) => f.type === 'skywalk');
+  const plates = (lv.towerPlates || []).map((t) => t.poly);
   for (const e of ctx.outlineEdges(lv)) {
     const crown = e.kind === 'arc';
+    const spans = plates.length ? plateFreeSpans(e, plates) : [[0, e.len]];
+    if (!spans.length) continue;
+    const whole = spans.length === 1 && spans[0][0] === 0 && spans[0][1] === e.len;
     B.frame(e.F, () => {
       const n = Math.max(1, Math.round(e.len / 2));
       for (let i = 0; i < n; i++) {
         const a = (i + 0.5) * (e.len / n);
         const [wx, wz] = toW(e.F, a, 0);
         if (skywalks.some((f) => { const [u, v] = toL(f.frame, wx, wz); return u > f.rect.x0 - 1 && u < f.rect.x1 + 1 && v > f.rect.z0 - 0.5 && v < f.rect.z1 + 0.5; })) continue;
-        B.get('glass').box(a, y + 0.75, -0.05, e.len / n, 1.1, 0.04, 0xffffff);
+        if (whole) { B.get('glass').box(a, y + 0.75, -0.05, e.len / n, 1.1, 0.04, 0xffffff); continue; }
+        const a0 = i * (e.len / n), a1 = a0 + e.len / n;
+        for (const [p, q] of spans) {
+          const lo = Math.max(p, a0), hi = Math.min(q, a1);
+          if (hi - lo > 0.01) B.get('glass').box((lo + hi) / 2, y + 0.75, -0.05, hi - lo, 1.1, 0.04, 0xffffff);
+        }
       }
-      B.get('metal').box(e.len / 2, y + 1.32, -0.05, e.len, 0.07, 0.12, COLORS.steel);
-      B.get('satin').box(e.len / 2, y + 0.12, -0.2, e.len, 0.24, 0.4, COLORS.stoneDark);
+      for (const [p, q] of spans) {
+        B.get('metal').box((p + q) / 2, y + 1.32, -0.05, q - p, 0.07, 0.12, COLORS.steel);
+        B.get('satin').box((p + q) / 2, y + 0.12, -0.2, q - p, 0.24, 0.4, COLORS.stoneDark);
+      }
       if (crown) {
         // 圆厅顶部金属冠：竖向翼片 + 顶环
         B.get('extMetal').box(e.len / 2, y + 2.6, 0.1, e.len, 0.25, 0.5, COLORS.white);

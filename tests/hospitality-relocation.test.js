@@ -51,7 +51,7 @@ test('共享地库共20个街道坡口及36条坡道，酒店公寓、西库和�
 test('共享地面停车包含真实车位、充电位和两端通路，避开全部坡口及建筑',()=>{
   const lots=L.extensions.surfaceParking;assert.ok(lots.length>=2);
   assert.ok(lots.find(l=>l.id==='hotel-shared-parking').stalls.length>=20,'酒店仍须保留地面短停车位');
-  assert.ok(lots.reduce((s,l)=>s+l.stalls.length,0)>500,'交通中心和共享入口之外仍须保留大型地面停车场');
+  assert.ok(lots.reduce((s,l)=>s+l.stalls.length,0)>400,'交通中心、共享入口和云澜·西苑之外仍须保留大型地面停车场');
   for(const lot of lots) {
     assert.ok(lot.stalls.some(s=>s.type==='ev'));assert.ok(lot.aisle);
     for(const s of lot.stalls) {
@@ -135,15 +135,15 @@ test('右上公寓四层公共连廊抵达一期北翼主走道，经过公共�
   }
 });
 
-test('西侧共享车库保留两停车层、四电梯与九楼梯，地面连续且一期地下通路可走',()=>{
+test('西侧共享车库保留两停车层、四电梯与八楼梯（ST1 让给云澜·西苑），地面连续且一期地下通路可走',()=>{
   const b=L.buildings.find(b=>b.id==='WPG');
   assert.ok(b.undergroundOnly);assert.equal(b.kind,'garage');assert.equal(b.height,0);
   assert.deepEqual(b.levels,['WPG-B2','WPG-B1','WPG-G']);
   assert.equal(L.levels.filter(l=>l.building==='WPG').flatMap(l=>l.units).length,0);
   assert.equal(L.elevators.filter(e=>e.building==='WPG').length,4);
-  assert.equal(L.stairs.filter(e=>e.building==='WPG').length,9);
-  const entry=L.levels.find(l=>l.id==='WPG-G');assert.equal(entry.slab.pieces.filter(p=>!p.stair).length,11);assert.equal(entry.kind,'lobby');
-  assert.equal(entry.garageKiosks.length,9);
+  assert.equal(L.stairs.filter(e=>e.building==='WPG').length,8);
+  const entry=L.levels.find(l=>l.id==='WPG-G');assert.equal(entry.slab.pieces.filter(p=>!p.stair).length,10);assert.equal(entry.kind,'lobby');
+  assert.equal(entry.garageKiosks.length,8);
   for(const [x,z] of [[-344.5,-200],[-344.5,-215],[-377,-200]])assert.ok(clear(nav,{floor:'ground',x,z,y:0,slope:null}),'不能把公共停车地面挖掉');
   for(const [floor,target,route] of [
     ['WPG-B1','P1-B1M',[[-310,-200],[-282,-200],[-278,-200]]],

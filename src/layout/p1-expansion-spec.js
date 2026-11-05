@@ -20,7 +20,9 @@ export function buildExpandedP1Spec(original) {
     spec.escalators.push({pair:`ART-${from}`,rot:'C',from,to,axis:'x',sign:1,cross,slot:true,label:`${from} ↔ ${to}`});
     spec.escalators.push({pair:`ART2-${from}`,rot:'C',from,to,axis:'x',sign:-1,cross:-cross,slot:true,label:`${from} ↔ ${to}`});
     const template=spec.escalators.find(e=>e.square&&e.from==='2F'&&e.to==='3F');
-    spec.escalators.push({...template,pair:`SQ-ART-${from}`,from,to,cross:from==='4F'?21:-21,label:`方庭 ${from} ↔ ${to}`});
+    // The north pairs (3F→4F, 5F→6F) start east of the 8 m north-terrace passage mouth x[−224,−216],
+    // so the passage opens straight onto the 方庭 corridor instead of hiding behind the escalator.
+    spec.escalators.push({...template,pair:`SQ-ART-${from}`,from,to,cross:from==='4F'?21:-21,...(from==='4F'?{}:{bottom:4.8}),label:`方庭 ${from} ↔ ${to}`});
   }
   return spec;
 }

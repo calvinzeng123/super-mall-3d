@@ -2,6 +2,8 @@
 // Path slabs, portals, furniture footprints and the renderer share these records.
 import clipping from 'polygon-clipping';
 import { IDENTITY, frame, rect, rectPoly, lrectPoly, lseg, toW, circlePoly } from './geom.js';
+import { ACCESS, ACCESS_HW } from './metro-access.js';
+import { WEST_GATE_AXIS } from './west-parking.js';
 
 const strip = (a, b, width) => {
   const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -37,8 +39,14 @@ export function addSunkenArtCourt(layout) {
   lv.slab.pieces.push({ outer: poly, holes: [] });
   lv.walk.push({ id: 'P1-sunken-court', kind: 'plaza', frame: IDENTITY, lpoly: poly, poly, outdoor: true });
   const door = layout.entrances.find(e => e.id === 'P1-S'), mid = [(door.seg.x0 + door.seg.x1) / 2, (door.seg.z0 + door.seg.z1) / 2];
-  const food = path(layout, 'P1-sunken-food-passage', '云谷艺术广场 · B1M 美食广场', [mid, [-108.5, -64], [-108.5, -56]], 4.8);
-  portal(layout, 'P1-sunken-food-door', door.seg, door.nx, door.nz, { architecturalOpening: true, name: food.name });
+  // Leave the rotunda square to its chord, then turn for the court. The B1M
+  // wall opening is exactly the passage width and keeps a lintel above the
+  // passage ceiling, so no void or sky shows around the tunnel mouth.
+  const foodWidth = 4.8, out = [mid[0] + door.nx * 3, mid[1] + door.nz * 3];
+  const food = path(layout, 'P1-sunken-food-passage', '云谷艺术广场 · B1M 美食广场', [mid, out, [-108.5, -64], [-108.5, -56]], foodWidth);
+  const tx = -door.nz, tz = door.nx, half = foodWidth / 2;
+  portal(layout, 'P1-sunken-food-door', { x0: mid[0] - tx * half, z0: mid[1] - tz * half, x1: mid[0] + tx * half, z1: mid[1] + tz * half },
+    door.nx, door.nz, { architecturalOpening: true, name: food.name, lintel: food.height - .1 });
 
   const bottom = { x: -108.5, z: -44, y: -4.5, floor: lv.id }, top = { x: -108.5, z: bounds.z1, y: 0, floor: 'ground' };
   const flight = { id: 'P1-SUNKEN-ST', stair: 'P1-SUNKEN-ST', building: 'P1', parentFloor: lv.id, frame: IDENTITY,
@@ -47,12 +55,14 @@ export function addSunkenArtCourt(layout) {
   b.access.routes.push({ id: 'P1-SUNKEN-ACCESS', stair: flight.id, from: lv.id, to: 'ground', landings: [],
     waypoints: [{ ...bottom, z: -44.8 }, { ...top, z: top.z + .65 }, { ...top, z: -23.5 }] });
 
-  const PA = layout.buildings.find(b => b.id === 'M').passages.find(p => p.id === 'PA');
-  const width = 5.2, at = 62, end = toW(PA.F, at, -PA.hw), turn = toW(PA.F, at, -24);
+  // The art passage ends in the side wall of the metro E-exit tunnel. Running
+  // on to the station across that tunnel left its walls standing in the
+  // passage: rendered on M-B1, but walkable on B1M.
+  const E = ACCESS.find(a => a.id === 'E'), [ex, ez] = E.route.at(-2), wallZ = ez - ACCESS_HW;
+  const width = 5.2, stationDoor = { x0: ex - width / 2, z0: wallZ, x1: ex + width / 2, z1: wallZ };
   const metro = path(layout, 'P1-sunken-metro-passage', '云谷艺术通廊 · 地铁云澜汇站',
-    [[-86, -38.5], [-78, -38.5], [-74, turn[1]], turn, end], width, { to: 'M-B1', artGallery: true });
-  const seg = lseg(PA.F, { x0: at - width / 2, z0: -PA.hw, x1: at + width / 2, z1: -PA.hw, side: 'S' });
-  const entry = portal(layout, `${metro.id}-station`, seg, -PA.F.s, PA.F.c, { to: 'M-B1', name: metro.name, metroPassage: 'PA' });
+    [[-86, -38.5], [-78, -38.5], [ex, -38.5 + (ex + 78)], [ex, wallZ]], width, { to: 'M-B1', artGallery: true });
+  const entry = portal(layout, `${metro.id}-station`, stationDoor, 0, 1, { to: 'M-B1', name: metro.name, metroPassage: `P${E.id}` });
   (layout.extensions.connections ||= []).push({ id: metro.id, from: lv.id, to: 'M-B1', kind: 'underground' });
 
   const stage = rect(-122, -52, -116, -44.8);
@@ -91,17 +101,23 @@ export function addWestArrival(layout) {
   const seg = lseg(F, { x0: 81.5, z0: -23, x1: 87, z1: -23, side: 'N' });
   const e = portal(layout, 'P1-WEST-ART', seg, F.s, -F.c, { level: lv.id, to: 'site', name: '西门 · 喷泉艺术街', main: false, westArrival: true });
   const middle = toW(F, 84.25, -23), approach = toW(F, 84.25, -31);
-  const points = [[-303, -124.5], [-298, -124.5], [-286, -124.5], [-269, -124.5], [-264, -127.5], [-205, -127.5], [-198, -143.5], approach, middle].reverse();
+  // The axis sits 1 m south of the old line so the walk clears the WP-G2 driveway;
+  // past the zebra it continues as the parking-lot walk (west-gate-promenade).
+  const Z = WEST_GATE_AXIS;
+  const points = [[-298, Z], [-286, Z], [-269, Z], [-264, -127.5], [-205, -127.5], [-198, -143.5], approach, middle].reverse();
   const width = 5.6, polys = points.slice(1).map((p, i) => strip(points[i], p, width));
   const P = { id: 'P1-west-art-promenade', name: '西门艺术步道', entrance: e.id, points, width, polys, crossingSegments: [6], pavedBy: 'p1-public-realm' };
   const S = layout.site;
   S.forecourt.paths.push(P);
   polys.forEach((poly, i) => S.walk.push({ id: `${P.id}-${i}`, kind: 'promenade', poly, outdoor: true }));
-  const crossing = rect(-298, -127.3, -286, -121.7);
+  const crossing = rect(-298, Z - 2.8, -286, Z + 2.8);
   S.crossings.push({ id: 'west-cross-art-gate', axis: 'x', rect: crossing, poly: rectPoly(crossing) });
-  const gate = { x: -283, z: -124.5, width: 10, height: 5.8, name: '西门', en: 'WEST ENTRANCE', piers: [-1, 1].map(s => rect(-283.55, -124.5 + s * 4.65 - .55, -282.45, -124.5 + s * 4.65 + .55)) };
+  const gate = { x: -283, z: Z, width: 10, height: 5.8, name: '西门', en: 'WEST ENTRANCE', piers: [-1, 1].map(s => rect(-283.55, Z + s * 4.65 - .55, -282.45, Z + s * 4.65 + .55)) };
   gate.piers.forEach((r, i) => S.forecourt.obstacles.push({ id: `P1-west-gate-pier-${i}`, poly: rectPoly(r) }));
   gate.canopyPoly = rectPoly(rect(gate.x - 1.5, gate.z - 5.65, gate.x + 1.5, gate.z + 5.65));
-  S.activityExclusions.push(...polys, gate.canopyPoly);
-  layout.expansion.westArrival = { gate, path: P, entry: e.id, hall: hallPoly, approach, middle, interior: toW(F, 84.25, -3) };
+  const lotWalk = S.westParking?.gateWalk;
+  S.activityExclusions.push(...polys, gate.canopyPoly, ...(lotWalk?.polys || []));
+  if (lotWalk) for (const [i, l] of lotWalk.lamps.entries())
+    S.forecourt.obstacles.push({ id: `west-gate-walk-lamp-${i}`, poly: rectPoly(rect(l.x - .15, l.z - .15, l.x + .15, l.z + .15)) });
+  layout.expansion.westArrival = { gate, path: P, entry: e.id, hall: hallPoly, approach, middle, interior: toW(F, 84.25, -3), lotWalk: lotWalk?.id };
 }
