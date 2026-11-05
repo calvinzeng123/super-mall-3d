@@ -2,7 +2,7 @@
 
 面向手机的 Three.js 小样，同一封面提供 **完整园区探索** 与 **竞技 FPS** 两种入口。
 
-[在线体验（Netlify）](https://yunlan-mall-calvin.netlify.app/) · [最新交接](HANDOFF.md) · [FPS 说明](docs/fps-sample.md) · [免费模型来源](docs/fps-asset-sources.md)
+[在线体验（Netlify）](https://yunlan-mall-calvin.netlify.app/) · [滨江社区新站](https://yunlan-mall-calvin-v2.netlify.app/) · [最新交接](HANDOFF.md) · [FPS 说明](docs/fps-sample.md) · [免费模型来源](docs/fps-asset-sources.md)
 
 ![一期按概念 A 对图深化后的游戏实景鸟瞰](docs/images/p1-concept-fidelity-day-20261029.jpg)
 
@@ -91,7 +91,11 @@ npm run build:netlify
 netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2e2-06f122ed5fc3
 ```
 
-必须先构建再执行 `--no-build` 部署。旧 Cloudflare Pages 站点独立存在，不会自动同步；后续验收以以上 Netlify 地址为准。
+必须先构建再执行 `--no-build` 部署（`netlify-cli` 17 版没有这个选项，默认就不构建，去掉即可）。
+
+2026-11-05 起，滨江社区版本另外发布在新站 [yunlan-mall-calvin-v2](https://yunlan-mall-calvin-v2.netlify.app/)（site ID `b9d32e8f-84f0-4958-b426-fd2e491c3676`）。它在另一个 Netlify 账号下，原站暂未更新，详见 HANDOFF 最上节。
+
+旧 Cloudflare Pages 站点独立存在，不会自动同步；后续验收以以上 Netlify 地址为准。
 
 发布目录只用 `dist/netlify/`；`netlify.toml` 声明可选的 `netlify/functions/`。线上资源使用内容哈希和长期缓存，首页校验更新。部署 ID、文件校验和最终检查结果见[扩建 QA](docs/qa-2026-10-28-p1-expansion.md)。
 

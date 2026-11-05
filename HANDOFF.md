@@ -1,10 +1,28 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-04。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-05。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+
+## 2026-11-05 发布：滨江社区上线到新站点 yunlan-mall-calvin-v2
+
+用户要求在当前可用的 Netlify 账号下**新建站点**来发布，原站 `yunlan-mall-calvin` 不在该账号下，没有更新。
+
+| 项目 | 值 |
+| --- | --- |
+| 新站 URL | https://yunlan-mall-calvin-v2.netlify.app/ |
+| 新站 site ID | `b9d32e8f-84f0-4958-b426-fd2e491c3676`（已关闭 `sso_login`，公开访问） |
+| 生产部署 ID | `6aec280d7c2f337e40a9633e`，2026-11-05 06:54:12 UTC 发布，状态 `ready`，站点发布指针一致 |
+| 部署的提交 | `4b94cbf`（PR #2 合并到 `feat/explore-v4`），源码树与 `cdc4d2c` 相同 |
+| 产物 | `npm run build:netlify` → `dist/netlify/` 88 文件 57.63 MiB，入口 `assets/main.EMAUURRT.js` |
+
+- 部署前 495/495 测试通过；构建后工作区无改动。
+- 线上 86 个非 HTML 文件 SHA-256 与本地逐一一致，首页 HTTP 200，入口文件名一致。
+- 线上页面在 headless Chromium 中约 32 s 加载完成，0 个页面错误。云澜江、星湾桥、西苑和北苑塔楼均可见。
+- 命令：`netlify-cli@17` 不支持 `--no-build`（该版本默认不构建），用的是 `netlify deploy --prod --dir dist/netlify --site b9d32e8f-84f0-4958-b426-fd2e491c3676`。
+- 原站 https://yunlan-mall-calvin.netlify.app/（`3af33d60-…`）仍是旧版本。要更新原站，需要拥有它的 Netlify 账号的凭据。
 
 ## 2026-11-04 最新交接：云澜·西苑、云澜·北苑、云澜江与 3F 江景台
 
-本次分支 `claude/wonderful-thompson-olaaxb`，还没有部署（云端会话没有 Netlify 凭据）。需求、数量、性能、测试、出入和截图都在 [滨江社区 QA](docs/qa-2026-11-04-riverside-communities.md) 里。设计依据是三份研究（西苑 / 北苑户型、云澜江、独立核心筒与门禁）的整合规格。只改游览布局，`buildLayout({ expansion: false })` 的 FPS 布局逐字节不变，由 `tests/fps-frozen.test.js` 钉住哈希。
+本次分支 `claude/wonderful-thompson-olaaxb`，经 PR #2 合并到 `feat/explore-v4`（`4b94cbf`），已发布到新站点 yunlan-mall-calvin-v2（见上节）。需求、数量、性能、测试、出入和截图都在 [滨江社区 QA](docs/qa-2026-11-04-riverside-communities.md) 里。设计依据是三份研究（西苑 / 北苑户型、云澜江、独立核心筒与门禁）的整合规格。只改游览布局，`buildLayout({ expansion: false })` 的 FPS 布局逐字节不变，由 `tests/fps-frozen.test.js` 钉住哈希。
 
 ### 新模块
 
