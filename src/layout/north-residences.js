@@ -68,7 +68,7 @@ export function applyNorthResidences(layout) {
   // ---------- P1 roof: the two plates replace the roof deck under the towers ----------
   const skyDoors = parts.flatMap((p) => p.entrances.filter((e) => e.skyLobby));
   const capped = capRoofVerticals(layout, byId.get('P1-RF'), parts, skyDoors);
-  if (skyDoors.length) skyForecourt(byId.get('P1-RF'));
+  if (skyDoors.length) { skyForecourt(byId.get('P1-RF')); skyWayfinding(layout, byId.get('P1-RF'), skyDoors); }
 
   // ---------- fire hardstands on the 北外环 frontage ----------
   layout.site.fireAccess ||= [];
@@ -137,6 +137,58 @@ function skyForecourt(rf) {
 }
 
 /**
+ * Wayfinding to the 北苑 空中大堂 on P1-RF (render: square.js skySigns, shared with nav as post obstacles).
+ * Double-sided boards on 0.1 m posts at the roof exits of the 方庭 glass lifts (GW / GE), the 方庭 escalator
+ * top (SQ-P7-U), the SQ-E lift bank and the main roof lift banks (SE / C / N / NW / W), each face with the
+ * arrow (←, →, ↑) toward the nearer S door as its viewer sees it; and a pair of boards on the 方庭 canopy's
+ * north column (−236, −218) naming both towers. rf.skySigns: [{ id, x, z, nx, nz, post, faces: [{ side, cell }] }],
+ * nx/nz = the board's normal on its front face (toward the lift / escalator it serves).
+ */
+export const SKY_SIGN = Object.freeze({ y: 2.25, h: .5, w: 2.2, post: .1, column: Object.freeze([-236, -218, .35]) });
+function skyWayfinding(layout, rf, doors) {
+  const S = doors.filter((d) => d.skyLobby === 'S').map((d) => [(d.seg.x0 + d.seg.x1) / 2, (d.seg.z0 + d.seg.z1) / 2]);
+  if (!S.length) return;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  /** Arrow cell for a viewer at (x, z) looking along −n (at the board): toward the nearer S door. */
+  const arrow = (x, z, nx, nz) => {
+    const [tx, tz] = S.reduce((m, p) => Math.hypot(p[0] - x, p[1] - z) < Math.hypot(m[0] - x, m[1] - z) ? p : m), d = Math.hypot(tx - x, tz - z) || 1;
+    const ux = (tx - x) / d, uz = (tz - z) / d, fx = -nx, fz = -nz, right = ux * -fz + uz * fx, ahead = ux * fx + uz * fz;
+    return ahead > Math.abs(right) ? 'res-sky-u' : right > 0 ? 'res-sky-r' : 'res-sky-l';
+  };
+  const signs = [];
+  const post = (id, x, z, nx, nz) => {
+    signs.push({ id, x: r2(x), z: r2(z), nx, nz, post: true,
+      faces: [{ side: 1, cell: arrow(x, z, nx, nz) }, { side: -1, cell: arrow(x, z, -nx, -nz) }] });
+    const h = SKY_SIGN.post / 2 + .1;
+    (rf.navObstacles ||= []).push({ id: `P1-RF-sky-sign-${id}`, poly: rectPoly(rect(x - h, z - h, x + h, z + h)) });
+  };
+  const lift = (id) => layout.elevators.find((e) => e.id === id && e.serves.includes(rf.id));
+  /** Beside a lift bank's roof exit: `out` m in front of the doors, `side` m along them (+ = n turned 90° clockwise). */
+  const bank = (id, ids, out, side) => {
+    const es = ids.map(lift).filter(Boolean);
+    if (!es.length) return;
+    const cx = es.reduce((a, e) => a + e.x, 0) / es.length, cz = es.reduce((a, e) => a + e.z, 0) / es.length, { nx, nz } = es[0];
+    post(id, cx + nx * out - nz * side, cz + nz * out + nx * side, nx, nz);
+  };
+  // 方庭 glass lifts: a totem straight ahead of the door, 3.5 m out (walkers pass either side; the lobbies are to the
+  // north); SQ-E: across the 7.5 m aisle, by its west wall; main banks: 4.5 m out, beside the bank's far lift.
+  bank('SQ-GW', ['P1-SQ-GW'], 4.8, 0);
+  bank('SQ-GE', ['P1-SQ-GE'], 4.8, 0);
+  bank('SQ-E', ['P1-SQ-E-L1', 'P1-SQ-E-L2', 'P1-SQ-E-L3'], 9.4, 0);
+  for (const [id, ids] of [['SE', ['P1-SE-L1', 'P1-SE-L2']], ['W', ['P1-W-L1', 'P1-W-L2']], ['N', ['P1-N-L1', 'P1-N-L2']],
+    ['NW', ['P1-NW-L1', 'P1-NW-L2']], ['C-GW', ['P1-C-GW']], ['C-GE', ['P1-C-GE']]]) bank(id, ids, 4.5, 2.4);
+  const esc = layout.escalators.find((e) => e.id === 'P1-SQ-P7-U' && e.to === rf.id);
+  if (esc) {
+    const dx = esc.top.x - esc.bottom.x, dz = esc.top.z - esc.bottom.z, l = Math.hypot(dx, dz), ux = dx / l, uz = dz / l;
+    // Riders step off heading u; the board faces them (normal −u), 6 m on and 2 m to their left (south here).
+    post('SQ-P7', esc.top.x + ux * 6 + uz * 2, esc.top.z + uz * 6 - ux * 2, -ux, -uz);
+  }
+  const [cx, cz, cr] = SKY_SIGN.column;
+  signs.push({ id: 'SQ-canopy-N', x: cx, z: cz, nx: 0, nz: 1, post: false, r: cr, faces: [{ side: 1, cell: 'res-sky-pair-s' }, { side: -1, cell: 'res-sky-pair-n' }] });
+  rf.skySigns = signs;
+}
+
+/**
  * P1-RF under the plates: the slab gives way to T-7F (holes clipped to the
  * roof outline), mall lifts and stairs below the plates stop at 6F, roof rooms,
  * walks and features under the plates go, and the farm and view deck move.
@@ -177,6 +229,13 @@ function capRoofVerticals(layout, rf, parts, doors = []) {
     if (f.type === 'viewdeck') Object.assign(f, { frame: IDENTITY, rect: rect(-238.5, -228, -231.5, -221.5), movedBy: 'north-residences', flush: true });
   }
   rf.navObstacles = (rf.navObstacles || []).filter((o) => !hits(o.poly));
+  // The flush viewdeck's bench and two telescopes stand on the walk: solid, as drawn (square.js viewdeck()).
+  const deck = rf.features.find((f) => f.type === 'viewdeck' && f.flush);
+  if (deck) {
+    const r = deck.rect, cx = (r.x0 + r.x1) / 2;
+    rf.navObstacles.push({ id: 'P1-RF-viewdeck-bench', poly: rectPoly(rect(cx - .95, r.z0 + 4.2, cx + .95, r.z0 + 4.8)) },
+      ...[cx - 2.2, cx + 2.2].map((x, i) => ({ id: `P1-RF-viewdeck-telescope-${i}`, poly: rectPoly(rect(x - .2, r.z0 + .2, x + .2, r.z0 + .9)) })));
+  }
   rf.navWalls ||= [];
   // Plate edges are walls on the roof, except where a 空中大堂 door opens onto it.
   for (const P of plates) for (let i = 0; i < 4; i++) {

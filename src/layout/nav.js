@@ -29,7 +29,8 @@ const CAMPUS = rect(-298, -298, 298, 298);
 // ---------------------------------------------------------------------------
 // 构建
 
-/** options.gates === 'open': every card gate stays open (pathfinding, AI walkers). */
+/** options.gates === 'open': every card gate stays open (pathfinding, AI walkers).
+ * options.unitSolids(u): extra unit-local obstacle rects of a residence (the community homes' tall furniture). */
 export function buildNav(layout, options = {}) {
   const floors = new Map();
   const mk = (id, y, kind, extra = {}) => {
@@ -195,6 +196,8 @@ export function buildNav(layout, options = {}) {
       for (const s of subtractOpenings(mergeSegments(unionOutline(u.rects)), openings)) wallL(F, u.frame, s);
       for (const p of u.residence?.partitions || []) partition(F, u.frame, p);
       for (const o of u.residence?.obstacles || []) obstacle(F, u.frame, o.rect);
+      // Furniture placed by the renderer (options.unitSolids(u) → unit-local rects): tall cabinets are solid too.
+      if (options.unitSolids && u.residence) for (const r of options.unitSolids(u) || []) obstacle(F, u.frame, r);
       const d = u.residence?.duplex;
       if (d) {
         const M = floors.get(d.surface.id);
@@ -800,6 +803,8 @@ function levelSpawn(nav, layout, levelId, prefer = null) {
   const lv = layout.levels.find((l) => l.id === levelId);
   const F = nav.floors.get(levelId);
   if (prefer && clearAt(nav, F, prefer[0], prefer[1])) return { floor: levelId, x: prefer[0], z: prefer[1], y: F.y, slope: null, yaw: 0 };
+  // A level may name its own public arrival point (北苑 7F 空中大堂: inside the S door, not the residents' club).
+  if (lv?.spawn && clearAt(nav, F, lv.spawn.x, lv.spawn.z)) return { floor: levelId, x: lv.spawn.x, z: lv.spawn.z, y: F.y, slope: null, yaw: lv.spawn.yaw ?? 0 };
   const walks = [...lv.walk].sort((a, b) => Math.abs(polyArea(b.poly)) - Math.abs(polyArea(a.poly)));
   for (const w of walks) {
     const c = polyCentroid(w.poly);

@@ -115,6 +115,7 @@ export function createUI(app, layout) {
     if (!bid) out.unshift(['园区', layout.playable ? '一期商场 · 酒店 · 公寓' : '商场 · 酒店 · 公寓 · 住宅 · 地铁']);
     return out;
   };
+  let dirKey = null;
   function renderDirectory() {
     const s = app.state;
     const lv = s.focus ? lvById[s.focus] : null;
@@ -164,7 +165,16 @@ export function createUI(app, layout) {
           .join('');
       }
     }
+    // 一期天台：北苑两座 7F 空中大堂与天台同层，目录里直接列出（点击到大堂南门内侧）。
+    if (lv && !q && lv.skySigns?.length) html = '<li class="dir-group">北苑空中大堂（7F，与天台同层）</li>'
+      + (layout.northResidences?.skyLobbies || []).map((id) => { const L = lvById[id], B = bById[L.building];
+        return `<li><button class="shop" data-level="${id}"><span class="shop-code">7F</span><span class="shop-name"><b>${esc(B.name)} · 空中大堂</b><span>天台南门 / 缝侧门进入 · 刷卡乘住户电梯</span></span><span class="shop-cat" style="--cc:${L.theme?.accent || 'var(--accent)'}">与天台同层</span></button></li>`; }).join('') + html;
     list.innerHTML = html;
+    // A tower on the mall roof lists RF … 7F, then the podium row: open it at the bottom (7F 空中大堂, 8F–13F
+    // and 一期商场 1–6F), as the floor rail does, once per building.
+    const key = `${s.building || ''}|${lv ? lv.id : ''}|${q}`;
+    if (key !== dirKey && !lv && !q && b && podiumOf(layout, b.id)) list.scrollTop = list.scrollHeight;
+    dirKey = key;
   }
   // 手机上目录面板盖住画面中部：从目录里选了分期 / 楼层 / 店铺后自动收起，否则触摸落在面板上，3D 视角转不动
   const collapseOnPhone = () => viewport.closePanel();

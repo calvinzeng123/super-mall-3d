@@ -156,7 +156,11 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     return lv.elev < 0 ? [sign('garage', `北苑 ${n} 号楼 · 住户电梯厅 · 刷卡进入`)]
       : [sign('mall', '云澜·北苑 住户通道 · RESIDENTS'), sign('lobby', `北苑 ${n} 号楼 · 住户大堂`), sign('name', `云澜·北苑 ${n} 号楼`)];
   }).concat((lv.residentsLobbies || []).length ? [['private-w', '住户电梯 W'], ['fire', '消防电梯'], ['private-e', '住户电梯 E']].map(([role, text]) => ({ id: `res-lift-${role}`,
-    draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, 'lift', text, role === 'fire' ? '#7a2c1c' : '#3b3226') })) : []);
+    draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, 'lift', text, role === 'fire' ? '#7a2c1c' : '#3b3226') })) : [])
+    // 一期天台 → 北苑 7F 空中大堂（与天台同层）：立杆双面箭头牌与方庭雨棚北柱上的一对牌（square.js skySigns）
+    .concat(lv.skySigns?.length ? [['res-sky-l', '← 云澜·北苑 空中大堂'], ['res-sky-r', '云澜·北苑 空中大堂 →'], ['res-sky-u', '↑ 云澜·北苑 空中大堂'],
+      ['res-sky-pair-s', '← 1 号楼 · 北苑空中大堂 · 2 号楼 →'], ['res-sky-pair-n', '← 2 号楼 · 北苑空中大堂 · 1 号楼 →']].map(([id, text]) => ({ id,
+      draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, 'lift', text, '#3b3226') })) : []);
   const makeFloorAtlas = (lv, materials = mats) => {
     const atlas = makeSignAtlas([...lv.units.map(u => ({ id: u.id, brand: u.brand })), ...wayfindingEntries, ...residentSigns(lv)]);
     atlas.material = materials.sign(atlas.texture);
@@ -975,7 +979,32 @@ function buildPicks(ctx) {
     const G = ctx.levels[id]?.picks, lv = ctx.lvById[id];
     if (!G || !lv) continue;
     const [title, desc] = gatePickInfo(layout, g);
-    pickBox(G, geo, mat, g.frame, { x0: g.line.u0, x1: g.line.u1, z0: Math.min(g.reader.v, -.4) - .3, z1: .4 }, lv.elev, 2.4, { kind: 'facility', title, desc });
+    // The cabinets and leaves only (v ±0.75), up to the header: a camera at the reader (v −1.2) stands
+    // outside the box, so the crosshair on the gate reads the gate, not a pick behind the core wall.
+    pickBox(G, geo, mat, g.frame, { x0: g.line.u0, x1: g.line.u1, z0: -.75, z1: .75 }, lv.elev, 3.3, { kind: 'facility', title, desc });
+  }
+  // 7F 空中大堂: the reception desk and the halls (zones seen from inside too: double-sided, 2 cm inside their
+  // edges), so the crosshair inside the lobby names the room it looks at, not a stair or the roof farm beyond it.
+  const room = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+  const SKY_PICKS = {
+    'reception-desk': ['礼宾台', '访客登记 · 住户服务'],
+    'sky-hall': ['空中大堂', '商场天台南门 / 缝侧门进出 · 对公众开放'],
+    'sky-river-lounge': ['江景休息区', '对公众开放'],
+    'sky-lift-hall': ['住户候梯厅', '刷卡后乘住户电梯直达 8F–24F'],
+    lounge: ['住户会所 · 江景会客厅', '住户专属'], library: ['住户会所 · 住户阅览室', '住户专属'],
+    dining: ['住户会所 · 住户私宴厅', '住户专属'], gym: ['住户会所 · 健身房', '住户专属'],
+  };
+  for (const lv of layout.levels.filter((l) => l.skyLobby && l.lobbyPlan)) {
+    const G = ctx.levels[lv.id]?.picks, plan = lv.lobbyPlan, H = (lv.height || 5) - .31;
+    if (!G) continue;
+    for (const o of plan.obstacles) if (SKY_PICKS[o.id]) {
+      const [title, desc] = SKY_PICKS[o.id];
+      pickBox(G, geo, mat, plan.frame, o.rect, lv.elev, o.height + .1, { kind: 'facility', title, desc });
+    }
+    for (const z of plan.zones) if (SKY_PICKS[z.id]) {
+      const [title, desc] = SKY_PICKS[z.id], r = z.rect;
+      pickBox(G, geo, room, plan.frame, { x0: r.x0 + .02, x1: r.x1 - .02, z0: r.z0 + .02, z1: r.z1 - .02 }, lv.elev, H, { kind: 'facility', title, desc });
+    }
   }
   for (const e of layout.escalators) {
     const lo = ctx.lvById[e.from], hi = ctx.lvById[e.to];

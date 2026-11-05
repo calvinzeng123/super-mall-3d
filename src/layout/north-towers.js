@@ -170,6 +170,9 @@ function skyLobbyRecords(id, n, F, lv, plan) {
   lv.skyLobby = { building: id, name, liftHall: zone('sky-lift-hall'), publicRects: [zone('sky-river-lounge'), zone('sky-hall')], clubRects: club,
     doors: entrances.map((e) => e.id), gate: `${id}-7F-GATE`,
     gateFrame: [r2(F.ox + s * L.gateU), r2(F.oz + (s > 0 ? L.gateZ[0] : L.gateZ[1])), s > 0 ? 90 : -90] };
+  // Directory / floor-rail spawn: 1.6 m inside the S door, facing north (yaw 0) toward the reception desk and the
+  // gates, in the public hall (not the residents' club, which levelSpawn's largest walk would pick).
+  lv.spawn = { x: r2((doorS.x0 + doorS.x1) / 2), z: r2(F.oz + 6.4), yaw: 0 };
   return { entrances };
 }
 

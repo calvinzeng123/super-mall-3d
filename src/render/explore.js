@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { buildNav, step, landAt, linksNear, spawn, unitSpawn, floorLabel, sightBlocked, NAV, yawOf, tapGate, updateGates, gateBlocking, resetGates } from '../layout/nav.js';
 import { pointInPoly, distToPolyEdge, toL } from '../layout/geom.js';
 import { createElevatorRide, sampleElevatorRide } from '../layout/elevator-ride.js';
+import { communitySolids } from './build/residence-interiors.js';
 
 const WALK = 2.8, RUN = 6, FLY = 8, FLY_MAX = 30;
 const JUMP = 4.5, GRAVITY = 12;
@@ -56,7 +57,7 @@ export function attachExplore(app, ui) {
   app.enterExplore = (opts = {}) => {
     if (on) return;
     if (app.state.touring && app.stopTour) app.stopTour();
-    if (!nav) nav = buildNav(layout);
+    if (!nav) nav = buildNav(layout, { unitSolids: communitySolids });
     // 退出时回到进入前的俯瞰视角与选择（漫游中目录会跟着传送切换分期、楼层）
     const { building, focus, selected } = app.state;
     saved = { pos: camera.position.clone(), target: controls.target.clone(), building, focus, selected };
@@ -120,7 +121,7 @@ export function attachExplore(app, ui) {
     },
     /** 目录传送：楼栋 → 主入口内侧；楼层 → 该层出生点；铺位 → 店门外 2m 面朝店 */
     teleport(t) {
-      if (!nav) nav = buildNav(layout);
+      if (!nav) nav = buildNav(layout, { unitSolids: communitySolids });
       // 铺位 → 店门外面朝店（复式上层 → 户内楼梯上层到达口外）；楼栋 / 楼层 → 出生点
       const st = t.unit ? unitSpawn(nav, layout, t.unit) : spawn(nav, layout, t);
       if (!st) return;

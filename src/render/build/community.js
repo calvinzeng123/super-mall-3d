@@ -18,7 +18,7 @@ export const COMMUNITY_PALETTES = {
   north: { wall: '#e7e0d3', band: '#8a7a5c', accent: '#8a7a5c', frame: '#3e3b37', core: '#d5ccbc', stone: '#ebe5da', slab: '#e0d9cc', sign: '#3d362b', ink: '#f1e4c6', curtain: '#e4d6bd' },
 };
 const FULL_HEIGHT = 1e5;
-const Y = new THREE.Vector3(0, 1, 0), X = new THREE.Vector3(1, 0, 0), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
+const Y = new THREE.Vector3(0, 1, 0), X = new THREE.Vector3(1, 0, 0), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _v = new THREE.Vector3();
 const EPS = 1e-6;
 const OUTWARD = { S: [0, 1], N: [0, -1], W: [-1, 0], E: [1, 0] };
 // Helpers written for other shells draw with these keys; the exterior keeps seven batches.
@@ -133,6 +133,17 @@ function slab(B, b, lv, color, depth = .28, ceilingKey = 'facadePlaster', ceilin
 /** Thin trim seen face-on: a double-sided plane just proud of the wall (2 triangles). */
 const trim = (B, a, b, y0, y1, [ox, oz], color) => pane(B, 'extMetal', [a[0] + ox, a[1] + oz], [b[0] + ox, b[1] + oz], y0, y1, color);
 
+/**
+ * The drawn-back curtain of a window opening o (with s0 / s1 along its wall of length len, sill height bottom) on the
+ * storey at y, or null: { s0, cw, lit } along the wall. The façade draws it as one flat pane just inside the glass; a
+ * loaded home floor draws the same curtain as gathered folds in front of it (residence-interiors curtainFolds).
+ */
+export function windowCurtain(o, y, len, bottom) {
+  const seed = Math.abs(Math.round(o.at * 7 + y * 3 + len)) % 7;
+  if (!(seed < 5 && bottom > .02)) return null;
+  const cw = Math.min(.5, (o.s1 - o.s0) * .25);
+  return { s0: seed % 2 ? o.s0 + .08 : o.s1 - .08 - cw, cw, lit: seed < 2 };
+}
 /** One exterior wall of a home: storey-high piers (merged), sills and lintels, framed windows, balcony railings. */
 function facadeWall(B, col, F, w, y, h, pal) {
   const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), t = w.thickness || .2, P = (s) => along(w.a, w.b, s);
@@ -153,11 +164,8 @@ function facadeWall(B, col, F, w, y, h, pal) {
     segment(B, 'facadePlaster', a, b, y + top, y + h, t, pal.wall);
     pane(B, 'glassTint', a, b, y + bottom, y + top);
     // A drawn-back curtain inside most windows; two in seven are lit warm, so the towers read as lived-in at night.
-    const seed = Math.abs(Math.round(o.at * 7 + y * 3 + len)) % 7, inner = [-out[0] * 2.2, -out[1] * 2.2];
-    if (seed < 5 && bottom > .02) {
-      const cw = Math.min(.5, (o.s1 - o.s0) * .25), s0 = seed % 2 ? o.s0 + .08 : o.s1 - .08 - cw;
-      pane(B, seed < 2 ? 'glowSoft' : 'extSatin', [P(s0)[0] + inner[0], P(s0)[1] + inner[1]], [P(s0 + cw)[0] + inner[0], P(s0 + cw)[1] + inner[1]], y + bottom + .05, y + top - .05, seed < 2 ? '#f6dfb4' : pal.curtain);
-    }
+    const c = windowCurtain(o, y, len, bottom), inner = [-out[0] * 2.2, -out[1] * 2.2];
+    if (c) pane(B, c.lit ? 'glowSoft' : 'extSatin', [P(c.s0)[0] + inner[0], P(c.s0)[1] + inner[1]], [P(c.s0 + c.cw)[0] + inner[0], P(c.s0 + c.cw)[1] + inner[1]], y + bottom + .05, y + top - .05, c.lit ? '#f6dfb4' : pal.curtain);
     trim(B, a, b, y + bottom, y + bottom + .06, out, pal.frame);
     trim(B, a, b, y + top - .05, y + top, out, pal.frame);
     const n = Math.max(1, Math.round((o.s1 - o.s0) / 1.6));
@@ -437,7 +445,14 @@ function skyDoorway(B, layout, b, lv, pal) {
     B.get('glassTint').box(c[0], y, c[1], cw, .04, cd, 0xffffff);
     const o = at(e, m, d - .04);
     B.get('extMetal').box(o[0], y - .04, o[1], e.axis === 'x' ? cw + .08 : .08, .14, e.axis === 'x' ? .08 : cd + .08, pal.frame);
-    for (const t of [m - half + .3, m + half - .3]) { const r = at(e, t, d / 2); B.get('extMetal').box(r[0], y + .7, r[1], .04, 1.4, .04, pal.frame); }
+    // Tie rods from the canopy's outer edge up to the façade, 1.4 m above it (as the 连廊雨棚's, square.js).
+    for (const t of [m - half + .3, m + half - .3]) {
+      const p = at(e, t, d - .1), q = at(e, t, .02);
+      _v.set(q[0] - p[0], 1.4, q[1] - p[1]);
+      const len = _v.length();
+      _q.setFromUnitVectors(Y, _v.normalize());
+      B.get('extMetal').shape('box', _p.set((p[0] + q[0]) / 2, y + .7, (p[1] + q[1]) / 2), _q, _s.set(.04, len, .04), pal.frame);
+    }
   }
 }
 
@@ -658,16 +673,30 @@ export function buildCommunityLobby(ctx, b, lv, pal, signMat) {
       const w = r.x1 - r.x0, d = r.z1 - r.z0, rows = Math.max(1, Math.round(d / 2.4));
       for (let k = 0; k < rows; k++) lamp(B, (r.x0 + r.x1) / 2, y + h - .32, r.z0 + d * (k + .5) / rows, Math.max(.6, w - 1.6), .14, '#f7ead0');
     }
+    // 7F 空中大堂: the ceiling (underside of the 8F slab) is 0.31 m below the storey height.
+    const ceiling = h - .31;
     for (const w of plan.partitions) {
       if (w.role === 'glass') {
         pane(B, 'glass', w.a, w.b, y + .05, y + 3.2);
         segment(B, 'metal', w.a, w.b, y + 3.2, y + 3.3, .08, pal.frame);
         segment(B, 'metal', w.a, w.b, y, y + .08, .08, pal.frame);
+        // Gate-line glass: slim mullions at both ends (the gate-bank edges) and every ≤ 1.6 m, floor to ceiling
+        // through the transom, so the glass reads as a wall in the cutaway too.
+        if (w.skyLobby) {
+          const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), n = Math.max(1, Math.ceil(len / 1.6));
+          for (let k = 0; k <= n; k++) {
+            const t = Math.min(len - .025, Math.max(.025, len * k / n));
+            segment(B, 'metal', along(w.a, w.b, t - .025), along(w.a, w.b, t + .025), y, y + ceiling, .05, pal.frame);
+          }
+        }
         continue;
       }
       const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), d = w.door;
       const spans = d ? subtractInterval([[0, len]], [d.at - d.width / 2, d.at + d.width / 2]) : [[0, len]];
-      for (const [s0, s1] of spans) segment(B, 'plaster', along(w.a, w.b, s0), along(w.a, w.b, s1), y, y + 3.3, .14, '#efebe2');
+      // The 空中大堂 reception backdrop closes the residents' lift hall up to the ceiling, like the glazed gate line
+      // beside it (transom to 4.6 m + head rail); the club's own partitions stop at 3.3 m.
+      const top = w.skyLobby ? ceiling : 3.3;
+      for (const [s0, s1] of spans) segment(B, 'plaster', along(w.a, w.b, s0), along(w.a, w.b, s1), y, y + top, .14, '#efebe2');
       if (d) segment(B, 'plaster', along(w.a, w.b, d.at - d.width / 2), along(w.a, w.b, d.at + d.width / 2), y + 2.3, y + 3.3, .14, '#efebe2');
     }
     for (const o of plan.obstacles) {
@@ -690,6 +719,8 @@ export function buildCommunityLobby(ctx, b, lv, pal, signMat) {
     const { a, b: z } = plan.gateLine;
     pane(B, 'glass', a, z, y + 3.3, y + 4.6);
     segment(B, 'metal', a, z, y + 4.6, y + 4.69, .08, pal.frame);
+    // Transom mullions over the gate cabinets between the lanes (the glass partitions carry their own).
+    for (const g of gates) B.frame(g.frame, () => { for (const l of g.lanes.slice(0, -1)) B.get('metal').box(l.u1, y + 3.95, 0, .05, 1.3, .05, pal.frame); });
   });
   raw.flush(group);
   // 大堂 / 会所标识（招牌图集第二格，与外立面共用一张贴图）：接待处背墙，否则挂在核心筒墙面上。

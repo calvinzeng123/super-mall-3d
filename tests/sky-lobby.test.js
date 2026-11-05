@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { L, lvl, stairDoor } from './helpers.js';
-import { buildNav, step, clear, linksNear, tapGate, updateGates, gateBlocking, resetGates, floorLabel, GATE, NAV } from '../src/layout/nav.js';
+import { buildNav, step, clear, linksNear, tapGate, updateGates, gateBlocking, resetGates, floorLabel, spawn, GATE, NAV } from '../src/layout/nav.js';
 import { toW, toL, pointInPoly, rectPoly, dist, distToSeg } from '../src/layout/geom.js';
 import { gateRecordErrors } from '../src/layout/access-records.js';
 import { SKY_LOBBY, northStops } from '../src/layout/north-towers.js';
@@ -385,5 +385,78 @@ test('渲染：两樘外门门洞里没有玻璃、门旁是玻璃幕墙；闸�
       assert.ok(header && /metal/.test(header.object.material.name) && Math.abs(header.distance - 1) < .1, `${g.id} 通道 ${c} 上方没有横梁`);
       assert.ok(transom && /glass/.test(transom.object.material.name) && Math.abs(transom.distance - 1) < .05, `${g.id} 通道 ${c} 上方 4.0 m 没封到吊顶`);
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Review fixes (RL-1 … RL-9): wayfinding on the roof, the directory spawn, the backdrop wall to the ceiling,
+// the canopy tie rods, the solid viewdeck furniture.
+
+test('目录 / 楼层栏进 7F：落在空中大堂南门内 1.6 m（公共区、不在任何门禁区），面朝礼宾台与闸机', () => {
+  for (const t of TOWERS) {
+    const lv = lvl(`${t.id}-7F`), s = spawn(nav, L, { building: t.id, level: lv.id });
+    assert.ok(s && s.floor === lv.id && clear(nav, s), `${lv.id} 出生点站不住`);
+    assert.ok(Math.abs(s.x - t.door) < .01 && Math.abs(s.yaw) < 1e-9, `${lv.id} 出生点 (${s.x}, ${s.z}) yaw ${s.yaw}`);
+    assert.ok(lv.skyLobby.publicRects.some((r) => s.x > r.x0 && s.x < r.x1 && s.z > r.z0 && s.z < r.z1), `${lv.id} 出生点不在公共区`);
+    assert.ok(!zones.some((z) => z.floors.includes(lv.id) && inZone(z, [s.x, s.z])), `${lv.id} 出生点在门禁区里`);
+    assert.match(label(s), /空中大堂（7F）$/);
+  }
+});
+
+test('一期天台导视：方庭观光梯、方庭扶梯顶、SQ-E 电梯与五组主电梯出口都有指向空中大堂的双面牌，立杆是导航障碍物且不挡出口', () => {
+  const rf = lvl('P1-RF'), signs = rf.skySigns || [];
+  assert.deepEqual(signs.map((s) => s.id).sort(), ['C-GE', 'C-GW', 'N', 'NW', 'SE', 'SQ-E', 'SQ-GE', 'SQ-GW', 'SQ-P7', 'SQ-canopy-N', 'W'].sort());
+  const doors = TOWERS.map((t) => [t.door, lvl(`${t.id}-7F`).spawn.z + 1.6]);
+  for (const s of signs) {
+    assert.equal(s.faces.length, 2, `${s.id} 不是双面牌`);
+    if (!s.post) continue;
+    assert.ok(!clear(nav, S('P1-RF', s.x, s.z)), `${s.id} 立杆不是障碍物`);
+    // Walkable all round at 0.75 m on at least three sides (not jammed into a corner), and each face's arrow points
+    // within 90° of the nearer S door as its viewer (standing in front of that face) sees it.
+    const ring = Array.from({ length: 12 }, (_, i) => S('P1-RF', s.x + Math.cos(i * Math.PI / 6) * .75, s.z + Math.sin(i * Math.PI / 6) * .75)).filter((q) => clear(nav, q));
+    assert.ok(ring.length >= 7, `${s.id} 立杆周围只有 ${ring.length}/12 处可站`);
+    const [tx, tz] = doors.reduce((m, p) => Math.hypot(p[0] - s.x, p[1] - s.z) < Math.hypot(m[0] - s.x, m[1] - s.z) ? p : m);
+    for (const f of s.faces) {
+      const nx = s.nx * f.side, nz = s.nz * f.side, fx = -nx, fz = -nz, dir = { 'res-sky-u': [fx, fz], 'res-sky-r': [-fz, fx], 'res-sky-l': [fz, -fx] }[f.cell];
+      assert.ok(dir && dir[0] * (tx - s.x) + dir[1] * (tz - s.z) > 0, `${s.id} 面 ${f.side} 的箭头 ${f.cell} 指错方向`);
+    }
+  }
+  // The lift exits stay clear: 1.5 m straight out of each served lift door is standable.
+  for (const id of ['P1-SQ-GW', 'P1-SQ-GE', 'P1-SQ-E-L2', 'P1-SE-L1', 'P1-C-GW']) {
+    const e = L.elevators.find((q) => q.id === id), d = e.reach + 1.5;
+    assert.ok(clear(nav, S('P1-RF', e.x + e.nx * d, e.z + e.nz * d)), `${id} 出梯口被挡`);
+  }
+  // The canopy pair hangs on the 方庭 canopy's north column, both towers named.
+  const pair = signs.find((s) => s.id === 'SQ-canopy-N');
+  assert.ok(!pair.post && rf.navObstacles.some((o) => o.id.startsWith('P1-SQ-CANOPY-column') && pointInPoly([pair.x, pair.z], o.poly)));
+});
+
+test('平齐观景台的长椅与两台望远镜是导航障碍物；两座空中大堂缝侧门之间仍走得通', () => {
+  const deck = lvl('P1-RF').features.find((f) => f.type === 'viewdeck' && f.flush), r = deck.rect, cx = (r.x0 + r.x1) / 2;
+  for (const [x, z, what] of [[cx, r.z0 + 4.5, '长椅'], [cx - 2.2, r.z0 + .6, '西望远镜'], [cx + 2.2, r.z0 + .6, '东望远镜']]) assert.ok(!clear(nav, S('P1-RF', x, z)), `${what} 可以穿过`);
+  // Gap door to gap door across the forecourt at the doors' mid height.
+  const d = L.entrances.filter((e) => e.skyLobby === 'GAP'), z = (d[0].seg.z0 + d[0].seg.z1) / 2;
+  const r0 = walk({ s: S('P1-RF', d[0].seg.x0 + 1.0 * Math.sign(d[1].seg.x0 - d[0].seg.x0), z), now: 0 }, [d[1].seg.x0 - 1.0 * Math.sign(d[1].seg.x0 - d[0].seg.x0), z]);
+  assert.ok(Math.abs(r0.s.x - (d[1].seg.x0 - 1.0 * Math.sign(d[1].seg.x0 - d[0].seg.x0))) < .05, `缝侧门之间走不通（停在 ${r0.s.x.toFixed(2)}）`);
+});
+
+test('渲染：接待背墙封到 7F 吊顶（4.0 m 处射线打到墙），闸机两侧玻璃有竖梃；南门雨棚拉杆斜拉到立面、不悬空', () => {
+  const ctx = context();
+  for (const t of TOWERS) {
+    const b = L.buildings.find((q) => q.id === t.id), rec = buildCommunityTower(ctx, b, ctx.hospitality.buildings), lv = lvl(`${t.id}-7F`), y = lv.elev;
+    const plan = lv.lobbyPlan, wall = plan.partitions.find((p) => p.skyLobby && !p.role), F = plan.frame;
+    const [ax, az] = toW(F, ...wall.a), [bx, bz] = toW(F, ...wall.b), mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    const rc = new THREE.Raycaster(new THREE.Vector3(mx, y + 4.0, mz + 1), new THREE.Vector3(0, 0, -1), 0, 2);
+    const hit = rc.intersectObjects(meshesOf(rec.groundGroup), false)[0];
+    assert.ok(hit && Math.abs(hit.distance - 1) < .1 && !/glass/.test(hit.object.material.name), `${t.id} 接待背墙上方 4.0 m 是空的`);
+    // Mullions: a metal hit on the gate line, beside the gate bank, at 2 m.
+    const g = gates.find((q) => q.id === `${t.id}-7F-GATE`), [gx, gz] = toW(g.frame, -.01, -1), [hx, hz] = toW(g.frame, -.01, 1);
+    const m = new THREE.Raycaster(new THREE.Vector3(gx, y + 2, gz), new THREE.Vector3(hx - gx, 0, hz - gz).normalize(), 0, 2).intersectObjects(meshesOf(rec.groundGroup), false)[0];
+    assert.ok(m && /metal/.test(m.object.material.name) && Math.abs(m.distance - 1) < .1, `${t.id} 闸机边没有竖梃`);
+    // Tie rods: nothing metal stands in mid-air 1.2 m out from the S door canopy, 1 m above it.
+    const e = L.entrances.find((q) => q.id === `${t.id}-SKY-S`), cx = (e.seg.x0 + e.seg.x1) / 2, cz = e.seg.z0 + 1.2;
+    const up = new THREE.Raycaster(new THREE.Vector3(cx - 3, y + 5.3, cz), new THREE.Vector3(1, 0, 0), 0, 6).intersectObjects(meshesOf(rec.group), false)
+      .filter((h) => /metal/i.test(h.object.material.name) && h.point.y > y + 5);
+    assert.equal(up.length, 0, `${t.id} 南门雨棚上方 1.2 m 处仍有竖直拉杆`);
   }
 });

@@ -7,6 +7,7 @@ import { toW } from '../../layout/geom.js';
 import { COLORS } from '../theme.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { bench } from './props.js';
+import { SKY_SIGN } from '../../layout/north-residences.js';
 
 export function buildSquare(ctx) {
   for (const b of ctx.layout.buildings.filter((x) => x.square)) {
@@ -22,6 +23,27 @@ export function buildSquare(ctx) {
       else if (f.type === 'viewdeck') viewdeck(L.batch, f, rf.elev);
       else if (f.type === 'sky-link-canopy') skyLinkCanopy(L.batch, f, rf.elev);
     }
+    if (rf.skySigns) skySigns(ctx, L, rf);
+  }
+}
+
+/**
+ * 北苑空中大堂导视（layout rf.skySigns）：立杆双面牌（0.1 m 钢立杆、深色底板，两面各贴一格箭头导视），方庭雨棚北柱上挂一对牌。
+ * 写进天台层已有的 extMetal 批次与导视招牌批次（+0 次绘制）。
+ */
+function skySigns(ctx, L, rf) {
+  const atlas = ctx.atlas[rf.id], { y, h, w, post } = SKY_SIGN, y0 = rf.elev, steel = '#3b3226';
+  if (!atlas || !L.signs) return;
+  for (const s of rf.skySigns) {
+    const ry = Math.atan2(s.nx, s.nz), off = s.post ? .04 : s.r + .05;
+    if (s.post) {
+      L.batch.get('extMetal').box(s.x, y0 + (y + h + .05) / 2, s.z, post, y + h + .05, post, steel);
+      L.batch.get('extMetal').box(s.x, y0 + .02, s.z, .3, .04, .3, steel);
+      L.batch.get('extMetal').box(s.x, y0 + y + h / 2, s.z, w + .06, h + .06, .05, steel, ry);
+    } else for (const k of [1, -1]) {
+      L.batch.get('extMetal').box(s.x + s.nx * k * (s.r + .02), y0 + y + h / 2, s.z + s.nz * k * (s.r + .02), w + .06, h + .06, .04, steel, ry);
+    }
+    for (const f of s.faces) L.signs.placeN(s.x + s.nx * f.side * off, y0 + y + h / 2, s.z + s.nz * f.side * off, w, h, s.nx * f.side, s.nz * f.side, atlas.cell(f.cell));
   }
 }
 

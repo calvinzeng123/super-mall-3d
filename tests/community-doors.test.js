@@ -9,7 +9,7 @@ import { L, walkNav, standable } from './helpers.js';
 import { toL, toW, pointInPoly } from '../src/layout/geom.js';
 import { buildNav } from '../src/layout/nav.js';
 import { Batcher, BatchSet } from '../src/render/batch.js';
-import { buildResidenceFloor } from '../src/render/build/residence-interiors.js';
+import { buildResidenceFloor, communitySolids, SOLID_INSET } from '../src/render/build/residence-interiors.js';
 import { DOOR, partitionAxis, doorSpan, bedRects, doorPassages, wallSegments, wallRect, inSwing } from '../src/layout/community-units.js';
 
 const paint = new Proxy({}, {
@@ -58,6 +58,8 @@ const local = (u, b) => {
 const WALL = new Set(['#eeeae1', '#e4ddd0', '#e6e0d2', '#ebe6db']);
 const DOOR_COLORS = new Set(['#f4f1ea', '#ebe5d8', '#4b4844', '#615b54']);
 const TV_WALL = new Set(['#8f6f52', '#d8cdb9']);
+/** Curtain folds drawn inside the windows of a loaded floor (two shades per palette). */
+const CURTAIN = new Set(['#e8dcc4', '#d1c6b0', '#e4d6bd', '#cdc1aa']);
 /** Per probed floor and unit: the home's boxes split into walls, door parts and furniture (unit-local). */
 const floors = probed.map((lv) => {
   const rec = probeFloor(lv), units = lv.units.filter((u) => u.residence?.kind === 'community');
@@ -187,7 +189,7 @@ test('1.8 m 及以上的盒体不用木地板纹理（wood），只有电视背�
   let cabinets = 0, books = 0;
   for (const { units } of floors) for (const { u, all } of units) {
     assert.deepEqual(tallWood(all).map((b) => `${b.color} ${b.size.map((v) => v.toFixed(2)).join('×')}`), [], u.code);
-    cabinets += all.filter((b) => b.key === 'matte' && b.size[1] >= 1.8 && b.y0 < .2 && !WALL.has(b.color) && !DOOR_COLORS.has(b.color)).length;
+    cabinets += all.filter((b) => b.key === 'matte' && b.size[1] >= 1.8 && b.y0 < .2 && !WALL.has(b.color) && !DOOR_COLORS.has(b.color) && !CURTAIN.has(b.color)).length;
     books += all.filter((b) => ['#7d937c', '#b7846c', '#6f7f99'].includes(b.color) && b.y0 > .05).length;
   }
   assert.ok(cabinets > 300 && books > 50, `${cabinets} 个高柜 / ${books} 排书`);
@@ -201,7 +203,8 @@ function navObstacle(nav, floor, u, q) {
 }
 
 test('门扇是导航障碍物，每个门洞都能双向走过，每个房间都走得到（走廊净宽 ≥ 0.6 m）', () => {
-  const nav = buildNav(L);
+  // With the tall furniture solid too, as the explore mode builds it (RD-4): the cabinets keep every doorway and room reachable.
+  const nav = buildNav(L, { unitSolids: communitySolids });
   for (const { lv, u } of distinct) {
     const res = u.residence, floor = lv.id, W = (x, z) => toW(u.frame, x, z);
     for (const l of (res.doorLeaves || []).filter((q) => q.rect)) assert.ok(navObstacle(nav, floor, u, l.rect), `${u.code} ${l.id} 门扇不是导航障碍物`);
@@ -330,4 +333,98 @@ test('反证：旧门扇规则（铰链固定在 a 端、按 a→b 方向开、�
     const nav = buildNav(L), l = unit.residence.doorLeaves.find((q) => q.id === 'bed_3/hall_right');
     assert.ok(!navObstacle(nav, lv.id, unit, l.rect), '去掉门扇障碍后不应再有门扇障碍物');
   } finally { unit.residence.obstacles = kept; }
+});
+
+// ---------------------------------------------------------------------------
+// Review fixes RD-2 … RD-4: doorways read from above, leaves rest on a cabinet, framed mirrors, gathered curtains,
+// solid tall furniture.
+
+test('俯视能看出门洞：门洞上方的墙与门头套在单独的 lintel 批次里，相机在本层吊顶以上时隐藏，漫游时显示', () => {
+  const lv = L.levels.find((l) => l.id === 'W1-12F'), r = buildResidenceFloor({ layout: L, mats: { base } }, { lv });
+  try {
+    assert.ok(r.lintel && r.lintel.isMesh, '没有 lintel 网格');
+    let meshes = 0; r.group.traverse((o) => { if (o.isMesh) meshes++; });
+    assert.ok(meshes <= 8, `${meshes} 个网格`);
+    const app = (explore, y) => ({ state: { explore }, camera: { position: { y } } });
+    r.update(app(null, lv.elev + 40)); assert.equal(r.lintel.visible, false, '俯视剖切时门头墙仍挡住门洞');
+    r.update(app({ level: lv.id }, lv.elev + 1.62)); assert.equal(r.lintel.visible, true, '漫游时门头墙不见了');
+    r.update(app(null, lv.elev + 1.7)); assert.equal(r.lintel.visible, true, '低机位时门头墙不见了');
+  } finally { r.dispose(); }
+  // Every lintel box sits above 2.1 m over a doorway; every interior doorway has its lintel there.
+  for (const { units } of floors) for (const { u, all } of units) {
+    const lin = all.filter((b) => b.key === 'lintel');
+    for (const b of lin) assert.ok(b.y0 > 2.05, `${u.code} lintel 盒体下沿 ${b.y0.toFixed(2)} m`);
+    for (const p of u.residence.partitions.filter(SWING_ROLES)) {
+      const s = partitionAxis(p), [g0, g1] = doorSpan(p), c = (g0 + g1) / 2, q = s.axis === 'x' ? [c, s.c] : [s.c, c];
+      assert.ok(lin.some((b) => q[0] > b.x0 - .01 && q[0] < b.x1 + .01 && q[1] > b.z0 - .01 && q[1] < b.z1 + .01), `${u.code} ${p.id} 门洞上方没有 lintel`);
+    }
+  }
+});
+
+test('原先独立的 12 扇门扇：能放下的（7 扇）靠到门后高柜的端头（≤ 5 cm），其余 5 扇旁边是床头或外墙', () => {
+  let free = 0, backed = 0;
+  const seen = new Set();
+  for (const { units } of floors) for (const rec of units) {
+    const u = rec.u;
+    if (seen.has(u.residence.plan + u.residence.level)) continue;
+    seen.add(u.residence.plan + u.residence.level);
+    const tall = rec.all.filter((b) => b.key === 'matte' && b.size[1] >= 1.8 && b.y0 < .2 && !WALL.has(b.color) && !DOOR_COLORS.has(b.color) && !CURTAIN.has(b.color));
+    for (const l of (u.residence.doorLeaves || []).filter((q) => q.kind === 'swing' && q.rect && !q.rest && !q.front)) {
+      free++;
+      const k = l.side === 'lo' ? -1 : 1, q = l.rect, back = l.axis === 'x' ? (k < 0 ? q.x0 : q.x1) : (k < 0 ? q.z0 : q.z1);
+      if (tall.some((b) => {
+        const gap = l.axis === 'x' ? (k < 0 ? back - b.x1 : b.x0 - back) : (k < 0 ? back - b.z1 : b.z0 - back);
+        const along = l.axis === 'x' ? Math.min(q.z1, b.z1) - Math.max(q.z0, b.z0) : Math.min(q.x1, b.x1) - Math.max(q.x0, b.x0);
+        return gap > -.005 && gap <= .05 && along > .3;
+      })) backed++;
+    }
+  }
+  assert.equal(free, 12);
+  assert.ok(backed >= 7, `${backed}/12 扇靠到高柜`);
+});
+
+test('梳妆镜与台盆镜有深色镜框（背板比镜面大 ≥ 2 cm、贴墙在镜后）；窗帘在加载楼层画成三道前后错开的褶', () => {
+  let mirrors = 0, folds = 0;
+  for (const { units } of floors) for (const { u, all } of units) {
+    // Mirrors: thin glass at least 0.5 m tall above 0.85 m (the washer's door glass is 0.3 m).
+    for (const m of all.filter((b) => b.key === 'glass' && b.y0 > .85 && b.size[1] >= .5 && Math.min(b.x1 - b.x0, b.z1 - b.z0) < .03)) {
+      mirrors++;
+      const thinX = m.x1 - m.x0 < m.z1 - m.z0;
+      const frame = all.find((b) => b.color === '#6e6458' && b.key === 'matte' && b.y0 < m.y0 - .015 && b.y1 > m.y1 + .015
+        && (thinX ? b.z0 < m.z0 - .01 && b.z1 > m.z1 + .01 && Math.abs((b.x0 + b.x1) / 2 - (m.x0 + m.x1) / 2) < .03 : b.x0 < m.x0 - .01 && b.x1 > m.x1 + .01 && Math.abs((b.z0 + b.z1) / 2 - (m.z0 + m.z1) / 2) < .03));
+      assert.ok(frame, `${u.code} 镜面 (${m.x0.toFixed(2)}, ${m.z0.toFixed(2)}) 没有镜框`);
+    }
+    folds += all.filter((b) => CURTAIN.has(b.color) && b.size[1] > 1.2).length;
+  }
+  assert.ok(mirrors >= 100, `${mirrors} 面镜子`);
+  assert.ok(folds >= 300 && folds % 3 === 0, `${folds} 道窗帘褶`);
+});
+
+test('高柜是导航实体：衣柜、衣帽间、储藏柜、鞋柜、茶柜、书架、冰箱、洗烘塔都走不进去（buildNav unitSolids）', () => {
+  const nav = buildNav(L, { unitSolids: communitySolids });
+  let solids = 0;
+  for (const { lv, u } of distinct) {
+    const list = communitySolids(u);
+    solids += list.length;
+    for (const q of list) {
+      const [x, z] = toW(u.frame, (q.x0 + q.x1) / 2, (q.z0 + q.z1) / 2);
+      assert.ok(!standable(nav, lv.id, x, z), `${u.code} 柜体 (${x.toFixed(2)}, ${z.toFixed(2)}) 可以走进去`);
+    }
+  }
+  assert.ok(solids > 400, `${solids} 件高柜`);
+  // Every rendered tall cabinet body (matte, ≥ 1.8 m, on the floor) lies inside one of the solid footprints.
+  for (const { units } of floors) for (const { u, all } of units) {
+    const list = communitySolids(u);
+    for (const b of all.filter((q) => q.key === 'matte' && q.size[1] >= 1.8 && q.y0 < .2 && !WALL.has(q.color) && !DOOR_COLORS.has(q.color) && !CURTAIN.has(q.color)))
+      // (the footprints are the bodies less SOLID_INSET: 5 cm at the ends, 15 cm at the fronts)
+      assert.ok(list.some((q) => {
+        const k = SOLID_INSET.front + .02, e = SOLID_INSET.end + .01, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+        return b.x0 > q.x0 - k && b.x1 < q.x1 + k && b.z0 > q.z0 - k && b.z1 < q.z1 + k && cx > q.x0 - e && cx < q.x1 + e && cz > q.z0 - e && cz < q.z1 + e;
+      }),
+        `${u.code} 高柜 ${b.color} (${b.x0.toFixed(2)}, ${b.z0.toFixed(2)}) 不是实体`);
+  }
+  // The review's walk into the W1-NE master wardrobe now stops at its door fronts.
+  const u = L.levels.find((l) => l.id === 'W1-12F').units.find((q) => q.residence?.plan === 'W1-NE');
+  const q = communitySolids(u).find((r) => { const [x, z] = toW(u.frame, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2); return Math.hypot(x + 439.6, z + 244.8) < 1.5; });
+  assert.ok(q, 'W1-NE 主卧衣柜没有实体');
 });

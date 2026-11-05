@@ -2,10 +2,11 @@
 import * as THREE from 'three';
 import { BatchSet, SignBatch } from '../batch.js';
 import { toW, toL, frame, subtractInterval } from '../../layout/geom.js';
-import { DOOR, partitionAxis, doorSpan, bedsideRect } from '../../layout/community-units.js';
+import { DOOR, partitionAxis, doorSpan, bedsideRect, doorPassages } from '../../layout/community-units.js';
 import { interiorDetail } from './interior-detail.js';
 import { buildSuiteModels } from './suite-models.js';
 import { buildResidentialModels } from './residential-models.js';
+import { windowCurtain, COMMUNITY_PALETTES } from './community.js';
 
 const roomCenter = (r) => [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2];
 const WARM = '#eee6d6';
@@ -24,7 +25,11 @@ export function buildResidenceFloor(ctx, L) {
   // 云澜社区住宅楼层只用六个材质批次（≤ 8 个网格）。
   const community = lv.units.some((u) => u.residence?.kind === 'community');
   const raw = new BatchSet(ctx.mats.base);
-  const B = community ? { get: (k) => raw.get(COMMUNITY_KEYS[k] || k), frame: (F, fn) => raw.frame(F, fn), flush: (g) => raw.flush(g), sets: raw.sets } : raw;
+  // The wall above every door (and its head casing) is a batch of its own: hidden whenever the camera looks down
+  // from above this floor's ceiling (orbit cutaway, top views), so each doorway reads as a gap in the wall.
+  const lintels = community ? new BatchSet({ lintel: ctx.mats.base.matte }) : null;
+  const B = community ? { get: (k) => k === 'lintel' ? lintels.get('lintel') : raw.get(COMMUNITY_KEYS[k] || k),
+    frame: (F, fn) => raw.frame(F, () => lintels.frame(F, fn)), flush: (g) => { raw.flush(g); lintels.flush(g); }, sets: raw.sets } : raw;
   const height = Math.max(2.6, (lv.height || lv.h || 3.5) - .30);
   const y0 = lv.elev;
   const labels = [];
@@ -33,7 +38,7 @@ export function buildResidenceFloor(ctx, L) {
   for (const u of lv.units) {
     const residence = u.residence;
     if (!residence) continue;
-    if (residence.kind === 'community') { communityHome(B, u, y0, height, labels, wallKeys); continue; }
+    if (residence.kind === 'community') { communityHome(B, u, y0, height, labels, wallKeys, lv.height || lv.h || 3.5); continue; }
     if (residence.prototype || (residence.suitePlan && ctx.suiteAsset)) {
       const entry = residence.entryDoor;
       const [x,z] = toW(u.frame, entry.at - entry.width / 2 - .24, -.12);
@@ -184,10 +189,14 @@ export function buildResidenceFloor(ctx, L) {
   const residential = buildResidentialModels(ctx, lv);
   if (residential) group.add(residential.group);
   const atlas = labelAtlas(labels, y0, group);
+  const lintel = group.children.find((m) => m.isMesh && m.name === 'lintel') || null;
   let disposed = false;
   return {
-    group,
-    update(app) { suite?.update(app); residential?.update(app); },
+    group, lintel,
+    update(app) {
+      suite?.update(app); residential?.update(app);
+      if (lintel) lintel.visible = !!app.state.explore || app.camera.position.y < y0 + height;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -500,7 +509,7 @@ function doorSide(res, room) {
 /** World frame centred on a unit-local point, turned so that canonical −z (front) faces `side`. */
 const roomFrame = (u, cx, cz, side) => frame(...toW(u.frame, cx, cz), u.frame.deg + ROT[side]);
 
-function communityHome(B, u, y0, height, labels, wallKeys) {
+function communityHome(B, u, y0, height, labels, wallKeys, storey = height + .3) {
   const res = u.residence, W = res.width, D = res.depth, ext = new Set(res.exteriorSides || []);
   const R = makeRoomTools(B, y0), { box, cylinder } = R;
   const wall = (a, b, door, color = '#eeeae1', t = .12) => {
@@ -517,7 +526,7 @@ function communityHome(B, u, y0, height, labels, wallKeys) {
     };
     if (!door) return piece(0, len, .02, height);
     const d0 = Math.max(0, door.at - door.width / 2), d1 = Math.min(len, door.at + door.width / 2);
-    piece(0, d0, .02, height); piece(d1, len, .02, height); piece(d0, d1, 2.15, height);
+    piece(0, d0, .02, height); piece(d1, len, .02, height); piece(d0, d1, 2.15, height, 'lintel');
     return [d0, d1, dx, dz, angle];
   };
   B.frame(u.frame, () => {
@@ -560,9 +569,44 @@ function communityHome(B, u, y0, height, labels, wallKeys) {
       }
     }
     stairTreads(R, res);
+    curtainFolds(R, res, y0, storey);
   });
   communityFurniture(B, u, y0);
 }
+
+const OUT = { S: [0, 1], N: [0, -1], W: [-1, 0], E: [1, 0] };
+/**
+ * The façade's drawn-back curtains (community.js windowCurtain, a flat pane 0.25 m inside the glass), seen from the
+ * room as gathered fabric: three narrow folds at alternating depths (1.5 cm apart) just in front of that pane, in two
+ * shades. Only on the loaded floor; the campus view keeps the single pane.
+ */
+function curtainFolds(R, res, y0, h) {
+  const pal = COMMUNITY_PALETTES[res.community] || COMMUNITY_PALETTES.west;
+  // A curtain by a doorway (a window next to the balcony slider) keeps the flat pane: the folds stay out of every passage.
+  const passages = doorPassages(res, .5).map((q) => q.rect), meets = (q) => passages.some((p) => q.x0 < p.x1 && p.x0 < q.x1 && q.z0 < p.z1 && p.z0 < q.z1);
+  for (const w of res.facadeWalls || []) {
+    const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), t = w.thickness || .2, [ox, oz] = OUT[w.side] || OUT.S;
+    if (len < .02) continue;
+    const ux = (w.b[0] - w.a[0]) / len, uz = (w.b[1] - w.a[1]) / len, inner = 2.2 * (t / 2 + .012), alongX = Math.abs(ux) > .5;
+    for (const o of w.openings || []) {
+      if (o.type === 'railing') continue;
+      const op = { ...o, s0: Math.max(0, o.at - o.width / 2), s1: Math.min(len, o.at + o.width / 2) };
+      if (op.s1 - op.s0 <= .1) continue;
+      const bottom = Math.max(0, o.bottom ?? .6), top = Math.min(h - .25, o.top ?? 2.4), c = windowCurtain(op, y0, len, bottom);
+      if (!c) continue;
+      const y = (bottom + top) / 2, tall = top - bottom - .1, fw = c.cw / 3;
+      const span = [0, c.cw].map((d) => [w.a[0] + ux * (c.s0 + d) - ox * inner, w.a[1] + uz * (c.s0 + d) - oz * inner]);
+      const foot = { x0: Math.min(span[0][0], span[1][0]) - .05, x1: Math.max(span[0][0], span[1][0]) + .05, z0: Math.min(span[0][1], span[1][1]) - .05, z1: Math.max(span[0][1], span[1][1]) + .05 };
+      if (meets(foot)) continue;
+      for (let k = 0; k < 3; k++) {
+        const along = c.s0 + fw * (k + .5), depth = inner + .014 + (k % 2) * .015;
+        const x = w.a[0] + ux * along - ox * depth, z = w.a[1] + uz * along - oz * depth;
+        R.box('matte', x, z, y, alongX ? fw + .012 : .014, alongX ? .014 : fw + .012, tall, k % 2 ? pal.curtain : shade(pal.curtain, .9));
+      }
+    }
+  }
+}
+const shade = (hex, f) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * f).toString(16).padStart(2, '0')).join('');
 
 // 门：户内门为暖白色漆面门扇与门套（不是木地板纹理），入户门为深色钢质门；执手为金属拉手。
 const INNER_DOOR = { frameKey: 'matte', frame: '#f4f1ea', leafKey: 'matte', leaf: '#ebe5d8', handle: '#8d8576', lining: DOOR.lining, casing: .03 };
@@ -580,7 +624,7 @@ function doorSet(R, { axis, line, g0, g1, tw }, leaf, st) {
   const d = tw / 2 + .015, top = leaf.h + .03;
   slab(g0 - st.casing, g0 + st.lining, line - d, line + d, 0, top, st.frameKey, st.frame);
   slab(g1 - st.lining, g1 + st.casing, line - d, line + d, 0, top, st.frameKey, st.frame);
-  slab(g0 - st.casing, g1 + st.casing, line - d, line + d, top, top + .08, st.frameKey, st.frame);
+  slab(g0 - st.casing, g1 + st.casing, line - d, line + d, top, top + .08, 'lintel', st.frame);
   if (leaf.kind === 'pocket') {
     // Pocket door slid into the wall: its edge and a flush pull show in the opening.
     const e = leaf.side === 'lo' ? g0 + st.lining : g1 - st.lining, k = leaf.side === 'lo' ? 1 : -1;
@@ -613,7 +657,7 @@ export function communityFurniture(B, u, y0) {
   const res = u.residence, R = makeRoomTools(B, y0), ext = new Set(res.exteriorSides || []);
   // Per-home seed; the floor seed plus the slot keeps neighbours on one floor in different colours.
   const seed = hashCode(u.code), slot = /^\d+$/.test(u.slot) ? +u.slot - 1 : u.slot === 'E' ? 1 : 0;
-  const tone = hashCode(u.level || u.code) + slot * 2, summary = { living: [], bedrooms: [], balconies: [] };
+  const tone = hashCode(u.level || u.code) + slot * 2, summary = { living: [], bedrooms: [], balconies: [], solids: [] };
   const beds = res.beds || [], leaves = (res.doorLeaves || []).filter((l) => l.rect);
   for (const [i, bed] of beds.entries()) {
     const side = bed.head || 'N', F = roomFrame(u, bed.x, bed.z, side);
@@ -647,9 +691,41 @@ export function communityFurniture(B, u, y0) {
       else if (r.kind === 'storage') storagePlan(R, P);
       else if (r.kind === 'laundry') laundryPlan(R, P);
       else if (r.kind === 'kitchen') kitchenPlan(R, P, OPPOSITE[res.kitchen?.door?.side || doorSide(res, r)]);
+      for (const q of P.solids) summary.solids.push({ room: r.id, ...q });
     }
   });
   return summary;
+}
+
+/** Batches that draw nothing: communityFurniture run for its plan only (same placement as the drawn floor). */
+const NOOP = new Proxy({}, { get: () => () => {} });
+const DRY = { get: () => NOOP, frame: (F, fn) => fn() };
+const SOLIDS = new WeakMap(), SOLIDS_BY_PLAN = new Map();
+/**
+ * Nav footprints are the drawn bodies less 5 cm at the ends and 15 cm at the door fronts (the back stays on the wall):
+ * the walker (r 0.3 m) may brush the fronts, so the 0.5–0.55 m walkway roomPlanner leaves between a wardrobe and a
+ * bed stays passable, while the body behind the fronts stays solid.
+ */
+export const SOLID_INSET = Object.freeze({ end: .05, front: .15 });
+/**
+ * Unit-local footprints of a community home's tall furniture (wardrobes, closets, stores, shoe and tea cabinets,
+ * bookcase, fridge, washer stack), each less SOLID_INSET a side: what buildNav(layout, { unitSolids }) makes solid,
+ * so a walker cannot step into a cabinet. Placement is the renderer's own (roomPlanner), so nav and the drawn floor
+ * always agree. It reads only the plan geometry (not the per-home colour seed): homes with one plan share one result.
+ */
+export function communitySolids(u) {
+  const r = u.residence;
+  if (r?.kind !== 'community') return [];
+  if (!SOLIDS.has(u)) {
+    const key = JSON.stringify([r.width, r.depth, r.community, r.rooms, r.partitions, r.beds, r.doorLeaves, r.exteriorSides, r.facadeWalls,
+      r.entryDoor, r.obstacles, r.bathrooms, r.kitchen, r.bedrooms, r.area]);
+    const { end: e, front: f } = SOLID_INSET, inset = ({ rect: q, side }) => side === 'N' ? { x0: q.x0 + e, x1: q.x1 - e, z0: q.z0, z1: q.z1 - f }
+      : side === 'S' ? { x0: q.x0 + e, x1: q.x1 - e, z0: q.z0 + f, z1: q.z1 } : side === 'W' ? { x0: q.x0, x1: q.x1 - f, z0: q.z0 + e, z1: q.z1 - e }
+        : { x0: q.x0 + f, x1: q.x1, z0: q.z0 + e, z1: q.z1 - e };
+    if (!SOLIDS_BY_PLAN.has(key)) SOLIDS_BY_PLAN.set(key, communityFurniture(DRY, u, 0).solids.map(inset));
+    SOLIDS.set(u, SOLIDS_BY_PLAN.get(key));
+  }
+  return SOLIDS.get(u);
 }
 /** Bedside tables of a bed: the layout's choice (bed.tables), else both when both lateral gaps exceed 0.95 m. */
 function bedTables(res, bed) {
@@ -720,10 +796,12 @@ function roomPlanner(res, ext, room, beds, leaves = []) {
       solid.push([t0, t1]);
       if (p.door) zone(pa + Math.sign(pb - pa) * p.door.at, p.door.width, p.role === 'opening' ? 1.1 : 1.0);
     }
+    const wallIv = mergeIv(solid.map((q) => [...q]));
     let iv = mergeIv(solid), low = mergeIv(solid.map((q) => [...q]));
     for (const c of cut) iv = subtractInterval(iv, c);
     for (const c of cutLow) low = subtractInterval(low, c);
-    sides[side] = { side, horiz, line, exterior, glass, onOutline: Math.abs(line - edge) < 1e-3, span: [s0, s1], stretches: iv.filter(([a, b]) => b - a > .4).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0])),
+    sides[side] = { side, horiz, line, exterior, glass, onOutline: Math.abs(line - edge) < 1e-3, span: [s0, s1], wall: wallIv, cuts: cut.map((c) => [...c]),
+      stretches: iv.filter(([a, b]) => b - a > .4).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0])),
       low: low.filter(([a, b]) => b - a > .4).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0])) };
   }
   const bed = beds.find((q) => q.room === room.id) || null;
@@ -735,6 +813,9 @@ function roomPlanner(res, ext, room, beds, leaves = []) {
   }
   // Door leaves parked open in this room.
   for (const l of leaves) if (overlaps(l.rect, r, .01)) taken.push(l.rect);
+  // Footprints of the tall pieces (≥ 1.2 m: wardrobes, closets, stores, shoe / tea cabinets, bookcase, fridge,
+  // washer stack): solid for walking (communitySolids → buildNav).
+  const solids = [];
   const inside = (q) => q.x0 >= r.x0 + .085 && q.x1 <= r.x1 - .085 && q.z0 >= r.z0 + .085 && q.z1 <= r.z1 - .085;
   const free = (q, clear = q) => inside(q) && inside(clear) && !zones.some((z) => overlaps(q, z)) && !taken.some((t) => overlaps(clear, t));
   /** Local rect of a piece backed on `side` at along-position s: len along the wall, depth inward from off. */
@@ -746,15 +827,43 @@ function roomPlanner(res, ext, room, beds, leaves = []) {
   };
   const grow = (side, q, d) => ({ N: { ...q, z1: q.z1 + d }, S: { ...q, z0: q.z0 - d }, W: { ...q, x1: q.x1 + d }, E: { ...q, x0: q.x0 - d } })[side];
   /** First fit along the given walls: longest stretch first, centred then at either end, shrinking to `min`. */
-  const onWall = (list, len, depth, { min = len, clear = .5, off = .09, exterior = false, ends = false, low = false } = {}) => {
+  const onWall = (list, len, depth, { min = len, clear = .5, off = .09, exterior = false, ends = false, low = false, solid = false } = {}) => {
     for (const side of list) {
       const S = sides[side];
       if (!S || (S.exterior && !exterior)) continue;
       for (const [a, b] of low ? S.low : S.stretches) for (let L = Math.min(len, b - a - .2); L >= min - 1e-6; L -= .2) {
         for (const s of ends ? [a + .1 + L / 2, b - .1 - L / 2, (a + b) / 2] : [(a + b) / 2, a + .1 + L / 2, b - .1 - L / 2]) {
           const q = rectAt(side, s, L, depth, off);
-          if (free(q, grow(side, q, clear))) { taken.push(q); return { side, s, len: L, ab: [a, b], rect: q }; }
+          if (free(q, grow(side, q, clear))) { taken.push(q); if (solid) solids.push({ rect: q, side }); return { side, s, len: L, ab: [a, b], rect: q }; }
         }
+      }
+    }
+    return null;
+  };
+  /**
+   * A tall cabinet backed on the door wall, flush behind a door leaf of this room that stands free (no wall within
+   * 5 cm of its back): its end 4 cm off the leaf's back face, so the open leaf rests against the cabinet. The wall
+   * behind is solid (only this door's own clearance cut is crossed); other doorways, windows, beds and leaves keep clear.
+   */
+  const behindLeaf = (len, depth, { min = len, clear = .5 } = {}) => {
+    for (const l of leaves) {
+      if (l.kind !== 'swing' || l.rest || l.into !== room.id) continue;
+      const side = l.axis === 'x' ? (l.n > 0 ? 'N' : 'S') : (l.n > 0 ? 'W' : 'E'), S = sides[side];
+      if (!S || Math.abs(S.line - l.line) > .2) continue;
+      const k = l.side === 'lo' ? -1 : 1, ac = l.axis === 'x' ? l.hinge[0] : l.hinge[1];
+      const end = (l.axis === 'x' ? (k < 0 ? l.rect.x0 : l.rect.x1) : (k < 0 ? l.rect.z0 : l.rect.z1)) + k * .04;
+      const own = (z) => z.x0 - 1e-6 <= l.hinge[0] && l.hinge[0] <= z.x1 + 1e-6 && z.z0 - 1e-6 <= l.hinge[1] && l.hinge[1] <= z.z1 + 1e-6;
+      // Longest first: up to the wall's end (or the room's, 0.085 m in), then in 0.2 m steps down to `min`.
+      const span = S.wall.find(([a, b]) => a <= end + 1e-6 && end <= b + 1e-6), lim = k > 0 ? Math.min(span?.[1] ?? -Infinity, S.span[1]) : Math.max(span?.[0] ?? Infinity, S.span[0]);
+      const room0 = Math.floor((Math.abs(lim - end) - .09) * 100) / 100;
+      for (let L = Math.min(len, room0); L >= min - 1e-6; L -= .2) {
+        const p0 = Math.min(end, end + k * L), p1 = Math.max(end, end + k * L), q = rectAt(side, (p0 + p1) / 2, L, depth);
+        if (!S.wall.some(([a, b]) => a <= p0 + 1e-6 && p1 <= b + 1e-6)) continue;
+        if (S.cuts.some(([a, b]) => !(a <= ac && ac <= b) && a < p1 && p0 < b)) continue;
+        const front = grow(side, q, clear);
+        if (!inside(q) || !inside(front) || zones.some((z) => !own(z) && overlaps(q, z)) || taken.some((t) => overlaps(front, t))) continue;
+        taken.push(q); solids.push({ rect: q, side });
+        return { side, s: (p0 + p1) / 2, len: L, rect: q, leaf: l.id };
       }
     }
     return null;
@@ -770,7 +879,7 @@ function roomPlanner(res, ext, room, beds, leaves = []) {
     };
   };
   const closet = res.partitions.some((p) => p.door && p.id.split('/').includes(room.id) && p.id.split('/').some((id) => res.rooms.find((q) => q.id === id)?.kind === 'closet'));
-  return { room, rect: r, bed, closet, sides, zones, taken, free, inside, rectAt, onWall, frameOn };
+  return { room, rect: r, bed, closet, sides, zones, taken, solids, free, inside, rectAt, onWall, behindLeaf, frameOn };
 }
 
 /**
@@ -982,16 +1091,29 @@ function bedroomPlan(R, P, room, seed) {
   const wood = CABINET[(seed + room.id.length) % CABINET.length];
   // A suite with its own walk-in closet needs no wardrobe; every other bedroom gets one where it fits.
   const walkIn = P.closet;
-  let wr = walkIn ? null : P.onWall(order, master ? 2.8 : 2.2, .6, { min: 1.0, clear: .5 });
-  if (!wr && !walkIn) wr = P.onWall(order, master ? 2.8 : 2.2, .6, { min: 1.0, clear: .5, exterior: true });
-  if (!wr && !walkIn) wr = P.onWall(order, .9, .55, { min: .8, clear: .45, exterior: true });
+  // A door leaf standing free in the room rests against the end of a tall cabinet set behind it on the door wall
+  // (a suite with a walk-in closet gets a short one; a short one in a plain bedroom still leaves room for the wardrobe).
+  const back = P.behindLeaf(walkIn ? 1.6 : master ? 2.8 : 2.2, .6, { min: .75, clear: .5 }) || P.behindLeaf(.7, .45, { min: .5, clear: .5 });
+  if (back) {
+    const deep = P.sides[back.side].horiz ? back.rect.z1 - back.rect.z0 : back.rect.x1 - back.rect.x0;
+    wardrobe(P.frameOn(R, back.side, back.s), back.len, master ? '#e8ddc8' : kid ? '#f0e6d2' : '#e3d5bd', deep, 2.2, { doors: back.len < .75 ? .7 : .55 });
+    // A full-length one is the room's wardrobe; a short one is an extra tall cabinet behind the door.
+    out.push(...(back.len >= 1.6 ? ['wardrobe', 'door-cabinet'] : ['door-cabinet']));
+  }
+  const need = !walkIn && !(back && back.len >= 1.6);
+  let wr = need ? P.onWall(order, master ? 2.8 : 2.2, .6, { min: 1.0, clear: .5, solid: true }) : null;
+  if (!wr && need) wr = P.onWall(order, master ? 2.8 : 2.2, .6, { min: 1.0, clear: .5, exterior: true, solid: true });
+  if (!wr && need) wr = P.onWall(order, .9, .55, { min: .8, clear: .45, exterior: true, solid: true });
   if (wr) { wardrobe(P.frameOn(R, wr.side, wr.s), wr.len, master ? '#e8ddc8' : kid ? '#f0e6d2' : '#e3d5bd', wr.rect.x1 - wr.rect.x0 < .58 || wr.rect.z1 - wr.rect.z0 < .58 ? .55 : .6); out.push('wardrobe'); }
   if (master) {
     const dr = P.onWall(order, 1.3, .45, { min: .9, clear: .6 }) || P.onWall(order, 1.3, .45, { min: .9, clear: .6, exterior: true });
     if (dr) {
       const f = P.frameOn(R, dr.side, dr.s);
       f.box('wood', 0, .225, .38, dr.len, .45, .72, wood);
-      f.box('mirror', 0, .02, 1.35, Math.min(.9, dr.len - .2), .02, .9, '#ffffff');
+      // Mirror on the wall above the dresser, on a dark frame 2.5 cm proud of it all round (as the foyer mirror).
+      const face = wallFace(P, dr.side), mw = Math.min(.9, dr.len - .2);
+      f.box('matte', 0, face + .008, 1.35, mw + .05, .016, .95, '#6e6458');
+      f.box('mirror', 0, face + .02, 1.35, mw, .012, .9, '#ffffff');
       f.box('matte', 0, .7, .23, .45, .38, .46, SOFA[(seed + 2) % SOFA.length]);
       out.push('dresser');
     }
@@ -1141,7 +1263,8 @@ function bathPlan(R, P, powder, far) {
     const f = P.frameOn(R, va.side, va.s), face = wallFace(P, va.side);
     f.box('wood', 0, .25, .42, va.len, .5, .78, '#e3d3b8');
     f.cyl('satin', 0, .28, .8, .18, .1, '#fbfaf3', 10);
-    f.box('mirror', 0, face + .012, 1.5, Math.min(.8, va.len), .02, .8, '#ffffff');
+    f.box('matte', 0, face + .006, 1.5, Math.min(.8, va.len) + .05, .012, .85, '#6e6458');
+    f.box('mirror', 0, face + .016, 1.5, Math.min(.8, va.len), .012, .8, '#ffffff');
   }
   return { shower: !!sh, wc: !!wc, vanity: !!va };
 }
@@ -1197,7 +1320,7 @@ const span = (P, s) => { const t = P.sides[s].stretches[0]; return t ? t[1] - t[
 
 /** 玄关：顶天鞋柜（门板、拉手、中部开放格）与穿衣镜，都靠实墙、不挡任何门洞。 */
 function entryPlan(R, P) {
-  const sc = P.onWall(bySpan(P), 1.4, .38, { min: .8, clear: .6 });
+  const sc = P.onWall(bySpan(P), 1.4, .38, { min: .8, clear: .6, solid: true });
   if (sc) wardrobe(P.frameOn(R, sc.side, sc.s), sc.len, '#e1d4bd', .38, 2.0, { doors: .45, pull: 1.3, niche: 1.0 });
   const m = P.onWall(bySpan(P), .6, .04, { min: .5, clear: .5 });
   if (m) {
@@ -1211,7 +1334,7 @@ function entryPlan(R, P) {
 function studyPlan(R, P, name = '') {
   const r = P.rect, w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
   if (/茶/.test(name)) {
-    const cab = P.onWall(bySpan(P), Math.min(2.4, Math.max(w, d) - .4), .4, { min: 1.0, clear: .7 });
+    const cab = P.onWall(bySpan(P), Math.min(2.4, Math.max(w, d) - .4), .4, { min: 1.0, clear: .7, solid: true });
     if (cab) wardrobe(P.frameOn(R, cab.side, cab.s), cab.len, '#d9cdb6', .4, 1.9, { doors: .5, pull: 1.0, niche: 1.1 });
     const long = w >= d, tw = Math.min(1.6, Math.max(w, d) - 1.6), td = Math.min(.9, Math.min(w, d) - 1.6);
     const q = long ? { x0: cx - tw / 2 - .45, x1: cx + tw / 2 + .45, z0: cz - td / 2, z1: cz + td / 2 } : { z0: cz - tw / 2 - .45, z1: cz + tw / 2 + .45, x0: cx - td / 2, x1: cx + td / 2 };
@@ -1246,14 +1369,15 @@ function studyPlan(R, P, name = '') {
     f.box('matte', 0, 1.22, .75, .48, .06, .55, '#5c6c63');
     P.taken.push(f.rect(-.3, .7, .3, 1.3));
   }
-  const bk = P.onWall(bySpan(P), Math.min(2.2, Math.max(w, d) - .5), .35, { min: .9, clear: .7 });
+  const bk = P.onWall(bySpan(P), Math.min(2.2, Math.max(w, d) - .5), .35, { min: .9, clear: .7, solid: true });
   if (bk) bookcase(P.frameOn(R, bk.side, bk.s), bk.len, .35, 2.1);
 }
 /** 衣帽间：最多三面墙的顶天衣柜（门板与拉手），中间留 ≥ 0.8 m 通道。 */
 function closetPlan(R, P) {
   let n = 0;
   for (let k = 0; k < 3; k++) {
-    const c = P.onWall(bySpan(P), 5, .6, { min: .9, clear: .8 });
+    // The first run takes the wall behind a free-standing door leaf, when there is one (the leaf rests on its end).
+    const c = (k === 0 && P.behindLeaf(5, .6, { min: .9, clear: .8 })) || P.onWall(bySpan(P), 5, .6, { min: .9, clear: .8, solid: true });
     if (!c) break;
     wardrobe(P.frameOn(R, c.side, c.s), c.len, k ? '#e1d4bd' : '#e6dac4', .6, 2.2);
     n++;
@@ -1264,14 +1388,14 @@ function closetPlan(R, P) {
 function storagePlan(R, P) {
   const r = P.rect, area = (r.x1 - r.x0) * (r.z1 - r.z0);
   for (let k = 0; k < (area > 8 ? 2 : 1); k++) {
-    const c = P.onWall(bySpan(P), 3, .45, { min: .6, clear: .6 });
+    const c = P.onWall(bySpan(P), 3, .45, { min: .6, clear: .6, solid: true });
     if (!c) break;
     wardrobe(P.frameOn(R, c.side, c.s), c.len, '#ddd0b8', .45, 2.0, { doors: .5 });
   }
 }
 /** 家务间：洗衣机与烘干机叠放、带台面的洗衣池。 */
 function laundryPlan(R, P) {
-  const wd = P.onWall(bySpan(P), .64, .64, { min: .64, clear: .6 });
+  const wd = P.onWall(bySpan(P), .64, .64, { min: .64, clear: .6, solid: true });
   if (wd) {
     const f = P.frameOn(R, wd.side, wd.s);
     f.box('matte', 0, .32, .43, .6, .6, .86, '#f2f2ee');
@@ -1306,7 +1430,7 @@ function kitchenPlan(R, P, far) {
     }
   }
   if (w < 2 || d < 2.2) return { counter: !!k, fridge: false };
-  const fr = P.onWall(bySpan(P), .7, .7, { min: .7, clear: .7, exterior: true });
+  const fr = P.onWall(bySpan(P), .7, .7, { min: .7, clear: .7, exterior: true, solid: true });
   if (fr) {
     const f = P.frameOn(R, fr.side, fr.s);
     f.box('metal', 0, .34, 1.0, .68, .68, 2.0, '#c3cbc3');
