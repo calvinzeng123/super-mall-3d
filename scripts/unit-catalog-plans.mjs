@@ -110,18 +110,28 @@ function collectParts(L) {
   return out;
 }
 
+/**
+ * 面宽 × 进深 as drawn (north up): 面宽 is the east–west extent, 进深 the north–south one. The plan
+ * data's width/depth are unit-local (width runs along the entry wall), which for the 北苑 homes is
+ * the north–south core wall, so their width/depth would read the wrong way round on these sheets.
+ */
+function worldSize(p) {
+  const b = wrect(p.unit.frame, { x0: 0, z0: 0, x1: p.res.width, z1: p.res.depth });
+  return `面宽 ${f1(b.x1 - b.x0)} m × 进深 ${f1(b.z1 - b.z0)} m`;
+}
+
 function titles(p) {
   const r = p.res, n = TOWER_NO(p.tower);
   if (p.community === 'west') {
     const ext = r.exteriorSides.map((s) => SIDE_CN[worldSide(p.unit.frame, s)]).join(' / ');
     return {
       title: `云澜·西苑 ${n} 号楼 ${p.slot} 户 · ${r.label} · ${fmtA(r.area)} ㎡`,
-      sub: `户型 ${r.plan} · 标准层 12F（2F–28F 同户型，12F 标高 ${f1(p.lv.elev)} m，层高 ${f1(p.lv.height)} m）· 面宽 ${f1(r.width)} m × 进深 ${f1(r.depth)} m · ${r.bedrooms} 卧 · 采光面 ${ext}`,
+      sub: `户型 ${r.plan} · 标准层 12F（2F–28F 同户型，12F 标高 ${f1(p.lv.elev)} m，层高 ${f1(p.lv.height)} m）· ${worldSize(p)} · ${r.bedrooms} 卧 · 采光面 ${ext}`,
       caption: [`${n} 号楼 · ${p.slot} 户`, `${r.label} · ${fmtA(r.area)} ㎡`, '2F–28F（图为 12F）'],
     };
   }
   const h = p.home, ext = r.exteriorSides.map((s) => SIDE_CN[worldSide(p.unit.frame, s)]).join(' / ');
-  const env = `${p.floor}F 标高 ${f1(p.lv.elev)} m · 层高 ${f1(p.lv.height)} m · 面宽 ${f1(r.width)} m × 进深 ${f1(r.depth)} m · 采光面 ${ext}`;
+  const env = `${p.floor}F 标高 ${f1(p.lv.elev)} m · 层高 ${f1(p.lv.height)} m · ${worldSize(p)} · 采光面 ${ext}`;
   if (h.kind === 'duplex') {
     const upper = r.level === 'upper';
     return {
