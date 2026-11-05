@@ -777,14 +777,16 @@ function northSection(L) {
     for (const id of stops[k]) o.push(`<circle cx="${x + 7}" cy="${n2(y(lvElev(id) + 1.1))}" r="5" fill="${k === 'LF' ? '#c0392b' : '#2d6a9f'}" stroke="#ffffff" stroke-width="1"/>`);
   }
   t((cx0 + cx1) / 2, y(bottom) + 34, '核心筒', 13, 'text-anchor="middle" font-weight="700" fill="#4a453e"');
-  // 7F club, one wing either side of the core.
-  const club = tl[0];
+  // 7F, one wing either side of the core: the 空中大堂 (walk in from the mall roof, card gates to the
+  // residents' lifts) on the wing facing the gap (NORTH_SITE.towers[].skyLobby), the residents' club on the other.
+  const club = tl[0], skySide = NORTH_SITE.towers.find((q) => q.id === 'T1').skyLobby;
   rect(wx0, club.elev, wx1, club.elev + club.height, `fill="#cfeae6" stroke="#5f8f88" stroke-width="1.4"`);
   rect(ex0, club.elev, ex1, club.elev + club.height, `fill="#cfeae6" stroke="#5f8f88" stroke-width="1.4"`);
-  t((wx0 + wx1) / 2, y(club.elev + club.height / 2) - 2, '7F 空中会所', 15, 'text-anchor="middle" font-weight="700" fill="#2f5d57"');
-  t((wx0 + wx1) / 2, y(club.elev + club.height / 2) + 17, '会客厅 · 阅览室', 12.5, 'text-anchor="middle" fill="#2f5d57"');
-  t((ex0 + ex1) / 2, y(club.elev + club.height / 2) - 2, '7F 空中会所', 15, 'text-anchor="middle" font-weight="700" fill="#2f5d57"');
-  t((ex0 + ex1) / 2, y(club.elev + club.height / 2) + 17, '私宴厅 · 健身房', 12.5, 'text-anchor="middle" fill="#2f5d57"');
+  for (const [side, x0, x1, clubRooms] of [['W', wx0, wx1, '会客厅 · 阅览室'], ['E', ex0, ex1, '私宴厅 · 健身房']]) {
+    const sky = side === skySide;
+    t((x0 + x1) / 2, y(club.elev + club.height / 2) - 2, sky ? '7F 空中大堂' : '7F 住户会所', 15, 'text-anchor="middle" font-weight="700" fill="#2f5d57"');
+    t((x0 + x1) / 2, y(club.elev + club.height / 2) + 17, sky ? '天台进出 · 刷卡乘梯' : clubRooms, 12.5, 'text-anchor="middle" fill="#2f5d57"');
+  }
   // Homes.
   const homeFill = { flat: '#d9e7f5', duplex: '#f6e6c6', pent: '#e6ddf1', single: '#dcefcf' };
   for (const h of T.homes) {
@@ -856,7 +858,7 @@ function northSection(L) {
   const ans = [
     '答：一层都没有少。北苑的楼层号接着商场往上数：',
     '· 商场 1F–6F 占 0–34 m；',
-    '· 7F 空中会所就在 34 m 的商场屋面上；',
+    '· 7F 空中大堂与住户会所就在 34 m 的商场屋面上：从商场天台走进空中大堂，刷卡过闸机就是住户电梯；',
     '· 8F–13F 江景大平层（层高 3.6 m，每层 W / E 两户）；',
     '· 14F–24F 错层复式（层高 3.3 m；W 侧 14–15、16–17…，E 侧 15–16、17–18…；14E 与 24W 为单层）；',
     '· RF 屋顶花园 96.9 m。',
@@ -884,7 +886,7 @@ function northSection(L) {
   }
   o.push(`<rect x="${qx - 20}" y="${qy - 34}" width="${Wd - qx - 10}" height="${n2(yy - qy + 30)}" rx="10" fill="#f8f6f1" stroke="#d6d0c4" stroke-width="1.2"/>`, ...panel);
   // Legend.
-  const lg = [['#d9e7f5', '8F–13F 大平层'], ['#dcefcf', '14E 单层大平层'], ['#f6e6c6', '错层复式（虚线为上下层分界）'], ['#e6ddf1', '24W 顶层大平层'], ['#cfeae6', '7F 空中会所'], ['#f3e7d3', '一期商场楼层']];
+  const lg = [['#d9e7f5', '8F–13F 大平层'], ['#dcefcf', '14E 单层大平层'], ['#f6e6c6', '错层复式（虚线为上下层分界）'], ['#e6ddf1', '24W 顶层大平层'], ['#cfeae6', '7F 空中大堂 / 住户会所'], ['#f3e7d3', '一期商场楼层']];
   let lx = qx, ly = yy + 60;
   t(lx, ly - 14, '图例', 15, 'font-weight="700" fill="#1f1d1a"');
   for (const [c, str] of lg) { o.push(`<rect x="${lx}" y="${ly}" width="20" height="14" fill="${c}" stroke="#7d7363"/>`); t(lx + 28, ly + 12, str, 14, 'fill="#3a3530"'); ly += 24; }
@@ -952,7 +954,7 @@ function westSection(L) {
   }
   const l12 = lvs.find((l) => l.short === '12F');
   o.push(`<line x1="${ax + 10}" y1="${y(34)}" x2="${fx}" y2="${y(34)}" stroke="#d08a2a" stroke-width="1.6" stroke-dasharray="7 5"/>`);
-  t(ax + 20, y(34) + 17, `34.0 m = 北苑 7F 空中会所标高（西苑 12F 为 ${f1(l12.elev)} m）`, 13.5, 'font-weight="700" fill="#8a4f0b" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"');
+  t(ax + 20, y(34) + 17, `34.0 m = 北苑 7F 空中大堂标高（西苑 12F 为 ${f1(l12.elev)} m）`, 13.5, 'font-weight="700" fill="#8a4f0b" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"');
   // Legend.
   let lx = 1650, ly = 160;
   t(lx, ly - 14, '图例', 15, 'font-weight="700" fill="#1f1d1a"');
