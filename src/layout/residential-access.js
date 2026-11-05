@@ -3,7 +3,7 @@
 import polygonClipping from 'polygon-clipping';
 import { IDENTITY, rect, rectPoly, lrectPoly, lseg, toL, polyBounds, convexOverlap, pointInPoly, distToPolyEdge } from './geom.js';
 import { gateRecord, zoneRecord, SPEED_LANES, SPEED_CABINETS } from './access-records.js';
-import { NORTH_CORE, ringRects, coreRoom } from './north-towers.js';
+import { NORTH_CORE, SKY_LOBBY, ringRects, coreRoom } from './north-towers.js';
 
 const EPS = 1e-6;
 export const wrect = (P) => { const b = polyBounds(P); return rect(b.x0, b.z0, b.x1, b.z1); };
@@ -196,4 +196,21 @@ export function clearStalls(lv, rects) {
   lv.parking.stalls = lv.parking.stalls.filter((s) => !hit(s.poly));
   lv.parking.columns = (lv.parking.columns || []).filter((c) => !hit(lrectPoly(c.frame, rect(c.lx - .4, c.lz - .4, c.lx + .4, c.lz + .4))));
   return n - lv.parking.stalls.length;
+}
+
+// ---------------------------------------------------------------------------
+// 7F 空中大堂：商场天台进出（两樘外门常开，对公众开放），速通闸机是安防线，闸机后是候梯厅
+// （塔楼层，世界坐标由 lv.skyLobby 给出，闸机坐标系与渲染共用 lv.skyLobby.gateFrame）。
+
+const skySign = { cn: '云澜·北苑 空中大堂 · SKY LOBBY', en: 'YUNLAN NORTH RESIDENCE · SKY LOBBY', sub: '住户刷卡乘梯 · 访客请至礼宾台' };
+/** Speed gates between the sky lobby and the lift hall, and the residents' zone (lift hall + landing band).
+ * The kept club wing is deliberately outside the zone: it is reached from the band, behind the gates. */
+export function skyLobbyAccessRecords(b, lv) {
+  const S = lv.skyLobby, n = b.id.slice(1), band = lrectPoly(b.frame, NORTH_CORE.band);
+  const gates = [gateRecord({ id: S.gate, zone: lv.id, kind: 'speed-gates', name: `北苑 ${n} 号楼空中大堂 · 刷卡`, floor: lv.id,
+    frame: S.gateFrame, length: 3.5 /* = SKY_LOBBY.gateZ span */, lanes: SPEED_LANES, cabinets: SPEED_CABINETS,
+    reader: { ...SKY_LOBBY.reader }, sign: skySign })];
+  const zones = [zoneRecord({ id: lv.id, building: b.id, name: `云澜·北苑 ${n} 号楼住户区`, label: `北苑 ${n} 号楼 · 空中大堂候梯厅`, floor: lv.id,
+    polys: [rectPoly(S.liftHall), band] })];
+  return { gates, zones };
 }

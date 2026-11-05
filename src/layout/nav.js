@@ -832,6 +832,12 @@ export function floorLabel(nav, layout, s) {
       // Residents' street vestibule (outside the card door): label only, no gate logic.
       const vest = lv.residentsLobbies?.find((r) => inRect(r.vestibule));
       if (vest) return `北苑 ${vest.building.slice(1)} 号楼 · 住户门厅（${where}）`;
+      // 7F 空中大堂：闸机外的大堂前厅与江景休息区、闸机内的住户会所（候梯厅由住户区命名）
+      const sky = lv.skyLobby;
+      if (sky?.publicRects.some(inRect)) return `${sky.name}（${where}）`;
+      if (sky?.clubRects.some(inRect)) return `${title} · 住户会所（${where}）`;
+      // 一期天台上两座空中大堂之间的前庭（连廊雨棚下）
+      if (inRect(lv.skyForecourt?.rect)) return `${lv.skyForecourt.name}（${where}）`;
       const rt = lv.riverTerrace;
       if (rt?.prows?.some((p) => inRect(p.rect))) return `云澜江景台 · 江景台玻璃挑台（${where}）`;
       if (rt?.pieces?.some((p) => pointInPoly(at, p.outer))) return `云澜江景台（${where}）`;

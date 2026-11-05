@@ -77,6 +77,11 @@ button { font: inherit; color: inherit; }
 .floor[aria-pressed="true"] .fl-num { background: var(--fc, var(--accent)); color: #fff; border-left-color: transparent; }
 .floor[aria-pressed="true"] .fl-name { color: var(--ink); font-weight: 600; }
 .floor.all .fl-num { font-size: 14px; }
+.floor-podium { box-sizing: border-box; display: grid; grid-template-columns: 46px 1fr; align-items: center; gap: 10px; width: 156px; padding: 4px 10px 4px 4px; margin-top: 4px; border-top: 1px dashed var(--line); color: var(--ink-3); cursor: default; }
+.floor-podium .fl-num { font-size: 13px; background: transparent; border-left-color: var(--ink-3); }
+.floor-podium .fl-name { color: var(--ink-3); white-space: normal; }
+.shop.podium { cursor: default; opacity: .72; }
+.shop.podium:hover { background: none; }
 
 /* 工具条 */
 .toolbar { position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; padding: 5px; max-width: calc(100% - 32px); }
@@ -242,6 +247,7 @@ body.ui-hidden #app > :not(#stage):not(.loading):not(.fatal):not(.clean-hint) { 
   .phase span { display: none; }
   .floor-list { flex-direction: row; overflow-x: auto; overflow-y: hidden; flex: none; }
   .floor { flex: none; width: auto; grid-template-columns: 44px; padding: 3px; gap: 0; min-height: 44px; }
+  .floor-podium { flex: none; width: auto; grid-template-columns: 52px; padding: 3px; gap: 0; min-height: 44px; margin: 0 0 0 4px; border-top: 0; border-left: 1px dashed var(--line); }
   .fl-name { display: none; }
   body.mobile-tools .toolbar { display: flex; flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; max-width: 560px; }
   .tool { height: 44px; flex: none; padding: 0 11px; }

@@ -115,10 +115,12 @@ test('门禁：每个有门禁的楼层两个实例化网格，静态件进楼�
     for (const m of inst) triangles += m.count * 12;
     triangles += vertices(ctx.levels[f].batch) / 3;
   }
-  // 本包（北苑）的门禁只在一期 B2/B1/1F；合并后西苑门禁在各自楼栋楼层上，单独计
+  // 北苑的门禁在一期 B2/B1/1F 与两栋塔楼的 7F 空中大堂；合并后西苑门禁在各自楼栋楼层上，单独计。
+  // 7F 的门禁静态件随会所批次画（tests/sky-lobby.test.js），楼层批次里只有一期楼层的。
   const north = [...new Set(L.accessControl.gates.filter((g) => /^T[12]-/.test(g.zone)).flatMap((g) => g.floors))];
   assert.ok(north.length >= 3 && north.length <= 6, `北苑门禁楼层 ${north.join(',')}`);
-  assert.ok(north.every((f) => f.startsWith('P1-')));
+  assert.ok(north.every((f) => f.startsWith('P1-') || /^T[12]-7F$/.test(f)), north.join(','));
+  for (const f of north.filter((q) => /^T[12]-7F$/.test(q))) assert.equal(vertices(ctx.levels[f].batch), 0, `${f} 门禁静态件不该进楼层批次`);
   assert.ok(triangles < 10000, `门禁 ${triangles} 三角形`);
   const id = 'T2-1F-GATE', st = api.states.get(id);
   api.set(id, true); api.step(.2); assert.ok(st.t > .5 && st.t < 1);
@@ -159,7 +161,8 @@ test('门线上方封到吊顶：玻璃门框上有玻璃亮子、3.05 m 以上�
   buildResidentialCores(ctx); buildAccessGates(ctx);
   const rc = new THREE.Raycaster(), meshes = (id) => { const L2 = ctx.levels[id]; if (!L2.flushed) { L2.batch.flush(L2.base); L2.base.updateMatrixWorld(true); L2.flushed = true; }
     return L2.base.children.filter((m) => !m.isInstancedMesh); };
-  for (const g of L.accessControl.gates.filter((q) => /^T[12]-/.test(q.zone))) {
+  // 一期宿主楼层的门禁（住户核心筒画的过梁 / 亮子）；7F 空中大堂的门线由会所组封顶，见 tests/sky-lobby.test.js。
+  for (const g of L.accessControl.gates.filter((q) => /^T[12]-/.test(q.zone) && q.floors[0].startsWith('P1-'))) {
     const lv = L.levels.find((l) => l.id === g.floors[0]), H = clearHeight(lv), list = meshes(lv.id);
     for (const m of list) m.material.side = THREE.DoubleSide;
     const ys = [...(g.kind === 'glass-door' ? [2.5, 2.9] : []), 3.2, H - .15].filter((y) => y < H);

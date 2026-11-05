@@ -1,11 +1,13 @@
 // 云澜·北苑：一期北侧裙房屋面上的 T1/T2 一梯一户塔楼、穿过一期的独立核心筒与住户门禁（游览布局）。
 // 一期手术：拆除核心筒所占铺位与 1F 住户大堂、方庭北门西移 8 m 至 SQ-N3、屋面让出两块塔楼底板，
 // 被塔楼底板覆盖的商场电梯与楼梯止于 6F；B1/B2 设地库电梯厅；所有住户入口为刷卡门禁。
+// 7F 空中大堂与一期天台同高：每栋朝两塔之间的一翼开南门（天台花园）与缝侧门（空中大堂前庭），
+// 两门常开可穿堂而过，刷卡速通闸机后是候梯厅；前庭上方一道玻璃连廊雨棚连接两座大堂。
 import { IDENTITY, rect, rectPoly, lseg, convexOverlap, clipConvex, pointInPoly, polyArea, distToPolyEdge } from './geom.js';
 import { NORTH_SITE } from './community-sites.js';
 import { northTowers } from './north-towers.js';
 import { NORTH_ACCESS, addHostCore, addResidentsLobby, residentsStreetDoor, northAccessRecords, fillColumn, setRoomRects, clipWalkX,
-  setWalkRect, clearStalls, exposedColumnFaces } from './residential-access.js';
+  setWalkRect, clearStalls, exposedColumnFaces, skyLobbyAccessRecords } from './residential-access.js';
 
 const CAPPED_LIFTS = ['P1-SQ-W-L1', 'P1-SQ-W-L2', 'P1-SQ-W-L3', 'P1-SQ-F1'];
 const CAPPED_STAIRS = ['P1-SQ-ST-W', 'P1-SQ-ST-SV'];
@@ -53,10 +55,20 @@ export function applyNorthResidences(layout) {
     layout.accessControl ||= { version: 1, zones: [], gates: [] };
     layout.accessControl.gates.push(...gates);
     layout.accessControl.zones.push(...zones);
+    // 7F 空中大堂：两樘门通商场天台（同高门户），速通闸机进候梯厅
+    const club = part.levels.find((l) => l.skyLobby);
+    if (club) {
+      layout.entrances.push(...part.entrances);
+      const sky = skyLobbyAccessRecords(part.building, club);
+      layout.accessControl.gates.push(...sky.gates);
+      layout.accessControl.zones.push(...sky.zones);
+    }
   }
 
   // ---------- P1 roof: the two plates replace the roof deck under the towers ----------
-  const capped = capRoofVerticals(layout, byId.get('P1-RF'), parts);
+  const skyDoors = parts.flatMap((p) => p.entrances.filter((e) => e.skyLobby));
+  const capped = capRoofVerticals(layout, byId.get('P1-RF'), parts, skyDoors);
+  if (skyDoors.length) skyForecourt(byId.get('P1-RF'));
 
   // ---------- fire hardstands on the 北外环 frontage ----------
   layout.site.fireAccess ||= [];
@@ -74,7 +86,8 @@ export function applyNorthResidences(layout) {
     layout.stairs.push(...part.stairs);
   }
   layout.northResidences = { towers: parts.map((p) => p.building.id), removedUnits, cappedVerticals: capped,
-    hardstands: NORTH_SITE.towers.map((t) => `HS${t.id.slice(1)}`) };
+    hardstands: NORTH_SITE.towers.map((t) => `HS${t.id.slice(1)}`),
+    skyLobbies: parts.flatMap((p) => p.levels.filter((l) => l.skyLobby).map((l) => l.id)) };
   return layout;
 }
 
@@ -112,11 +125,24 @@ function moveNorthDoor(layout, lv) {
 }
 
 /**
+ * 空中大堂前庭 on P1-RF between the two gap doors (HUD name), and the 连廊雨棚 over the walk
+ * from door to door: glass hung from the two tower façades (tie rods to the 8F slab edge,
+ * no posts, so no nav obstacles), south of the 4F–RF notch edge (z −228) and over no hardstand.
+ */
+export const SKY_FORECOURT = Object.freeze({ name: '云澜·北苑 空中大堂前庭', rect: rect(-242, -228, -228, -218) });
+function skyForecourt(rf) {
+  rf.skyForecourt = { name: SKY_FORECOURT.name, rect: { ...SKY_FORECOURT.rect } };
+  rf.features.push({ type: 'sky-link-canopy', frame: IDENTITY, rect: rect(-242, -228, -228, -224.6), y: 4.3, name: '空中大堂连廊雨棚',
+    pickInfo: ['空中大堂连廊雨棚', '连接北苑 1、2 号楼空中大堂 · 玻璃雨棚'] });
+}
+
+/**
  * P1-RF under the plates: the slab gives way to T-7F (holes clipped to the
  * roof outline), mall lifts and stairs below the plates stop at 6F, roof rooms,
  * walks and features under the plates go, and the farm and view deck move.
+ * The plate edges are roof walls except at the 空中大堂 door spans (doors).
  */
-function capRoofVerticals(layout, rf, parts) {
+function capRoofVerticals(layout, rf, parts, doors = []) {
   const plates = NORTH_SITE.towers.map((t) => rectPoly(rect(t.plate[0], -240, t.plate[1], -224)));
   const under = (P) => plates.some((pl) => within(P, pl));
   const hits = (P) => plates.some((pl) => convexOverlap(P, pl));
@@ -147,13 +173,27 @@ function capRoofVerticals(layout, rf, parts) {
   rf.walk = rf.walk.filter((w) => !under(w.poly));
   for (const f of rf.features) {
     if (f.type === 'farm') Object.assign(f, { frame: IDENTITY, rect: rect(-278, -222.5, -260, -211), movedBy: 'north-residences' });
-    if (f.type === 'viewdeck') Object.assign(f, { frame: IDENTITY, rect: rect(-239, -228, -229, -219.5), movedBy: 'north-residences' });
+    // Between the two sky lobbies, flush with the roof (nav walks it as level ground), 3.5 m clear of each façade.
+    if (f.type === 'viewdeck') Object.assign(f, { frame: IDENTITY, rect: rect(-238.5, -228, -231.5, -221.5), movedBy: 'north-residences', flush: true });
   }
   rf.navObstacles = (rf.navObstacles || []).filter((o) => !hits(o.poly));
   rf.navWalls ||= [];
+  // Plate edges are walls on the roof, except where a 空中大堂 door opens onto it.
   for (const P of plates) for (let i = 0; i < 4; i++) {
-    const [a, b] = [P[i], P[(i + 1) % 4]];
-    rf.navWalls.push({ x0: a[0], z0: a[1], x1: b[0], z1: b[1], towerPlate: true });
+    const [a, b] = [P[i], P[(i + 1) % 4]], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const t = (q) => ((q[0] - a[0]) * (b[0] - a[0]) + (q[1] - a[1]) * (b[1] - a[1])) / len;
+    const off = (q) => Math.abs((q[0] - a[0]) * (b[1] - a[1]) - (q[1] - a[1]) * (b[0] - a[0])) / len;
+    let spans = [[0, len]];
+    for (const d of doors) {
+      const p = [d.seg.x0, d.seg.z0], q = [d.seg.x1, d.seg.z1];
+      if (off(p) > 1e-6 || off(q) > 1e-6) continue;
+      const [g0, g1] = [t(p), t(q)].sort((u, v) => u - v);
+      spans = spans.flatMap(([u, v]) => [[u, Math.min(v, g0)], [Math.max(u, g1), v]]).filter(([u, v]) => v - u > 1e-6);
+    }
+    for (const [u, v] of spans) {
+      const A = [a[0] + (b[0] - a[0]) * u / len, a[1] + (b[1] - a[1]) * u / len], B = [a[0] + (b[0] - a[0]) * v / len, a[1] + (b[1] - a[1]) * v / len];
+      rf.navWalls.push({ x0: A[0], z0: A[1], x1: B[0], z1: B[1], towerPlate: true });
+    }
   }
   rf.towerPlates = parts.map((p) => ({ building: p.building.id, poly: plates[parts.indexOf(p)] }));
   return [...CAPPED_LIFTS, ...CAPPED_STAIRS];

@@ -43,7 +43,7 @@ import { toW, frame, IDENTITY } from '../layout/geom.js';
 import { riverPicks } from './build/river.js';
 import { declutterLabels, towerOccluders } from './label-declutter.js';
 import { unitFront } from '../layout/nav.js';
-import { createExploreVisibility } from './explore-visibility.js';
+import { createExploreVisibility, skyLobbyVisibility } from './explore-visibility.js';
 import { buildTransitCenter } from './build/transit-center.js';
 import { buildBusStops } from './build/bus-stops.js';
 import { createDeferredResource, createSerialTaskQueue, detailAssetKind, activeDetailFloor } from './deferred-resource.js';
@@ -417,6 +417,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       result.group.removeFromParent(); result.dispose(); residenceCache.delete(key);
     }
   }
+  // 7F 空中大堂 that should draw although its tower is not entered (seen from the mall roof, or P1 selected).
+  const skyLobbyFor = skyLobbyVisibility(layout);
   // A tower stacked on the mall: P1 selected and cut below its roof, or exploded, hides it.
   const stackedHidden = (b, explore) => !explore && b.stackedOn && state.building === b.stackedOn
     && (state.exploded || (ctx.lvById[state.focus]?.elev ?? Infinity) < (ctx.lvById[b.levels[0]]?.elev ?? 0));
@@ -427,8 +429,12 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     const focus = selected && state.focus;
     // A tower whose entry is another building's floor (北苑 on P1-1F) has no own default floor.
     const entry = b.entryLevel || `${b.id}-1F`, own = ctx.lvById[entry]?.building === b.id ? entry : null;
-    const wanted = explore ? inside ? explore.level : explore.near === b.id ? own : null
+    // 7F 空中大堂与一期天台同高相通：站在天台或另一座空中大堂（60 m 内）、或俯瞰时选中一期 / 本塔且未聚焦楼层，
+    // 空中大堂室内透过玻璃可见（漫游时作为想看的楼层，俯瞰时直接显示）。
+    const sky = skyLobbyFor(b, { explore, building: state.building, focus: state.focus });
+    const wanted = explore ? inside ? explore.level : explore.near === b.id ? own : sky
       : selected ? focus || own : null;
+    const skyOrbit = !explore && sky;
     if (wanted) ensureTowerFloor(wanted);
     const companions = new Set(wanted ? companionsOf(wanted) : []);
     setResidentialDetailLevel(ctx, b.id, residenceCache.has(wanted) ? wanted : null);
@@ -441,7 +447,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     // the cut, its lift lobby is cut away): companions show only from inside, or below the focus.
     const companionShown = (lv) => !!explore || !selectedLevel || lv.elev <= selectedLevel.elev;
     for (const L of B.levels) {
-      const active = L.lv.id === wanted || (companions.has(L.lv.id) && companionShown(L.lv)) || (!!explore && visibleExploreLevels.has(L.lv.id) && L.lv.elev <= 0
+      const active = L.lv.id === wanted || L.lv.id === skyOrbit || (companions.has(L.lv.id) && companionShown(L.lv)) || (!!explore && visibleExploreLevels.has(L.lv.id) && L.lv.elev <= 0
         && !(L.lv.elev < 0 && !inside && !explore.under && (ctx.lvById[explore.level]?.elev ?? 0) > 4));
       const common = (!explore && !focus && (L.lv.short === '1F' || L.lv.kind === 'roof'))
         || (!!explore && !explore.under && L.lv.kind === 'roof');
@@ -947,7 +953,7 @@ function buildPicks(ctx) {
         court: ['屋顶篮球场', '标准全场 · 围网 · 夜间灯光'],
         'cinema-open': ['星空露天影院', '方庭天台 · LED 银幕 · 每晚 20:00 放映'],
         farm: ['屋顶农场', '方庭天台 · 种植池 · 玻璃温室 · 亲子采摘'],
-        viewdeck: ['方庭观景台', '抬高木平台 · 望远镜 · 俯瞰园区'],
+        viewdeck: f.flush ? ['方庭观景台', '木平台 · 望远镜 · 俯瞰北苑空中大堂与云澜江'] : ['方庭观景台', '抬高木平台 · 望远镜 · 俯瞰园区'],
         plaza: ['云澜里中心广场', '街区舞台 · 旱喷水景 · 周末市集'],
         stage: ['街区舞台', '每周五 19:30 街区音乐节 · LED 背景屏'],
         fountain: ['旱喷水景', '16 组喷头 · 夜间灯光'],
@@ -959,7 +965,7 @@ function buildPicks(ctx) {
         pickBox(G, geo, mat, IDENTITY, { x0: f.x - r, x1: f.x + r, z0: f.z - r, z1: f.z + r }, lv.elev, f.type === 'stage' ? 7 : 2, { kind: 'facility', title: t[0], desc: t[1] });
         continue;
       }
-      if (f.rect) pickBox(G, geo, mat, f.frame, f.rect, lv.elev, f.type === 'pavilion' ? 4.6 : 2.5, { kind: 'facility', title: t[0], desc: t[1] });
+      if (f.rect) pickBox(G, geo, mat, f.frame, f.rect, lv.elev, f.type === 'pavilion' || f.type === 'sky-link-canopy' ? 4.6 : 2.5, { kind: 'facility', title: t[0], desc: t[1] });
       else if (f.type === 'ferris') pickBox(G, geo, mat, f.frame, { x0: f.lu - f.radius, x1: f.lu + f.radius, z0: f.lv - 3, z1: f.lv + 3 }, lv.elev, f.radius * 2 + 4, { kind: 'facility', title: t[0], desc: t[1] });
       else pickBox(G, geo, mat, f.frame, { x0: f.lu - 3, x1: f.lu + 3, z0: f.lv - 3, z1: f.lv + 3 }, lv.elev, 7, { kind: 'facility', title: t[0], desc: t[1] });
     }
