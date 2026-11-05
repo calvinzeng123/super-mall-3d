@@ -15,8 +15,9 @@
  * $PLAYWRIGHT_PATH, or from /opt/node-tools/node_modules/playwright.
  * Geometry comes from the built layout, buildLayout({ expansion: true }): every room, wall, window
  * and door is the unit-local plan data of the unit record, mapped through the unit's world frame.
- * Doors are drawn where the renderer (src/render/build/residence-interiors.js, communityHome)
- * puts them: the leaf stands open at 90° on the (dz, −dx) side of the partition a→b.
+ * Doors are drawn from the same record the renderer and the nav read (partition.door.leaf and
+ * entryDoor.leaf, chosen by doorLeaves() in src/layout/community-units.js): each interior leaf stands
+ * open at 90° in the room it serves, parked against a wall; a front door folds back on the front wall.
  */
 import { mkdirSync, writeFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -208,17 +209,21 @@ function labelGroups(res) {
   return [...groups.values()].map((rooms) => ({ rooms, host: rooms.reduce((m, q) => rArea(q.rect) > rArea(m.rect) ? q : m), area: rooms.reduce((sum, q) => sum + rArea(q.rect), 0) }));
 }
 
-/** Every internal door leaf as the renderer places it, with the checks. */
+/**
+ * Every internal swing leaf from the shared layout record (partition.door.leaf), with what the checks need: the hinge
+ * on the wall line, the open leaf's tip and the free edge's closed position (the swing arc runs between them).
+ */
 function doorLeaves(res) {
   const out = [];
   for (const p of res.partitions) {
-    if (!p.door || p.role === 'opening' || p.role === 'railing' || p.role === 'balcony-slider') continue;
+    const l = p.door?.leaf;
+    if (!l || l.kind !== 'swing' || p.role === 'opening' || p.role === 'railing' || p.role === 'balcony-slider') continue;
     const len = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]);
     const dx = (p.b[0] - p.a[0]) / len, dz = (p.b[1] - p.a[1]) / len;
-    const d0 = Math.max(0, p.door.at - p.door.width / 2), d1 = Math.min(len, p.door.at + p.door.width / 2), w = d1 - d0 - 0.06;
-    const hinge = [p.a[0] + dx * (d0 + 0.03), p.a[1] + dz * (d0 + 0.03)], n = [dz, -dx];
-    const tip = [hinge[0] + n[0] * w, hinge[1] + n[1] * w], close = [p.a[0] + dx * (d0 + 0.03 + w), p.a[1] + dz * (d0 + 0.03 + w)];
-    out.push({ p, len, dx, dz, d0, d1, w, hinge, tip, close, n });
+    const d0 = Math.max(0, p.door.at - p.door.width / 2), d1 = Math.min(len, p.door.at + p.door.width / 2), w = l.w;
+    const hinge = l.axis === 'x' ? [l.hinge[0], l.line] : [l.line, l.hinge[1]], n = l.axis === 'x' ? [0, l.n] : [l.n, 0];
+    const tip = [hinge[0] + n[0] * w, hinge[1] + n[1] * w], close = l.closed;
+    out.push({ p, leaf: l, len, dx, dz, d0, d1, w, hinge, tip, close, n });
   }
   return out;
 }
@@ -253,15 +258,15 @@ function analysePlan(res) {
       const t0 = Math.min(base, base + dir * L.w), t1 = Math.max(base, base + dir * L.w);
       return Math.min(hi, t1) - Math.max(lo, t0) > L.w * 0.5;
     });
-    const hits = segs.filter((s) => s.id !== L.p.id && s !== support && segHitsRect(s, leafRect)).map((s) => s.id);
+    const hits = segs.filter((s) => s.id !== L.p.id && s !== support && !(L.leaf.rest && s.id === L.leaf.rest.id) && segHitsRect(s, leafRect)).map((s) => s.id);
     const shrink = (r, k) => ({ x0: r.x0 + k, z0: r.z0 + k, x1: r.x1 - k, z1: r.z1 - k });
     const beds = (res.obstacles || []).filter((o) => /-bed$/.test(o.id) || /^home-stair/.test(o.id)).filter((o) => overlapArea(shrink(o.rect, 0.03), leafRect) > 1e-6).map((o) => o.id);
     const outside = !inRect(L.tip, plate, 1e-3);
     const intoKind = into?.kind;
     const wrongRoom = into && ![ra, rb].includes(into.id);
     const outward = into && CIRCULATION.has(intoKind) && other && !CIRCULATION.has(kindOf(other));
-    const d = { partition: L.p.id, at: L.p.door.at, width: L.p.door.width, leafInto: into?.id ?? null, freestanding: !support, outward: !!outward,
-      hits, beds, outside, wrongRoom: !!wrongRoom };
+    const d = { partition: L.p.id, at: L.p.door.at, width: L.p.door.width, leafInto: into?.id ?? null, freestanding: !L.leaf.rest, outward: !!outward,
+      hits, beds, outside, wrongRoom: !!wrongRoom, ...(L.p.door.planAt != null ? { planAt: L.p.door.planAt } : {}) };
     doors.push(d);
     if (outside) issues.push(`门 ${L.p.id}：门扇伸出户型外框`);
     if (!into) issues.push(`门 ${L.p.id}：门扇落在无房间处`);
@@ -537,7 +542,14 @@ function drawPlan(part, L, { bare = false } = {}) {
       walls.push(line(P(wpt(F, segAt(p.a, p.b, g0))), P(wpt(F, segAt(p.a, p.b, g1))), `stroke="#8d877c" stroke-width="1" stroke-dasharray="4 3"`));
     }
   }
-  // Door leaves and swings, where the renderer stands them.
+  // Pocket doors: the leaf slid into the wall beside the opening (dashed).
+  for (const p of res.partitions) {
+    const l = p.door?.leaf;
+    if (!l || l.kind !== 'pocket') continue;
+    const a = l.axis === 'x' ? [l.hinge[0], l.line] : [l.line, l.hinge[1]], b = l.closed, q = [2 * a[0] - b[0], 2 * a[1] - b[1]];
+    doorsEl.push(line(P(wpt(F, a)), P(wpt(F, q)), `stroke="${COL.door}" stroke-width="2.4" stroke-dasharray="4 2"`));
+  }
+  // Door leaves and swings, from the layout record (the same leaves the scene draws and the nav blocks).
   for (const Lf of doorLeaves(res)) {
     const h = P(wpt(F, Lf.hinge)), t = P(wpt(F, Lf.tip)), c = P(wpt(F, Lf.close)), r = Lf.w * S;
     const cross = (t[0] - h[0]) * (c[1] - h[1]) - (t[1] - h[1]) * (c[0] - h[0]);
@@ -571,11 +583,16 @@ function drawPlan(part, L, { bare = false } = {}) {
     }
   }
   if (ent) {
-    const d0 = ent.at - ent.width / 2;
-    const h = P(wpt(F, [d0 + 0.05, 0.02])), t = P(wpt(F, [d0 + 0.05, 0.94])), c = P(wpt(F, [d0 + 0.97, 0.02])), r = 0.92 * S;
-    const cross = (t[0] - h[0]) * (c[1] - h[1]) - (t[1] - h[1]) * (c[0] - h[0]);
-    doorsEl.push(`<path d="M${n2(t[0])},${n2(t[1])} A${n2(r)},${n2(r)} 0 0 ${cross > 0 ? 1 : 0} ${n2(c[0])},${n2(c[1])}" fill="${COL.entry}" fill-opacity="0.08" stroke="${COL.entry}" stroke-width="1.2"/>`,
-      poly(band([d0 + 0.05, 0.02], [d0 + 0.05, 0.94], 0, 0.92, 0.06), `fill="${COL.entry}"`));
+    // Front door from entryDoor.leaf: 90° on a foyer side wall, or folded back 180° flat on the front wall.
+    const l = ent.leaf, hx = l.closed[0] - (l.side === 'lo' ? 1 : -1) * l.w, w = l.w, r = w * S;
+    const h = [hx, 0.02], c = [l.closed[0], 0.02], m = [hx, 0.02 + w], op = l.angle === 180 ? [l.free[0], 0.02] : m;
+    const arc = (a, b) => {
+      const A = P(wpt(F, a)), Bp = P(wpt(F, b)), H = P(wpt(F, h)), cross = (A[0] - H[0]) * (Bp[1] - H[1]) - (A[1] - H[1]) * (Bp[0] - H[0]);
+      return `A${n2(r)},${n2(r)} 0 0 ${cross > 0 ? 1 : 0} ${n2(Bp[0])},${n2(Bp[1])}`;
+    };
+    const st = P(wpt(F, c));
+    doorsEl.push(`<path d="M${n2(st[0])},${n2(st[1])} ${arc(c, m)}${l.angle === 180 ? ` ${arc(m, op)}` : ''}" fill="none" stroke="${COL.entry}" stroke-width="1.2"/>`,
+      poly(l.angle === 180 ? band([hx, l.free[1]], [l.free[0], l.free[1]], 0, w, 0.06) : band(h, m, 0, w, 0.06), `fill="${COL.entry}"`));
     // Arrow from the corridor/core side into the home, and the 入户门 tag.
     const { o, i, cx, cy, fs } = entryTag;
     doorsEl.push(`<line x1="${n2(o[0])}" y1="${n2(o[1])}" x2="${n2(i[0])}" y2="${n2(i[1])}" stroke="${COL.entry}" stroke-width="2" marker-end="url(#arrowRed)"/>`);
@@ -646,7 +663,7 @@ function drawPlan(part, L, { bare = false } = {}) {
       lx += w;
     }
     const sy2 = sy + 44;
-    chrome.push(`<text x="${pad}" y="${sy2}" font-size="11" fill="#7b756b">上北下南、左西右东（世界坐标，与俯视图同向）· 门扇按场景中的位置画成 90° 开启 · 浅灰为核心筒、走廊与邻户 · 数据：COMMUNITY_PLANS / buildLayout({ expansion: true })</text>`);
+    chrome.push(`<text x="${pad}" y="${sy2}" font-size="11" fill="#7b756b">上北下南、左西右东（世界坐标，与俯视图同向）· 门扇：开向房内、贴墙停放（与场景一致） · 浅灰为核心筒、走廊与邻户 · 数据：COMMUNITY_PLANS / buildLayout({ expansion: true })</text>`);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" font-family="${esc(FONT)}">
   ${defs}
