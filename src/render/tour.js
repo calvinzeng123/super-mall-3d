@@ -64,8 +64,8 @@ export function buildTourSteps(layout) {
     const gate = '云澜·北苑 · 商场住户通道（刷卡门禁）';
     return [
       { caption: '云澜江 · 星湾桥连接一期与二期', pos: V(120, 46, -560), target: V(-120, 14, -300), dur: 6, shadow: 320 },
-      { caption: '星湾桥 · 146 m 系杆拱与跨中玻璃挑台', pos: V(13, 1.7, -300), target: V(0, 16, -380), dur: 5, shadow: 120 },
-      { caption: '云澜江景台 · 3F 江景露台与玻璃眺台', building: 'P1', pos: V(-236, 14.2, -242), target: V(-214, 7, -345), dur: 5, shadow: 120 },
+      { caption: '星湾桥 · 146 m 系杆拱与跨中玻璃挑台', pos: V(12.5, 1.7, -326), target: V(19.5, 4.5, -368), dur: 5, shadow: 120 },
+      { caption: '云澜江景台 · 3F 江景露台与玻璃眺台', building: 'P1', pos: V(-235, 14.2, -249.5), target: V(-214, 7, -345), dur: 5, shadow: 120 },
       { caption: '云澜·北苑 · 一梯一户江景大平层与错层复式', pos: V(-150, 115, -380), target: V(-236, 55, -232), dur: 5.5, shadow: 180 },
       { caption: gate, building: 'P1', pos: V(-228, 1.7, -258), target: V(-228, 2.2, -236), dur: 4.5, shadow: 90 },
       { caption: gate, focus: 'P1-1F', pos: V(-228, 1.7, -221), target: V(-212, 1.6, -221), dur: 4 },

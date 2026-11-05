@@ -821,16 +821,44 @@ export function floorLabel(nav, layout, s) {
   }
   const F = nav.floors.get(s.floor);
   if (!F) return '';
+  const at = [s.x, s.z], inRect = (r) => !!r && s.x >= r.x0 && s.x <= r.x1 && s.z >= r.z0 && s.z <= r.z1;
   if (F.kind === 'level' || F.kind === 'mezzanine') {
-    const b = layout.buildings.find((x) => x.id === F.building);
-    const zone = F.kind === 'level' && nav.zones?.find((z) => z.floors.includes(F.id) && z.polys.some((p) => pointInPoly([s.x, s.z], p)));
-    if (zone) return `${zone.label}（${b.short} ${F.level.short}）`;
+    const b = layout.buildings.find((x) => x.id === F.building), lv = F.level;
+    // Community towers read by their full name (云澜·西苑 1 号楼), matching the signage.
+    const title = b.community ? b.name : b.short, where = b.community ? lv.short : `${b.short} ${lv.short}`;
+    const zone = F.kind === 'level' && nav.zones?.find((z) => z.floors.includes(F.id) && z.polys.some((p) => pointInPoly(at, p)));
+    if (zone) return `${zone.label}（${where}）`;
+    if (F.kind === 'level') {
+      // Residents' street vestibule (outside the card door): label only, no gate logic.
+      const vest = lv.residentsLobbies?.find((r) => inRect(r.vestibule));
+      if (vest) return `北苑 ${vest.building.slice(1)} 号楼 · 住户门厅（${where}）`;
+      const rt = lv.riverTerrace;
+      if (rt?.prows?.some((p) => inRect(p.rect))) return `云澜江景台 · 江景台玻璃挑台（${where}）`;
+      if (rt?.pieces?.some((p) => pointInPoly(at, p.outer))) return `云澜江景台（${where}）`;
+    }
     const suffix = F.kind === 'mezzanine' ? (F.unit ? ` · ${F.unit.code} 夹层` : ' · 楼梯中间平台') : '';
-    return `${b.short} · ${F.level.name}${suffix}`;
+    return `${title} · ${lv.name}${suffix}`;
   }
   if (F.kind === 'bridge') return '云环天桥';
-  const plot = layout.site.plots.find((p) => pointInPoly([s.x, s.z], p.poly));
+  const river = riverPlace(layout.site.river, s, inRect);
+  if (river) return `室外 · ${river}`;
+  const plot = layout.site.plots.find((p) => pointInPoly(at, p.poly));
   return `室外 · ${plot ? plot.name : '道路'}`;
+}
+
+/** Name of the riverside place at s: bridges and their lookouts, the glass lookout, pavilion and promenades. */
+function riverPlace(R, s, inRect) {
+  if (!R) return null;
+  for (const b of R.bridges || []) {
+    if ((b.lookouts || []).some(inRect)) return `${b.name} · 跨中玻璃挑台`;
+    if (inRect(b.deck)) return b.name;
+  }
+  for (const l of R.lookouts || []) if (inRect(l.rect)) return l.name;
+  if (inRect(R.pavilion?.rect)) return `${R.pavilion.name} · 对岸滨江公园`;
+  for (const p of R.promenades || []) if (p.bank && inRect(p.rect)) return p.bank === 'N' ? '北岸滨江绿道' : '南岸滨江步道';
+  const S = R.south;
+  if (S && s.z >= S.revetment[0] && s.z <= S.terrace[1] && (R.promenades || []).some((p) => p.bank === 'S' && s.x >= p.rect.x0 && s.x <= p.rect.x1)) return '南岸亲水平台';
+  return null;
 }
 
 

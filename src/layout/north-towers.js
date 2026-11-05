@@ -68,8 +68,13 @@ function clubPlan(F, wx0, ex1) {
   const obstacles = [
     ob('lounge-sofa-north', 'sofa', rect(wm - 2, -7.2, wm + 2, -6.4), .85), ob('lounge-table', 'table', rect(wm - 1, -5.3, wm + 1, -4.5), .45),
     ob('lounge-sofa-south', 'sofa', rect(wm - 2, -3.4, wm + 2, -2.6), .85),
-    ob('library-shelf', 'bookcase', rect(wx0 + .2, 1.5, wx0 + .6, 7.5), 2.2), ob('library-table', 'table', rect(wm - 1.2, 3.4, wm + 1.2, 4.6), .76),
+    { ...ob('library-shelf', 'bookcase', rect(wx0 + .2, 1.5, wx0 + .6, 7.5), 2.2), facing: 'E' }, ob('library-table', 'table', rect(wm - 1.2, 3.4, wm + 1.2, 4.6), .76),
+    ob('library-table-2', 'table', rect(wm + 2.4, 3.6, wm + 3.6, 4.4), .76),
+    ...[-.6, .6].flatMap((dx, i) => [ob(`library-chair-${i}`, 'chair', rect(wm + dx - .25, 2.7, wm + dx + .25, 3.2), .9),
+      { ...ob(`library-chair-${i}-south`, 'chair', rect(wm + dx - .25, 4.8, wm + dx + .25, 5.3), .9), facing: 'N' }]),
     ob('dining-table', 'table', rect(em - 2, -5.2, em + 2, -3.8), .76), ob('dining-sideboard', 'cabinet', rect(ex1 - .6, -7, ex1 - .2, -2), 1.0),
+    ...[-.9, .9].flatMap((dx, i) => [ob(`dining-chair-${i}`, 'chair', rect(em + dx - .25, -5.85, em + dx + .25, -5.35), .9),
+      { ...ob(`dining-chair-${i}-south`, 'chair', rect(em + dx - .25, -3.65, em + dx + .25, -3.15), .9), facing: 'N' }]),
     ...[-1.6, 0, 1.6].map((dx, i) => ob(`gym-treadmill-${i}`, 'treadmill', rect(em + dx - .4, 5.6, em + dx + .4, 7.4), 1.4)),
   ];
   // Glazed partitions between the river rooms and the south rooms, with wide doors.

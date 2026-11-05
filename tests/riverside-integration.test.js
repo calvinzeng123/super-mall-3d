@@ -147,7 +147,7 @@ test('西苑地库：西停车场 B1 车库 → 门户 → 刷 W1-B1-GATE → �
   const st = nav.links.find((k) => k.id === 'W1-L1').stops.find((q) => q.floor === 'W1-B1');
   r = walk(r, [st.x, st.z]);
   assert.ok(at(r.s, [st.x, st.z]), `走不到 W1-L1 (${r.s.x.toFixed(2)},${r.s.z.toFixed(2)})`);
-  assert.equal(floorLabel(nav, L, r.s), '西苑 1 号楼 · 住户电梯厅（西苑1 B1）');
+  assert.equal(floorLabel(nav, L, r.s), '西苑 1 号楼 · 住户电梯厅（B1）');
   const up = ride(r, 'W1-L1', 'W1-12F');
   assert.equal(up.s.floor, 'W1-12F');
   // 到时关门：之后从车库一侧再走又被挡住
@@ -199,4 +199,36 @@ test('园区总数（游览布局，实测）：338 层、76 部电梯、106 部
   const P = L.site.westParking;
   assert.deepEqual([P.stallCount, P.lots.length, P.evCount, P.accessibleCount], [427, 20, 51, 9]);
   assert.deepEqual([L.site.urban.buildings.length, L.site.urban.trees.length], [82, 1314]);
+});
+
+test('位置提示：江景台、玻璃挑台、星湾桥与跨中挑台、南岸步道、玻璃眺台、对岸绿道与观景亭都报出地名；社区塔楼用全名、街门门厅单独命名', () => {
+  const label = (floor, x, z) => floorLabel(nav, L, S(floor, x, z));
+  assert.equal(label('P1-3F', -235, -246), '云澜江景台（一期 3F）');
+  assert.equal(label('P1-3F', -235, -254.5), '云澜江景台 · 江景台玻璃挑台（一期 3F）');
+  assert.equal(label('P1-3F', -174, -254.5), '云澜江景台 · 江景台玻璃挑台（一期 3F）');
+  assert.equal(label('ground', -13, -330), '室外 · 星湾桥');
+  assert.equal(label('ground', -20, -363), '室外 · 星湾桥 · 跨中玻璃挑台');
+  assert.equal(label('ground', -540, -330), '室外 · 城西桥');
+  assert.equal(label('ground', -100, -282), '室外 · 南岸滨江步道');
+  assert.equal(label('ground', -228, -300), '室外 · 江景玻璃眺台');
+  assert.equal(label('ground', -100, -444), '室外 · 北岸滨江绿道');
+  assert.equal(label('ground', -228, -445), '室外 · 观景亭 · 对岸滨江公园');
+  assert.equal(label('W1-12F', -456, -241.8), '云澜·西苑 1 号楼 · 12F 五户住宅');
+  assert.ok(!label('W1-1F', -456, -224).includes('西苑1'), label('W1-1F', -456, -224));
+  assert.equal(label('T2-16F', -212, -238), '云澜·北苑 2 号楼 · 16F 错层复式');
+  for (const [b, x] of [['1', -272], ['2', -220]]) assert.equal(label('P1-1F', x, -238.8), `北苑 ${b} 号楼 · 住户门厅（一期 1F）`);
+  // 门厅只改提示，不影响门禁：街门门禁仍挡在刷卡门线上。
+  assert.ok(gates.some((g) => g.id === 'T2-STREET-GATE'));
+});
+
+test('方庭 3F 去江景台的北通道口正对走廊：北侧扶梯移到通道口以东，3F 走廊沿 x 方向能直接走进通道并到江景台', () => {
+  const art = L.escalators.filter((e) => /SQ-ART-(3F|5F)/.test(e.id));
+  assert.equal(art.length, 4);
+  for (const e of art) assert.ok(Math.min(e.bottom.x, e.top.x) > -216, `${e.id} 仍挡在通道口前 (${e.bottom.x.toFixed(2)})`);
+  // 通道口 x[−224,−216] 南侧 4 m 内整条可站（不再只剩扶梯与口线之间 1.1 m 的缝）。
+  for (let x = -223.5; x <= -216.5; x += .5) for (let z = -223.5; z <= -220; z += .5) assert.ok(clear(nav, S('P1-3F', x, z)), `通道口前 (${x},${z}) 站不了人`);
+  let r = { s: S('P1-3F', -232, -220.5), now: 0 };
+  assert.ok(clear(nav, r.s));
+  r = route(r, [[-220, -220.5], [-220, -224.5], [-220, -232], [-220, -235.5]]);
+  assert.ok(at(r.s, [-220, -235.5], .2), `没走进北通道：(${r.s.x.toFixed(2)},${r.s.z.toFixed(2)})`);
 });

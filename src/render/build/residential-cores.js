@@ -38,6 +38,7 @@ export function buildResidentialCores(ctx) {
       // Parking batches carry no 'stone' material: garages clad in concrete (+0 draw calls).
       const K = garage ? 'concrete' : 'stone';
       B.frame(b.frame, () => core(B, lv, { door, garage, H, y0, stairs, lifts, K }));
+      if (door) liftPlates(ctx, L, lv, b, lifts, y0);
       if (door) residents(ctx, L, lv, b, B, { garage, H, y0, K });
       stats.levels++;
     }
@@ -76,7 +77,19 @@ function core(B, lv, { door, garage, H, y0, stairs, lifts, K }) {
     const serves = e.serves.includes(lv.id);
     B.get('metal').box(e.lu, y0 + 1.15, band.z0 + .01, 1.3, 2.35, .06, '#5f666d');
     B.get('satin').box(e.lu, y0 + 1.1, band.z0 + .03, 1.1, 2.2, .04, serves ? '#c9ced3' : clad);
-    if (serves) B.get('glow').box(e.lu, y0 + 2.5, band.z0 + .05, .5, .16, .02, e.role === 'fire' ? '#ff7a45' : '#d9c39a');
+    if (!serves) continue;
+    // Two leaves with a centre seam, a call-button plate beside the frame and the lift's name plate above.
+    B.get('metal').box(e.lu, y0 + 1.1, band.z0 + .052, .014, 2.2, .01, '#4a5056');
+    B.get('metal').box(e.lu + .8, y0 + 1.15, band.z0 + .02, .12, .3, .04, '#9ea4a8');
+    B.get('glow').box(e.lu + .8, y0 + 1.2, band.z0 + .045, .045, .045, .012, '#ffd9a0');
+    B.get('glow').box(e.lu + .8, y0 + 1.09, band.z0 + .045, .045, .045, .012, '#ffd9a0');
+    B.get('satin').box(e.lu, y0 + 2.5, band.z0 + .04, .62, .22, .04, e.role === 'fire' ? '#7a2c1c' : '#3b3226');
+  }
+  if (door) {
+    // Header over the lobby ↔ landing opening, up to the ceiling (closes the slot into the core).
+    const o0 = band.z0 + .2, o1 = band.z1 - .2;
+    B.get(K).box(C.rect.x0 + .07, y0 + (2.8 + h) / 2, (o0 + o1) / 2, .3, h - 2.8, o1 - o0 + .02, clad);
+    B.get('metal').box(C.rect.x0 + .07, y0 + 2.78, (o0 + o1) / 2, .32, .05, o1 - o0, TRIM);
   }
   const stairDoors = stairs.map((s) => [s.door.x0, s.door.x1]);
   wallRun(B, K, band.x0, band.z1 + .1, band.x1, band.z1 + .1, y0, h, .2, clad, stairDoors);
@@ -108,8 +121,7 @@ function residents(ctx, L, lv, b, B, { garage, H, y0, K }) {
     B.get('satin').box(cx(desk), y0 + .52, cz(desk), rw(desk), 1.04, rd(desk), '#6f5a44');
     B.get('stone').box(cx(desk), y0 + 1.07, cz(desk), rw(desk) + .06, .06, rd(desk) + .06, '#efe9df');
     B.get('glow').box(cx(desk), y0 + .2, cz(desk), rw(desk) - .2, .04, rd(desk) + .02, '#ffe2b0');
-    B.get('metal').box(cx(lockers), y0 + 1.1, cz(lockers), rw(lockers), 2.2, rd(lockers), '#8d949a');
-    for (let z = lockers.z0 + .4; z < lockers.z1 - .2; z += .8) B.get('glow').box(cx(lockers), y0 + 1.95, z, rw(lockers) + .02, .03, .5, '#cfe8ff');
+    lockerWall(B, A, lockers, y0);
     streetDoor(L, A, y0);
   }
   // Every gate line closes to the ceiling: glass transom over the door frame (glass doors),
@@ -146,6 +158,37 @@ function residents(ctx, L, lv, b, B, { garage, H, y0, K }) {
     }
   }
   void n;
+}
+
+/** 信报与快递柜：浅色烤漆柜体、0.5 m 见方的柜门分缝与把手，每门一颗小指示灯（面向大堂）。 */
+function lockerWall(B, A, q, y0) {
+  const alongZ = rd(q) >= rw(q), walls = A.lobbyWalls || [];
+  // The front faces away from the lobby wall the cabinet stands against.
+  const near = (x) => walls.some((w) => Math.abs(w.x0 - w.x1) < 1e-6 && Math.abs(w.x0 - x) < .5);
+  const nearZ = (z) => walls.some((w) => Math.abs(w.z0 - w.z1) < 1e-6 && Math.abs(w.z0 - z) < .5);
+  const sign = alongZ ? (near(q.x0) ? 1 : -1) : (nearZ(q.z0) ? 1 : -1), len = alongZ ? rd(q) : rw(q), lo = alongZ ? q.z0 : q.x0;
+  const face = alongZ ? (sign > 0 ? q.x1 : q.x0) : (sign > 0 ? q.z1 : q.z0);
+  const at = (t, off) => alongZ ? [face + sign * off, t] : [t, face + sign * off];
+  const box = (key, t, off, y, lt, lo2, h, color) => { const [x, z] = at(t, off); B.get(key).box(x, y0 + y, z, alongZ ? lo2 : lt, h, alongZ ? lt : lo2, color); };
+  box('satin', lo + len / 2, -(alongZ ? rw(q) : rd(q)) / 2, 1.1, len, alongZ ? rw(q) : rd(q), 2.2, '#d7d9d6');
+  box('satin', lo + len / 2, -.02, .05, len, .04, .1, '#5e6266');
+  const cols = Math.max(2, Math.round(len / .5)), rows = [.1, .62, 1.14, 1.66, 2.18];
+  for (let k = 1; k < cols; k++) box('metal', lo + len * k / cols, .004, 1.14, .012, .008, 2.08, '#80868b');
+  for (const y of rows.slice(1, -1)) box('metal', lo + len / 2, .004, y, len, .008, .012, '#80868b');
+  for (let k = 0; k < cols; k++) for (let j = 0; j < rows.length - 1; j++) {
+    const t = lo + len * (k + .8) / cols, y = (rows[j] + rows[j + 1]) / 2;
+    box('metal', t, .008, y, .02, .016, .1, '#a9aeb2');
+    box('glow', lo + len * (k + .2) / cols, .008, y + .17, .03, .012, .03, (k + j) % 5 ? '#7fd38f' : '#ffd27a');
+  }
+}
+
+/** Name plates over the residents' lift doors on the P1 host levels (one sign cell per lift role). */
+function liftPlates(ctx, L, lv, b, lifts, y0) {
+  const S = L.signs, atlas = ctx.atlas?.[lv.id], band = NORTH_CORE.band;
+  if (!S || !atlas?.cell) return;
+  S.frame(b.frame, () => {
+    for (const e of lifts) if (e.serves.includes(lv.id)) S.place(e.lu, y0 + 2.5, band.z0 + .065, .58, .18, 'S', atlas.cell(`res-lift-${e.role}`));
+  });
 }
 
 /**

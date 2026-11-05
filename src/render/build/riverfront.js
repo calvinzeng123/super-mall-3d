@@ -7,6 +7,7 @@ import { textMask, FONT_CN } from '../textures.js';
 import { SLAB_T } from './shell.js';
 import { RIVER_TERRACE } from '../../layout/river-terrace.js';
 import { expansionTerraceEdges, terraceSupports } from './p1-expansion.js';
+import { JOINT } from './river.js';
 
 const FASCIA = '#c9c5bd', GRILLAGE = '#8b949b';
 
@@ -15,6 +16,10 @@ const FASCIA = '#c9c5bd', GRILLAGE = '#8b949b';
 export function glassProw(B, FB, r, y) {
   const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
   B.get('glass').box(cx, y - .01, cz, w, .06, d, '#ffffff');
+  // Light panel joints on the glass and a bright nosing along the mouth: the floor reads as glass, not a pit.
+  for (let x = r.x0 + 1.2; x < r.x1 - .4; x += 1.2) B.get('extMetal').box(x, y + .025, cz, .03, .012, d, JOINT);
+  for (let z = r.z0 + 1.4; z < r.z1 - .4; z += 1.4) B.get('extMetal').box(cx, y + .025, z, w, .012, .03, JOINT);
+  FB?.get('glow').box(cx, y + .03, r.z1 - .04, w, .02, .05, COLORS.led);
   for (const x of [r.x0 + .08, r.x1 - .08]) B.get('extMetal').box(x, y - .24, cz, .16, .4, d, GRILLAGE);
   B.get('extMetal').box(cx, y - .24, r.z0 + .08, w, .4, .16, GRILLAGE);
   for (let x = r.x0 + 2.4; x < r.x1 - 1; x += 2.4) B.get('extMetal').box(x, y - .18, cz, .07, .24, d, GRILLAGE);

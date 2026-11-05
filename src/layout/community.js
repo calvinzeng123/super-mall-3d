@@ -132,7 +132,7 @@ function levelDefs() {
 }
 
 const levelName = (spec, d) => d.kind === 'garage-lobby' ? `${d.short} 住户电梯厅 · 接共享车库`
-  : d.kind === 'lobby' ? `1F ${spec.name} · 社区大堂` : d.kind === 'roof' ? 'RF 屋顶花园' : `${d.short} 五户住宅`;
+  : d.kind === 'lobby' ? '1F 社区大堂' : d.kind === 'roof' ? 'RF 屋顶花园' : `${d.short} 五户住宅`;
 const levelLabel = (spec, d) => d.kind === 'garage-lobby' ? '住户刷卡进入 · 西侧共享车库'
   : d.kind === 'lobby' ? '门禁大堂 · 礼宾 · 物业服务中心 · 信报快递' : d.kind === 'roof' ? '屋顶花园 · 电梯直达'
     : `3梯5户 · 两房 / 三房 / 四房 · ${spec.name}`;

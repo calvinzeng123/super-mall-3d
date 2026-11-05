@@ -332,11 +332,21 @@ function entrances(ctx) {
     const F = frame(mx, mz, Math.atan2(e.nz, e.nx) * DEG);
     const cw = width + (main ? 8 : 4);
     const y0 = L.lv.elev;
+    // A residents' street door on the same façade line keeps its own canopy: this one stops 1.4 m short of it.
+    let [v0, v1] = [-cw / 2, cw / 2];
+    for (const o of ctx.layout.entrances) {
+      if (o === e || !o.residentialCore || o.level !== e.level) continue;
+      const ox = (o.seg.x0 + o.seg.x1) / 2 - mx, oz = (o.seg.z0 + o.seg.z1) / 2 - mz, off = ox * e.nx + oz * e.nz, v = -ox * e.nz + oz * e.nx;
+      if (Math.abs(off) > .3 || Math.abs(v) > cw / 2 + 6) continue;
+      const keep = (o.width + 1.2) / 2 + 1.4;
+      if (v > 0) v1 = Math.min(v1, v - keep); else v0 = Math.max(v0, v + keep);
+    }
+    const vc = (v0 + v1) / 2, vw = v1 - v0;
     if (!custom) FB.frame(F, () => {
-      FB.get('glass').box(depth / 2, y0 + hY, 0, depth, 0.06, cw, 0xffffff);
-      FB.get('extMetal').box(depth / 2, y0 + hY + 0.18, 0, depth + 0.1, 0.28, cw + 0.2, COLORS.white);
-      FB.get('glow').box(depth, y0 + hY + 0.05, 0, 0.08, 0.05, cw, COLORS.led);
-      for (const k of [-1, 1]) FB.get('extMetal').cyl(depth - 0.4, y0, k * (cw / 2 - 0.6), 0.16, hY, COLORS.steel, 12);
+      FB.get('glass').box(depth / 2, y0 + hY, vc, depth, 0.06, vw, 0xffffff);
+      FB.get('extMetal').box(depth / 2, y0 + hY + 0.18, vc, depth + 0.1, 0.28, vw + 0.2, COLORS.white);
+      FB.get('glow').box(depth, y0 + hY + 0.05, vc, 0.08, 0.05, vw, COLORS.led);
+      for (const v of [v0 + 0.6, v1 - (v1 < cw / 2 ? 0.8 : 0.6)]) FB.get('extMetal').cyl(depth - 0.4, y0, v, 0.16, hY, COLORS.steel, 12);
       // The doors stand open (nav walks straight through): sliding leaves are
       // parked behind the jambs, so only the frame, jamb posts and a glazed
       // transom above head height are drawn inside the door line.

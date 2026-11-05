@@ -96,7 +96,8 @@ export function gatePickInfo(layout, g) {
 export function buildAccessGates(ctx) {
   const gates = ctx.layout.accessControl?.gates || [];
   const leafGeo = new THREE.BoxGeometry(1, 1, 1), ledGeo = new THREE.BoxGeometry(1, 1, 1);
-  const leafMat = ctx.mats.base.glass, ledMat = ctx.accessGateLedMaterial ||= new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  // Tinted flaps (like smoked acrylic) so a closed lane reads at a glance; open flaps fold against the cabinets.
+  const leafMat = ctx.mats.base.glassTint || ctx.mats.base.glass, ledMat = ctx.accessGateLedMaterial ||= new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
   const byFloor = new Map();
   for (const g of gates) for (const f of g.floors) {
     if (!ctx.levels[f]) continue;

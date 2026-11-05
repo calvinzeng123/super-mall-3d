@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { labelTexture } from '../textures.js';
 import { toW } from '../../layout/geom.js';
+import { LABEL_PRIORITY } from '../label-declutter.js';
 
 const cache = new Map();
 const STYLE = {
@@ -50,6 +51,7 @@ export function buildLabels(ctx) {
   const put = (group, text, x, y, z, style, icon, sub, size) => {
     const s = sprite(text, style, icon, sub, size);
     s.position.set(x, y, z);
+    s.userData.prio = LABEL_PRIORITY[style] ?? 1;
     group.add(s);
     return s;
   };
@@ -214,7 +216,7 @@ export function buildLabels(ctx) {
       continue;
     }
     const top = Math.max(...layout.levels.filter((l) => l.building === b.id).map((l) => l.elev));
-    put(S, b.name, b.center[0], top + 26, b.center[1], 'title', 'star', b.en, 0.03);
+    put(S, b.name, b.center[0], top + 26, b.center[1], 'title', 'star', b.en, 0.03).userData.building = b.id;
   }
   for (const e of layout.entrances.filter((x) => x.to === 'site')) {
     if (e.kiosk) {

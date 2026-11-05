@@ -40,6 +40,8 @@ import { createSuiteLighting } from './suite-lighting.js';
 import { loadResidentialAssets } from './residential-asset.js';
 import { createResidentialLighting } from './residential-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
+import { riverPicks } from './build/river.js';
+import { declutterLabels, towerOccluders } from './label-declutter.js';
 import { unitFront } from '../layout/nav.js';
 import { createExploreVisibility } from './explore-visibility.js';
 import { buildTransitCenter } from './build/transit-center.js';
@@ -153,7 +155,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, 'lift', text, '#3b3226') });
     return lv.elev < 0 ? [sign('garage', `北苑 ${n} 号楼 · 住户电梯厅 · 刷卡进入`)]
       : [sign('mall', '云澜·北苑 住户通道 · RESIDENTS'), sign('lobby', `北苑 ${n} 号楼 · 住户大堂`), sign('name', `云澜·北苑 ${n} 号楼`)];
-  });
+  }).concat((lv.residentsLobbies || []).length ? [['private-w', '住户电梯 W'], ['fire', '消防电梯'], ['private-e', '住户电梯 E']].map(([role, text]) => ({ id: `res-lift-${role}`,
+    draw: (g, x, y, cw, ch) => drawWayfinding(g, x, y, cw, ch, 'lift', text, role === 'fire' ? '#7a2c1c' : '#3b3226') })) : []);
   const makeFloorAtlas = (lv, materials = mats) => {
     const atlas = makeSignAtlas([...lv.units.map(u => ({ id: u.id, brand: u.brand })), ...wayfindingEntries, ...residentSigns(lv)]);
     atlas.material = materials.sign(atlas.texture);
@@ -197,6 +200,16 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   root.add(siteGroup);
   ctx.site = { group: siteGroup, batch: new BatchSet(mats.base), labels: new THREE.Group(), picks: new THREE.Group(), flows: null };
   siteGroup.add(ctx.site.labels, ctx.site.picks);
+  // Orbit-view labels: drop the ones behind a tower and keep one per overlap (re-run only when the view changes).
+  const labelOccluders = towerOccluders(layout);
+  let labelView = '';
+  ctx.dynamic.push({ name: 'site-label-declutter', update() {
+    if (!ctx.site.labels.visible) { labelView = ''; return; }
+    const key = `${camera.position.toArray().map((n) => n.toFixed(1))}|${controls.target.toArray().map((n) => n.toFixed(1))}|${camera.aspect.toFixed(3)}|${camera.fov}`;
+    if (key === labelView) return;
+    labelView = key;
+    declutterLabels(ctx.site.labels.children.filter((s) => s.isSprite), camera, labelOccluders, { reach: Math.max(500, 4 * camera.position.distanceTo(controls.target)) });
+  } });
 
   const steps = [
     ['搭建楼板与外立面', buildShell],
@@ -425,7 +438,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     setHospitalityCut(ctx, b.id, !explore && selectedLevel && selectedLevel.kind !== 'roof' ? selectedLevel.elev + 0.05 : Infinity);
     if (B.exterior) B.exterior.visible = true;
     for (const L of B.levels) {
-      const active = L.lv.id === wanted || companions.has(L.lv.id) || (!!explore && visibleExploreLevels.has(L.lv.id) && L.lv.elev <= 0);
+      const active = L.lv.id === wanted || companions.has(L.lv.id) || (!!explore && visibleExploreLevels.has(L.lv.id) && L.lv.elev <= 0
+        && !(L.lv.elev < 0 && !inside && !explore.under && (ctx.lvById[explore.level]?.elev ?? 0) > 4));
       const common = (!explore && !focus && (L.lv.short === '1F' || L.lv.kind === 'roof'))
         || (!!explore && !explore.under && L.lv.kind === 'roof');
       L.group.visible = active || common;
@@ -465,6 +479,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   function applyExploreVisibility() {
     const ex = state.explore;
     visibleExploreLevels = resolveExploreVisibility(ex);
+    // Up on an upper floor the ground hides every other building's basements: skip drawing them
+    // (at street level they stay, for the views down ramps and stairwells).
+    const high = !ex.under && (ctx.lvById[ex.level]?.elev ?? 0) > 4;
     for (const B of Object.values(ctx.buildings)) {
       if (B.b.kind === 'tower') { towerVisibility(B, ex); continue; }
       const metro = B.b.kind === 'metro';
@@ -473,7 +490,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       for (const L of B.levels) {
         const lv = L.lv;
         const connected = visibleExploreLevels.has(lv.id);
-        L.group.visible = B.b.undergroundOnly ? connected || lv.elev >= 0 : metro ? inside || connected || lv.short === 'B1' : true;
+        L.group.visible = high && !inside && lv.elev < 0 ? false
+          : B.b.undergroundOnly ? connected || lv.elev >= 0 : metro ? inside || connected || lv.short === 'B1' : true;
         L.base.visible = (inside && (ex.under || lv.kind !== 'parking')) || (peek && lv.elev >= 0)
           || connected || floorCache?.active(lv.id) || lv.kind === 'roof' || (B.b.kind === 'street' && lv.elev >= 0);
         L.facade.visible = !metro;
@@ -741,8 +759,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       if (target) controls.target.set(...target);
       if (shadow) env.setShadowFocus(controls.target.clone(), shadow);
       for (const L of Object.values(ctx.levels)) { L.offset = L.offsetTarget; L.group.position.y = L.offset; }
-      // 漫游时相机由漫游控制器摆放，OrbitControls 的俯仰限制会把视线掰走
-      if (!state.explore) controls.update();
+      // 漫游时相机由漫游控制器摆放，OrbitControls 的俯仰限制会把视线掰走；同时给了机位与目标时
+      // 直接按导览的方式摆相机（lookAt），不经 controls.update() 的俯仰夹角，仰视镜头与导览一致。
+      if (pos && target) camera.lookAt(controls.target);
+      else if (!state.explore) controls.update();
       updateNear();
       for (let i = 0; i < n; i++) {
         env.night = env.target;
@@ -983,6 +1003,7 @@ function buildPicks(ctx) {
   for (const r of layout.ramps.filter((x) => x.type.startsWith('street'))) {
     pickBox(ctx.site.picks, geo, mat, r.frame, r.lane, -2, 4, { kind: 'facility', title: r.name, desc: r.type === 'street-in' ? '15% 坡道下至 B1' : '由 B1 上行驶出' });
   }
+  for (const [r, y0, h, data] of riverPicks(layout)) pickBox(ctx.site.picks, geo, mat, IDENTITY, r, y0, h, data);
   // 整栋楼：园区视角点击进入该期（街区按各楼栋体量 + 街巷地面拾取，避免挡住上空的天桥）
   for (const b of layout.buildings) {
     if (b.kind === 'metro' || b.undergroundOnly) continue;

@@ -8,7 +8,7 @@ import { siteGroundHoles } from '../src/render/build/site.js';
 import { flatShapeGeometry } from '../src/render/build/shell.js';
 import { cutSurfaceShapes } from '../src/render/build/surface-shapes.js';
 import { buildUrbanDistrict } from '../src/render/build/urban.js';
-import { buildRiver, riverBridgeParts, riverRailRuns, riverPlaques, archY } from '../src/render/build/river.js';
+import { buildRiver, riverBridgeParts, riverRailRuns, riverPlaques, archY, riverPicks } from '../src/render/build/river.js';
 import { buildForecourt } from '../src/render/build/forecourt.js';
 import { buildRiverTerrace, maskRects } from '../src/render/build/riverfront.js';
 import { buildP1ExpansionExterior } from '../src/render/build/p1-expansion.js';
@@ -224,4 +224,29 @@ test('星湾桥铭牌：四块铜牌朝人行道一面各有“星湾桥”字�
   assert.deepEqual([img(b).width, img(b).height], [img(a).width, img(a).height], '招牌图集变大了');
   assert.equal(triangles(b.signs[0]) - triangles(a.signs[0]), 4 * 2, '应正好多 4 块字牌');
   for (const r of [a, b]) r.ctx.site.group.traverse(m => m.geometry?.dispose());
+});
+
+test('云澜江信息卡：星湾桥（含两处跨中挑台）、四座梁桥、江景玻璃眺台与观景亭都有拾取卡片', () => {
+  const picks = riverPicks(L), titles = picks.map(([, , , d]) => d.title);
+  assert.ok(titles.some((t) => /^星湾桥 · 146 m 系杆拱/.test(t)), titles.join(' / '));
+  assert.equal(titles.filter((t) => t === '星湾桥 · 跨中玻璃挑台').length, 2);
+  for (const n of ['城西二桥', '城西桥', '城东桥', '城东二桥']) assert.ok(titles.includes(`${n} · 跨江梁桥`), n);
+  assert.ok(titles.includes('江景玻璃眺台') && titles.includes('观景亭'));
+  for (const [r, , h, d] of picks) assert.ok(r.x1 > r.x0 && r.z1 > r.z0 && h > 1 && d.desc, d.title);
+});
+
+test('观景亭是坡屋面木亭：脊高 ≥ 5 m，屋面两坡倾斜、四周有檐口，不再是一块平板', () => {
+  const ctx = context();
+  buildRiver(ctx);
+  const pv = R.pavilion.rect, B = ctx.site.batch, inside = (x, z) => x > pv.x0 - 1 && x < pv.x1 + 1 && z > pv.z0 - 1.2 && z < pv.z1 + 1.2;
+  const timber = B.sets.facadeTimber, ys = [];
+  for (let i = 0; i < timber.n; i++) if (inside(timber.pos[i * 3], timber.pos[i * 3 + 2])) ys.push(timber.pos[i * 3 + 1]);
+  assert.ok(Math.max(...ys) > 5, `脊高 ${Math.max(...ys).toFixed(2)}`);
+  // 屋面斜：亭子范围内有法线既不水平也不竖直的木面（两坡屋面）。
+  let sloped = 0;
+  for (let i = 0; i < timber.n; i++) {
+    const ny = Math.abs(timber.nor[i * 3 + 1]) / 127;
+    if (inside(timber.pos[i * 3], timber.pos[i * 3 + 2]) && ny > .5 && ny < .99) sloped++;
+  }
+  assert.ok(sloped >= 12, `坡屋面顶点 ${sloped}`);
 });

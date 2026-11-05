@@ -13,6 +13,8 @@ import { FONT_CN, FONT_EN } from '../textures.js';
 
 const BED_BOTTOM = -7.4;
 const STONE = '#bdb5a5', STONE_LIGHT = '#cfc8b8', STEEL_WHITE = '#eef0f1', GRILLAGE = '#8b949b';
+/** Light stainless panel joints on walk-on glass, so the floor reads as a surface from above. */
+export const JOINT = '#e4ecee';
 const subtractX = (runs, a, b) => runs.flatMap(([p, q]) => b <= p || a >= q ? [[p, q]] : [[p, a], [b, q]].filter(([u, v]) => v - u > .1));
 
 /** x-runs of the south bank railing: the whole render width minus every deck and the bank lookout. */
@@ -106,6 +108,7 @@ export function riverBridgeParts(river) {
       for (const r of b.lookouts) {
         const lx = (r.x0 + r.x1) / 2, lz = (r.z0 + r.z1) / 2, out = r.x0 < 0 ? r.x0 : r.x1;
         box(b.id, 'lookout-glass', 'glass', lx, top - .03, lz, r.x1 - r.x0, .06, r.z1 - r.z0, '#ffffff');
+        for (let z = r.z0 + 1.5; z < r.z1 - .5; z += 1.5) box(b.id, 'lookout-joint', 'extMetal', lx, top + .005, z, r.x1 - r.x0, .012, .035, JOINT);
         for (const z of [r.z0 + .12, r.z1 - .12]) box(b.id, 'lookout-frame', 'extMetal', lx, top - .26, z, r.x1 - r.x0, .4, .22, GRILLAGE);
         box(b.id, 'lookout-frame', 'extMetal', out, top - .26, lz, .22, .4, r.z1 - r.z0, GRILLAGE);
         for (let z = r.z0 + 3; z < r.z1 - 1; z += 3) box(b.id, 'lookout-frame', 'extMetal', lx, top - .2, z, r.x1 - r.x0, .26, .08, GRILLAGE);
@@ -208,9 +211,12 @@ export function buildRiver(ctx) {
   // floors (renderOrder 2) and the curtain-wall and window glassTint (renderOrder 0, no depth write), which
   // a transparent sheet at renderOrder 1 painted over. Softened: on a 112 m sheet the park-lake mirror
   // finish shows the room environment's light panels as hard white patches.
-  const water = mats.base.water.clone();
-  Object.assign(water, { roughness: .3, metalness: .2, envMapIntensity: .3, transparent: false, opacity: 1 });
-  water.color?.set?.(0x245a72);
+  // Physical water (ior 1.33) with the specular lobe turned down: the sun / moon glint and the sky reflection
+  // stay a soft sheen at grazing angles instead of a milky white sheet, and both dim with the night factor
+  // so the river goes dark at night instead of glowing like fog.
+  const water = new THREE.MeshPhysicalMaterial({ name: 'river-water', color: 0x245a72, roughness: .38, metalness: 0, ior: 1.33,
+    specularIntensity: .4, envMapIntensity: .14, transparent: false, opacity: 1 });
+  mats.onNight?.((t) => { water.envMapIntensity = .14 * (1 - .85 * t); water.specularIntensity = .4 * (1 - .7 * t); });
   add(flatShapeGeometry(shapeFromPoly(W.poly), W.y), water, 'river-water', 1);
   const bedMat = new THREE.MeshStandardMaterial({ color: 0x1f3d46, roughness: .95 });
   add(flatShapeGeometry(shapeFromPoly(rectPoly(rect(R.render.x0, W.z0 + 6, R.render.x1, W.z1 + .5))), W.bed), bedMat, 'river-bed');
@@ -264,6 +270,10 @@ export function buildRiver(ctx) {
     for (const q of [rect(r.x0, r.z0, g.x0, r.z1), rect(g.x1, r.z0, r.x1, r.z1), rect(g.x0, g.z1, g.x1, r.z1)])
       stone.box((q.x0 + q.x1) / 2, -.41, (q.z0 + q.z1) / 2, q.x1 - q.x0, .5, q.z1 - q.z0, STONE_LIGHT);
     B.get('glass').box((g.x0 + g.x1) / 2, -.17, (g.z0 + g.z1) / 2, g.x1 - g.x0, .06, g.z1 - g.z0, '#ffffff');
+    // Panel joints and a bright nosing along the mouth so the glass reads as a floor, not a hole.
+    for (let x = g.x0 + 1.5; x < g.x1 - .5; x += 1.5) B.get('extMetal').box(x, -.135, (g.z0 + g.z1) / 2, .035, .012, g.z1 - g.z0, JOINT);
+    for (let z = g.z0 + 2; z < g.z1 - .5; z += 2) B.get('extMetal').box((g.x0 + g.x1) / 2, -.135, z, g.x1 - g.x0, .012, .035, JOINT);
+    B.get('glow').box((g.x0 + g.x1) / 2, -.13, g.z1 - .05, g.x1 - g.x0, .02, .06, COLORS.led);
     for (let x = g.x0 + 3; x < g.x1 - 1; x += 3) B.get('extMetal').box(x, -.36, (g.z0 + g.z1) / 2, .08, .3, g.z1 - g.z0, GRILLAGE);
     B.get('extMetal').box((g.x0 + g.x1) / 2, -.38, g.z0 + .12, g.x1 - g.x0, .36, .24, GRILLAGE);
     glassRail(B, r.x0, r.z0 + .1, r.x1, r.z0 + .1, -.14, { h: 1.2 });
@@ -276,8 +286,18 @@ export function buildRiver(ctx) {
     const r = pv.rect, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
     stone.box(cx, -.09, cz, r.x1 - r.x0, .1, r.z1 - r.z0, STONE_LIGHT);
     for (const [x, z] of pv.columns) B.get('facadeTimber').box(x, 1.66, z, .4, 3.6, .4, '#8a6a48');
-    B.get('facadeTimber').box(cx, 3.6, cz, r.x1 - r.x0 + 1.2, .28, r.z1 - r.z0 + 1.2, '#7a5a3a');
-    B.get('extMetal').box(cx, 3.82, cz, r.x1 - r.x0 + 1.4, .12, r.z1 - r.z0 + 1.4, '#3f4448');
+    // Perimeter and tie beams, then a shallow gabled timber roof with a ridge beam and eave fascias.
+    const W = r.x1 - r.x0, D = r.z1 - r.z0, eave = 3.72, rise = 1.5, half = D / 2 + .7;
+    for (const z of [r.z0 + .2, r.z1 - .2]) B.get('facadeTimber').box(cx, 3.56, z, W + .2, .32, .3, '#7a5a3a');
+    for (const x of [r.x0 + .2, cx - W / 4, cx, cx + W / 4, r.x1 - .2]) B.get('facadeTimber').box(x, 3.56, cz, .26, .3, D, '#7a5a3a');
+    const tilt = Math.atan2(rise, half), len = Math.hypot(rise, half);
+    for (const s of [-1, 1]) {
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), s * tilt);
+      B.get('facadeTimber').shape('box', new THREE.Vector3(cx, eave + rise / 2 + .08, cz + s * half / 2), q, new THREE.Vector3(W + 1.4, .16, len), '#6e4f33');
+      B.get('extMetal').box(cx, eave - .02, cz + s * half, W + 1.5, .22, .08, '#3f4448');
+    }
+    B.get('facadeTimber').box(cx, eave + rise + .14, cz, W + 1.5, .2, .3, '#5e4128');
+    for (const x of [r.x0 - .7, r.x1 + .7]) B.get('facadeTimber').box(x, eave + rise / 2, cz, .1, rise, .24, '#5e4128');
     for (const dx of [-6, 0, 6]) bench(B, cx + dx, -.14, cz + .6, 0);
   }
 
@@ -291,4 +311,19 @@ export function buildRiver(ctx) {
   (ctx.site.signs ||= []).push(...plaqueSigns(R));
   buildRiverTerrace(ctx);
   return { meshes };
+}
+
+/** Info cards for 云澜江's structures: 星湾桥 and its lookouts, the girder bridges, the glass lookout and the pavilion. */
+export function riverPicks(layout) {
+  const R = layout.site?.river, out = [];
+  if (!R) return out;
+  for (const b of R.bridges || []) {
+    const arch = b.kind === 'tied-arch';
+    out.push([b.deck, -2.4, arch ? (b.rise || 30) + 2.4 : 4, { kind: 'facility', title: arch ? `${b.name} · ${b.span} m 系杆拱` : `${b.name} · 跨江梁桥`,
+      desc: arch ? `${b.en || ''} · 双向车道 + 两侧人行道 · 跨中玻璃挑台`.replace(/^ · /, '') : `${b.span} m 三跨连续梁 · 车行 + 两侧人行道 · 跨云澜江` }]);
+    for (const l of b.lookouts || []) out.push([l, -.5, 2.2, { kind: 'facility', title: `${b.name} · 跨中玻璃挑台`, desc: '悬挑玻璃地面 · 俯瞰云澜江' }]);
+  }
+  for (const l of R.lookouts || []) out.push([l.rect, -1, 2.6, { kind: 'facility', title: l.name, desc: `${l.en} · 南岸滨江步道 · 悬挑玻璃地面` }]);
+  if (R.pavilion) out.push([R.pavilion.rect, -.2, 5.4, { kind: 'facility', title: R.pavilion.name, desc: `${R.pavilion.en} · 对岸滨江公园 · 远眺一期江景台与北苑` }]);
+  return out;
 }

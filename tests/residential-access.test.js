@@ -130,8 +130,9 @@ test('够不到：从公共一侧（读卡点）出发、门禁关闭时能走�
 
 test('穿越层封闭：B1M、2F–6F 从方庭北环廊朝核心筒走，停在核心筒外；住户楼梯只在开门层可互动', () => {
   for (const f of NORTH_SITE.hostPassLevels) for (const t of NORTH_SITE.towers) {
-    const x = (t.core[0] + t.core[1]) / 2, s = S(f, x, -221);
-    assert.ok(clear(nav, s), `${f} 环廊起点`);
+    // 3F–6F：方庭北侧扶梯（移到江景台通道口以东）挡在 T2 核心筒正前方，起点取扶梯与核心筒之间的走道。
+    const x = (t.core[0] + t.core[1]) / 2, s = [-221, -223.5].map((z) => S(f, x, z)).find((q) => clear(nav, q));
+    assert.ok(s, `${f} 环廊起点`);
     const r = walk(s, [x, -232]);
     assert.ok(r.s.z >= -224.4, `${f} 走进了 ${t.id} 核心筒 (z=${r.s.z.toFixed(2)})`);
   }

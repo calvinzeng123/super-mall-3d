@@ -214,8 +214,13 @@ export function lobbyFurniture(B,o,y) {
     for(let i=0;i<n;i++)for(let j=0;j<rows;j++) {
       const a=(i+.5)/n,bh=h/rows-.04,along=frontX?r.z0+a*d:r.x0+a*w,yy=y+(j+.5)*h/rows;
       if(o.type==='bookcase') {
-        B.get('extSatin').box(frontX?r.x0-.005:along,yy,frontX?along:r.z1+.005,frontX?.035:w/n-.035,bh,frontX?d/n-.035:.035,'#5f5546');
-        for(let k=0;k<4;k++)B.get('satin').box(frontX?r.x0-.025:along+(k-1.5)*.14,yy-.025,frontX?along+(k-1.5)*.14:r.z1+.04,frontX?.055:.095,bh*(.58+k*.07),frontX?.095:.055,['#ddd3b3','#7d937c','#b7846c','#d0bfa9'][k]);
+        // Open shelves on the reading side (o.facing, else west / south): dark back, shelf board and a row of books.
+        const sx=o.facing==='E'?1:-1,sz=o.facing==='N'?-1:1,fx=sx>0?r.x1:r.x0,fz=sz>0?r.z1:r.z0;
+        B.get('extSatin').box(frontX?fx+sx*.005:along,yy,frontX?along:fz+sz*.005,frontX?.035:w/n-.035,bh,frontX?d/n-.035:.035,'#5f5546');
+        for(let k=0;k<4;k++) {
+          const hb=bh*(.58+((i*3+j+k)%4)*.07);
+          B.get('satin').box(frontX?fx+sx*.03:along+(k-1.5)*.14,yy-bh/2+.02+hb/2,frontX?along+(k-1.5)*.14:fz+sz*.03,frontX?.055:.095,hb,frontX?.095:.055,['#ddd3b3','#7d937c','#b7846c','#d0bfa9','#6f7f99'][(i+j+k)%5]);
+        }
       } else {
         B.get('extSatin').box(frontX?r.x0-.015:along,yy,frontX?along:r.z1+.015,frontX?.035:w/n-.035,bh,frontX?d/n-.035:.035,o.type==='locker'?'#b7bdad':'#d7d2c3');
         B.get('extMetal').box(frontX?r.x0-.04:along,yy,frontX?along:r.z1+.04,frontX?.025:.12,.025,frontX?.12:.025,C.trim);

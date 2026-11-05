@@ -3,7 +3,7 @@
 // 每栋一个 BatchSet（7 个材质批次 + 1 块招牌），户内陈设由 residence-interiors.js 按楼层加载；
 // 西苑两栋在 600 m 外换成两个批次的远景替身（园区全景、对岸视角）。
 import * as THREE from 'three';
-import { BatchSet, SignBatch } from '../batch.js';
+import { BatchSet, SignBatch, frameMatrix } from '../batch.js';
 import { rect, toW, toL, subtractInterval } from '../../layout/geom.js';
 import { shapeFromPoly } from './shell.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
@@ -112,14 +112,19 @@ export const coreCells = (cp) => subtractRects(cp.core, [...cp.lifts.map((l) => 
   ...cp.landings.filter((q) => q.open).map((q) => q.rect), ...(cp.corridor ? [cp.corridor] : [])])
   .filter((r) => Math.min(r.x1 - r.x0, r.z1 - r.z0) >= .15);
 
-function slab(B, b, lv, color, depth = .28) {
-  const top = lv.elev - .03, local = (poly) => poly.map((q) => toL(b.frame, ...q));
+/** Floor slab: stone top and edge band; the underside is the plaster ceiling of the storey below. */
+function slab(B, b, lv, color, depth = .28, ceilingKey = 'facadePlaster', ceiling = '#f0eee8') {
+  const top = lv.elev - .03, local = (poly) => poly.map((q) => toL(b.frame, ...q)), at = new THREE.Matrix4().makeTranslation(0, top, 0);
   for (const piece of lv.slab.pieces) {
     const g = new THREE.ExtrudeGeometry(shapeFromPoly(local(piece.outer), (piece.holes || []).map(local)), { depth, bevelEnabled: false, curveSegments: 1 });
     g.rotateX(-Math.PI / 2); g.translate(0, -depth, 0);
-    const geo = g.index ? g.toNonIndexed() : g;
-    B.get('stone').push({ pos: geo.attributes.position.array, nor: geo.attributes.normal.array, count: geo.attributes.position.count },
-      new THREE.Matrix4().makeTranslation(0, top, 0), color);
+    const geo = g.index ? g.toNonIndexed() : g, P = geo.attributes.position.array, N = geo.attributes.normal.array;
+    const parts = { stone: { pos: [], nor: [] }, under: { pos: [], nor: [] } };
+    for (let i = 0; i < P.length; i += 9) {
+      const t = N[i + 1] < -.5 ? parts.under : parts.stone;
+      for (let k = 0; k < 9; k++) { t.pos.push(P[i + k]); t.nor.push(N[i + k]); }
+    }
+    for (const [key, t, c] of [['stone', parts.stone, color], [ceilingKey, parts.under, ceiling]]) if (t.pos.length) B.get(key).push({ pos: t.pos, nor: t.nor, count: t.pos.length / 3 }, at, c);
     geo.dispose(); if (geo !== g) g.dispose();
   }
 }
@@ -146,11 +151,11 @@ function facadeWall(B, col, F, w, y, h, pal) {
     if (bottom > .02) segment(B, 'facadePlaster', a, b, y, y + bottom, t, pal.wall);
     segment(B, 'facadePlaster', a, b, y + top, y + h, t, pal.wall);
     pane(B, 'glassTint', a, b, y + bottom, y + top);
-    // A drawn-back curtain inside most windows; a few glow at night.
+    // A drawn-back curtain inside most windows; two in seven are lit warm, so the towers read as lived-in at night.
     const seed = Math.abs(Math.round(o.at * 7 + y * 3 + len)) % 7, inner = [-out[0] * 2.2, -out[1] * 2.2];
     if (seed < 5 && bottom > .02) {
       const cw = Math.min(.5, (o.s1 - o.s0) * .25), s0 = seed % 2 ? o.s0 + .08 : o.s1 - .08 - cw;
-      pane(B, seed === 0 ? 'glowSoft' : 'extSatin', [P(s0)[0] + inner[0], P(s0)[1] + inner[1]], [P(s0 + cw)[0] + inner[0], P(s0 + cw)[1] + inner[1]], y + bottom + .05, y + top - .05, seed === 0 ? '#f6dfb4' : pal.curtain);
+      pane(B, seed < 2 ? 'glowSoft' : 'extSatin', [P(s0)[0] + inner[0], P(s0)[1] + inner[1]], [P(s0 + cw)[0] + inner[0], P(s0 + cw)[1] + inner[1]], y + bottom + .05, y + top - .05, seed < 2 ? '#f6dfb4' : pal.curtain);
     }
     trim(B, a, b, y + bottom, y + bottom + .06, out, pal.frame);
     trim(B, a, b, y + top - .05, y + top, out, pal.frame);
@@ -214,17 +219,66 @@ function slider(B, p, y, h, pal) {
 }
 
 /** Lift shaft: three walls and door jambs as columns, a lintel and door head on each storey. */
+/** Lift shaft walls (run .35 m down past the slab so no slot shows between storeys) and the door frame. */
 function liftShaft(B, col, F, L, y, h, pal) {
   const r = L.rect, door = L.door;
   const sides = { N: [[r.x0, r.z0], [r.x1, r.z0]], S: [[r.x0, r.z1], [r.x1, r.z1]], W: [[r.x0, r.z0], [r.x0, r.z1]], E: [[r.x1, r.z0], [r.x1, r.z1]] };
   for (const [side, [a, b]] of Object.entries(sides)) {
-    if (side !== door) { col.wall(F, 'facadePlaster', a, b, y, y + h, .12, pal.core); continue; }
+    if (side !== door) { col.wall(F, 'facadePlaster', a, b, y - .35, y + h, .12, pal.core); continue; }
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]), d0 = len / 2 - .55, d1 = len / 2 + .55;
-    col.wall(F, 'facadePlaster', a, along(a, b, d0), y, y + h, .12, pal.core);
-    col.wall(F, 'facadePlaster', along(a, b, d1), b, y, y + h, .12, pal.core);
+    col.wall(F, 'facadePlaster', a, along(a, b, d0), y - .35, y + h, .12, pal.core);
+    col.wall(F, 'facadePlaster', along(a, b, d1), b, y - .35, y + h, .12, pal.core);
     segment(B, 'facadePlaster', along(a, b, d0), along(a, b, d1), y + 2.3, y + h, .12, pal.core);
     segment(B, 'extMetal', along(a, b, d0 - .06), along(a, b, d1 + .06), y + 2.24, y + 2.32, .16, pal.frame);
   }
+}
+
+/**
+ * Landing doors of a tower's lifts: two brushed-metal leaves at every stop (one InstancedMesh per
+ * tower), closed except at the floor where the car stands with its doors open. Shown while the
+ * tower is in use (one of its cars is visible), so open shafts never show on the other floors.
+ */
+export function landingDoors(ctx, b, levels, material, group) {
+  const stops = [];
+  for (const lv of levels) for (const L of lv.corePlan?.lifts || []) {
+    const e = ctx.layout.elevators?.find((q) => q.id === L.id);
+    if (!e || !e.serves.includes(lv.id)) continue;
+    const r = L.rect, alongX = L.door === 'N' || L.door === 'S';
+    stops.push({ lift: L.id, level: lv.id, y: lv.elev, alongX, line: { N: r.z0, S: r.z1, W: r.x0, E: r.x1 }[L.door], mid: alongX ? (r.x0 + r.x1) / 2 : (r.z0 + r.z1) / 2 });
+  }
+  if (!stops.length) return null;
+  // Batch materials take vertex colours; the instanced leaves carry none, so use a plain brushed-steel copy.
+  const steel = material.clone();
+  steel.vertexColors = false; steel.color?.set?.('#aab1b6'); steel.metalness = Math.min(steel.metalness ?? .6, .6); steel.roughness = Math.max(steel.roughness ?? .35, .35);
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), steel, stops.length * 2);
+  mesh.name = `${b.id}-landing-doors`; mesh.visible = false; mesh.castShadow = false;
+  const F = frameMatrix(b.frame), m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+  const place = (i, open) => {
+    const s = stops[i];
+    for (const k of [0, 1]) {
+      const t = s.mid + (k ? 1 : -1) * (.2775 + .55 * open);
+      p.set(s.alongX ? t : s.line, s.y + 1.14, s.alongX ? s.line : t);
+      sc.set(s.alongX ? .545 : .045, 2.27, s.alongX ? .045 : .545);
+      mesh.setMatrixAt(2 * i + k, m.compose(p, q, sc).premultiply(F));
+    }
+  };
+  const state = stops.map(() => 0);
+  stops.forEach((s, i) => place(i, 0));
+  mesh.computeBoundingSphere();
+  group.add(mesh);
+  const rec = { mesh, stops, state, update() {
+    let shown = false, dirty = false;
+    for (const [i, s] of stops.entries()) {
+      const car = ctx.elevatorCars?.get(s.lift), live = !!car && car.group.visible !== false;
+      shown ||= live;
+      const open = live && Math.abs(car.group.position.y - s.y) < .05 ? Math.max(0, Math.min(1, car.open)) : 0;
+      if (open !== state[i]) { state[i] = open; place(i, open); dirty = true; }
+    }
+    mesh.visible = shown;
+    if (dirty) mesh.instanceMatrix.needsUpdate = true;
+  } };
+  ctx.dynamic?.push({ name: mesh.name, update: () => rec.update() });
+  return rec;
 }
 
 /** Protected stair enclosure: side and back walls as columns, the door wall with a lintel and exit sign.
@@ -533,6 +587,7 @@ export function buildCommunityTower(ctx, b, records) {
     for (const m of far.children) m.name = `${b.id}-far`;
     group.add(farSwap(b, roof?.elev ?? 0, near, [...far.children]));
   }
+  const landing = landingDoors(ctx, b, levels, materials.metal, group);
   // Protected stair flights are built and shown only once a floor this core serves is visited.
   const stairLevels = (b.stairLevelIds || b.levels).map((id) => byId.get(id)).filter(Boolean).sort((a, z) => a.elev - z.elev);
   buildTowerStairInstances(ctx, b, stairLevels, stairs, materials, group, { idle: [], follow: b.community === 'north', lazy: true });
@@ -542,7 +597,7 @@ export function buildCommunityTower(ctx, b, records) {
   const groundGroup = lobbyLevel ? buildCommunityLobby(ctx, b, lobbyLevel, pal, signMat) : null;
   const roofGroup = group;   // the roof garden rides the exterior batches (+0 draw calls)
   const basements = below.map((lv) => buildCommunityBasement(ctx, b, lv, pal, stairs));
-  const record = { group, plane, groundGroup, roofGroup, basements, materials, signMaterial: signMat, residentialShells: null, detailLevel: null, community: b.community };
+  const record = { group, plane, groundGroup, roofGroup, basements, materials, signMaterial: signMat, residentialShells: null, detailLevel: null, community: b.community, landing };
   records?.set(b.id, record);
   return record;
 }
@@ -641,7 +696,7 @@ export function buildCommunityBasement(ctx, b, lv, pal, stairs) {
   const group = new THREE.Group(); group.name = `${lv.id}-community-basement`;
   const B = new BatchSet(ctx.mats.base), col = new Columns(), y = lv.elev, h = lv.height, cp = lv.corePlan;
   B.frame(b.frame, () => {
-    slab(B, b, lv, '#c9cdc9', .3);
+    slab(B, b, lv, '#c9cdc9', .3, 'matte', '#e4e5e1');
     for (const piece of lv.slab.pieces) {
       const r = piece.localRect;
       if (!r) continue;
