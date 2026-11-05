@@ -19,6 +19,7 @@
 - 线上页面在 headless Chromium 中约 32 s 加载完成，0 个页面错误。云澜江、星湾桥、西苑和北苑塔楼均可见。
 - 命令：`netlify-cli@17` 不支持 `--no-build`（该版本默认不构建），用的是 `netlify deploy --prod --dir dist/netlify --site b9d32e8f-84f0-4958-b426-fd2e491c3676`。
 - 原站 https://yunlan-mall-calvin.netlify.app/（`3af33d60-…`）仍是旧版本。要更新原站，需要拥有它的 Netlify 账号的凭据。
+- 户型目录：58 户逐户的平面图、俯视剖切、室内实景，北苑楼层说明（7F 在商场天台上，没有缺层），以及门扇“竖板”等已知问题，见 [户型目录](docs/unit-catalog-2026-11-05.md)。
 
 ## 2026-11-04 最新交接：云澜·西苑、云澜·北苑、云澜江与 3F 江景台
 
