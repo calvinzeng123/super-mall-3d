@@ -6,6 +6,7 @@ import { BatchSet } from '../batch.js';
 import { toW, unionOutline, mergeSegments, subtractInterval } from '../../layout/geom.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { planter, bench } from './props.js';
+import { moduleSet } from './facade-modules.js';
 
 const C = { wall: '#ede9df', trim: '#77766b', stone: '#e9e3d6', timber: '#b89770', green: '#4c6356' };
 const SHEER = new Set(['glass','glassTint','ext','glowSoft','extMetal']);
@@ -80,29 +81,31 @@ function stairShell(B,core,height) {
   }
 }
 
-/** World-positioned geometry is shared between the identical upper storeys. */
+/** World-positioned geometry is shared between the identical upper storeys: M0 (SPEC §2.2) draws the typical
+ * storey once and instances it, one InstancedMesh per material per tower (the per-storey template.clone() cost five
+ * draw calls a storey). The detail floor hides its instance (zero scale); the result maps level → { visible }. */
 export function buildResidentialLevelShells(ctx,b,levels,materials,exterior) {
   const result=new Map(),typical=levels.find(l=>l.units.some(u=>u.residence.prototype));
   if(!typical)return result;
-  const template=new THREE.Group(),B=new BatchSet(materials);
-  for(const u of typical.units)B.frame(u.frame,()=>{
-    for(const w of u.residence.facadeWalls.filter(w=>w.type==='exterior'))openingWall(B,w,0,typical.height-.04);
-    const r=u.residence.balcony;
-    for(const [a,z] of [edges(r)[1],edges(r)[2],edges(r)[3]])railing(B,a,z,0,'glassTint');
-    // Three batches per distant storey; the original textured finish comes from
-    // the detail GLB when selected. Geometry is shared across all 29 storeys.
-    rectFinish(B,{x0:0,z0:0,x1:u.residence.width,z1:r.z0},0,'extSatin','#d9c9ad');
-    rectFinish(B,r,-.02,'extSatin','#c8c9bf');
-    // Thin edge detail follows the actual dwelling wing, never the enclosing box.
-    for(const [a,z] of edges({x0:0,z0:0,x1:u.residence.width,z1:r.z1}))segment(B,'extSatin',a,z,-.23,-.06,.13,'#b7b4a7');
+  const mods=moduleSet(ctx,b,materials,{name:`${b.id}-residential-shell`});
+  mods.build('typical',B=>{
+    for(const u of typical.units)B.frame(u.frame,()=>{
+      for(const w of u.residence.facadeWalls.filter(w=>w.type==='exterior'))openingWall(B,w,0,typical.height-.04);
+      const r=u.residence.balcony;
+      for(const [a,z] of [edges(r)[1],edges(r)[2],edges(r)[3]])railing(B,a,z,0,'glassTint');
+      // Three batches per distant storey; the original textured finish comes from
+      // the detail GLB when selected. Geometry is shared across all 29 storeys.
+      rectFinish(B,{x0:0,z0:0,x1:u.residence.width,z1:r.z0},0,'extSatin','#d9c9ad');
+      rectFinish(B,r,-.02,'extSatin','#c8c9bf');
+      // Thin edge detail follows the actual dwelling wing, never the enclosing box.
+      for(const [a,z] of edges({x0:0,z0:0,x1:u.residence.width,z1:r.z1}))segment(B,'extSatin',a,z,-.23,-.06,.13,'#b7b4a7');
+    });
+    B.frame(b.frame,()=>stairShell(B,typical.corePlan,typical.height));
   });
-  B.frame(b.frame,()=>stairShell(B,typical.corePlan,typical.height));
-  B.flush(template);
-  for(const lv of levels.filter(l=>l.units.some(u=>u.residence.prototype))) {
-    const group=template.clone();group.name=`${lv.id}-residential-lod`;group.position.y=lv.elev;
-    group.userData={level:lv.id,kind:'residential-lod',prototypeSlots:lv.units.map(u=>u.residence.prototype)};
-    exterior.add(group);result.set(lv.id,group);
-  }
+  const storeys=levels.filter(l=>l.units.some(u=>u.residence.prototype));
+  for(const im of mods.instance('typical',storeys)){im.userData.kind='residential-lod';exterior.add(im);}
+  for(const lv of storeys)result.set(lv.id,mods.handle(lv.id));
+  result.modules=mods;
   for(const lv of levels.filter(l=>!l.units.length&&l.kind!=='roof')) {
     const group=new THREE.Group(),SB=new BatchSet(materials);
     SB.frame(b.frame,()=>stairShell(SB,lv.corePlan,lv.height));SB.flush(group);

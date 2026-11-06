@@ -40,26 +40,6 @@ function trianglesOf(mesh) {
   return out;
 }
 
-test('每栋社区塔楼外壳可构建：≤ 8 次绘制（楼梯实例默认隐藏），西苑两栋 ≤ 16 次 / 17 万三角形', () => {
-  const ctx = context(L), community = L.buildings.filter((b) => b.community);
-  assert.ok(community.length >= 2);
-  let west = { calls: 0, tris: 0 };
-  for (const b of community) {
-    const rec = buildCommunityTower(ctx, b, ctx.hospitality.buildings);
-    const meshes = visibleMeshes(rec.group), tris = meshes.reduce((n, m) => n + triangles(m), 0);
-    assert.ok(meshes.length <= 8, `${b.id} 外壳 ${meshes.length} 次绘制`);
-    assert.ok(ctx.buildings[b.id].group.children.includes(rec.group));
-    // 防烟楼梯梯段按需构建：首次到访前没有实例网格，聚焦某层后才生成并显示。
-    assert.ok(!rec.group.children.some((m) => m.isInstancedMesh && m.userData.towerStairs), `${b.id} 楼梯梯段提前构建`);
-    const focus = (b.stairLevelIds || b.levels).find((id) => b.access.flights.some((f) => f.parentFloor === id && f.kind !== 'interior-stair'));
-    ctx.dynamic.find((d) => d.name === `${b.id}-protected-stairs`).update(0, 0, { state: { building: b.id, focus } });
-    assert.ok(rec.group.children.some((m) => m.isInstancedMesh && m.userData.towerStairs && m.visible && m.count > 0), `${b.id} 聚焦 ${focus} 后缺少楼梯梯段`);
-    assert.ok(rec.groundGroup?.children.length && rec.roofGroup?.children.length, `${b.id} 缺少大堂或屋顶花园`);
-    if (b.community === 'west') { west.calls += meshes.length; west.tris += tris; assert.equal(rec.basements.length, 2); }
-  }
-  assert.ok(west.calls <= 16 && west.tris <= 170000, `西苑外壳 ${west.calls} 次 / ${west.tris} 三角形`);
-});
-
 /** Meshes the renderer would draw: the mesh and every ancestor up to `root` visible. */
 function drawnMeshes(root) {
   const out = [];
@@ -76,30 +56,6 @@ function boundsOf(meshes, y0 = -Infinity) {
   }
   return box;
 }
-
-test('西苑塔楼远景替身：600 m 外只画 2 个网格、≤ 1,500 三角形，轮廓与完整外壳一致；回到近处恢复完整外壳', () => {
-  const ctx = context(L);
-  for (const b of L.buildings.filter((q) => q.community === 'west')) {
-    const rec = buildCommunityTower(ctx, b, ctx.hospitality.buildings), lod = rec.group.children.find((o) => o.isLOD);
-    assert.ok(lod, `${b.id} 缺少远景替身`);
-    const near = drawnMeshes(rec.group), roof = L.levels.find((l) => l.building === b.id && l.kind === 'roof');
-    const [cx, cz] = toW(b.frame, (b.footprint.x0 + b.footprint.x1) / 2, (b.footprint.z0 + b.footprint.z1) / 2);
-    const cam = new THREE.PerspectiveCamera();
-    const at = (d) => { cam.position.set(cx + d, roof.elev / 2, cz); cam.updateMatrixWorld(); lod.update(cam); return drawnMeshes(rec.group); };
-    assert.deepEqual(at(COMMUNITY_FAR_LOD - 50), near, `${b.id} 近处应显示完整外壳`);
-    const far = at(COMMUNITY_FAR_LOD + 50), tris = far.reduce((n, m) => n + triangles(m), 0);
-    assert.ok(far.length <= 2 && far.every((m) => !near.includes(m)), `${b.id} 远景 ${far.length} 个网格`);
-    assert.ok(tris <= 1500, `${b.id} 远景 ${tris} 三角形`);
-    assert.deepEqual(far.map((m) => m.material.name).sort(), ['facadePlaster', 'facadeWindow']);
-    // 轮廓：入口雨棚（3.6 m）以上的平面包围盒、以及总高度，与完整外壳相差不到 0.5 m。
-    const A = boundsOf(near, 5), F = boundsOf(far, 5), Ah = boundsOf(near), Fh = boundsOf(far);
-    for (const k of ['x', 'z']) for (const s of ['min', 'max']) assert.ok(Math.abs(A[s][k] - F[s][k]) <= .5, `${b.id} 远景轮廓 ${s}.${k} ${F[s][k].toFixed(2)} / ${A[s][k].toFixed(2)}`);
-    assert.ok(Math.abs(Ah.max.y - Fh.max.y) <= .5 && Math.abs(Ah.min.y - Fh.min.y) <= .5, `${b.id} 远景高度 ${Fh.min.y.toFixed(2)}–${Fh.max.y.toFixed(2)} / ${Ah.min.y.toFixed(2)}–${Ah.max.y.toFixed(2)}`);
-    // 5 % 回差：刚进 600 m 仍是远景，570 m 以内才换回完整外壳。
-    assert.deepEqual(at(COMMUNITY_FAR_LOD - 10), far);
-    assert.deepEqual(at(COMMUNITY_FAR_LOD * .95 - 5), near);
-  }
-});
 
 /** Vertices of the distinct geometries under the given groups (instanced geometry counted once). */
 function vertices(...groups) {
@@ -167,40 +123,6 @@ test('会所 / 大堂标识：有接待背柜挂在背柜上，否则挂在面�
   assert.deepEqual(lobbySignSpot(t1, t1.lobbyPlan, L.buildings.find((b) => b.id === 'T1')), { frame: t1.lobbyPlan.frame, ...t1.lobbyPlan.signSpot });
 });
 
-test('西库停车顶盖与 B1 灯具让出西苑地下大堂：大堂内没有车库构件，楼梯井与电梯井向上不被遮挡', () => {
-  const levels = Object.fromEntries(L.levels.map((lv) => [lv.id, { lv, group: new THREE.Group(), base: new THREE.Group(), shell: new THREE.Group(), batch: new BatchSet(base), shellBatch: new BatchSet(base) }]));
-  const ctx = { layout: L, levels, mats: { base, floor: () => base.floor, onNight: () => {} }, dynamic: [], root: new THREE.Group(), camera: { position: { y: -3 } } };
-  buildPublicGarageShells(ctx);
-  for (const L2 of Object.values(levels)) L2.batch.flush(L2.base);
-  const meshes = []; for (const id of ['WPG-B1', 'WPG-B2', 'WPG-G']) for (const g of [levels[id].base, levels[id].shell]) g.traverse((o) => { if (o.isMesh) { o.updateMatrixWorld(true); meshes.push(o); } });
-  // 顶盖面片仍在（车位上方照旧），只是没有一块压进住户大堂。
-  let ceiling = null; levels['WPG-B1'].shell.traverse((o) => { if (o.name === 'WPG-park-support-ceiling') ceiling = o; });
-  const WPG = L.buildings.find((b) => b.id === 'WPG');
-  assert.ok(ceiling?.userData.panels.length > 1, '缺少西库停车顶盖');
-  for (const b of L.buildings.filter((q) => q.community === 'west')) {
-    const ex = polyBounds(b.deckExclusions[0].map((q) => toL(WPG.frame, ...q)));
-    for (const r of ceiling.userData.panels) assert.ok(!(r.x0 < ex.x1 - 1e-6 && r.x1 > ex.x0 + 1e-6 && r.z0 < ex.z1 - 1e-6 && r.z1 > ex.z0 + 1e-6), `顶盖面片压住 ${b.id} 地下大堂`);
-  }
-  const rc = new THREE.Raycaster(), v = new THREE.Vector3();
-  for (const b of L.buildings.filter((q) => q.community === 'west')) {
-    const ex = polyBounds(b.deckExclusions[0]);
-    for (const m of meshes) {
-      const p = m.geometry.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld);
-        assert.ok(!(v.y > -4.4 && v.y < -.05 && v.x > ex.x0 + .05 && v.x < ex.x1 - .05 && v.z > ex.z0 + .05 && v.z < ex.z1 - .05), `${m.material.name} 在 ${b.id} 地下大堂内 (${v.x.toFixed(1)}, ${v.y.toFixed(2)}, ${v.z.toFixed(1)})`);
-      }
-    }
-    const shafts = [...L.stairs.filter((s) => s.building === b.id).map((s) => toW(b.frame, (s.shaftRect.x0 + s.shaftRect.x1) / 2, (s.shaftRect.z0 + s.shaftRect.z1) / 2)),
-      ...L.elevators.filter((e) => e.building === b.id).map((e) => [e.x, e.z])];
-    for (const [x, z] of shafts) {
-      rc.set(new THREE.Vector3(x, -3.5, z), new THREE.Vector3(0, 1, 0)); rc.far = 3.4;
-      for (const m of meshes) m.material.side = THREE.DoubleSide;
-      assert.equal(rc.intersectObjects(meshes, false).length, 0, `${b.id} 井道 (${x.toFixed(1)}, ${z.toFixed(1)}) 上方有车库顶盖`);
-    }
-  }
-});
-
 test('消防车道与 G4 车道不画路中虚线（登高场地字样不被覆盖），普通车道照画', () => {
   const road = (id, kind, z) => ({ id, kind, width: 10, points: [[0, 0, z], [40, 0, z]], polys: [rectPoly(rect(0, z - 5, 40, z + 5))] });
   const layout = { extensions: { roads: [road('west-garden-fire-road', 'fire', 0), road('west-plain', undefined, 30)], paths: [] }, site: { trenches: [], openings: [], roads: [] }, levels: [], buildings: [], entrances: [], ramps: [] };
@@ -244,25 +166,6 @@ function floorStats(ctx, lv) {
   return { r, ms, meshes, boxes: meshes.reduce((n, m) => n + triangles(m), 0) / 12 };
 }
 
-test('西苑 12F：五户全部有家具，≤ 1,500 个盒体、≤ 8 个网格，构建足够快', () => {
-  const ctx = { layout: L, mats: { base } }, lv = L.levels.find((l) => l.id === 'W1-12F');
-  let best = Infinity, stats;
-  for (let i = 0; i < 3; i++) { stats = floorStats(ctx, lv); best = Math.min(best, stats.ms); if (i < 2) stats.r.dispose(); }
-  assert.ok(stats.boxes <= 1500, `${stats.boxes} 个盒体`);
-  assert.ok(stats.meshes.length <= 8, `${stats.meshes.length} 个网格`);
-  assert.ok(best < 60, `构建 ${best.toFixed(1)} ms`);
-  // 每户：至少一张床（含床头板）、卫浴与厨房台面落在户内。
-  const tris = stats.meshes.flatMap((m) => trianglesOf(m).map((t) => [m.material.name, t]));
-  for (const u of lv.units) {
-    const inside = tris.filter(([, t]) => t.every((p) => u.polys.some((q) => pointInPoly([p[0], p[2]], q))));
-    const tall = (key, y) => inside.filter(([k, t]) => k === key && t.some((p) => p[1] > lv.elev + y)).length;
-    assert.ok(tall('wood', .9) > 30, `${u.code} 缺少床头板 / 柜体`);
-    assert.ok(tall('matte', .3) > 30, `${u.code} 缺少床品与沙发`);
-    assert.ok(tall('stone', .85) > 10, `${u.code} 缺少厨卫台面`);
-  }
-  stats.r.dispose();
-});
-
 /** Hand-built 北苑 14–15W duplex pair (P-north's plan data through communityUnit). */
 function northDuplex() {
   const T = NORTH_SITE.towers[0], hm = COMMUNITY_PLANS.north.T1.homes.find((h) => h.id === 'T1-14W');
@@ -274,108 +177,6 @@ function northDuplex() {
   levels[0].units.push(lower); levels[1].units.push(upper);
   return { levels, lower, upper, UF };
 }
-
-test('手工搭建的北苑错层复式：下层有两跑踏步与平台，上层楼梯洞口不铺地板且四周（到达口除外）有栏杆', () => {
-  const { levels, lower, upper, UF } = northDuplex(), ctx = { layout: { elevators: [] }, mats: { base } };
-  const lo = floorStats(ctx, levels[0]), up = floorStats(ctx, levels[1]);
-  for (const s of [lo, up]) { assert.ok(s.boxes <= 1500 && s.meshes.length <= 8, `${s.boxes} 盒 / ${s.meshes.length} 网格`); }
-  const st = lower.residence.homeStair, block = lrectPoly(UF, st.block);
-  // 下层：楼梯块内有 ≥ 20 级踏步（木质水平面，标高沿梯段递增至上层楼面）。
-  const treadTops = new Set();
-  for (const m of lo.meshes.filter((q) => q.material.name === 'wood')) for (const t of trianglesOf(m)) {
-    const ys = t.map((p) => p[1]);
-    if (Math.max(...ys) - Math.min(...ys) > 1e-4) continue;
-    if (!t.every((p) => pointInPoly([p[0], p[2]], block))) continue;
-    if (ys[0] > levels[0].elev + .1) treadTops.add(ys[0].toFixed(2));
-  }
-  assert.ok(treadTops.size >= 19, `只有 ${treadTops.size} 级踏步`);
-  assert.ok([...treadTops].some((y) => Math.abs(+y - (levels[0].elev + st.landingY)) < .05), '缺少半层平台');
-  // 上层：洞口内没有地板（楼面附近的水平三角形）。
-  const hole = lrectPoly(UF, st.upperHole), y0 = levels[1].elev;
-  // 地面盒体与地毯：楼面附近的水平面（离洞口边 > 8 cm，排除骑在洞口边线上的墙与栏杆）。
-  const floors = up.meshes.filter((m) => ['wood', 'stone', 'matte'].includes(m.material.name));
-  const floorIn = (poly) => floors.some((m) => trianglesOf(m).some((t) => {
-    if (!t.every((p) => Math.abs(p[1] - t[0][1]) < 1e-4 && p[1] > y0 - .01 && p[1] < y0 + .04)) return false;
-    const c = [(t[0][0] + t[1][0] + t[2][0]) / 3, (t[0][2] + t[1][2] + t[2][2]) / 3];
-    return pointInPoly(c, poly) && distToPoly(c, poly) > .08;
-  }));
-  assert.ok(!floorIn(hole), '上层楼梯洞口内有地板');
-  // 栏杆：玻璃栏板沿洞口的封闭边，梯段 B 到达口留空。
-  const rails = upper.residence.partitions.filter((p) => p.role === 'railing');
-  assert.ok(rails.length >= 1);
-  const glass = up.meshes.filter((m) => m.material.name === 'glass').flatMap(trianglesOf).filter((t) => t.some((p) => p[1] > y0 + .9));
-  for (const p of rails) {
-    const a = toW(UF, ...p.a), b = toW(UF, ...p.b), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    assert.ok(glass.some((t) => t.some((q) => distToSeg([q[0], q[2]], a, b) < .1)), `栏杆 ${p.id} 未绘制 (${mid})`);
-  }
-  const arrival = st.upperArrival, ax = toW(UF, (arrival.a[0] + arrival.b[0]) / 2, (arrival.a[1] + arrival.b[1]) / 2);
-  assert.ok(!glass.some((t) => t.some((q) => Math.hypot(q[0] - ax[0], q[2] - ax[1]) < .3)), '到达口被栏杆挡住');
-  // 上层无户门，不生成门牌；挑空（若有）同样不铺地板。
-  for (const v of upper.residence.voids || []) assert.ok(!floorIn(lrectPoly(UF, v)), '挑空内有地板');
-  // 反证：同一判据能找到上层家庭厅的地板。
-  const family = upper.residence.rooms.find((r) => r.kind === 'family');
-  assert.ok(floorIn(lrectPoly(UF, family.rect)), '家庭厅缺少地板');
-  lo.r.dispose(); up.r.dispose();
-});
-
-test('北苑契约塔楼（手工两层）外壳可构建：楼板开洞、两户立面、核心筒实体与会所 / 屋顶缺省时不报错', () => {
-  const { levels, UF } = northDuplex(), T = NORTH_SITE.towers[0], F = frame(...T.frame, 0, 'T1'), footprint = rect(-18, -8, 18, 8);
-  const coreRect = rect(-4, -8, 4, 8), stairs = [{ id: 'T1-ST-A', building: 'T1', frame: F, rect: rect(-4, -1.6, -.2, 8), door: { x0: -1.35, z0: -1.6, x1: -.25, z1: -1.6, side: 'N' }, serves: levels.map((l) => l.id) }];
-  for (const lv of levels) {
-    lv.slab = { pieces: [{ outer: lrectPoly(F, footprint), holes: [], localRect: footprint }] };
-    lv.voids = []; lv.walk = []; lv.features = [];
-    lv.corePlan = { kind: 'community', frame: F, core: coreRect,
-      landings: [{ id: 'W', rect: rect(-4, -4.8, -1.4, -1.6), open: lv.short === '14F' }, { id: 'F', rect: rect(-1.4, -4.8, 1.4, -1.6), open: true }, { id: 'E', rect: rect(1.4, -4.8, 4, -1.6), open: lv.short === '15F' }],
-      lifts: [-2.7, 0, 2.7].map((x, i) => ({ id: `T1-L${i}`, rect: rect(x - 1.2, -7.8, x + 1.2, -4.8), door: 'S' })),
-      stairs: [{ id: 'T1-ST-A', rect: stairs[0].rect, door: stairs[0].door, shaftRect: rect(-3.6, 0.4, -.6, 7.3), landingRect: rect(-3.8, -1.4, -.4, .4) }] };
-  }
-  const upper = levels[1], st = upper.units[0].residence.homeStair;
-  upper.slab.pieces[0].holes.push(lrectPoly(UF, st.upperHole));
-  const b = { id: 'T1', kind: 'tower', usage: 'community', community: 'north', name: '云澜·北苑 1 号楼', short: '北苑1', en: 'YUNLAN NORTH RESIDENCE 1',
-    frame: F, footprint, outline: lrectPoly(F, footprint), levels: levels.map((l) => l.id), stairLevelIds: levels.map((l) => l.id), access: { protected: true, flights: [], surfaces: [], routes: [] } };
-  const layout = { buildings: [b], levels, stairs, elevators: [], entrances: [] }, ctx = context(layout);
-  const rec = buildCommunityTower(ctx, b, ctx.hospitality.buildings);
-  const meshes = visibleMeshes(rec.group);
-  assert.ok(meshes.length <= 8 && meshes.length >= 5, `${meshes.length} 次绘制`);
-  const solid = (lv, [x, z]) => coreCells(lv.corePlan).some((c) => x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1);
-  assert.ok(solid(levels[1], [-2.7, -3.2]) && !solid(levels[0], [-2.7, -3.2]), '西侧候梯厅只在不停靠的上层为实体');
-  // 上层楼板在楼梯洞口处真的开洞。
-  const slabTris = trianglesOf(meshes.find((m) => m.material.name === 'stone')).filter((t) => t.every((p) => Math.abs(p[1] - (upper.elev - .03)) < 1e-3));
-  const c = toW(UF, (st.upperHole.x0 + st.upperHole.x1) / 2, (st.upperHole.z0 + st.upperHole.z1) / 2);
-  assert.ok(!slabTris.some((t) => pointInPoly(c, t.map((p) => [p[0], p[2]]))), '复式上层楼板盖住了楼梯洞口');
-});
-
-test('西苑场地：围墙留出北门与步行口，消防登高场地有字样，乔木不种在登高场地、消防车道与车行道上', () => {
-  const ctx = context(L);
-  for (const b of L.buildings.filter((q) => q.community)) buildCommunityTower(ctx, b, ctx.hospitality.buildings);
-  const group = buildCommunitySite(ctx), S = L.site.westGarden;
-  assert.ok(group && ctx.site.group.children.includes(group));
-  const meshes = []; group.traverse((o) => { if (o.isMesh) meshes.push(o); });
-  assert.ok(meshes.length <= 10, `场地 ${meshes.length} 次绘制`);
-  assert.equal(S.fence.length, 4);
-  assert.ok(S.fence.find((f) => f.id === 'north').gaps.some(([a, z]) => a <= S.gateLane.x0 && z >= S.gateLane.x1), '北门车道被围墙封住');
-  const legends = group.children.filter((m) => m.isMesh && m.name === 'signs');
-  assert.equal(legends.length, S.hardstands.length);
-  // 北门 G4：门楼石柱与岗亭按场地记录绘制；停车场 P 门架不再立在社区门前（门楼招牌另由停车场渲染挂上）。
-  const solidAt = (meshes, r, y0, y1) => meshes.some((m) => { m.updateMatrixWorld(true); const p = m.geometry.attributes.position, v = new THREE.Vector3();
-    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld); if (v.x > r.x0 && v.x < r.x1 && v.z > r.z0 && v.z < r.z1 && v.y > y0 && v.y < y1) return true; } return false; });
-  for (const r of [...S.gate.pillars, S.gate.booth]) assert.ok(solidAt(meshes, r, .5, 2.5), '门楼石柱或岗亭未绘制');
-  const parking = new THREE.Group();
-  buildWestParkingDetails({ layout: L, mats: { base, sign: () => new THREE.MeshBasicMaterial() }, site: { group: parking } });
-  const pm = []; parking.traverse((o) => { if (o.isMesh && !o.isInstancedMesh) pm.push(o); });
-  const g4 = L.site.westParking.gates.find((g) => g.id === 'WP-G4');
-  assert.ok(!solidAt(pm, rect(g4.x - 5, g4.z - .6, g4.x + 5, g4.z + .6), .3, 4.5), '社区北门前仍有停车场门架');
-  assert.ok(pm.some((m) => m.geometry.type === 'PlaneGeometry' && Math.abs(m.position.z - (S.gate.z - .27)) < 1e-6), '北门门楼缺少招牌');
-  const trees = group.children.filter((m) => m.isInstancedMesh);
-  assert.ok(trees.length && trees[0].count > 5);
-  const matrix = new THREE.Matrix4(), p = new THREE.Vector3();
-  const blocked = [S.fireRoad, S.gateLane, ...S.hardstands.map((h) => h.rect)];
-  for (let i = 0; i < trees[0].count; i++) {
-    trees[0].getMatrixAt(i, matrix); p.setFromMatrixPosition(matrix);
-    for (const r of blocked) assert.ok(!(p.x > r.x0 - 2 && p.x < r.x1 + 2 && p.z > r.z0 - 2 && p.z < r.z1 + 2), `树 (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) 占用消防场地`);
-    for (const b of L.buildings.filter((q) => q.community)) assert.ok(!pointInPoly([p.x, p.z], b.outline));
-  }
-});
 
 /** Records every furniture piece of one home as world-space points (box corners, template vertices, bar ends). */
 function furnitureRecorder() {

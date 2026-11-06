@@ -34,6 +34,7 @@ import { loadSurfaceTextures } from './pbr.js';
 import { buildHospitality, setHospitalityCut, setResidentialDetailLevel } from './build/hospitality.js';
 import { buildResidenceFloor } from './build/residence-interiors.js';
 import { buildTowerElevators } from './build/tower-elevators.js';
+import { buildRefugeFloor } from './build/refuge-floor.js';
 import { loadSuiteAsset } from './suite-asset.js';
 import { SUITE_MODEL_URL } from './suite-data.js';
 import { createSuiteLighting } from './suite-lighting.js';
@@ -76,6 +77,8 @@ const WAYFINDING = [
 
 /** 园区总览（四个地块 + 路口云环） */
 const OVERVIEW = [V(125, 480, 590), V(-90, 30, -35)];
+// (e) Overview shadow radius (SPEC §0.8-6, perf.md §4.6): 410 also covers W1 at x ≈ −458, which 380 missed.
+export const OVERVIEW_SHADOW = 410;
 
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const fps = layout.playable?.mode === 'fps';
@@ -181,6 +184,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       const parts = ['base', 'shell', 'facade', 'labels', 'flows', 'people', 'picks'].map(() => new THREE.Group());
       const [base, shell, facade, labels, flows, people, picks] = parts;
       group.add(...parts);
+      // (c) Static matrices (SPEC §2.2 app.js hooks): the sub-groups never move; the level group moves only in the
+      // exploded view, and syncLevelMatrices() re-derives its matrix when its offset changes.
+      for (const q of parts) q.matrixAutoUpdate = false;
+      group.matrixAutoUpdate = false;
       bg.add(group);
       // 高层房号按当前楼层生成，避免为160层常驻数百张招牌图集。
       if (lazyAtlasLevels.has(lv.id) && !sharedWayfindingAtlas) {
@@ -199,6 +206,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       B.levels.push(L);
     });
   }
+  /** Level groups have static matrices: re-derive one only when its exploded-view offset moved it. */
+  const syncLevelMatrices = () => {
+    for (const L of Object.values(ctx.levels)) if (L.group.position.y !== L.matrixY) { L.group.updateMatrix(); L.matrixY = L.group.position.y; }
+  };
   const siteGroup = new THREE.Group();
   siteGroup.name = 'site';
   root.add(siteGroup);
@@ -393,17 +404,26 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   // A duplex floor shows its companion storeys through the stair opening and the 挑空:
   // they load together and the LRU never evicts a floor of the current set.
   const companionsOf = (id) => [...new Set([id, ...(ctx.lvById[id]?.units || []).flatMap(u => u.residence?.homeLevels || [])])];
+  // (a) A tower floor gets a lazily built interior when it has homes, is a refuge floor, or carries a lobby /
+  // amenity plan that a tower package registers a builder for (ctx.towerFloorBuilders: [(ctx, L) => result | null]).
+  const towerFloorBuilder = (lv) => lv.units.some(u => u.residence) ? buildResidenceFloor
+    : lv.kind === 'refuge' && lv.refugePlan ? buildRefugeFloor
+    : (lv.lobbyPlan || lv.amenityPlan) && ctx.towerFloorBuilders?.length ? (c, L) => { for (const f of c.towerFloorBuilders) { const r = f(c, L); if (r) return r; } return null; }
+    : null;
   function ensureTowerFloor(id, keep = null) {
     const L = ctx.levels[id];
-    if (!L || ctx.bById[L.building]?.kind !== 'tower' || !L.lv.units.some(u => u.residence)) return;
+    if (!L || ctx.bById[L.building]?.kind !== 'tower') return;
+    const build = towerFloorBuilder(L.lv);
+    if (!build) return;
     const set = keep || new Set(companionsOf(id));
     if (!keep) for (const other of set) if (other !== id) ensureTowerFloor(other, set);
-    const kind = detailAssetKind(L.lv), resource = detailResources[kind];
+    const kind = build === buildResidenceFloor ? detailAssetKind(L.lv) : null, resource = detailResources[kind];
     if (resource && resource.status !== 'ready') { requestDetailResource(kind); return; }
     if (detailErrors.has(id)) return;
     if (!residenceCache.has(id)) {
       try {
-        const result = buildResidenceFloor(ctx, L);
+        const result = build(ctx, L);
+        if (!result) return;
         L.base.add(result.group);
         residenceCache.set(id, result);
       } catch (error) {
@@ -463,8 +483,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       L.offset = L.offsetTarget = 0; L.group.position.y = 0;
     }
     for (const car of ctx.elevatorCars?.values() || []) if (car.elevator.building === b.id) {
-      // Community lift cars show only for their own tower (selected, explored or being ridden).
-      const mine = !b.community || selected || inside || explore?.elevator?.id === car.elevator.id;
+      // Tower lift cars show only for their own tower (selected, explored or being ridden): the community rule,
+      // extended to R / H / A by M1 (SPEC §2.2 near-branch groups), so far towers draw no cars.
+      const mine = selected || inside || explore?.elevator?.id === car.elevator.id;
       car.group.visible = mine && (!selectedLevel || !!explore || car.group.position.y <= selectedLevel.elev + 0.1);
     }
   }
@@ -638,7 +659,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       const size = Math.max(r.x1-r.x0, r.z1-r.z0);
       return [c.clone().add(V(size*.46, size*(camera.aspect<1?1.35:.86), size*.92)), c, size];
     }
-    return [OVERVIEW[0].clone().sub(OVERVIEW[1]).multiplyScalar(camera.aspect < 1 ? 1.2 : 1).add(OVERVIEW[1]), OVERVIEW[1], 380];
+    return [OVERVIEW[0].clone().sub(OVERVIEW[1]).multiplyScalar(camera.aspect < 1 ? 1.2 : 1).add(OVERVIEW[1]), OVERVIEW[1], OVERVIEW_SHADOW];
   };
 
   const flyView = ([position, target, radius], duration = 1.4) => flyTo(position, target, duration, radius);
@@ -784,6 +805,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         for (const d of ctx.dynamic) d.update(dt, (elapsed += dt), app);
       }
       renderer.shadowMap.needsUpdate = true;
+      syncLevelMatrices();
       if (fps) renderer.info.reset();
       env.render();
       for (const draw of ctx.afterRender) draw();
@@ -873,6 +895,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     env.update(dt);
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
     highlight.update(elapsed, ctx);
+    syncLevelMatrices();
     if (fps) renderer.info.reset();
     env.render();
     for (const draw of ctx.afterRender) draw();
@@ -884,7 +907,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   if (layout.playable) { const [pos, target] = overview(); camera.position.copy(pos); controls.target.copy(target); controls.update(); }
   resize();
   if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22 * 1.2).add(controls.target);
-  env.setShadowFocus(controls.target.clone(), 380);
+  env.setShadowFocus(controls.target.clone(), OVERVIEW_SHADOW);
   return app;
 }
 
@@ -918,6 +941,8 @@ function pickBox(group, geo, mat, F, r, y0, h, data) {
   m.position.set(x, y0 + h / 2, z);
   m.rotation.y = -F.a;
   m.userData = data;
+  // (c) Pick boxes never move: a static matrix keeps them out of the per-frame updateMatrixWorld cost.
+  m.matrixAutoUpdate = false; m.updateMatrix();
   group.add(m);
   return m;
 }
@@ -939,9 +964,15 @@ function buildPicks(ctx) {
     const G = ctx.levels[lv.id].picks;
     const H = lv.kind === 'roof' ? 4.2 : clearHeight(lv);
     for (const u of lv.units) for (const r of u.rects) pickBox(G, geo, mat, u.frame, r, lv.elev, H, { kind: 'unit', unit: u });
+    // (d) Tower core and refuge pick texts come from the layout (b.coreCard, lv.pickText) when a package sets them.
+    const bt = ctx.bById[lv.building];
     for (const m of lv.rooms) {
-      const info = m.pickInfo || INFO[m.type];
+      const info = m.pickInfo || (m.type === 'core' && bt?.coreCard ? (Array.isArray(bt.coreCard) ? bt.coreCard : ['电梯', bt.coreCard]) : null) || INFO[m.type];
       if (info) for (const r of m.rects) pickBox(G, geo, mat, m.frame, r, lv.elev, H, { kind: 'facility', title: info[0], desc: m.label && m.type === 'equip' ? m.label : info[1] });
+    }
+    if (lv.pickText) {
+      const [title, desc] = Array.isArray(lv.pickText) ? lv.pickText : [lv.name, lv.pickText];
+      for (const w of lv.walk.filter((q) => q.rect && q.frame)) pickBox(G, geo, mat, w.frame, w.rect, lv.elev, H, { kind: 'facility', title, desc });
     }
     for (const f of lv.features) {
       const t = f.pickInfo || {

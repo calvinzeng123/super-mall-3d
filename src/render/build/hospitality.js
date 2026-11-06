@@ -17,6 +17,9 @@ import { subtractRect } from '../../layout/urban.js';
 import { buildExpansionConnections } from './expansion-connections.js';
 import { buildCommunityTower } from './community.js';
 import { buildCommunitySite } from './community-site.js';
+import { buildSupertallResidentialRender } from './r-supertall.js';
+import { buildSupertallTowerRender } from './hospitality-supertall.js';
+import { buildFarLod, mergeBands, storeyNightWindows, crownEdgeLines, cornerAviation, FAR_COLORS } from './far-lod.js';
 export { setResidentialDetailLevel } from './residential-shell.js';
 
 const PALETTES = {
@@ -71,61 +74,182 @@ export function buildHospitality(ctx) {
   ctx.hospitality={buildings:records};
   if(!towers.length&&!community.length)return ctx.hospitality;
   ctx.renderer.localClippingEnabled=true;
+  // Supertall dispatch (SPEC §2.1 / §5.2): an expansion-only R / H / A builder draws its tower and returns its record;
+  // the stubs return null, so today's builder draws every tower. Only the marked regions belong to P-R / P-HA.
   for(const b of towers) {
-    const F=b.frame,r=b.footprint,pal=PALETTES[b.usage]||PALETTES.residential;
-    const levels=ctx.layout.levels.filter(l=>l.building===b.id).sort((a,z)=>a.elev-z.elev);
-    const group=new THREE.Group();group.name=`${b.id}-batched-exterior`;
-    const plane=new THREE.Plane(new THREE.Vector3(0,-1,0),FULL_HEIGHT);
-    const materials=clippedMaterials(ctx,plane),B=new BatchSet(materials);
-    const edges=rectEdges(r);
-    B.frame(F,()=>{
-      for(const lv of levels) {
-        slab(ctx,B,b,lv,pal);
-        if(lv.kind==='roof')continue;
-        if(b.usage==='residential') {
-          if(lv.elev<=0)for(const e of edges)facadeFloor(ctx,B,b,lv,e,pal);
-          residentialCommon(ctx,B,b,lv);
-        } else {
-          for(const e of edges) facadeFloor(ctx,B,b,lv,e,pal);
-          corridorLights(B,b,lv);
-        }
-      }
-      if(b.usage==='residential')residentialCrown(B,b,levels.at(-1));
-      else crown(B,b,levels.at(-1),pal);
-      liftEnclosures(ctx,B,b,levels,pal);
-      buildTowerStairGeometry(B,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),{flights:false});
-      for(const en of ctx.layout.entrances.filter(en=>en.building===b.id&&en.secondaryDoor)) {
-        const d=en.secondaryDoor,e=edges.find(e=>e.side===d.side);
-        const a=e.along==='x'?Math.min(d.x0,d.x1)-r.x0:Math.min(d.z0,d.z1)-r.z0;
-        sideBox(B,e,'extMetal',a-.3,a+en.width+.3,2.94,3.08,.55,1.1,pal.metal);
-        sideBox(B,e,'glowSoft',a+.1,a+en.width-.1,2.91,2.94,.65,.07,'#ffe7bf');
-      }
-    });
-    B.flush(group);
-    buildTowerStairInstances(ctx,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),materials,group);
-    const residentialShells=b.usage==='residential'?buildResidentialLevelShells(ctx,b,levels,materials,group):null;
-    ctx.buildings[b.id].group.add(group);
-    ctx.buildings[b.id].exterior=group;
-    ctx.buildings[b.id].exteriorClip=plane;
-    const ground=levels.find(l=>l.short==='1F');
-    const groundGroup=b.usage==='residential'?buildResidentialLobby(ctx,b,ground,plane)
-      :ground?.lobbyPlan?.kind==='hospitality'?buildHospitalityLobby(ctx,b,ground,plane):buildLobby(ctx,b,ground,pal);
-    const roofGroup=b.usage==='residential'?buildResidentialRoofGarden(ctx,b,levels.find(l=>l.kind==='roof')):buildRoofGarden(ctx,b,levels.find(l=>l.kind==='roof'),pal);
-    const sign=buildingSign(ctx,b,pal,plane);
-    if(sign)group.add(sign);
-    records.set(b.id,{group,plane,groundGroup,roofGroup,materials,residentialShells,detailLevel:null});
+    // <supertall:R>
+    if(buildSupertallResidentialRender(ctx,b,records))continue;
+    // </supertall:R>
+    // <supertall:HA>
+    if(buildSupertallTowerRender(ctx,b,records))continue;
+    // </supertall:HA>
+    buildHospitalityTower(ctx,b,records);
   }
   // 云澜社区住宅（西苑 / 北苑）由社区渲染器按 community-contract 字段绘制
   for(const b of community)buildCommunityTower(ctx,b,records);
   if(community.length)buildCommunitySite(ctx);
   if(!towers.length)return ctx.hospitality;
   buildPublicGarageShells(ctx);
+  // <supertall:R>
   landscape(ctx,towers);
+  // </supertall:R>
   connections(ctx);
+  // <supertall:HA>
   sharedSurfaceParking(ctx);
   attachedDockLobbies(ctx);
+  // </supertall:HA>
   return ctx.hospitality;
 }
+
+/** One R / H / A tower: the batched exterior, stairs, residential shells (M0), lobby, roof garden, sign and far LOD (M1). */
+export function buildHospitalityTower(ctx,b,records) {
+  const F=b.frame,r=b.footprint,pal=PALETTES[b.usage]||PALETTES.residential;
+  const levels=ctx.layout.levels.filter(l=>l.building===b.id).sort((a,z)=>a.elev-z.elev);
+  const group=new THREE.Group();group.name=`${b.id}-batched-exterior`;
+  const plane=new THREE.Plane(new THREE.Vector3(0,-1,0),FULL_HEIGHT);
+  const materials=clippedMaterials(ctx,plane),B=new BatchSet(materials);
+  const edges=rectEdges(r);
+  B.frame(F,()=>{
+    for(const lv of levels) {
+      slab(ctx,B,b,lv,pal);
+      if(lv.kind==='roof')continue;
+      if(b.usage==='residential') {
+        if(lv.elev<=0)for(const e of edges)facadeFloor(ctx,B,b,lv,e,pal);
+        residentialCommon(ctx,B,b,lv);
+      } else {
+        for(const e of edges) facadeFloor(ctx,B,b,lv,e,pal);
+        corridorLights(B,b,lv);
+      }
+    }
+    if(b.usage==='residential')residentialCrown(B,b,levels.at(-1));
+    else crown(B,b,levels.at(-1),pal);
+    liftEnclosures(ctx,B,b,levels,pal);
+    buildTowerStairGeometry(B,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),{flights:false});
+    for(const en of ctx.layout.entrances.filter(en=>en.building===b.id&&en.secondaryDoor)) {
+      const d=en.secondaryDoor,e=edges.find(e=>e.side===d.side);
+      const a=e.along==='x'?Math.min(d.x0,d.x1)-r.x0:Math.min(d.z0,d.z1)-r.z0;
+      sideBox(B,e,'extMetal',a-.3,a+en.width+.3,2.94,3.08,.55,1.1,pal.metal);
+      sideBox(B,e,'glowSoft',a+.1,a+en.width-.1,2.91,2.94,.65,.07,'#ffe7bf');
+    }
+  });
+  B.flush(group);
+  buildTowerStairInstances(ctx,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),materials,group);
+  const residentialShells=b.usage==='residential'?buildResidentialLevelShells(ctx,b,levels,materials,group):null;
+  ctx.buildings[b.id].group.add(group);
+  ctx.buildings[b.id].exterior=group;
+  ctx.buildings[b.id].exteriorClip=plane;
+  const ground=levels.find(l=>l.short==='1F');
+  const groundGroup=b.usage==='residential'?buildResidentialLobby(ctx,b,ground,plane)
+    :ground?.lobbyPlan?.kind==='hospitality'?buildHospitalityLobby(ctx,b,ground,plane):buildLobby(ctx,b,ground,pal);
+  // b.roofGarden === false (a supertall tower that retires its roof garden above ≈ 140 m) skips it.
+  const roofLevel=levels.find(l=>l.kind==='roof');
+  const roofGroup=b.roofGarden===false||!roofLevel?null:b.usage==='residential'?buildResidentialRoofGarden(ctx,b,roofLevel):buildRoofGarden(ctx,b,roofLevel,pal);
+  const sign=buildingSign(ctx,b,pal,plane);
+  if(sign)group.add(sign);
+  // M1 (SPEC §2.2): beyond 600 m the exterior swaps to a two-batch stand-in (+ the night layer); the 1F lobby and
+  // the roof garden show only with the near branch. A supertall package replaces hospitalityFarSpec with its own.
+  const farLod=buildFarLod(ctx,b,group,materials,hospitalityFarSpec(ctx,b,levels,pal),{extra:[groundGroup,roofGroup]});
+  records.set(b.id,{group,plane,groundGroup,roofGroup,materials,residentialShells,detailLevel:null,farLod});
+  return records.get(b.id);
+}
+
+/**
+ * Far stand-in of an R / H / A tower with today's builders (M1): the mass from grade to the roof, a glazing column per
+ * window bay of a typical storey merged up the tower, a spandrel band per storey, the glazed 1F lobby, the parapet
+ * and cap, the roof machine boxes and the roof-garden pergola, and the night layer (hashed lit bays, dark refuge
+ * storeys, lit parapet, red corner lights). Building frame.
+ */
+export function hospitalityFarSpec(ctx,b,levels,pal) {
+  const F=b.frame,roof=levels.find(l=>l.kind==='roof');
+  const storeys=levels.filter(l=>l.elev>=0&&l.kind!=='roof'),last=storeys.at(-1),top=roof?roof.elev:last.elev+last.height;
+  // The stand-in mass follows the real plates (R's plate is 0.6 m inside its footprint rectangle).
+  const pts=storeys.filter(l=>l.elev>0).flatMap(l=>l.slab?.pieces||[]).flatMap(p=>p.outer.map(q=>toL(F,...q)));
+  const r=pts.length?{x0:Math.min(...pts.map(p=>p[0])),x1:Math.max(...pts.map(p=>p[0])),z0:Math.min(...pts.map(p=>p[1])),z1:Math.max(...pts.map(p=>p[1]))}:b.footprint;
+  const edges=farEdges(r);
+  const typical=storeys.find(l=>l.units.length&&!l.lobbyPlan&&l.elev>0)||storeys.at(-1);
+  // Window bays of the typical storey per edge (the facadeFloor / residential-shell rule).
+  const bays=Object.fromEntries(edges.map(e=>[e.side,[]]));
+  for(const u of typical?.units||[]) {
+    if(u.residence?.facadeWalls) {
+      for(const w of u.residence.facadeWalls.filter(w=>w.type==='exterior'))for(const o of w.openings||[]) {
+        const len=Math.hypot(w.b[0]-w.a[0],w.b[1]-w.a[1]),P=t=>toW(u.frame,w.a[0]+(w.b[0]-w.a[0])*t/len,w.a[1]+(w.b[1]-w.a[1])*t/len);
+        for(const e of edges){const span=edgeInterval(e,F,P(Math.max(0,o.at-o.width/2)),P(Math.min(len,o.at+o.width/2)),3.2);if(span&&span[1]-span[0]>.5){bays[e.side].push(span);break;}}
+      }
+    } else {
+      const q=u.rects?.[0];if(!q)continue;
+      for(const e of edges){const span=edgeInterval(e,F,toW(u.frame,q.x0,q.z1),toW(u.frame,q.x1,q.z1),3);if(span&&span[1]-span[0]>1.2){bays[e.side].push([span[0]+.3,span[1]-.3]);break;}}
+    }
+  }
+  const first=storeys.find(l=>l.elev>0&&!l.lobbyPlan)||typical,lobby=storeys.find(l=>l.lobbyPlan);
+  const GLASS=b.usage==='residential'?'#6f8792':'#5c7380';
+  const faces=edges.map(e=>{
+    const t=(v)=>(e.axis==='x'?r.x0:r.z0)+v,bands=[];
+    for(const [a,z] of bays[e.side])bands.push({kind:'glass',t0:t(a),t1:t(z),y0:first.elev+.6,y1:last.elev+last.height-.4,color:GLASS});
+    if(lobby)bands.push({kind:'glass',t0:e.lo,t1:e.hi,y0:lobby.elev+.16,y1:lobby.elev+lobby.height-.4,color:GLASS});
+    for(const lv of storeys)if(lv.elev>0)bands.push({kind:'spandrel',y0:lv.elev-.35,y1:lv.elev+.55,color:pal.dark,off:.05});
+    return {edge:e.side,bands:mergeBands(bands)};
+  });
+  // R (residential): the plate is three wings round a core band and light wells, not one box. The mass follows the
+  // roof's upper-plate rectangles, and each wing carries its own windows, balcony strip and storey lines.
+  let mass=null;
+  const plate=roof?.corePlan?.upperPlate;
+  if(b.usage==='residential'&&plate?.length&&typical) {
+    mass=plate.map(q=>({rect:q,y0:0,y1:top,color:pal.wall}));
+    faces.length=0;
+    for(const u of typical.units) {
+      const q=u.rects?.[0];if(!q)continue;
+      const pts=[[q.x0,q.z0],[q.x1,q.z1]].map(p=>toL(F,...toW(u.frame,...p)));
+      const wing={x0:Math.min(pts[0][0],pts[1][0]),x1:Math.max(pts[0][0],pts[1][0]),z0:Math.min(pts[0][1],pts[1][1]),z1:Math.max(pts[0][1],pts[1][1])};
+      const we=farEdges(wing),bands=Object.fromEntries(we.map(e=>[e.side,[]]));
+      const side=(p,qq)=>we.map(e=>({e,d:e.axis==='x'?Math.max(Math.abs(p[1]-e.c),Math.abs(qq[1]-e.c)):Math.max(Math.abs(p[0]-e.c),Math.abs(qq[0]-e.c))})).sort((a,z)=>a.d-z.d)[0];
+      for(const w of u.residence?.facadeWalls?.filter(w=>w.type==='exterior')||[]) {
+        const len=Math.hypot(w.b[0]-w.a[0],w.b[1]-w.a[1]),P=t=>toL(F,...toW(u.frame,w.a[0]+(w.b[0]-w.a[0])*t/len,w.a[1]+(w.b[1]-w.a[1])*t/len));
+        for(const o of (w.openings||[]).filter(o=>o.type==='window')) {
+          const p=P(Math.max(0,o.at-o.width/2)),qq=P(Math.min(len,o.at+o.width/2)),hit=side(p,qq);
+          if(hit.d>3.2)continue;
+          const t0=hit.e.axis==='x'?Math.min(p[0],qq[0]):Math.min(p[1],qq[1]),t1=hit.e.axis==='x'?Math.max(p[0],qq[0]):Math.max(p[1],qq[1]);
+          bands[hit.e.side].push({kind:'glass',t0,t1,y0:first.elev+.7,y1:last.elev+last.height-.6,color:GLASS});
+        }
+      }
+      const bal=u.residence?.balcony;
+      if(bal){const bp=[[bal.x0,bal.z0],[bal.x1,bal.z1]].map(p=>toL(F,...toW(u.frame,...p))),hit=side(...bp);
+        const t0=hit.e.axis==='x'?Math.min(bp[0][0],bp[1][0]):Math.min(bp[0][1],bp[1][1]),t1=hit.e.axis==='x'?Math.max(bp[0][0],bp[1][0]):Math.max(bp[0][1],bp[1][1]);
+        bands[hit.e.side].push({kind:'balcony',t0,t1,y0:first.elev,y1:last.elev+last.height,color:'#7e878a',off:.03});}
+      for(const e of we) {
+        for(const lv of storeys)if(lv.elev>0)bands[e.side].push({kind:'spandrel',y0:lv.elev-.25,y1:lv.elev+.08,color:'#b7b4a7',off:.06});
+        faces.push({edge:e.side,rect:wing,bands:mergeBands(bands[e.side])});
+      }
+    }
+  }
+  const cx=(r.x0+r.x1)/2,cz=(r.z0+r.z1)/2,w=r.x1-r.x0,d=r.z1-r.z0,crown=[];
+  if(b.usage==='residential') {
+    const cp=roof?.corePlan;
+    for(const L of cp?.lifts||[])crown.push({rect:{x0:L.rect.x0-.12,x1:L.rect.x1+.12,z0:L.rect.z0-.12,z1:L.rect.z1+.12},y0:top+3.45,y1:top+5.03,color:'#a3aaa1'});
+    for(const e of edges)faces.find(f=>f.edge===e.side).bands.push({kind:'band',t0:e.lo-.15,t1:e.hi+.15,y0:top-.3,y1:top+.86,color:'#babaae',off:.15});
+    if(b.roofGarden!==false)for(const x of [-11.6,11.6])crown.push({rect:{x0:x-3.55,x1:x+3.55,z0:6.1,z1:11.9},y0:top+2.87,y1:top+3.03,color:FAR_COLORS.deck});
+  } else {
+    const h=b.usage==='hotel'?2.8:b.usage==='apartment'?1.8:1.2;
+    for(const e of edges)faces.find(f=>f.edge===e.side).bands.push({kind:'band',t0:e.lo-.15,t1:e.hi+.15,y0:top-.3,y1:top+h+.1,color:pal.dark,off:.3});
+    crown.push({rect:{x0:cx-w*.14,x1:cx+w*.14,z0:cz-d*.13,z1:cz+d*.13},y0:top,y1:top+2.62,color:'#a5adae'});
+    if(b.roofGarden!==false){const gw=b.usage==='residential'?5:9,gz=r.z1-6.5;crown.push({rect:{x0:cx-gw/2-.1,x1:cx+gw/2+.1,z0:gz-2.2,z1:gz+2.2},y0:top+2.9,y1:top+3.14,color:FAR_COLORS.deck});}
+  }
+  // Glass lift shafts rise 0.3 m above their top stop (liftEnclosures).
+  for(const e of ctx.layout.elevators.filter(e=>e.building===b.id&&e.exterior)) {
+    const served=levels.filter(l=>e.serves.includes(l.id)),hi=served.at(-1);
+    if(!hi)continue;
+    const [x,z]=toL(F,...toW(e.frame,e.lu,e.lv));
+    crown.push({rect:{x0:x-e.w/2,x1:x+e.w/2,z0:z-e.d/2,z1:z+e.d/2},y0:hi.elev,y1:hi.elev+hi.height+.3,color:FAR_COLORS.glass});
+  }
+  // Night: lit bays hashed per storey (the bays of the typical storey), refuge storeys dark, lit parapet, red lights.
+  const faceSpans=edges.flatMap(e=>bays[e.side].map(([a,z])=>({edge:e.side,t0:(e.axis==='x'?r.x0:r.z0)+a,t1:(e.axis==='x'?r.x0:r.z0)+z})));
+  const lit=storeyNightWindows(b,storeys.filter(l=>l.elev>0&&!l.lobbyPlan).map(l=>({id:l.id,y0:l.elev,y1:l.elev+l.height,refuge:l.kind==='refuge'})),
+    faceSpans,{rate:.3,perFace:1,width:2.6}).slice(0,240);
+  const capY=b.usage==='residential'?top+.86:top+(b.usage==='hotel'?2.9:b.usage==='apartment'?1.9:1.3);
+  return {top,footprint:r,color:pal.wall,...(mass?{mass}:{}),faces,crown,roof:{y:top},
+    night:{windows:lit,crownEdges:crownEdgeLines(r,capY),aviation:cornerAviation(r,capY+.5)}};
+}
+/** rectEdges with the far-LOD fields (axis, edge line c, lo / hi along it). */
+const farEdges=(r)=>rectEdges(r).map(e=>({...e,axis:e.along,c:{N:r.z0,S:r.z1,W:r.x0,E:r.x1}[e.side],lo:e.along==='x'?r.x0:r.z0,hi:e.along==='x'?r.x1:r.z1}));
 
 function slab(ctx,B,b,lv,pal) {
   const shaftHoles=lv.playableCap?[]:ctx.layout.elevators.filter(e=>e.building===b.id).map(e=>[
@@ -379,7 +503,10 @@ export function landscape(ctx,towers) {
   const group=new THREE.Group();group.name='hospitality-landscape';
   const B=new BatchSet(ctx.mats.base),trees=[];
   // 道路和地块由布局提供，景观只落在楼边已有plot内，避开全部建筑轮廓。
-  const occupied=p=>ctx.layout.buildings.some(b=>!b.undergroundOnly&&pointInPoly(p,b.outline))||ctx.layout.site.trenches.some(q=>pointInPoly(p,q))||(ctx.layout.extensions.roads||[]).some(r=>r.polys.some(q=>pointInPoly(p,q)))||(ctx.layout.extensions.surfaceParking||[]).some(r=>pointInPoly(p,r.poly));
+  // Fire-rescue hardstands (site.fireAccess: HS1 / HS2 today, HS-R1…R4, HS-H, HS-A later) stay clear: no planter,
+  // tree, bench or bollard inside them (GB 55037 §3.4.7).
+  const hardstands=(ctx.layout.site.fireAccess||[]).map(h=>h.poly||(h.rect?rectPoly(h.rect):null)).filter(Boolean);
+  const occupied=p=>ctx.layout.buildings.some(b=>!b.undergroundOnly&&pointInPoly(p,b.outline))||ctx.layout.site.trenches.some(q=>pointInPoly(p,q))||(ctx.layout.extensions.roads||[]).some(r=>r.polys.some(q=>pointInPoly(p,q)))||(ctx.layout.extensions.surfaceParking||[]).some(r=>pointInPoly(p,r.poly))||hardstands.some(q=>pointInPoly(p,q));
   // Planters, benches and bollards keep out of every street door's approach
   // (6 m out, 1.5 m wider each side) and their footprints out of buildings.
   const clearOf=doorMouths(ctx.layout);

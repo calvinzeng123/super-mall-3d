@@ -1,7 +1,7 @@
 import { attachViewportUI } from './viewport-ui.js';
 import { attachQualityUI } from './quality-ui.js';
 import { attachGlassLens } from './liquid-glass.js';
-import { floorRows, podiumOf, podiumDirectoryRow } from './floor-rows.js';
+import { floorRows, podiumOf, podiumDirectoryRow, zoneChips, towerRailZones, zoneOfLevel, railSearch, towerSub as towerSubOf, towerFacts } from './floor-rows.js';
 // 界面：分期切换（园区 / 一期 / 二期 / 三期 / 地铁）、所选期的楼层牌、工具条、全园区店铺目录与搜索、悬停提示。
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -16,10 +16,9 @@ const PHASES = [
 
 export function createUI(app, layout) {
   const annexes = layout.buildings.filter(b => b.kind === 'annex');
-  // 楼栋牌副标题：云澜物业社区写社区名与实际最高层（西苑 28 层、北苑 24 层），其余按用途。
-  const topFloor = (b) => Math.max(...layout.levels.filter(l => l.building === b.id).map(l => parseInt(l.short, 10)).filter(Number.isFinite));
-  const towerSub = (b) => b.community ? `${b.name.replace(/\s*\d+\s*号楼$/, '')} · ${topFloor(b)}层`
-    : b.usage === 'hotel' ? '20层酒店' : b.usage === 'apartment' ? '20层公寓' : '30层住宅';
+  // 楼栋牌副标题来自数据（floor-rows.js towerSub）：b.sub，否则社区名 / 用途与实际最高层（西苑 28 层、北苑 24 层、20层酒店）。
+  const towerSub = (b) => towerSubOf(layout, b);
+  injectRailStyles();
   const phases = [...PHASES.filter(p=>!layout.playable||!p.id||layout.buildings.some(b=>b.id===p.id)).flatMap(p => [p,
     ...annexes.filter(b => b.campusGroup === p.id).map(b => ({ id: b.id, label: b.short, sub: '一期 · 艺术街区' }))]), ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: towerSub(b) })),
     ...layout.buildings.filter(b => b.undergroundOnly).map(b => ({ id: b.id, label: b.short, sub: '地下公共停车' }))];
@@ -39,25 +38,66 @@ export function createUI(app, layout) {
     if (!b || b.disabled) return;
     app.setBuilding(b.dataset.building || null);
   });
-  let floorsFor = undefined;
-  /** Re-renders the rail when the building changes; true when it did. */
-  function renderFloors(bid) {
-    if (floorsFor === bid) return false;
-    floorsFor = bid;
+  let floorsFor = undefined, railKey = '';
+  // Zone rail (SPEC §3.1): the focused floor's zone is open, plus the zones the visitor opened.
+  const expanded = new Set();
+  let searchHits = [];
+  /** Re-renders the rail when the building, the focused floor's zone or the opened zones change; true when it did. */
+  function renderFloors(bid, focus = app.state.focus) {
+    const zone = bid ? zoneOfLevel(layout, bid, focus)?.id || '' : '';
+    const key = `${bid}|${zone}|${[...expanded].join(',')}|${searchHits.join(',')}`;
+    if (floorsFor === bid && railKey === key) return false;
+    const fresh = floorsFor !== bid;
+    if (fresh) { expanded.clear(); searchHits = []; }
+    floorsFor = bid; railKey = `${bid}|${zone}|${[...expanded].join(',')}|${searchHits.join(',')}`;
     if (!bid) {
       floorList.innerHTML = '';
       floorList.hidden = true;
       return true;
     }
     floorList.hidden = false;
-    floorList.innerHTML = floorRows(layout, bid);
-    return true;
+    const zones = towerRailZones(layout, bid);
+    const search = zones ? `<input class="floor-search" type="search" placeholder="楼层 / 房号" aria-label="搜索楼层或房号" value="${esc(searchValue)}">` : '';
+    floorList.innerHTML = (zones ? zoneChips(layout, bid, { focus }) + search : '') + floorRows(layout, bid, { focus, expanded });
+    for (const id of searchHits) floorList.querySelector(`[data-level="${id}"]`)?.classList.add('hit');
+    return fresh;
   }
+  let searchValue = '';
   floorList.addEventListener('click', (e) => {
+    const z = e.target.closest('.floor-zone, .zone-chip');
+    if (z) {
+      const id = z.dataset.zone, open = z.classList.contains('zone-chip') ? true : z.getAttribute('aria-expanded') !== 'true';
+      if (z.classList.contains('zone-chip')) expanded.clear();
+      if (open) expanded.add(id); else expanded.delete(id);
+      sync(app.state);
+      floorList.querySelector(`.floor-zone[data-zone="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      return;
+    }
     const b = e.target.closest('.floor');
     if (!b) return;
     app.setFocus(b.dataset.level || null);
     viewport.closePanel();
+  });
+  // 楼层 / 房号搜索：37 / 37F 聚焦楼层，3702 / R1-3702 聚焦并选中住户，「避难」列出避难层。
+  floorList.addEventListener('keydown', (e) => {
+    if (!e.target.classList?.contains('floor-search') || e.key !== 'Enter') return;
+    searchValue = e.target.value;
+    const hit = railSearch(layout, app.state.building, searchValue);
+    if (!hit) { e.target.classList.add('miss'); return; }
+    e.target.classList.remove('miss');
+    if (hit.levels) { searchHits = hit.levels; sync(app.state); floorList.querySelector('.floor.hit')?.scrollIntoView({ block: 'nearest' }); return; }
+    searchHits = [];
+    const unit = hit.unit && unitsById.get(hit.unit);
+    if (unit) app.focusUnit(unit); else app.setFocus(hit.level);
+  });
+  // [ / ] 或 PageUp / PageDown：俯瞰时按楼层上下切换。
+  window.addEventListener('keydown', (e) => {
+    if (app.state.explore || !app.state.building || /INPUT|TEXTAREA/.test(e.target?.tagName || '')) return;
+    const step = e.key === ']' || e.key === 'PageUp' ? 1 : e.key === '[' || e.key === 'PageDown' ? -1 : 0;
+    if (!step) return;
+    const own = layout.levels.filter((l) => l.building === app.state.building).sort((a, z) => a.elev - z.elev);
+    const i = own.findIndex((l) => l.id === app.state.focus), j = i < 0 ? (step > 0 ? 0 : own.length - 1) : Math.max(0, Math.min(own.length - 1, i + step));
+    if (own[j]) { e.preventDefault(); app.setFocus(own[j].id); }
   });
 
   const toolbar = $('toolbar');
@@ -110,12 +150,15 @@ export function createUI(app, layout) {
     const units = levels.reduce((n, l) => n + l.units.length, 0);
     // 北苑的住户电梯从一期 B2 起停，按所属核心筒计入本楼。
     const lifts = layout.elevators.filter((e) => ids.has(e.serves[0]) || (!!bid && (e.residentialCore === bid || e.building === bid))).length;
-    const out = [[bid && bById[bid]?.kind === 'tower' ? '房间 / 户' : bid ? '店铺' : '店铺 / 房间', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', lifts],
+    // Towers: 电梯 by bank, 避难层 n, 最高 xxx m (towerFacts).
+    if (bid && bById[bid]?.kind === 'tower') return [['房间 / 户', units], ...towerFacts(layout, bid), ['车位', stallsOf(levels)]];
+    const out = [[bid ? '店铺' : '店铺 / 房间', units], ['扶梯', layout.escalators.filter((e) => ids.has(e.from)).length], ['电梯', lifts],
       ['人行入口', layout.entrances.filter((e) => ids.has(e.level) && e.to === 'site').length], ['车位', stallsOf(levels)]];
     if (!bid) out.unshift(['园区', layout.playable ? '一期商场 · 酒店 · 公寓' : '商场 · 酒店 · 公寓 · 住宅 · 地铁']);
     return out;
   };
   let dirKey = null;
+  const dirShut = new Set();
   function renderDirectory() {
     const s = app.state;
     const lv = s.focus ? lvById[s.focus] : null;
@@ -141,9 +184,14 @@ export function createUI(app, layout) {
           return `<li><button class="shop" data-building="${p.id}"${ok ? '' : ' disabled'}><span class="shop-code">${p.label}</span><span class="shop-name"><b>${esc(ok ? bById[p.id].name : p.sub)}</b><span>${esc(ok ? bById[p.id].en : '规划建设中')}</span></span><span class="shop-cat" style="--cc:var(--accent)">${ok ? n + (parkingOnly ? ' 车位' : bById[p.id].kind === 'tower' ? ' 户/间' : ' 家') : '规划中'}</span></button></li>`;
         }).join('');
       } else {
-        html = layout.levels.filter((l) => l.building === b.id).reverse()
-          .map((l) => `<li><button class="shop" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + (b.kind === 'tower' ? ' 户/间' : ' 家') : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`)
-          .join('') + podiumDirectoryRow(layout, b.id);
+        const row = (l) => `<li><button class="shop${l.kind === 'refuge' ? ' refuge' : ''}" data-level="${l.id}"><span class="shop-code">${l.short}</span><span class="shop-name"><b>${esc(l.name)}</b><span>${esc(l.theme.label)}</span></span><span class="shop-cat" style="--cc:${l.theme.accent}">${l.units.length ? l.units.length + (b.kind === 'tower' ? ' 户/间' : ' 家') : l.parking ? l.parking.stalls.length + ' 位' : ''}</span></button></li>`;
+        // Towers: the rail's zone groups as collapsible dir-group rows (「中区 15–26F · 24 户」, SPEC §3.1).
+        const zones = towerRailZones(layout, b.id);
+        html = zones ? zones.map((z) => {
+          const shut = dirShut.has(z.id);
+          return `<li class="dir-group zone${shut ? ' shut' : ''}" data-zone="${esc(z.id)}">${esc(z.single ? z.name : `${z.name.replace(` ${z.range}`, '')} ${z.range}`)}${z.homes ? ` · ${z.homes} 户` : ''}</li>` + (shut ? '' : z.levels.map(row).join(''));
+        }).join('') + podiumDirectoryRow(layout, b.id)
+          : layout.levels.filter((l) => l.building === b.id).reverse().map(row).join('') + podiumDirectoryRow(layout, b.id);
         const linked = annexes.filter(a => a.campusGroup === b.id);
         if (linked.length) html += '<li class="dir-group">一期 · 艺术街区</li>' + linked.map(a =>
           `<li><button class="shop" data-building="${a.id}"><span class="shop-code">${esc(a.short)}</span><span class="shop-name"><b>${esc(a.name)}</b><span>连廊接入主商场 · 可进入各层</span></span><span class="shop-cat">${layout.levels.filter(l => l.building === a.id && l.kind !== 'roof').length} 层</span></button></li>`).join('');
@@ -179,6 +227,8 @@ export function createUI(app, layout) {
   // 手机上目录面板盖住画面中部：从目录里选了分期 / 楼层 / 店铺后自动收起，否则触摸落在面板上，3D 视角转不动
   const collapseOnPhone = () => viewport.closePanel();
   list.addEventListener('click', (e) => {
+    const g = e.target.closest('.dir-group.zone');
+    if (g) { const id = g.dataset.zone; if (dirShut.has(id)) dirShut.delete(id); else dirShut.add(id); renderDirectory(); return; }
     const b = e.target.closest('.shop');
     if (!b || b.disabled) return;
     if (app.state.explore) { exploreGo(b.dataset); return; }
@@ -213,11 +263,11 @@ export function createUI(app, layout) {
   function sync(s) {
     viewport.sync(s);
     for (const t of phaseTabs.querySelectorAll('.phase')) t.setAttribute('aria-pressed', String((t.dataset.building || null) === s.building));
-    const fresh = renderFloors(s.building);
+    const fresh = renderFloors(s.building, s.focus);
     for (const f of floorList.querySelectorAll('.floor')) f.setAttribute('aria-pressed', String((f.dataset.level || null) === s.focus && !s.exploded));
     phaseGlass.sync();
     floorGlass.sync();
-    const activeFloor = floorList.querySelector('[aria-pressed="true"]');
+    const activeFloor = floorList.querySelector('.floor[aria-pressed="true"]');
     if (activeFloor && s.focus) activeFloor.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     // A tower on the mall roof lists RF … 7F and the podium row: with no floor focused, show the
     // bottom first (7F 空中大堂, 8F–13F and 一期商场 1–6F), not only the top floors.
@@ -276,4 +326,40 @@ export function createUI(app, layout) {
       $('hint').hidden = !!caption;
     },
   };
+}
+
+/** Zone-rail styles (injected once; index.html is not touched). */
+function injectRailStyles() {
+  if (typeof document === 'undefined' || document.getElementById('zone-rail-css')) return;
+  const st = document.createElement('style'); st.id = 'zone-rail-css';
+  st.textContent = `
+.floor-zone { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 46px 1fr; align-items: center; gap: 10px; width: 156px; padding: 3px 10px 3px 4px; border-radius: 7px; cursor: pointer; color: var(--ink-2); }
+.floor-zone:hover { background: var(--chip); }
+.floor-zone .fl-num { height: 28px; font-size: 12px; background: transparent; border-left: 4px solid var(--line); }
+.floor-zone .fl-name::before { content: '▸ '; }
+.floor-zone[aria-expanded="true"] .fl-name::before { content: '▾ '; }
+.floor-zone[aria-expanded="true"] { color: var(--ink); font-weight: 600; }
+.floor.in-zone { padding-left: 12px; }
+.floor.refuge .fl-num { background: repeating-linear-gradient(135deg, #8d9499 0 4px, #747c81 4px 8px); color: #fff; }
+.floor.refuge .fl-name { color: var(--ink-3); }
+.floor.hit .fl-num { outline: 2px solid #e1b63a; }
+.zone-chips { display: flex; flex-wrap: wrap; gap: 3px; padding: 2px 2px 4px; width: 156px; box-sizing: border-box; }
+.zone-chip { all: unset; font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 10px; background: var(--chip); cursor: pointer; }
+.zone-chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.zone-chip.refuge { background: repeating-linear-gradient(135deg, #8d9499 0 3px, #747c81 3px 6px); color: #fff; }
+.floor-search { box-sizing: border-box; width: 150px; margin: 0 2px 4px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel-solid, #fff); color: var(--ink); font-size: 12px; }
+.floor-search.miss { border-color: #c0392b; }
+.dir-group.zone { cursor: pointer; }
+.dir-group.zone::before { content: '▾ '; }
+.dir-group.zone.shut::before { content: '▸ '; }
+.shop.refuge .shop-code { background: repeating-linear-gradient(135deg, #8d9499 0 4px, #747c81 4px 8px); color: #fff; }
+@media (max-width: 900px), (pointer: coarse), (max-height: 520px) {
+  .zone-chips { display: none; }
+  .floor-zone { flex: none; width: auto; grid-template-columns: 56px; padding: 3px; gap: 0; min-height: 44px; }
+  .floor-zone .fl-name { display: none; }
+  .floor-zone .fl-num { height: 38px; font-size: 11px; }
+  .floor.in-zone { padding-left: 3px; }
+  .floor-search { flex: none; width: 84px; margin: 0 4px 0 0; min-height: 44px; }
+}`;
+  document.head.append(st);
 }

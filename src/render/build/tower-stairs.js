@@ -15,6 +15,16 @@ const rail = (B, a, b) => {
 
 const protectedFlight = f => f.kind !== 'interior-stair' && !!f.localBottom;
 
+/**
+ * The 分隔 of stair s on level id (stair frame): { doors: [door1, door2], partition } or null, from P0a's
+ * towerStairPlan(s).breakAt(id) (s.breakLevels with s.breakDoors[id] = { door2, partition }, else the partition up
+ * the middle of the door landing and door2 mirrored about it): the same doors applyStairBreaks() gives the stair room.
+ */
+export function stairBreak(s, p, id) {
+  const at = (p || towerStairPlan(s)).breakAt(id);
+  return at ? { doors: at.doors, partition: at.partition } : null;
+}
+
 /** Called inside the building frame, batched into its permanent clipped shell.
  * Mid-flight geometry must survive loading the next visited dwelling floor. */
 export function buildTowerStairGeometry(B, building, levels, stairs, { enclosures = true, flights = true } = {}) {
@@ -28,15 +38,30 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
       const back=s.door.side==='S'?r.z0:r.z1-.2;
       box(B,'concrete',{x0:r.x0,z0:back,x1:r.x1,z1:back+.2},y,h,WALL);
       const front=s.door.side==='S'?dz-.2:dz;
-      for(const [x0,x1] of [[r.x0,s.door.x0],[s.door.x1,r.x1]])
-        box(B,'concrete',{x0,z0:front,x1,z1:front+.2},y,h,WALL);
-      box(B,'concrete',{x0:s.door.x0,z0:front,x1:s.door.x1,z1:front+.2},y+2.35,h-2.35,WALL);
-      // Open door leaves are parked against the entry wall, not through the
-      // 1.8m clear landing or the route between the two stair flights.
-      const cx=(s.door.x0+s.door.x1)/2,entryZ=dz-p.direction*.045;
-      B.get('extMetal').box(s.door.x0-.35,y+1.09,entryZ,.65,2.18,.055,METAL);
-      B.get('extMetal').box(s.door.x1+.35,y+1.09,entryZ,.65,2.18,.055,METAL);
-      B.get('glowSoft').box(cx,y+2.55,entryZ,.85,.23,.07,'#78b98b');
+      // 分隔 (breakLevels): a second door in the same wall and a lane partition across the door landing, so the run
+      // from below arrives through one door and the run above leaves through the other (SPEC §2.2 stairs).
+      const brk=stairBreak(s,p,lv.id),doors=brk?brk.doors:[s.door];
+      const sorted=[...doors].sort((a,b)=>a.x0-b.x0);
+      let x=r.x0;
+      for(const d of sorted){box(B,'concrete',{x0:x,z0:front,x1:d.x0,z1:front+.2},y,h,WALL);x=d.x1;}
+      box(B,'concrete',{x0:x,z0:front,x1:r.x1,z1:front+.2},y,h,WALL);
+      const entryZ=dz-p.direction*.045;
+      for(const d of sorted) {
+        box(B,'concrete',{x0:d.x0,z0:front,x1:d.x1,z1:front+.2},y+2.35,h-2.35,WALL);
+        // Open door leaves are parked against the entry wall, not through the
+        // 1.8m clear landing or the route between the two stair flights.
+        const leaf=Math.min(.65,(d.x1-d.x0)*.6);
+        if(!brk){B.get('extMetal').box(d.x0-.35,y+1.09,entryZ,.65,2.18,.055,METAL);B.get('extMetal').box(d.x1+.35,y+1.09,entryZ,.65,2.18,.055,METAL);}
+        else {const out=(d.x0+d.x1)/2<brk.partition.x0?-1:1;B.get('extMetal').box(out<0?d.x0-leaf/2-.03:d.x1+leaf/2+.03,y+1.09,entryZ,leaf,2.18,.055,METAL);}
+        B.get('glowSoft').box((d.x0+d.x1)/2,y+2.55,entryZ,Math.min(.85,d.x1-d.x0),.23,.07,'#78b98b');
+      }
+      if(brk) {
+        const P=brk.partition,z0=Math.min(P.z0,P.z1),z1=Math.max(P.z0,P.z1);
+        box(B,'concrete',{x0:P.x0-.06,z0,x1:P.x0+.06,z1},y,h,WALL);
+        // A lit 「nF 避难层」 plate on each side of the partition, at the doors.
+        for(const sg of [-1,1])B.get('glowSoft').box(P.x0+sg*.075,y+1.9,(z0+z1)/2,.012,.3,.9,'#d9e8d2');
+      }
+      const cx=(s.door.x0+s.door.x1)/2;
       const q=p.point(cx,1.05);
       B.get('glowSoft').box(q[0],y+h-.13,q[1],1.2,.055,.3,'#f5ebd6');
       const frontEdge=p.point(0,2);
