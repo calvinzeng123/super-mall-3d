@@ -12,18 +12,26 @@ import { buildTowerStairInstances } from './tower-stairs.js';
 import { WEST_CANOPY } from '../../layout/community.js';
 import { planter, bench } from './props.js';
 import { gateStatics } from './access-gates.js';
+import { FAR_LOD_RADIUS, buildFarLod } from './far-lod.js';
+import { buildWestExterior, westFar, drawWestFar } from './community-west.js';
+import { buildNorthExterior, northFar, drawNorthFar } from './community-north.js';
 
 export const COMMUNITY_PALETTES = {
   west: { wall: '#ebe5d9', band: '#b6ad9b', accent: '#6f8a7a', frame: '#4f5759', core: '#d8d2c4', stone: '#e6e1d6', slab: '#e2ddd2', sign: '#2f4a40', ink: '#f2ead6', curtain: '#e8dcc4' },
   north: { wall: '#e7e0d3', band: '#8a7a5c', accent: '#8a7a5c', frame: '#3e3b37', core: '#d5ccbc', stone: '#ebe5da', slab: '#e0d9cc', sign: '#3d362b', ink: '#f1e4c6', curtain: '#e4d6bd' },
 };
 const FULL_HEIGHT = 1e5;
+// Per-community exterior builders and far stand-ins (looked up at call time: the modules import helpers from here).
+const COMMUNITY_EXTERIORS = {
+  get west() { return { exterior: buildWestExterior, far: westFar, drawFar: drawWestFar }; },
+  get north() { return { exterior: buildNorthExterior, far: northFar, drawFar: drawNorthFar }; },
+};
 const Y = new THREE.Vector3(0, 1, 0), X = new THREE.Vector3(1, 0, 0), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _v = new THREE.Vector3();
 const EPS = 1e-6;
 const OUTWARD = { S: [0, 1], N: [0, -1], W: [-1, 0], E: [1, 0] };
 // Helpers written for other shells draw with these keys; the exterior keeps seven batches.
-const EXTERIOR_KEYS = { concrete: 'facadePlaster', ext: 'facadePlaster', matte: 'facadePlaster', plaster: 'facadePlaster', wood: 'extSatin', satin: 'extSatin', foliage: 'extSatin', metal: 'extMetal', glow: 'glowSoft' };
-const keyed = (B, map) => ({ get: (k) => B.get(map[k] || k), frame: (F, fn) => B.frame(F, fn) });
+export const EXTERIOR_KEYS = { concrete: 'facadePlaster', ext: 'facadePlaster', matte: 'facadePlaster', plaster: 'facadePlaster', wood: 'extSatin', satin: 'extSatin', foliage: 'extSatin', metal: 'extMetal', glow: 'glowSoft' };
+export const keyed = (B, map) => ({ get: (k) => B.get(map[k] || k), frame: (F, fn) => B.frame(F, fn) });
 
 const along = (a, b, t) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [a[0] + (b[0] - a[0]) * t / l, a[1] + (b[1] - a[1]) * t / l]; };
 /** A vertical pane between points a and b (two triangles). */
@@ -54,7 +62,7 @@ const clipSpans = (spans, [a, b]) => spans.map(([p, q]) => [Math.max(p, a), Math
  * Storey-high walls, panes and core cells that repeat floor after floor are merged
  * into one column per footprint (world coordinates): a 27-storey pier is one box.
  */
-class Columns {
+export class Columns {
   constructor() { this.m = new Map(); }
   add(kind, key, a, b, y0, y1, t, color) {
     const id = `${kind}|${key}|${a.map((v) => v.toFixed(3))}|${b.map((v) => v.toFixed(3))}|${t}|${color}`;
@@ -114,7 +122,7 @@ export const coreCells = (cp) => subtractRects(cp.core, [...cp.lifts.map((l) => 
   .filter((r) => Math.min(r.x1 - r.x0, r.z1 - r.z0) >= .15);
 
 /** Floor slab: stone top and edge band; the underside is the plaster ceiling of the storey below. */
-function slab(B, b, lv, color, depth = .28, ceilingKey = 'facadePlaster', ceiling = '#f0eee8') {
+export function slab(B, b, lv, color, depth = .28, ceilingKey = 'facadePlaster', ceiling = '#f0eee8') {
   const top = lv.elev - .03, local = (poly) => poly.map((q) => toL(b.frame, ...q)), at = new THREE.Matrix4().makeTranslation(0, top, 0);
   for (const piece of lv.slab.pieces) {
     const g = new THREE.ExtrudeGeometry(shapeFromPoly(local(piece.outer), (piece.holes || []).map(local)), { depth, bevelEnabled: false, curveSegments: 1 });
@@ -185,7 +193,7 @@ const onRectEdge = (p, r) => {
 };
 
 /** Facade walls, party-wall pilasters, recessed balcony slider and side walls of one home (inside its frame). */
-function homeFacade(B, col, u, lv, pal) {
+export function homeFacade(B, col, u, lv, pal) {
   const res = u.residence, y = lv.elev, h = lv.height, F = u.frame;
   for (const w of res.facadeWalls || []) {
     facadeWall(B, col, F, w, y, h, pal);
@@ -227,33 +235,50 @@ function slider(B, p, y, h, pal) {
   segment(B, 'facadePlaster', p.a, p.b, y + 2.44, y + h, .14, pal.wall);
 }
 
-/** Lift shaft: three walls and door jambs as columns, a lintel and door head on each storey. */
-/** Lift shaft walls (run .35 m down past the slab so no slot shows between storeys) and the door frame. */
-function liftShaft(B, col, F, L, y, h, pal) {
-  const r = L.rect, door = L.door;
+/** Lift records by id for liftShaft (set per tower build: the core renderers run inside the exterior batch). */
+let LIFT_RECORDS = new Map();
+/** What the lift of core-plan entry L has on level lv: 'normal' (a landing door), 'fire' (消防专用, fire mode only) or
+ * null (the lift passes: corePlan.lifts[i].landing === false, a blank shaft wall). Absent fields = today's door. */
+export function liftLanding(L, lv, records = LIFT_RECORDS) {
+  const e = records.get(L.id);
+  if (e?.fireOnly?.includes(lv.id) && !e.serves.includes(lv.id)) return 'fire';
+  if (L.landing === false) return null;
+  if (L.landing === 'fire') return 'fire';
+  return 'normal';
+}
+/**
+ * Lift shaft walls (run .35 m down past the slab so no slot shows between storeys) and, on the door side, the door
+ * frame: the door width comes from the record (L.doorWidth, else the lift's doorWidth, else 1.1 m; K4's 1.9 m shafts
+ * keep a 1.0–1.1 m door), a pass level (landing null) closes the door side as a blank wall, and a fire-only landing
+ * gets the door plus a red 消防专用 plate over it.
+ */
+export function liftShaft(B, col, F, L, y, h, pal, landing = 'normal') {
+  const r = L.rect, door = L.door, e = LIFT_RECORDS.get(L.id), half = (L.doorWidth ?? e?.doorWidth ?? 1.1) / 2;
   const sides = { N: [[r.x0, r.z0], [r.x1, r.z0]], S: [[r.x0, r.z1], [r.x1, r.z1]], W: [[r.x0, r.z0], [r.x0, r.z1]], E: [[r.x1, r.z0], [r.x1, r.z1]] };
   for (const [side, [a, b]] of Object.entries(sides)) {
-    if (side !== door) { col.wall(F, 'facadePlaster', a, b, y - .35, y + h, .12, pal.core); continue; }
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), d0 = len / 2 - .55, d1 = len / 2 + .55;
+    if (side !== door || !landing) { col.wall(F, 'facadePlaster', a, b, y - .35, y + h, .12, pal.core); continue; }
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), d0 = len / 2 - half, d1 = len / 2 + half;
     col.wall(F, 'facadePlaster', a, along(a, b, d0), y - .35, y + h, .12, pal.core);
     col.wall(F, 'facadePlaster', along(a, b, d1), b, y - .35, y + h, .12, pal.core);
     segment(B, 'facadePlaster', along(a, b, d0), along(a, b, d1), y + 2.3, y + h, .12, pal.core);
     segment(B, 'extMetal', along(a, b, d0 - .06), along(a, b, d1 + .06), y + 2.24, y + 2.32, .16, pal.frame);
+    if (landing === 'fire') segment(B, 'extMetal', along(a, b, len / 2 - .35), along(a, b, len / 2 + .35), y + 2.4, y + 2.62, .18, '#b5302a');
   }
 }
 
 /**
- * Landing doors of a tower's lifts: two brushed-metal leaves at every stop (one InstancedMesh per
- * tower), closed except at the floor where the car stands with its doors open. Shown while the
- * tower is in use (one of its cars is visible), so open shafts never show on the other floors.
+ * Landing doors of a tower's lifts: two brushed-metal leaves and a sill at every stop (one InstancedMesh per
+ * tower), closed except at the floor where the car stands with its doors open. Shown while the tower is in use
+ * (one of its cars is visible), so open shafts never show on the other floors. Fire-only landings (e.fireOnly,
+ * 消防专用) get leaves too. buildElevators draws nothing for these closed shafts (C-14): the sill lives here.
  */
 export function landingDoors(ctx, b, levels, material, group) {
   const stops = [];
   for (const lv of levels) for (const L of lv.corePlan?.lifts || []) {
     const e = ctx.layout.elevators?.find((q) => q.id === L.id);
-    if (!e || !e.serves.includes(lv.id)) continue;
-    const r = L.rect, alongX = L.door === 'N' || L.door === 'S';
-    stops.push({ lift: L.id, level: lv.id, y: lv.elev, alongX, line: { N: r.z0, S: r.z1, W: r.x0, E: r.x1 }[L.door], mid: alongX ? (r.x0 + r.x1) / 2 : (r.z0 + r.z1) / 2 });
+    if (!e || !(e.serves.includes(lv.id) || e.fireOnly?.includes(lv.id))) continue;
+    const r = L.rect, alongX = L.door === 'N' || L.door === 'S', half = (L.doorWidth ?? e.doorWidth ?? 1.1) / 2;
+    stops.push({ lift: L.id, level: lv.id, y: lv.elev, alongX, half, line: { N: r.z0, S: r.z1, W: r.x0, E: r.x1 }[L.door], mid: alongX ? (r.x0 + r.x1) / 2 : (r.z0 + r.z1) / 2 });
   }
   if (!stops.length) return null;
   // Batch materials take vertex colours; the instanced leaves carry none, so use a plain brushed-steel copy.
@@ -261,20 +286,27 @@ export function landingDoors(ctx, b, levels, material, group) {
   steel.vertexColors = false; steel.color?.set?.('#aab1b6'); steel.metalness = Math.min(steel.metalness ?? .6, .6); steel.roughness = Math.max(steel.roughness ?? .35, .35);
   // clone() copies the clipping planes; share the tower's own plane so a floor cutaway also cuts the doors above it.
   steel.clippingPlanes = material.clippingPlanes;
-  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), steel, stops.length * 2);
+  // Instances: the two leaves of stop i at 2i and 2i + 1, its sill at 2n + i.
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), steel, stops.length * 3);
   mesh.name = `${b.id}-landing-doors`; mesh.visible = false; mesh.castShadow = false;
   const F = frameMatrix(b.frame), m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
   const place = (i, open) => {
-    const s = stops[i];
+    const s = stops[i], leaf = s.half / 2 + .0025;
     for (const k of [0, 1]) {
-      const t = s.mid + (k ? 1 : -1) * (.2775 + .55 * open);
+      const t = s.mid + (k ? 1 : -1) * (leaf + s.half * open);
       p.set(s.alongX ? t : s.line, s.y + 1.14, s.alongX ? s.line : t);
-      sc.set(s.alongX ? .545 : .045, 2.27, s.alongX ? .045 : .545);
+      sc.set(s.alongX ? s.half - .005 : .045, 2.27, s.alongX ? .045 : s.half - .005);
       mesh.setMatrixAt(2 * i + k, m.compose(p, q, sc).premultiply(F));
     }
   };
   const state = stops.map(() => 0);
-  stops.forEach((s, i) => place(i, 0));
+  stops.forEach((s, i) => {
+    place(i, 0);
+    // The landing sill: a 0.12 m steel strip across the door, flush with the floor.
+    p.set(s.alongX ? s.mid : s.line, s.y + .006, s.alongX ? s.line : s.mid);
+    sc.set(s.alongX ? 2 * s.half + .1 : .12, .012, s.alongX ? .12 : 2 * s.half + .1);
+    mesh.setMatrixAt(2 * stops.length + i, m.compose(p, q, sc).premultiply(F));
+  });
   mesh.computeBoundingSphere();
   group.add(mesh);
   const rec = { mesh, stops, state, update() {
@@ -308,10 +340,10 @@ function stairShell(B, col, F, s, y, h, pal, outer) {
 }
 
 /** Core fill, lift shafts, stair enclosures and the shared circulation finish on one storey. */
-function coreStorey(B, col, F, lv, pal, height = lv.height, outer = null) {
+export function coreStorey(B, col, F, lv, pal, height = lv.height, outer = null) {
   const cp = lv.corePlan, y = lv.elev;
   if (!cp) return;
-  for (const L of cp.lifts) liftShaft(B, col, F, L, y, height, pal);
+  for (const L of cp.lifts) liftShaft(B, col, F, L, y, height, pal, liftLanding(L, lv));
   for (const s of cp.stairs) stairShell(B, col, F, s, y, height, pal, outer);
   for (const c of coreCells(cp)) col.cell(F, 'facadePlaster', c, y, y + height, pal.core);
   for (const q of cp.landings.filter((q) => q.open)) {
@@ -329,7 +361,7 @@ const entranceSpans = (layout, b, lv, e) => (layout.entrances || []).filter((en)
   .map((en) => [toL(b.frame, en.seg.x0, en.seg.z0), toL(b.frame, en.seg.x1, en.seg.z1)]).filter(([p, q]) => onEdge(e, p, q, .3)).map(([p, q]) => spanOn(e, p, q));
 
 /** Perimeter not covered by homes: core facade with stair slots, corridor-end glazing, lobby curtain walls. */
-function perimeter(B, col, layout, b, lv, pal) {
+export function perimeter(B, col, layout, b, lv, pal) {
   const y = lv.elev, h = lv.height, cp = lv.corePlan, cover = facadeCoverage(b, lv), F = b.frame;
   for (const e of footprintEdges(b.footprint)) {
     let free = cover[e.side].reduce((iv, s) => subtractInterval(iv, s), [[e.lo, e.hi]]);
@@ -381,12 +413,12 @@ function perimeter(B, col, layout, b, lv, pal) {
 }
 
 /** Slab edge band of a storey, slightly proud of the facade. */
-function band(B, b, y, pal, color = pal.band, y0 = -.22, y1 = .04) {
+export function band(B, b, y, pal, color = pal.band, y0 = -.22, y1 = .04) {
   for (const e of footprintEdges(b.footprint)) segment(B, 'extSatin', at(e, e.lo - .06, .03), at(e, e.hi + .06, .03), y + y0, y + y1, .3, color);
 }
 
 /** Parapet, accent cornice and the lift / stair penthouse over the core. */
-function crown(B, b, lv, pal) {
+export function crown(B, b, lv, pal) {
   const y = lv.elev, cp = lv.corePlan;
   band(B, b, y, pal, pal.accent, -.35, 1.15);
   for (const e of footprintEdges(b.footprint)) segment(B, 'extMetal', at(e, e.lo - .12, .05), at(e, e.hi + .12, .05), y + 1.15, y + 1.23, .42, pal.frame);
@@ -404,7 +436,7 @@ function crown(B, b, lv, pal) {
   for (const L of cp.lifts) { const r = L.rect; B.get('facadePlaster').box((r.x0 + r.x1) / 2, y + H + .8, (r.z0 + r.z1) / 2, r.x1 - r.x0, 1.2, r.z1 - r.z0, pal.core); }
 }
 
-function canopy(B, layout, b, lv, pal) {
+export function canopy(B, layout, b, lv, pal) {
   for (const en of (layout.entrances || []).filter((q) => q.building === b.id && q.level === lv.id && q.to === 'site')) {
     const p = toL(b.frame, en.seg.x0, en.seg.z0), q = toL(b.frame, en.seg.x1, en.seg.z1), e = footprintEdges(b.footprint).find((x) => onEdge(x, p, q, .3));
     if (!e) continue;
@@ -418,6 +450,7 @@ function canopy(B, layout, b, lv, pal) {
 }
 
 /** 7F 空中大堂 doors of a storey on their footprint edge: { en, e (edge), span [t0, t1] } in the building frame. */
+export const skyDoorSpans = (b, lv, layout) => skyDoors(layout, b, lv);
 const skyDoors = (layout, b, lv) => (layout.entrances || []).filter((q) => q.building === b.id && q.level === lv.id && q.skyLobby).flatMap((en) => {
   const p = toL(b.frame, en.seg.x0, en.seg.z0), q = toL(b.frame, en.seg.x1, en.seg.z1), e = footprintEdges(b.footprint).find((x) => onEdge(x, p, q, .3));
   return e ? [{ en, e, span: spanOn(e, p, q) }] : [];
@@ -427,7 +460,7 @@ const skyDoors = (layout, b, lv) => (layout.entrances || []).filter((q) => q.bui
  * 空中大堂外门（外立面批次，+0 次绘制）：两扇自动推拉玻璃门常开、收在门洞两侧室内 8 cm；
  * 南门上方 2.4 m 玻璃雨棚、铜色封边与两根拉杆。门洞与亮子由 perimeter() 按入口记录开出。
  */
-function skyDoorway(B, layout, b, lv, pal) {
+export function skyDoorway(B, layout, b, lv, pal) {
   for (const { en, e, span: [a, z] } of skyDoors(layout, b, lv)) {
     const m = (a + z) / 2, w = z - a, leaf = w / 2;
     // Leaves park beside the opening; a side too short for its leaf (the gap door is 1 m from the
@@ -484,9 +517,10 @@ function signFacade(layout, b) {
   return footprintEdges(b.footprint)[b.community === 'north' ? 0 : 1];
 }
 
-// 西苑 towers beyond this distance (camera to tower centre, 5 % hysteresis) draw a two-batch stand-in instead of the
-// exterior batches: the campus overview and the far bank see them at ~1 m per pixel, where windows are 2 px tall.
-export const COMMUNITY_FAR_LOD = 600;
+// Community towers beyond this distance (camera to tower centre, 5 % hysteresis) draw a two-batch stand-in instead
+// of the exterior batches: the campus overview and the far bank see them at ~1 m per pixel, where windows are 2 px
+// tall. The mechanism (farSwap, the night layer) lives in far-lod.js; the stand-in content is per community.
+export const COMMUNITY_FAR_LOD = FAR_LOD_RADIUS;
 const FAR_GLASS = '#8c9ca3', FAR_BALCONY = '#a08d6e', FAR_DECK = '#a8916c', FAR_PLANTER = '#647f52', FAR_ROOF = '#aaa395', FAR_PENTHOUSE = '#c4bcad';
 const _up = new THREE.Quaternion();
 
@@ -501,11 +535,13 @@ function farFace(B, e, t0, t1, y0, y1, off, color, key = 'facadePlaster') {
 /** Distant stand-in of a tower (building frame; facadePlaster + facadeWindow batches, ~2k vertices): the footprint
  * mass, the window / balcony / stair-slot / corridor glazing, party-wall pilasters and core fins merged up the tower,
  * a spandrel and slab band per storey, the lobby glass, the crown, the roof deck and planters, the core penthouse. */
-function farFacade(B, b, above, pal) {
+export function farFacade(B, b, above, pal, lit = null) {
   const fp = b.footprint, edges = footprintEdges(fp), roof = above.find((l) => l.kind === 'roof');
   const last = above.filter((l) => l.kind !== 'roof').at(-1), top = roof ? roof.elev : last.elev + last.height;
   const cx = (fp.x0 + fp.x1) / 2, cz = (fp.z0 + fp.z1) / 2, W = fp.x1 - fp.x0, D = fp.z1 - fp.z0;
-  B.get('facadePlaster').box(cx, top / 2, cz, W, top, D, pal.wall);
+  // The mass starts at the first own storey: 0 for 西苑, the 7F sky lobby (34 m) for 北苑 on the 一期 roof.
+  const base = Math.max(0, above[0].elev);
+  B.get('facadePlaster').box(cx, (base + top) / 2, cz, W, top - base, D, pal.wall);
   const strips = new Map();
   const strip = (e, [t0, t1], y0, y1, color, off = .02) => {
     if (t1 - t0 < .05 || y1 - y0 < .05) return;
@@ -526,7 +562,12 @@ function farFacade(B, b, above, pal) {
         const p = P(Math.max(0, o.at - o.width / 2)), q = P(Math.min(len, o.at + o.width / 2)), e = edges.find((x) => onEdge(x, p, q));
         if (!e) continue;
         if (o.type === 'railing') strip(e, spanOn(e, p, q), y, y + h, FAR_BALCONY);
-        else strip(e, spanOn(e, p, q), y + Math.max(0, o.bottom ?? .6), y + Math.min(h - .25, o.top ?? 2.4), FAR_GLASS);
+        else {
+          const [t0, t1] = spanOn(e, p, q), y0 = y + Math.max(0, o.bottom ?? .6), y1 = y + Math.min(h - .25, o.top ?? 2.4);
+          strip(e, [t0, t1], y0, y1, FAR_GLASS);
+          // Night candidates: every window of every storey (the night layer picks a hashed share, refuge floors stay dark).
+          if (lit && lv.kind !== 'refuge' && t1 - t0 > .6) lit.push({ level: lv.id, edge: e.side, t0, t1, y0, y1 });
+        }
       }
     }
     if (!cp) continue;
@@ -570,28 +611,10 @@ function farFacade(B, b, above, pal) {
   for (const { rect: r } of roof.corePlan.lifts) B.get('facadePlaster').box((r.x0 + r.x1) / 2, top + 5, (r.z0 + r.z1) / 2, r.x1 - r.x0, 1.2, r.z1 - r.z0, FAR_PENTHOUSE);
 }
 
-/** Swaps the exterior batches (`near`) for the stand-in meshes (`far`) by distance. The renderer calls update() on
- * an isLOD object before it draws the object's children, with the main camera only; the shadow pass reuses that
- * choice. The stand-in starts hidden, so the exterior reads as the full tower until a frame is drawn. */
-function farSwap(b, top, near, far) {
-  const lod = new THREE.LOD(), [cx, cz] = toW(b.frame, (b.footprint.x0 + b.footprint.x1) / 2, (b.footprint.z0 + b.footprint.z1) / 2);
-  const centre = new THREE.Vector3(cx, top / 2, cz), eye = new THREE.Vector3();
-  lod.name = `${b.id}-far-lod`;
-  lod.add(near, ...far);
-  for (const m of far) m.visible = false;
-  let distant = false;
-  lod.update = (camera) => {
-    const want = eye.setFromMatrixPosition(camera.matrixWorld).distanceTo(centre) > COMMUNITY_FAR_LOD * (distant ? .95 : 1);
-    if (want === distant) return;
-    distant = want; near.visible = !distant;
-    for (const m of far) m.visible = distant;
-  };
-  return lod;
-}
-
 /** Permanent exterior of one community tower, plus its lobby / club, roof garden and basement lobbies. */
 export function buildCommunityTower(ctx, b, records) {
   const pal = COMMUNITY_PALETTES[b.community] || COMMUNITY_PALETTES.west, layout = ctx.layout;
+  LIFT_RECORDS = new Map((layout.elevators || []).map((e) => [e.id, e]));
   const byId = new Map(layout.levels.map((l) => [l.id, l]));
   const levels = (b.levels || []).map((id) => byId.get(id)).filter(Boolean).sort((a, z) => a.elev - z.elev);
   const group = new THREE.Group(); group.name = `${b.id}-community-exterior`;
@@ -600,18 +623,9 @@ export function buildCommunityTower(ctx, b, records) {
   const B = new BatchSet(materials), col = new Columns(), XB = keyed(B, EXTERIOR_KEYS);
   const above = levels.filter((l) => l.elev >= 0), below = levels.filter((l) => l.elev < 0);
   const stairs = layout.stairs.filter((s) => s.building === b.id);
-  for (const u of above.flatMap((l) => l.units)) B.frame(u.frame, () => homeFacade(B, col, u, byId.get(u.level), pal));
-  B.frame(b.frame, () => {
-    for (const lv of above) {
-      slab(B, b, lv, pal.slab);
-      if (lv.kind === 'roof') { crown(B, b, lv, pal); coreStorey(B, col, b.frame, lv, pal, 4.2, b.footprint); roofGarden(XB, b, lv, pal); continue; }
-      if (lv.elev > 0) band(B, b, lv.elev, pal);
-      perimeter(B, col, layout, b, lv, pal);
-      coreStorey(B, col, b.frame, lv, pal, lv.height, b.footprint);
-      canopy(B, layout, b, lv, pal);
-      skyDoorway(B, layout, b, lv, pal);
-    }
-  });
+  // Per-community exterior and stand-in (community-west.js / community-north.js): each tower package edits only its own.
+  const kit = COMMUNITY_EXTERIORS[b.community] || COMMUNITY_EXTERIORS.west;
+  kit.exterior({ ctx, b, B, col, XB, levels, above, byId, pal, layout });
   col.flush(B);
   B.flush(group);
   // One sign mesh: the crown name on the main facade and the plate over the street door.
@@ -635,15 +649,8 @@ export function buildCommunityTower(ctx, b, records) {
     }
   });
   signs.flush(group, signMat);
-  if (b.community === 'west' && above.length) {
-    const near = new THREE.Group(), stand = new BatchSet(materials), far = new THREE.Group();
-    near.name = `${b.id}-near`;
-    near.add(...group.children);
-    stand.frame(b.frame, () => farFacade(stand, b, above, pal));
-    stand.flush(far);
-    for (const m of far.children) m.name = `${b.id}-far`;
-    group.add(farSwap(b, roof?.elev ?? 0, near, [...far.children]));
-  }
+  // M1 (SPEC §2.2): every community tower swaps to its two-batch stand-in beyond 600 m, plus the night layer.
+  const farLod = above.length ? buildFarLod(ctx, b, group, materials, kit.far({ b, above, pal, layout }), { draw: kit.drawFar && ((stand) => kit.drawFar(stand, { b, above, pal })) }) : null;
   const landing = landingDoors(ctx, b, levels, materials.metal, group);
   // Protected stair flights are built and shown only once a floor this core serves is visited.
   const stairLevels = (b.stairLevelIds || b.levels).map((id) => byId.get(id)).filter(Boolean).sort((a, z) => a.elev - z.elev);
@@ -654,7 +661,7 @@ export function buildCommunityTower(ctx, b, records) {
   const groundGroup = lobbyLevel ? buildCommunityLobby(ctx, b, lobbyLevel, pal, signMat) : null;
   const roofGroup = group;   // the roof garden rides the exterior batches (+0 draw calls)
   const basements = below.map((lv) => buildCommunityBasement(ctx, b, lv, pal, stairs));
-  const record = { group, plane, groundGroup, roofGroup, basements, materials, signMaterial: signMat, residentialShells: null, detailLevel: null, community: b.community, landing };
+  const record = { group, plane, groundGroup, roofGroup, basements, materials, signMaterial: signMat, residentialShells: null, detailLevel: null, community: b.community, landing, farLod };
   records?.set(b.id, record);
   return record;
 }
@@ -765,7 +772,7 @@ export function lobbySignSpot(lv, plan, b) {
 
 /** Roof garden (inside the building frame, exterior batches): deck, planters along the parapet
  * (layout planters where given), pergola and benches. */
-function roofGarden(B, b, lv, pal) {
+export function roofGarden(B, b, lv, pal) {
   const y = lv.elev, r = b.footprint, core = lv.corePlan?.core;
   const planters = lv.roofGarden?.planters?.map((p) => p.rect) || footprintEdges(r).flatMap((e) => {
     const spans = core && rectTouches(core, e, 1.5) ? subtractInterval([[e.lo + 1, e.hi - 1]], [rectSpan(core, e)[0] - 1, rectSpan(core, e)[1] + 1]) : [[e.lo + 1, e.hi - 1]];

@@ -565,7 +565,9 @@ function communityHome(B, u, y0, height, labels, wallKeys, storey = height + .3)
       // 户内门：门套、门扇与执手；门扇按布局记录（partition.door.leaf）开向所服务的房间、贴墙停放。
       if (opened && p.role !== 'opening' && p.door.leaf) {
         const s = partitionAxis(p), [g0, g1] = doorSpan(p);
-        doorSet(R, { axis: s.axis, line: s.c, g0, g1, tw: .12 }, p.door.leaf, INNER_DOOR);
+        // 户内避难间（residence.refugeRoom）的门是乙级防火门（supertall：layout 给门扇 fire: '乙级'）：钢质门、闭门器、标识。
+        const fire = p.door.leaf.fire || p.door.fire;
+        doorSet(R, { axis: s.axis, line: s.c, g0, g1, tw: .12 }, p.door.leaf, fire ? FIRE_DOOR : INNER_DOOR);
       }
     }
     stairTreads(R, res);
@@ -611,6 +613,8 @@ const shade = (hex, f) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.sli
 // 门：户内门为暖白色漆面门扇与门套（不是木地板纹理），入户门为深色钢质门；执手为金属拉手。
 const INNER_DOOR = { frameKey: 'matte', frame: '#f4f1ea', leafKey: 'matte', leaf: '#ebe5d8', handle: '#8d8576', lining: DOOR.lining, casing: .03 };
 const FRONT_DOOR = { frameKey: 'metal', frame: '#4b4844', leafKey: 'metal', leaf: '#615b54', handle: '#d9d2c3', lining: DOOR.frontLining, casing: .05 };
+/** 乙级防火门 finish (the 户内避难间 door): a steel leaf in fire-door red-brown, a steel frame, a closer and a sign plate. */
+export const FIRE_DOOR = { frameKey: 'metal', frame: '#5d5a55', leafKey: 'metal', leaf: '#8f4b3a', handle: '#d9d2c3', lining: DOOR.lining, casing: .04, fire: true };
 /**
  * One door in unit-local coordinates: jambs with their casings on both faces, the head casing, the leaf where the
  * layout parked it (leaf.rect: open 90° or folded back 180°; a pocket leaf shows its edge in the opening) and a
@@ -639,6 +643,13 @@ function doorSet(R, { axis, line, g0, g1, tw }, leaf, st) {
   const across = (len, thick, at, y, h) => R.box('metal', fx + ux * at, fz + uz * at, y, Math.abs(ux) * len + Math.abs(uz) * thick, Math.abs(uz) * len + Math.abs(ux) * thick, h, st.handle);
   across(.05, leaf.t + .024, .06, 1.0, .07);
   across(.13, leaf.t + .07, .12, 1.0, .022);
+  if (st.fire) {
+    // Closer at the head on the hinge side, and the 「乙级防火门 · 户内避难间」 plate at eye height on the leaf.
+    const at = (k) => [hx + (fx - hx) * k, hz + (fz - hz) * k];
+    const [cx, cz] = at(.25), [px, pz] = at(.5);
+    R.box('metal', cx, cz, leaf.h - .06, Math.abs(ux) * .3 + Math.abs(uz) * (leaf.t + .06), Math.abs(uz) * .3 + Math.abs(ux) * (leaf.t + .06), .06, '#2f2e2c');
+    R.box('matte', px, pz, 1.55, Math.abs(ux) * .24 + Math.abs(uz) * (leaf.t + .012), Math.abs(uz) * .24 + Math.abs(ux) * (leaf.t + .012), .08, '#e9dccb');
+  }
 }
 
 /** Door-plate text of a community home: 1201, 10W, or 14–15W for a duplex (both parts). */

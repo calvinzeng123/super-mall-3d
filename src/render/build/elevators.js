@@ -3,11 +3,15 @@
 import * as THREE from 'three';
 import { COLORS } from '../theme.js';
 import { NORMAL } from '../../layout/geom.js';
+import { closedTowerShaft } from './tower-elevators.js';
 
 export function buildElevators(ctx) {
   const { layout } = ctx;
   const byId = ctx.lvById;
-  for (const e of layout.elevators.filter((x) => x.rideable || x.type === 'glass' || x.exterior)) {
+  // C-14: closed tower shafts draw nothing here. Their walls, door frames and lintels come from the core renderers
+  // (community.js liftShaft, residential-cores.js), the landing sills and leaves from landingDoors (one instance
+  // each per stop) and the cars from tower-elevators.js. Only glass and exterior lifts keep their per-stop panes.
+  for (const e of layout.elevators.filter((x) => (x.rideable || x.type === 'glass' || x.exterior) && !closedTowerShaft(ctx, x))) {
     const half = e.w / 2, depth = e.d / 2;
     const topId = e.serves[e.serves.length - 1];
     const frameCol = e.exterior ? '#2b3036' : COLORS.white;

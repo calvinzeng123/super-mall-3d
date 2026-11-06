@@ -2,9 +2,20 @@
 // 每个有门禁的楼层只有两个实例化网格（门扇、指示灯），门扇开合 0.35 s 动画。
 // 关闭的门扇横跨通道，与导航中的实体墙一致；“所见即所挡”。
 import * as THREE from 'three';
-import { toW } from '../../layout/geom.js';
+import { toW, dirW } from '../../layout/geom.js';
+import { SignBatch } from '../batch.js';
 
 export const GATE_COLORS = Object.freeze({ idle: 0x3aa0ff, granted: 0x3ddc84, denied: 0xff5a4f });
+/** Plate colour beside an existing-leaf gate's reader, by role. */
+const GATE_PLATE = Object.freeze({ entry: '#2f4a40', exit: '#2f7d4a', reentry: '#2f4a40' });
+/** Sign text of a gate by role (SPEC §3.5): every gate releases on alarm (GB 55037 §7.1.7). */
+export const GATE_SIGN = Object.freeze({
+  entry: { cn: '住户专区 · 刷卡进入', sub: '火灾时自动释放' },
+  exit: { cn: '仅供疏散 · 外侧刷卡', sub: '火灾时自动释放' },
+  reentry: { cn: '住户楼层 · 刷卡进入', sub: '火灾时自动释放' },
+});
+/** Sign lines of gate g: its own record sign when given, else the role's. */
+export const gateSignText = (g) => ({ cn: g.sign?.cn || GATE_SIGN[g.role || 'entry'].cn, sub: g.sign?.sub || (g.releaseOnAlarm !== false ? GATE_SIGN[g.role || 'entry'].sub : '') });
 const OPEN_TIME = 0.35, DENIED = 0.6;
 
 /**
@@ -15,6 +26,9 @@ const OPEN_TIME = 0.35, DENIED = 0.6;
  */
 export function gateLeafBoxes(g, t) {
   const out = [];
+  // leaf 'existing' (SPEC §2.1 gates): the gate sits in an existing stair / fire-door opening whose own leaf the
+  // stair renderer draws; the gate adds only its reader and sign.
+  if (g.leaf === 'existing') return out;
   for (const l of g.lanes) {
     const w = l.u1 - l.u0, c = (l.u0 + l.u1) / 2;
     if (g.kind === 'speed-gates') {
@@ -38,6 +52,14 @@ export function gateLeafBoxes(g, t) {
 /** Static parts of a gate in its frame (cabinets, track, sidelights, reader) into the level batch. */
 export function gateStatics(B, g, y0) {
   B.frame(g.frame, () => {
+    if (g.leaf === 'existing') {
+      // Reader and a small plate beside the existing door, on the card side (v < 0: the public side of an entry,
+      // outside of an exit-only door, the stair side of a re-entry door); the sign text rides the gate-sign batch.
+      const m = readerMount(g);
+      B.get('metal').box(m.u, y0 + 1.25, m.v, .1, .16, .04, '#11161b');
+      B.get('metal').box(m.u, y0 + 1.62, m.v, .34, .24, .03, GATE_PLATE[g.role] || GATE_PLATE.entry);
+      return;
+    }
     if (g.kind === 'speed-gates') {
       for (const c of g.cabinets) {
         const u = (c.u0 + c.u1) / 2, w = c.u1 - c.u0, d = c.v1 - c.v0, v = (c.v0 + c.v1) / 2;
@@ -67,6 +89,11 @@ export function gateStatics(B, g, y0) {
 /** Wall-mounted reader of a glass door: on the static glass next to the lane nearest the reader stand. */
 function readerMount(g) {
   if (g.kind === 'speed-gates') return null;
+  if (g.leaf === 'existing') {
+    // Beside the opening, 0.25 m past the frame on the reader's side of the door.
+    const right = g.reader.u >= (g.line.u0 + g.line.u1) / 2;
+    return { u: right ? g.line.u1 + .25 : g.line.u0 - .25, v: Math.min(-.06, g.reader.v * .1) };
+  }
   const l = [...g.lanes].sort((a, b) => Math.abs((a.u0 + a.u1) / 2 - g.reader.u) - Math.abs((b.u0 + b.u1) / 2 - g.reader.u))[0];
   const left = l.u0 - .22, right = l.u1 + .22;
   const u = g.reader.u <= (l.u0 + l.u1) / 2 && left > g.line.u0 + .05 ? left : right < g.line.u1 - .05 ? right : left;
@@ -86,7 +113,28 @@ export const gateLeds = (g) => g.kind === 'speed-gates' ? g.lanes.map((l) => {
 export function gatePickInfo(layout, g) {
   const zone = layout.accessControl?.zones?.find((z) => z.id === g.zone);
   const b = layout.buildings.find((q) => q.id === (g.building || zone?.building));
-  return [b ? `${b.name} · 住户门禁` : '住户门禁', `${g.name} · 刷卡通行 · 出门自动感应 · 访客请联系礼宾`];
+  const title = b ? `${b.name} · 住户门禁` : '住户门禁';
+  if (g.role === 'exit') return [title, `${g.name} · 仅供疏散 · 外侧刷卡 · 火灾时自动释放`];
+  if (g.role === 'reentry') return [title, `${g.name} · 住户楼层 · 刷卡进入 · 火灾时自动释放`];
+  return [title, `${g.name} · 刷卡通行 · 出门自动感应 · 访客请联系礼宾`];
+}
+
+/** Two-cell sign atlas (exit / re-entry) for the existing-leaf gates' door signs. */
+let SIGN_ATLAS = null;
+function gateSignAtlas(ctx) {
+  if (SIGN_ATLAS?.ctx === ctx) return SIGN_ATLAS;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const g = c.getContext('2d');
+  for (const [i, role] of ['exit', 'reentry'].entries()) {
+    const y = i * 128, t = GATE_SIGN[role];
+    g.fillStyle = role === 'exit' ? '#1f6b3c' : '#2f4a40'; g.fillRect(0, y, 512, 128);
+    g.fillStyle = '#f4ead6'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '600 46px "PingFang SC","Noto Sans CJK SC","WenQuanYi Zen Hei",sans-serif'; g.fillText(t.cn, 256, y + 48, 490);
+    g.font = '400 28px "PingFang SC","Noto Sans CJK SC","WenQuanYi Zen Hei",sans-serif'; g.fillText(t.sub, 256, y + 98, 490);
+  }
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return (SIGN_ATLAS = { ctx, material: ctx.mats.sign(texture), cells: { exit: [0, .5, 1, 1], reentry: [0, 0, 1, .5] } });
 }
 
 /**
@@ -126,6 +174,18 @@ export function buildAccessGates(ctx) {
       st.center = new THREE.Vector3(cx, y0 + 1, cz);
     }
     L.base.add(leaves, leds);
+    // Door signs of the existing-leaf gates (exit-only / re-entry): one sign mesh per floor that has them.
+    const doors = list.filter((g) => g.leaf === 'existing');
+    if (doors.length && ctx.mats.sign && typeof document !== 'undefined') {
+      const atlas = gateSignAtlas(ctx), signs = new SignBatch();
+      for (const g of doors) {
+        const cu = (g.line.u0 + g.line.u1) / 2, [x, z] = toW(g.frame, cu, -.08), [nx, nz] = dirW(g.frame, 0, -1);
+        signs.placeN(x, y0 + 2.55, z, 1.1, .275, nx, nz, atlas.cells[g.role] || atlas.cells.reentry);
+      }
+      const holder = new THREE.Group(); holder.name = `access-gate-signs ${floor}`;
+      signs.flush(holder, atlas.material);
+      L.base.add(holder);
+    }
     meshes.push({ floor, leaves, leds });
   }
   const place = (st) => {

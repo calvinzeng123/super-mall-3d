@@ -6,6 +6,8 @@ import { buildNav, step, landAt, linksNear, spawn, unitSpawn, floorLabel, sightB
 import { pointInPoly, distToPolyEdge, toL } from '../layout/geom.js';
 import { createElevatorRide, sampleElevatorRide } from '../layout/elevator-ride.js';
 import { communitySolids } from './build/residence-interiors.js';
+import { keypadModel, keypadHtml, keyForBuffer, isFireLift, realRunSeconds, rideHud, KEYPAD_MIN_STOPS, KEYPAD_CSS } from './lift-keypad.js';
+import { closedTowerShaft } from './build/tower-elevators.js';
 
 const WALK = 2.8, RUN = 6, FLY = 8, FLY_MAX = 30;
 const JUMP = 4.5, GRAVITY = 12;
@@ -47,6 +49,11 @@ export function attachExplore(app, ui) {
   let label = '';
   let busy = false;
   let liftRide = null;
+  // 电梯按键面板（停靠层 > 9 个时）：选中键、数字缓冲（1 秒内连续输入）、避难层钥匙确认、消防模式（解锁避难层与消防专用层）
+  let keypad = null, kpSelected = null, kpBuffer = '', kpBufferAt = 0, kpConfirm = null, fireMode = false;
+  if (typeof document !== 'undefined' && !document.getElementById('lift-keypad-css')) {
+    const st = document.createElement('style'); st.id = 'lift-keypad-css'; st.textContent = KEYPAD_CSS; document.head.append(st);
+  }
   // 门禁时钟：刷卡开门 4 秒、出门感应与防夹都按漫游时间计
   let clock = 0, hintAt = -10;
   const raycaster = new THREE.Raycaster();
@@ -113,6 +120,13 @@ export function attachExplore(app, ui) {
     /** 调试：当前位置与视角 */
     get state() { return s && { ...s, yaw, pitch, flying, eyeY, riding: liftRide?.link.id || null }; },
     get navigation() { return nav; },
+    /** 消防模式（消防员钥匙）：按键面板上的避难层不再确认、消防专用层可按（SPEC §3.2）。 */
+    get fireMode() { return fireMode; },
+    setFireMode(on) { fireMode = !!on; renderPrompt(); },
+    /** 调试：当前按键面板的数据（没有时为 null）。 */
+    get keypad() { return keypad; },
+    /** 乘梯中跳过行程，直接到达（空格键）。 */
+    skipRide() { return skipRide(); },
     rideLift(id, floor) {
       if (!on || busy || flying) return false;
       const n = linksNear(nav, s.floor, s.x, s.z).find(n => n.link.id === id);
@@ -196,6 +210,9 @@ export function attachExplore(app, ui) {
     if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
     if (e.repeat) { keys.add(k); return; }
     keys.add(k);
+    // 乘梯时空格跳过行程（HUD 显示真实运行时间，游戏里约为一半）
+    if (k === ' ' && liftRide) { skipRide(); return; }
+    if (promptOpen && keypad && keypadKey(e, k)) return;
     if (k === ' ') {
       const now = performance.now();
       if (now - lastSpace < 300) { toggleFly(); lastSpace = 0; } else { lastSpace = now; input.jump = true; }
@@ -349,6 +366,7 @@ export function attachExplore(app, ui) {
   }
   function closePrompt() {
     promptOpen = false;
+    kpSelected = null; kpBuffer = ''; kpConfirm = null;
     renderPrompt();
   }
   function tap(id) {
@@ -372,12 +390,32 @@ export function attachExplore(app, ui) {
     }
     return out;
   }
+  /** The keypad model of the nearest lift when it has more than 9 stops, else null. */
+  function keypadFor() {
+    // The nearest lift link (a landing often sits beside the stair doors, so it need not be near[0]).
+    const n = near.find((q) => q.link.kind === 'lift');
+    if (!n) return null;
+    const e = layout.elevators.find((q) => q.id === n.link.id);
+    if (!e || [...new Set([...e.serves, ...(e.fireOnly || [])])].length < KEYPAD_MIN_STOPS) return null;
+    return { ...keypadModel(layout, e, { here: n.stop.floor, options: n.options, fireMode }), link: n.link, e };
+  }
   function renderPrompt() {
     const list = on && !flying ? options() : [];
-    if (!list.length) { hud.prompt.hidden = true; return; }
+    hud.prompt.classList.remove('keypad');
+    if (!list.length) { hud.prompt.hidden = true; keypad = null; return; }
     hud.prompt.hidden = false;
     // 触屏上面板本身就是「互动」按钮：点开选楼层，再点空白处收起
     const touch = isTouch();
+    keypad = promptOpen ? keypadFor() : null;
+    if (keypad) {
+      hud.prompt.classList.add('keypad');
+      if (kpBuffer && performance.now() - kpBufferAt > 1000) kpBuffer = '';
+      // The other links in reach (stairs, other lifts) stay available as compact options under the keypad.
+      const others = list.map((o, i) => ({ o, i })).filter(({ o }) => o.link !== keypad.link);
+      hud.prompt.innerHTML = keypadHtml(keypad, { selected: kpSelected, buffer: kpBuffer, confirm: kpConfirm })
+        + (others.length && !kpConfirm ? `<div class="kp-others">${others.map(({ o, i }) => `<button type="button" class="ex-opt" data-i="${i}">${esc(o.text)}</button>`).join('')}</div>` : '');
+      return;
+    }
     if (!promptOpen) {
       hud.prompt.innerHTML = near[0].link.kind === 'gate'
         ? `<span class="ex-key">${touch ? '卡' : 'E'}</span>刷卡 · ${esc(near[0].link.name)}`
@@ -387,10 +425,57 @@ export function attachExplore(app, ui) {
     hud.prompt.innerHTML = list.map((o, i) => `<button type="button" class="ex-opt" data-i="${i}">${touch ? '' : `<span class="ex-key">${i + 1}</span>`}${esc(o.text)}</button>`).join('');
   }
   hud.prompt.addEventListener('click', (e) => {
+    if (keypad) {
+      const opt = e.target.closest('.ex-opt');
+      if (opt) { choose(Number(opt.dataset.i)); return; }
+      const k = e.target.closest('.kp-key, .kp-yes, .kp-no');
+      if (k?.classList.contains('kp-no')) { kpConfirm = null; renderPrompt(); return; }
+      if (k?.classList.contains('kp-yes')) { const lv = kpConfirm?.level; kpConfirm = null; if (lv) pressKey(lv, true); return; }
+      if (k && !k.disabled) { pressKey(k.dataset.level); return; }
+      if (k) return;
+      if (e.target.closest('.kp-head, .kp-zone, .kp-grid, .kp-confirm, .kp-others')) return;
+      togglePrompt(); return;
+    }
     const b = e.target.closest('.ex-opt');
     if (b) choose(Number(b.dataset.i));
     else togglePrompt();
   });
+  /** Press a keypad key: a refuge key asks for the fire-service key first (unless fire mode), then the ride starts. */
+  function pressKey(level, confirmed = false) {
+    const k = keypad?.keys.find((q) => q.level === level);
+    if (!k || k.disabled) return;
+    if (k.confirm && !confirmed) { kpConfirm = { level, label: k.label }; renderPrompt(); return; }
+    const n = near.find((q) => q.link === keypad.link), stop = n?.options.find((o) => o.floor === level);
+    if (!stop) { toast(k.kind === 'fireOnly' ? '消防专用 · 仅消防模式可停靠' : '该层暂不可达'); return; }
+    kpSelected = null; kpBuffer = ''; kpConfirm = null;
+    if (k.confirm || k.kind === 'refuge') toast('已使用消防员钥匙 · 前往避难层');
+    if (ctx.elevatorCars?.has(n.link.id)) startLift(n.link, stop);
+    else jump({ floor: stop.floor, x: stop.x, z: stop.z, y: nav.floors.get(stop.floor).y, slope: null, yaw: yawOf(stop.face[0], stop.face[1]) });
+  }
+  /** Keypad keyboard: digits buffer for 1 s, Enter goes, Backspace deletes, ↑ / ↓ move, E / Esc close. */
+  function keypadKey(ev, k) {
+    if (kpConfirm) {
+      if (k === 'Enter') { const lv = kpConfirm.level; kpConfirm = null; pressKey(lv, true); return true; }
+      if (k === 'Escape' || k === 'Backspace') { kpConfirm = null; renderPrompt(); return true; }
+      return k !== 'e';
+    }
+    const live = keypad.keys.filter((q) => !q.disabled);
+    if (/^[0-9b]$/i.test(k) || (k === 'r' && !kpBuffer)) {
+      const now = performance.now();
+      if (now - kpBufferAt > 1000) kpBuffer = '';
+      kpBuffer += k.toUpperCase(); kpBufferAt = now;
+      kpSelected = keyForBuffer(keypad, kpBuffer)?.level || kpSelected;
+      renderPrompt(); return true;
+    }
+    if (k === 'Backspace') { kpBuffer = kpBuffer.slice(0, -1); kpBufferAt = performance.now(); renderPrompt(); return true; }
+    if (k === 'ArrowUp' || k === 'ArrowDown') {
+      const i = live.findIndex((q) => q.level === kpSelected), j = i < 0 ? 0 : Math.max(0, Math.min(live.length - 1, i + (k === 'ArrowUp' ? -1 : 1)));
+      kpSelected = live[j]?.level || null; renderPrompt(); return true;
+    }
+    if (k === 'Enter') { const t = keyForBuffer(keypad, kpBuffer)?.level || kpSelected; if (t) pressKey(t); return true; }
+    if (k === 'Escape') { closePrompt(); return true; }
+    return false;
+  }
   function choose(i) {
     const o = options()[i];
     if (!o) return;
@@ -420,7 +505,12 @@ export function attachExplore(app, ui) {
     keys.clear(); endStick(); setFlying(false);
     busy = true;
     const to = { ...stop, y: nav.floors.get(stop.floor).y };
-    liftRide = { ...createElevatorRide({ ...s }, to, { x: car.elevator.x, z: car.elevator.z }, approach), link, car };
+    // Ride time Δy / (2 × speed) (P0a's createElevatorRide reads the speed; e.speed ?? 3.5 = today's Δy / 7);
+    // the HUD shows the real run time at the lift's rated speed, and Space skips (SPEC §3.2, DECISIONS round 2).
+    const speed = car.elevator.speed ?? 3.5, fire = isFireLift(car.elevator);
+    liftRide = { ...createElevatorRide({ ...s }, to, { x: car.elevator.x, z: car.elevator.z }, approach, speed, { fire }), link, car };
+    liftRide.realSeconds ??= realRunSeconds(to.y - s.y, speed, fire ? .9 : 1.0);
+    liftRide.closed = closedTowerShaft(ctx, car.elevator);
     app.state.explore = { ...app.state.explore, elevator: { id: link.id, from: s.floor, to: stop.floor } };
     app.refresh();
     app.ensureTowerFloor?.(stop.floor);
@@ -442,7 +532,9 @@ export function attachExplore(app, ui) {
     Object.assign(s, { x: p.x, y: p.y, z: p.z, slope: null });
     // 经过哪层就显示哪层的真实内饰，观光梯外不会出现整栋空壳。
     // 每次仅切换当前经过层，仍使用全局三层缓存上限。
-    const passFloor = r.link.stops.filter(st => nav.floors.get(st.floor).y <= p.y + 0.05).at(-1)?.floor;
+    // (b) A closed shaft shows nothing of the floors it passes: no pass-floor builds, only the destination
+    // (prebuilt by startLift). Glass and exterior lifts still switch the visible floor as they pass it.
+    const passFloor = r.closed ? null : r.link.stops.filter(st => nav.floors.get(st.floor).y <= p.y + 0.05).at(-1)?.floor;
     if (passFloor && passFloor !== r.viewFloor) {
       r.viewFloor = passFloor;
       app.state.explore = { ...app.state.explore, level: passFloor, under: p.y < 0,
@@ -455,8 +547,9 @@ export function attachExplore(app, ui) {
     }
     eyeY = p.y + NAV.eye;
     r.car.set(p.y, p.door, `${Math.round(p.y)}m`);
-    hud.mode.textContent = p.phase;
-    hud.where.textContent = `${r.link.name} · ${nav.floors.get(r.to.floor).level.short} · ${Math.round(p.y)}m`;
+    const toShort = nav.floors.get(r.to.floor).level.short, moving = p.phase === '上行' || p.phase === '下行';
+    hud.mode.textContent = moving ? `${rideHud(p.phase, toShort, r.realSeconds)}` : p.phase;
+    hud.where.textContent = `${r.link.name} · ${toShort} · ${Math.round(p.y)}m${moving ? ' · 空格跳过' : ''}`;
     syncCamera();
     if (p.done) {
       r.car.set(r.to.y, 1, nav.floors.get(r.to.floor).level.short);
@@ -466,6 +559,18 @@ export function attachExplore(app, ui) {
       updateVisibility(true); app.emit();
       toast('已到达，可走出电梯探索本层');
     }
+  }
+
+  /** Skip the ride in progress to its arrival (doors opening at the destination). */
+  function skipRide() {
+    const r = liftRide;
+    if (!r) return false;
+    let lo = r.elapsed, hi = sampleElevatorRide(r, 0).total;
+    if (sampleElevatorRide(r, lo).arrived) return false;
+    for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (sampleElevatorRide(r, m).arrived) hi = m; else lo = m; }
+    r.elapsed = hi;
+    toast('已跳过 · 到达');
+    return true;
   }
 
   // ---------- 提示 ----------

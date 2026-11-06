@@ -71,18 +71,26 @@ function core(B, lv, { door, garage, H, y0, stairs, lifts, K }) {
   }
   // Lift lobby floor and the two fronts: lifts (north) and stairs (south).
   B.get(K).box(cx(band), y0 + .012, cz(band), rw(band), .024, rd(band), FLOOR);
-  const liftDoors = lifts.map((e) => [e.lu - .55, e.lu + .55]);
+  // Shaft count, positions and door widths come from the lift records (K4: four 1.9 m shafts, 1.0–1.1 m doors).
+  // A lift without a landing on this level (it passes: hostPassLevels, refuge floors) is a blank wall; a fire-only
+  // landing (e.fireOnly, 消防专用) gets its door and a red plate but no call button.
+  const landing = (e) => (e.serves.includes(lv.id) ? 'normal' : e.fireOnly?.includes(lv.id) ? 'fire' : e.shaftLevels && !e.shaftLevels.includes(lv.id) ? 'none' : null);
+  const half = (e) => (e.doorWidth ?? 1.1) / 2;
+  const liftDoors = lifts.filter((e) => landing(e) !== null).map((e) => [e.lu - half(e), e.lu + half(e)]);
   wallRun(B, K, band.x0, band.z0 - .1, band.x1, band.z0 - .1, y0, h, .2, clad, liftDoors);
   for (const e of lifts) {
-    const serves = e.serves.includes(lv.id);
-    B.get('metal').box(e.lu, y0 + 1.15, band.z0 + .01, 1.3, 2.35, .06, '#5f666d');
-    B.get('satin').box(e.lu, y0 + 1.1, band.z0 + .03, 1.1, 2.2, .04, serves ? '#c9ced3' : clad);
+    const kind = landing(e), serves = kind === 'normal', w = 2 * half(e);
+    if (kind === null) continue;   // passes this level: the band wall runs through, blank
+    B.get('metal').box(e.lu, y0 + 1.15, band.z0 + .01, w + .2, 2.35, .06, '#5f666d');
+    B.get('satin').box(e.lu, y0 + 1.1, band.z0 + .03, w, 2.2, .04, kind === 'none' ? clad : '#c9ced3');
+    if (kind === 'fire') { B.get('satin').box(e.lu, y0 + 2.5, band.z0 + .04, .62, .22, .04, '#b5302a'); continue; }
     if (!serves) continue;
     // Two leaves with a centre seam, a call-button plate beside the frame and the lift's name plate above.
     B.get('metal').box(e.lu, y0 + 1.1, band.z0 + .052, .014, 2.2, .01, '#4a5056');
-    B.get('metal').box(e.lu + .8, y0 + 1.15, band.z0 + .02, .12, .3, .04, '#9ea4a8');
-    B.get('glow').box(e.lu + .8, y0 + 1.2, band.z0 + .045, .045, .045, .012, '#ffd9a0');
-    B.get('glow').box(e.lu + .8, y0 + 1.09, band.z0 + .045, .045, .045, .012, '#ffd9a0');
+    const btn = e.lu + Math.min(.8, half(e) + .25);
+    B.get('metal').box(btn, y0 + 1.15, band.z0 + .02, .12, .3, .04, '#9ea4a8');
+    B.get('glow').box(btn, y0 + 1.2, band.z0 + .045, .045, .045, .012, '#ffd9a0');
+    B.get('glow').box(btn, y0 + 1.09, band.z0 + .045, .045, .045, .012, '#ffd9a0');
     B.get('satin').box(e.lu, y0 + 2.5, band.z0 + .04, .62, .22, .04, e.role === 'fire' ? '#7a2c1c' : '#3b3226');
   }
   if (door) {
