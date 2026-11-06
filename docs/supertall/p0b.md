@@ -120,11 +120,13 @@ reels, extinguishers, the fire phone, PA, signs, louvre backs and 乙级 fire-wi
 
 - `liftShaft(B, col, F, L, y, h, pal, landing)` and `liftLanding(L, lv)`: the door width is `L.doorWidth ??
   e.doorWidth ?? 1.1`; `corePlan.lifts[i].landing === false` draws a blank wall; a level in `e.fireOnly` draws the
-  door plus a red `消防专用` plate. `residential-cores.js` follows the same rules for 北苑's host levels.
+  door plus a red `消防专用` plate. `residential-cores.js` follows the same rules for 北苑's host levels. Since the P0
+  merge both read the landing kind through P0a's `landingAt(e, levelId)`.
 - `landingDoors()`: two leaves and a steel sill per stop (fire-only stops included), one InstancedMesh per tower.
-- `stairBreak(s, plan, levelId)` (`tower-stairs.js`): reads P0a's `towerStairPlan(s).breakAt` when present, else
-  `s.breakLevels` + `s.breakDoors[id] = { door2, partition }`, else the mirrored default; the stair shell then
-  draws both doors, their leaves, exit signs and the partition with its lit plates.
+- `stairBreak(s, plan, levelId)` (`tower-stairs.js`): P0a's `towerStairPlan(s).breakAt(levelId)` (since the P0
+  merge it has no fallback of its own: `s.breakLevels` + `s.breakDoors[id] = { door2, partition }`, else the mirrored
+  default, exactly the doors `applyStairBreaks()` gives the stair room); the stair shell then draws both doors, their
+  leaves, exit signs and the partition with its lit plates.
 - `tower-elevators.js`: closed tower shafts (`closedTowerShaft(ctx, e)`: tower, not glass, not exterior) draw their
   cars as one InstancedMesh per material per cabin size per tower plus one for the door leaves; the car API
   (`group`, `set(y, open, floor)`, `open`, `elevator`) is unchanged. **Cabin size contract**: `e.car = { w, d }`
@@ -145,20 +147,22 @@ lines of render `hospitality.js` a tower package edits are inside `// <supertall
 ### UI
 
 - `floor-rows.js`: `towerRailZones(layout, bid)` (reads `b.zones` — P0a's `towerZones()` shape, `levels` or
-  `from` / `to` — else `railZonesFallback(b, levels)`; host zones are skipped, the podium row stays),
+  `from` / `to` — else, since the P0 merge, P0a's `towerZones(b, levels)` (P0b's `railZonesFallback` /
+  `railZoneKind` were removed then); host zones are skipped, the podium row stays),
   `floorRows(layout, bid, { focus, expanded, all })`, `zoneChips`, `railSearch` (`37` / `37F`, `3702` /
   `R1-3702`, `避难`), `towerSub(layout, b)` (`b.sub` or name + top floor), `towerFacts` (电梯 by bank,
   避难层 n, 最高 m). Single-level zones (lobby, amenity, refuge, roof) are floor buttons; refuge rows are hatched
-  `避难层 · 设备层` buttons. At the P0 merge the rail can switch to P0a's `towerZones()` by publishing `b.zones`
-  (P0a's `applyTowerZones` already does for the community towers); nothing in floor-rows needs to change.
+  `避难层 · 设备层` buttons. The community towers publish P0a's `b.zones` (`applyTowerZones`); the other towers
+  get `towerZones()` on the fly until their package sets `b.zones` (see `docs/supertall/p0-merge.md`).
 - `lift-keypad.js`: `keypadModel(layout, e, { here, options, fireMode })`, `keypadHtml`, `keyForBuffer`,
-  `realRunSeconds`, `rideHud`. Explore shows the keypad for the nearest lift with ≥ 10 stops (6 columns, 5 on
+  `keypadStops` (P0a's `liftStops(e, { fire: true })`), `rideHud`. Fire lifts are P0a's `isFireLift()`. Explore shows the keypad for the nearest lift with ≥ 10 stops (6 columns, 5 on
   phones, ≥ 44 px keys), the other links under it; digits buffer 1 s, Enter goes, Backspace deletes, ↑ / ↓ move,
   E / Esc close; refuge keys only on fire lifts with the `使用消防员钥匙？` confirm (`app.explore.setFireMode(true)`
   unlocks them and fire-only keys); `fireOnly` keys are greyed `消防专用`.
 - Ride: `createElevatorRide(from, to, cabin, approach, e.speed ?? 3.5, { fire })` (P0a's signature; today's code
   ignores the extra arguments, and Δy / (2 × 3.5) = today's Δy / 7). The HUD reads `上行 · 20F · 实际约 12 秒`
-  (`ride.realSeconds`, else `realRunSeconds`); Space skips to the arrival (`app.explore.skipRide()`).
+  (P0a's `ride.realSeconds`; the keypad's own `realRunSeconds` copy was removed at the P0 merge); Space skips to the
+  arrival (`app.explore.skipRide()`).
 - `app.js` hooks: (a) `ensureTowerFloor` builds homes, refuge floors (`buildRefugeFloor`) and lobby / amenity
   floors through `ctx.towerFloorBuilders`; (b) closed shafts build no pass floors on a ride (explore), only the
   destination; (c) pick boxes and level sub-groups have static matrices, level groups re-derive theirs only when
@@ -240,6 +244,6 @@ and `p0b-campus-night.jpg`.
 10. **Gate door signs** (exit / re-entry, leaf `existing`) are one sign mesh per floor that has such gates (+1 call
     when that floor shows); none exist today.
 11. **JS heap** varies between runs of the same build (531 / 550 MB); both under 560 MB.
-12. **Rail switch at the merge**: the rail already reads `b.zones` (P0a's `towerZones()` shape, with `levels` or
-    `from` / `to`) and falls back to `railZonesFallback()`; P0a's `applyTowerZones` publishes zones for the community
-    towers, so the merge needs no rail edit, only the fallback test coverage stays.
+12. **Rail switch at the merge**: the rail already read `b.zones` (P0a's `towerZones()` shape, with `levels` or
+    `from` / `to`) and fell back to `railZonesFallback()`. At the P0 merge the fallback became P0a's `towerZones()`
+    itself, as SPEC §2.2 asks (`docs/supertall/p0-merge.md`).
