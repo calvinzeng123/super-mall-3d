@@ -38,7 +38,31 @@ const OPEN = new Set(['entry|dining', 'dining|living', 'dining|hall', 'entry|hal
 const isOpen = (a, b) => OPEN.has([a, b].sort().join('|'));
 
 /* ------------------------------------------------------------------ program */
-export function program(type, { lux = false, level = 'flat', variant = 0 } = {}) {
+/**
+ * Variant extras for big flats (茶室 / 家庭厅 / 工人房 + 卫 / 双主卧套房 / 酒窖), picked by `variant % 5`.
+ * Only used when the spec sets `variantExtras: true` (off by default, so the frozen 西苑 / 北苑 output
+ * never changes). None of them adds a bedroom: 工人房 is a study-sized room, 双主卧套房 gives the
+ * second bedroom its own en-suite. The 北苑 package tunes this table (P0a: plumbing only).
+ */
+export const VARIANT_EXTRAS = Object.freeze([
+  [{ id: 'tea', kind: 'study', name: '茶室' }],
+  [{ id: 'family_room', kind: 'study', name: '家庭厅' }],
+  [{ id: 'staff', kind: 'study', name: '工人房' }, { id: 'bath_staff', kind: 'bathroom', name: '工人卫', ensuiteOf: 'staff' }],
+  [{ id: 'bath_suite2', kind: 'bathroom', name: '次主卫', ensuiteOf: 'bed_2', renames: { bed_2: '次主卧套房' } }],
+  [{ id: 'cellar', kind: 'storage', name: '酒窖' }],
+].map((list) => Object.freeze(list.map(Object.freeze))));
+
+export function program(type, { lux = false, level = 'flat', variant = 0, variantExtras = false } = {}) {
+  const out = baseProgram(type, { lux, level, variant });
+  if (!variantExtras || level !== 'flat') return out;
+  for (const { renames, ...room } of VARIANT_EXTRAS[((variant % 5) + 5) % 5]) {
+    for (const [id, name] of Object.entries(renames || {})) { const r = out.rooms.find((q) => q.id === id); if (r) r.name = name; }
+    if (!room.ensuiteOf || out.rooms.some((q) => q.id === room.ensuiteOf)) out.rooms.push({ ...room });
+  }
+  return out;
+}
+
+function baseProgram(type, { lux = false, level = 'flat', variant = 0 } = {}) {
   const n = { '2BR': 2, '3BR': 3, '4BR': 4, '5BR': 5 }[type];
   const rooms = [];
   const bed = (id, name, master = false) => rooms.push({ id, kind: 'bedroom', master, name });
@@ -89,9 +113,25 @@ export function generateHome(spec) {
   return null;
 }
 
+/**
+ * A wing outside the 西苑 / 北苑 plates (二期 R 顶层复式): `wing = { w, d, exteriorEdges, rise }`.
+ * exteriorEdges: { S = true, W, E, N } in unit-local sides; N (the entry front) may be exterior only
+ * over parts of its length, given as [[x0, x1], …] (e.g. beyond the core band). rise is the storey
+ * height of the duplex stair (default DUPLEX_STAIR.rise). Returns the spec the generator runs on.
+ */
+export function wingSpec(spec, wing) {
+  const E = wing.exteriorEdges || {};
+  if (E.S === false) throw new Error('wing: the rear (S) edge must stay exterior');
+  const front = Array.isArray(E.N) ? E.N.map(([a, b]) => [Math.min(a, b), Math.max(a, b)]) : E.N === true ? [[0, wing.w]] : null;
+  return { ...spec, w: wing.w ?? spec.w, d: wing.d ?? spec.d, exposed: { left: !!E.W, right: !!E.E },
+    ...(front?.length ? { front } : {}), ...(wing.rise != null ? { rise: wing.rise } : {}) };
+}
+
 /** Duplex = lower + upper level sharing the public column and the stair block.
- * Lower candidates are tried in rank order until an upper level validates. */
-export function generateDuplex(spec, { tries = 60, exclude = [] } = {}) {
+ * Lower candidates are tried in rank order until an upper level validates.
+ * options.wing (see wingSpec) is the hook for non-community wings; absent, the code path is today's. */
+export function generateDuplex(spec, { tries = 60, exclude = [], wing = null } = {}) {
+  if (wing) spec = wingSpec(spec, wing);
   let n = 0;
   for (const lower of homeCandidates({ ...spec, level: 'lower', duplex: true, exclude, noFront: !!spec.voidAbove })) {
     if (++n > tries) break;
@@ -414,7 +454,17 @@ function exteriorOf(r, spec) {
   if (Math.abs(r.z1 - spec.d) < EPS && W(r) >= 1.0) out.push('S');
   if (spec.exposed?.left && Math.abs(r.x0) < EPS && D(r) >= 1.0) out.push('W');
   if (spec.exposed?.right && Math.abs(r.x1 - spec.w) < EPS && D(r) >= 1.0) out.push('E');
+  // wing hook: the entry front is exterior over spec.front spans only (≥ 1.0 m of the room's front edge).
+  if (spec.front && Math.abs(r.z0) < EPS && frontSpan(r, spec)) out.push('N');
   return out;
+}
+/** The part of room r's front edge (z = 0) that is exterior, as [x0, x1], or null below 1.0 m. */
+function frontSpan(r, spec) {
+  for (const [a, b] of spec.front || []) {
+    const x0 = Math.max(a, r.x0), x1 = Math.min(b, r.x1);
+    if (x1 - x0 >= 1.0 - EPS) return [x0, x1];
+  }
+  return null;
 }
 
 function evaluate(spec, rooms, ctx) {
@@ -544,7 +594,7 @@ function finish(spec, plan, candidates) {
     level: spec.level || 'flat', width: w, depth: d, area: r2(w * d),
     bedrooms: rooms.filter(r => r.kind === 'bedroom').length,
     entryDoor: ctx.entryAt == null ? null : { at: ctx.entryAt, width: 1.1 },
-    exteriorSides: ['S', ...(spec.exposed?.left ? ['W'] : []), ...(spec.exposed?.right ? ['E'] : [])],
+    exteriorSides: ['S', ...(spec.exposed?.left ? ['W'] : []), ...(spec.exposed?.right ? ['E'] : []), ...(spec.front ? ['N'] : [])],
     rooms: rooms.map(r => ({ id: r.id, kind: r.kind, name: r.name, rect: r.rect, ...(r.master ? { master: true } : {}),
       ...(r.exterior.length ? { windows: r.exterior } : {}), ...(r.open ? { open: true } : {}) })),
     partitions, beds, bathrooms,
@@ -552,7 +602,7 @@ function finish(spec, plan, candidates) {
     living: liv ? { rect: liv.rect } : null,
     balcony: bal ? bal.rect : null,
     facadeWalls: facade(spec, rooms), obstacles,
-    ...(stair ? { homeStair: homeStair(stair.rect, spec.level) } : {}),
+    ...(stair ? { homeStair: homeStair(stair.rect, spec.level, spec.rise) } : {}),
     ...(rooms.some(r => r.kind === 'void') ? { voids: rooms.filter(r => r.kind === 'void').map(r => r.rect) } : {}),
   };
   return { residence, meta: { p0: ctx.p0, pcw: ctx.pcw, fz: ctx.fz, modes: [ctx.ml, ctx.mr], candidates, score: r2(plan.score) } };
@@ -582,10 +632,14 @@ function facade(spec, rooms) {
   const sides = [{ side: 'S', a: [0, d], b: [w, d], along: 'x' }];
   if (spec.exposed?.left) sides.push({ side: 'W', a: [0, 0], b: [0, d], along: 'z' });
   if (spec.exposed?.right) sides.push({ side: 'E', a: [w, 0], b: [w, d], along: 'z' });
+  // wing hook: a front (N) facade wall per exterior span; `at` is measured from its own point a.
+  for (const [i, [x0, x1]] of (spec.front || []).entries()) sides.push({ side: 'N', id: `facade-N-${i}`, a: [x0, 0], b: [x1, 0], along: 'x', front: [x0, x1] });
   return sides.map(s => {
     const openings = [];
     for (const r of rooms.filter(r => r.exterior.includes(s.side))) {
-      const [lo, hi] = s.along === 'x' ? [r.rect.x0, r.rect.x1] : [r.rect.z0, r.rect.z1], span = hi - lo, c = (lo + hi) / 2, k = r.kind;
+      const clip = s.front ? [Math.max(s.front[0], r.rect.x0), Math.min(s.front[1], r.rect.x1)] : null;
+      if (clip && clip[1] - clip[0] < 1.0 - EPS) continue;
+      const [lo, hi] = clip ? clip.map(v => v - s.a[0]) : s.along === 'x' ? [r.rect.x0, r.rect.x1] : [r.rect.z0, r.rect.z1], span = hi - lo, c = (lo + hi) / 2, k = r.kind;
       if (k === 'balcony') { openings.push({ id: `${r.id}-${s.side}`, type: 'railing', at: r2(c), width: r2(span - 0.1), bottom: 0, top: 1.1, room: r.id }); continue; }
       const width = k === 'living' || k === 'family' || k === 'void' ? span - 0.5 : k === 'dining' ? span - 0.8 : k === 'bedroom' ? Math.min(span - 0.6, spec.lux ? 3.2 : 2.4)
         : k === 'study' ? Math.min(span - 0.6, 2.0) : k === 'kitchen' ? Math.min(span - 0.7, 1.6) : ['bathroom', 'powder', 'laundry', 'closet'].includes(k) ? Math.min(span - 0.6, 0.9)
@@ -596,7 +650,7 @@ function facade(spec, rooms) {
       openings.push({ id: `${r.id}-${s.side}`, type: 'window', at: r2(c), width: r2(width), bottom: tall ? 0.1 : wet ? 1.5 : 0.6, top: 2.6, room: r.id,
         ...(wet ? { frosted: true } : {}), ...(tall ? { style: 'floor-to-ceiling' } : {}) });
     }
-    return { id: `facade-${s.side}`, side: s.side, a: s.a, b: s.b, thickness: 0.2, type: 'exterior', openings };
+    return { id: s.id ?? `facade-${s.side}`, side: s.side, a: s.a, b: s.b, thickness: 0.2, type: 'exterior', openings };
   });
 }
 
@@ -632,9 +686,10 @@ function placeBed(r, partitions, spec) {
   return bed;
 }
 
-/** Flights in unit-local metres (y relative to the lower floor). */
-export function homeStair(b, level) {
-  const S = DUPLEX_STAIR, z1 = b.z1 - 0.1, zl = b.z0 + 0.1 + S.landing;
+/** Flights in unit-local metres (y relative to the lower floor). rise = the duplex storey height
+ * (DUPLEX_STAIR.rise, 3.3 m, unless a wing spec sets another: 二期 R uses 3.4 m → 0.17 m risers). */
+export function homeStair(b, level, rise = DUPLEX_STAIR.rise) {
+  const S = { ...DUPLEX_STAIR, rise }, z1 = b.z1 - 0.1, zl = b.z0 + 0.1 + S.landing;
   const xa = [b.x0 + 0.1, b.x0 + 0.1 + S.flight], xb = [xa[1] + S.gap, xa[1] + S.gap + S.flight];
   return { block: b, role: level, rise: S.rise, steps: S.steps * 2,
     landing: R(b.x0 + 0.1, b.z0 + 0.1, b.x1 - 0.1, zl), landingY: S.rise / 2,
@@ -708,8 +763,42 @@ export function validateHome(home, spec) {
     if (Math.min(W(r.rect), D(r.rect)) < m.side - 0.011) errs.push(`${r.id} narrow ${Math.min(W(r.rect), D(r.rect)).toFixed(2)}`);
     if (A(r.rect) < m.area - 0.05) errs.push(`${r.id} small ${A(r.rect).toFixed(1)}`);
   }
+  // 户内避难间 (GB 50016 §5.5.32): only checked once a plan names one (today's frozen data has none).
+  if (home.refugeRoom != null) errs.push(...refugeRoomErrors(home));
   return errs;
 }
+
+/* -------------------------------------------------------- 户内避难间 */
+/** Rooms of a plan that may serve as the 户内避难间: bedrooms and studies with an exterior window. */
+const refugeCandidates = (home) => home.rooms.filter((r) => ['bedroom', 'study'].includes(r.kind)
+  && (home.facadeWalls || []).some((f) => f.openings.some((o) => o.room === r.id && o.type === 'window')));
+/** Window sides (unit-local) of room id. */
+const windowSides = (home, id) => (home.facadeWalls || []).filter((f) => f.openings.some((o) => o.room === id && o.type === 'window')).map((f) => f.side);
+
+/** Why home.refugeRoom is not a valid 户内避难间 (exists, a bedroom or study, an exterior window). */
+export function refugeRoomErrors(home) {
+  const id = home.refugeRoom, r = home.rooms.find((q) => q.id === id);
+  if (!r) return [`refugeRoom ${id} missing`];
+  if (!['bedroom', 'study'].includes(r.kind)) return [`refugeRoom ${id} is a ${r.kind}, not a bedroom or study`];
+  if (!windowSides(home, id).length) return [`refugeRoom ${id} has no exterior window`];
+  return [];
+}
+
+/**
+ * The 户内避难间 of a plan: a bedroom or study with an exterior window, preferring one whose window is
+ * on `face` (the hardstand side, unit-local 'S' | 'W' | 'E' | 'N'), then the master bedroom (on a
+ * duplex entry level: its only bedroom), then the largest. Returns the room id, or null if none fits.
+ */
+export function pickRefugeRoom(home, face = null) {
+  const ranked = refugeCandidates(home).map((r) => ({ r, key: [face && windowSides(home, r.id).includes(face) ? 0 : 1,
+    r.kind === 'bedroom' ? 0 : 1, r.master ? 0 : 1, -A(r.rect), r.id] }))
+    .sort((a, b) => { for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] < b.key[i] ? -1 : 1; return 0; });
+  return ranked[0]?.r.id ?? null;
+}
+
+/** The generator's geometry key (meta.key) rebuilt from a stored plan, so a script or test can seed
+ * `exclude` / `used` sets from the frozen data alone (rooms as kind:x0,z0,x1,z1, sorted). */
+export const planKey = (home) => home.rooms.map((r) => `${r.kind}:${r.rect.x0},${r.rect.z0},${r.rect.x1},${r.rect.z1}`).sort().join(';');
 
 /** Mirror-invariant type signature: room kinds with rounded areas (a mirrored twin is the same type). */
 export const planSignature = r => r.rooms.map(q => `${q.kind}:${Math.round((q.rect.x1 - q.rect.x0) * (q.rect.z1 - q.rect.z0))}`).sort().join(',');

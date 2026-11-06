@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildLayout } from '../src/layout/layout.js';
 import { buildNav, clear, step } from '../src/layout/nav.js';
 import { polyArea, polyBounds, pointInPoly, lrectPoly, toW, rect, rectPoly, segProbes } from '../src/layout/geom.js';
+import { COMPACT_IDENTICAL } from './campus-deltas/index.js';
 
 const L=buildLayout(), old=buildLayout({expansion:false}), nav=buildNav(L);
 const annexes=L.buildings.filter(b=>b.kind==='annex');
@@ -47,7 +48,10 @@ test('tour adds six-storey main mall and eight stepped annexes while compact FPS
   same(L.buildings.find(b=>b.id==='WPG'),old.buildings.find(b=>b.id==='WPG'),'WPG');
   assert.deepEqual(L.levels.filter(l=>l.building==='WPG').map(l=>l.id),old.levels.filter(l=>l.building==='WPG').map(l=>l.id));
   for(const lv of old.levels.filter(l=>l.building==='WPG'))same(L.levels.find(l=>l.id===lv.id),lv,lv.id);
-  for(const bid of ['P2','P3','H','A','R1','R2','R3','R4']) {
+  // The buildings still identical in both layouts come from tests/campus-deltas (C-6): today P2, P3, H, A, R1–R4;
+  // the supertall packages drop R1–R4 (P-R) and H, A (P-HA) in their own delta files.
+  assert.ok(COMPACT_IDENTICAL.includes('P2')&&COMPACT_IDENTICAL.includes('P3'),'P2 / P3 stay compact-identical');
+  for(const bid of COMPACT_IDENTICAL) {
     assert.deepEqual(L.buildings.find(b=>b.id===bid),old.buildings.find(b=>b.id===bid),`${bid} building changed`);
     const levels=structuredClone(L.levels.filter(l=>l.building===bid));
     // The full-tour H exit intentionally cuts the street slab; every other

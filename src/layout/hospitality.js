@@ -12,6 +12,10 @@ import { prepareMallStairs, buildMallStairAccess } from './mall-stairs.js';
 import { createHospitalityLobby } from './hospitality-lobby.js';
 import { WEST_GARDEN, westTower, westGates, westGardenSite } from './community.js';
 import { WEST_SITE } from './community-sites.js';
+// Supertall builders (expansion layout only; SPEC §2.1 "supertall dispatch"). P-R owns r-supertall.js and the
+// regions marked supertall:R below, P-HA hospitality-supertall.js and the supertall:HA regions; P0a owns the rest.
+import { supertallResidential } from './r-supertall.js';
+import { supertallTower } from './hospitality-supertall.js';
 
 export const HOSPITALITY = {
   west: rect(-286, -151, -203, -27),
@@ -372,10 +376,26 @@ function addTowerGarageRamps(part, site, extensions) {
 
 /** 返回新的 parts；同时在原商场的已验证走道端头登记真实门户，保持原主体布局不动。
  * expansion（游览布局）另建云澜·西苑 W1/W2 及其北排场地；紧凑 FPS 布局不变。 */
+/**
+ * The access records and hardstands of the supertall parts (SPEC §2.1 "supertall dispatch"): their gates and
+ * zones, in part order, for layout.accessControl; their fireAccess records are appended to site.fireAccess.
+ */
+export function collectSupertall(supertall, site) {
+  for (const p of supertall) if (p.fireAccess?.length) (site.fireAccess ||= []).push(...p.fireAccess);
+  return { zones: supertall.flatMap((p) => p.access?.zones || []), gates: supertall.flatMap((p) => p.access?.gates || []) };
+}
+
 export function buildHospitality(existing, site, { expansion = false } = {}) {
   site.bounds = rect(-495, -298, 298, 298);
   const community = expansion ? WEST_GARDEN.towers.map(westTower) : [];
-  const parts = [...HOSPITALITY.towers.map(tower),publicWestGarage(),...community];
+  // The compact FPS layout always builds tower(spec); the expansion layout asks the supertall builders first.
+  const supertall = [];
+  const towers = HOSPITALITY.towers.map((t) => {
+    const st = expansion ? (supertallResidential(t, { site, expansion }) ?? supertallTower(t, { site, expansion })) : null;
+    if (st) supertall.push(st);
+    return st ?? tower(t);
+  });
+  const parts = [...towers,publicWestGarage(),...community];
   const all = [...existing, ...parts], by = Object.fromEntries(all.map(p => [p.building.id, p]));
   // Both attached towers use short canopies and surveyed docking lobbies. A generic seven-metre forecourt canopy would penetrate the neighbour.
   // R1-R4 lobbies draw their own portal and canopy too: no generic mall door
@@ -392,10 +412,12 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
     extensions.paths.push({ id, kind: 'ground', name: id, width, points, polys });
     polys.forEach((poly, i) => addPlaza(site, `${id}-${i}`, poly, null));
   };
+  // <supertall:HA> H / A side doors to the ground
   surface('酒店西门至停车场', [[-284,0,-81.1533717],[-303,0,-81.1533717]],4.4);
   const hotelCrossing=rect(-298,-83.3533717,-286,-78.9533717);
   site.crossings.push({id:'hotel-west-crossing',rect:hotelCrossing,poly:rectPoly(hotelCrossing),axis:'x'});
   surface('公寓东门接星湾路步道',[[-16,0,-178.5],[-13,0,-178.5]],2.4);
+  // </supertall:HA>
   // The west parking module owns the surface parking approaches.
   for(const entry of by.WPG.entrances) {
     const x=(entry.seg.x0+entry.seg.x1)/2;surface(entry.name,[[x,0,-183],[x,0,-179]],4);
@@ -404,12 +426,15 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
   const westParkingCrossing=rect(-307,-203,-284,-197);
   site.crossings.push({id:'west-parking-crossing',rect:westParkingCrossing,poly:rectPoly(westParkingCrossing),axis:'x'});
   site.walk.push({id:'west-parking-crossing',kind:'crossing',poly:rectPoly(westParkingCrossing),outdoor:true});
+  // <supertall:R> 住宅 ground paths
   const residentialSpecs = HOSPITALITY.towers.filter(t => t.usage === 'residential');
   const residentialFront = residentialSpecs[0].z + residentialSpecs[0].d / 2;
   surface('住宅至星湾北门', [[49, 0, residentialFront], [49, 0, -193], [250, 0, -193]], 5);
   for (const t of residentialSpecs.slice(1)) surface(`住宅支路-${t.x}`, [[t.x, 0, t.z+t.d/2], [t.x, 0, -193]], 5);
   surface('住宅过街通廊', [[106.066, 0, -193], [106.066, 0, -135.902]], 6);
+  // </supertall:R>
   const road = (id, name, points, width) => extensions.roads.push({ id, name, width, points, polys: strips(points, width).map(rectPoly) });
+  // <supertall:HA> hotel arrival road and surface parking
   road('hotel-arrival', '酒店北侧车库到达路', [[-292,0,-148],[-224,0,-148]],6);
   const lots = [
     {id:'hotel-shared-parking',name:'酒店 · 一期共享地面停车',rect:rect(-280,-59,-213,-33),rows:[
@@ -424,8 +449,11 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
     site.walk.push({id:`${lot.id}-aisle`,kind:'parking-aisle',poly:rectPoly(lot.aisle),outdoor:true});
   }
   road('hotel-parking-access','酒店共享停车接西外环',[[-292,0,-49],[-212,0,-49]],6);
+  // </supertall:HA>
 
+  // <supertall:R> 住宅消防与落客环路
   road('residential-loop', '住宅消防与落客环路', [[20, 0, -250], [278, 0, -250], [278, 0, -184], [20, 0, -184], [20, 0, -250]], 6);
+  // </supertall:R>
   const W1=at('WPG','B1'),P1=at('P1','B1M');
   appendPath(extensions,W1,'west-parking-mall','underground','西侧公共车库 · 方庭 · 地铁连廊',[[-305,-4.5,-200],[-280,-4.5,-200]],5,P1.level.id);
   connect(W1,P1,'west-parking-mall',{x0:-280,z0:-202.5,x1:-280,z1:-197.5},1,0,'西侧公共停车地下连廊',BELOW);
@@ -436,8 +464,11 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
   PB.level.parking.stalls=PB.level.parking.stalls.filter(s=>!convexOverlap(s.poly,rectPoly(threshold)));
   PB.level.parking.columns=PB.level.parking.columns.filter(c=>!convexOverlap(lrectPoly(c.frame,rect(c.lx-.25,c.lz-.25,c.lx+.25,c.lz+.25)),rectPoly(threshold)));
   connect(WB,PB,'west-parking-garage',{x0:-280,z0:-182,x1:-280,z1:-176},1,0,'西侧停车与一期地库互通',BELOW);
+  // <supertall:HA> H / A basement ramps (WPG keeps its ramps)
   for(const bid of ['H','A','WPG'])addTowerGarageRamps(by[bid],site,extensions);
+  // </supertall:HA>
 
+  // <supertall:HA> H / A docks: the four P1 links (1F, 2F skybridge, B1 metro, B2 garage)
   // Attachment geometry belongs to the surveyed position. Tower IDs/usages,
   // suite frames, duplexes, signage and connection IDs follow the moved tower.
   const dockConfigs=[
@@ -470,6 +501,8 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
       }
     }
   }
+  // </supertall:HA>
+  // <supertall:R> 住宅 garage spine, metro link, branch garages, arrival and street ramps
   const R = at('R1', 'B1'), P2 = at('P2', 'B1');
   // The southern drive aisle sits east of both lift shafts, with six metres of
   // real width; it never relies on the narrow pedestrian gap between cabins.
@@ -495,6 +528,7 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
     by.R1.ramps.push({ id: `R1-${i ? 'OUT' : 'IN'}`, building: 'R1', type: i ? 'street-out' : 'street-in', name: i ? '住宅车库出口' : '住宅车库入口', width: 5, frame: F, lane, poly, from: i ? low : high, to: i ? high : low });
     site.trenches.push(poly); site.driveways.push(rectPoly(rect(16, z - 2.5, 20, z + 2.5)));
   }
+  // </supertall:R>
   if (community.length) {
     // 云澜·西苑：门禁社区地块（围墙、北门 G4、消防登高场地）占用西停车场北排。
     const plot = WEST_GARDEN.plot, poly = rectPoly(plot);
@@ -509,12 +543,15 @@ export function buildHospitality(existing, site, { expansion = false } = {}) {
   }
   buildWestParking(site,extensions,community.length?{northStrip:WEST_SITE.plot}:{});
   extensions.connections = all.flatMap(p => p.entrances.filter(e => e.extension).map(e => ({ id: e.id, from: e.level, to: e.to, seg: e.seg })));
-  if (!community.length) return { parts, extensions };
+  // Supertall parts carry their own gates / zones and hardstands.
+  const supertallAccess = collectSupertall(supertall, site);
+  if (!community.length) return { parts, extensions, ...(supertall.length ? { access: supertallAccess } : {}) };
   site.westGarden = westGardenSite(community);
   // The walk model treats every west-parking island as solid ground furniture: the 西苑
   // fence, 门楼 pillars, guard booth, posts, raised planters and bollards join them.
   site.westParking.islands.push(...site.westGarden.obstacles.map(o => ({ ...o, rect: { ...o.rect }, x: (o.rect.x0 + o.rect.x1) / 2, z: (o.rect.z0 + o.rect.z1) / 2 })));
   const access = { zones: [], gates: [] };
   for (const p of community) { const a = westGates(p); access.zones.push(...a.zones); access.gates.push(...a.gates); }
+  access.zones.push(...supertallAccess.zones); access.gates.push(...supertallAccess.gates);
   return { parts, extensions, access };
 }

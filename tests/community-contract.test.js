@@ -10,6 +10,7 @@ import { communityUnit, COMMUNITY_ACCENT, COMMUNITY_CATEGORY } from '../src/layo
 import { NORTH_SITE, WEST_SITE } from '../src/layout/community-sites.js';
 import { COMMUNITY_PLANS } from '../src/layout/community-plan-data.js';
 import { GATE, SPEED_LANES, SPEED_CABINETS, gateRecord, zoneRecord, gateRecordErrors } from '../src/layout/access-records.js';
+import { refugeLevel } from '../src/layout/refuge.js';
 
 const P1_HOSTS = [['B2', -12], ['B1', -8.4], ['B1M', -4.5], ['1F', 0], ['2F', 6.5], ['3F', 12], ['4F', 17.5], ['5F', 23], ['6F', 28.5]];
 const level = (id, building, short, elev, height, kind, F, footprint) => ({
@@ -105,8 +106,38 @@ function northFixture() {
   return { b, layout: { buildings: [b], levels: [...hosts, ...own], elevators: lifts, stairs, entrances: [] } };
 }
 
+/** 西苑 1 号楼 with a 3F 避难层 (supertall P0a: kind 'refuge' from refugeLevel()); L1 passes it, the fire lift F1 lands. */
+function refugeFixture() {
+  const fx = westFixture(), { b, layout } = fx, F = b.frame, c = WEST_SITE.towers[0].core[0];
+  const lv = refugeLevel({ id: 'W1-3F', building: 'W1', short: '3F', elev: 7.5, height: 4.5, frame: F, footprint: rect(-21.7, -9.6, 21.7, 9.6), face: 'S',
+    areas: [{ id: 'W1-3F-refuge', rect: rect(-9, 0.6, 9, 9.6) }], corridors: [rect(-21.7, -1.2, 21.7, 0.6)],
+    plant: [{ id: 'W1-3F-plant-SW', name: '消防水池 · 水泵', rect: rect(-21.7, 0.6, -9, 9.6), rating: '2.00h' }],
+    windows: [{ edge: 'S', span: [-9, 9], kind: 'fire-window-B' }], persons: 120, serves: ['W1-2F'] });
+  layout.levels.push(lv);
+  const ids = [...b.levels, lv.id];
+  Object.assign(b, { levels: ids, stairLevelIds: ids, storeys: 3, height: 12 });
+  layout.stairs[0].serves = ids;
+  const fire = { ...lift('W1-F1', 'W1', 'passenger', F, c + 7.575, -5.4, 2.6, 2.4, 'E', ids), tower: true, residentialCore: 'W1', label: '西苑消防电梯', role: 'fire', speed: 3 };
+  layout.elevators.push(fire);
+  for (const l of layout.levels) {
+    if (l.building !== 'W1') continue;
+    if (l === lv) core(l, F, rect(c, -9.6, c + 15.7, -1.2), layout.stairs, layout.elevators);
+    else {
+      const inner = rect(fire.lu - fire.w / 2 + .09, fire.lv - fire.d / 2 + .09, fire.lu + fire.w / 2 - .09, fire.lv + fire.d / 2 - .09), poly = lrectPoly(F, inner);
+      l.voids.push({ id: `${fire.id}-void`, kind: 'shaft', frame: F, rect: inner, poly, elevator: fire.id });
+      l.slab.pieces[0].holes.push(poly);
+      l.corePlan.lifts.push({ id: fire.id, rect: rect(fire.lu - fire.w / 2, fire.lv - fire.d / 2, fire.lu + fire.w / 2, fire.lv + fire.d / 2), door: fire.door });
+    }
+  }
+  return fx;
+}
+
 test('最小西苑塔楼与北苑复式塔楼满足社区契约', () => {
   for (const fx of [westFixture(), northFixture()]) assert.deepEqual(communityContractErrors(fx.layout, fx.b), [], fx.b.id);
+  // supertall P0a: a refuge level (kind 'refuge', no homes, a refugePlan) passes the west contract
+  const rf = refugeFixture();
+  assert.deepEqual(communityContractErrors(rf.layout, rf.b), [], 'W1 + 3F 避难层');
+  assert.equal(rf.layout.levels.find((l) => l.id === 'W1-3F').name, '3F 避难层');
   const { layout } = northFixture();
   assert.deepEqual(communityContractErrors(layout, 'T1'), []);
   assert.deepEqual(communityContractErrors(layout, 'nope'), ['building: missing']);
@@ -161,11 +192,18 @@ const CASES = [
   ...['building', 'residentialCore', 'serves', 'passLevels', 'continuous', 'shaftRect', 'landingRect'].map((k) => ['north', `stair T1-ST-A ${k}`, (fx) => del(k)(fx.layout.stairs[0])]),
   ['north', 'stair T1-ST-A serves', (fx) => { fx.layout.stairs[0].serves.push('P1-3F'); }],
   ['west', 'lift W1-L1 role', (fx) => { fx.layout.elevators[0].role = 'vip'; }],
+  // supertall P0a: the refuge level (SPEC §2.1): no homes, its plan, its name, only fire lifts land there
+  ['refuge', 'units: a refuge floor has no homes', (fx) => { const lv = fx.layout.levels.find((l) => l.id === 'W1-3F'), u = fx.layout.levels.find((l) => l.id === 'W1-2F').units[0]; lv.units.push({ ...u, level: lv.id }); }],
+  ['refuge', 'refugePlan', (fx) => del('refugePlan')(fx.layout.levels.find((l) => l.id === 'W1-3F'))],
+  ['refuge', "name: expected '3F 避难层'", (fx) => { fx.layout.levels.find((l) => l.id === 'W1-3F').name = '3F 住宅'; }],
+  ['refuge', 'W1-3F is a refuge floor: only fire lifts land there', (fx) => { fx.layout.elevators[0].serves.push('W1-3F'); }],
+  ['refuge', 'kind', (fx) => { fx.layout.levels.find((l) => l.id === 'W1-3F').kind = 'plant'; }],
+  ['refuge', 'fireOnly', (fx) => { fx.layout.elevators[1].fireOnly = ['W1-1F']; }],
 ];
 
 test('删去任一必需字段，契约给出点名的错误', () => {
   for (const [kind, field, mutate] of CASES) {
-    const fx = kind === 'west' ? westFixture() : northFixture();
+    const fx = kind === 'west' ? westFixture() : kind === 'refuge' ? refugeFixture() : northFixture();
     mutate(fx);
     const errs = communityContractErrors(fx.layout, fx.b);
     assert.ok(errs.some((e) => e.includes(field)), `${kind} ${field}: ${errs.join(' | ') || '没有报错'}`);

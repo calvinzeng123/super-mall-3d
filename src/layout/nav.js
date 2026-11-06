@@ -16,6 +16,7 @@ import { ESC } from './constants.js';
 import { gantryPosts } from './west-parking.js';
 import { EXIT } from './metro.js';
 import { GATE } from './access-records.js';
+import { liftStops } from './elevator-shafts.js';
 
 export { GATE };
 
@@ -29,8 +30,11 @@ const CAMPUS = rect(-298, -298, 298, 298);
 // ---------------------------------------------------------------------------
 // 构建
 
-/** options.gates === 'open': every card gate stays open (pathfinding, AI walkers).
- * options.unitSolids(u): extra unit-local obstacle rects of a residence (the community homes' tall furniture). */
+/** options.gates === 'open': every card gate stays open (pathfinding, AI walkers) — also the fire-alarm
+ * model (gates release on alarm), so lifts link their fire-only landings (e.fireOnly) too.
+ * options.unitSolids(u): extra unit-local obstacle rects of a residence (the community homes' tall furniture).
+ * options.share (default true): floors whose walls and obstacles are identical (typical storeys) share one
+ * walls / obstacles / grid record; false builds every floor separately (the nav-share test compares both). */
 export function buildNav(layout, options = {}) {
   const floors = new Map();
   const mk = (id, y, kind, extra = {}) => {
@@ -153,6 +157,10 @@ export function buildNav(layout, options = {}) {
   // X/Z frames. Collision vertices and wall records are immutable; share them
   // instead of allocating another complete model projection on every storey.
   const measuredUnitGeometry = new Map();
+  // lv.navPlan (optional, the render module key of a typical storey): a repeat of an already built key
+  // copies that level's own walls and obstacles instead of rebuilding them (levels with duplex
+  // mezzanines always build, since their upper surfaces are separate floors).
+  const navPlans = new Map();
   const partition = (F, Fr, p) => {
     const [x0, z0] = p.a, [x1, z1] = p.b;
     const len = Math.hypot(x1 - x0, z1 - z0);
@@ -167,6 +175,10 @@ export function buildNav(layout, options = {}) {
   };
   for (const lv of layout.levels) {
     const F = floors.get(lv.id);
+    const planKey = lv.navPlan != null && !lv.units.some((u) => u.residence?.duplex) ? lv.navPlan : null;
+    const repeat = planKey != null && navPlans.get(planKey);
+    if (repeat) { F.walls.push(...repeat.walls); F.obstacles.push(...repeat.obstacles); continue; }
+    const w0 = F.walls.length, o0 = F.obstacles.length;
     for (const u of lv.units) {
       // Detailed residential models already include measured external walls,
       // open door leaves, balcony glass, wetroom screens and furniture solids.
@@ -249,6 +261,7 @@ export function buildNav(layout, options = {}) {
         box(F, frame(0, 0, 0), rect(f.x - hw, f.z - 0.3, f.x + hw, f.z + 0.3));
       }
     }
+    if (planKey != null) navPlans.set(planKey, { walls: F.walls.slice(w0), obstacles: F.obstacles.slice(o0) });
   }
   // 不在核心筒里的电梯井
   for (const e of layout.elevators) {
@@ -412,7 +425,17 @@ export function buildNav(layout, options = {}) {
   }
 
   // ---------- 空间索引 ----------
-  for (const F of floors.values()) indexWalls(F);
+  // Typical storeys repeat their plan in X/Z: share walls, obstacles and the wall grid between floors
+  // whose records are identical (numeric hash at 1 mm, gate leaves included, then an element-wise check).
+  // Pieces, portals, zones, slopes and y stay per floor. step / clearAt / wallsNear read by reference.
+  if (options.share !== false) {
+    const plans = new Map();
+    for (const F of floors.values()) {
+      const h = planHash(F), list = plans.get(h) || plans.set(h, []).get(h), T = list.find((P) => samePlan(P, F));
+      if (T) { F.walls = T.walls; F.obstacles = T.obstacles; F.grid = T.grid; F.sharedPlan = T.id; }
+      else { indexWalls(F); list.push(F); }
+    }
+  } else for (const F of floors.values()) indexWalls(F);
 
   const nav = { floors, portals, slopes, slopeById: new Map(slopes.map((s) => [s.id, s])), links: [], groundAt, gates,
     zones: layout.accessControl?.zones || [] };
@@ -434,7 +457,8 @@ export function buildNav(layout, options = {}) {
     nav.links.push({ id: s.id, kind: 'stair', name: s.kind === 'kiosk' ? '地库楼梯' : '楼梯', stops: sortStops(stops, floors) });
   }
   for (const e of layout.elevators) {
-    const stops = e.serves.filter((id) => floors.has(id)).map((id) => stopAt(id, e.x + e.nx * e.reach, e.z + e.nz * e.reach, e.nx, e.nz));
+    // Normal mode links e.serves; fire mode (gates 'open') adds the 消防专用 landings in e.fireOnly.
+    const stops = liftStops(e, { fire: fixedOpen }).filter((id) => floors.has(id)).map((id) => stopAt(id, e.x + e.nx * e.reach, e.z + e.nz * e.reach, e.nx, e.nz));
     nav.links.push({ id: e.id, kind: 'lift', elevator: e, name: e.label || (e.type === 'glass' || e.tower ? '观光电梯' : e.type === 'freight' ? '货梯' : '电梯'), stops: sortStops(stops, floors) });
   }
   if (br) {
@@ -460,6 +484,29 @@ export function buildNav(layout, options = {}) {
 
 function sortStops(stops, floors) {
   return stops.sort((a, b) => floors.get(a.floor).y - floors.get(b.floor).y);
+}
+
+const mm = (v) => Math.round(v * 1000);
+/** Numeric hash of a floor's walls and obstacles at 1 mm (gate leaves flagged). */
+function planHash(F) {
+  let h = (F.walls.length * 7919 + F.obstacles.length) | 0;
+  for (const w of F.walls) h = (Math.imul(h, 31) + mm(w.x0) * 3 + mm(w.z0) * 5 + mm(w.x1) * 7 + mm(w.z1) * 11 + (w.gate ? 13 : 0)) | 0;
+  for (const o of F.obstacles) for (const p of o.outer) h = (Math.imul(h, 17) + mm(p[0]) * 3 + mm(p[1]) * 5) | 0;
+  return h;
+}
+const samePoly = (P, Q) => P.length === Q.length && P.every((p, i) => mm(p[0]) === mm(Q[i][0]) && mm(p[1]) === mm(Q[i][1]));
+/** Element-wise equality of two floors' walls (same gate state object) and obstacles (outer and holes) at 1 mm. */
+function samePlan(A, B) {
+  if (A.walls.length !== B.walls.length || A.obstacles.length !== B.obstacles.length) return false;
+  for (let i = 0; i < A.walls.length; i++) {
+    const w = A.walls[i], o = B.walls[i];
+    if (mm(w.x0) !== mm(o.x0) || mm(w.z0) !== mm(o.z0) || mm(w.x1) !== mm(o.x1) || mm(w.z1) !== mm(o.z1) || w.gate !== o.gate) return false;
+  }
+  for (let i = 0; i < A.obstacles.length; i++) {
+    const a = A.obstacles[i], b = B.obstacles[i];
+    if (!samePoly(a.outer, b.outer) || a.holes.length !== b.holes.length || !a.holes.every((h, j) => samePoly(h.poly, b.holes[j].poly))) return false;
+  }
+  return true;
 }
 
 function indexWalls(F) {
@@ -846,6 +893,14 @@ export function floorLabel(nav, layout, s) {
       const rt = lv.riverTerrace;
       if (rt?.prows?.some((p) => inRect(p.rect))) return `云澜江景台 · 江景台玻璃挑台（${where}）`;
       if (rt?.pieces?.some((p) => pointInPoly(at, p.outer))) return `云澜江景台（${where}）`;
+      // 避难层：避难区由 lv.refugePlan 命名（社区塔楼「云澜·北苑 1 号楼 · 24F 避难层（避难区）」，其他「R1 · 14F 避难层 · 避难区」）
+      const refuge = lv.refugePlan?.areas?.find((a) => pointInPoly(at, a.poly));
+      if (refuge) return b.community ? `${title} · ${lv.name}（${refuge.name}）` : `${title} · ${lv.name} · ${refuge.name}`;
+      // Sky lobbies and public floors name the zone you stand in: lv.amenityPlan always, a lobbyPlan when it opts in (labelZones).
+      for (const plan of [lv.amenityPlan, lv.lobbyPlan?.labelZones ? lv.lobbyPlan : null]) {
+        const z = plan && planZoneAt(plan, s.x, s.z);
+        if (z) return `${title} · ${lv.short} ${z.name}`;
+      }
     }
     const suffix = F.kind === 'mezzanine' ? (F.unit ? ` · ${F.unit.code} 夹层` : ' · 楼梯中间平台') : '';
     return `${title} · ${lv.name}${suffix}`;
@@ -855,6 +910,13 @@ export function floorLabel(nav, layout, s) {
   if (river) return `室外 · ${river}`;
   const plot = layout.site.plots.find((p) => pointInPoly(at, p.poly));
   return `室外 · ${plot ? plot.name : '道路'}`;
+}
+
+/** The named zone ({ name, rect } in plan.frame) of an amenity / lobby plan at world (x, z), or null. */
+function planZoneAt(plan, x, z) {
+  if (!plan.frame || !Array.isArray(plan.zones)) return null;
+  const [u, v] = toL(plan.frame, x, z);
+  return plan.zones.find((q) => q.name && q.rect && u >= q.rect.x0 && u <= q.rect.x1 && v >= q.rect.z0 && v <= q.rect.z1) || null;
 }
 
 /** Name of the riverside place at s: bridges and their lookouts, the glass lookout, pavilion and promenades. */

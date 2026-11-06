@@ -25,6 +25,8 @@ import { addRiver } from './river.js';
 import { applyRiverTerrace } from './river-terrace.js';
 import { applyNorthResidences } from './north-residences.js';
 import { COMMUNITY_CATEGORY } from './community-units.js';
+import { applyTowerZones } from './zones.js';
+import { supertallSitePass } from './hospitality-supertall.js';
 
 /** expansion: the full phase-one tour (false builds the compact FPS authoring
  * layout). fidelity: the concept A scheme on top of it — extra vehicle access,
@@ -78,5 +80,11 @@ export function buildLayout({ expansion = true, fidelity = expansion } = {}) {
   if (expansion) applyMetroInterchange(layout);
   addTransitCenter(layout.site, layout.extensions);
   if (expansion) addBusStops(layout);
+  if (expansion) {
+    // Supertall P0a: floor zones for the expansion-only towers (b.zones / lv.zone), then the supertall
+    // site pass (P-HA's 酒店短停 bays). The compact FPS layout gets neither (fps-frozen).
+    applyTowerZones(layout);
+    supertallSitePass(layout);
+  }
   return prepareRideableElevators(layout);
 }

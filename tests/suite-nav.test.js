@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import { L } from './helpers.js';
 import { toW, toL } from '../src/layout/geom.js';
 import { buildNav, clear, step, landAt, floorLabel } from '../src/layout/nav.js';
+import { buildLayout } from '../src/layout/layout.js';
+import { CAMPUS } from './campus-deltas/index.js';
 
 const nav = buildNav(L);
 const homes = L.levels.flatMap(lv => lv.units.filter(u => u.residence?.suitePlan).map(u => ({ lv, u })));
@@ -25,12 +27,19 @@ function go(s, u, p, audit = null) {
 const reached = (s, u, p) => Math.hypot(...toL(u.frame, s.x, s.z).map((v, i) => v - p[i])) < .025;
 
 test('模型套房覆盖酒店公寓380户和10套顶层夹层，六栋独立首层大堂后合计728住户', () => {
-  assert.equal(homes.length, 380);
-  assert.equal(duplexes.length, 10);
-  assert.ok(duplexes.every(({ lv }) => lv.id === 'A-20F' && lv.height === 6.5));
-  assert.equal(L.levels.filter(l => l.building === 'H' && l.levelNumber).length, 20);
-  assert.equal(L.levels.filter(l => l.building === 'A' && l.levelNumber).length, 20);
-  assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 728);
+  // The H / A pins (380 suites, the 10 LOFTs on A-20F, 20 numbered levels each) are the compact FPS truth (C-7);
+  // the H + A + R record count comes from tests/campus-deltas (P-HA re-pins its expansion towers itself).
+  const C = buildLayout({ expansion: false });
+  const compactHomes = C.levels.flatMap(lv => lv.units.filter(u => u.residence?.suitePlan).map(u => ({ lv, u })));
+  assert.equal(compactHomes.length, 380);
+  const compactDuplexes = compactHomes.filter(({ u }) => u.residence.duplex);
+  assert.equal(compactDuplexes.length, 10);
+  assert.ok(compactDuplexes.every(({ lv }) => lv.id === 'A-20F' && lv.height === 6.5));
+  assert.equal(C.levels.filter(l => l.building === 'H' && l.levelNumber).length, 20);
+  assert.equal(C.levels.filter(l => l.building === 'A' && l.levelNumber).length, 20);
+  assert.equal(C.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, 728);
+  assert.equal(L.levels.filter(l => ['H', 'A', 'R1', 'R2', 'R3', 'R4'].includes(l.building)).flatMap(l => l.units).length, CAMPUS.residenceAccess);
+  assert.ok(duplexes.length > 0 && homes.length > 0);
   const streetLandings = L.buildings.reduce((n, b) => n + (b.access?.surfaces.length || 0), 0) + (L.bridges?.access?.surfaces.length || 0);
   assert.equal(nav.floors.size, L.levels.length + 2 + 10 + streetLandings);
 });
@@ -104,7 +113,7 @@ test('夹层护栏阻止侧向跌落，楼梯实体阻止下层横穿，户间�
 });
 
 test('导入家具占地不可站立，电视墙东端的真实走道保持通行', () => {
-  for (const { lv, u } of [homes[0], homes[1], homes.find(h => h.lv.id === 'A-2F')]) {
+  for (const { lv, u } of [homes[0], homes[1], homes.find(h => h.lv.id === 'A-3F')]) {
     for (const o of u.residence.obstacles) {
       const r = o.rect;
       assert.ok(!clear(nav, state(lv, u, [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2])), `${u.id}/${o.id} 家具可穿入`);
@@ -122,7 +131,7 @@ test('导入家具占地不可站立，电视墙东端的真实走道保持通�
 });
 
 test('套房从玄关绕过电视墙进入独卫，并真正通过湿区及WC玻璃门', () => {
-  for (const { lv, u } of [homes[0], homes[1], homes.find(h => h.lv.id === 'A-2F')]) {
+  for (const { lv, u } of [homes[0], homes[1], homes.find(h => h.lv.id === 'A-3F')]) {
     let s = state(lv, u, [5.46, .8]);
     // Bath entry, WC entrance (shifted 0.05m past the vanity), wetroom and
     // shower circulation all use their surveyed openings, in both orientations.

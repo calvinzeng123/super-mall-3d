@@ -26,6 +26,19 @@ export const stairDoor = (s, id) => (s.wdoorByLevel && s.wdoorByLevel[id]) || s.
 export const midOf = (s) => [(s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2];
 export const liftProbe = (e) => [e.x + e.nx * (e.reach + 0.6), e.z + e.nz * (e.reach + 0.6)];
 
+/**
+ * 酒店地面短停车位（SPEC §0.8-25 / §1.4, C-7）：the stalls of the hotel's own lot plus the west-lot bays tagged
+ * `hotelShortStay: true` within 60 m of the hotel's west door H-SIDE. Today (no tagged bays) it equals the lot's
+ * stall count, in both layouts; P-HA tags 20 bays through supertallSitePass when HS-H takes 19 of the 22 lot stalls.
+ */
+export function hotelShortStay(layout) {
+  const lot = layout.extensions.surfaceParking.find((l) => l.id === 'hotel-shared-parking');
+  const side = layout.entrances.find((e) => e.id === 'H-SIDE'), [sx, sz] = side ? midOf(side.seg) : [NaN, NaN];
+  const bays = (layout.site.westParking?.lots || []).flatMap((q) => q.stalls)
+    .filter((s) => s.hotelShortStay === true && Math.hypot(s.x - sx, s.z - sz) <= 60);
+  return (lot?.stalls.length || 0) + bays.length;
+}
+
 /** 多边形各顶点向形心内缩 d（不超过到形心距离的一半） */
 export function insetPts(poly, d = 1) {
   const c = polyCentroid(poly);

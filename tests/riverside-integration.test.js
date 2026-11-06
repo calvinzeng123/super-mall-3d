@@ -14,6 +14,7 @@ import { NORTH_SITE } from '../src/layout/community-sites.js';
 import { NORTH_ACCESS } from '../src/layout/residential-access.js';
 import { RIVER_AXIS } from '../src/layout/river.js';
 import { buildTourSteps } from '../src/render/tour.js';
+import { CAMPUS, HARDSTANDS } from './campus-deltas/index.js';
 
 const nav = buildNav(L), gates = L.accessControl.gates;
 const floorY = (f) => (f === 'ground' ? 0 : nav.floors.get(f).y);
@@ -61,7 +62,8 @@ test('江景台：露台读取北苑 1/2 号楼的消防登高面，任何消防
   const T = lvl('P1-3F').riverTerrace;
   assert.deepEqual(T.frontages, north.map((b) => b.fireFrontage), '江景台没有读取塔楼的消防登高面');
   const fa = L.site.fireAccess;
-  assert.deepEqual(fa.map((f) => [f.id, f.tower]), [['HS1', 'T1'], ['HS2', 'T2']]);
+  // site.fireAccess holds exactly the hardstands the campus deltas list (base HS1 / HS2, plus each package's own).
+  assert.deepEqual(fa.map((f) => [f.id, f.tower]).sort((a, b) => (a[0] < b[0] ? -1 : 1)), HARDSTANDS.map((h) => [...h]));
   for (const b of north) assert.ok(fa.some((f) => f.tower === b.id && JSON.stringify(f.rect) === JSON.stringify(b.hardstand)), `${b.id} 登高场地未登记`);
   for (const f of fa) {
     const hs = rectPoly(f.rect);
@@ -191,19 +193,21 @@ test('紧凑 FPS 布局哈希不变', () => {
   assert.equal(createHash('sha256').update(json).digest('hex'), pinned);
 });
 
-test('园区总数（游览布局，实测）：338 层、76 部电梯、106 部楼梯、664 个商铺、1,066 条住宅记录（1,046 户）', () => {
+test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和：今天 338 层、76 部电梯、106 部楼梯、664 个商铺、1,066 条住宅记录（1,046 户）', () => {
+  // The pinned totals live in tests/campus-deltas (base.js + one delta file per supertall package), so each
+  // package changes only its own file.
   const units = L.levels.flatMap((l) => l.units || []), res = units.filter((u) => u.residence);
-  assert.equal(L.levels.length, 338);
-  assert.equal(L.elevators.length, 76);
-  assert.equal(L.stairs.length, 106);
-  assert.equal(units.length - res.length, 664);
+  assert.equal(L.levels.length, CAMPUS.levels);
+  assert.equal(L.elevators.length, CAMPUS.lifts);
+  assert.equal(L.stairs.length, CAMPUS.stairs);
+  assert.equal(units.length - res.length, CAMPUS.shops);
   assert.equal(units.filter((u) => !u.residence && lvl(u.level).building === 'P1').length, 367);
-  assert.equal(res.length, 1066);
-  assert.equal(new Set(res.map((u) => u.residence.home ?? u.id)).size, 1046);
+  assert.equal(res.length, CAMPUS.records);
+  assert.equal(new Set(res.map((u) => u.residence.home ?? u.id)).size, CAMPUS.homes);
   const homes = (c) => new Set(res.filter((u) => u.residence.community === c).map((u) => u.residence.home ?? u.id)).size;
-  assert.deepEqual([homes('west'), homes('north')], [270, 48]);
+  assert.deepEqual([homes('west'), homes('north')], [CAMPUS.west, CAMPUS.north]);
   // 北苑 7F 空中大堂各加一道速通闸机与一个住户区（候梯厅 + 候梯带）：14 → 16 道门禁、12 → 14 个住户区。
-  assert.deepEqual([gates.length, L.accessControl.zones.length], [16, 14]);
+  assert.deepEqual([gates.length, L.accessControl.zones.length], [CAMPUS.gates, CAMPUS.zones]);
   const P = L.site.westParking;
   assert.deepEqual([P.stallCount, P.lots.length, P.evCount, P.accessibleCount], [427, 20, 51, 9]);
   assert.deepEqual([L.site.urban.buildings.length, L.site.urban.trees.length], [82, 1314]);

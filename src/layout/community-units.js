@@ -484,7 +484,7 @@ function chooseLeaves(res, { log } = {}) {
 const LEAF_CACHE = new Map();
 /** Choose (memoized per plan) and apply the door leaves of one level-unit; returns res.doorLeaves. */
 export function doorLeaves(res, opts = {}) {
-  if (opts.log) return chooseLeaves(res, opts).doorLeaves;
+  if (opts.log) { const r = chooseLeaves(res, opts); for (const leaf of refugeDoorLeaves(r)) leaf.fire = '乙级'; return r.doorLeaves; }
   const key = JSON.stringify([res.plan, res.level, res.width, res.depth, res.entryDoor, res.exteriorSides, res.rooms, res.partitions, res.beds, res.obstacles, res.facadeWalls]);
   let done = LEAF_CACHE.get(key);
   if (!done) {
@@ -497,8 +497,24 @@ export function doorLeaves(res, opts = {}) {
   for (const p of res.partitions) if (d.doors[p.id]) p.door = d.doors[p.id];
   if (res.entryDoor) res.entryDoor = d.entry;
   res.beds = d.beds; res.bathrooms = d.bathrooms; res.kitchen = d.kitchen; res.obstacles = d.obstacles;
+  for (const leaf of refugeDoorLeaves(res)) leaf.fire = '乙级';
   res.doorLeaves = [...res.partitions.filter((p) => p.door?.leaf).map((p) => p.door.leaf), ...(res.entryDoor?.leaf ? [res.entryDoor.leaf] : [])];
   return res.doorLeaves;
+}
+
+/**
+ * The leaves of the 户内避难间 door (GB 50016 §5.5.32: 宜 乙级): the doors of residence.refugeRoom whose
+ * leaf swings into it (its entrance from the hall; an en-suite or closet door swings the other way).
+ * If none swings in, its doors onto circulation rooms. Empty when the plan names no refuge room.
+ */
+export function refugeDoorLeaves(res) {
+  const id = res.refugeRoom;
+  if (id == null) return [];
+  const mine = res.partitions.filter((p) => p.door?.leaf && p.id.split('/').includes(id));
+  const into = mine.filter((p) => p.door.leaf.into === id);
+  const kindOf = new Map(res.rooms.map((r) => [r.id, r.kind]));
+  const onto = mine.filter((p) => p.id.split('/').some((q) => q !== id && CIRCULATION.has(kindOf.get(q))));
+  return (into.length ? into : onto).map((p) => p.door.leaf);
 }
 
 /**
@@ -506,13 +522,16 @@ export function doorLeaves(res, opts = {}) {
  * front to the rear). fronts defaults to the entry front; an upper duplex level has none.
  */
 export function communityUnit({ lv, building, id, code, slot, frame, plan, name, en, catLabel, accent,
-  fronts, home, homeLevels, partner, community }) {
+  fronts, home, homeLevels, partner, community, refugeRoom }) {
   const residence = structuredClone(plan);
   const bid = building ?? lv.building;
   residence.community = community || residence.community || (/^T/.test(bid) ? 'north' : 'west');
   residence.home = home ?? residence.home ?? id;
   residence.homeLevels = [...(homeLevels ?? residence.homeLevels ?? [lv.id])];
   if (partner != null) residence.partner = partner;
+  // 户内避难间 (GB 50016 §5.5.32, supertall P0a): a room id of this plan; its door leaf becomes 乙级 (doorLeaves).
+  // Absent, the plan's own refugeRoom (if any) stands; today's frozen data has none.
+  if (refugeRoom != null) residence.refugeRoom = refugeRoom;
   if (residence.homeStair || residence.voids?.length) duplexParts(residence);
   doorLeaves(residence);
   const upper = residence.level === 'upper' || residence.entryDoor == null;
@@ -526,4 +545,24 @@ export function communityUnit({ lv, building, id, code, slot, frame, plan, name,
       bg: accent ?? COMMUNITY_ACCENT[residence.community], fg: '#ffffff', logo: 'diamond' },
     residence,
   };
+}
+
+/**
+ * The two level-units of one generated duplex, for callers outside the 西苑 / 北苑 builders (二期 R 顶层复式).
+ * spec: { building, community, home, slot, accent?, catLabel?,
+ *         levels: [lowerLv, upperLv], ids: [lowerId, upperId], codes: [lower, upper] (or code),
+ *         names: [lower, upper] (or name), en: [lower, upper] (or en), plans: [lowerPlan, upperPlan],
+ *         refugeRooms?: [lowerRoomId | null, upperRoomId | null] (户内避难间; the entry level's bedroom by rule) }
+ * frame: the unit frame both levels share (x along the entry front, z to the rear facade).
+ * Returns [lower, upper]: partners of each other, homeLevels both level ids, the upper with no front.
+ */
+export function buildDuplexUnits(spec, frame) {
+  const { levels, ids, plans } = spec;
+  if (levels?.length !== 2 || ids?.length !== 2 || plans?.length !== 2) throw new Error('buildDuplexUnits: two levels, ids and plans');
+  const pick = (v, i) => (Array.isArray(v) ? v[i] : v);
+  const homeLevels = levels.map((lv) => lv.id);
+  return [0, 1].map((i) => communityUnit({ lv: levels[i], building: spec.building, id: ids[i], code: pick(spec.codes ?? spec.code, i),
+    slot: spec.slot, frame, plan: plans[i], name: pick(spec.names ?? spec.name, i), en: pick(spec.en, i), catLabel: spec.catLabel,
+    accent: spec.accent, community: spec.community, home: spec.home ?? ids[0], homeLevels, partner: ids[1 - i], ...(i ? { fronts: [] } : {}),
+    ...(spec.refugeRooms?.[i] != null ? { refugeRoom: spec.refugeRooms[i] } : {}) }));
 }

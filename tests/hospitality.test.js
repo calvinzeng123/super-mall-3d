@@ -2,13 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { L, inWalk, inSite, midOf } from './helpers.js';
 import { HOSPITALITY } from '../src/layout/hospitality.js';
+import { buildLayout } from '../src/layout/layout.js';
 import { convexOverlap, rect, rectPoly, polyBounds, polySamples, pointInPoly } from '../src/layout/geom.js';
 import { buildWalkGraph, components } from '../src/layout/walk.js';
 
+// The tower pins (storeys, homes per floor, 728 homes, 12 tower lifts) are the FPS truth: they run on the compact
+// layout C, where H / A / R1–R4 keep today's 20- / 30-storey towers (SPEC §4, supertall P0a). The expansion
+// layout's towers are pinned by their own packages (r-supertall.test.js, hospitality-supertall.test.js) and,
+// while they are still compact-identical, by p1-expansion-layout.test.js (tests/campus-deltas COMPACT_IDENTICAL).
+// The campus-connection tests below (paths, ramps, the underground chain) keep running on the expansion layout L.
+const C = buildLayout({ expansion: false });
 const towers = L.buildings.filter(b => b.kind === 'tower');
 // 云澜社区住宅（西苑 / 北苑）由各自测试覆盖；这里只核验酒店、公寓与四栋住宅。
-const legacyTowers = towers.filter(b => !b.community);
-const floors = bid => L.levels.filter(l => l.building === bid);
+const legacyTowers = C.buildings.filter(b => b.kind === 'tower' && !b.community);
+const floors = bid => C.levels.filter(l => l.building === bid);
 const within = (outer, inner, eps = 1e-6) => inner.x0 >= outer.x0 - eps && inner.x1 <= outer.x1 + eps && inner.z0 >= outer.z0 - eps && inner.z1 <= outer.z1 + eps;
 
 test('酒店公寓各20层且首层为大堂、上层10套，四栋30层住宅2至30层各01/02/03三户', () => {
@@ -32,7 +39,7 @@ test('酒店公寓各20层且首层为大堂、上层10套，四栋30层住宅2�
     assert.ok(within(b.usage === 'residential' ? HOSPITALITY.residential : b.id === 'A' ? HOSPITALITY.east : HOSPITALITY.west, bounds));
     // Mall outlines are concave: SAT convexOverlap would incorrectly reject a
     // tower fitted into the existing west-wing recess. Probe the true polygon.
-    for (const old of L.buildings.filter(q => q.kind === 'mall' || q.kind === 'street'))
+    for (const old of C.buildings.filter(q => q.kind === 'mall' || q.kind === 'street'))
       for (const p of polySamples(b.outline,.75,.03)) assert.ok(!pointInPoly(p,old.outline), `${b.id} 不应改占原商场`);
   }
   assert.equal(legacyTowers.flatMap(b => floors(b.id)).flatMap(l => l.units).length, 728);
@@ -109,7 +116,7 @@ test('地下、空中连接为真实连续宽度的通道，门户两侧等标�
   const comp = components(buildWalkGraph(L));
   const first = comp.get(`ent:${L.entrances.find(e => e.building === 'M').id}`);
   assert.notEqual(first, undefined);
-  for (const b of towers) for (const lv of floors(b.id)) for (const u of lv.units) assert.equal(comp.get(`unit:${u.id}`), first, `${u.id} 到不了地铁网络`);
+  for (const b of towers) for (const lv of L.levels.filter(l => l.building === b.id)) for (const u of lv.units) assert.equal(comp.get(`unit:${u.id}`), first, `${u.id} 到不了地铁网络`);
 });
 
 test('住宅独立双坡道连接住客停车层，酒店公寓地库通过既有一期车道抵达', () => {
@@ -151,11 +158,11 @@ test('地下车行连廊和空桥整条中心线可实际步行，转角平台�
 });
 
 test('12部塔楼电梯逐层贯通井道，轿厢尺度在楼板洞内有余量', () => {
-  const lifts = L.elevators.filter(e => e.tower && !L.buildings.find(b => b.id === e.building)?.community);
+  const lifts = C.elevators.filter(e => e.tower && !C.buildings.find(b => b.id === e.building)?.community);
   assert.equal(lifts.length, 12);
   for (const e of lifts) {
     for (const id of e.serves) {
-      const lv = L.levels.find(l => l.id === id), hole = lv.voids.find(v => v.elevator === e.id);
+      const lv = C.levels.find(l => l.id === id), hole = lv.voids.find(v => v.elevator === e.id);
       assert.ok(hole && hole.kind === 'shaft', `${e.id}/${id} 缺少贯通井道`);
       assert.ok(hole.rect.x1 - hole.rect.x0 > e.w - 0.26 && hole.rect.z1 - hole.rect.z0 > e.d - 0.26, `${e.id}/${id} 轿厢擦楼板`);
       assert.ok(lv.slab.pieces.some(p => p.holes.includes(hole.poly)), `${e.id}/${id} 洞口只写在说明中`);
