@@ -4,10 +4,19 @@ import assert from 'node:assert/strict';
 import { L } from './helpers.js';
 import { toW, toL } from '../src/layout/geom.js';
 import { buildNav, clear, step, NAV } from '../src/layout/nav.js';
+import { CAMPUS } from './campus-deltas/index.js';
 
 const nav = buildNav(L);
 // 云澜社区住宅（西苑 / 北苑）的户型由各自测试核验。
 const homes = L.levels.flatMap((lv) => lv.units.filter((u) => u.residence && !u.residence.community).map((u) => ({ lv, u })));
+// Walk dedupe (SPEC §4, supertall P0a): homes with the same plan at the same X/Z frame on floors of the same
+// storey height whose nav plan is shared (buildNav shares walls / obstacles / grid between element-wise identical
+// floors) walk exactly alike, so one representative walks for all of them; every home still counts.
+const navPlanOf = (lv) => nav.floors.get(lv.id).sharedPlan ?? lv.id;
+const walkKey = ({ lv, u }) => [navPlanOf(lv), lv.height, u.frame.ox, u.frame.oz, u.frame.a, u.residence.prototype ?? u.residence.type,
+  JSON.stringify(u.residence.entryDoor), JSON.stringify(u.residence.partitions)].join('|');
+const groups = new Map();
+for (const h of homes) { const k = walkKey(h); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(h); }
 const state = (lv, u, x, z) => {
   const p = toW(u.frame, x, z);
   return { floor: lv.id, x: p[0], z: p[1], y: lv.elev, slope: null };
@@ -21,10 +30,12 @@ function walk(from, to) {
 }
 const near = (a, b, eps = .035) => a.floor === b.floor && !a.slope && Math.hypot(a.x - b.x, a.z - b.z) < eps;
 
-test('全部728套的入户门与内部卧室/卫浴门均有双侧净空且能实际穿越', () => {
-  assert.equal(homes.length, 728);
+test('全部住宅记录（今天 728 套，酒店 + 公寓 + R）的入户门与内部卧室/卫浴门均有双侧净空且能实际穿越', () => {
+  assert.equal(homes.length, CAMPUS.residenceAccess);
+  assert.equal([...groups.values()].reduce((n, g) => n + g.length, 0), homes.length);
   let partitionDoors = 0;
-  for (const { lv, u } of homes) {
+  for (const group of groups.values()) {
+    const { lv, u } = group[0], doors = u.residence.partitions.filter((p) => p.door).length;
     const entry = u.residence.entryDoor;
     const outside = state(lv, u, entry.at, -.8), inside = state(lv, u, entry.at, .8);
     assert.ok(clear(nav, outside) && clear(nav, inside), `${u.id} 入户门两侧无站立净空`);
@@ -46,10 +57,15 @@ test('全部728套的入户门与内部卧室/卫浴门均有双侧净空且能�
         return clear(nav, a) && clear(nav, b) && near(walk(a, b), b) && near(walk(b, a), a);
       });
       assert.ok(pass, `${u.id} 门(${cx},${cz})缺少可双向穿越的真实净空`);
-      partitionDoors++;
     }
+    // every home of the group is covered by this walk (same plan, frame, storey and shared nav plan)
+    partitionDoors += doors * group.length;
   }
   assert.ok(partitionDoors >= 1400, `仅审计${partitionDoors}扇套内门`);
+  // each group walks on one nav plan: every member's floor shares the representative's walls and wall grid
+  for (const group of groups.values()) for (const { lv } of group)
+    assert.equal(nav.floors.get(lv.id).walls, nav.floors.get(group[0].lv.id).walls, `${lv.id} grouped with ${group[0].lv.id}`);
+  assert.ok(groups.size < homes.length);
 });
 
 // 每种套内平面、框架朝向都选真实单元，走动边由真实0.1m step组成；

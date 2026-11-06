@@ -2,9 +2,12 @@
 // 社区渲染器（render/build/community.js）只依赖这里列出的字段。返回错误字符串列表，空表示通过。
 import { pointInPoly, polyCentroid } from './geom.js';
 import { NORTH_SITE } from './community-sites.js';
+import { LIFT_ROLES as ROLES, isFireLift } from './elevator-shafts.js';
+import { refugeLevelErrors } from './refuge.js';
 
-const LEVEL_KINDS = new Set(['garage-lobby', 'lobby', 'club', 'community', 'roof']);
-const LIFT_ROLES = new Set(['private-w', 'private-e', 'fire', 'passenger']);
+// 'refuge': a numbered 避难层 with no homes and a refugePlan (refuge.js). Supertall P0a.
+export const LEVEL_KINDS = new Set(['garage-lobby', 'lobby', 'club', 'community', 'roof', 'refuge']);
+export const LIFT_ROLES = new Set(ROLES);
 const VOID_REF = { stair: 'stair', shaft: 'elevator', 'home-stair': 'unit', 'home-void': 'unit' };
 const LOBBY = { west: ['1F', 'community-lobby'], north: ['7F', 'community-club'] };
 
@@ -69,6 +72,7 @@ export function communityContractErrors(layout, b) {
   for (const lid of own) {
     const lv = levelById.get(lid), at = `level ${lid}`;
     if (!LEVEL_KINDS.has(lv.kind)) err(`${at} kind`, `unexpected ${lv.kind}`);
+    if (lv.kind === 'refuge') for (const e of refugeLevelErrors(lv)) errs.push(`${id} ${e}`);
     if (!num(lv.elev)) err(`${at} elev`, 'required number');
     if (!num(lv.height) || lv.height <= 0) err(`${at} height`, 'required positive number');
     const m = /^(\d+)F$/.exec(lv.short || '');
@@ -142,6 +146,9 @@ export function communityContractErrors(layout, b) {
     if (!str(e.label)) err(`${at} label`, 'required string');
     if (!LIFT_ROLES.has(e.role)) err(`${at} role`, `unexpected ${e.role}`);
     if (!Array.isArray(e.serves) || !e.serves.length || e.serves.some((lid) => !stairLevels.includes(lid))) err(`${at} serves`, 'must be host or own levels');
+    if (e.fireOnly != null && (!Array.isArray(e.fireOnly) || e.fireOnly.some((lid) => !stairLevels.includes(lid) || e.serves?.includes(lid)))) err(`${at} fireOnly`, 'host or own levels that are not normal stops');
+    // Passenger and private lifts pass refuge floors with no landing door (GB 55037 §7.1.15-3).
+    if (!isFireLift(e)) for (const lid of e.serves || []) if (levelById.get(lid)?.kind === 'refuge') err(`${at} serves`, `${lid} is a refuge floor: only fire lifts land there`);
     if (north) {
       const stops = (e.serves || []).map(elevOf).filter(num), lo = Math.min(...stops), hi = Math.max(...stops);
       const passes = stairLevels.filter((lid) => elevOf(lid) >= lo && elevOf(lid) <= hi);

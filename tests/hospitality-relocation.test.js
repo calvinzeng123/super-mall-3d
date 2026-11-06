@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { L } from './helpers.js';
+import { L, hotelShortStay } from './helpers.js';
 import { toW, toL, convexOverlap, pointInPoly, polySamples } from '../src/layout/geom.js';
 import { buildNav, clear, step } from '../src/layout/nav.js';
 
@@ -50,7 +50,9 @@ test('共享地库共20个街道坡口及36条坡道，酒店公寓、西库和�
 
 test('共享地面停车包含真实车位、充电位和两端通路，避开全部坡口及建筑',()=>{
   const lots=L.extensions.surfaceParking;assert.ok(lots.length>=2);
-  assert.ok(lots.find(l=>l.id==='hotel-shared-parking').stalls.length>=20,'酒店仍须保留地面短停车位');
+  // The lot's own stalls plus west-lot bays tagged hotelShortStay within 60 m of H-SIDE (C-7; today: the lot alone)
+  assert.equal(hotelShortStay(L),lots.find(l=>l.id==='hotel-shared-parking').stalls.length+L.site.westParking.lots.flatMap(q=>q.stalls).filter(s=>s.hotelShortStay).length);
+  assert.ok(hotelShortStay(L)>=20,'酒店仍须保留地面短停车位');
   assert.ok(lots.reduce((s,l)=>s+l.stalls.length,0)>400,'交通中心、共享入口和云澜·西苑之外仍须保留大型地面停车场');
   for(const lot of lots) {
     assert.ok(lot.stalls.some(s=>s.type==='ev'));assert.ok(lot.aisle);

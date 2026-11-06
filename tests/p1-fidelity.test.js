@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { L, onSlab, walkNav, standable as standableOn } from './helpers.js';
+import { L, onSlab, walkNav, standable as standableOn, hotelShortStay } from './helpers.js';
 import { buildLayout } from '../src/layout/layout.js';
 import { buildNav } from '../src/layout/nav.js';
 import { ART_DOME, SQUARE_CANOPY, BILLBOARDS, domeColumns, canopyColumns } from '../src/layout/p1-fidelity.js';
@@ -184,7 +184,8 @@ test('地面景观：两处喷泉雕塑、东南大台阶、两条行道树带�
   const t = D.trees.find(t => t.z === -21.4);
   assert.ok(!standable('ground', t.x, t.z) && standable('ground', t.x, -24.5), '行道树挡住了南侧长廊');
   const lot = L.extensions.surfaceParking.find(l => l.id === 'hotel-shared-parking'), loop = D.hotelLoop;
-  assert.ok(lot.stalls.length >= 20 && !lot.stalls.some(s => convexOverlap(s.poly, loop.poly)), '环岛内仍有车位');
+  // ≥ 20 hotel short-stay stalls: the lot's own plus any west-lot bays tagged for the hotel (hotelShortStay, C-7)
+  assert.ok(hotelShortStay(L) >= 20 && !lot.stalls.some(s => convexOverlap(s.poly, loop.poly)), '环岛内仍有车位');
   assert.ok(Math.abs(loop.rect.z0 - lot.aisle.z1) < 1e-9, '环岛没有接上停车通道');
   for (const r of L.ramps.filter(r => r.type.startsWith('street'))) assert.ok(!convexOverlap(loop.poly, r.poly), `环岛压 ${r.id}`);
   assert.ok(!standable('ground', loop.cx, loop.cz), '环岛花坛可以穿过');

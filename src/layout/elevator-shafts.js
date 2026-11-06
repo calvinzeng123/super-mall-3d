@@ -2,6 +2,28 @@ import { rect, lrectPoly, pointInPoly, distToPolyEdge } from './geom.js';
 
 const inside = (p, poly) => pointInPoly(p, poly) || distToPolyEdge(p, poly) < 1e-6;
 
+// ---------------------------------------------------------------------------
+// Lift record fields (supertall P0a). Only expansion-only builders write them; readers use defaults,
+// so the compact FPS layout never carries them (SPEC §2.1, rule C-13):
+//   e.speed      m/s, read as e.speed ?? LIFT_SPEED_DEFAULT
+//   e.role       one of LIFT_ROLES (absent = an ordinary passenger lift)
+//   e.zone       'low' | 'high' | null   (西苑 banks)
+//   e.card       'resident' | 'room-key' | null   (cosmetic 梯控 text)
+//   e.serves     normal-mode landing doors (existing)
+//   e.shaftLevels every level the shaft passes (existing)
+//   e.fireOnly   levels with a landing door used only in fire mode (消防专用: no call button, a nav link
+//                only with buildNav(L, { gates: 'open' }))
+export const LIFT_SPEED_DEFAULT = 3.5;
+export const LIFT_ROLES = Object.freeze(['private-w', 'private-e', 'fire', 'fire-service', 'passenger', 'residence', 'shuttle', 'hotel', 'service-fire']);
+/** Roles of fire lifts (消防电梯): they may, and must, open on refuge floors. */
+export const FIRE_LIFT_ROLES = Object.freeze(['fire', 'fire-service', 'service-fire']);
+export const isFireLift = (e) => FIRE_LIFT_ROLES.includes(e.role);
+/** Landing doors of lift e: normal-mode stops, plus the fire-only ones when fire is set. */
+export const liftStops = (e, { fire = false } = {}) => (fire && e.fireOnly?.length ? [...e.serves, ...e.fireOnly.filter((id) => !e.serves.includes(id))] : e.serves);
+/** What lift e has on level id: 'normal' (a landing door), 'fire' (消防专用 door, fire mode only) or null (passes, blank wall).
+ * corePlan.lifts[i].landing = landingAt(e, lv.id) != null. */
+export const landingAt = (e, id) => (e.serves.includes(id) ? 'normal' : e.fireOnly?.includes(id) ? 'fire' : null);
+
 /** All lift cars follow the same real shaft, including the G to B1 segment. */
 export function prepareRideableElevators(layout) {
   const levels = new Map(layout.levels.map(l => [l.id, l]));
@@ -11,7 +33,8 @@ export function prepareRideableElevators(layout) {
       e.lu + e.w / 2 - .1, e.lv + e.d / 2 - .1);
     const poly = lrectPoly(e.frame, r);
     e.shaftPoly = poly;
-    const stops = e.serves.map(id => levels.get(id)).filter(Boolean);
+    // Fire-only landings are real doors too: the shaft reaches them (absent fireOnly = today's stops).
+    const stops = liftStops(e, { fire: true }).map(id => levels.get(id)).filter(Boolean);
     if (!stops.length) continue;
     e.shaftBottom = Math.min(...stops.map(l => l.elev));
     e.shaftTop = Math.max(...stops.map(l => l.elev));
