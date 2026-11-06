@@ -2,6 +2,34 @@
 
 > 最后更新：2026-11-05。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
+## 2026-11-05 最新交接：户内门扇（“竖着的门板”）与北苑 7F 空中大堂
+
+分支 `claude/wonderful-thompson-olaaxb`，在上一节发布（`4b94cbf`）之后做的，**还没有上线**。需求、前后数字、设计取舍、楼层问题的回答、测试、性能、已知限制和截图都在 [门扇与空中大堂 QA](docs/qa-2026-11-05-doors-sky-lobby.md)。
+
+| 提交 | 内容 |
+|---|---|
+| `4658dc3` → 合并 `8bc9336` | 门扇：布局统一选定铰链和开向，门套、门头、执手，高柜有柜门，家具让开门洞 |
+| `c82f17b` → 合并 `f7a3655` | 7F 空中大堂、两道速通闸机、前庭与连廊雨棚、楼层栏的 1–6F 说明行 |
+| `e7cfb42` | 户型目录的北苑剖面图改叫空中大堂 / 住户会所 |
+| `751386f` | 评审修复：天台导视牌、7F 目录落点、俯视门洞（`lintel`）、12 扇无墙门扇靠柜、高柜是漫游实体 |
+| `3c0249f` | 户型目录 58 户全部按修复后重拍 |
+| `9bdb886`、`ea99c34` | 重新构建 `dist/` |
+
+**门扇**（全部 78 个户型层，707 扇室内门 + 58 扇入户门）：
+- `src/layout/community-units.js` 的 `doorLeaves()` 定每扇门的铰链、开向和停放面，写在 `partition.door.leaf`、`entryDoor.leaf`、`residence.doorLeaves`，并把门扇矩形写进 `residence.obstacles`。渲染（`residence-interiors.js` 的 `communityHome`）、导航和 `scripts/unit-catalog-plans.mjs` 读同一份记录。重新生成户型数据后门扇会自动重选，跑 `community-doors` 测试确认。
+- 结果：695 扇贴墙，12 扇背后没有墙（7 扇靠门后高柜端头，见 QA §1.4），0 扇开向走廊或客厅；入户门向内折 180° 贴玄关墙。
+- 门洞上方的墙和门头线是单独的 `lintel` 网格，相机高过本层吊顶时隐藏。高柜由 `communitySolids(u)` 交给 `buildNav(layout, { unitSolids })`，漫游时走不进去。
+- 预算：西苑 W1-12F 1,364 盒 / 8 网格（≤ 1,500 / ≤ 8）。
+
+**7F 空中大堂**（每栋朝缝的一翼：1 号楼东翼、2 号楼西翼）：
+- 布局：`NORTH_SITE.towers[].skyLobby`（`'E'` / `'W'`）；`north-towers.js` 的 `SKY_LOBBY`、`clubWing()` / `clubPlan()`、`lv.skyLobby`、入口记录 `Tn-SKY-S`（南门 3.0 m）/ `Tn-SKY-GAP`（缝侧门 2.4 m），都是 `Tn-7F ⇄ P1-RF` 的同高门户；`residential-access.js` 的 `skyLobbyAccessRecords()`（闸机 `Tn-7F-GATE`、住户区 `Tn-7F`）；`north-residences.js` 的屋面墙在门洞处断开、`skyWayfinding()`（`rf.skySigns`）、`SKY_FORECOURT`、连廊雨棚和平齐观景台；`nav.js` 的 `floorLabel()` 和 `lv.spawn`（目录进 7F 落在南门内）。
+- 渲染：`community.js`（门洞、南门雨棚与招牌、7F 室内组里的闸机静态件、亮子、背墙）、`access-gates.js`、`residential-shell.js`（跑步机）、`square.js`（观景台、连廊雨棚、导视牌）、`explore-visibility.js` 的 `skyLobbyVisibility()`、`app.js`、`tour.js`（两步）、`ui.js` + `floor-rows.js`（楼层栏）。
+- 门禁 14 → 16 道，住户区 12 → 14 个。外门全天对公众开放，闸机是安防线。会所每栋只剩远离缝的一翼。改这三个默认见 QA §2.5。
+- 社区塔楼几何 9.9503 MB（预算 10 MB）。园区、N1、R1 三个视角的绘制调用数和 `4b94cbf` 一样，主 pass 多 746 个三角形。
+- 截图：[空中大堂 12 张拼图](docs/qa/sky-lobby-2026-11-05/overview.jpg)、[门扇前后对比](docs/qa/doors-2026-11-05/compare.jpg)。
+
+测试 527/527（`ea99c34`）。新增 `community-doors`（12）、`sky-lobby`（18）、`ui-floor-rows`（2）。FPS 紧凑布局哈希不变。
+
 ## 2026-11-05 发布：滨江社区上线到新站点 yunlan-mall-calvin-v2
 
 用户要求在当前可用的 Netlify 账号下**新建站点**来发布，原站 `yunlan-mall-calvin` 不在该账号下，没有更新。
