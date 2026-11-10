@@ -241,7 +241,7 @@ function terraces(ctx, lv) {
     }
   });
   for (const [i, s] of expansionTerraceSites(lv, ctx.layout.entrances).entries()) {
-    if (s.kind === 'table') roundTable(B, s.x, y, s.z, 3, { top: '#e8dfce', chair: p.fin }, 'extSatin');
+    if (s.kind === 'table') { if (!B.unfit(s.x, s.z, 1.1)) roundTable(B, s.x, y, s.z, 3, { top: '#e8dfce', chair: p.fin }, 'extSatin'); } // 贴着屋架立柱、格栅柱的那几桌不摆
     else gardenPlanter(B, s.x, y, s.z, p, i % 3 === 1);
   }
 }

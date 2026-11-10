@@ -217,3 +217,12 @@ export function pilotAxes(run) {
   const climbing = d > 22 && cruise - s.y > 6;
   return { lx: 0, ly: climbing || Math.abs(dyaw) > 0.5 ? 0 : Math.min(1, d / 16), rx: -Math.max(-1, Math.min(1, dyaw * 3)), ry };
 }
+
+/**
+ * 取餐点旁的一摞周转筐和纸箱：[模型, dx, dy, dz, 转角, 缩放]，位置相对停机坪中心（m）。
+ * 叠在上面的要压在下面那只的正上方：dy 等于下面那只缩放后的高度（周转筐 0.254 × 1.3 = 0.33，纸箱 0.342 × 1.2 = 0.41）。
+ */
+export const HUB_CARGO = Object.freeze([
+  ['crate_plastic', 4.4, 0, .6, 0, 1.3], ['crate_plastic', 4.4, .33, .7, .4, 1.3],
+  ['cardboard_box', 5.3, 0, -.4, 1.1, 1.2], ['cardboard_box', 4.6, 0, -1.3, 2.6, 1.1], ['cardboard_box', 5.26, .41, -.42, .5, 1],
+]);

@@ -166,6 +166,25 @@ export function buildShell(ctx) {
   ceilingLights(ctx);
 }
 
+/**
+ * 商场一层的天花分格。每块带局部矩形的室内走道（主街、回廊、通道、休息区、电梯厅……）沿自己的方向分成
+ * 约 4 m × 4.5 m 的格子：每格正中一盏灯，格与格之间一道梁（梁在 ceiling.js 里画）。
+ * 走道之间有重叠，按面积从大到小排，后面的只管没被前面占掉的部分。
+ * 返回 [{ w, r, nx, nz, earlier }]：走道、它的局部矩形、两个方向各分几格、排在它前面的走道的多边形。
+ */
+export function ceilingBays(lv) {
+  const walks = (lv.walk || []).filter((w) => w.rect && w.frame && w.poly && !w.outdoor)
+    .map((w) => ({ w, area: (w.rect.x1 - w.rect.x0) * (w.rect.z1 - w.rect.z0) }))
+    .sort((p, q) => q.area - p.area);
+  const out = [];
+  const count = (len, pitch) => Math.max(1, Math.round(len / pitch));
+  for (const { w } of walks) {
+    const r = w.rect, lx = r.x1 - r.x0, lz = r.z1 - r.z0, long = lx >= lz;
+    out.push({ w, r, nx: count(lx, long ? 4 : 4.5), nz: count(lz, long ? 4.5 : 4), earlier: out.map((b) => b.w.poly) });
+  }
+  return out;
+}
+
 /** 楼板底面的灯具：商业层为筒灯点阵，停车层为沿车道的灯管（随上层楼板显示，从下方可见） */
 export function ceilingLights(ctx) {
   for (const B of Object.values(ctx.buildings)) {
@@ -211,12 +230,25 @@ export function ceilingLights(ctx) {
           }
         }
       } else if (below.kind !== 'roof') {
+        // 完整园区和小游戏里，商场走道的灯跟着天花分格走：每格正中一盏（FPS 保持原来的 4 m 点阵）
+        const bays = ctx.depthCues && B.b.kind === 'mall' && (below.kind === 'retail' || below.kind === 'food') ? ceilingBays(below) : null;
+        for (const bay of bays || []) {
+          const { w, r, nx, nz } = bay;
+          for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+            const [x, z] = toW(w.frame, r.x0 + (i + .5) * (r.x1 - r.x0) / nx, r.z0 + (j + .5) * (r.z1 - r.z0) / nz);
+            if (bay.earlier.some((P) => pointInPoly([x, z], P))) continue;
+            // 灯离洞口边至少 0.5 m（洞口边有一道边梁）
+            if ([[.5, 0], [-.5, 0], [0, .5], [0, -.5]].some(([dx, dz]) => inVoid(x + dx, z + dz)) || !once(x, z)) continue;
+            Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+          }
+        }
         for (const w of below.walk) {
-          if (w.outdoor) continue;
+          if (w.outdoor || (bays && w.rect && w.frame)) continue;
           const xs = w.poly.map((p) => p[0]), zs = w.poly.map((p) => p[1]);
           for (let x = Math.ceil(Math.min(...xs) / 4) * 4; x < Math.max(...xs); x += 4) {
             for (let z = Math.ceil(Math.min(...zs) / 4) * 4; z < Math.max(...zs); z += 4) {
               if (!pointInPoly([x, z], w.poly) || distToPolyEdge([x, z], w.poly) < 0.8) continue;
+              if (bays?.some((bay) => pointInPoly([x, z], bay.w.poly))) continue;
               if (!once(x, z)) continue;
               Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
             }
@@ -248,6 +280,7 @@ function columns(ctx, lv) {
           B.get('metal').box(a, lv.elev + 0.06, b, 0.78, 0.12, 0.78, th.trim);
           B.get('metal').box(a, lv.elev + h - 0.16, b, 0.74, 0.1, 0.74, th.trim);
           B.get('stone').box(a, lv.elev + 0.32, b, 0.75, 0.36, 0.75, '#cec9bf');
+          B.blob(a, lv.elev, b, 2.5, 2.5); // 柱脚的一圈软阴影（柱子自己盖住中间 0.75 m，露出来的是外面一圈）
         });
       }
     }
@@ -288,11 +321,14 @@ function railings(ctx, lv) {
       if (len < 0.05) continue;
       const n = Math.max(1, Math.ceil(len / 1.6));
       const ang = Math.atan2(-(z1 - z0), x1 - x0);
+      // 栏板脚下、朝楼面一侧有一条渐暗带（朝洞口那一侧是空的）；扶梯口、电梯门前没有栏板，也就没有这条带
+      const floorSide = pointInPoly([(x0 + x1) / 2 - (z1 - z0) / len * 0.3, (z0 + z1) / 2 + (x1 - x0) / len * 0.3], P) ? -1 : 1;
       for (let k = 0; k < n; k++) {
         const t = (k + 0.5) / n;
         const mx = x0 + (x1 - x0) * t, mz = z0 + (z1 - z0) * t;
         if (gaps.some((g) => pointInPoly([mx, mz], g))) continue;
         const pl = len / n + 0.02;
+        B.edge(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n, x0 + (x1 - x0) * (k + 1) / n, z0 + (z1 - z0) * (k + 1) / n, lv.elev, 0.6, floorSide);
         B.get('glass').box(mx, lv.elev + 0.62, mz, pl, 1.0, 0.03, 0xffffff, ang);
         B.get('metal').box(mx, lv.elev + 1.12, mz, pl, 0.06, 0.09, th.trim, ang);
         B.get('satin').box(mx, lv.elev + 0.07, mz, pl, 0.14, 0.24, th.column, ang);

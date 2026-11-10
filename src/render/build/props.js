@@ -111,6 +111,7 @@ export function bollard(B, x, z, y0 = 0) {
 
 export function bench(B, x, y, z, ry = 0, key = 'ext') {
   const c = Math.cos(ry), s = Math.sin(ry);
+  B.blob?.(x, y, z, 2.3, 0.95, ry);
   for (let i = 0; i < 5; i++) {
     const dz = -.20 + i * .10;
     B.get(key).box(x + s * dz, y + .45, z + c * dz, 1.8, .075, .083, COLORS.wood, ry);
@@ -127,6 +128,7 @@ export function bench(B, x, y, z, ry = 0, key = 'ext') {
 export function planter(B, x0, z0, x1, z1, y = 0, seed = 3, flowers = true, key = 'ext') {
   const rand = rng(seed);
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0;
+  B.blob?.(cx, y, cz, w + 0.9, d + 0.9);
   // 真正的种植槽：石材围边低于花叶，土壤内退，不用整块实心顶面盖住植物根部。
   for (const x of [x0 + .09, x1 - .09]) B.get(key).box(x, y + .3, cz, .18, .6, d, COLORS.stoneDark);
   for (const z of [z0 + .09, z1 - .09]) B.get(key).box(cx, y + .3, z, Math.max(.1, w - .36), .6, .18, COLORS.stoneDark);
@@ -153,7 +155,7 @@ export function plantBed(B, x0, z0, x1, z1, y, rand, flowers = true) {
   const w = x1 - x0, d = z1 - z0, short = Math.min(w, d);
   const put = (list, x, z, spread) => {
     const [id, width] = list[Math.floor(rand() * list.length)];
-    B.prop(id, x, y, z, rand() * Math.PI * 2, spread / width);
+    B.prop(id, x, y, z, rand() * Math.PI * 2, spread / width, { anchored: true }); // 种在花坛里，不用再查脚下有没有楼板
   };
   const inset = Math.min(.45, short * .3);
   const at = () => [x0 + inset + rand() * Math.max(.01, w - 2 * inset), z0 + inset + rand() * Math.max(.01, d - 2 * inset)];
@@ -213,7 +215,7 @@ export function tableSet(B, x, y, z, ry, colors = {}, key = 'matte') {
     // 贴图模型：木方桌配四把椅子。室外用折叠椅，餐厅（satin）用皮餐椅，其余用壳椅并染成这一家的颜色。
     const seat = key === 'ext' ? 'outdoor_chair' : key === 'satin' ? 'dining_chair' : 'shell_chair';
     const c0 = Math.cos(ry), s0 = Math.sin(ry);
-    B.prop('cafe_table', x, y, z, ry, [1, .74 / .8, 1]);
+    B.prop('cafe_table', x, y, z, ry, [1, .766 / .8, 1]); // 桌面 0.766 m，和各处摆在桌上的餐具高度一致
     for (const [lx, lz, r] of [[-0.3, 0.6, 0], [0.3, 0.6, 0], [-0.3, -0.6, Math.PI], [0.3, -0.6, Math.PI]])
       B.prop(seat, x + lx * c0 + lz * s0, y, z - lx * s0 + lz * c0, ry + r + Math.PI, .9, seat === 'shell_chair' ? { color: chair } : undefined);
     return;
@@ -239,7 +241,7 @@ export function roundTable(B, x, y, z, n = 4, colors = {}, key = 'matte') {
   const top = colors.top || '#f3efe7', chair = colors.chair || '#2f86b0';
   if (B.hasProp?.('outdoor_table')) {
     // 贴图模型：折叠小桌配 n 把折叠椅，椅子朝向桌心
-    B.prop('outdoor_table', x, y, z, 0, 1);
+    B.prop('outdoor_table', x, y, z, 0, [1, .77 / .726, 1]); // 模型的桌面在 0.726 m，拉到 0.77 m，和原来的圆桌、桌上的餐具一样高
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       B.prop('outdoor_chair', x + Math.cos(a) * .78, y, z + Math.sin(a) * .78, Math.atan2(-Math.cos(a), -Math.sin(a)), .95);
@@ -270,7 +272,10 @@ export function umbrella(B, x, y, z, color = '#f4f1ea', r = 1.4) {
 /** 斑马线：沿 axis 方向通行，宽 w，长 len */
 export function zebra(B, cx, cz, len, w, axis = 'z', y = 0.012, key = 'ext') {
   const n = Math.floor(len / 0.9);
-  B.prop('manhole', cx + (axis === 'z' ? len / 2 + 1.4 : 0), y - .045, cz + (axis === 'z' ? 0 : len / 2 + 1.4), 0, 1, { outdoor: true }); // 贴图模型：斑马线旁的井盖
+  // 贴图模型：斑马线旁的井盖。两条斑马线挨得近时会算到同一个位置，1.5 m 内已经有一个就不再摆。
+  const mx = cx + (axis === 'z' ? len / 2 + 1.4 : 0), mz = cz + (axis === 'z' ? 0 : len / 2 + 1.4);
+  const [wx, wz] = B.world ? B.world(mx, mz) : [mx, mz], covers = (B.manholes ||= []);
+  if (!covers.some(([px, pz]) => Math.hypot(px - wx, pz - wz) < 1.5)) { covers.push([wx, wz]); B.prop('manhole', mx, y - .045, mz, 0, 1, { outdoor: true }); }
   for (let i = 0; i < n; i++) {
     const o = -len / 2 + (i + 0.5) * (len / n);
     if (axis === 'z') B.get(key).box(cx + o, y, cz, 0.45, 0.02, w, '#f2f2ee');

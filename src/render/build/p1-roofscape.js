@@ -30,6 +30,7 @@ export function buildP1Roofscape(ctx, L, lv) {
       const r = f.rect, covered = f.tablesAt.some(([x, z]) => lattices.some(l => inRect(l, x, z)));
       B.frame(f.frame, () => B.get('facadeTimber').box((r.x0 + r.x1) / 2, y + .06, (r.z0 + r.z1) / 2, r.x1 - r.x0, .12, r.z1 - r.z0, '#b89670'));
       for (const [x, z] of f.tablesAt) {
+        if (B.unfit(x, z, 1.1)) { k++; continue; } // 贴着女儿墙、墙垛或洞口的那几桌不摆
         roundTable(B, x, y + .12, z, 4, { top: '#efe7d8', chair: '#7d6a52' }, 'matte');
         if (!covered) umbrella(B, x, y + .12, z, UMBRELLAS[k % UMBRELLAS.length], 1.55);
         k++;
@@ -57,7 +58,7 @@ function glassPavilion(B, f, y0) {
   for (const x of [r.x0, r.x1]) B.get('facadeBronze').box(x, top, cz, .5, .42, d + 1.2, COLORS.bronze);
   B.get('glass').box(cx, top + .1, cz, w - .4, .05, d - .4, '#ffffff');
   B.get('glow').box(cx, top - .26, r.z1 + .2, w, .05, .08, COLORS.warmLight);
-  for (const [x, z] of f.tablesAt) roundTable(B, x, y0 + .12, z, 4, { top: '#efe7d8', chair: '#5d4a36' }, 'matte');
+  for (const [x, z] of f.tablesAt) if (!B.unfit(x, z, 1.1)) roundTable(B, x, y0 + .12, z, 4, { top: '#efe7d8', chair: '#5d4a36' }, 'matte');
   const c = f.counter;
   B.get('facadeTimber').boxMinMax(c.x0, y0 + .1, c.z0, c.x1, y0 + 1.1, c.z1, '#9a7652');
 }

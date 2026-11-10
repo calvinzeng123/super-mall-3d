@@ -64,16 +64,23 @@ function chair(B, w, d, y, color = '#8a6951', arm = false) {
   B.get('satin').box(0, y + (height + seat) / 2, -d * .36, w * .9, height - seat, .16, color);
   if (arm) for (const x of [-w * .42, w * .42]) B.get('satin').box(x, y + .64, .02, .15, .3, d * .86, color);
 }
-function furniture(B, o, y, hotel) {
+function furniture(B, o, y, hotel, turn = 0) {
   const r = o.rect, w = r.x1 - r.x0, d = r.z1 - r.z0, h = o.height;
   if (o.type === 'chair' || o.type === 'armchair') {
-    // 贴图模型：扶手椅 / 皮餐椅（正面朝局部 +Z，和原来的朝向一致）
-    const clamp = (v) => Math.min(1.25, Math.max(.85, v));
-    if (o.type === 'armchair' ? B.prop('armchair', 0, y, 0, 0, clamp(w / .86)) : B.prop('dining_chair', 0, y, 0, 0, clamp(w / .52))) return;
+    // 贴图模型：扶手椅 / 皮餐椅，等比缩放到不超出平面图里给它的那块地方。turn 是朝向修正：
+    // 平面图里休息区的沙发和扶手椅背对着茶几（原来的方块家具看不出来），这里让坐具转向 2.6 m 内最近的那张桌子。
+    const fit = (mw, md) => Math.min(1.25, w / mw, d / md);
+    if (o.type === 'armchair' ? B.prop('armchair', 0, y, 0, turn, fit(.82, .99)) : B.prop('dining_chair', 0, y, 0, turn, fit(.43, .58))) return;
     chair(B, w, d, y, hotel ? '#81745e' : '#c1aa87', o.type === 'armchair'); return;
   }
   if (o.type === 'sofa') {
-    if (w > 2.3 ? B.prop('sofa3', 0, y, 0, 0, [w / 2.73, 1, Math.min(1.15, d / 1.0)]) : B.prop('sofa2', 0, y, 0, 0, [w / 1.81, 1.05, Math.min(1.2, d / .82)])) return;
+    // 贴图模型：长沙发位摆两张双人沙发，中等的摆一张三人沙发，短的摆一张双人沙发；都是等比缩放，不拉长
+    if (B.hasProp('sofa2')) {
+      if (w >= 4) { const k = Math.min(1.25, w / 2 / 1.86, d / .82); for (const side of [-1, 1]) B.prop('sofa2', side * w / 4, y, 0, turn, k); }
+      else if (w > 2.3) B.prop('sofa3', 0, y, 0, turn, Math.min(1.25, w / 2.73, d / 1.12));
+      else B.prop('sofa2', 0, y, 0, turn, Math.min(1.25, w / 1.81, d / .82));
+      return;
+    }
     const color = o.color || '#547268';
     for (const x of [-w * .4, w * .4]) for (const z of [-d * .32, d * .32]) B.get('metal').cyl(x, y, z, .04, .2, C.bronze, 8);
     B.get('satin').box(0, y + .36, 0, w, .34, d, color);
@@ -319,7 +326,18 @@ export function buildHospitalityLobby(ctx, building, lv) {
     // Rendering rotations are bounded by the obstacle rectangles (square
     // chairs and mirrors excepted); long fixtures retain their surveyed axes.
     const rotation = ['chair', 'armchair'].includes(o.type) ? o.rotation || 0 : 0;
-    B.frame(frame(wx, wz, building.frame.deg - rotation * 180 / Math.PI), () => furniture(B, o, y, hotel));
+    // 坐具朝向最近的桌子：模型的正面是局部 +Z；转了 rotation 之后它在楼栋坐标里朝 (sin r, cos r)
+    let turn = 0;
+    if (['sofa', 'armchair', 'chair'].includes(o.type)) {
+      let best = 2.6, to = null;
+      for (const t of plan.obstacles) {
+        if (!['coffee-table', 'round-table', 'dining-table', 'worktable'].includes(t.type)) continue;
+        const [tx, tz] = mid(t.rect), dist = Math.hypot(tx - x, tz - z);
+        if (dist < best) { best = dist; to = [tx - x, tz - z]; }
+      }
+      if (to && Math.sin(rotation) * to[0] + Math.cos(rotation) * to[1] < 0) turn = Math.PI;
+    }
+    B.frame(frame(wx, wz, building.frame.deg - rotation * 180 / Math.PI), () => furniture(B, o, y, hotel, turn));
   }
   ceilingBatch.frame(building.frame, () => {
     for (const zone of plan.zones) {

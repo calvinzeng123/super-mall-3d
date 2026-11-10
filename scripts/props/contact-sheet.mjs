@@ -1,5 +1,5 @@
 // 素材总览图：把 assets/models/props 里的每个模型各渲染一格，检查减面后的样子、朝向（正面朝 +Z）和尺寸。
-// 用法：node scripts/props/contact-sheet.mjs <输出目录> [每张几列=5] [格子像素=300] [near|far]   （far 看远景简化版，没有贴图）
+// 用法：node scripts/props/contact-sheet.mjs <输出目录> [每张几列=5] [格子像素=300] [near|far|front]   （far 看远景简化版，没有贴图；front 从 +Z 正对模型，核对朝向）
 // 需要本机有 Playwright 和 Chromium（只在检查素材时用）。
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -56,7 +56,10 @@ for (const [i, p] of props.entries()) {
   const r = Math.max(size.x, size.y, size.z) * .5 + .02;
   floor.scale.setScalar(r * 1.5); floor.position.set(0, Math.min(0, box.min.y) - .001, 0);
   arrow.scale.setScalar(Math.max(.4, r * 1.4)); arrow.position.set(0, floor.position.y + .01, r * 1.35);
-  camera.position.set(center.x + r * 2.2, center.y + r * 1.45, center.z + r * 3.1); camera.lookAt(center); camera.updateProjectionMatrix();
+  // 正面图：相机在 +Z 一侧正对模型，看到的就是模型的「正面」（椅子应该看到座面，柜子应该看到柜门）
+  if (params.get('view') === 'front') camera.position.set(center.x + r * .25, center.y + r * .7, center.z + r * 3.6);
+  else camera.position.set(center.x + r * 2.2, center.y + r * 1.45, center.z + r * 3.1);
+  camera.lookAt(center); camera.updateProjectionMatrix();
   const cx = i % cols, cy = Math.floor(i / cols);
   renderer.setViewport(cx * cell, (rows - 1 - cy) * cell, cell, cell); renderer.setScissor(cx * cell + 1, (rows - 1 - cy) * cell + 1, cell - 2, cell - 2);
   renderer.clear(); renderer.render(scene, camera);
@@ -94,9 +97,9 @@ try {
     tab.on('pageerror', (e) => console.error('page error:', e.message));
     tab.on('console', (m) => { if (m.type() === 'error') console.error('console:', m.text()); });
     current = part;
-    await tab.goto(`http://127.0.0.1:${port}/sheet.html?cols=${cols}&cell=${cell}`);
+    await tab.goto(`http://127.0.0.1:${port}/sheet.html?cols=${cols}&cell=${cell}&view=${which === 'front' ? 'front' : 'angle'}`);
     await tab.waitForFunction(() => window.__done === true, null, { timeout: 180000 });
-    const file = path.join(outDir, `props-${which === 'far' ? 'far-' : ''}${String(s + 1).padStart(2, '0')}.png`);
+    const file = path.join(outDir, `props-${which === 'near' ? '' : which + '-'}${String(s + 1).padStart(2, '0')}.png`);
     await tab.screenshot({ path: file });
     await tab.close();
     console.log(file);

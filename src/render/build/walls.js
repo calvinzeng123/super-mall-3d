@@ -36,6 +36,7 @@ export function buildWalls(ctx) {
     const color = themeOf(lv).wall;
     const cap = lv.kind === 'parking' ? '#6b7178' : '#5d5650';
     const t = 0.2;
+    const shade = lv.kind !== 'parking' && B.shaded;
     for (const { F, segs, openings } of groups.values()) {
       const walls = subtractOpenings(mergeSegments(segs), openings);
       B.frame(F, () => {
@@ -48,6 +49,11 @@ export function buildWalls(ctx) {
           const sx = horiz ? len + t : t, sz = horiz ? t : len + t;
           B.get('matte').box(cx, lv.elev + h / 2, cz, sx, h, sz, color);
           B.get('matte').box(cx, lv.elev + h + 0.015, cz, sx + 0.01, 0.03, sz + 0.01, cap);
+          // 墙根两侧各一条渐暗带：墙和地面的交接处有了进深（地库不加）
+          if (shade && len > 0.6) for (const side of [1, -1]) {
+            const ox = horiz ? 0 : -side * t / 2 * Math.sign(w.z1 - w.z0 || 1), oz = horiz ? side * t / 2 * Math.sign(w.x1 - w.x0 || 1) : 0;
+            B.edge(w.x0 + ox, w.z0 + oz, w.x1 + ox, w.z1 + oz, lv.elev, 0.55, side);
+          }
         }
       });
     }

@@ -18,8 +18,35 @@ function patchVertexEmissive(mat) {
 
 const WARM = new THREE.Color(1.0, 0.9, 0.76);
 
+/**
+ * 贴地的假阴影用的两张渐变图：blob 是中间深、四周淡出的一团（家具脚下），edge 是一边深、向另一边淡出的一条（墙根）。
+ * 只有黑色和透明度；画不出来（没有 DOM）时返回 null。
+ */
+function shadowTextures() {
+  if (typeof document === 'undefined') return null;
+  const make = (draw) => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'); if (!g?.createRadialGradient) return null;
+    draw(g);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const blob = make((g) => {
+    const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    r.addColorStop(0, 'rgba(0,0,0,.58)'); r.addColorStop(.5, 'rgba(0,0,0,.44)'); r.addColorStop(.8, 'rgba(0,0,0,.15)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  });
+  const edge = make((g) => {
+    const l = g.createLinearGradient(0, 0, 0, 64);
+    l.addColorStop(0, 'rgba(0,0,0,.52)'); l.addColorStop(.35, 'rgba(0,0,0,.26)'); l.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = l; g.fillRect(0, 0, 64, 64);
+  });
+  return blob && edge ? { blob, edge } : null;
+}
+
 export class MaterialLib {
-  constructor(surfaces = {}) {
+  /** depthCues：要不要准备贴地假阴影的材质（完整园区和小游戏要；FPS 不要，画面保持原样）。 */
+  constructor(surfaces = {}, { depthCues = false } = {}) {
     this.surfaces = surfaces;
     this.night = 0;
     this.nightHooks = [];
@@ -46,6 +73,13 @@ export class MaterialLib {
       water: std({ color: 0x356f8f, roughness: 0.04, metalness: 0.65, envMapIntensity: 2.2 }),
       mirror: std({ color: 0x8fb4c8, roughness: 0.02, metalness: 0.95, envMapIntensity: 2.4 }),
     };
+    const shadows = depthCues ? shadowTextures() : null;
+    if (shadows) for (const [key, map] of [['aoBlob', shadows.blob], ['aoEdge', shadows.edge]]) {
+      // 贴花：只有透明度起作用；略微抬离地面并加深度偏移，不和地面打架；不写深度
+      const m = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      m.name = key; m.userData.decal = true;
+      this.base[key] = m;
+    }
     Object.assign(this.base, createFacadeMaterials(surfaces, fn => this.onNight(fn)));
     for (const [key, id, strength, roughness = 0.86, metalness = 0] of [
       ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22, 0.48],

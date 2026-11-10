@@ -7,6 +7,7 @@ import { MaterialLib } from './materials.js';
 import { Environment } from './env.js';
 import { BatchSet, SignBatch, usePropLibrary } from './batch.js';
 import { createPropLibrary } from './props/library.js';
+import { floorGuard } from '../layout/access-zones.js';
 import { makeSignAtlas, setAnisotropy, drawWayfinding } from './textures.js';
 import { buildShell, clearHeight } from './build/shell.js';
 import { buildSite } from './build/site.js';
@@ -116,7 +117,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
 
   onProgress('加载石材、木纹与街区铺装', 0);
   const surfaces = await loadSurfaceTextures(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
-  const mats = new MaterialLib(surfaces);
+  const mats = new MaterialLib(surfaces, { depthCues: !fps });
   const env = new Environment(renderer, scene, camera, mats, initialQuality);
   const root = new THREE.Group();
   scene.add(root);
@@ -130,7 +131,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   }
   usePropLibrary(props);
 
-  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality, props };
+  // depthCues：贴地假阴影、天花分格这些增加立体感的细节。完整园区和小游戏有；FPS 没有，画面保持原样。
+  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality, props, depthCues: !fps };
   const detailQueue = createSerialTaskQueue();
   const assetAnisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   let residentialProgress = '';
@@ -214,6 +216,11 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         offset: 0, offsetTarget: 0, title: null,
       };
       L.batch.outdoor = lv.kind === 'roof' || (lv.kind === 'street' && !!lv.ground);
+      L.batch.floorY = lv.elev;
+      // 这一层摆东西的约束（留出店门、扶梯口、电梯门、出入口；要在楼板上；不被墙穿过）。FPS 不设，保持原样。
+      if (!fps && b.kind !== 'tower') L.batch.guard = floorGuard(layout, lv);
+      // 退台和屋面的外摆桌椅画在楼板那一批里：同样要守摆放约束，而且是露天的
+      L.shellBatch.guard = L.batch.guard; L.shellBatch.floorY = lv.elev; L.shellBatch.outdoor = true;
       ctx.levels[lv.id] = L;
       B.levels.push(L);
     });

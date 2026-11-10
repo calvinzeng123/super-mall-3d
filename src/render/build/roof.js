@@ -424,7 +424,8 @@ function mech(B, r, y0) {
   }
   for (let i = 0; i < 3; i++) B.get('metal').box(r.x0 + 13 + i * 1.6, y0 + 1.0, (r.z0 + r.z1) / 2, 1.2, 2.0, 5, '#b8bfc6');
   // 贴图模型：机组旁一排空调外机（背靠围挡，风扇朝里）
-  for (let x = r.x0 + 18.4; x < r.x1 - 1.2; x += 1.25) B.prop('aircon', x, y0, r.z1 - .75, Math.PI, 1.25, { outdoor: true });
+  // （起点原来写的是 x0 + 18.4，比围挡本身还长，一台也没摆出来）
+  for (let x = r.x0 + 1.2; x < r.x1 - 1.2; x += 1.25) B.prop('aircon', x, y0, r.z1 - .75, Math.PI, 1.25, { outdoor: true });
   B.get('metal').box((r.x0 + r.x1) / 2, y0 + 2.4, r.z0 + 1.5, r.x1 - r.x0 - 2, 0.3, 0.3, '#7d848b');
 }
 

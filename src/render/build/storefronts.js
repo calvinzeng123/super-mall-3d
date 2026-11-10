@@ -57,6 +57,8 @@ function front(B, S, lv, u, f, cell, style) {
   const liningKey = timber ? 'wood' : 'stone';
   const liningCol = timber ? '#dfc5a8' : '#eee8dc';
 
+  // 店面脚下、朝走道一侧的渐暗带：让店面和地面的交接有一点进深（门洞处断开）
+  const foot = (a, b) => { const [ax, az] = F.at(a, -0.03), [bx, bz] = F.at(b, -0.03); B.edge(ax, az, bx, bz, y0, 0.8, -F.uz * F.nx + F.ux * F.nz > 0 ? 1 : -1); };
   if (style === 'glass' || style === 'cinema' || style === 'market') {
     const { width: doorW, at: doors } = glassDoors(style, F.len);
     const openings = doorW ? doors.map((d) => [d - doorW / 2, d + doorW / 2]) : [[0, F.len]];
@@ -77,6 +79,7 @@ function front(B, S, lv, u, f, cell, style) {
       box('metal', p, 0, y0 + glassTop / 2, 0.055, 0.1, glassTop, frameCol);
     }
     for (const [a, b] of panels) {
+      foot(a, b);
       box('metal', (a + b) / 2, 0, y0 + 0.025, b - a, 0.2, 0.05, frameCol);
       box('metal', (a + b) / 2, 0, y0 + glassTop - 0.04, b - a, 0.12, 0.08, frameCol);
       // 窗内低台与顶灯槽：离玻璃退让，保留通向店内的中心视线。
@@ -101,6 +104,7 @@ function front(B, S, lv, u, f, cell, style) {
       box('metal', d, -0.02, y0 + dh + 0.07, 0.3, 0.09, 0.055, '#343b40');
     }
   } else if (style === 'stall' || style === 'oldstreet') {
+    foot(0.4, F.len - 1.2);
     const top = style === 'oldstreet' ? '#7a4a2a' : '#d8dde2';
     box(style === 'oldstreet' ? 'wood' : 'stone', F.len / 2 - 0.4, 0.45, y0 + 0.52, F.len - 1.6, 0.7, 1.04, style === 'oldstreet' ? '#bb9470' : '#eef1f3');
     box('stone', F.len / 2 - 0.4, 0.45, y0 + 1.06, F.len - 1.5, 0.8, 0.05, top);

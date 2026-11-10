@@ -4,6 +4,7 @@
 // 全园区七百多万个顶点，44 字节/顶点会把手机浏览器的内存撑爆，现在是 18 字节/顶点。
 import * as THREE from 'three';
 import { surfaceUV } from './surface-uv.js';
+import { blockedZone, fits, grounded, crossed } from '../layout/access-zones.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -288,12 +289,17 @@ export class BatchSet {
     this.xf = null;
     /** 这一批是不是露天的（场地、屋顶）：露天的贴图模型夜里不自发光。 */
     this.outdoor = false;
+    /** 这一批所在楼层的摆放约束（layout/access-zones.js 的 floorGuard：留空区域、楼板、墙段）；没设就不检查。 */
+    this.guard = null;
+    /** 这一批所在楼层的楼面标高；设了以后，只有落在楼面上的模型才垫假阴影（摆在台面、台座上的不垫）。 */
+    this.floorY = null;
   }
   get(key) {
     if (!this.sets[key]) {
       const mat = this.materials[key];
       const textured = !!(mat?.map || mat?.normalMap || mat?.roughnessMap);
-      this.sets[key] = new Batcher(this, textured, textured);
+      // 贴花（假阴影）用模板自带的 UV；其余带贴图的批次按世界坐标投影 UV
+      this.sets[key] = new Batcher(this, textured, textured && !mat.userData?.decal);
     }
     return this.sets[key];
   }
@@ -308,21 +314,99 @@ export class BatchSet {
     this.setFrame(F);
     try { fn(); } finally { this.xf = prev; }
   }
+  /** 当前局部坐标系里的 (x, z) 换成世界坐标。 */
+  world(x, z) {
+    const e = this.xf?.elements;
+    return e ? [e[0] * x + e[8] * z + e[12], e[2] * x + e[10] * z + e[14]] : [x, z];
+  }
+  /**
+   * (x, z)（当前局部坐标系）为中心、半径 r 的东西会不会挡住店门、扶梯口、电梯门或出入口。
+   * 这一批没有设摆放约束（单元测试、FPS）时总是返回 false。
+   */
+  blocked(x, z, r = 0.4) {
+    if (!this.guard) return false;
+    const [wx, wz] = this.world(x, z);
+    return !!blockedZone(this.guard.zones, wx, wz, r);
+  }
+  /** 半径 r 的东西放在 (x, z) 是不是不合适：挡了通道、脚下没有楼板（伸到洞口或板外）、或有墙从中间穿过。 */
+  unfit(x, z, r = 0.4) {
+    if (!this.guard) return false;
+    const [wx, wz] = this.world(x, z);
+    return !!blockedZone(this.guard.zones, wx, wz, r) || !fits(this.guard, wx, wz, r);
+  }
+  /**
+   * (x, z)（当前局部坐标系）周围 r 米内，这一批里是不是已经摆了别的贴图模型（按各自的原点算）。
+   * 两处各管各的摆放代码共用一块地方时（美食层的口袋休息区和用餐区），后摆的用它避开先摆的。
+   * count：只看最先摆下的那么多件（调用方在自己开始摆之前记下 placed.length，就不会被自己刚摆的挡住）。
+   */
+  crowded(x, z, r, count = Infinity) {
+    if (!this.placed?.length) return false;
+    const [wx, wz] = this.world(x, z), n = Math.min(count, this.placed.length);
+    for (let i = 0; i < n; i++) { const m = this.placed[i].m; if (Math.hypot(m[12] - wx, m[14] - wz) < r) return true; }
+    return false;
+  }
+  /** 有没有贴地假阴影的材质（完整园区和小游戏有；FPS 和单元测试没有，下面两个函数就什么也不做）。 */
+  get shaded() { return !!this.materials.aoBlob?.userData?.decal; }
+  /**
+   * 脚下的一团软阴影：以 (x, z) 为中心、w × d，贴在标高 y 的面上，绕竖轴转 ry。
+   * 让家具、柱子、花池「落」在地上，而不是浮着。
+   */
+  blob(x, y, z, w, d, ry = 0) {
+    if (!this.shaded) return;
+    _p.set(x, y + 0.028, z); _q.setFromAxisAngle(Y, ry); _s.set(w, 1, d);
+    this.get('aoBlob').shape('planeUp', _p, _q, _s, 0xffffff);
+  }
+  /**
+   * 墙根的一条渐暗带：沿线段 (ax, az) → (bx, bz) 铺，贴着线的一侧最深，向 side 指的那一侧（1 是行进方向的左手边，−1 是右手边）
+   * 淡出 width 米。贴在标高 y 的面上。
+   */
+  edge(ax, az, bx, bz, y, width = 0.7, side = 1) {
+    if (!this.shaded) return;
+    const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+    if (len < 0.2) return;
+    // 贴图深的一边在模板的 −Z 一侧；转 θ 后模板 +X 对准线段方向，+Z 对准 (−dz, dx)
+    const nx = -dz / len * side, nz = dx / len * side;
+    _p.set((ax + bx) / 2 + nx * width / 2, y + 0.024, (az + bz) / 2 + nz * width / 2);
+    _q.setFromAxisAngle(Y, Math.atan2(-dz, dx) + (side > 0 ? 0 : Math.PI));
+    _s.set(len, 1, width);
+    this.get('aoEdge').shape('planeUp', _p, _q, _s, 0xffffff);
+  }
   /** 模型库里有没有这个模型（决定要不要走程序化的画法）。 */
   hasProp(id) { return !!propLibrary?.has(id); }
   /**
    * 摆一个贴图模型：底面中心在 (x, y, z)，绕竖轴转 ry（模型正面原本朝 +Z，转后朝 (sin ry, cos ry)），
-   * scale 是数或 [sx, sy, sz]。outdoor 的模型夜里不自发光；color 给整件染色（白色贴图的椅子可以染成各种颜色）。
+   * scale 是数或 [sx, sy, sz]。outdoor 的模型夜里不自发光；color 给整件染色（白色贴图的椅子可以染成各种颜色）；
+   * anchored 表示它固定在别的东西上（种在花坛里、摆在台座上），不做下面的落地检查。
    * 没有这个模型时返回 false，调用方改画程序化几何。当前局部坐标系（setFrame / frame）同样生效。
    */
-  prop(id, x, y, z, ry = 0, scale = 1, { outdoor = this.outdoor, color = null } = {}) {
+  prop(id, x, y, z, ry = 0, scale = 1, { outdoor = this.outdoor, color = null, anchored = false } = {}) {
     if (!propLibrary?.has(id)) return false;
+    const info = propLibrary.info?.(id), floorMounted = info?.mount === 'floor';
+    const sx = Array.isArray(scale) ? scale[0] : scale, sz = Array.isArray(scale) ? scale[2] : scale;
     _p.set(x, y, z);
     _q.setFromAxisAngle(Y, ry);
     if (Array.isArray(scale)) _s.set(scale[0], scale[1], scale[2]); else _s.setScalar(scale);
     _m.compose(_p, _q, _s);
     if (this.xf) _m.premultiply(this.xf);
+    // 保险：落地的模型不许挡住店门、扶梯口、电梯门和出入口，不许悬在洞口上，也不许有墙从中间穿过。
+    // 不合适就不摆（仍返回 true，调用方不必改画别的）；成组的桌椅由调用方先用 unfit() 整组判断。
+    if (this.guard && !anchored && floorMounted) {
+      const reach = Math.max(info.size[0] * sx, info.size[2] * sz) * 0.5;
+      if (reach > 0.15) {
+        const e = _m.elements, wx = e[12], wz = e[14];
+        const corner = (lx, lz) => [e[0] * lx + e[8] * lz + wx, e[2] * lx + e[10] * lz + wz];
+        const why = blockedZone(this.guard.zones, wx, wz, reach) ? 'keptClear'
+          : !grounded(this.guard, wx, wz, Math.min(reach, 0.9)) ? 'unfit'
+          : crossed(this.guard, [corner(info.min[0], info.min[2]), corner(info.max[0], info.min[2]), corner(info.max[0], info.max[2]), corner(info.min[0], info.max[2])]) ? 'walled' : null;
+        if (why) { if (propLibrary.stats) propLibrary.stats[why] = (propLibrary.stats[why] || 0) + 1; return true; }
+      }
+    }
     (this.placed ||= []).push({ id, m: _m.toArray(), outdoor: !!outdoor, color });
+    // 落在楼面上的模型脚下自动垫一团软阴影。种在花坛里的、摆在台面上的、太小或太扁（井盖）的不垫。
+    if (!anchored && floorMounted && this.shaded && (this.floorY == null || Math.abs(y - this.floorY) < 0.2)) {
+      const w = info.size[0] * sx, d = info.size[2] * sz;
+      if (Math.max(w, d) > 0.3 && info.size[1] * (Array.isArray(scale) ? scale[1] : scale) > 0.15) this.blob(x, y, z, w * 1.35 + 0.15, d * 1.35 + 0.15, ry);
+    }
     return true;
   }
   /** 把所有批次合成网格加入 group */
@@ -331,10 +415,12 @@ export class BatchSet {
     for (const [key, b] of Object.entries(this.sets)) {
       const mat = this.materials[key];
       if (!mat) throw new Error('missing material ' + key);
-      const noShadow = key === 'glass' || key === 'glow' || key === 'glowSoft' || key === 'water';
-      const m = b.mesh(mat, { shadow: !noShadow && opts.shadow !== false, receive: key !== 'glow' && key !== 'glowSoft', name: key, consume: true });
+      const decal = !!mat.userData?.decal;
+      const noShadow = key === 'glass' || key === 'glow' || key === 'glowSoft' || key === 'water' || decal;
+      const m = b.mesh(mat, { shadow: !noShadow && opts.shadow !== false, receive: key !== 'glow' && key !== 'glowSoft' && !decal, name: key, consume: true });
       if (m) {
         if (key === 'glass' || key === 'water') m.renderOrder = 2;
+        if (decal) m.renderOrder = 1; // 在不透明物之后、玻璃之前画
         group.add(m);
       }
     }

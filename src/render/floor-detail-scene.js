@@ -52,6 +52,7 @@ export function buildOwnedFloorDetail(ctx, level, { build, atlas, protectedResou
   // this floor. Bind these methods to their permanent MaterialLib instance.
   for (const key of ['floor', 'flow', 'makeStep']) if (typeof ctx.mats[key] === 'function') mats[key] = ctx.mats[key].bind(ctx.mats);
   const L = { ...level, base, people, batch: new BatchSet(ctx.mats.base), signs: new SignBatch() };
+  L.batch.guard = level.batch?.guard || null; L.batch.outdoor = !!level.batch?.outdoor; L.batch.floorY = level.lv.elev;
   const b = ctx.bById[level.building];
   const local = { ...ctx, mats, dynamic, afterRender: [],
     levels: { ...ctx.levels, [level.lv.id]: L },

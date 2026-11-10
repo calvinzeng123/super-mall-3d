@@ -161,6 +161,7 @@ export function createPropLibrary({ mats = null, anisotropy = 4, onChange = () =
   function build(group, template, list, outdoor) {
     const near = instanced(group, template, template.near, list, outdoor);
     const far = instanced(group, template, template.far, list, outdoor);
+    near.userData.lod = 'near'; far.userData.lod = 'far';
     near.castShadow = template.record.size[1] > 0.35;
     const chunk = { near, far, center: near.boundingSphere.center.clone(), radius: near.boundingSphere.radius, size: template.record.size,
       count: list.length, nearTriangles: template.near.triangles * list.length, farTriangles: template.far.triangles * list.length };
@@ -174,6 +175,8 @@ export function createPropLibrary({ mats = null, anisotropy = 4, onChange = () =
     stats,
     has: (id) => records.has(id) && !failed.has(id),
     info: (id) => records.get(id) || null,
+    /** 已解析的模板（几何、还原量化的矩阵）；没解析过返回 null。核对摆放位置的工具用。 */
+    template: (id) => templates.get(id) || null,
     ids: () => [...records.keys()],
     request,
     /** 把一批摆放记录 [{ id, m, outdoor, color }] 变成实例化网格挂到 group 下；没解析好的模型解析完再补上。 */

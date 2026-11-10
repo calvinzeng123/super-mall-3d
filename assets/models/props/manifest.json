@@ -5,7 +5,7 @@
   "licenseUrl": "https://polyhaven.com/license",
   "credit": "Models from Poly Haven (CC0). Downloaded once, simplified and self-hosted; no runtime requests to Poly Haven.",
   "generatedBy": "scripts/props/build-props.mjs from scripts/props/catalog.mjs",
-  "totalBytes": 3390724,
+  "totalBytes": 3357824,
   "props": [
     {
       "id": "armchair",
@@ -47,6 +47,7 @@
       "alpha": false,
       "roughness": 0.57,
       "metalness": 0,
+      "backrestOffset": -0.487,
       "source": {
         "site": "Poly Haven",
         "id": "modern_arm_chair_01",
@@ -147,6 +148,7 @@
       "alpha": false,
       "roughness": 0.43,
       "metalness": 0,
+      "backrestOffset": -0.675,
       "source": {
         "site": "Poly Haven",
         "id": "mid_century_lounge_chair",
@@ -235,6 +237,7 @@
       "alpha": false,
       "roughness": 0.544,
       "metalness": 0,
+      "backrestOffset": -0.056,
       "source": {
         "site": "Poly Haven",
         "id": "sofa_02",
@@ -323,6 +326,7 @@
       "alpha": false,
       "roughness": 0.502,
       "metalness": 0,
+      "backrestOffset": -0.325,
       "source": {
         "site": "Poly Haven",
         "id": "sofa_03",
@@ -408,6 +412,7 @@
       "alpha": false,
       "roughness": 0.749,
       "metalness": 0,
+      "backrestOffset": -0.426,
       "source": {
         "site": "Poly Haven",
         "id": "Sofa_01",
@@ -584,6 +589,7 @@
       "alpha": false,
       "roughness": 0.617,
       "metalness": 0,
+      "backrestOffset": -0.211,
       "source": {
         "site": "Poly Haven",
         "id": "dining_chair_02",
@@ -672,6 +678,7 @@
       "alpha": false,
       "roughness": 0.3,
       "metalness": 0,
+      "backrestOffset": -0.268,
       "source": {
         "site": "Poly Haven",
         "id": "SchoolChair_01",
@@ -760,6 +767,7 @@
       "alpha": false,
       "roughness": 0.3,
       "metalness": 0,
+      "backrestOffset": -0.268,
       "source": {
         "site": "Poly Haven",
         "id": "SchoolChair_01",
@@ -813,13 +821,13 @@
       "label": "户外椅",
       "group": "seat",
       "file": "outdoor_chair.glb",
-      "bytes": 51072,
-      "sha256": "4d1250ea8c4b7b7628482dc390c39a15f3a9dc313a044df59dc70e0ee74a5156",
+      "bytes": 51268,
+      "sha256": "494ddd8665e657b4b1ac214d172d8e21bca66edc3a7714b85069ea8974fba5d3",
       "lod": {
         "file": "outdoor_chair.lod1.glb",
-        "bytes": 5808,
-        "sha256": "1de62070eb62af5377871ea17feddbad2061e01d09b171b741b5d3be59ea015f",
-        "triangles": 293
+        "bytes": 5856,
+        "sha256": "e2b396180fa2f8b0915a0eac610e9d94ebaf0407f552583cc507e67cfd1ac945",
+        "triangles": 297
       },
       "size": [
         0.574,
@@ -836,8 +844,8 @@
         0.859,
         0.331
       ],
-      "triangles": 1594,
-      "vertices": 2884,
+      "triangles": 1601,
+      "vertices": 2897,
       "texture": {
         "size": 512,
         "bytes": 20992,
@@ -848,6 +856,7 @@
       "alpha": false,
       "roughness": 0.542,
       "metalness": 0,
+      "backrestOffset": -0.369,
       "source": {
         "site": "Poly Haven",
         "id": "outdoor_table_chair_set_01",
@@ -904,7 +913,7 @@
         ],
         "scale": 1,
         "pivot": "floor",
-        "yaw": 0,
+        "yaw": 180,
         "aoBakedIntoColor": 0.65,
         "tiledUvVertices": 0,
         "simplifyError": 0.03,
@@ -1039,6 +1048,7 @@
       "alpha": false,
       "roughness": 0.41,
       "metalness": 0,
+      "backrestOffset": -0.392,
       "source": {
         "site": "Poly Haven",
         "id": "chinese_armchair",
@@ -1215,6 +1225,7 @@
       "alpha": false,
       "roughness": 0.463,
       "metalness": 0,
+      "backrestOffset": -0.094,
       "source": {
         "site": "Poly Haven",
         "id": "chinese_sofa",
@@ -1303,6 +1314,7 @@
       "alpha": false,
       "roughness": 0.567,
       "metalness": 0,
+      "backrestOffset": -0.328,
       "source": {
         "site": "Poly Haven",
         "id": "GreenChair_01",
@@ -1356,13 +1368,13 @@
       "label": "轮椅",
       "group": "safety",
       "file": "wheelchair.glb",
-      "bytes": 50084,
-      "sha256": "f5d8aabf17b3186c5bc302fcc255f739b95d976ef57c2f10aeaef9d04c2ccf1c",
+      "bytes": 50624,
+      "sha256": "d07c5275193b95c88839d13fb43f26de11d7d53163df9c72ae98898381fcbb14",
       "lod": {
         "file": "wheelchair.lod1.glb",
-        "bytes": 4812,
-        "sha256": "2bf9a964d20ac5375043c1590935233f556cfda4ac85970c769f7188081cae29",
-        "triangles": 296
+        "bytes": 4856,
+        "sha256": "a0133e39acb2eec0280dcde057f20d0fa11dfab1effa174e5ffda41feec6d8e4",
+        "triangles": 294
       },
       "size": [
         0.824,
@@ -1379,8 +1391,8 @@
         1.104,
         0.545
       ],
-      "triangles": 1773,
-      "vertices": 2322,
+      "triangles": 1781,
+      "vertices": 2362,
       "texture": {
         "size": 512,
         "bytes": 20686,
@@ -1432,7 +1444,7 @@
       "processing": {
         "scale": 1,
         "pivot": "floor",
-        "yaw": 0,
+        "yaw": 180,
         "aoBakedIntoColor": 0.65,
         "tiledUvVertices": 0,
         "simplifyError": 0.03,
@@ -2061,94 +2073,6 @@
         "aoBakedIntoColor": 0.65,
         "tiledUvVertices": 0,
         "simplifyError": 0,
-        "steps": "merge to one mesh and one atlas, weld, meshopt simplify, quantize (14/8/12 bit), meshopt compression, WebP"
-      }
-    },
-    {
-      "id": "desk",
-      "label": "办公桌",
-      "group": "table",
-      "file": "desk.glb",
-      "bytes": 28688,
-      "sha256": "5921ff23f2928152630ee41757cfa045d802f40f7a40f4d059c28c9012d1d431",
-      "lod": {
-        "file": "desk.lod1.glb",
-        "bytes": 5040,
-        "sha256": "7b78b47d10fea14e3d2738668999b7cc5d5383d6aeea5e4c49c0dcabf1cc23e4",
-        "triangles": 268
-      },
-      "size": [
-        2,
-        0.788,
-        0.947
-      ],
-      "min": [
-        -1,
-        0,
-        -0.474
-      ],
-      "max": [
-        1,
-        0.788,
-        0.474
-      ],
-      "triangles": 900,
-      "vertices": 1435,
-      "texture": {
-        "size": 512,
-        "bytes": 11848,
-        "format": "webp",
-        "cells": 1
-      },
-      "tintable": false,
-      "alpha": false,
-      "roughness": 0.3,
-      "metalness": 0,
-      "source": {
-        "site": "Poly Haven",
-        "id": "metal_office_desk",
-        "name": "Metal Office Desk",
-        "url": "https://polyhaven.com/a/metal_office_desk",
-        "authors": [
-          "Ulan Cabanilla"
-        ],
-        "license": "CC0-1.0",
-        "resolution": "1k",
-        "triangles": 6898,
-        "files": [
-          {
-            "path": "metal_office_desk_1k.gltf",
-            "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/metal_office_desk/metal_office_desk_1k.gltf",
-            "md5": "723956efef6da35ad41494efa5c3b820",
-            "bytes": 13510
-          },
-          {
-            "path": "textures/metal_office_desk_diff_1k.jpg",
-            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/metal_office_desk/metal_office_desk_diff_1k.jpg",
-            "md5": "6a27263c95811fa902ddea6476d610e9",
-            "bytes": 470831
-          },
-          {
-            "path": "textures/metal_office_desk_arm_1k.jpg",
-            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/metal_office_desk/metal_office_desk_arm_1k.jpg",
-            "md5": "fb76b1e17f07592608d3f144fce4bfce",
-            "bytes": 721614
-          },
-          {
-            "path": "metal_office_desk.bin",
-            "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/metal_office_desk/metal_office_desk.bin",
-            "md5": "96f258b9a64d36ca011f44de23da7c65",
-            "bytes": 229700
-          }
-        ]
-      },
-      "processing": {
-        "scale": 1,
-        "pivot": "floor",
-        "yaw": 0,
-        "aoBakedIntoColor": 0.65,
-        "tiledUvVertices": 0,
-        "simplifyError": 0.01,
         "steps": "merge to one mesh and one atlas, weld, meshopt simplify, quantize (14/8/12 bit), meshopt compression, WebP"
       }
     },

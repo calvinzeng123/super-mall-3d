@@ -2,6 +2,27 @@
 
 > 最后更新：2026-11-10。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
+## 2026-11-10 最新交接（三）：摆放核对和立体感
+
+用户指出第一轮截图里外摆的椅子全都背对桌子，要求把其他模型的摆放也查一遍，并让商场里的细节更立体。详细说明见 [docs/props.md](docs/props.md) 的两节「第二轮」。
+
+- **椅子的问题**：户外椅和轮椅的模型正面朝反（约定是 +Z，它们是 −Z）。在 `scripts/props/catalog.mjs` 里加了 `yaw: 180`。`build-props.mjs` 现在加工坐具时量靠背的位置，朝反就报错。
+- **核对工具**（都在 `scripts/props/`）：
+  - `audit-placements.mjs`：在真实页面里逐层检查每一件模型（要先起 `python3 serve.py 5174`，要 Playwright）。
+  - `audit-sets.mjs`：52 组成套陈设逐组检查，读模型量台面高度。规则在 `set-rules.mjs`。
+  - `audit-fronts.mjs`：坐具的正面。
+- **摆放时的保险**：`src/layout/access-zones.js` 给出每层要留空的区域（店门、扶梯口、电梯门、出入口）、楼板和墙。`BatchSet` 上挂 `guard`（`src/render/app.js`、`floor-detail-scene.js`），`BatchSet.prop()` 遇到挡通道、脚下没板、被墙穿过的落地模型就不摆；成组的桌椅和陈设由调用方先用 `B.unfit()` 整组判断。FPS 和塔楼楼层不设 `guard`。
+- **顺手改掉的老问题**：`interiors.js` 的 `unitFrame()` 对 L 形铺位取错主体，一期 3F–6F 的 SQ-N2 四家店的陈设原来全挤在一条 1 m 宽的边条里。
+- **立体感**（只在探索和小游戏里，`ctx.depthCues`）：
+  - 贴地假阴影：`MaterialLib` 的 `aoBlob` / `aoEdge` 两个材质，`BatchSet.blob()` / `edge()`。落地的模型自动垫一团；柱脚、墙根、店面脚下、栏板脚下各处手动加。
+  - 天花：`src/render/build/ceiling.js` 画分格梁和洞口边梁；`shell.js` 的 `ceilingLights` 在有 `depthCues` 时把灯摆到每格正中。梁属于各层的室内细节，随楼层加载和释放。
+- **小游戏里改的**：「夜间潜入」的卷帘门原来下半截埋在地里、只拉到半腰；门禁卡和手电陷在边几里。「无人机送外卖」取餐点的纸箱有一只半悬空。这几样的摆法挪进了 `heist-rules.js`（`shutterPlacement`、`HEIST_PROPS`）和 `drone-rules.js`（`HUB_CARGO`），有测试。
+- **模型**：101 个（删了从没摆出来的书桌）。第一轮说的「全部摆进了场景」不对：另有 8 个模型一件都没摆出来（4 组口袋陈设从没被选中，空调外机的循环写错）。现在 99 个在完整园区里，卷帘门和周转筐只在小游戏里。
+- **口袋陈设**（`public.js` 的 `lounges()`）：18 组每层轮着取；优先摆在背离中庭的一端、面朝中庭；美食层的口袋不摆陈设，脚凳和盆栽用 `B.crowded()` 避开用餐区已经摆下的桌椅。
+- **测试**：653 / 653，新增 11 项（`tests/props-placement.test.js`）。
+- **构建**：单文件版 84.4 MB，在线包 99 个文件 61.06 MiB。
+- **没做的**：没有真机测试；核对工具不查小游戏里临时摆的东西，也不查柜台、货架上的小件；没有部署。
+
 ## 2026-11-10 最新交接（二）：贴图模型
 
 用户要求「尽可能地加入更多贴图模型」。说明、出处、摆放位置、性能数字和已知限制见 [docs/props.md](docs/props.md)。

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { droneModel, padDeck } from '../drone-model.js';
 import { buildAirspace } from '../airspace.js';
-import { DRONE, DRONE_LEVELS, dronePads, buildOrders, windAt, newRun, stepRun, runTarget, runResult, pilotAxes } from './drone-rules.js';
+import { DRONE, DRONE_LEVELS, HUB_CARGO, dronePads, buildOrders, windAt, newRun, stepRun, runTarget, runResult, pilotAxes } from './drone-rules.js';
 
 const CSS = `
 .dr-order{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(10px + env(safe-area-inset-top,0px));max-width:min(360px,62vw);background:#0c1a25d9;border:1px solid #8da9ba55;border-radius:13px;padding:9px 13px}
@@ -70,8 +70,7 @@ export async function createGame({ app, layout, level, hud, input, rng, toast, f
 
   // 取餐点旁的一摞周转筐和纸箱（贴图模型；没有模型库就不摆）
   const props = app.ctx.props;
-  if (props) [['crate_plastic', 4.4, 0, .6, 0, 1.3], ['crate_plastic', 4.4, .33, .7, .4, 1.3], ['cardboard_box', 5.3, 0, -.4, 1.1, 1.2], ['cardboard_box', 4.6, 0, -1.3, 2.6, 1.1], ['cardboard_box', 4.9, .4, -.6, .3, 1]]
-    .forEach(async ([id, dx, dy, dz, ry, scale]) => {
+  if (props) HUB_CARGO.forEach(async ([id, dx, dy, dz, ry, scale]) => {
       const item = await props.spawn(id, { outdoor: true });
       if (!item || !world.parent) return;
       item.position.set(hubPad.x + dx, hubPad.y + dy, hubPad.z + dz); item.rotation.y = ry; item.scale.setScalar(scale);

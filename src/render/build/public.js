@@ -7,6 +7,7 @@ import { tableSet, roundTable, bench, planter } from './props.js';
 import { pocketSet } from './prop-sets.js';
 import { interiorDetail } from './interior-detail.js';
 import { clearHeight } from './shell.js';
+import { ceilingRelief } from './ceiling.js';
 
 const flatDetail = (B, y0) => interiorDetail(B, { at: (a, b) => [a, b], ang: 0, nx: 0, nz: -1 },
   (key, a, b, y, w, d, h, color, rot = 0) => B.get(key).box(a, y, b, w, h, d, color, rot), y0);
@@ -25,6 +26,7 @@ export function buildPublic(ctx, { details = true, art = true } = {}) {
       if (lv.short === '1F') atrium1F(ctx, b, lv);
       if (lv.short === '2F') popups(ctx, b, lv);
       if (b.id === 'P1' || b.id === 'P2') mallFinish(ctx, b, lv);
+      ceilingRelief(ctx, b, lv); // 天花分格梁和洞口边梁（完整园区和小游戏）
     }
     if (art) atriumArt(ctx, b, levels);
   }
@@ -185,6 +187,7 @@ function atrium1F(ctx, b, lv) {
       const detail = flatDetail(B, y0);
       const x = r.R - 12, z = -9.5;
       B.get('satin').box(x, y0 + 0.55, z, 1.1, 1.1, 5.2, '#f4f1ea');
+      B.blob(x, y0, z, 2.3, 6.4);
       B.get('metal').box(x, y0 + 1.13, z, 1.3, 0.06, 5.4, '#b08d4f');
       B.get('glow').box(x + 0.57, y0 + 0.2, z, 0.02, 0.06, 5.0, '#ffe6b0');
       for (const dz of [-1.55, .75]) {
@@ -220,6 +223,7 @@ function popups(ctx, b, lv) {
       const detail = flatDetail(B, y0);
       for (const k of [{ x: 15, z: -14.2, color: '#2f86b0' }, { x: -15, z: 14.2, color: '#e0567a' }]) {
         B.get('satin').box(k.x, y0 + 0.5, k.z, 3.2, 1.0, 1.6, '#f7f7f5');
+        B.blob(k.x, y0, k.z, 4.4, 2.8);
         B.get('satin').box(k.x, y0 + 1.03, k.z, 3.3, 0.06, 1.7, k.color);
         for (let i = 0; i < 5; i++) {
           if (k.x > 0) detail.toy(k.x - 1.2 + i * .6, k.z, 1.06, ['#d4b280', '#92a99b', '#d7a99c', '#8ca5b1', '#e5dcc7'][i]);
@@ -241,6 +245,10 @@ function lounges(ctx, b, lv) {
   // 地铁连接口落在翼楼端部休息区上（一期 B1M 的 P1-MT 等）：到站人流的正前方不摆沙发与茶几（它们没有碰撞），只保留地毯与两端绿植
   const metroPortals = ctx.layout.entrances.filter((e) => e.level === lv.id && e.to === 'M-B1')
     .map((e) => [(e.seg.x0 + e.seg.x1) / 2, (e.seg.z0 + e.seg.z1) / 2]);
+  const setStart = Math.max(0, (b.levels || []).indexOf(lv.id)) * 5 + (b.id === 'P2' ? 9 : 0);
+  const atria = lv.walk.filter((q) => q.kind === 'atrium' && q.poly?.length >= 3).map((q) => q.poly);
+  const others = B.placed?.length || 0; // 进这个函数之前别处已经摆下的模型数（美食层是用餐区的桌椅）
+  let staged7 = 0; // 这一层已经摆了几组陈设
   for (const w of lv.walk) {
     if (!w.rect || !(w.kind === 'pocket' || w.kind === 'lounge')) continue;
     const r = w.rect;
@@ -260,12 +268,25 @@ function lounges(ctx, b, lv) {
         B.get(lv.finishes ? 'carpet' : 'satin').box(cu, y0 + 0.008, cv, du - 1.5, 0.016, Math.min(dv - 2, 8), '#d9cbb5');
         const modelled = B.hasProp('sofa3');
         if (!arrival && modelled) {
-          // 贴图模型：两张三人沙发背靠一侧、面朝圆茶几；够宽时对面再摆两把扶手椅
-          for (const dz of [-2.4, 2.4]) B.prop('sofa3', cu - .55, y0, cv + dz, Math.PI / 2);
+          // 贴图模型：沙发背靠一侧、面朝圆茶几。按休息区的进深挑沙发：够深摆两张三人位，浅一些摆两张双人位，再浅只摆一张，
+          // 两端都留出 0.35 m 不顶墙。够宽时对面再摆两把扶手椅。
+          const room = dv / 2 - .35;
+          const [seat, half] = room >= 2.98 ? ['sofa3', 1.365] : room >= 2.06 ? ['sofa2', .905] : ['sofa2', 0];
+          const offs = half ? [-(half + .25), half + .25] : [0];
+          for (const dz of offs) B.prop(seat, cu - .55, y0, cv + dz, Math.PI / 2);
           B.prop('coffee_table_round', cu + 1.0, y0, cv, 0);
           B.prop('plant_small', cu + 1.2, y0 + .49, cv + .2, .6, 1.3);
           if (du >= 7.5) for (const dz of [-1.1, 1.1]) B.prop('armchair', cu + 2.7, y0, cv + dz, -Math.PI / 2 + dz * .16);
           B.prop('chandelier', cu + 1.0, y0 + clearHeight(lv) - .1, cv, 0, 1.5);
+          // 两盆大绿植放在沙发两头的空档里；空档不够就放到沙发对面的两个角上
+          const end = (half ? half * 2 + .25 : .905), gap = room + .35 - end;
+          for (const [i, side] of [-1, 1].entries()) {
+            const [px, pz] = gap >= 1.05 ? [cu - .55, cv + side * (dv / 2 - .6)] : [cu + du / 2 - 1.0, cv + side * (dv / 2 - .9)];
+            B.prop(i ? 'plant_bush' : 'plant_tall', px, y0, pz, i * 2.1, i ? 1.4 : 1.35);
+          }
+        } else if (modelled) {
+          // 地铁到站口正前方：不摆沙发，只在两端各放一盆绿植
+          for (const [i, side] of [-1, 1].entries()) B.prop(i ? 'plant_bush' : 'plant_tall', cu, y0, cv + side * (dv / 2 - .9), i * 2.1, i ? 1.4 : 1.35);
         } else if (!arrival) {
           for (const dz of [-2.4, 2.4]) {
             B.get('matte').box(cu - 0.6, y0 + 0.25, cv + dz, 0.9, 0.5, 3.2, '#55707f');
@@ -280,20 +301,37 @@ function lounges(ctx, b, lv) {
           B.get('satin').box(cu + .73, y0 + .506, cv - .08, .27, .006, .34, '#eee6d3');
           detail.bouquet(cu + 1.03, cv + .19, .45, '#b49570', .58);
         }
-        for (const [i, dz] of [-dv / 2 + 1.2, dv / 2 - 1.2].entries()) {
-          if (modelled) { B.prop(i ? 'plant_bush' : 'plant_tall', cu, y0, cv + dz, i * 2.1, i ? 1.5 : 1.45); continue; }
+        if (!modelled) for (const dz of [-dv / 2 + 1.2, dv / 2 - 1.2]) {
           B.get('matte').cyl(cu, y0, cv + dz, 0.45, 0.7, '#6b4426', 12);
           B.get('foliage').sphere(cu, y0 + 1.4, cv + dz, 0.7, '#4f8a3a');
         }
       } else if (B.hasProp('ottoman')) {
-        // 贴图模型：够长的口袋一端摆一组陈设（雕塑、屏风、展墙……每处按位置取一组），中间一排皮脚凳，另一端一盆大绿植
-        const staged = du >= 5 && dv >= 4;
-        if (staged) pocketSet(B, Math.abs(Math.round(cu * 3 + cv * 7 + y0 * 5)), cu - du / 2 + 1.3, y0, cv);
+        // 贴图模型：一端摆一组陈设（雕塑、屏风、展墙……每处按位置取一组），中间一排皮脚凳，另一端一盆大绿植。
+        // 哪一端正对着店门、扶梯口，就不往那一端摆；两端都不行就只留脚凳。
+        // 一端能不能摆：中心 1.5 m 内不挡门、不贴墙、不出楼板，而且那一组占地的四角和四边中点也都不挡通道
+        // （一组里要是只有一两件被拦下，会剩下空台座、没有桌子的椅子）
+        const facesAtrium = (side) => { const p = toW(w.frame, cu + side * (du / 2 + 1.2), cv); return atria.some((poly) => pointInPoly(p, poly)); };
+        // 一组陈设的中心离口袋这一端多远：靠中庭的一端多退 0.6 m，不压到中庭的主通道上
+        const inset = (side) => (du >= 9 && facesAtrium(side) ? 1.9 : 1.3);
+        const ends = [1, -1].filter((side) => {
+          const x = cu + side * (du / 2 - inset(side));
+          return !B.unfit(x, cv, 1.5) && ![[-1.05, -1.5], [1.05, -1.5], [1.05, 1.5], [-1.05, 1.5], [0, -1.5], [0, 1.5], [-1.05, 0], [1.05, 0]].some(([dx, dz]) => B.unfit(x + dx, cv + dz, 0.35));
+        });
+        // 只有一端能摆时，先摆陈设；两端都能摆，另一端摆绿植
+        // 美食层的口袋和用餐区的桌椅挨在一起，不再加成套陈设，只留脚凳和绿植
+        // 陈设优先摆在背离中庭的一端、面朝中庭（从中庭走过来看到的是正面）；那一端不行再摆中庭这一端
+        const far = facesAtrium(1) && !facesAtrium(-1) ? -1 : facesAtrium(-1) && !facesAtrium(1) ? 1 : -1;
+        const setEnd = lv.kind !== 'food' && du >= 5 && dv >= 4 ? (ends.includes(far) ? far : ends[0] ?? 0) : 0, plantEnd = ends.find((side) => side !== setEnd) ?? 0;
+        const staged = !!setEnd;
+        // 18 组轮着取：每层从不同的一组起，逐个口袋往后数（原来按坐标取，有 7 组一次也轮不到）
+        if (staged) pocketSet(B, setStart + staged7++ * 7, cu + setEnd * (du / 2 - inset(setEnd)), y0, cv, setEnd);
         if (!staged || du >= 7.5) {
-          const n = Math.max(1, Math.min(3, Math.floor(Math.min(du - 2, 3.2) / .95))), shift = staged ? .8 : 0;
-          for (let i = 0; i < n; i++) B.prop('ottoman', cu + shift + (i - (n - 1) / 2) * .98, y0, cv, 0, [1, .76, 1]);
+          const n = Math.max(1, Math.min(3, Math.floor(Math.min(du - 2, 3.2) / .95))), shift = staged ? -setEnd * .8 : 0;
+          // 美食层的口袋里已经摆了用餐区的桌椅：脚凳和盆栽碰到桌椅的那几个不摆
+          const taken = (x, r) => lv.kind === 'food' && B.crowded(x, cv, r, others);
+          for (let i = 0; i < n; i++) { const x = cu + shift + (i - (n - 1) / 2) * .98; if (!taken(x, 1.05)) B.prop('ottoman', x, y0, cv, 0, [1, .76, 1]); }
         }
-        B.prop('plant_tall', cu + du / 2 - 1.2, y0, cv, 1.1, 1.5);
+        if (plantEnd && !(lv.kind === 'food' && B.crowded(cu + plantEnd * (du / 2 - 1.2), cv, 1.1, others))) B.prop('plant_tall', cu + plantEnd * (du / 2 - 1.2), y0, cv, 1.1, 1.5);
       } else {
         B.get('matte').box(cu, y0 + 0.25, cv, Math.min(du - 2, 3.2), 0.5, 0.9, '#7a6a5a');
         for (const s of [-1, 1]) B.get('matte').box(cu + s * Math.min(.65, (du - 2) * .2), y0 + .53, cv, Math.min(1.15, (du - 2) * .35), .06, .78, lv.short === '2F' ? '#9bada7' : '#c6b697');

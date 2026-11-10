@@ -6,7 +6,7 @@ import { NORMAL } from '../../layout/geom.js';
 import { traceMotion } from '../../fps/pathfinding.js';
 import { BatchSet } from '../../render/batch.js';
 import { loadGuardKit } from '../guard-model.js';
-import { HEIST, HEIST_LEVELS, patrolNodes, patrolEdges, patrolStarts, patrolLoop, newGuard, stepGuard, updateAlert, sightLine, openVoids, heistStars, heistScore } from './heist-rules.js';
+import { HEIST, HEIST_LEVELS, HEIST_PROPS, shutterPlacement, patrolNodes, patrolEdges, patrolStarts, patrolLoop, newGuard, stepGuard, updateAlert, sightLine, openVoids, heistStars, heistScore } from './heist-rules.js';
 
 const CSS = `
 .hs-goal{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(10px + env(safe-area-inset-top,0px));max-width:min(380px,64vw);background:#0c1a25d9;border:1px solid #8da9ba55;border-radius:13px;padding:9px 13px}
@@ -60,10 +60,8 @@ function closeShops(app, layout, floors, world) {
       if (u.residence || !u.fronts?.length) continue;
       B.frame(u.frame, () => {
         for (const f of u.fronts) {
-          const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0);
-          if (len < 1.2) continue;
-          const [nx, nz] = NORMAL[f.side] || [0, 1];
-          B.prop('shutter', (f.x0 + f.x1) / 2 + nx * .16, lv.elev, (f.z0 + f.z1) / 2 + nz * .16, Math.atan2(nx, nz), [(len - .3) / 1.08, 3.05 / 2.4, .6]);
+          const at = shutterPlacement(f, NORMAL[f.side] || [0, 1], lv.elev);
+          if (at) B.prop('shutter', at.x, at.y, at.z, at.ry, at.scale);
         }
       });
     }
@@ -160,9 +158,10 @@ export async function createGame({ app, layout, level, hud, rng, toast, finish }
     if (o.id === 'card') {
       const table = await props.spawn('side_table'); if (!table) return;
       const card = new THREE.Mesh(new THREE.BoxGeometry(.09, .006, .057), new THREE.MeshBasicMaterial({ color: 0x7fe3d0 }));
-      card.position.set(0, .458, 0); card.rotation.y = .5;
+      // 卡和手电放在边几的台面上（原来按 0.455 m 摆，台面其实在 0.55 m，两样都陷在桌子里）
+      card.position.set(0, HEIST_PROPS.tableTop + .004, 0); card.rotation.y = .5;
       const torch = await props.spawn('torch');
-      if (torch) { torch.position.set(.12, .455, -.12); torch.rotation.y = 2.2; torch.scale.setScalar(.8); g.add(torch); }
+      if (torch) { torch.position.set(.12, HEIST_PROPS.tableTop + .001, -.12); torch.rotation.y = 2.2; torch.scale.setScalar(.8); g.add(torch); }
       g.add(table, card); items[i] = card;
     } else if (o.id === 'exhibit') {
       const bust = await props.spawn('bust'); if (!bust) return;

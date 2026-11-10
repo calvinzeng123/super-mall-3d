@@ -1,5 +1,6 @@
 // 店内陈设：按业态生成（服饰、珠宝、美妆、数码、餐饮、档口、小吃、亲子、书店、影城、电玩、超市、家居）。
 import { NORMAL } from '../../layout/geom.js';
+import { glassDoors } from '../../layout/frontage.js';
 import { rng } from '../textures.js';
 import { tableSet, roundTable } from './props.js';
 import { homeShowroom } from './prop-sets.js';
@@ -18,21 +19,34 @@ function spread(n, a0, a1) {
 }
 
 /** 以第一段门面建立局部坐标：u 沿门面，v 向店内；返回该铺位在局部坐标下的范围 */
-function unitFrame(u) {
+export function unitFrame(u) {
   const f = u.fronts[0];
   const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0);
   const ux = (f.x1 - f.x0) / len, uz = (f.z1 - f.z0) / len;
   const [nx, nz] = NORMAL[f.side];
   let umin = Infinity, umax = -Infinity, vmax = 0;
-  // 只取与第一段门面相接的矩形作为主体
-  const main = u.rects.find((r) => (f.side === 'N' && Math.abs(r.z0 - f.z0) < 0.01) || (f.side === 'S' && Math.abs(r.z1 - f.z0) < 0.01)
-    || (f.side === 'W' && Math.abs(r.x0 - f.x0) < 0.01) || (f.side === 'E' && Math.abs(r.x1 - f.x0) < 0.01)) || u.rects[0];
+  // 主体取贴着第一段门面的那块矩形。L 形铺位可能有两块都贴着门面所在的那条线，取和门面重合最长的一块
+  // （原来取第一块，会把整间店的陈设摆进一条 1 m 宽的边条里）。
+  const touching = u.rects.filter((r) => (f.side === 'N' && Math.abs(r.z0 - f.z0) < 0.01) || (f.side === 'S' && Math.abs(r.z1 - f.z0) < 0.01)
+    || (f.side === 'W' && Math.abs(r.x0 - f.x0) < 0.01) || (f.side === 'E' && Math.abs(r.x1 - f.x0) < 0.01));
+  const along = f.side === 'N' || f.side === 'S' ? ['x0', 'x1'] : ['z0', 'z1'];
+  const shared = (r) => Math.min(r[along[1]], Math.max(f[along[0]], f[along[1]])) - Math.max(r[along[0]], Math.min(f[along[0]], f[along[1]]));
+  const main = touching.sort((p, q) => shared(q) - shared(p))[0] || u.rects[0];
   for (const [x, z] of [[main.x0, main.z0], [main.x1, main.z0], [main.x1, main.z1], [main.x0, main.z1]]) {
     const du = (x - f.x0) * ux + (z - f.z0) * uz;
     const dv = -((x - f.x0) * nx + (z - f.z0) * nz);
     umin = Math.min(umin, du); umax = Math.max(umax, du); vmax = Math.max(vmax, dv);
   }
   return { f, ux, uz, nx, nz, umin, umax, depth: vmax, main, ang: Math.atan2(-uz, ux), at: (a, b) => [f.x0 + ux * a - nx * b, f.z0 + uz * a - nz * b] };
+}
+
+/**
+ * 铺位局部坐标 (a, b) 里的朝向换成摆模型用的转角（模型正面转后朝 (sin, cos)）。
+ * face：0 朝店内（+b），Math.PI 朝门口，Math.PI / 2 朝 +a，−Math.PI / 2 朝 −a。
+ */
+export function faceAngle(F, face) {
+  const sin = Math.sin(face), cos = Math.cos(face);
+  return Math.atan2(F.ux * sin - F.nx * cos, F.uz * sin - F.nz * cos);
 }
 
 export function buildInteriors(ctx) {
@@ -63,11 +77,12 @@ function furnish(L, atlas, lv, u, rand) {
   const u0 = F.umin, u1 = F.umax;
   const mid = (u0 + u1) / 2;
   const detail = interiorDetail(B, F, P, y0);
-  // 贴图模型：face 是朝向——0 朝店内（+b），Math.PI 朝门口，±Math.PI / 2 朝两侧；没有模型库时返回 false
-  const inward = F.uz * F.nx - F.ux * F.nz > 0 ? 0 : Math.PI;
+  // 贴图模型：face 是朝向——0 朝店内（+b），Math.PI 朝门口，Math.PI / 2 朝 +a，−Math.PI / 2 朝 −a；没有模型库时返回 false。
+  // 朝向按 (a, b) 坐标里的方向换算成铺位坐标里的转角：门面在南侧或东侧的铺位，(a, b) 是左手系，
+  // 直接拿角度相加会把朝两侧的椅子转反。
   const prop = (id, a, b, h = 0, face = Math.PI, scale = 1, opts) => {
     const [x, z] = F.at(a, b);
-    return B.prop(id, x, y0 + h, z, F.ang + inward + face, scale, opts);
+    return B.prop(id, x, y0 + h, z, faceAngle(F, face), scale, opts);
   };
   const boutique = /^P[12]-/.test(lv.id) && (cat === 'jewelry' || cat === 'beauty');
 
@@ -329,7 +344,9 @@ function furnish(L, atlas, lv, u, rand) {
         // 贴图模型：台面上的蛋糕、可颂和门口的立式黑板
         prop(cat === 'tea' ? 'teapot' : 'cake_carrot', mid + .55, b - .1, 1.13, Math.PI, 1.25);
         prop(cat === 'tea' ? 'tea_cup' : 'croissant', mid + .95, b - .18, 1.13, Math.PI + .6, 1.3);
-        if (W > 5) prop('chalkboard', u0 + .75, .95, 0, Math.PI + .35, .78);
+        // 立式黑板摆在店门外、门洞旁边，牌面朝走道
+        const flen = Math.hypot(F.f.x1 - F.f.x0, F.f.z1 - F.f.z0), door = glassDoors(style, flen);
+        if (door.width && flen > 5.5) prop('chalkboard', flen / 2 + door.width / 2 + .8, -.55, 0, Math.PI - .3, .78);
         // 后墙搁板与杯碟，留出操作面的空间。
         P('wood', mid, D - .32, y0 + 2.28, Math.min(len, 4.5), .3, .07, '#eee3d4');
         for (let k = 0; k < 5; k++) detail.cup(mid - 1.0 + k * .5, D - .32, 2.32, '#f2e8d6', false);
@@ -340,6 +357,7 @@ function furnish(L, atlas, lv, u, rand) {
       for (let i = 0; i < rows; i++) {
         for (const a of spread(cols, u0 + 1.3, u1 - 1.3)) {
           const b = 1.8 + i * 2.4, [x, z] = F.at(a, b);
+          if (B.unfit(x, z, 1.4)) continue; // 店门里面留出过道；楼板外、洞口上、墙里不摆
           roundTable(B, x, y0, z, 3, { chair: cat === 'tea' ? '#3f8f6d' : '#c08a5a' });
           if (i < 2) {
             detail.tableware(a, b, .77);
@@ -366,6 +384,7 @@ function furnish(L, atlas, lv, u, rand) {
       for (let i = 0; i < rows; i++) {
         for (const a of spread(cols, u0 + 1.4, u1 - 1.4)) {
           const b = 1.8 + i * 2.5, [x, z] = F.at(a, b);
+          if (B.unfit(x, z, 1.4)) continue; // 店门里面留出过道；楼板外、洞口上、墙里不摆
           tableSet(B, x, y0, z, F.ang, tc);
           if (i < 2) {
             detail.tableware(a, b, .765);
@@ -458,6 +477,7 @@ function furnish(L, atlas, lv, u, rand) {
       const count = Math.max(1, Math.min(3, Math.floor((W - 2) / 3)));
       for (const a of spread(count, u0 + 1.9, u1 - 1.9)) {
         const b = D - 2.0, [x, z] = F.at(a, b);
+        if (B.unfit(x, z, 1.4)) continue;
         roundTable(B, x, y0, z, 3, { chair: '#566a77' });
         P('matte', a - .15, b, y0 + .7925, .3, .38, .045, '#697c67');
         P('satin', a - .15, b, y0 + .816, .26, .34, .009, '#e8e2d1');
@@ -495,14 +515,22 @@ function furnish(L, atlas, lv, u, rand) {
       break;
     }
     case 'home': {
-      for (let k = 0; k < 4; k++) {
+      // 贴图模型：每家店按铺位号取一种风格（现代、中式、古典、餐厅），四组样板间。
+      // 一组占地约 2.2 m × 2.4 m，两侧墙边各有 0.65 m 的货架：中间够 4.8 m 摆两列，不够就摆一列、一组一排；
+      // 中间不到 2.3 m 的小铺不摆。第一排从店门往里 3 m 起，不占门里面的过道；
+      // 哪一组的位置挡了门、贴了墙或出了楼板，整组不摆。
+      if (B.hasProp('sofa2')) {
+        const free = W - 1.3, cols = free >= 4.8 ? 2 : 1, variant = [...u.id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 9973, 7);
+        for (let k = 0; k < 4 && free >= 2.3; k++) {
+          const a = u0 + .65 + (k % cols + .5) * (free / cols), b = 3.0 + Math.floor(k / cols) * 2.6;
+          if (b > D - 1.3) break;
+          if (B.unfit(...F.at(a, b), 1.3)) continue;
+          homeShowroom(prop, variant, k, a, b, H);
+        }
+      }
+      for (let k = 0; k < 4 && !B.hasProp('sofa2'); k++) {
         const a = u0 + (k % 2 + 1) * (W / 3), b = 2.2 + Math.floor(k / 2) * 2.6;
         if (b > D - 1.2) continue;
-        if (B.hasProp('sofa2')) {
-          // 贴图模型：每家店按铺位号取一种风格（现代、中式、古典、餐厅），四个位置各摆一组
-          homeShowroom(prop, [...u.id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 9973, 7), k, a, b, H);
-          continue;
-        }
         if (k % 2 === 0) {
           const textile = k ? '#94a498' : '#cbb797';
           P('wood', a, b, y0 + .17, 1.45, .85, .15, '#9c805f');

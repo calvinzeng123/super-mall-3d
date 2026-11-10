@@ -12,6 +12,8 @@
 //   error         减面的误差上限（占模型尺寸的比例），默认 0.01 不够再放到 0.03
 //   lod           远景简化版的目标三角形数（默认是近景版的三成，40–300 之间）
 //   strict        近景版只用保守的减面（细腿、板条多的模型放宽了会散架）
+//   backrest      有没有靠背。坐具（group: 'seat'）默认有：加工时会量靠背在座面的哪一侧，
+//                 靠背跑到前面（椅子背对 +Z）就报错。没有靠背的凳子写 false，别的类里带靠背的写 true。
 // 改完跑 scripts/props/build-props.mjs，再跑 contact-sheet.mjs 看一眼成品。
 const only = (name) => [new RegExp(`^${name}$`)];
 
@@ -22,17 +24,19 @@ export const PROP_CATALOG = [
   { id: 'sofa2', src: 'sofa_02', label: '双人沙发', group: 'seat', tris: 900 },
   { id: 'sofa3', src: 'sofa_03', label: '三人沙发', group: 'seat', tris: 1500, dropMaterials: [/fringe/] },
   { id: 'sofa_leather', src: 'Sofa_01', label: '皮沙发', group: 'seat', tris: 1200 },
-  { id: 'ottoman', src: 'Ottoman_01', label: '脚凳', group: 'seat', tris: 500, tex: 256 },
+  { id: 'ottoman', src: 'Ottoman_01', label: '脚凳', group: 'seat', tris: 500, tex: 256, backrest: false },
   { id: 'dining_chair', src: 'dining_chair_02', label: '餐椅', group: 'seat', tris: 700 },
   { id: 'cafe_chair', src: 'SchoolChair_01', label: '钢木椅', group: 'seat', tris: 600 },
   { id: 'shell_chair', src: 'SchoolChair_01', label: '可染色的壳椅', group: 'seat', tris: 600, tint: true },
-  { id: 'outdoor_chair', src: 'outdoor_table_chair_set_01', label: '户外椅', group: 'seat', tris: 900, strict: true, nodes: only('outdoor_table_chair_set_01_chair_01') },
-  { id: 'bench_wood', src: 'painted_wooden_bench', label: '木长椅', group: 'seat', tris: 630 },
+  // 这把椅子在原资产里是面朝桌子摆的（背对 +Z），所以转 180°
+  { id: 'outdoor_chair', src: 'outdoor_table_chair_set_01', label: '户外椅', group: 'seat', tris: 900, strict: true, yaw: 180, nodes: only('outdoor_table_chair_set_01_chair_01') },
+  { id: 'bench_wood', src: 'painted_wooden_bench', label: '木长椅', group: 'seat', tris: 630, backrest: false },
   { id: 'cn_armchair', src: 'chinese_armchair', label: '中式圈椅', group: 'seat', tris: 1200 },
-  { id: 'cn_stool', src: 'chinese_stool', label: '中式凳', group: 'seat', tris: 700, tex: 256 },
+  { id: 'cn_stool', src: 'chinese_stool', label: '中式凳', group: 'seat', tris: 700, tex: 256, backrest: false },
   { id: 'cn_sofa', src: 'chinese_sofa', label: '中式罗汉床', group: 'seat', tris: 704 },
   { id: 'green_chair', src: 'GreenChair_01', label: '绒面椅', group: 'seat', tris: 900 },
-  { id: 'wheelchair', src: 'wheelchair_01', label: '轮椅', group: 'safety', tris: 1800 },
+  // 原资产背对 +Z（从正面图上看出来的；轮子的顶点太多，靠背的量法对它不准，所以不自动核对）
+  { id: 'wheelchair', src: 'wheelchair_01', label: '轮椅', group: 'safety', tris: 1800, yaw: 180 },
   // ---------- 桌 ----------
   { id: 'outdoor_table', src: 'outdoor_table_chair_set_01', label: '户外小桌', group: 'table', tris: 500, strict: true, nodes: only('outdoor_table_chair_set_01_table') },
   { id: 'coffee_table', src: 'modern_coffee_table_01', label: '长茶几', group: 'table', tris: 500 },
@@ -41,7 +45,6 @@ export const PROP_CATALOG = [
   { id: 'plinth', src: 'side_table_tall_01', label: '高几', group: 'table', tris: 400, tex: 256 },
   { id: 'cafe_table_round', src: 'round_wooden_table_02', label: '圆餐桌', group: 'table', tris: 600 },
   { id: 'cafe_table', src: 'wooden_table_02', label: '方餐桌', group: 'table', tris: 196 },
-  { id: 'desk', src: 'metal_office_desk', label: '办公桌', group: 'table', tris: 900 },
   { id: 'cn_tea_table', src: 'chinese_tea_table', label: '中式茶几', group: 'table', tris: 900 },
   { id: 'cn_console', src: 'chinese_console_table', label: '中式条案', group: 'table', tris: 1200 },
   { id: 'dining_table', src: 'dining_table', label: '铺桌布的长桌', group: 'table', tris: 1048 },

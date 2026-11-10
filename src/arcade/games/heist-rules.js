@@ -202,3 +202,22 @@ export function heistStars({ escaped, maxAlert, seconds }) {
 }
 
 export const heistScore = ({ escaped, maxAlert, seconds }) => (escaped ? Math.max(0, Math.round(1000 - seconds - maxAlert * 300)) : 0);
+
+/**
+ * 潜入里几件贴图道具的尺寸（m）。
+ * shutter：卷帘门拉下来的高度、离门面线多远、模型本身的宽和高；tableTop：放门禁卡的边几的台面高度
+ * （用 scripts/props/audit-sets.mjs 量模型得到的，包围盒看不出来）。
+ */
+export const HEIST_PROPS = Object.freeze({ shutter: Object.freeze({ height: 3.05, gap: 0.16, width: 1.08, tall: 2.4 }), tableTop: 0.55 });
+
+/**
+ * 一段门面上卷帘门的摆法（铺位局部坐标）：{ x, y, z, ry, scale }。front 是门面线段，normal 是朝店外的法向，elev 是楼面标高。
+ * 卷帘门模型的原点在背面正中（上下各一半），所以 y 取楼面加门高的一半——放在楼面标高的话下半截会埋在地里。
+ * 门面不到 1.2 m 宽的不装，返回 null。
+ */
+export function shutterPlacement(front, normal, elev) {
+  const len = Math.hypot(front.x1 - front.x0, front.z1 - front.z0), S = HEIST_PROPS.shutter;
+  if (len < 1.2) return null;
+  const [nx, nz] = normal;
+  return { x: (front.x0 + front.x1) / 2 + nx * S.gap, y: elev + S.height / 2, z: (front.z0 + front.z1) / 2 + nz * S.gap, ry: Math.atan2(nx, nz), scale: [(len - 0.3) / S.width, S.height / S.tall, 0.6] };
+}
