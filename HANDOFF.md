@@ -1,6 +1,27 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-05。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-10。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+
+## 2026-11-10 最新交接：小游戏合集（雏形）；超高层延伸搁置
+
+用户的方向变了：不再继续加地块，改做一个「小而美、可复用」的小游戏合集。详细说明、玩法、数值和已知限制见 [docs/arcade.md](docs/arcade.md)。
+
+- **入口**：封面第三个按钮「小游戏合集」，运行模式 `arcade`（`src/runtime.js`）。完整园区探索和 FPS 不受影响，`fps-frozen` 没动。
+- **地图**：`src/layout/arcade-scope.js` 从完整园区里裁掉二期和三期，原地放体块（`src/render/build/arcade-massing.js`）。保留 21 栋楼、326 个楼层。加载时顶点数从 14.5 M 降到 11.1 M。
+- **外壳**：`src/arcade/shell.js`。游戏列表、开始、暂停、结算、星级，进度存在 `localStorage` 的 `yunlan.arcade.v1`。
+- **能玩的两个**：「无人机送外卖」（`games/drone*.js`，飞行碰撞在 `airspace.js`）和「夜间潜入」（`games/heist*.js`，在漫游模式上加保安和目标）。规则都在各自的 `*-rules.js` 里，是纯逻辑。
+- **占位的四个**：高空滑翔、躲猫猫、购物车竞速、上班的一天。
+- **改到的旧文件**：
+  - `src/layout/playable.js`：多一个 `arcade` 模式。
+  - `src/render/app.js`：建体块；`state.arcadeCamera` 为真时轨道控制器让开。
+  - `src/render/ui.js`：分期列表只列存在的楼。
+  - `src/render/explore.js`：`app.explore.setRules({ fly, teleport })`。
+  - `src/launcher.js`、`src/runtime.js`：入口。
+- **测试**：631 / 631，新增 27 项（`tests/arcade-*.test.js`）。无头 Chromium 里两个游戏各完整跑了一局，三个模式都加载过，没有页面报错。
+- **没做的**：没有人上手玩过，数值是估的；没有音效；`dist/` 没有重建（`dist/mall.html` 还是 `ea99c34` 的构建）；没有部署。
+- **超高层延伸**：P0 基础引擎已合并（`64c8857`），四组楼的建设在 11-06 暂停，11-10 搁置。设计文档、半成品和恢复步骤在 [docs/supertall/STATUS.md](docs/supertall/STATUS.md)。
+- **线上**：两个 Netlify 站点都没有更新。v2 站点仍是 `4b94cbf`。
+
 
 ## 2026-11-05 最新交接：户内门扇（“竖着的门板”）与北苑 7F 空中大堂
 

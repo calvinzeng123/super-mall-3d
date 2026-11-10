@@ -14,9 +14,10 @@ const CSS = `
 .hs-arrow{position:absolute;left:50%;top:calc(104px + env(safe-area-inset-top,0px));transform:translateX(-50%);display:flex;align-items:center;gap:8px;text-shadow:0 1px 3px #000;font-variant-numeric:tabular-nums}
 .hs-arrow i{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:20px solid #e8b876;filter:drop-shadow(0 1px 2px #000)}
 .hs-hold{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);width:150px;height:8px;border-radius:5px;background:#0c1a25cc;overflow:hidden}.hs-hold i{display:block;height:100%;width:0;background:#e8b876}
-/* 闭店后的昏暗：整幅画面压暗偏蓝，中间留一圈手电筒似的亮区 */
-.hs-dark{position:absolute;inset:0;background:radial-gradient(ellipse 62% 58% at 50% 54%,#b9c6dc 0%,#6f80a3 55%,#3a4667 100%);mix-blend-mode:multiply}
-body[data-arcade="playing"] #exFly,body[data-arcade="playing"] #exPlaces{display:none!important}
+/* 闭店后的昏暗：整幅画面蒙一层半透明的深蓝，四周更暗，中间留一圈手电筒似的亮区。
+   外壳是独立的层叠上下文，混合模式混不到画布上，所以只用透明度。 */
+.hs-dark{position:absolute;inset:0;background:radial-gradient(ellipse 60% 56% at 50% 54%,#08133000 0%,#08133059 58%,#040a1cb8 100%),linear-gradient(#0b1c4233,#0b1c4233)}
+body[data-arcade="playing"] #exFly,body[data-arcade="playing"] #exPlaces,body[data-arcade="playing"] #exCard{display:none!important}
 `;
 
 const mmss = (sec) => { const s = Math.max(0, Math.round(sec)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
@@ -34,7 +35,7 @@ function guardModel() {
   const fov = HEIST.fov * Math.PI / 180;
   const coneMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide });
   const cone = new THREE.Mesh(new THREE.CircleGeometry(HEIST.range, 28, -Math.PI / 2 - fov / 2, fov), coneMat);
-  cone.rotation.x = -Math.PI / 2; cone.position.y = 0.07; cone.renderOrder = 4;
+  cone.rotation.x = -Math.PI / 2; cone.position.y = 0.12; cone.renderOrder = 4;
   g.add(body, vest, head, cap, torch, cone);
   return { group: g, coneMat };
 }
@@ -43,7 +44,7 @@ function goalMarker() {
   const g = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: 0xffb648, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
   const ring = new THREE.Mesh(new THREE.RingGeometry(HEIST.objectiveRadius * 0.78, HEIST.objectiveRadius, 36), mat);
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.08;
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.12;
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 3.2, 12, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xffb648, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
   beam.position.y = 1.6;
@@ -147,7 +148,7 @@ export async function createGame({ app, layout, level, hud, rng, toast, finish }
     const rel = wrapPi(Math.atan2(-dx, -dz) - p.yaw); // 漫游的朝向：面朝 (−sin yaw, −cos yaw)
     dom.arrow.style.transform = `rotate(${(-rel * 180 / Math.PI).toFixed(0)}deg)`;
     const dy = o.y - p.y;
-    dom.dist.textContent = same ? `${Math.round(Math.hypot(dx, dz))} m` : `${Math.round(Math.hypot(dx, dz))} m · ${Math.abs(dy) < 1 ? '隔壁楼' : dy > 0 ? '在楼上' : '在楼下'}`;
+    dom.dist.textContent = same || Math.abs(dy) < 1 ? `${Math.round(Math.hypot(dx, dz))} m` : `${Math.round(Math.hypot(dx, dz))} m · ${dy > 0 ? '在楼上' : '在楼下'}`;
     dom.hold.hidden = hold <= 0; dom.holdFill.style.width = `${Math.min(100, hold / HEIST.hold * 100)}%`;
   }
 
@@ -212,6 +213,16 @@ export async function createGame({ app, layout, level, hud, rng, toast, finish }
       app.explore.teleport({ level: levelId });
       app.explore.setRules({ fly: false, teleport: false });
       const p = app.explore.state; last = { x: p.x, z: p.z }; speed = 0;
+    },
+    /** 调试 / 自动化：站到本层某处并面朝某点。站不住返回 false。 */
+    standAt(floor, x, z, tx, tz) {
+      const F = nav.floors.get(floor);
+      const st = F && { floor, x, z, y: F.y, slope: null, yaw: Math.atan2(-(tx - x), -(tz - z)) };
+      if (!st || !clear(nav, st)) return false;
+      app.exitExplore(); app.enterExplore({ state: st });
+      app.explore.setRules({ fly: false, teleport: false });
+      last = { x, z }; speed = 0;
+      return true;
     },
     get debug() {
       const p = app.explore.state;

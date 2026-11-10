@@ -4,7 +4,7 @@ import { polyCentroid, polyArea, pointInPoly, distToPolyEdge } from '../../layou
 
 export const HEIST = Object.freeze({
   range: 20, fov: 100, touch: 1.8, // 视野：最远距离（m）、张角（度）、贴到这么近不管朝向都会发现
-  fillNear: 1.1, fillFar: 0.3, decay: 0.3, // 被看见时警觉条每秒涨多少（贴身 / 最远处），没人看见时每秒回落多少
+  fillNear: 0.8, fillFar: 0.15, decay: 0.3, // 被看见时警觉条每秒涨多少（贴身 / 最远处），没人看见时每秒回落多少
   hear: 10, runSpeed: 4.2, investigate: 6, // 跑步声传多远（m）；多快算跑（m/s）；保安去查看多久（s）
   guardSpeed: 1.5, searchSpeed: 2.4, pause: 2.2, turn: 3.2,
   objectiveRadius: 2.6, hold: 1.4, // 站进目标圈多久算完成
