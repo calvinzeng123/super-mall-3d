@@ -19,7 +19,7 @@ export function createUI(app, layout) {
   // 楼栋牌副标题来自数据（floor-rows.js towerSub）：b.sub，否则社区名 / 用途与实际最高层（西苑 28 层、北苑 24 层、20层酒店）。
   const towerSub = (b) => towerSubOf(layout, b);
   injectRailStyles();
-  const phases = [...PHASES.filter(p=>!layout.playable||!p.id||layout.buildings.some(b=>b.id===p.id)).flatMap(p => [p,
+  const phases = [...PHASES.filter(p=>!p.id||layout.buildings.some(b=>b.id===p.id)).flatMap(p => [p,
     ...annexes.filter(b => b.campusGroup === p.id).map(b => ({ id: b.id, label: b.short, sub: '一期 · 艺术街区' }))]), ...layout.buildings.filter(b => b.kind === 'tower').map(b => ({ id: b.id, label: b.short, sub: towerSub(b) })),
     ...layout.buildings.filter(b => b.undergroundOnly).map(b => ({ id: b.id, label: b.short, sub: '地下公共停车' }))];
   const built = new Set(layout.buildings.map((b) => b.id));

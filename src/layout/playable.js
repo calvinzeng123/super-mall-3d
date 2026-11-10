@@ -4,6 +4,7 @@ import { buildLayout } from './layout.js';
 import { rect, rectPoly, clipConvex } from './geom.js';
 import { addMissionCollision } from '../fps/mission-layout.js';
 import { buildTowerStairAccess } from './tower-stairs.js';
+import { scopeArcade } from './arcade-scope.js';
 
 const BUILDINGS = new Set(['P1', 'H', 'A']);
 export const PLAYABLE_BOUNDS = Object.freeze({ x0: -304, z0: -270, x1: -8, z1: -18 });
@@ -40,18 +41,21 @@ function accessibleTowerRoof(building, roof, levels) {
 
 /** Physically discard unused data before FPS meshes, physics or people exist.
  * Tour returns the full source layout, including phases 2/3, homes and metro.
+ * Arcade (the mini-game collection) keeps the tour's phase one, its towers and the
+ * metro, and drops phases 2/3 (arcade-scope.js).
  * FPS keeps two retail floors, three tower floors and reachable tower roofs. */
 export function buildPlayableLayout({ mode = 'tour' } = {}) {
-  if (!['tour', 'fps'].includes(mode)) throw new Error(`Unknown playable mode: ${mode}`);
+  if (!['tour', 'fps', 'arcade'].includes(mode)) throw new Error(`Unknown playable mode: ${mode}`);
   // The exploration extension is authored independently from the compact FPS
   // slice, so new courts and upstairs links cannot change mission geometry.
-  const layout = buildLayout({ expansion: mode === 'tour' }), full = {
+  const layout = buildLayout({ expansion: mode !== 'fps' }), full = {
     buildings: layout.buildings.length, levels: layout.levels.length,
     dwellings: layout.levels.reduce((n, l) => n + l.units.filter(u => u.residence).length, 0),
   };
   if (mode === 'tour') {
     return layout;
   }
+  if (mode === 'arcade') return scopeArcade(layout);
   const buildings = layout.buildings.filter(b => BUILDINGS.has(b.id));
   let levels = layout.levels.filter(l => BUILDINGS.has(l.building) && FPS_FLOORS.has(l.id));
   for (const level of levels) if (['H-B1', 'A-B1'].includes(level.id)) {

@@ -47,6 +47,7 @@ import { unitFront } from '../layout/nav.js';
 import { createExploreVisibility, skyLobbyVisibility } from './explore-visibility.js';
 import { buildTransitCenter } from './build/transit-center.js';
 import { buildBusStops } from './build/bus-stops.js';
+import { buildArcadeMassing } from './build/arcade-massing.js';
 import { createDeferredResource, createSerialTaskQueue, detailAssetKind, activeDetailFloor } from './deferred-resource.js';
 import { createFloorDetailSelector, createFloorDetailCache } from './floor-detail-streaming.js';
 import { buildOwnedFloorDetail, sceneResources, geometryStats } from './floor-detail-scene.js';
@@ -284,6 +285,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   buildAccessGates(ctx);
   buildTransitCenter(ctx);
   buildBusStops(ctx);
+  // 小游戏版：被裁掉的二期、三期原地放低细节体块
+  if (layout.arcade) buildArcadeMassing(ctx);
   const towerIds = new Set(layout.buildings.filter(b => b.kind === 'tower').map(b => b.id));
   buildParking({ ...ctx, layout: { ...layout,
     buildings: layout.buildings.filter(b => towerIds.has(b.id)),
@@ -890,7 +893,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       }
     }
     if (moving) renderer.shadowMap.needsUpdate = true;
-    if (!state.touring && !state.explore) controls.update();
+    // state.arcadeCamera：小游戏自己摆相机（无人机追尾视角等），轨道控制器让开
+    if (!state.touring && !state.explore && !state.arcadeCamera) controls.update();
     updateNear();
     env.update(dt);
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
