@@ -40,6 +40,8 @@ export function attachExplore(app, ui) {
   let eyeY = 0;
   let saved = null;
   let lastSpace = 0;
+  // 小游戏可以收紧规则：不许飞、不许用目录传送（app.explore.setRules）
+  let rules = { fly: true, teleport: true };
   let lookYaw = 0, lookPitch = 0; // 本帧累计的视角增量（弧度）
   const keys = new Set();
   const input = { stickX: 0, stickY: 0, up: false, down: false, jump: false };
@@ -135,7 +137,14 @@ export function attachExplore(app, ui) {
       return stop ? startLift(n.link, stop) : false;
     },
     /** 目录传送：楼栋 → 主入口内侧；楼层 → 该层出生点；铺位 → 店门外 2m 面朝店 */
+    /** 小游戏规则：{ fly, teleport }，不传的项恢复为允许。 */
+    setRules(next = {}) {
+      rules = { fly: true, teleport: true, ...next };
+      if (!rules.fly && flying && on) toggleFly();
+    },
+    get rules() { return { ...rules }; },
     teleport(t) {
+      if (!rules.teleport) return false;
       if (!nav) nav = buildNav(layout, { unitSolids: communitySolids });
       // 铺位 → 店门外面朝店（复式上层 → 户内楼梯上层到达口外）；楼栋 / 楼层 → 出生点
       const st = t.unit ? unitSpawn(nav, layout, t.unit) : spawn(nav, layout, t);
@@ -338,6 +347,7 @@ export function attachExplore(app, ui) {
   }
   function toggleFly() {
     if (busy) return;
+    if (!flying && !rules.fly) { toast('这一局不能飞行'); return; }
     if (!flying) {
       setFlying(true);
       flyY = eyeY;
