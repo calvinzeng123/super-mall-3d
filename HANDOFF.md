@@ -18,7 +18,7 @@
   - `src/render/explore.js`：`app.explore.setRules({ fly, teleport })`。
   - `src/launcher.js`、`src/runtime.js`：入口。
 - **测试**：631 / 631，新增 27 项（`tests/arcade-*.test.js`）。无头 Chromium 里两个游戏各完整跑了一局，三个模式都加载过，没有页面报错。
-- **没做的**：没有人上手玩过，数值是估的；没有音效；`dist/` 没有重建（`dist/mall.html` 还是 `ea99c34` 的构建）；没有部署。
+- **没做的**：没有人上手玩过，数值是估的；没有音效；没有部署。`dist/` 的两个单文件已按这一版重建（含 P0 引擎和小游戏合集）。
 - **超高层延伸**：P0 基础引擎已合并（`64c8857`），四组楼的建设在 11-06 暂停，11-10 搁置。设计文档、半成品和恢复步骤在 [docs/supertall/STATUS.md](docs/supertall/STATUS.md)。
 - **线上**：两个 Netlify 站点都没有更新。v2 站点仍是 `4b94cbf`。
 
