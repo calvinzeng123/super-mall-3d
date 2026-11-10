@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { pointInPoly, toW, toL, frame, NORMAL, rect, lrectPoly } from '../../layout/geom.js';
 import { rng, makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { tableSet, roundTable, bench, planter } from './props.js';
+import { pocketSet } from './prop-sets.js';
 import { interiorDetail } from './interior-detail.js';
 import { clearHeight } from './shell.js';
 
@@ -199,6 +200,12 @@ function atrium1F(ctx, b, lv) {
       B.get('metal').box(x - 0.23, y0 + 4.05, z, 0.06, 0.7, 0.06, '#4a5056');
       for (const [px, pz] of [[-9, -12.5], [9, -12.5], [-9, 12.5], [9, 12.5]]) planter(B, px - 1.4, pz - 1.0, px + 1.4, pz + 1.0, y0, px * 3 + pz, true, 'matte');
       for (const [px, pz, ry] of [[-14.5, -13, 0], [14.5, -13, 0], [-14.5, 13, Math.PI], [14.5, 13, Math.PI]]) bench(B, px, y0, pz, ry, 'matte');
+      // 贴图模型：服务台旁的轮椅；圆厅另一侧的咖啡车、立式黑板和「小心地滑」
+      B.prop('wheelchair', x - 1.4, y0, z + 3.4, -Math.PI / 2 - .4);
+      if (B.prop('coffee_cart', -(r.R - 12), y0, 9.5, Math.PI / 2)) {
+        B.prop('chalkboard', -(r.R - 12) + 1.9, y0, 11.4, Math.PI / 2 + .5, .8);
+        B.prop('wet_floor_sign', -(r.R - 12) + 2.4, y0, 7.6, 2.2);
+      }
     }));
   }
 }
@@ -251,7 +258,15 @@ function lounges(ctx, b, lv) {
       const detail = flatDetail(B, y0);
       if (w.kind === 'lounge') {
         B.get(lv.finishes ? 'carpet' : 'satin').box(cu, y0 + 0.008, cv, du - 1.5, 0.016, Math.min(dv - 2, 8), '#d9cbb5');
-        if (!arrival) {
+        const modelled = B.hasProp('sofa3');
+        if (!arrival && modelled) {
+          // 贴图模型：两张三人沙发背靠一侧、面朝圆茶几；够宽时对面再摆两把扶手椅
+          for (const dz of [-2.4, 2.4]) B.prop('sofa3', cu - .55, y0, cv + dz, Math.PI / 2);
+          B.prop('coffee_table_round', cu + 1.0, y0, cv, 0);
+          B.prop('plant_small', cu + 1.2, y0 + .49, cv + .2, .6, 1.3);
+          if (du >= 7.5) for (const dz of [-1.1, 1.1]) B.prop('armchair', cu + 2.7, y0, cv + dz, -Math.PI / 2 + dz * .16);
+          B.prop('chandelier', cu + 1.0, y0 + clearHeight(lv) - .1, cv, 0, 1.5);
+        } else if (!arrival) {
           for (const dz of [-2.4, 2.4]) {
             B.get('matte').box(cu - 0.6, y0 + 0.25, cv + dz, 0.9, 0.5, 3.2, '#55707f');
             B.get('matte').box(cu - 0.98, y0 + 0.62, cv + dz, 0.18, 0.5, 3.2, '#55707f');
@@ -265,10 +280,20 @@ function lounges(ctx, b, lv) {
           B.get('satin').box(cu + .73, y0 + .506, cv - .08, .27, .006, .34, '#eee6d3');
           detail.bouquet(cu + 1.03, cv + .19, .45, '#b49570', .58);
         }
-        for (const dz of [-dv / 2 + 1.2, dv / 2 - 1.2]) {
+        for (const [i, dz] of [-dv / 2 + 1.2, dv / 2 - 1.2].entries()) {
+          if (modelled) { B.prop(i ? 'plant_bush' : 'plant_tall', cu, y0, cv + dz, i * 2.1, i ? 1.5 : 1.45); continue; }
           B.get('matte').cyl(cu, y0, cv + dz, 0.45, 0.7, '#6b4426', 12);
           B.get('foliage').sphere(cu, y0 + 1.4, cv + dz, 0.7, '#4f8a3a');
         }
+      } else if (B.hasProp('ottoman')) {
+        // 贴图模型：够长的口袋一端摆一组陈设（雕塑、屏风、展墙……每处按位置取一组），中间一排皮脚凳，另一端一盆大绿植
+        const staged = du >= 5 && dv >= 4;
+        if (staged) pocketSet(B, Math.abs(Math.round(cu * 3 + cv * 7 + y0 * 5)), cu - du / 2 + 1.3, y0, cv);
+        if (!staged || du >= 7.5) {
+          const n = Math.max(1, Math.min(3, Math.floor(Math.min(du - 2, 3.2) / .95))), shift = staged ? .8 : 0;
+          for (let i = 0; i < n; i++) B.prop('ottoman', cu + shift + (i - (n - 1) / 2) * .98, y0, cv, 0, [1, .76, 1]);
+        }
+        B.prop('plant_tall', cu + du / 2 - 1.2, y0, cv, 1.1, 1.5);
       } else {
         B.get('matte').box(cu, y0 + 0.25, cv, Math.min(du - 2, 3.2), 0.5, 0.9, '#7a6a5a');
         for (const s of [-1, 1]) B.get('matte').box(cu + s * Math.min(.65, (du - 2) * .2), y0 + .53, cv, Math.min(1.15, (du - 2) * .35), .06, .78, lv.short === '2F' ? '#9bada7' : '#c6b697');
@@ -328,6 +353,7 @@ function mallFinish(ctx, b, lv) {
       }
       if (signU !== undefined) {
         const h = Math.min(H - .64, 3.7), span = Math.min(width - .5, 5.3);
+        B.prop('cctv', signU + 1.6, y + H - .02, cv + span * .5 + .2, Math.PI / 2); // 贴图模型：吊牌旁的监控
         B.get('metal').box(signU, y + h, cv, .12, .64, span, '#394b43');
         B.get('satin').box(signU - .065, y + h + .25, cv, .016, .065, span - .12, accent);
         for (const dv of [-span * .4, span * .4]) B.get('metal').box(signU, y + (h + .32 + H) / 2, cv + dv, .025, Math.max(.05, H - h - .32), .025, '#636c5d');

@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MaterialLib } from './materials.js';
 import { Environment } from './env.js';
-import { BatchSet, SignBatch } from './batch.js';
+import { BatchSet, SignBatch, usePropLibrary } from './batch.js';
+import { createPropLibrary } from './props/library.js';
 import { makeSignAtlas, setAnisotropy, drawWayfinding } from './textures.js';
 import { buildShell, clearHeight } from './build/shell.js';
 import { buildSite } from './build/site.js';
@@ -120,7 +121,16 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const root = new THREE.Group();
   scene.add(root);
 
-  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality };
+  // 贴图小模型（家具、绿植、摆件）。FPS 不用：它的地图和开场流程保持原样。
+  let props = fps ? null : createPropLibrary({ mats, anisotropy: renderer.capabilities.getMaxAnisotropy(), tier: initialQuality.tier,
+    onChange: () => { renderer.shadowMap.needsUpdate = true; } });
+  if (props) {
+    onProgress('加载家具、绿植与摆件模型', 0.01);
+    try { await props.warm(); } catch (error) { console.warn('贴图模型包没有加载成功，改用程序化家具。', error); props = null; }
+  }
+  usePropLibrary(props);
+
+  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality, props };
   const detailQueue = createSerialTaskQueue();
   const assetAnisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   let residentialProgress = '';
@@ -203,6 +213,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
         signs: b.kind === 'tower' ? null : new SignBatch(), facadeSigns: b.kind === 'tower' ? null : new SignBatch(),
         offset: 0, offsetTarget: 0, title: null,
       };
+      L.batch.outdoor = lv.kind === 'roof' || (lv.kind === 'street' && !!lv.ground);
       ctx.levels[lv.id] = L;
       B.levels.push(L);
     });
@@ -215,6 +226,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   siteGroup.name = 'site';
   root.add(siteGroup);
   ctx.site = { group: siteGroup, batch: new BatchSet(mats.base), labels: new THREE.Group(), picks: new THREE.Group(), flows: null };
+  ctx.site.batch.outdoor = true;
   siteGroup.add(ctx.site.labels, ctx.site.picks);
   // Orbit-view labels: drop the ones behind a tower and keep one per overlap (re-run only when the view changes).
   const labelOccluders = towerOccluders(layout);
@@ -310,6 +322,12 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   }
   ctx.site.batch.flush(siteGroup);
   buildPicks(ctx);
+  // 开场用到的模型都解析完、补进场景后再继续，免得家具一件件冒出来
+  if (props) {
+    onProgress('摆放家具与绿植', 0.99); await props.idle();
+    // 按相机距离切换精细版 / 简化版 / 不画
+    ctx.dynamic.push({ name: 'props-lod', update() { props.update(camera); } });
+  }
   releaseGeometryAfterUpload(scene);
   // 系统回收了 WebGL 上下文（多见于手机切后台）：顶点数据已释放，无法恢复，提示刷新
   canvas.addEventListener('webglcontextlost', (e) => {
@@ -861,6 +879,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     renderer.setPixelRatio(quality.pixelRatio);
     env.setQuality(quality);
     ctx.peopleQuality?.setDensity(quality.crowdDensity);
+    props?.setTier(quality.tier);
     if (shadowsChanged) scene.traverse(o => {
       if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true;
     });

@@ -31,7 +31,12 @@ function sharedLibraryResources(ctx, protectedResources) {
   }
   for (const atlas of Object.values(ctx.atlas)) if (atlas?.material) materials.add(atlas.material);
   for (const material of materials) for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
-  return { geometries: protectedResources.geometries, materials, textures };
+  // 贴图小模型全园区共用：这一层换出时，几何、材质、贴图都得留着。
+  const props = ctx.props?.resources();
+  if (!props) return { geometries: protectedResources.geometries, materials, textures };
+  for (const material of props.materials) materials.add(material);
+  for (const texture of props.textures) textures.add(texture);
+  return { geometries: new Set([...protectedResources.geometries, ...props.geometries]), materials, textures };
 }
 
 /** The public builders allocate some private LED maps and skater geometry.

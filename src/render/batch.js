@@ -63,6 +63,15 @@ export function frameMatrix(F) {
 
 const _mf = new THREE.Matrix4();
 
+let propLibrary = null;
+/**
+ * 接上贴图模型库（src/render/props/library.js）。只有完整园区和小游戏合集接；
+ * 没接的时候（单元测试、FPS、模型包下载失败）BatchSet.prop() 返回 false，各处照旧画程序化几何。
+ */
+export function usePropLibrary(library) { propLibrary = library || null; }
+/** 当前接上的贴图模型库；没接时是 null（各处据此决定画贴图版还是程序化版）。 */
+export const getPropLibrary = () => propLibrary;
+
 export class Batcher {
   constructor(owner = null, withUv = false, projected = false) {
     this.cap = 0;
@@ -277,6 +286,8 @@ export class BatchSet {
     this.materials = materials;
     this.sets = {};
     this.xf = null;
+    /** 这一批是不是露天的（场地、屋顶）：露天的贴图模型夜里不自发光。 */
+    this.outdoor = false;
   }
   get(key) {
     if (!this.sets[key]) {
@@ -297,8 +308,26 @@ export class BatchSet {
     this.setFrame(F);
     try { fn(); } finally { this.xf = prev; }
   }
+  /** 模型库里有没有这个模型（决定要不要走程序化的画法）。 */
+  hasProp(id) { return !!propLibrary?.has(id); }
+  /**
+   * 摆一个贴图模型：底面中心在 (x, y, z)，绕竖轴转 ry（模型正面原本朝 +Z，转后朝 (sin ry, cos ry)），
+   * scale 是数或 [sx, sy, sz]。outdoor 的模型夜里不自发光；color 给整件染色（白色贴图的椅子可以染成各种颜色）。
+   * 没有这个模型时返回 false，调用方改画程序化几何。当前局部坐标系（setFrame / frame）同样生效。
+   */
+  prop(id, x, y, z, ry = 0, scale = 1, { outdoor = this.outdoor, color = null } = {}) {
+    if (!propLibrary?.has(id)) return false;
+    _p.set(x, y, z);
+    _q.setFromAxisAngle(Y, ry);
+    if (Array.isArray(scale)) _s.set(scale[0], scale[1], scale[2]); else _s.setScalar(scale);
+    _m.compose(_p, _q, _s);
+    if (this.xf) _m.premultiply(this.xf);
+    (this.placed ||= []).push({ id, m: _m.toArray(), outdoor: !!outdoor, color });
+    return true;
+  }
   /** 把所有批次合成网格加入 group */
   flush(group, opts = {}) {
+    if (this.placed?.length) { propLibrary?.instantiate(group, this.placed); this.placed = null; }
     for (const [key, b] of Object.entries(this.sets)) {
       const mat = this.materials[key];
       if (!mat) throw new Error('missing material ' + key);

@@ -2,6 +2,7 @@
 import { NORMAL } from '../../layout/geom.js';
 import { rng } from '../textures.js';
 import { tableSet, roundTable } from './props.js';
+import { homeShowroom } from './prop-sets.js';
 import { shade, storeStyle } from './storefronts.js';
 import { clearHeight } from './shell.js';
 import { interiorDetail } from './interior-detail.js';
@@ -62,6 +63,12 @@ function furnish(L, atlas, lv, u, rand) {
   const u0 = F.umin, u1 = F.umax;
   const mid = (u0 + u1) / 2;
   const detail = interiorDetail(B, F, P, y0);
+  // 贴图模型：face 是朝向——0 朝店内（+b），Math.PI 朝门口，±Math.PI / 2 朝两侧；没有模型库时返回 false
+  const inward = F.uz * F.nx - F.ux * F.nz > 0 ? 0 : Math.PI;
+  const prop = (id, a, b, h = 0, face = Math.PI, scale = 1, opts) => {
+    const [x, z] = F.at(a, b);
+    return B.prop(id, x, y0 + h, z, F.ang + inward + face, scale, opts);
+  };
   const boutique = /^P[12]-/.test(lv.id) && (cat === 'jewelry' || cat === 'beauty');
 
   // 壁龛贴在单矩形铺位的实墙上；转角门面所在段不装柜，保留原有侧入口。
@@ -319,6 +326,10 @@ function furnish(L, atlas, lv, u, rand) {
         if (cat === 'tea') detail.teaStation(mid - .35, b, 1.13);
         else detail.espresso(mid - .35, b, 1.13);
         if (len > 4.2) detail.pastryCase(mid + len / 2 - .6, b, 1.13);
+        // 贴图模型：台面上的蛋糕、可颂和门口的立式黑板
+        prop(cat === 'tea' ? 'teapot' : 'cake_carrot', mid + .55, b - .1, 1.13, Math.PI, 1.25);
+        prop(cat === 'tea' ? 'tea_cup' : 'croissant', mid + .95, b - .18, 1.13, Math.PI + .6, 1.3);
+        if (W > 5) prop('chalkboard', u0 + .75, .95, 0, Math.PI + .35, .78);
         // 后墙搁板与杯碟，留出操作面的空间。
         P('wood', mid, D - .32, y0 + 2.28, Math.min(len, 4.5), .3, .07, '#eee3d4');
         for (let k = 0; k < 5; k++) detail.cup(mid - 1.0 + k * .5, D - .32, 2.32, '#f2e8d6', false);
@@ -387,7 +398,8 @@ function furnish(L, atlas, lv, u, rand) {
         const count = Math.min(10, Math.floor((W - 1.4) / .48));
         for (let k = 0; k < count; k++) {
           const [x, z] = F.at(u0 + .9 + k * (W - 1.8) / Math.max(1, count - 1), D - .45);
-          B.get('matte').sphere(x, y0 + h + .14, z, .18, '#cb9250', .10, .11, 'ico0');
+          if (!B.prop(['croissant', 'burger_bun', 'croissant'][(k + shelf) % 3], x, y0 + h + .035, z, F.ang + k * 1.9, (k + shelf) % 3 === 1 ? 2.1 : 1.5))
+            B.get('matte').sphere(x, y0 + h + .14, z, .18, '#cb9250', .10, .11, 'ico0');
         }
       }
       break;
@@ -486,6 +498,11 @@ function furnish(L, atlas, lv, u, rand) {
       for (let k = 0; k < 4; k++) {
         const a = u0 + (k % 2 + 1) * (W / 3), b = 2.2 + Math.floor(k / 2) * 2.6;
         if (b > D - 1.2) continue;
+        if (B.hasProp('sofa2')) {
+          // 贴图模型：每家店按铺位号取一种风格（现代、中式、古典、餐厅），四个位置各摆一组
+          homeShowroom(prop, [...u.id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 9973, 7), k, a, b, H);
+          continue;
+        }
         if (k % 2 === 0) {
           const textile = k ? '#94a498' : '#cbb797';
           P('wood', a, b, y0 + .17, 1.45, .85, .15, '#9c805f');

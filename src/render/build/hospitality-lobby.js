@@ -66,8 +66,14 @@ function chair(B, w, d, y, color = '#8a6951', arm = false) {
 }
 function furniture(B, o, y, hotel) {
   const r = o.rect, w = r.x1 - r.x0, d = r.z1 - r.z0, h = o.height;
-  if (o.type === 'chair' || o.type === 'armchair') { chair(B, w, d, y, hotel ? '#81745e' : '#c1aa87', o.type === 'armchair'); return; }
+  if (o.type === 'chair' || o.type === 'armchair') {
+    // 贴图模型：扶手椅 / 皮餐椅（正面朝局部 +Z，和原来的朝向一致）
+    const clamp = (v) => Math.min(1.25, Math.max(.85, v));
+    if (o.type === 'armchair' ? B.prop('armchair', 0, y, 0, 0, clamp(w / .86)) : B.prop('dining_chair', 0, y, 0, 0, clamp(w / .52))) return;
+    chair(B, w, d, y, hotel ? '#81745e' : '#c1aa87', o.type === 'armchair'); return;
+  }
   if (o.type === 'sofa') {
+    if (w > 2.3 ? B.prop('sofa3', 0, y, 0, 0, [w / 2.73, 1, Math.min(1.15, d / 1.0)]) : B.prop('sofa2', 0, y, 0, 0, [w / 1.81, 1.05, Math.min(1.2, d / .82)])) return;
     const color = o.color || '#547268';
     for (const x of [-w * .4, w * .4]) for (const z of [-d * .32, d * .32]) B.get('metal').cyl(x, y, z, .04, .2, C.bronze, 8);
     B.get('satin').box(0, y + .36, 0, w, .34, d, color);
@@ -108,7 +114,7 @@ function furniture(B, o, y, hotel) {
       B.get('metal').cyl(0, y, 0, .42, .07, C.bronze, 16);
       B.get('metal').cyl(0, y + .06, 0, .11, h - .06, C.bronze, 12);
       B.get('stone').cyl(0, y + h - .04, 0, w / 2, .075, C.stone, 32);
-    } else {
+    } else if (!(o.type === 'coffee-table' && B.prop('coffee_table', 0, y, 0, Math.PI / 2, [d / .6, h / .39, w / 1.2]))) {
       for (const x of [-w * .4, w * .4]) for (const z of [-d * .32, d * .32]) B.get('metal').box(x, y + h / 2, z, .055, h, .055, C.bronze);
       B.get(o.type === 'worktable' ? 'wood' : o.type === 'piano-seat' ? 'satin' : 'stone').box(0, y + h - .04, 0, w, .08, d, o.type === 'piano-seat' ? '#202c2b' : C.stone);
     }

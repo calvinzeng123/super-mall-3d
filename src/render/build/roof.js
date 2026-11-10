@@ -63,7 +63,7 @@ export function buildRoof(ctx) {
       const u1 = w.link ? w.len - w.ua : w.uEnd;
       B.frame(w.F, () => {
         for (let u = w.u0 + 2; u < u1 - 6; u += 9) {
-          for (const v of [-21.2, 21.2]) bollard(B, u, v, y0);
+          for (const v of [-21.2, 21.2]) if (!B.prop('street_lamp', u, y0, v, 0, .92, { outdoor: true })) bollard(B, u, v, y0);
         }
       });
     }
@@ -423,6 +423,8 @@ function mech(B, r, y0) {
     B.get('metal').cyl(x, y0 + 3.0, (r.z0 + r.z1) / 2, 1.3, 0.5, '#4a5056', 16);
   }
   for (let i = 0; i < 3; i++) B.get('metal').box(r.x0 + 13 + i * 1.6, y0 + 1.0, (r.z0 + r.z1) / 2, 1.2, 2.0, 5, '#b8bfc6');
+  // 贴图模型：机组旁一排空调外机（背靠围挡，风扇朝里）
+  for (let x = r.x0 + 18.4; x < r.x1 - 1.2; x += 1.25) B.prop('aircon', x, y0, r.z1 - .75, Math.PI, 1.25, { outdoor: true });
   B.get('metal').box((r.x0 + r.x1) / 2, y0 + 2.4, r.z0 + 1.5, r.x1 - r.x0 - 2, 0.3, 0.3, '#7d848b');
 }
 

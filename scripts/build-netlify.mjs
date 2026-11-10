@@ -8,6 +8,7 @@ import path from 'node:path';
 import { FPS_MODEL_ASSETS } from '../src/fps/model-data.js';
 import { geometryLicenses } from './geometry-licenses.mjs';
 import { COVER_SOURCE, COVER_MIME } from '../src/cover-data.js';
+import { packProps } from './props/pack.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 process.chdir(root);
@@ -59,6 +60,9 @@ const fpsAssets = await Promise.all(FPS_MODEL_ASSETS.map(async a=>({...a,
   url:await emitAsset(a.id==='rifle'?'smg45':a.id==='pistol'?'deagle':'fps-hands','glb',await readFile(a.url.replace(/^\.\//,'')),'fps-model'),
 })));
 const coverURL = await emitAsset('cover',COVER_MIME.split('/')[1],await readFile(COVER_SOURCE),'cover');
+// 贴图小模型：打成一个文件，开场下载一次；各模型按偏移量取用。
+const props = await packProps();
+const propPackURL = await emitAsset('props', 'bin', props.bytes, 'prop-pack');
 
 const replacements = new Map([
   ['people-data.js', `export const PEOPLE_ASSETS = ${JSON.stringify(people)};`],
@@ -67,13 +71,14 @@ const replacements = new Map([
   ['residential-data.js', `export const RESIDENTIAL_ASSETS = ${JSON.stringify(residences)};`],
   ['model-data.js', `export const FPS_MODEL_ASSETS = ${JSON.stringify(fpsAssets)};`],
   ['cover-data.js', `export const COVER_URL = ${JSON.stringify(coverURL)};`],
+  ['prop-data.js', `export const PROP_ASSETS = ${JSON.stringify(props.assets)};\nexport const PROP_PACK = ${JSON.stringify({ url: propPackURL })};`],
 ]);
 const bundled = await build({
   entryPoints: ['src/main.js'], bundle: true, splitting:true, format: 'esm', minify: true,
   outdir:path.join(output,'assets'), entryNames:'[name].[hash]',chunkNames:'chunk.[hash]',metafile:true,
   target: 'es2022', write: false, legalComments: 'none',
   plugins: [{ name: 'local-runtime-assets', setup(builder) {
-    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people|model|cover)-data\.js$/ }, args => ({
+    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people|model|cover|prop)-data\.js$/ }, args => ({
       contents: replacements.get(path.basename(args.path)), loader: 'js',
     }));
   } }],
@@ -89,7 +94,7 @@ for(const file of bundled.outputFiles){
 if(!script)throw new Error('Missing launcher entry');
 const credits = await readFile('assets/models/fps/CREDITS.txt','utf8');
 const escaped = credits.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-const creditsPage='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>云澜汇素材署名</title><style>body{max-width:760px;margin:40px auto;padding:0 22px;background:#101d28;color:#e2eaf0;font:15px/1.8 system-ui}pre{white-space:pre-wrap}a{color:#edc188}</style><h1>云澜汇 · 素材署名</h1><p><a href="./">返回封面</a></p><pre>'+escaped+'</pre><p>园区石材、木纹等 PBR 贴图来自 Poly Haven（CC0）。贴图行人来自 Microsoft Rocketbox（MIT）。用户提供的套房模型由用户授权在本项目使用，不属于 CC0。</p></html>';
+const creditsPage='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>云澜汇素材署名</title><style>body{max-width:760px;margin:40px auto;padding:0 22px;background:#101d28;color:#e2eaf0;font:15px/1.8 system-ui}pre{white-space:pre-wrap}a{color:#edc188}</style><h1>云澜汇 · 素材署名</h1><p><a href="./">返回封面</a></p><pre>'+escaped+'</pre><p>园区石材、木纹等 PBR 贴图，以及家具、绿植、摆件等小模型来自 Poly Haven（CC0），逐项出处见仓库的 assets/models/props/manifest.json。贴图行人来自 Microsoft Rocketbox（MIT）。用户提供的套房模型由用户授权在本项目使用，不属于 CC0。</p></html>';
 await writeFile(path.join(output,'credits.html'),creditsPage);
 files.push({path:'credits.html',bytes:Buffer.byteLength(creditsPage),sha256:sha256(creditsPage),kind:'credits'});
 await mkdir(path.join(output,'assets/models/fps'),{recursive:true});

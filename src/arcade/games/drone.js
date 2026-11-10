@@ -1,5 +1,6 @@
 // 无人机送外卖：从商场天台取餐，飞到各栋楼顶投递。规则在 drone-rules.js，这里是画面、相机和 HUD。
 import * as THREE from 'three';
+import { droneModel, padDeck } from '../drone-model.js';
 import { buildAirspace } from '../airspace.js';
 import { DRONE, DRONE_LEVELS, dronePads, buildOrders, windAt, newRun, stepRun, runTarget, runResult, pilotAxes } from './drone-rules.js';
 
@@ -19,33 +20,6 @@ const mmss = (sec) => { const s = Math.max(0, Math.ceil(sec)); return `${String(
 const CAM_BACK = 11.5, CAM_UP = 4.4; // 追尾相机在机身后上方多远
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
-function droneModel() {
-  const group = new THREE.Group(), tilt = new THREE.Group();
-  const dark = new THREE.MeshStandardMaterial({ color: 0x2a3138, roughness: 0.6 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.24, 1.1), dark);
-  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.3), new THREE.MeshBasicMaterial({ color: 0xffb648 }));
-  nose.position.set(0, 0.04, -0.62); // 机头朝 −Z
-  tilt.add(body, nose);
-  const rotorMat = new THREE.MeshBasicMaterial({ color: 0xdfe9f0, transparent: true, opacity: 0.45, depthWrite: false });
-  const rotors = [];
-  for (const [x, z] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) {
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 1.3), dark);
-    arm.position.set(x / 2, 0, z / 2); arm.rotation.y = Math.atan2(x, z);
-    const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.03, 18), rotorMat);
-    rotor.position.set(x, 0.14, z);
-    const led = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: z < 0 ? 0x7dffb0 : 0xff5a4a }));
-    led.position.set(x, -0.05, z);
-    tilt.add(arm, rotor, led); rotors.push(rotor);
-  }
-  const parcel = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.5, 0.62), new THREE.MeshStandardMaterial({ color: 0xf2a23a, roughness: 0.8 }));
-  parcel.position.y = -0.42; parcel.visible = false;
-  tilt.add(parcel);
-  group.add(tilt);
-  group.scale.setScalar(1.15);
-  group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { group, tilt, rotors, parcel };
-}
-
 function padMarker(pad, color) {
   const g = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false });
@@ -55,7 +29,10 @@ function padMarker(pad, color) {
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 110, 14, 1, true),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
   beam.position.y = 55;
-  g.add(ring, dot, beam);
+  // 甲板：实体的停机坪（贴标识的薄圆盘），光圈和光柱浮在它上面
+  const deck = padDeck(DRONE.padRadius * 0.98, !!pad.hub);
+  deck.position.y -= 0.04;
+  g.add(deck, ring, dot, beam);
   g.position.set(pad.x, pad.y + 0.14, pad.z);
   g.renderOrder = 5;
   return { group: g, beam, mat };
@@ -90,6 +67,16 @@ export async function createGame({ app, layout, level, hud, input, rng, toast, f
     markers.set(pad.id, m); world.add(m.group);
   }
   scene.add(world);
+
+  // 取餐点旁的一摞周转筐和纸箱（贴图模型；没有模型库就不摆）
+  const props = app.ctx.props;
+  if (props) [['crate_plastic', 4.4, 0, .6, 0, 1.3], ['crate_plastic', 4.4, .33, .7, .4, 1.3], ['cardboard_box', 5.3, 0, -.4, 1.1, 1.2], ['cardboard_box', 4.6, 0, -1.3, 2.6, 1.1], ['cardboard_box', 4.9, .4, -.6, .3, 1]]
+    .forEach(async ([id, dx, dy, dz, ry, scale]) => {
+      const item = await props.spawn(id, { outdoor: true });
+      if (!item || !world.parent) return;
+      item.position.set(hubPad.x + dx, hubPad.y + dy, hubPad.z + dz); item.rotation.y = ry; item.scale.setScalar(scale);
+      world.add(item);
+    });
 
   const style = document.createElement('style'); style.textContent = CSS;
   const ui = document.createElement('div');
@@ -180,7 +167,8 @@ export async function createGame({ app, layout, level, hud, input, rng, toast, f
     update,
     dispose() {
       scene.remove(world);
-      world.traverse((o) => { o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
+      world.traverse((o) => { if (o.userData.sharedProp) return; o.userData.dispose?.(); o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
+      model.dispose();
       input.disable();
       state.arcadeCamera = false;
       controls.enabled = saved.enabled;

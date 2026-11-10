@@ -2,6 +2,21 @@
 
 > 最后更新：2026-11-10。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
+## 2026-11-10 最新交接（二）：贴图模型
+
+用户要求「尽可能地加入更多贴图模型」。说明、出处、摆放位置、性能数字和已知限制见 [docs/props.md](docs/props.md)。
+
+- **素材**：102 个 Poly Haven 的 CC0 模型，加工后在 `assets/models/props/`（每个一份精细版、一份远景版，共 3.23 MiB）。出处和校验值在同目录的 `manifest.json`。
+- **加工脚本**：`scripts/props/`。清单是 `catalog.mjs`；`build-props.mjs` 下载、合并贴图、减面、压缩。加工工具不在 `package.json` 里，用法见 `docs/props.md`。
+- **运行时**：`src/render/props/library.js`（按需解析、实例化、12 m 分块、两级精度、远了不画）。搭建函数通过 `BatchSet.prop()` 摆放，没有模型库时它返回 `false`，各处照旧画程序化几何。
+- **只有探索和小游戏接模型库**（`src/render/app.js`）。FPS 不接，测试里也不接，所以原来的测试都没动。
+- **摆放**：`src/render/build/props.js`（桌椅、花坛、路灯旁的小件、树）、`prop-sets.js`（口袋休息区 18 组陈设、家居店四种样板间）、`public.js`、`interiors.js`、`hospitality-lobby.js`、`roof.js`。
+- **树**：`src/render/build/tree-kit.js`，叶片簇树冠加树皮，贴图是画布现画的。
+- **小游戏**：`src/arcade/guard-model.js`（保安，行人模型上涂制服）、`src/arcade/drone-model.js`（无人机、停机坪）；潜入里加了卷帘门、门禁卡边几、胸像展品。
+- **构建**：`build.mjs` 和 `scripts/build-netlify.mjs` 用 `scripts/props/pack.mjs` 把模型打成一包。单文件版 84.4 MB，离 100 MB 的单文件上限还有余量，有测试守着（`tests/props-library.test.js`）。
+- **测试**：642 / 642，新增 11 项。
+- **没做的**：没有真机测试；汽车、公交、天桥行人、长椅、外立面还是老样子；没有部署。
+
 ## 2026-11-10 最新交接：小游戏合集（雏形）；超高层延伸搁置
 
 用户的方向变了：不再继续加地块，改做一个「小而美、可复用」的小游戏合集。详细说明、玩法、数值和已知限制见 [docs/arcade.md](docs/arcade.md)。

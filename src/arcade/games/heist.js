@@ -2,7 +2,10 @@
 // 走路、电梯、楼梯都用漫游模式本身；这里只加保安、目标和警觉条。规则在 heist-rules.js。
 import * as THREE from 'three';
 import { spawn, clear, step, floorLabel } from '../../layout/nav.js';
+import { NORMAL } from '../../layout/geom.js';
 import { traceMotion } from '../../fps/pathfinding.js';
+import { BatchSet } from '../../render/batch.js';
+import { loadGuardKit } from '../guard-model.js';
 import { HEIST, HEIST_LEVELS, patrolNodes, patrolEdges, patrolStarts, patrolLoop, newGuard, stepGuard, updateAlert, sightLine, openVoids, heistStars, heistScore } from './heist-rules.js';
 
 const CSS = `
@@ -23,21 +26,52 @@ body[data-arcade="playing"] #exFly,body[data-arcade="playing"] #exPlaces,body[da
 const mmss = (sec) => { const s = Math.max(0, Math.round(sec)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
-function guardModel() {
+/** 一名保安：贴图人物（没加载成功就用占位的圆柱）加上贴在地面上的视野扇形。 */
+function guardModel(kit) {
   const g = new THREE.Group();
-  const navy = new THREE.MeshStandardMaterial({ color: 0x1d2a3d, roughness: 0.8 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 1.32, 12), navy); body.position.y = 0.66;
-  const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.31, 0.26, 12), new THREE.MeshBasicMaterial({ color: 0xe8d44a })); vest.position.y = 1.0;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), new THREE.MeshStandardMaterial({ color: 0xd9b08c, roughness: 0.9 })); head.position.y = 1.52;
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.09, 12), navy); cap.position.y = 1.67;
-  const torch = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.2), new THREE.MeshBasicMaterial({ color: 0xfff3c0 })); torch.position.set(0.24, 1.0, 0.24);
+  let figure = null;
+  if (kit) { figure = kit.create(); g.add(figure.group); }
+  else {
+    const navy = new THREE.MeshStandardMaterial({ color: 0x1d2a3d, roughness: 0.8 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 1.32, 12), navy); body.position.y = 0.66;
+    const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.31, 0.26, 12), new THREE.MeshBasicMaterial({ color: 0xe8d44a })); vest.position.y = 1.0;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), new THREE.MeshStandardMaterial({ color: 0xd9b08c, roughness: 0.9 })); head.position.y = 1.52;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.09, 12), navy); cap.position.y = 1.67;
+    g.add(body, vest, head, cap);
+  }
   // 视野：贴在地面上的一块扇形，朝保安正前方（局部 +Z）
   const fov = HEIST.fov * Math.PI / 180;
   const coneMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide });
   const cone = new THREE.Mesh(new THREE.CircleGeometry(HEIST.range, 28, -Math.PI / 2 - fov / 2, fov), coneMat);
   cone.rotation.x = -Math.PI / 2; cone.position.y = 0.12; cone.renderOrder = 4;
-  g.add(body, vest, head, cap, torch, cone);
-  return { group: g, coneMat };
+  g.add(cone);
+  return { group: g, coneMat, figure, px: null, pz: null };
+}
+
+/** 闭店的样子：这些楼层每家店的门面外拉下卷帘门（贴图模型，按门面宽度拉伸）。没有模型库就不摆。 */
+function closeShops(app, layout, floors, world) {
+  if (!app.ctx.props?.has('shutter')) return;
+  for (const id of floors) {
+    const lv = layout.levels.find((l) => l.id === id), L = app.ctx.levels[id];
+    if (!lv || !L) continue;
+    const B = new BatchSet(app.ctx.mats.base), group = new THREE.Group();
+    group.name = `heist-shutters-${id}`;
+    for (const u of lv.units || []) {
+      if (u.residence || !u.fronts?.length) continue;
+      B.frame(u.frame, () => {
+        for (const f of u.fronts) {
+          const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0);
+          if (len < 1.2) continue;
+          const [nx, nz] = NORMAL[f.side] || [0, 1];
+          B.prop('shutter', (f.x0 + f.x1) / 2 + nx * .16, lv.elev, (f.z0 + f.z1) / 2 + nz * .16, Math.atan2(nx, nz), [(len - .3) / 1.08, 3.05 / 2.4, .6]);
+        }
+      });
+    }
+    B.flush(group);
+    // 挂在楼层自己的分组下：这一层不显示时卷帘门也跟着不显示
+    L.base.add(group);
+    world.userData.attached.push(group);
+  }
 }
 
 function goalMarker() {
@@ -110,9 +144,38 @@ export async function createGame({ app, layout, level, hud, rng, toast, finish }
   };
 
   const world = new THREE.Group(); world.name = 'arcade-heist';
-  const models = guards.map((g) => { const m = guardModel(); world.add(m.group); return m; });
+  world.userData.attached = [];
+  let kit = null;
+  try { kit = await loadGuardKit(); } catch (error) { console.warn('保安的贴图模型没有加载成功，用占位模型。', error); }
+  const models = guards.map((g) => { const m = guardModel(kit); world.add(m.group); return m; });
   const marker = goalMarker(); world.add(marker);
   scene.add(world);
+  closeShops(app, layout, [...new Set([...cfg.guards.map(([floor]) => floor), ...cfg.objectives.map((o) => o.level)])], world);
+
+  // 目标处的道具：门禁卡放在边几上，展品是玻璃罩里的大理石胸像（贴图模型；没有模型库就只有光圈）
+  const items = objectives.map(() => null);
+  const props = app.ctx.props;
+  const stage = async (o, i) => {
+    const g = new THREE.Group(); g.position.set(o.x, o.y, o.z);
+    if (o.id === 'card') {
+      const table = await props.spawn('side_table'); if (!table) return;
+      const card = new THREE.Mesh(new THREE.BoxGeometry(.09, .006, .057), new THREE.MeshBasicMaterial({ color: 0x7fe3d0 }));
+      card.position.set(0, .458, 0); card.rotation.y = .5;
+      const torch = await props.spawn('torch');
+      if (torch) { torch.position.set(.12, .455, -.12); torch.rotation.y = 2.2; torch.scale.setScalar(.8); g.add(torch); }
+      g.add(table, card); items[i] = card;
+    } else if (o.id === 'exhibit') {
+      const bust = await props.spawn('bust'); if (!bust) return;
+      const plinth = new THREE.Mesh(new THREE.BoxGeometry(.5, 1.0, .5), new THREE.MeshStandardMaterial({ color: 0xece7dc, roughness: .6, emissive: 0x57503f }));
+      plinth.position.y = .5;
+      bust.position.y = 1.0; bust.scale.setScalar(1.15);
+      const glass = new THREE.Mesh(new THREE.BoxGeometry(.52, .78, .52), new THREE.MeshStandardMaterial({ color: 0xcfe6ee, transparent: true, opacity: .16, roughness: .05, depthWrite: false }));
+      glass.position.y = 1.39;
+      g.add(plinth, bust, glass); items[i] = bust;
+    } else return;
+    if (!ended) world.add(g);
+  };
+  if (props) objectives.forEach((o, i) => { stage(o, i).catch(() => {}); });
 
   const style = document.createElement('style'); style.textContent = CSS;
   const ui = document.createElement('div');
@@ -173,6 +236,7 @@ export async function createGame({ app, layout, level, hud, rng, toast, finish }
       hold += dt;
       if (hold >= HEIST.hold) {
         hold = 0; index++;
+        if (items[index - 1]) items[index - 1].visible = false; // 卡、展品拿走了
         toast(o.done, 2.4);
         if (index >= objectives.length) { drawHud(p); end(true, '全身而退'); return; }
       }
@@ -182,6 +246,7 @@ export async function createGame({ app, layout, level, hud, rng, toast, finish }
     guards.forEach((g, i) => {
       const m = models[i];
       m.group.visible = Math.abs(g.y - p.y) < 9;
+      if (m.figure) { m.figure.animate(m.px == null ? 0 : Math.hypot(g.x - m.px, g.z - m.pz), dt); m.px = g.x; m.pz = g.z; }
       m.group.position.set(g.x, g.y, g.z);
       m.group.rotation.y = g.yaw;
       m.coneMat.color.setHex(g.mode === 'look' ? 0xff6b55 : g.mode === 'investigate' ? 0xffa64d : 0xffd27a);
@@ -201,7 +266,10 @@ export async function createGame({ app, layout, level, hud, rng, toast, finish }
     update,
     dispose() {
       scene.remove(world);
-      world.traverse((o) => { o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
+      // 共用的贴图小模型只摘掉、不销毁；卷帘门是实例化网格，dispose() 只放掉实例缓冲
+      for (const group of world.userData.attached) { group.removeFromParent(); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); }
+      world.traverse((o) => { if (o.userData.sharedProp) return; o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
+      kit?.dispose();
       app.explore.setRules({});
       if (app.explore.active) app.exitExplore();
       app.setNight(saved.night); app.setLabels(saved.labels);
