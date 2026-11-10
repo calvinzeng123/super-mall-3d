@@ -1,0 +1,3 @@
+{"objects":13988,"updateMatrixWorldMs":1.281,"withAutoUpdateOffMs":0.429}
+{"objects":18630,"updateMatrixWorldMs":1.921,"withAutoUpdateOffMs":0.434}
+{"objects":21937,"updateMatrixWorldMs":2.15,"withAutoUpdateOffMs":0.462}

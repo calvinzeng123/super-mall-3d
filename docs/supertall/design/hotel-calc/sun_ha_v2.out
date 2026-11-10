@@ -1,0 +1,80 @@
+== today
+  T1 S 8F sill x-260 (39.5)        8.02 h   lost to {}
+  T1 S 8F sill x-248               8.02 h   lost to {}
+  T1 S 14F x-260 (61.5)            8.02 h   lost to {}
+  T1 S 20F x-260 (81.3)            8.02 h   lost to {}
+  T1 S 25F x-260 (100)             8.02 h   lost to {}
+  T1 S 31F x-260 (123)             8.02 h   lost to {}
+  T2 S 8F sill x-212 (39.5)        8.02 h   lost to {}
+  T2 S 8F sill x-202               8.02 h   lost to {}
+  T2 S 20F x-212 (81.3)            8.02 h   lost to {}
+  P1-RF deck SQ-D1 (-258,-200)     8.02 h   lost to {}
+  P1-RF deck SQ-D4 (-182,-200)     8.02 h   lost to {}
+  P1-RF 方庭退台观景台 (-235,-225)        8.02 h   lost to {}
+  P1-RF W deck (-195,-80)          6.48 h   lost to {'H': 1.53}
+  P1-RF W deck (-165,-100)         7.33 h   lost to {'H': 0.68}
+  R1 W face 2F z-218               3.05 h   lost to {'A': 0.95}
+  R1 W face 60 m z-218             3.60 h   lost to {'A': 0.4}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             7.85 h   lost to {'H': 0.17}
+  W2 S 50 m SE slot                8.02 h   lost to {}
+== v2: H 185.4/196.4, A 174.6/184.6
+  T1 S 8F sill x-260 (39.5)        6.43 h   lost to {'H': 1.58}
+  T1 S 8F sill x-248               6.43 h   lost to {'H': 1.58}
+  T1 S 14F x-260 (61.5)            6.43 h   lost to {'H': 1.58}
+  T1 S 20F x-260 (81.3)            7.50 h   lost to {'H': 0.52}
+  T1 S 25F x-260 (100)             8.02 h   lost to {}
+  T1 S 31F x-260 (123)             8.02 h   lost to {}
+  T2 S 8F sill x-212 (39.5)        6.43 h   lost to {'H': 1.58}
+  T2 S 8F sill x-202               6.42 h   lost to {'H': 1.6}
+  T2 S 20F x-212 (81.3)            6.95 h   lost to {'H': 1.07}
+  P1-RF deck SQ-D1 (-258,-200)     6.07 h   lost to {'H': 1.95}
+  P1-RF deck SQ-D4 (-182,-200)     6.03 h   lost to {'H': 1.98}
+  P1-RF 方庭退台观景台 (-235,-225)        6.45 h   lost to {'H': 1.57}
+  P1-RF W deck (-195,-80)          7.55 h   lost to {'H': 0.47}
+  P1-RF W deck (-165,-100)         7.78 h   lost to {'H': 0.23}
+  R1 W face 2F z-218               3.32 h   lost to {'A': 0.68}
+  R1 W face 60 m z-218             3.32 h   lost to {'A': 0.68}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             6.38 h   lost to {'H': 1.63}
+  W2 S 50 m SE slot                6.38 h   lost to {'H': 1.63}
+== H at 150 (sensitivity)
+  T1 S 8F sill x-260 (39.5)        7.50 h   lost to {'H': 0.52}
+  T1 S 8F sill x-248               7.48 h   lost to {'H': 0.53}
+  T1 S 14F x-260 (61.5)            8.02 h   lost to {}
+  T1 S 20F x-260 (81.3)            8.02 h   lost to {}
+  T1 S 25F x-260 (100)             8.02 h   lost to {}
+  T1 S 31F x-260 (123)             8.02 h   lost to {}
+  T2 S 8F sill x-212 (39.5)        7.38 h   lost to {'H': 0.63}
+  T2 S 8F sill x-202               7.17 h   lost to {'H': 0.85}
+  T2 S 20F x-212 (81.3)            8.02 h   lost to {}
+  P1-RF deck SQ-D1 (-258,-200)     6.07 h   lost to {'H': 1.95}
+  P1-RF deck SQ-D4 (-182,-200)     6.10 h   lost to {'H': 1.92}
+  P1-RF 方庭退台观景台 (-235,-225)        7.48 h   lost to {'H': 0.53}
+  P1-RF W deck (-195,-80)          7.55 h   lost to {'H': 0.47}
+  P1-RF W deck (-165,-100)         7.78 h   lost to {'H': 0.23}
+  R1 W face 2F z-218               3.32 h   lost to {'A': 0.68}
+  R1 W face 60 m z-218             3.32 h   lost to {'A': 0.68}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             6.38 h   lost to {'H': 1.63}
+  W2 S 50 m SE slot                7.07 h   lost to {'H': 0.95}
+== H today, others v2
+  T1 S 8F sill x-260 (39.5)        8.02 h   lost to {}
+  T1 S 8F sill x-248               8.02 h   lost to {}
+  T1 S 14F x-260 (61.5)            8.02 h   lost to {}
+  T1 S 20F x-260 (81.3)            8.02 h   lost to {}
+  T1 S 25F x-260 (100)             8.02 h   lost to {}
+  T1 S 31F x-260 (123)             8.02 h   lost to {}
+  T2 S 8F sill x-212 (39.5)        8.02 h   lost to {}
+  T2 S 8F sill x-202               8.02 h   lost to {}
+  T2 S 20F x-212 (81.3)            8.02 h   lost to {}
+  P1-RF deck SQ-D1 (-258,-200)     8.02 h   lost to {}
+  P1-RF deck SQ-D4 (-182,-200)     8.02 h   lost to {}
+  P1-RF 方庭退台观景台 (-235,-225)        8.02 h   lost to {}
+  P1-RF W deck (-195,-80)          6.48 h   lost to {'H': 1.53}
+  P1-RF W deck (-165,-100)         7.33 h   lost to {'H': 0.68}
+  R1 W face 2F z-218               3.32 h   lost to {'A': 0.68}
+  R1 W face 60 m z-218             3.32 h   lost to {'A': 0.68}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             7.85 h   lost to {'H': 0.17}
+  W2 S 50 m SE slot                8.02 h   lost to {}

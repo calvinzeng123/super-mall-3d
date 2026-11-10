@@ -1,0 +1,4 @@
+focus (0, 0, 0) → all ten inside at r = 500 (texel at 4096: 0.24 m)
+focus (-60, 0, -90) → all ten inside at r = 400 (texel at 4096: 0.20 m)
+focus (-90, 30, -35) → all ten inside at r = 410 (texel at 4096: 0.20 m)
+focus (-100, 0, -120) → all ten inside at r = 350 (texel at 4096: 0.17 m)

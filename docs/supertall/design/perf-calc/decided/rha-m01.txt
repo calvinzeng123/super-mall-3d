@@ -1,0 +1,18 @@
+layout ms 2815
+buildHospitality threw (continuing with what was built): Cannot read properties of undefined (reading 'visible')
+R1 all { meshes: 21, inst: 10, verts: 255712, tris: 355430, mb18: 4.603 } lodGroups 0 meshes/lod 0 coreLods 0 withoutLods { meshes: 21, inst: 10, verts: 255712, tris: 355430, mb18: 4.603 }
+  direct meshes 0 
+  instanced R1-protected-stairs-4.2-concrete n=0 vis=false | R1-protected-stairs-4.2-extMetal n=0 vis=false | R1-protected-stairs-4.8-concrete n=1 vis=true | R1-protected-stairs-4.8-extMetal n=1 vis=true | R1-protected-stairs-3.4-concrete n=1 vis=true | R1-protected-stairs-3.4-extMetal n=1 vis=true | R1-residential-shell-facadePlaster n=52 vis=true | R1-residential-shell-extMetal n=52 vis=true | R1-residential-shell-glassTint n=52 vis=true | R1-residential-shell-extSatin n=52 vis=true
+  ground { meshes: 19, inst: 0, verts: 34160, tris: 11392, mb18: 0.615 }
+  roof { meshes: 5, inst: 0, verts: 4272, tris: 1424, mb18: 0.077 }
+H all { meshes: 20, inst: 8, verts: 462994, tris: 148908, mb18: 8.334 } lodGroups 0 meshes/lod 0 coreLods 0 withoutLods { meshes: 20, inst: 8, verts: 462994, tris: 148908, mb18: 8.334 }
+  direct meshes 0 
+  instanced H-protected-stairs-3.9-concrete n=0 vis=false | H-protected-stairs-3.9-extMetal n=0 vis=false | H-protected-stairs-4.5-concrete n=0 vis=false | H-protected-stairs-4.5-extMetal n=0 vis=false | H-protected-stairs-6.5-concrete n=1 vis=true | H-protected-stairs-6.5-extMetal n=1 vis=true | H-protected-stairs-3.4-concrete n=1 vis=true | H-protected-stairs-3.4-extMetal n=1 vis=true
+  ground { meshes: 24, inst: 0, verts: 236484, tris: 78834, mb18: 4.257 }
+  roof { meshes: 5, inst: 0, verts: 3672, tris: 1224, mb18: 0.066 }
+A all { meshes: 20, inst: 8, verts: 358138, tris: 115684, mb18: 6.446 } lodGroups 0 meshes/lod 0 coreLods 0 withoutLods { meshes: 20, inst: 8, verts: 358138, tris: 115684, mb18: 6.446 }
+  direct meshes 0 
+  instanced A-protected-stairs-3.9-concrete n=0 vis=false | A-protected-stairs-3.9-extMetal n=0 vis=false | A-protected-stairs-4.5-concrete n=0 vis=false | A-protected-stairs-4.5-extMetal n=0 vis=false | A-protected-stairs-6.5-concrete n=2 vis=true | A-protected-stairs-6.5-extMetal n=2 vis=true | A-protected-stairs-3.4-concrete n=0 vis=false | A-protected-stairs-3.4-extMetal n=0 vis=false
+  ground { meshes: 25, inst: 0, verts: 238608, tris: 79542, mb18: 4.295 }
+  roof { meshes: 5, inst: 0, verts: 3672, tris: 1224, mb18: 0.066 }
+R1-R4 total exterior meshes 84 verts 951892 MB@18 17.13

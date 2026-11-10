@@ -1,0 +1,54 @@
+== C-1 stair engine (depth along the stair frame z; flights <= 18 risers) ==
+  storey  3.3 m: 2 flights 10 risers need  6.60 m | rule 1 loop(s) 10 risers need  6.60 m
+  storey  3.4 m: 2 flights 10 risers need  6.60 m | rule 1 loop(s) 10 risers need  6.60 m
+  storey  3.6 m: 2 flights 11 risers need  6.88 m | rule 1 loop(s) 11 risers need  6.88 m
+  storey  3.9 m: 2 flights 12 risers need  7.16 m | rule 1 loop(s) 12 risers need  7.16 m
+  storey  4.2 m: 2 flights 13 risers need  7.44 m | rule 1 loop(s) 13 risers need  7.44 m
+  storey  4.5 m: 2 flights 14 risers need  7.72 m | rule 1 loop(s) 14 risers need  7.72 m
+  storey  4.8 m: 2 flights 15 risers need  8.00 m | rule 1 loop(s) 15 risers need  8.00 m
+  storey  5.0 m: 2 flights 15 risers need  8.00 m | rule 1 loop(s) 15 risers need  8.00 m
+  storey  5.4 m: 2 flights 16 risers need  8.28 m | rule 1 loop(s) 16 risers need  8.28 m
+  storey  5.5 m: 2 flights 17 risers need  8.56 m | rule 1 loop(s) 17 risers need  8.56 m
+  storey  6.0 m: 2 flights 18 risers need  8.84 m | rule 1 loop(s) 18 risers need  8.84 m
+  storey  6.5 m: 2 flights 20 risers need  9.40 m | rule 2 loop(s) 10 risers need  6.60 m
+  storey  6.8 m: 2 flights 20 risers need  9.40 m | rule 2 loop(s) 10 risers need  6.60 m
+  storey  8.6 m: 2 flights 26 risers need 11.08 m | rule 2 loop(s) 13 risers need  7.44 m
+  T1 (P1-1F..RF): stair depth have 9.60 need 8.56 max risers/flight 17 OK; multi-loop ['P1-1F:6.5m->2x2 flights,10 risers (162 mm)']
+  T2 (P1-1F..RF): stair depth have 9.60 need 8.56 max risers/flight 17 OK; multi-loop ['P1-1F:6.5m->2x2 flights,10 risers (162 mm)']
+  T1 today rule (no max): stair depth have 9.60 need 9.40 max risers/flight 20 FAIL; multi-loop none
+  W1/W2: stair depth have 8.40 need 7.72 max risers/flight 14 OK; multi-loop none
+  R1: stair depth have 8.70 need 8.28 max risers/flight 16 OK; multi-loop none
+  R4: stair depth have 8.70 need 8.28 max risers/flight 16 OK; multi-loop none
+  H new 4.4 x 9.6: stair depth have 9.60 need 8.84 max risers/flight 18 OK; multi-loop ['1F:6.5m->2x2 flights,10 risers (162 mm)', '26F:8.6m->2x2 flights,13 risers (165 mm)', '27F:6.8m->2x2 flights,10 risers (170 mm)']
+  H as hotel-apt v2 (6.0 deep): stair depth have 6.00 need 8.84 max risers/flight 18 FAIL; multi-loop ['1F:6.5m->2x2 flights,10 risers (162 mm)', '26F:8.6m->2x2 flights,13 risers (165 mm)', '27F:6.8m->2x2 flights,10 risers (170 mm)']
+  A new 4.4 x 9.6: stair depth have 9.60 need 8.84 max risers/flight 18 OK; multi-loop ['1F:6.5m->2x2 flights,10 risers (162 mm)', '40F:6.5m->2x2 flights,10 risers (162 mm)', '41F:6.5m->2x2 flights,10 risers (162 mm)', '42F:6.5m->2x2 flights,10 risers (162 mm)', '43F:6.5m->2x2 flights,10 risers (162 mm)']
+  flight width = min(1.6, (4.4 - 1.2) / 2) = 1.6 m; two stairs -> capacity at 1.00 m / 100 p: 320 persons per floor
+
+== C-4 北苑 private lifts at 4.0 m/s (1,050 kg, 1.1 x 2.1 m) ==
+  T1: LW/LE 1F->34F (134.1 m) real 38.2 s, game 16.8 s; LF/LS 1F->top 39.4 s
+  T2: LW/LE 1F->32F (126.3 m) real 36.2 s, game 15.8 s; LF/LS 1F->top 37.4 s
+  F lobby: partitions at x=+-2.0 -> 12.8 m2 gross, net 12.09 m2 (>= 12.0)
+
+== 西苑 (refuge 16F / 31F kept, C-17 option a) ==
+  W: refuge ['16F@46.5', '31F@93.0'] first 46.5 gaps [46.5] top-occ 142.5 (+49.5) OK
+  RF garden (open air) above 31F: 52.5 m (exempt: not an enclosed storey); 47F above 31F 49.5
+  stops per tower {'L1': 31, 'L2': 31, 'F1': 33, 'H1': 20, 'H2': 20, 'F2': 21} 156
+
+== R (C-35: L1-L3 skip the penthouse upper level) ==
+  R1: L1-L3 51 stops (B2 B1 1F + 48 home entry floors), LF 56
+  R2: L1-L3 48 stops (B2 B1 1F + 45 home entry floors), LF 53
+  R3: L1-L3 45 stops (B2 B1 1F + 42 home entry floors), LF 50
+  R4: L1-L3 42 stops (B2 B1 1F + 39 home entry floors), LF 47
+  R stops total 764
+
+== H (C-3: S1 normal vs fire-only) ==
+  levels 51; S1 normal 26 (B2..25F), fire-only 25 ['2F', '26F', '27F']..['48F', 'RF']; S2 28
+  apartment floors with re-entry gates: 22 x 2 stairs = 44 gates
+  roof structures: lantern 22 x 19 = 418 m2 + stair housings / BMU / cooling screens 84 m2 = 502 m2 <= 1/4 x 2,112 = 528; A: 480 <= 525
+
+== totals ==
+  gates {'base': 16, 'north': 4, 'west': 0, 'r': 20, 'ha': 52} 92  zones {'base': 14, 'north': 4, 'west': 0, 'r': 12, 'ha': 29} 59
+  site.fireAccess hardstands {'base': 2, 'r': 4, 'ha': 2} 8
+  tower lift landings after {'north': 226, 'west': 312, 'r': 764, 'h': 278, 'a': 309} 1889 (today 646)
+  closed-shaft glass (buildElevators, ~470 v/stop, 18 B/v): today 5.5 MB, naive after 16.0 MB, after skip ~0
+  records 1520 / homes 1490; C-16 fallback: records 1512 residenceAccess 972

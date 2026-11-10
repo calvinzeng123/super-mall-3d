@@ -1,0 +1,188 @@
+
+== H 云澜酒店 (recommended: 酒店公寓 + 空中大堂 + 酒店): RF 186.2 m
+    1F    0.00 m  h  6.5  lobby      酒店落客大堂 · 酒店公寓大堂
+    2F    6.50 m  h  5.0  podium     会议中心 · 商场空中连廊
+    3F   11.50 m  h  3.4  residence  云澜酒店公寓 8 套
+    4F   14.90 m  h  3.4  residence  云澜酒店公寓 8 套
+    5F   18.30 m  h  3.4  residence  云澜酒店公寓 8 套
+    6F   21.70 m  h  3.4  residence  云澜酒店公寓 8 套
+    7F   25.10 m  h  3.4  residence  云澜酒店公寓 8 套
+    8F   28.50 m  h  3.4  residence  云澜酒店公寓 8 套
+    9F   31.90 m  h  3.4  residence  云澜酒店公寓 8 套
+   10F   35.30 m  h  3.4  residence  云澜酒店公寓 8 套
+   11F   38.70 m  h  3.4  residence  云澜酒店公寓 8 套
+   12F   42.10 m  h  3.4  residence  云澜酒店公寓 8 套
+   13F   45.50 m  h  4.5  refuge     避难层兼设备层 R1   <- refuge, +45.5 m from hardstand
+   14F   50.00 m  h  3.4  residence  云澜酒店公寓 8 套
+   15F   53.40 m  h  3.4  residence  云澜酒店公寓 8 套
+   16F   56.80 m  h  3.4  residence  云澜酒店公寓 8 套
+   17F   60.20 m  h  3.4  residence  云澜酒店公寓 8 套
+   18F   63.60 m  h  3.4  residence  云澜酒店公寓 8 套
+   19F   67.00 m  h  3.4  residence  云澜酒店公寓 8 套
+   20F   70.40 m  h  3.4  residence  云澜酒店公寓 8 套
+   21F   73.80 m  h  3.4  residence  云澜酒店公寓 8 套
+   22F   77.20 m  h  3.4  residence  云澜酒店公寓 8 套
+   23F   80.60 m  h  3.4  residence  云澜酒店公寓 8 套
+   24F   84.00 m  h  3.4  residence  云澜酒店公寓 8 套
+   25F   87.40 m  h  3.4  residence  云澜酒店公寓 8 套
+   26F   90.80 m  h  6.0  refuge     避难层兼设备层 R2 (低区电梯机房)   <- refuge, +45.3 m from previous
+   27F   96.80 m  h  6.8  skylobby   空中大堂 · 办理入住 · 全日餐厅 · 大堂吧
+   28F  103.60 m  h  3.4  hotel      酒店客房 8 间套房
+   29F  107.00 m  h  3.4  hotel      酒店客房 8 间套房
+   30F  110.40 m  h  3.4  hotel      酒店客房 8 间套房
+   31F  113.80 m  h  3.4  hotel      酒店客房 8 间套房
+   32F  117.20 m  h  3.4  hotel      酒店客房 8 间套房
+   33F  120.60 m  h  3.4  hotel      酒店客房 8 间套房
+   34F  124.00 m  h  3.4  hotel      酒店客房 8 间套房
+   35F  127.40 m  h  3.4  hotel      酒店客房 8 间套房
+   36F  130.80 m  h  3.4  hotel      酒店客房 8 间套房
+   37F  134.20 m  h  3.4  hotel      酒店客房 8 间套房
+   38F  137.60 m  h  6.0  refuge     避难层兼设备层 R3   <- refuge, +46.8 m from previous
+   39F  143.60 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   40F  147.00 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   41F  150.40 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   42F  153.80 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   43F  157.20 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   44F  160.60 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   45F  164.00 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   46F  167.40 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   47F  170.80 m  h  3.4  hotel      酒店客房 8 间套房 (45–47F 行政楼层)
+   48F  174.20 m  h  6.0  amenity    云境水疗 · 室内泳池 · 健身
+   49F  180.20 m  h  6.0  amenity    云端餐厅 · 云端酒吧
+    RF  186.20 m  h  3.2  roof       屋面
+  top occupied floor 49F @ 180.2 m, 42.6 m above the last refuge floor
+
+== H alternative O (写字楼 + 酒店): RF 183.6 m
+    1F    0.00 m  h  6.5  lobby      酒店落客大堂 · 写字楼大堂
+    2F    6.50 m  h  5.0  podium     会议中心 · 商场空中连廊
+    3F   11.50 m  h  4.2  office     写字楼
+    4F   15.70 m  h  4.2  office     写字楼
+    5F   19.90 m  h  4.2  office     写字楼
+    6F   24.10 m  h  4.2  office     写字楼
+    7F   28.30 m  h  4.2  office     写字楼
+    8F   32.50 m  h  4.2  office     写字楼
+    9F   36.70 m  h  4.2  office     写字楼
+   10F   40.90 m  h  4.2  office     写字楼
+   11F   45.10 m  h  4.5  refuge     R1   <- refuge, +45.1 m from hardstand
+   12F   49.60 m  h  4.2  office     写字楼
+   13F   53.80 m  h  4.2  office     写字楼
+   14F   58.00 m  h  4.2  office     写字楼
+   15F   62.20 m  h  4.2  office     写字楼
+   16F   66.40 m  h  4.2  office     写字楼
+   17F   70.60 m  h  4.2  office     写字楼
+   18F   74.80 m  h  4.2  office     写字楼
+   19F   79.00 m  h  4.2  office     写字楼
+   20F   83.20 m  h  4.2  office     写字楼
+   21F   87.40 m  h  4.2  office     写字楼
+   22F   91.60 m  h  6.0  refuge     R2   <- refuge, +46.5 m from previous
+   23F   97.60 m  h  6.8  skylobby   空中大堂
+   24F  104.40 m  h  3.4  hotel      客房
+   25F  107.80 m  h  3.4  hotel      客房
+   26F  111.20 m  h  3.4  hotel      客房
+   27F  114.60 m  h  3.4  hotel      客房
+   28F  118.00 m  h  3.4  hotel      客房
+   29F  121.40 m  h  3.4  hotel      客房
+   30F  124.80 m  h  3.4  hotel      客房
+   31F  128.20 m  h  3.4  hotel      客房
+   32F  131.60 m  h  3.4  hotel      客房
+   33F  135.00 m  h  6.0  refuge     R3   <- refuge, +43.4 m from previous
+   34F  141.00 m  h  3.4  hotel      客房
+   35F  144.40 m  h  3.4  hotel      客房
+   36F  147.80 m  h  3.4  hotel      客房
+   37F  151.20 m  h  3.4  hotel      客房
+   38F  154.60 m  h  3.4  hotel      客房
+   39F  158.00 m  h  3.4  hotel      客房
+   40F  161.40 m  h  3.4  hotel      客房
+   41F  164.80 m  h  3.4  hotel      客房
+   42F  168.20 m  h  3.4  hotel      客房
+   43F  171.60 m  h  6.0  amenity    水疗泳池
+   44F  177.60 m  h  6.0  amenity    云端餐厅酒吧
+    RF  183.60 m  h  3.2  roof       屋面
+  top occupied floor 44F @ 177.6 m, 42.6 m above the last refuge floor
+
+== A 云澜服务公寓: RF 174.6 m
+    1F    0.00 m  h  6.5  lobby      迎宾与生活大堂
+    2F    6.50 m  h  5.0  podium     住客会所 · 健身洗衣 · 共享办公 · 商场连廊（刷卡）
+    3F   11.50 m  h  3.4  apartment  服务公寓 8 套
+    4F   14.90 m  h  3.4  apartment  服务公寓 8 套
+    5F   18.30 m  h  3.4  apartment  服务公寓 8 套
+    6F   21.70 m  h  3.4  apartment  服务公寓 8 套
+    7F   25.10 m  h  3.4  apartment  服务公寓 8 套
+    8F   28.50 m  h  3.4  apartment  服务公寓 8 套
+    9F   31.90 m  h  3.4  apartment  服务公寓 8 套
+   10F   35.30 m  h  3.4  apartment  服务公寓 8 套
+   11F   38.70 m  h  3.4  apartment  服务公寓 8 套
+   12F   42.10 m  h  3.4  apartment  服务公寓 8 套
+   13F   45.50 m  h  4.5  refuge     避难层兼设备层 R1   <- refuge, +45.5 m from hardstand
+   14F   50.00 m  h  3.4  apartment  服务公寓 8 套
+   15F   53.40 m  h  3.4  apartment  服务公寓 8 套
+   16F   56.80 m  h  3.4  apartment  服务公寓 8 套
+   17F   60.20 m  h  3.4  apartment  服务公寓 8 套
+   18F   63.60 m  h  3.4  apartment  服务公寓 8 套
+   19F   67.00 m  h  3.4  apartment  服务公寓 8 套
+   20F   70.40 m  h  3.4  apartment  服务公寓 8 套
+   21F   73.80 m  h  3.4  apartment  服务公寓 8 套
+   22F   77.20 m  h  3.4  apartment  服务公寓 8 套
+   23F   80.60 m  h  3.4  apartment  服务公寓 8 套
+   24F   84.00 m  h  3.4  apartment  服务公寓 8 套
+   25F   87.40 m  h  3.4  apartment  服务公寓 8 套
+   26F   90.80 m  h  6.0  refuge     避难层兼设备层 R2   <- refuge, +45.3 m from previous
+   27F   96.80 m  h  3.4  apartment  服务公寓 8 套
+   28F  100.20 m  h  3.4  apartment  服务公寓 8 套
+   29F  103.60 m  h  3.4  apartment  服务公寓 8 套
+   30F  107.00 m  h  3.4  apartment  服务公寓 8 套
+   31F  110.40 m  h  3.4  apartment  服务公寓 8 套
+   32F  113.80 m  h  3.4  apartment  服务公寓 8 套
+   33F  117.20 m  h  3.4  apartment  服务公寓 8 套
+   34F  120.60 m  h  3.4  apartment  服务公寓 8 套
+   35F  124.00 m  h  3.4  apartment  服务公寓 8 套
+   36F  127.40 m  h  3.4  apartment  服务公寓 8 套
+   37F  130.80 m  h  3.4  apartment  服务公寓 8 套
+   38F  134.20 m  h  3.4  apartment  服务公寓 8 套
+   39F  137.60 m  h  6.0  refuge     避难层兼设备层 R3   <- refuge, +46.8 m from previous
+   40F  143.60 m  h  6.5  loft       LOFT 复式公寓 8 套
+   41F  150.10 m  h  6.5  loft       LOFT 复式公寓 8 套
+   42F  156.60 m  h  6.5  loft       LOFT 复式公寓 8 套
+   43F  163.10 m  h  6.5  loft       LOFT 复式公寓 8 套
+   44F  169.60 m  h  5.0  amenity    空中会所 · 住客酒廊 · 健身 · 共享厨房
+    RF  174.60 m  h  3.2  roof       屋面
+  top occupied floor 44F @ 169.6 m, 32.0 m above the last refuge floor
+
+== counts
+  H residence floors 22 -> homes 176 | hotel floors 19 -> keys 152
+  HO office floors 18 | hotel floors 18 -> keys 144
+  A apartment floors 34 -> units 272 + LOFT 32 = 304
+  H/B: H 5.82 (B 32.0) | A 5.49 (B 31.8)
+
+== refuge areas (GB 55037 §7.1.15-1: everyone between this refuge floor and the next one up; 5 p/m²)
+  H 13F @ 45.5 m: 192 people -> net refuge area >= 38 m²
+  H 26F @ 90.8 m: 410 people -> net refuge area >= 82 m²
+  H 38F @ 137.6 m: 464 people -> net refuge area >= 93 m²
+  A 13F @ 45.5 m: 192 people -> net refuge area >= 38 m²
+  A 26F @ 90.8 m: 192 people -> net refuge area >= 38 m²
+  A 39F @ 137.6 m: 216 people -> net refuge area >= 43 m²
+
+== lifts (up-peak, codes.md model; residential-type intervals are upper bounds)
+  H 酒店公寓客梯 RB ×3, 3F–25F (22 stops)                          N=22 v=3.5 18p L=3 RTT= 185.0 INT= 61.7 s HC5= 70.0 (19.9 % of 352)
+  H 酒店公寓客梯 RB ×4, 3F–25F (22 stops)                          N=22 v=3.5 18p L=4 RTT= 185.0 INT= 46.3 s HC5= 93.4 (26.5 % of 352)
+  H 酒店公寓客梯 RB ×4, 3F–25F (22 stops)                          N=22 v=4.0 18p L=4 RTT= 180.8 INT= 45.2 s HC5= 95.6 (27.2 % of 352)
+  H 穿梭梯 SH ×2 1F→27F 空中大堂 (express 96.8 m)                   N= 1 v=6.0 21p L=2 RTT=  96.1 INT= 48.1 s HC5=104.9 (27.7 % of 378.0)
+  H 穿梭梯 SH ×2 1F→27F 空中大堂 (express 96.8 m)                   N= 1 v=7.0 21p L=2 RTT=  93.5 INT= 46.8 s HC5=107.8 (28.5 % of 378.0)
+  H 穿梭梯 SH ×3 1F→27F 空中大堂 (express 96.8 m)                   N= 1 v=6.0 21p L=3 RTT=  96.1 INT= 32.0 s HC5=157.3 (41.6 % of 378.0)
+  H 酒店客梯 HL ×3 27F→28F–49F (21 stops)                        N=21 v=4.0 21p L=3 RTT= 185.2 INT= 61.7 s HC5= 81.6 (26.5 % of 308.0)
+  H 酒店客梯 HL ×4 27F→28F–49F (21 stops)                        N=21 v=4.0 21p L=4 RTT= 185.2 INT= 46.3 s HC5=108.9 (35.3 % of 308.0)
+  H 酒店客梯 HL ×4 27F→28F–49F (21 stops)                        N=21 v=5.0 21p L=4 RTT= 180.5 INT= 45.1 s HC5=111.7 (36.3 % of 308.0)
+  A single bank ×6, 3F–44F (39 stops) 6 m/s                  N=39 v=6.0 15p L=6 RTT= 183.0 INT= 30.5 s HC5=118.0 (19.4 % of 608)
+  A single bank ×6 at 5 m/s                                  N=39 v=5.0 15p L=6 RTT= 190.9 INT= 31.8 s HC5=113.1 (18.6 % of 608)
+  A single bank ×5 at 5 m/s                                  N=39 v=5.0 15p L=5 RTT= 190.9 INT= 38.2 s HC5= 94.3 (15.5 % of 608)
+  A low bank ×3, 3F–25F (22 stops) 3.5 m/s                   N=22 v=3.5 15p L=3 RTT= 166.9 INT= 55.6 s HC5= 64.7 (18.4 % of 352)
+  A high bank ×3, 27F–44F (17 stops) 6 m/s express 93.4      N=17 v=6.0 15p L=3 RTT= 174.1 INT= 58.0 s HC5= 62.0 (19.6 % of 316)
+  A high bank ×4, same                                       N=17 v=6.0 15p L=4 RTT= 174.1 INT= 43.5 s HC5= 82.7 (26.2 % of 316)
+
+== fire lifts 1F -> top storey (GB 50016 §7.3.8-3: <= 60 s), a = 0.9 m/s²
+  H 49F 180.2 m: {3.0: 64.0, 4.0: 50.1, 5.0: 42.2}
+  H RF 186.2 m: {3.0: 66.0, 4.0: 51.6, 5.0: 43.4}
+  A 44F 169.6 m: {3.0: 60.5, 4.0: 47.4, 5.0: 40.1}
+  A RF 174.6 m: {3.0: 62.1, 4.0: 48.7, 5.0: 41.1}
+
+== game ride today |dy|/7 s: {'H 1F->27F': 13.8, 'H 27F->49F': 11.9, 'A 1F->44F': 24.2}

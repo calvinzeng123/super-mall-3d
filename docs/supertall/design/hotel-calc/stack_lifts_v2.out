@@ -1,0 +1,91 @@
+
+== H v2 云澜酒店 (酒店公寓 3F–25F · 26F 双层高避难/转换层 · 27F 空中大堂 · 酒店 28F–46F): RF 185.4 m
+    1F    0.00 m  h  6.5  lobby      酒店落客大堂 · 酒店公寓大堂
+    2F    6.50 m  h  5.0  podium     会议中心 · 商场空中连廊
+    3F   11.50 m  h  3.4  residence  云澜酒店公寓 8 套
+    4F   14.90 m  h  3.4  residence  云澜酒店公寓 8 套
+    5F   18.30 m  h  3.4  residence  云澜酒店公寓 8 套
+    6F   21.70 m  h  3.4  residence  云澜酒店公寓 8 套
+    7F   25.10 m  h  3.4  residence  云澜酒店公寓 8 套
+    8F   28.50 m  h  3.4  residence  云澜酒店公寓 8 套
+    9F   31.90 m  h  3.4  residence  云澜酒店公寓 8 套
+   10F   35.30 m  h  3.4  residence  云澜酒店公寓 8 套
+   11F   38.70 m  h  3.4  residence  云澜酒店公寓 8 套
+   12F   42.10 m  h  3.4  residence  云澜酒店公寓 8 套
+   13F   45.50 m  h  4.5  refuge     避难层兼设备层 R1   <- refuge, +45.5 m from hardstand
+   14F   50.00 m  h  3.4  residence  云澜酒店公寓 8 套
+   15F   53.40 m  h  3.4  residence  云澜酒店公寓 8 套
+   16F   56.80 m  h  3.4  residence  云澜酒店公寓 8 套
+   17F   60.20 m  h  3.4  residence  云澜酒店公寓 8 套
+   18F   63.60 m  h  3.4  residence  云澜酒店公寓 8 套
+   19F   67.00 m  h  3.4  residence  云澜酒店公寓 8 套
+   20F   70.40 m  h  3.4  residence  云澜酒店公寓 8 套
+   21F   73.80 m  h  3.4  residence  云澜酒店公寓 8 套
+   22F   77.20 m  h  3.4  residence  云澜酒店公寓 8 套
+   23F   80.60 m  h  3.4  residence  云澜酒店公寓 8 套
+   24F   84.00 m  h  3.4  residence  云澜酒店公寓 8 套
+   25F   87.40 m  h  3.4  residence  云澜酒店公寓 8 套
+   26F   90.80 m  h  8.6  refuge     避难层 R2 + 双层高设备层: RB 机房 (核心筒夹层) · HL 底坑 · 酒店空调机组 · 转输水箱   <- refuge, +45.3 m from previous
+   27F   99.40 m  h  6.8  skylobby   空中大堂 · 办理入住 · 全日餐厅 · 大堂吧 · 行政酒廊
+   28F  106.20 m  h  3.4  hotel      酒店客房 8 间套房 · 核心筒南排 = 穿梭梯机房
+   29F  109.60 m  h  3.4  hotel      酒店客房 8 间套房
+   30F  113.00 m  h  3.4  hotel      酒店客房 8 间套房
+   31F  116.40 m  h  3.4  hotel      酒店客房 8 间套房
+   32F  119.80 m  h  3.4  hotel      酒店客房 8 间套房
+   33F  123.20 m  h  3.4  hotel      酒店客房 8 间套房
+   34F  126.60 m  h  3.4  hotel      酒店客房 8 间套房
+   35F  130.00 m  h  3.4  hotel      酒店客房 8 间套房
+   36F  133.40 m  h  3.4  hotel      酒店客房 8 间套房
+   37F  136.80 m  h  6.0  refuge     避难层兼设备层 R3   <- refuge, +46.0 m from previous
+   38F  142.80 m  h  3.4  hotel      酒店客房 8 间套房
+   39F  146.20 m  h  3.4  hotel      酒店客房 8 间套房
+   40F  149.60 m  h  3.4  hotel      酒店客房 8 间套房
+   41F  153.00 m  h  3.4  hotel      酒店客房 8 间套房
+   42F  156.40 m  h  3.4  hotel      酒店客房 8 间套房
+   43F  159.80 m  h  3.4  hotel      酒店客房 8 间套房
+   44F  163.20 m  h  3.4  hotel      行政楼层 8 间套房
+   45F  166.60 m  h  3.4  hotel      行政楼层 8 间套房
+   46F  170.00 m  h  3.4  hotel      行政楼层 8 间套房
+   47F  173.40 m  h  6.0  amenity    云境水疗 · 室内泳池 · 健身
+   48F  179.40 m  h  6.0  amenity    云端餐厅 · 云端酒吧
+    RF  185.40 m  h  3.2  roof       屋面
+  top occupied floor 48F @ 179.4 m, 42.6 m above the last refuge floor
+
+== counts
+  H residence floors 22 -> homes 176 | hotel floors 18 -> keys 144
+  A floors 34 + LOFT 4 -> units 304
+  H/B: H 5.79 | A 5.49
+
+== stacked shafts (RB below, HL above, same footprint): vertical budget from 25F floor to 27F floor
+  RB top landing 25F @ 87.4: hoistway top 92.6; machine room to 95.8; HL pit floor 95.8 (27F @ 99.4)
+  need 12.0 m, have 12.0 m  ->  OK
+  v1 stack had 25F @ 87.4, 27F @ 96.8: have 9.4 m -> SHORT by 2.6 m (why 26F grows from 6.0 to 8.6 m)
+  SH top landing 27F @ 99.4: hoistway top 106.4 (28F floor 106.2): machine room in the 28F core, south row, 106.4–109.6
+  HL top landing 48F @ 179.4: hoistway top 185.0 vs RF 185.4 -> machine room in the RF lantern
+  S1/S2 top landing RF @ 185.4: hoistway top 191.0, machine room to 194.2; deck slab + structure ≈ 1.6 -> pad ≈ 195.8
+  A: L1–L5 top landing 44F @ 169.6: 5 m/s headroom ≈ 6.3 -> 175.9 vs RF 174.6; S1/S2 to RF -> 183.4; lantern to ≈ RF + 10
+
+== refuge areas (GB 55037 §7.1.15-1; 5 p/m²)
+  H 13F @ 45.5 m: 192 people -> net refuge area >= 38 m²
+  H 26F @ 90.8 m: 394 people -> net refuge area >= 79 m²
+  H 37F @ 136.8 m: 464 people -> net refuge area >= 93 m²
+  A 13F @ 45.5 m: 192 people -> net refuge area >= 38 m²
+  A 26F @ 90.8 m: 192 people -> net refuge area >= 38 m²
+  A 39F @ 137.6 m: 216 people -> net refuge area >= 43 m²
+
+== lifts
+  H RB ×3 3F–25F (22 stops), 176 homes                       N=22 v=3.5 18p L=3 RTT= 185.0 INT= 61.7 s HC5= 70.0 (19.9 % of 352)
+  H RB ×4 3F–25F (22 stops), 176 homes                       N=22 v=3.5 18p L=4 RTT= 185.0 INT= 46.3 s HC5= 93.4 (26.5 % of 352)
+  H SH ×2 1F→27F (express 99.4 m)                            N= 1 v=6.0 21p L=2 RTT=  97.0 INT= 48.5 s HC5=103.9 (28.4 % of 366.0)
+  H SH ×3 1F→27F (express 99.4 m)                            N= 1 v=6.0 21p L=3 RTT=  97.0 INT= 32.3 s HC5=155.9 (42.6 % of 366.0)
+  H HL ×3 27F→28F–48F (20 stops)                             N=20 v=4.0 21p L=3 RTT= 181.9 INT= 60.6 s HC5= 83.1 (28.1 % of 296.0)
+  H HL ×4 27F→28F–48F (20 stops)                             N=20 v=4.0 21p L=4 RTT= 181.9 INT= 45.5 s HC5=110.8 (37.4 % of 296.0)
+  A single bank ×5 at 5 m/s (unchanged)                      N=39 v=5.0 15p L=5 RTT= 190.9 INT= 38.2 s HC5= 94.3 (15.5 % of 608)
+
+== fire lifts 1F -> top (GB 50016 §7.3.8-3 宜 <= 60 s), a = 0.9 m/s²
+  H 48F 179.4 m: {4.0: 49.9, 5.0: 42.0}
+  H RF 185.4 m: {4.0: 51.4, 5.0: 43.2}
+  A 44F 169.6 m: {4.0: 47.4, 5.0: 40.1}
+  A RF 174.6 m: {4.0: 48.7, 5.0: 41.1}
+
+== game ride |dy|/7 s: {'H 1F->27F': 14.2, 'H 27F->48F': 11.4, 'A 1F->44F': 24.2}

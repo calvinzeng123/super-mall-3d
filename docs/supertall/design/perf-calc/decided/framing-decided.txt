@@ -1,0 +1,24 @@
+== shadow frustum (|light-space x|,|y| of crown and base must be <= r)
+  overview    r 380 needed for all ten 409 outside: W1✗(409)
+  campusStep  r 380 needed for all ten 500 outside: W1✗(500) W2✗(450)
+  panorama    r 380 needed for all ten 500 outside: W1✗(500) W2✗(450)
+  north       r 180 needed for all ten 371 outside: R1✗(228) R2✗(272) R3✗(321) R4✗(371)
+  west        r 180 needed for all ten 515 outside: R1✗(367) R2✗(416) R3✗(465) R4✗(515) H✗(236) A✗(306)
+  river       r 320 needed for all ten 329 outside: R4✗(329)
+  opposite    r 220 needed for all ten 364 outside: R1✗(230) R2✗(265) R3✗(314) R4✗(364)
+== today's views: max NDC y of crown / label (desktop 1.6, phone 0.46)
+  overview      desktop crown 0.74 label 0.78 (W1) | phone crown 0.63 label 0.66 (W1)
+  measureCampus desktop crown 1.09 label 1.15 (R1) | phone crown 0.93 label 0.97 (W1)
+  tourCampus    desktop crown 1.45 label 1.53 (R1) | phone crown 1.25 label 1.31 (W1)
+  north         desktop crown 1.53 label 1.83 (T1) | phone crown 1.23 label 1.46 (T1)
+  west          desktop crown 2.67 label 3.26 (W2) | phone crown 1.94 label 2.32 (W2)
+  river         desktop crown 1.65 label 1.78 (R1) | phone crown 1.30 label 1.39 (R1)
+  opposite      desktop crown 1.29 label 1.45 (T1) | phone crown 1.08 label 1.22 (T1)
+== re-frames (target y capped; crown and label NDC y <= 0.88 on desktop and phone)
+  overview      pos (125, 480, 590) → target (-90, 30, -35), 800 m (×1.00), max NDC y 0.78
+  measureCampus pos (127, 545, 552) → target (0, 50, 0), 752 m (×1.15), max NDC y 0.88
+  tourCampus    pos (255, 565, 561) → target (0, 55, 0), 800 m (×1.70), max NDC y 0.87
+  north         pos (-120, 171, -432) → target (-236, 90, -232), 245 m (×1.35), max NDC y 0.87
+  west          pos (-238, 194, -404) → target (-425, 87, -236), 273 m (×1.70), max NDC y 0.87
+  river         pos (192, 116, -638) → target (-120, 74, -300), 462 m (×1.30), max NDC y 0.88
+  opposite      pos (-196, 2, -446) → target (-215, 70, -245), 213 m (×1.00), max NDC y 0.86

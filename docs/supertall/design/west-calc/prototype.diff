@@ -1,0 +1,102 @@
+diff --git a/src/layout/community.js b/src/layout/community.js
+index d058a6f..a439516 100644
+--- a/src/layout/community.js
++++ b/src/layout/community.js
+@@ -119,16 +119,28 @@ export function communityLobby(F, slab, core) {
+   return { kind: 'community-lobby', frame: F, zones, obstacles, partitions, circulation, height: 4.5, gateZ: LOBBY_GATE_Z };
+ }
+ 
++// PROTOTYPE (design study): WEST_STACK=S61|S47|S54 builds the supertall stack with refuge floors.
++const STACKS = { S61: { top: 61, refuge: [16, 31, 46] }, S47: { top: 47, refuge: [16, 31] }, S54: { top: 54, refuge: [16, 31, 46] } };
+ function levelDefs() {
+-  const L = WEST_SITE.levels;
+-  return [
++  const L = WEST_SITE.levels, S = STACKS[globalThis.process?.env?.WEST_STACK];
++  const head = [
+     { short: 'B2', elev: L.B2, height: r2(L.B1 - L.B2), kind: 'garage-lobby' },
+     { short: 'B1', elev: L.B1, height: r2(-L.B1), kind: 'garage-lobby' },
+     { short: '1F', levelNumber: 1, elev: 0, height: L.lobbyHeight, kind: 'lobby' },
++  ];
++  if (!S) return [...head,
+     ...Array.from({ length: L.top - 1 }, (_, i) => ({ short: `${i + 2}F`, levelNumber: i + 2,
+       elev: r2(L.lobbyHeight + i * L.floorHeight), height: L.floorHeight, kind: 'community' })),
+     { short: 'RF', elev: L.roof, height: 3.2, kind: 'roof' },
+   ];
++  let y = L.lobbyHeight; const out = [...head];
++  for (let n = 2; n <= S.top; n++) {
++    const refuge = S.refuge.includes(n), h = refuge ? 4.5 : L.floorHeight;
++    out.push({ short: `${n}F`, levelNumber: n, elev: r2(y), height: h, kind: refuge ? 'refuge' : 'community' });
++    y = r2(y + h);
++  }
++  out.push({ short: 'RF', elev: y, height: 3.2, kind: 'roof' });
++  return out;
+ }
+ 
+ const levelName = (spec, d) => d.kind === 'garage-lobby' ? `${d.short} 住户电梯厅 · 接共享车库`
+@@ -206,7 +218,7 @@ export function westTower(spec) {
+         rect(c + CORE_W, -HD + 1.3, HW - 1.3, WEST_BANDS.corridor[0])].entries()) lv.walk.push(localWalk(F, `${id}-roof-deck-${j}`, 'deck', r));
+       lv.roofGarden = { planters: roofPlanters(c) };
+       lv.navObstacles = lv.roofGarden.planters.map((p) => ({ id: `${id}-${p.id}`, poly: lrectPoly(F, p.rect) }));
+-    } else {
++    } else if (d.kind !== 'refuge') {
+       for (const [slot, u] of data.units.entries()) {
+         const number = `${String(d.levelNumber).padStart(2, '0')}${String(slot + 1).padStart(2, '0')}`;
+         const uf = frame(cx + u.frame.ox, cz + u.frame.oz, u.frame.deg, `${lv.id}-${u.slot}`);
+@@ -220,7 +232,7 @@ export function westTower(spec) {
+   const bounds = polyBounds(outline);
+   const b = { id, code: id, name: spec.name, short: spec.short, en: spec.en, kind: 'tower', usage: 'community', community: 'west',
+     campusGroup: 'P1', accent: spec.accent, operator: WEST_GARDEN.operator, frame: F, footprint, bounds, outline, center: [cx, cz],
+-    radius: Math.hypot(2 * HW, 2 * HD) / 2, height: top, storeys: WEST_SITE.levels.top, levels: ids, rotundas: [], wings: [],
++    radius: Math.hypot(2 * HW, 2 * HD) / 2, height: top, storeys: defs.filter((d) => d.levelNumber).length, levels: ids, rotundas: [], wings: [],
+     plot, massing: { width: 2 * HW, depth: 2 * HD, top, podiumHeight: WEST_SITE.levels.lobbyHeight, facadeModule: 3.0 },
+     entryLevel: `${id}-1F`, stackedOn: null, stairLevelIds: [...ids],
+     fireFrontage: [r2(bounds.x0), r2(bounds.x1)], hardstand: { x0: r2(bounds.x0), z0: hs.z0, x1: r2(bounds.x1), z1: hs.z1 },
+diff --git a/src/render/build/community.js b/src/render/build/community.js
+index b178a39..1fa82cb 100644
+--- a/src/render/build/community.js
++++ b/src/render/build/community.js
+@@ -585,20 +585,38 @@ export function buildCommunityTower(ctx, b, records) {
+   const B = new BatchSet(materials), col = new Columns(), XB = keyed(B, EXTERIOR_KEYS);
+   const above = levels.filter((l) => l.elev >= 0), below = levels.filter((l) => l.elev < 0);
+   const stairs = layout.stairs.filter((s) => s.building === b.id);
+-  for (const u of above.flatMap((l) => l.units)) B.frame(u.frame, () => homeFacade(B, col, u, byId.get(u.level), pal));
++  // PROTOTYPE (design study): WEST_INSTANCE=1 draws the non-column parts of every repeated floor of a module once
++  // and instances them; storey-high walls (piers, pilasters, core) still go to the shared Columns and merge up the tower.
++  const INST = globalThis.process?.env?.WEST_INSTANCE && b.community === 'west';
++  const modKey = (lv) => !INST ? null : lv.kind === 'community' ? `A${globalThis.process.env.WEST_FAMILIES ? Math.min(3, Math.floor((lv.levelNumber - 2) / 15)) : ''}` : lv.kind === 'refuge' ? 'R' : null;
++  const modules = new Map();
++  for (const lv of above) { const k = modKey(lv); if (k) (modules.get(k) || modules.set(k, []).get(k)).push(lv); }
++  const repOf = new Map([...modules.values()].map((ls) => [ls[0].id, new BatchSet(materials)]));
++  const NB = new BatchSet(materials);   // throwaway: direct geometry of the non-representative module floors
++  const sink = (lv) => !modKey(lv) ? B : repOf.get(lv.id) || NB;
++  for (const u of above.flatMap((l) => l.units)) { const lv = byId.get(u.level), BB = sink(lv); BB.frame(u.frame, () => homeFacade(BB, col, u, lv, pal)); }
+   B.frame(b.frame, () => {
+     for (const lv of above) {
+-      slab(B, b, lv, pal.slab);
+-      if (lv.kind === 'roof') { crown(B, b, lv, pal); coreStorey(B, col, b.frame, lv, pal, 4.2, b.footprint); roofGarden(XB, b, lv, pal); continue; }
+-      if (lv.elev > 0) band(B, b, lv.elev, pal);
+-      perimeter(B, col, layout, b, lv, pal);
+-      coreStorey(B, col, b.frame, lv, pal, lv.height, b.footprint);
++      if (lv.kind === 'roof') { slab(B, b, lv, pal.slab); crown(B, b, lv, pal); coreStorey(B, col, b.frame, lv, pal, 4.2, b.footprint); roofGarden(XB, b, lv, pal); continue; }
++      const BB = sink(lv);
++      BB.frame(b.frame, () => { slab(BB, b, lv, pal.slab); if (lv.elev > 0) band(BB, b, lv.elev, pal); perimeter(BB, col, layout, b, lv, pal); coreStorey(BB, col, b.frame, lv, pal, lv.height, b.footprint); });
+       canopy(B, layout, b, lv, pal);
+       skyDoorway(B, layout, b, lv, pal);
+     }
+   });
+   col.flush(B);
+   B.flush(group);
++  NB.sets = {};
++  for (const [k, ls] of modules) {
++    const g = new THREE.Group(), r0 = ls[0];
++    repOf.get(r0.id).flush(g);
++    for (const m of g.children) {
++      const im = new THREE.InstancedMesh(m.geometry, m.material, ls.length), M = new THREE.Matrix4();
++      ls.forEach((lv, i) => im.setMatrixAt(i, M.makeTranslation(0, lv.elev - r0.elev, 0)));
++      im.name = `${b.id}-module-${k}-${m.name}`; im.castShadow = m.castShadow; im.receiveShadow = m.receiveShadow; im.renderOrder = m.renderOrder;
++      im.computeBoundingSphere(); im.userData.module = k; group.add(im);
++    }
++  }
+   // One sign mesh: the crown name on the main facade and the plate over the street door.
+   const signMat = ctx.mats.sign(signAtlas(b, pal));
+   signMat.clippingPlanes = [plane];

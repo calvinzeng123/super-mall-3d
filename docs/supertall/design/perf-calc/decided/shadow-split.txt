@@ -1,0 +1,9 @@
+overview  r 380 | today: W1:topbase | decided: W1:topbase
+overview  r 420 | today: — | decided: —
+overview  r 440 | today: — | decided: —
+campus    r 380 | today: W1:topbase W2:topbase | decided: W1:topbase W2:topbase
+campus    r 420 | today: W1:topbase W2:topbase | decided: W1:topbase W2:topbase
+campus    r 440 | today: W1:topbase W2:topbase | decided: W1:topbase W2:topbase
+river     r 320 | today: R4:topbase | decided: R4:topbase
+river     r 360 | today: — | decided: —
+river     r 380 | today: — | decided: —

@@ -1,0 +1,59 @@
+== 北苑 (150 m variant) ==
+  T1: refuge ['10F@46.2', '24F@93.6'] first 46.2 gaps [47.4] top-occ 137.4 (+43.8) OK
+  T1: own levels 30 top 35F@137.4 RF 140.7 crown 150.7 H/B podium 6.67 grade 8.79 LF 4 m/s 1F->top 39.4s ->RF 40.2s; LW 5 m/s 1F->PH 32.5s
+  T1: homes 41 level units 52 W homes 20 stops LW 25 LE 26 LF/LS 33
+  T1: R1 serves 17 homes ~86 p -> 17.2 m2; R2 serves 20 homes ~93 p -> 18.6 m2
+  T2: refuge ['10F@46.2', '24F@93.6'] first 46.2 gaps [47.4] top-occ 129.6 (+36.0) OK
+  T2: own levels 28 top 33F@129.6 RF 132.9 crown 142.9 H/B podium 6.18 grade 8.31 LF 4 m/s 1F->top 37.4s ->RF 38.3s; LW 5 m/s 1F->PH 30.9s
+  T2: homes 37 level units 48 W homes 18 stops LW 23 LE 24 LF/LS 31
+  T2: R1 serves 17 homes ~86 p -> 17.2 m2; R2 serves 16 homes ~75 p -> 15.0 m2
+
+== 西苑 S47 ==
+  W: refuge ['16F@46.5', '31F@93.0'] first 46.5 gaps [46.5] top-occ 142.5 (+49.5) OK
+  levels 50 RF 145.5 crown 156.5 H/B 7.58; 47F 142.5
+  F1 3 m/s 1F->31F 34.9s; F2 4 m/s 1F->47F 40.7s
+  home floors 44 homes/tower 220 pair 440
+  stops L 31 F1 33 H 20 F2 21
+  refuge 16F serves 14 fl x19 = 266 p -> 53.2 m2; 31F 16 fl x19 = 304 p -> 60.8 m2
+
+== R1-R4 ==
+  R1: refuge ['14F@45.6', '27F@90.9', '40F@137.1'] first 45.6 gaps [45.3, 46.2] top-occ 183.3 (+46.2) OK
+  R1: levels 56 top 53F@183.3 RF 186.7 crown 200.0 H/B 5.87/4.58 homes 96 recs 98 S 11 L-stops 52 LF 56 LF 5m/s 42.8s (4m/s 50.9)
+  R2: refuge ['14F@45.6', '27F@90.9', '40F@137.1'] first 45.6 gaps [45.3, 46.2] top-occ 173.1 (+36.0) OK
+  R2: levels 53 top 50F@173.1 RF 176.5 crown 189.8 H/B 5.55/4.33 homes 90 recs 92 S 8 L-stops 49 LF 53 LF 5m/s 40.8s (4m/s 48.3)
+  R3: refuge ['14F@45.6', '27F@90.9', '40F@137.1'] first 45.6 gaps [45.3, 46.2] top-occ 162.9 (+25.8) OK
+  R3: levels 50 top 47F@162.9 RF 166.3 crown 179.6 H/B 5.23/4.08 homes 84 recs 86 S 5 L-stops 46 LF 50 LF 5m/s 38.7s (4m/s 45.8)
+  R4: refuge ['14F@45.6', '27F@90.9', '40F@137.1'] first 45.6 gaps [45.3, 46.2] top-occ 152.7 (+15.6) OK
+  R4: levels 47 top 44F@152.7 RF 156.1 crown 169.4 H/B 4.91/3.83 homes 78 recs 80 S 2 L-stops 43 LF 47 LF 5m/s 36.7s (4m/s 43.2)
+  types {'o1': 96, 'o2': 170, 'o3': 74, 'ph': 8} sum 348
+  refuge 14F 12x9=108p 21.6m2; 27F 12x8=96p 19.2; 40F R1 11x9+12=111p 22.2
+
+== H ==
+  H: refuge ['13F@45.5', '26F@90.8', '37F@136.8'] first 45.5 gaps [45.3, 46.0] top-occ 179.4 (+42.6) OK
+  levels 51 RF 185.4 H/B 5.79 residences 176 keys 144 S1 4m/s 1F->48F 49.9s ->RF 51.4
+  stops RB 25 SH 5 HL 21 S1 51 S2 28
+  26F->27F gap: 25F 87.4 27F 99.4 = 12.0 m (need 5.2+3.2+3.6=12.0)
+
+== A ==
+  A: refuge ['13F@45.5', '26F@90.8', '39F@137.6'] first 45.5 gaps [45.3, 46.8] top-occ 169.6 (+32.0) OK
+  levels 47 RF 174.6 H/B 5.49 units 272+32 S 4m/s 1F->44F 47.4s
+  stops L 43 S 47
+
+== campus totals ==
+  levels 338 -> 526
+  lifts 76 -> 108
+  residence records 1066 -> 1520  homes 1046 -> 1490  (H 320 A 304 R 356/348 W 440 N 100/78)
+  all units 1730 -> 2184
+  gates 16 -> 35  zones 14 -> 33
+
+== skyline (crown/top, m) ==
+  R1   200.0
+  H    196.8
+  R2   189.8
+  A    184.6
+  R3   179.6
+  R4   169.4
+  W1   156.5
+  W2   156.5
+  T1   150.7
+  T2   142.9

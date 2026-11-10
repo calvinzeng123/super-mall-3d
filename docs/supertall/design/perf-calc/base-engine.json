@@ -1,0 +1,139 @@
+{
+ "layoutMs": 1662,
+ "layoutRuns": [
+  2273,
+  1662,
+  1648
+ ],
+ "layoutFpsMs": 844,
+ "firstFpsMs": 1145,
+ "navMs": 414,
+ "navRuns": [
+  642,
+  387,
+  414
+ ],
+ "navOpenMs": 593,
+ "layoutHeapMB": 14.4,
+ "navHeapMB": -29.4,
+ "levels": 338,
+ "buildings": 23,
+ "elevators": 76,
+ "stairs": 106,
+ "navFloors": 1591,
+ "floorsByKind": {
+  "level": 338,
+  "mezzanine": 1245,
+  "ground": 1,
+  "bridge": 7
+ },
+ "walls": 619403,
+ "pieces": 3095,
+ "obstacles": 43165,
+ "gridCells": 16672,
+ "links": {
+  "stair": 108,
+  "lift": 78,
+  "gate": 16
+ },
+ "stops": 1991,
+ "maxLiftStops": 32,
+ "gates": 16,
+ "zones": 14,
+ "layoutJsonMB": 54.63,
+ "levelsJsonMB": 51.28,
+ "byBuilding": {
+  "P1": {
+   "levels": 10,
+   "units": 367
+  },
+  "P2": {
+   "levels": 7,
+   "units": 107
+  },
+  "P3": {
+   "levels": 5,
+   "units": 116
+  },
+  "M": {
+   "levels": 4,
+   "units": 2
+  },
+  "H": {
+   "levels": 23,
+   "units": 190
+  },
+  "A": {
+   "levels": 23,
+   "units": 190
+  },
+  "R1": {
+   "levels": 32,
+   "units": 87
+  },
+  "R2": {
+   "levels": 32,
+   "units": 87
+  },
+  "R3": {
+   "levels": 32,
+   "units": 87
+  },
+  "R4": {
+   "levels": 32,
+   "units": 87
+  },
+  "WPG": {
+   "levels": 3,
+   "units": 0
+  },
+  "W1": {
+   "levels": 31,
+   "units": 135
+  },
+  "W2": {
+   "levels": 31,
+   "units": 135
+  },
+  "P1C": {
+   "levels": 8,
+   "units": 28
+  },
+  "P1S": {
+   "levels": 4,
+   "units": 6
+  },
+  "P1E": {
+   "levels": 5,
+   "units": 12
+  },
+  "P1E2": {
+   "levels": 4,
+   "units": 6
+  },
+  "P1W1": {
+   "levels": 4,
+   "units": 6
+  },
+  "P1W2": {
+   "levels": 3,
+   "units": 4
+  },
+  "P1W3": {
+   "levels": 3,
+   "units": 4
+  },
+  "P1W4": {
+   "levels": 4,
+   "units": 6
+  },
+  "T1": {
+   "levels": 19,
+   "units": 34
+  },
+  "T2": {
+   "levels": 19,
+   "units": 34
+  }
+ }
+}

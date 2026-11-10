@@ -1,0 +1,11 @@
+buildHospitality threw (partial results ok): Cannot read properties of undefined (reading 'visible')
+build ms 1175
+H exterior {"meshes":18,"verts":194782,"tris":64928,"MB":3.506} byMat {"concrete":19980,"extMetal":61380,"glowSoft":15996,"stone":19812,"extSatin":3060,"glassTint":4590,"glass":882,"facadeTravertine":65664,"ext":3414,"?":4}
+H lobby {"meshes":24,"verts":236484,"MB":4.257} roof {"meshes":5,"verts":3672}
+H per unit floor ≈ 10252 verts (exterior / unit floors 19 )
+A exterior {"meshes":18,"verts":172930,"tris":57644,"MB":3.113} byMat {"concrete":22860,"extMetal":50040,"glowSoft":16212,"stone":6204,"extSatin":3060,"glassTint":4590,"glass":882,"facadeTravertine":65664,"ext":3414,"?":4}
+A lobby {"meshes":25,"verts":238608,"MB":4.295} roof {"meshes":5,"verts":3672}
+A per unit floor ≈ 9102 verts (exterior / unit floors 19 )
+R1 exterior {"meshes":131,"verts":604960,"tris":201654,"MB":10.889} byMat {"concrete":21744,"stone":21852,"extMetal":319488,"glowSoft":16152,"extSatin":21816,"glassTint":55506,"glass":6414,"facadePlaster":141984,"?":4}
+R1 lobby {"meshes":19,"verts":34160,"MB":0.615} roof {"meshes":5,"verts":4272}
+R1 per unit floor ≈ 20861 verts (exterior / unit floors 29 )

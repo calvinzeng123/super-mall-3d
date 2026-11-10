@@ -1,0 +1,110 @@
+== today
+  T1 S 8F sill x-272               8.02 h   lost to {}
+  T1 S 8F sill x-260               8.02 h   lost to {}
+  T1 S 8F sill x-248               8.02 h   lost to {}
+  T1 S 24F x-260                   8.02 h   lost to {}
+  T1 S 36F x-260                   8.02 h   lost to {}
+  T2 S 8F sill x-222               8.02 h   lost to {}
+  T2 S 8F sill x-212               8.02 h   lost to {}
+  T2 S 8F sill x-202               8.02 h   lost to {}
+  T2 S 24F x-212                   8.02 h   lost to {}
+  P1-RF deck SQ-D1 (-258,-200)     8.02 h   lost to {}
+  P1-RF deck SQ-D4 (-182,-200)     8.02 h   lost to {}
+  P1-RF W deck (-195,-80)          6.48 h   lost to {'H': 1.53}
+  P1-RF W deck (-165,-100)         7.33 h   lost to {'H': 0.68}
+  R1 W face 2F z-218               3.05 h   lost to {'A': 0.95}
+  R1 W face 2F z-205               4.00 h   lost to {}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  R1 S face 2F x49                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             7.85 h   lost to {'H': 0.17}
+  W2 S 50 m SE slot                8.02 h   lost to {}
+== H200 A183
+  T1 S 8F sill x-272               6.40 h   lost to {'H': 1.62}
+  T1 S 8F sill x-260               6.38 h   lost to {'H': 1.63}
+  T1 S 8F sill x-248               6.38 h   lost to {'H': 1.63}
+  T1 S 24F x-260                   7.48 h   lost to {'H': 0.53}
+  T1 S 36F x-260                   8.02 h   lost to {}
+  T2 S 8F sill x-222               6.42 h   lost to {'H': 1.6}
+  T2 S 8F sill x-212               6.38 h   lost to {'H': 1.63}
+  T2 S 8F sill x-202               6.35 h   lost to {'H': 1.67}
+  T2 S 24F x-212                   7.47 h   lost to {'H': 0.55}
+  P1-RF deck SQ-D1 (-258,-200)     6.02 h   lost to {'H': 2.0}
+  P1-RF deck SQ-D4 (-182,-200)     5.95 h   lost to {'H': 2.07}
+  P1-RF W deck (-195,-80)          7.55 h   lost to {'H': 0.47}
+  P1-RF W deck (-165,-100)         7.78 h   lost to {'H': 0.23}
+  R1 W face 2F z-218               3.32 h   lost to {'A': 0.68}
+  R1 W face 2F z-205               4.00 h   lost to {}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  R1 S face 2F x49                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             6.32 h   lost to {'H': 1.7}
+  W2 S 50 m SE slot                6.32 h   lost to {'H': 1.7}
+== H170 A183
+  T1 S 8F sill x-272               6.40 h   lost to {'H': 1.62}
+  T1 S 8F sill x-260               6.38 h   lost to {'H': 1.63}
+  T1 S 8F sill x-248               6.38 h   lost to {'H': 1.63}
+  T1 S 24F x-260                   8.02 h   lost to {}
+  T1 S 36F x-260                   8.02 h   lost to {}
+  T2 S 8F sill x-222               6.42 h   lost to {'H': 1.6}
+  T2 S 8F sill x-212               6.40 h   lost to {'H': 1.62}
+  T2 S 8F sill x-202               6.38 h   lost to {'H': 1.63}
+  T2 S 24F x-212                   8.02 h   lost to {}
+  P1-RF deck SQ-D1 (-258,-200)     6.02 h   lost to {'H': 2.0}
+  P1-RF deck SQ-D4 (-182,-200)     5.95 h   lost to {'H': 2.07}
+  P1-RF W deck (-195,-80)          7.55 h   lost to {'H': 0.47}
+  P1-RF W deck (-165,-100)         7.78 h   lost to {'H': 0.23}
+  R1 W face 2F z-218               3.32 h   lost to {'A': 0.68}
+  R1 W face 2F z-205               4.00 h   lost to {}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  R1 S face 2F x49                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             6.32 h   lost to {'H': 1.7}
+  W2 S 50 m SE slot                6.52 h   lost to {'H': 1.5}
+== H150 A183
+  T1 S 8F sill x-272               6.93 h   lost to {'H': 1.08}
+  T1 S 8F sill x-260               7.20 h   lost to {'H': 0.82}
+  T1 S 8F sill x-248               7.35 h   lost to {'H': 0.67}
+  T1 S 24F x-260                   8.02 h   lost to {}
+  T1 S 36F x-260                   8.02 h   lost to {}
+  T2 S 8F sill x-222               6.93 h   lost to {'H': 1.08}
+  T2 S 8F sill x-212               6.92 h   lost to {'H': 1.1}
+  T2 S 8F sill x-202               6.80 h   lost to {'H': 1.22}
+  T2 S 24F x-212                   8.02 h   lost to {}
+  P1-RF deck SQ-D1 (-258,-200)     6.02 h   lost to {'H': 2.0}
+  P1-RF deck SQ-D4 (-182,-200)     6.00 h   lost to {'H': 2.02}
+  P1-RF W deck (-195,-80)          7.55 h   lost to {'H': 0.47}
+  P1-RF W deck (-165,-100)         7.78 h   lost to {'H': 0.23}
+  R1 W face 2F z-218               3.32 h   lost to {'A': 0.68}
+  R1 W face 2F z-205               4.00 h   lost to {}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  R1 S face 2F x49                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             6.32 h   lost to {'H': 1.7}
+  W2 S 50 m SE slot                6.87 h   lost to {'H': 1.15}
+== Htoday A183
+  T1 S 8F sill x-272               8.02 h   lost to {}
+  T1 S 8F sill x-260               8.02 h   lost to {}
+  T1 S 8F sill x-248               8.02 h   lost to {}
+  T1 S 24F x-260                   8.02 h   lost to {}
+  T1 S 36F x-260                   8.02 h   lost to {}
+  T2 S 8F sill x-222               8.02 h   lost to {}
+  T2 S 8F sill x-212               8.02 h   lost to {}
+  T2 S 8F sill x-202               8.02 h   lost to {}
+  T2 S 24F x-212                   8.02 h   lost to {}
+  P1-RF deck SQ-D1 (-258,-200)     8.02 h   lost to {}
+  P1-RF deck SQ-D4 (-182,-200)     8.02 h   lost to {}
+  P1-RF W deck (-195,-80)          6.48 h   lost to {'H': 1.53}
+  P1-RF W deck (-165,-100)         7.33 h   lost to {'H': 0.68}
+  R1 W face 2F z-218               3.32 h   lost to {'A': 0.68}
+  R1 W face 2F z-205               4.00 h   lost to {}
+  R1 S face 2F x32                 8.02 h   lost to {}
+  R1 S face 2F x49                 8.02 h   lost to {}
+  W2 S 2F sill SE slot             7.85 h   lost to {'H': 0.17}
+  W2 S 50 m SE slot                8.02 h   lost to {}
+noon altitude 39.5°; shadow length of 200 m: 243 m; H north face z −97.95 → T1/T2 south face z −224 = 126.0 m
+  08:00 alt  13.4° az  123.3°
+  09:00 alt  23.5° az  133.6°
+  10:00 alt  31.8° az  146.5°
+  11:00 alt  37.5° az  162.2°
+  12:00 alt  39.5° az  180.0°
+  13:00 alt  37.5° az  197.8°
+  14:00 alt  31.8° az  213.5°
+  15:00 alt  23.5° az  226.4°
+  16:00 alt  13.4° az  236.7°

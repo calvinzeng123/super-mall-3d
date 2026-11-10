@@ -1,0 +1,542 @@
+{
+ "label": "stretched",
+ "url": "http://127.0.0.1:5506/mall.html",
+ "quality": {
+  "quality": "high",
+  "shadows": true,
+  "shadowSize": 4096,
+  "bloom": true,
+  "crowd": 1
+ },
+ "load": {
+  "htmlSeconds": 2.857,
+  "buildSeconds": 16.182,
+  "totalSeconds": 26.432
+ },
+ "memLoad": {
+  "geometries": 3896,
+  "meshes": 17025,
+  "vertices": 16014211,
+  "geometryBytes": 317937692,
+  "instanceBytes": 1405020,
+  "sceneTextures": 703,
+  "persistent": {
+   "geometries": 3894,
+   "vertices": 16012750,
+   "bufferBytes": 317903260
+  },
+  "info": {
+   "geometries": 2323,
+   "textures": 350,
+   "programs": 61
+  },
+  "gpuBufferBytes": 178707372,
+  "gpuTextureBytes": 650090260,
+  "gpuTextures": 352,
+  "renderTargetBytes": 143654912,
+  "jsHeap": 615865021
+ },
+ "views": {
+  "campus": {
+   "total": {
+    "calls": 5025,
+    "triangles": 8611821
+   },
+   "main": {
+    "calls": 3273,
+    "triangles": 4692507
+   },
+   "shadow": {
+    "calls": 1719,
+    "triangles": 3919248
+   },
+   "labels": {
+    "calls": 33,
+    "triangles": 66
+   },
+   "post": {
+    "calls": 0,
+    "triangles": 0
+   },
+   "perBuilding": {
+    "P1": {
+     "meshes": 1589,
+     "calls": 1591,
+     "tris": 335960,
+     "inst": 4
+    },
+    "P2": {
+     "meshes": 384,
+     "calls": 384,
+     "tris": 143864,
+     "inst": 2
+    },
+    "P3": {
+     "meshes": 303,
+     "calls": 303,
+     "tris": 587834,
+     "inst": 2
+    },
+    "M": {
+     "meshes": 70,
+     "calls": 70,
+     "tris": 23668,
+     "inst": 0
+    },
+    "H": {
+     "meshes": 76,
+     "calls": 78,
+     "tris": 232118,
+     "inst": 4
+    },
+    "A": {
+     "meshes": 64,
+     "calls": 66,
+     "tris": 207866,
+     "inst": 2
+    },
+    "R1": {
+     "meshes": 267,
+     "calls": 321,
+     "tris": 367586,
+     "inst": 4
+    },
+    "R2": {
+     "meshes": 277,
+     "calls": 331,
+     "tris": 367214,
+     "inst": 4
+    },
+    "R3": {
+     "meshes": 277,
+     "calls": 331,
+     "tris": 367214,
+     "inst": 4
+    },
+    "R4": {
+     "meshes": 277,
+     "calls": 331,
+     "tris": 367214,
+     "inst": 4
+    },
+    "WPG": {
+     "meshes": 87,
+     "calls": 87,
+     "tris": 43112,
+     "inst": 0
+    },
+    "W1": {
+     "meshes": 27,
+     "calls": 27,
+     "tris": 1788,
+     "inst": 2
+    },
+    "W2": {
+     "meshes": 26,
+     "calls": 26,
+     "tris": 1756,
+     "inst": 2
+    },
+    "P1C": {
+     "meshes": 187,
+     "calls": 187,
+     "tris": 67334,
+     "inst": 2
+    },
+    "P1S": {
+     "meshes": 79,
+     "calls": 79,
+     "tris": 39075,
+     "inst": 0
+    },
+    "P1E": {
+     "meshes": 101,
+     "calls": 101,
+     "tris": 31932,
+     "inst": 2
+    },
+    "P1E2": {
+     "meshes": 71,
+     "calls": 71,
+     "tris": 18080,
+     "inst": 2
+    },
+    "P1W1": {
+     "meshes": 73,
+     "calls": 73,
+     "tris": 19532,
+     "inst": 0
+    },
+    "P1W2": {
+     "meshes": 64,
+     "calls": 64,
+     "tris": 12992,
+     "inst": 0
+    },
+    "P1W3": {
+     "meshes": 53,
+     "calls": 53,
+     "tris": 11746,
+     "inst": 0
+    },
+    "P1W4": {
+     "meshes": 76,
+     "calls": 76,
+     "tris": 17652,
+     "inst": 0
+    },
+    "T1": {
+     "meshes": 8,
+     "calls": 10,
+     "tris": 59138,
+     "inst": 0
+    },
+    "T2": {
+     "meshes": 8,
+     "calls": 10,
+     "tris": 59120,
+     "inst": 0
+    },
+    "site": {
+     "meshes": 719,
+     "calls": 719,
+     "tris": 1152936,
+     "inst": 35
+    },
+    "hospitality-connections": {
+     "meshes": 8,
+     "calls": 8,
+     "tris": 18924,
+     "inst": 0
+    }
+   },
+   "seconds": 195.535
+  },
+  "N1": {
+   "total": {
+    "calls": 3050,
+    "triangles": 6811511
+   },
+   "main": {
+    "calls": 1306,
+    "triangles": 2729679
+   },
+   "shadow": {
+    "calls": 1725,
+    "triangles": 4081794
+   },
+   "labels": {
+    "calls": 19,
+    "triangles": 38
+   },
+   "post": {
+    "calls": 0,
+    "triangles": 0
+   },
+   "perBuilding": {
+    "P1": {
+     "meshes": 1181,
+     "calls": 1182,
+     "tris": 339535,
+     "inst": 2
+    },
+    "P3": {
+     "meshes": 176,
+     "calls": 176,
+     "tris": 560944,
+     "inst": 0
+    },
+    "H": {
+     "meshes": 56,
+     "calls": 58,
+     "tris": 223974,
+     "inst": 0
+    },
+    "A": {
+     "meshes": 2,
+     "calls": 2,
+     "tris": 41868,
+     "inst": 0
+    },
+    "WPG": {
+     "meshes": 87,
+     "calls": 87,
+     "tris": 43112,
+     "inst": 0
+    },
+    "W1": {
+     "meshes": 11,
+     "calls": 13,
+     "tris": 85422,
+     "inst": 0
+    },
+    "W2": {
+     "meshes": 30,
+     "calls": 32,
+     "tris": 85518,
+     "inst": 0
+    },
+    "P1C": {
+     "meshes": 129,
+     "calls": 129,
+     "tris": 61822,
+     "inst": 0
+    },
+    "P1S": {
+     "meshes": 79,
+     "calls": 79,
+     "tris": 39075,
+     "inst": 0
+    },
+    "P1W1": {
+     "meshes": 73,
+     "calls": 73,
+     "tris": 19532,
+     "inst": 0
+    },
+    "P1W2": {
+     "meshes": 64,
+     "calls": 64,
+     "tris": 12992,
+     "inst": 0
+    },
+    "P1W3": {
+     "meshes": 53,
+     "calls": 53,
+     "tris": 11746,
+     "inst": 0
+    },
+    "P1W4": {
+     "meshes": 76,
+     "calls": 76,
+     "tris": 17652,
+     "inst": 0
+    },
+    "T1": {
+     "meshes": 8,
+     "calls": 10,
+     "tris": 59138,
+     "inst": 0
+    },
+    "T2": {
+     "meshes": 8,
+     "calls": 10,
+     "tris": 59120,
+     "inst": 0
+    },
+    "site": {
+     "meshes": 443,
+     "calls": 443,
+     "tris": 565125,
+     "inst": 4
+    },
+    "hospitality-connections": {
+     "meshes": 8,
+     "calls": 8,
+     "tris": 18924,
+     "inst": 0
+    }
+   },
+   "seconds": 83.506
+  },
+  "R1": {
+   "total": {
+    "calls": 5021,
+    "triangles": 8603069
+   },
+   "main": {
+    "calls": 3286,
+    "triangles": 4683789
+   },
+   "shadow": {
+    "calls": 1719,
+    "triangles": 3919248
+   },
+   "labels": {
+    "calls": 16,
+    "triangles": 32
+   },
+   "post": {
+    "calls": 0,
+    "triangles": 0
+   },
+   "perBuilding": {
+    "P1": {
+     "meshes": 1589,
+     "calls": 1591,
+     "tris": 335960,
+     "inst": 4
+    },
+    "P2": {
+     "meshes": 374,
+     "calls": 374,
+     "tris": 143754,
+     "inst": 2
+    },
+    "P3": {
+     "meshes": 303,
+     "calls": 303,
+     "tris": 587834,
+     "inst": 2
+    },
+    "M": {
+     "meshes": 70,
+     "calls": 70,
+     "tris": 23668,
+     "inst": 0
+    },
+    "H": {
+     "meshes": 76,
+     "calls": 78,
+     "tris": 232118,
+     "inst": 4
+    },
+    "A": {
+     "meshes": 75,
+     "calls": 77,
+     "tris": 208178,
+     "inst": 2
+    },
+    "R1": {
+     "meshes": 277,
+     "calls": 331,
+     "tris": 367706,
+     "inst": 4
+    },
+    "R2": {
+     "meshes": 277,
+     "calls": 331,
+     "tris": 367214,
+     "inst": 4
+    },
+    "R3": {
+     "meshes": 277,
+     "calls": 331,
+     "tris": 367214,
+     "inst": 4
+    },
+    "R4": {
+     "meshes": 263,
+     "calls": 317,
+     "tris": 365682,
+     "inst": 4
+    },
+    "WPG": {
+     "meshes": 87,
+     "calls": 87,
+     "tris": 43112,
+     "inst": 0
+    },
+    "W1": {
+     "meshes": 47,
+     "calls": 47,
+     "tris": 2048,
+     "inst": 2
+    },
+    "W2": {
+     "meshes": 45,
+     "calls": 45,
+     "tris": 1984,
+     "inst": 2
+    },
+    "P1C": {
+     "meshes": 187,
+     "calls": 187,
+     "tris": 67334,
+     "inst": 2
+    },
+    "P1S": {
+     "meshes": 79,
+     "calls": 79,
+     "tris": 39075,
+     "inst": 0
+    },
+    "P1E": {
+     "meshes": 101,
+     "calls": 101,
+     "tris": 31932,
+     "inst": 2
+    },
+    "P1E2": {
+     "meshes": 71,
+     "calls": 71,
+     "tris": 18080,
+     "inst": 2
+    },
+    "P1W1": {
+     "meshes": 73,
+     "calls": 73,
+     "tris": 19532,
+     "inst": 0
+    },
+    "P1W2": {
+     "meshes": 64,
+     "calls": 64,
+     "tris": 12992,
+     "inst": 0
+    },
+    "P1W3": {
+     "meshes": 53,
+     "calls": 53,
+     "tris": 11746,
+     "inst": 0
+    },
+    "P1W4": {
+     "meshes": 76,
+     "calls": 76,
+     "tris": 17652,
+     "inst": 0
+    },
+    "T1": {
+     "meshes": 29,
+     "calls": 31,
+     "tris": 59410,
+     "inst": 0
+    },
+    "T2": {
+     "meshes": 29,
+     "calls": 31,
+     "tris": 59392,
+     "inst": 0
+    },
+    "site": {
+     "meshes": 734,
+     "calls": 734,
+     "tris": 1147564,
+     "inst": 35
+    },
+    "hospitality-connections": {
+     "meshes": 8,
+     "calls": 8,
+     "tris": 18924,
+     "inst": 0
+    }
+   },
+   "seconds": 83.293
+  }
+ },
+ "memAfter": {
+  "geometries": 3896,
+  "meshes": 17025,
+  "vertices": 16014211,
+  "geometryBytes": 317937692,
+  "instanceBytes": 1405020,
+  "sceneTextures": 703,
+  "persistent": {
+   "geometries": 3894,
+   "vertices": 16012750,
+   "bufferBytes": 317903260
+  },
+  "info": {
+   "geometries": 2418,
+   "textures": 368,
+   "programs": 61
+  },
+  "gpuBufferBytes": 191311284,
+  "gpuTextureBytes": 652216180,
+  "gpuTextures": 370,
+  "renderTargetBytes": 143654912,
+  "jsHeap": 370807684
+ },
+ "errors": []
+}

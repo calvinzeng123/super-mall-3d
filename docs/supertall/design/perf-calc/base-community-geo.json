@@ -1,0 +1,68 @@
+{
+ "layoutMs": 4410,
+ "towers": [
+  {
+   "id": "W1",
+   "levels": 31,
+   "units": 135,
+   "vertsExt": 125436,
+   "vertsLobby": 26688,
+   "vertsBase": 4224,
+   "MB": 2.814,
+   "nearVerts": 123564,
+   "farVerts": 1848,
+   "farTris": 616,
+   "trisVisible": 41188,
+   "drawCalls": 8,
+   "buildMs": 273
+  },
+  {
+   "id": "W2",
+   "levels": 31,
+   "units": 135,
+   "vertsExt": 125190,
+   "vertsLobby": 31728,
+   "vertsBase": 4224,
+   "MB": 2.901,
+   "nearVerts": 123318,
+   "farVerts": 1848,
+   "farTris": 616,
+   "trisVisible": 41106,
+   "drawCalls": 8,
+   "buildMs": 151
+  },
+  {
+   "id": "T1",
+   "levels": 19,
+   "units": 34,
+   "vertsExt": 81642,
+   "vertsLobby": 14160,
+   "vertsBase": 0,
+   "MB": 1.724,
+   "nearVerts": 81642,
+   "farVerts": 0,
+   "farTris": 0,
+   "trisVisible": 27206,
+   "drawCalls": 8,
+   "buildMs": 57
+  },
+  {
+   "id": "T2",
+   "levels": 19,
+   "units": 34,
+   "vertsExt": 81306,
+   "vertsLobby": 9492,
+   "vertsBase": 0,
+   "MB": 1.634,
+   "nearVerts": 81306,
+   "farVerts": 0,
+   "farTris": 0,
+   "trisVisible": 27094,
+   "drawCalls": 8,
+   "buildMs": 41
+  }
+ ],
+ "siteVerts": 48203,
+ "siteMB": 0.868,
+ "totalMB": 9.941
+}

@@ -1,0 +1,19 @@
+layout ms 3068
+buildHospitality threw (continuing with what was built): Cannot read properties of undefined (reading 'visible')
+R1 all { meshes: 223, inst: 6, verts: 1071952, tris: 354558, mb18: 19.295 } lodGroups 52 meshes/lod 4 coreLods 2 withoutLods { meshes: 15, inst: 6, verts: 237040, tris: 76254, mb18: 4.267 }
+  lod template meshes facadePlaster:4752 extMetal:8820 glassTint:1836 extSatin:648
+  direct meshes 15 concrete:24336 stone:37860 extMetal:95232 glowSoft:28020 extSatin:4680 glassTint:3918 glass:11382 facadePlaster:7488 concrete:3816 extMetal:4464 concrete:4392 extMetal:4752 concrete:2952 extMetal:3744 :4
+  instanced R1-protected-stairs-4.2-concrete n=0 vis=false | R1-protected-stairs-4.2-extMetal n=0 vis=false | R1-protected-stairs-4.8-concrete n=1 vis=true | R1-protected-stairs-4.8-extMetal n=1 vis=true | R1-protected-stairs-3.4-concrete n=1 vis=true | R1-protected-stairs-3.4-extMetal n=1 vis=true
+  ground { meshes: 19, inst: 0, verts: 34160, tris: 11392, mb18: 0.615 }
+  roof { meshes: 5, inst: 0, verts: 4272, tris: 1424, mb18: 0.077 }
+H all { meshes: 18, inst: 8, verts: 460570, tris: 148100, mb18: 8.29 } lodGroups 0 meshes/lod 0 coreLods 0 withoutLods { meshes: 18, inst: 8, verts: 460570, tris: 148100, mb18: 8.29 }
+  direct meshes 18 concrete:23724 extMetal:121536 glowSoft:36876 stone:48348 extSatin:7236 glassTint:11550 glass:1926 facadeTravertine:165888 ext:8634 concrete:3528 extMetal:4032 concrete:4104 extMetal:4608 concrete:5832 extMetal:6048 concrete:2952 extMetal:3744 :4
+  instanced H-protected-stairs-3.9-concrete n=0 vis=false | H-protected-stairs-3.9-extMetal n=0 vis=false | H-protected-stairs-4.5-concrete n=0 vis=false | H-protected-stairs-4.5-extMetal n=0 vis=false | H-protected-stairs-6.5-concrete n=1 vis=true | H-protected-stairs-6.5-extMetal n=1 vis=true | H-protected-stairs-3.4-concrete n=1 vis=true | H-protected-stairs-3.4-extMetal n=1 vis=true
+  ground { meshes: 24, inst: 0, verts: 236484, tris: 78834, mb18: 4.257 }
+  roof { meshes: 5, inst: 0, verts: 3672, tris: 1224, mb18: 0.066 }
+A all { meshes: 18, inst: 8, verts: 355954, tris: 114956, mb18: 6.407 } lodGroups 0 meshes/lod 0 coreLods 0 withoutLods { meshes: 18, inst: 8, verts: 355954, tris: 114956, mb18: 6.407 }
+  direct meshes 18 concrete:21564 extMetal:78552 glowSoft:33492 stone:12540 extSatin:6516 glassTint:10350 glass:1746 facadeTravertine:148608 ext:7734 concrete:3528 extMetal:4032 concrete:4104 extMetal:4608 concrete:5832 extMetal:6048 concrete:2952 extMetal:3744 :4
+  instanced A-protected-stairs-3.9-concrete n=0 vis=false | A-protected-stairs-3.9-extMetal n=0 vis=false | A-protected-stairs-4.5-concrete n=0 vis=false | A-protected-stairs-4.5-extMetal n=0 vis=false | A-protected-stairs-6.5-concrete n=2 vis=true | A-protected-stairs-6.5-extMetal n=2 vis=true | A-protected-stairs-3.4-concrete n=0 vis=false | A-protected-stairs-3.4-extMetal n=0 vis=false
+  ground { meshes: 25, inst: 0, verts: 238608, tris: 79542, mb18: 4.295 }
+  roof { meshes: 5, inst: 0, verts: 3672, tris: 1224, mb18: 0.066 }
+R1-R4 total exterior meshes 820 verts 3928708 MB@18 70.72

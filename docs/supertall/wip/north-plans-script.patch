@@ -1,0 +1,251 @@
+diff --git a/scripts/plans/north.mjs b/scripts/plans/north.mjs
+index 8bd2e52..ff5020b 100644
+--- a/scripts/plans/north.mjs
++++ b/scripts/plans/north.mjs
+@@ -1,80 +1,199 @@
+-/** 云澜·北苑 T1/T2 home plans (一梯一户 大平层 + 错层复式): generator and data-file text (≈ 40 s per tower).
++/** 云澜·北苑 T1/T2 home plans (一梯一户 大平层 + 错层复式 + 云端大平层 + 顶层复式): generator and data-file text.
+  * Moved out of scripts/prepare-community-plans.mjs (P0a, unchanged output); the 北苑 package owns it.
+- * Written to src/layout/community-plan-data-north.js by the driver (`--community north`). */
+-import { generateHome, generateDuplex, validateHome, planSignature as sig } from '../../src/layout/community-plan.js';
++ * Written to src/layout/community-plan-data-north.js by the driver (`--community north`, full regeneration) or by
++ * this module itself (`node scripts/plans/north.mjs --extend-north`: keep the frozen homes, generate the new bands).
++ *
++ * Supertall P-north (SPEC §1.1, north.md §3): the towers rise to 35F / 33F (RF 140.7 / 132.9 m).
++ *   - The 24 homes of today's loop (8F–24F) are generated exactly as before, then 10W, 10E, 24W and the 23–24E duplex
++ *     are retired (10F and 24F become 避难层). Their keys and signatures stay in `used`, so the drop cannot change
++ *     anything generated after it, and they are recorded per tower in `retired` so --extend-north seeds the same set.
++ *   - NORTH_BANDS then adds, in a fixed order: 23E 端户大平层, band C 云端大平层 (25F–33F / 25F–31F, variantExtras on,
++ *     rank-gated) and band PH 顶层复式 (the top two floors, both sides).
++ *   - Every part stores `spec: { type, variant, voidAbove?, variantExtras? }` (the variant the loop accepted), and
++ *     every home one 户内避难间 (`plan.refugeRoom`, on its entry level when that level has a window bedroom / study,
++ *     preferring the north = hardstand face). Kept homes differ from the frozen data only by refugeRoom / spec.
++ * Full regeneration and --extend-north give byte-identical output (tests/community-plans-north.test.js). */
++import { generateHome, generateDuplex, validateHome, planSignature as sig, planKey, pickRefugeRoom } from '../../src/layout/community-plan.js';
+ import { dataFile } from './text.mjs';
+ 
+ const quiet = () => {};
+ export const NORTH_TARGET = 'src/layout/community-plan-data-north.js';
+ 
+-// Plate z[-240,-224]; core column 8 × 16 at the north facade line; homes W/E of the core.
++// Plate z[-240,-224]; core column 8 × 16 at the north facade line; homes W/E of the core. top: the top floor (PH upper level).
+ export const NORTH = {
+   towers: [
+-    { id: 'T1', plate: [-278, -242], core: [-264, -256] },
+-    { id: 'T2', plate: [-228, -196], core: [-216, -208] },
++    { id: 'T1', plate: [-278, -242], core: [-264, -256], top: 35 },
++    { id: 'T2', plate: [-228, -196], core: [-216, -208], top: 33 },
+   ],
+ };
++/** Homes of today's loop that the supertall stack retires (10F 避难层 · 24F 避难层 + 加强层). */
++export const NORTH_RETIRED = Object.freeze(['10W', '10E', '24W', '23E']);
++/** The new bands, generated in this order after today's loop (SPEC §1.1 "Plan generation"). */
++export const NORTH_BANDS = Object.freeze([
++  { band: 'D-end', floors: [23, 23], side: 'E', kind: 'flat', types: ['4BR'] },
++  { band: 'C', floors: { T1: [25, 33], T2: [25, 31] }, kind: 'flat', variantExtras: true,
++    types: { T1: ['4BR', '3BR', '5BR', '4BR'], T2: ['3BR', '4BR', '4BR', '3BR'] } },
++  { band: 'PH', floors: 'top-1..top', kind: 'penthouse', sides: 'both', type: '5BR', voidAbove: true },
++].map(Object.freeze));
++/** C-band candidates must rank in the generator's top 25 (so 18 flats per tower do not slide down the ranking). */
++export const NORTH_RANK_GATE = 24;
++
+ const ENTRY_W = 4.8, ENTRY_E = 16 - 4.8; // core landing at core z[4.25,5.35] (world z -235.2)
+-/** The 24 homes (大平层 + interlocking duplexes) of one 北苑 tower (≈ 40 s). */
+-export function northTower(T, log = quiet) {
++/** The north (river, hardstand) face in unit-local sides: W units run x from the north, E units from the south. */
++const NORTH_FACE = { W: 'W', E: 'E' };
++const homeTag = (T, n, side) => `${T.id}-${String(n).padStart(2, '0')}${side}`;
++const retiredId = (T, tag) => tag === '23E' ? `${T.id}-23E` : `${T.id}-${tag.padStart(3, '0')}`;
++
++/** The strings a home adds to `used` (keys and signatures), in the order today's loop adds them. */
++export function usedKeys(hm) {
++  const plans = hm.parts.map((p) => p.plan);
++  if (plans.length === 2) return [`${planKey(plans[0])}|${planKey(plans[1])}`, planKey(plans[0]), planKey(plans[1]), `${sig(plans[0])}|${sig(plans[1])}`];
++  return [planKey(plans[0]), sig(plans[0])];
++}
++
++/** The tower's homes (today's loop, then NORTH_BANDS). extend: the frozen tower record, whose kept homes and
++ * `retired` keys are loaded instead of re-running today's loop (the result is byte-identical). */
++export function northTower(T, log = quiet, { extend = null } = {}) {
+   const wingW = T.core[0] - T.plate[0], wingE = T.plate[1] - T.core[1];
+-  const homes = [], used = new Set();
+-  const make = (side, spec) => {
+-    const base = { w: 16, d: side === 'W' ? wingW : wingE, exposed: { left: true, right: true }, lux: true,
+-      entryAt: side === 'W' ? ENTRY_W : ENTRY_E, view: side === 'W' ? 'left' : 'right', ...spec };
+-    for (let v = base.variant || 0; v < (base.variant || 0) + 40; v++) {
+-      const g = generateHome({ ...base, variant: v, exclude: [...used] });
+-      if (g && !used.has(g.meta.key) && !used.has(sig(g.residence))) { used.add(g.meta.key); used.add(sig(g.residence)); return { spec: { ...base, variant: v }, g }; }
++  const base = (side) => ({ w: 16, d: side === 'W' ? wingW : wingE, exposed: { left: true, right: true }, lux: true,
++    entryAt: side === 'W' ? ENTRY_W : ENTRY_E, view: side === 'W' ? 'left' : 'right' });
++  let homes = [], retired = [];
++  const used = new Set();
++  const make = (side, spec, { gate = null } = {}) => {
++    const b = { ...base(side), ...spec };
++    for (const pass of gate == null ? [null] : [gate, null]) {
++      for (let v = b.variant || 0; v < (b.variant || 0) + 40; v++) {
++        const g = generateHome({ ...b, variant: v, exclude: [...used] });
++        if (!g || used.has(g.meta.key) || used.has(sig(g.residence))) continue;
++        if (pass != null && g.meta.rank > pass) continue;
++        used.add(g.meta.key); used.add(sig(g.residence));
++        return { spec: { ...b, variant: v }, g };
++      }
+     }
+-    return { spec: base, g: null };
++    return { spec: b, g: null };
+   };
+-  // 大平层: 8F–13F both sides, 14F east, 24F west (penthouse).
+-  const flatTypes = ['3BR', '4BR', '4BR', '3BR', '4BR', '3BR'];
+-  for (let n = 8; n <= 13; n++) for (const side of ['W', 'E']) {
+-    const type = flatTypes[(n - 8 + (side === 'E' ? 1 : 0)) % 6];
+-    const h = make(side, { id: `${T.id}-${n}${side}`, type, variant: (n * 3 + (side === 'E' ? 7 : 0)) % 16 });
+-    homes.push({ id: `${T.id}-${String(n).padStart(2, '0')}${side}`, kind: 'flat', side, levels: [n], parts: [h] });
+-  }
+-  for (const [n, side, type] of [[14, 'E', '3BR'], [24, 'W', '4BR']]) {
+-    const h = make(side, { id: `${T.id}-${n}${side}`, type, variant: n % 16 });
+-    homes.push({ id: `${T.id}-${n}${side}`, kind: n === 24 ? 'penthouse-flat' : 'flat', side, levels: [n], parts: [h] });
+-  }
+-  // Interlocking duplexes: W homes start on even floors, E homes on odd floors.
+-  for (let n = 14; n <= 23; n++) {
+-    const side = n % 2 === 0 ? 'W' : 'E';
+-    const k = (n - 14) >> 1;
+-    const type = ['4BR', '5BR', '4BR', '5BR', '4BR'][k];
+-    const spec = { id: `${T.id}-${n}${side}`, w: 16, d: side === 'W' ? wingW : wingE, exposed: { left: true, right: true }, lux: true,
+-      entryAt: side === 'W' ? ENTRY_W : ENTRY_E, view: side === 'W' ? 'left' : 'right', type, voidAbove: k % 2 === 0, variant: (n * 5 + k) % 16 };
++  const duplex = (side, spec, tries = 24) => {
++    spec = { ...base(side), ...spec };
+     let dup = null;
+-    for (let v = 0; v < 24 && !dup; v++) {
++    for (let v = 0; v < tries && !dup; v++) {
+       const g = generateDuplex({ ...spec, variant: spec.variant + v }, { exclude: [...used] });
+-      if (g && !used.has(g.key) && !used.has(sig(g.lower.residence) + '|' + sig(g.upper.residence))) dup = g;
++      if (g && !used.has(g.key) && !used.has(sig(g.lower.residence) + '|' + sig(g.upper.residence))) { dup = g; spec = { ...spec, variant: spec.variant + v }; }
+       if (!dup && spec.voidAbove && v === 11) spec.voidAbove = false;   // fall back to a flat ceiling
+     }
+     if (dup) { used.add(dup.key); used.add(dup.lower.meta.key); used.add(dup.upper.meta.key); used.add(sig(dup.lower.residence) + '|' + sig(dup.upper.residence)); }
+     const parts = dup ? [{ spec: { ...spec, level: 'lower' }, g: dup.lower }, { spec: { ...spec, level: 'upper' }, g: dup.upper }] : [{ spec: { ...spec, level: 'lower' }, g: null }];
+-    homes.push({ id: `${T.id}-${n}${side}`, kind: 'duplex', side, levels: [n, n + 1], parts, voidRect: dup?.voidRect || null });
++    return { parts, voidRect: dup?.voidRect || null };
++  };
++
++  if (extend) {
++    // Seed `used` exactly as today's loop left it: every frozen home (kept and retired) in generation order.
++    const kept = extend.homes.filter((h) => !h.band);
++    for (const k of [...kept.map(usedKeys).flat(), ...(extend.retired || []).flatMap((r) => r.used)]) used.add(k);
++    homes = kept.map((h) => ({ frozen: h }));
++    retired = (extend.retired || []).map((r) => ({ ...r }));
++  } else {
++    // ---------- today's loop (unchanged): 大平层 8F–13F both sides, 14F east, 24F west ----------
++    const flatTypes = ['3BR', '4BR', '4BR', '3BR', '4BR', '3BR'];
++    for (let n = 8; n <= 13; n++) for (const side of ['W', 'E']) {
++      const type = flatTypes[(n - 8 + (side === 'E' ? 1 : 0)) % 6];
++      const h = make(side, { id: `${T.id}-${n}${side}`, type, variant: (n * 3 + (side === 'E' ? 7 : 0)) % 16 });
++      homes.push({ id: homeTag(T, n, side), kind: 'flat', side, levels: [n], parts: [h] });
++    }
++    for (const [n, side, type] of [[14, 'E', '3BR'], [24, 'W', '4BR']]) {
++      const h = make(side, { id: `${T.id}-${n}${side}`, type, variant: n % 16 });
++      homes.push({ id: `${T.id}-${n}${side}`, kind: n === 24 ? 'penthouse-flat' : 'flat', side, levels: [n], parts: [h] });
++    }
++    // Interlocking duplexes: W homes start on even floors, E homes on odd floors.
++    for (let n = 14; n <= 23; n++) {
++      const side = n % 2 === 0 ? 'W' : 'E';
++      const k = (n - 14) >> 1;
++      const type = ['4BR', '5BR', '4BR', '5BR', '4BR'][k];
++      const d = duplex(side, { id: `${T.id}-${n}${side}`, type, voidAbove: k % 2 === 0, variant: (n * 5 + k) % 16 });
++      homes.push({ id: `${T.id}-${n}${side}`, kind: 'duplex', side, levels: [n, n + 1], ...d });
++    }
++    // ---------- retire 10W, 10E, 24W and 23–24E (their keys stay in `used`) ----------
++    const gone = new Set(NORTH_RETIRED.map((t) => retiredId(T, t)));
++    const out = (h) => gone.has(h.id) && (h.id !== `${T.id}-23E` || h.kind === 'duplex');
++    retired = homes.filter(out).map((h) => ({ id: h.id, kind: h.kind, side: h.side, levels: h.levels, used: usedKeys(packHome(h)) }));
++    homes = homes.filter((h) => !out(h));
+   }
+-  for (const hm of homes) {
++
++  // ---------- new bands, in a fixed order ----------
++  for (const B of NORTH_BANDS) {
++    if (B.band === 'D-end') {
++      const n = B.floors[0], h = make(B.side, { id: `${T.id}-${n}${B.side}`, type: B.types[0], variant: n % 16 });
++      homes.push({ id: homeTag(T, n, B.side), kind: 'flat', band: B.band, side: B.side, levels: [n], parts: [h] });
++    } else if (B.band === 'C') {
++      const [lo, hi] = B.floors[T.id], types = B.types[T.id];
++      for (let n = lo; n <= hi; n++) for (const side of ['W', 'E']) {
++        const type = types[(n - lo + (side === 'E' ? 1 : 0)) % types.length];
++        const h = make(side, { id: `${T.id}-${n}${side}`, type, variant: (n * 3 + (side === 'E' ? 7 : 0)) % 16, variantExtras: true }, { gate: NORTH_RANK_GATE });
++        homes.push({ id: homeTag(T, n, side), kind: 'flat', band: B.band, side, levels: [n], parts: [h] });
++      }
++    } else if (B.band === 'PH') {
++      const n = T.top - 1;
++      for (const side of ['W', 'E']) {
++        const d = duplex(side, { id: `${T.id}-${n}${side}`, type: B.type, voidAbove: B.voidAbove, variant: (n * 5 + (side === 'E' ? 3 : 0)) % 16 });
++        homes.push({ id: `${T.id}-${n}${side}`, kind: 'penthouse', band: B.band, side, levels: [n, n + 1], ...d });
++      }
++    }
++  }
++
++  const packed = homes.map((h) => (h.frozen ? h.frozen : withRefuge(packHome(h))));
++  for (const hm of homes.filter((h) => !h.frozen)) {
+     const ok = hm.parts.every(p => p.g);
+     const errs = hm.parts.flatMap(p => p.g ? validateHome(p.g.residence, p.spec).map(e => `${p.spec.id}:${e}`) : [`${p.spec.id}:NO PLAN`]);
+     const stairSame = hm.parts.length === 2 && ok ? JSON.stringify(hm.parts[0].g.residence.homeStair.block) === JSON.stringify(hm.parts[1].g.residence.homeStair.block) : null;
+     const area = hm.parts.reduce((n, p) => n + (p.g?.residence.area || 0), 0);
+-    log(`${hm.id.padEnd(8)} ${hm.kind.padEnd(14)} ${hm.levels.map(n => n + 'F').join('+').padEnd(8)} ${String(area.toFixed(0)).padStart(4)}m²${hm.voidRect ? ' 挑空' : ''}${stairSame === false ? ' STAIR-MISMATCH' : ''} errs ${errs.length ? errs.join(';') : 'none'}`);
++    const meta = hm.parts.map((p) => p.g ? `r${p.g.meta.rank} s${p.g.meta.score}` : '').join(' ');
++    log(`${hm.id.padEnd(8)} ${hm.kind.padEnd(14)} ${hm.levels.map(n => n + 'F').join('+').padEnd(8)} ${String(area.toFixed(0)).padStart(4)}m²${hm.voidRect ? ' 挑空' : ''}${stairSame === false ? ' STAIR-MISMATCH' : ''} ${meta} errs ${errs.length ? errs.join(';') : 'none'}`);
+   }
+-  const sigs = homes.filter(h => h.parts.every(p => p.g)).map(h => h.parts.map(p => sig(p.g.residence)).join('|'));
+-  log(`${T.id}: wings W ${wingW} / E ${wingE} m · homes ${homes.length} · unit records ${homes.reduce((n, h) => n + h.parts.length, 0)} · distinct home types ${new Set(sigs).size}/${homes.length}`);
+-  return { ...T, homes: homes.map(h => ({ id: h.id, kind: h.kind, side: h.side, levels: h.levels, voidRect: h.voidRect || null,
+-    parts: h.parts.map(p => ({ id: p.spec.id, level: p.spec.level || 'flat', type: p.spec.type, plan: p.g?.residence || null })) })) };
++  const sigs = packed.filter(h => h.parts.every(p => p.plan)).map(h => h.parts.map(p => sig(p.plan)).join('|'));
++  log(`${T.id}: wings W ${wingW} / E ${wingE} m · homes ${packed.length} · unit records ${packed.reduce((n, h) => n + h.parts.length, 0)} · distinct home types ${new Set(sigs).size}/${packed.length} · retired ${retired.map((r) => r.id).join(' ')}`);
++  const { top: _top, ...rest } = T;
++  return { ...rest, retired, homes: packed };
++}
++
++/** A generated home in its data shape (the part spec recorded: type, variant, voidAbove, variantExtras). */
++function packHome(h) {
++  return { id: h.id, kind: h.kind, side: h.side, levels: h.levels, voidRect: h.voidRect || null, ...(h.band ? { band: h.band } : {}),
++    parts: h.parts.map(p => ({ id: p.spec.id, level: p.spec.level || 'flat', type: p.spec.type, plan: p.g?.residence || null,
++      spec: { type: p.spec.type, variant: p.spec.variant, ...(p.spec.voidAbove != null ? { voidAbove: p.spec.voidAbove } : {}),
++        ...(p.spec.variantExtras ? { variantExtras: true } : {}) } })) };
++}
++
++/** One 户内避难间 per home (GB 50016 §5.5.32): on the entry level when it has a window bedroom or study, else on the
++ * upper level; the north (hardstand) face first, then a bedroom, the master, the largest (pickRefugeRoom). */
++export function withRefuge(hm) {
++  const face = NORTH_FACE[hm.side];
++  let done = false;
++  for (const p of hm.parts) {
++    if (done || !p.plan) continue;
++    const id = pickRefugeRoom(p.plan, face);
++    if (id) { p.plan = { ...p.plan, refugeRoom: id }; done = true; }
++  }
++  return hm;
+ }
+ 
+ /** Text of src/layout/community-plan-data-north.js for { T1, T2 }. */
+-export const northDataText = (north) => dataFile('云澜·北苑 T1/T2 (一梯一户 大平层 + 错层复式) home plans.', 'NORTH_PLANS', north, 'homes');
++export const northDataText = (north) => dataFile('云澜·北苑 T1/T2 (一梯一户 大平层 + 错层复式 + 云端大平层 + 顶层复式) home plans.', 'NORTH_PLANS', north, 'homes');
+ 
+-/** Generate every 北苑 tower. */
+-export function generateNorth(log = quiet) {
++/** Generate every 北苑 tower (full regeneration, or extend = the frozen NORTH_PLANS). */
++export function generateNorth(log = quiet, { extend = null } = {}) {
+   const out = {};
+-  for (const T of NORTH.towers) out[T.id] = northTower(T, log);
++  for (const T of NORTH.towers) out[T.id] = northTower(T, log, { extend: extend?.[T.id] || null });
+   return out;
+ }
++
++// node scripts/plans/north.mjs --extend-north [--tower T2]: keep the frozen homes, regenerate the new bands only.
++import { pathToFileURL, fileURLToPath } from 'node:url';
++import path from 'node:path';
++if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
++  const { writeFileSync } = await import('node:fs');
++  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
++  const t0 = Date.now(), log = (...a) => console.log(...a);
++  const extend = process.argv.includes('--extend-north') ? (await import(pathToFileURL(path.join(root, NORTH_TARGET)).href)).NORTH_PLANS : null;
++  const text = northDataText(generateNorth(log, { extend }));
++  writeFileSync(path.join(root, NORTH_TARGET), text);
++  log(`wrote ${NORTH_TARGET} (${(Buffer.byteLength(text) / 1024).toFixed(1)} kB) in ${((Date.now() - t0) / 1000).toFixed(1)} s${extend ? ' (--extend-north)' : ''}`);
++}

@@ -1,0 +1,9 @@
+H v2 (tower 66 × 32, podium 74 × 38): RF 185.4 m, 48 storeys
+  near {"meshes":8,"verts":26892,"tris":8964,"MB":0.484} {"extSatin":1008,"extMetal":10512,"glassTint":240,"facadeTravertine":6516,"glowSoft":1632,"ext":2988,"stone":3600,"concrete":396}
+  far  {"meshes":2,"verts":1008,"tris":336,"MB":0.018}
+A v2 (tower 66 × 31.8, podium 74 × 38): RF 174.6 m, 44 storeys
+  near {"meshes":8,"verts":25224,"tris":8408,"MB":0.454} {"extSatin":864,"extMetal":10224,"glassTint":216,"facadeTravertine":5940,"glowSoft":1536,"ext":2772,"stone":3276,"concrete":396}
+  far  {"meshes":2,"verts":924,"tris":308,"MB":0.017}
+H landing doors 278 instances (one InstancedMesh, ≈ 3 boxes = 108 v each, one draw)
+A landing doors 309 instances (one InstancedMesh, ≈ 3 boxes = 108 v each, one draw)
+today (measured, geo.mjs): H exterior batched 176,202 v / 9 meshes, A 149,166 v / 9 meshes; H lobby 236,484 v, A lobby 238,608 v

@@ -1,0 +1,17 @@
+import { buildLayout } from '/home/user/super-mall-3d/src/layout/layout.js';
+const L = buildLayout({ expansion: true });
+const e = (L.entrances || []).find(e => e.id === 'H-SIDE');
+console.log(JSON.stringify(e).slice(0, 400));
+const p = e.pos || e.door || e.at || e.center;
+const side = Array.isArray(p) ? { x: p[0], z: p[1] } : (p || { x: -284, z: -80 });
+const lots = L.extensions.surfaceParking.filter(l => l.id !== 'hotel-shared-parking');
+const all = lots.flatMap(l => l.stalls.map(s => ({ lot: l.id, x: s.x, z: s.z })));
+for (const s of all) s.d = Math.hypot(s.x - (side.x ?? -284), s.z - (side.z ?? -80));
+all.sort((a, b) => a.d - b.d);
+console.log('nearest', all.slice(0, 5).map(s => `${s.lot}:${s.x.toFixed(1)},${s.z.toFixed(1)} d${s.d.toFixed(0)}`).join(' | '));
+console.log('within 100 m:', all.filter(s => s.d <= 100).length, 'within 150:', all.filter(s => s.d <= 150).length);
+console.log('westParking lots', (L.site.westParking?.lots || []).length, 'stalls', L.site.westParking?.stallCount);
+const wp = (L.site.westParking?.lots || []).flatMap(l => l.stalls.map(s => ({ x: s.x, z: s.z })));
+for (const s of wp) s.d = Math.hypot(s.x + 284, s.z + 80);
+wp.sort((a, b) => a.d - b.d);
+console.log('west lot nearest', wp.slice(0, 3).map(s => `${s.x.toFixed(1)},${s.z.toFixed(1)} d${s.d.toFixed(0)}`).join(' | '), 'within 60', wp.filter(s => s.d <= 60).length);

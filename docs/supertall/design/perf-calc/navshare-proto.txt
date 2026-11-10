@@ -1,0 +1,8 @@
+{"share":false,"levels":338,"floors":1591,"shared":0,"navCpuMs":843,"navHeapMB":50.7,"smokeMoves":970,"smokeChecksum":-29770272}
+{"share":true,"levels":338,"floors":1591,"shared":1443,"navCpuMs":838,"navHeapMB":21.7,"smokeMoves":970,"smokeChecksum":-29770272}
+{"share":false,"levels":614,"floors":2439,"shared":0,"navCpuMs":1672,"navHeapMB":92.9,"smokeMoves":1614,"smokeChecksum":-54381814}
+{"share":true,"levels":614,"floors":2439,"shared":2289,"navCpuMs":1568,"navHeapMB":24.2,"smokeMoves":1614,"smokeChecksum":-54381814}
+{"share":false,"levels":338,"floors":1591,"shared":0,"navCpuMs":1079,"navHeapMB":50.7,"smokeMoves":970,"smokeChecksum":-29770272}
+{"share":true,"levels":338,"floors":1591,"shared":1443,"navCpuMs":854,"navHeapMB":21.7,"smokeMoves":970,"smokeChecksum":-29770272}
+{"share":false,"levels":614,"floors":2439,"shared":0,"navCpuMs":1549,"navHeapMB":92.9,"smokeMoves":1614,"smokeChecksum":-54381814}
+{"share":true,"levels":614,"floors":2439,"shared":2289,"navCpuMs":1372,"navHeapMB":24,"smokeMoves":1614,"smokeChecksum":-54381814}

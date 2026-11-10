@@ -1,0 +1,219 @@
+diff --git a/src/layout/community-sites.js b/src/layout/community-sites.js
+index b8288d0..1e20a24 100644
+--- a/src/layout/community-sites.js
++++ b/src/layout/community-sites.js
+@@ -13,6 +13,14 @@ const northLevels = [
+   ...Array.from({ length: 11 }, (_, i) => ({ short: `${14 + i}F`, levelNumber: 14 + i, elev: r2(60.6 + i * 3.3), height: 3.3, kind: 'community' })),
+   { short: 'RF', elev: 96.9, height: 3.2, kind: 'roof' },
+ ];
++// PROTOTYPE (perf study): NORTH_STACK=1 repeats the 大平层 and 错层 bands up to 47F (RF 176.4 m).
++if ((globalThis.__PROTO_ENV || globalThis.process?.env)?.NORTH_STACK) {
++  const rf = northLevels.pop(); let y = rf.elev;
++  const band = (from, to, h) => { for (let n = from; n <= to; n++) { northLevels.push({ short: `${n}F`, levelNumber: n, elev: r2(y), height: h, kind: 'community' }); y = r2(y + h); } };
++  band(25, 30, 3.6); band(31, 41, 3.3); band(42, 47, 3.6);
++  northLevels.push({ short: 'RF', elev: y, height: 3.2, kind: 'roof' });
++}
++export const NORTH_SHIFTS = (globalThis.__PROTO_ENV || globalThis.process?.env)?.NORTH_STACK ? [[8, 24, 17], [8, 13, 34]] : [];
+ 
+ export const NORTH_SITE = deepFreeze({
+   plateZ: [-240, -224], podiumRoof: 34.0,
+diff --git a/src/layout/community.js b/src/layout/community.js
+index d058a6f..448f020 100644
+--- a/src/layout/community.js
++++ b/src/layout/community.js
+@@ -119,16 +119,28 @@ export function communityLobby(F, slab, core) {
+   return { kind: 'community-lobby', frame: F, zones, obstacles, partitions, circulation, height: 4.5, gateZ: LOBBY_GATE_Z };
+ }
+ 
++// PROTOTYPE (design study): WEST_STACK=S61|S47|S54 builds the supertall stack with refuge floors.
++const STACKS = { S61: { top: 61, refuge: [16, 31, 46] }, S47: { top: 47, refuge: [16, 31] }, S54: { top: 54, refuge: [16, 31, 46] } };
+ function levelDefs() {
+-  const L = WEST_SITE.levels;
+-  return [
++  const L = WEST_SITE.levels, S = STACKS[(globalThis.__PROTO_ENV || globalThis.process?.env)?.WEST_STACK];
++  const head = [
+     { short: 'B2', elev: L.B2, height: r2(L.B1 - L.B2), kind: 'garage-lobby' },
+     { short: 'B1', elev: L.B1, height: r2(-L.B1), kind: 'garage-lobby' },
+     { short: '1F', levelNumber: 1, elev: 0, height: L.lobbyHeight, kind: 'lobby' },
++  ];
++  if (!S) return [...head,
+     ...Array.from({ length: L.top - 1 }, (_, i) => ({ short: `${i + 2}F`, levelNumber: i + 2,
+       elev: r2(L.lobbyHeight + i * L.floorHeight), height: L.floorHeight, kind: 'community' })),
+     { short: 'RF', elev: L.roof, height: 3.2, kind: 'roof' },
+   ];
++  let y = L.lobbyHeight; const out = [...head];
++  for (let n = 2; n <= S.top; n++) {
++    const refuge = S.refuge.includes(n), h = refuge ? 4.5 : L.floorHeight;
++    out.push({ short: `${n}F`, levelNumber: n, elev: r2(y), height: h, kind: refuge ? 'refuge' : 'community' });
++    y = r2(y + h);
++  }
++  out.push({ short: 'RF', elev: y, height: 3.2, kind: 'roof' });
++  return out;
+ }
+ 
+ const levelName = (spec, d) => d.kind === 'garage-lobby' ? `${d.short} 住户电梯厅 · 接共享车库`
+@@ -206,7 +218,7 @@ export function westTower(spec) {
+         rect(c + CORE_W, -HD + 1.3, HW - 1.3, WEST_BANDS.corridor[0])].entries()) lv.walk.push(localWalk(F, `${id}-roof-deck-${j}`, 'deck', r));
+       lv.roofGarden = { planters: roofPlanters(c) };
+       lv.navObstacles = lv.roofGarden.planters.map((p) => ({ id: `${id}-${p.id}`, poly: lrectPoly(F, p.rect) }));
+-    } else {
++    } else if (d.kind !== 'refuge') {
+       for (const [slot, u] of data.units.entries()) {
+         const number = `${String(d.levelNumber).padStart(2, '0')}${String(slot + 1).padStart(2, '0')}`;
+         const uf = frame(cx + u.frame.ox, cz + u.frame.oz, u.frame.deg, `${lv.id}-${u.slot}`);
+@@ -220,7 +232,7 @@ export function westTower(spec) {
+   const bounds = polyBounds(outline);
+   const b = { id, code: id, name: spec.name, short: spec.short, en: spec.en, kind: 'tower', usage: 'community', community: 'west',
+     campusGroup: 'P1', accent: spec.accent, operator: WEST_GARDEN.operator, frame: F, footprint, bounds, outline, center: [cx, cz],
+-    radius: Math.hypot(2 * HW, 2 * HD) / 2, height: top, storeys: WEST_SITE.levels.top, levels: ids, rotundas: [], wings: [],
++    radius: Math.hypot(2 * HW, 2 * HD) / 2, height: top, storeys: defs.filter((d) => d.levelNumber).length, levels: ids, rotundas: [], wings: [],
+     plot, massing: { width: 2 * HW, depth: 2 * HD, top, podiumHeight: WEST_SITE.levels.lobbyHeight, facadeModule: 3.0 },
+     entryLevel: `${id}-1F`, stackedOn: null, stairLevelIds: [...ids],
+     fireFrontage: [r2(bounds.x0), r2(bounds.x1)], hardstand: { x0: r2(bounds.x0), z0: hs.z0, x1: r2(bounds.x1), z1: hs.z1 },
+diff --git a/src/layout/hospitality.js b/src/layout/hospitality.js
+index c4dfe24..44497bc 100644
+--- a/src/layout/hospitality.js
++++ b/src/layout/hospitality.js
+@@ -19,9 +19,9 @@ export const HOSPITALITY = {
+   east: rect(-62, -256, -16, -166),
+   residential: rect(16, -256, 286, -176),
+   towers: [
+-    { id: 'H', usage: 'hotel', name: '云澜酒店', short: '酒店', en: 'YUNLAN HOTEL', attachment: 'west-wing', x: -247, z: -81.1533717, rotation: 0, w: 74, d: 38, storeys: 20, floorHeight: 3.4, lobbyHeight: 6.5, accent: '#a27d49' },
+-    { id: 'A', usage: 'apartment', name: '云澜服务公寓', short: '公寓', en: 'YUNLAN RESIDENCES', attachment: 'north-wing', x: -35, z: -214, rotation: 90, w: 74, d: 38, storeys: 20, floorHeight: 3.4, lobbyHeight: 6.5, accent: '#537b78' },
+-    ...[49, 115, 181, 247].map((x, i) => ({ id: `R${i + 1}`, usage: 'residential', name: `云澜汇楼盘 ${i + 1} 号楼`, short: `住宅${i + 1}`, en: `YUNLAN RESIDENTIAL TOWER ${i + 1}`, x, z: -218, w: 42, d: 33.2, storeys: 30, floorHeight: 3.4, lobbyHeight: 4.8, accent: ['#7b8470', '#9b795f', '#637e91', '#867c96'][i] })),
++    { id: 'H', usage: 'hotel', name: '云澜酒店', short: '酒店', en: 'YUNLAN HOTEL', attachment: 'west-wing', x: -247, z: -81.1533717, rotation: 0, w: 74, d: 38, storeys: +((globalThis.__PROTO_ENV || globalThis.process?.env)?.HA_STOREYS || 20), floorHeight: 3.4, lobbyHeight: 6.5, accent: '#a27d49' },
++    { id: 'A', usage: 'apartment', name: '云澜服务公寓', short: '公寓', en: 'YUNLAN RESIDENCES', attachment: 'north-wing', x: -35, z: -214, rotation: 90, w: 74, d: 38, storeys: +((globalThis.__PROTO_ENV || globalThis.process?.env)?.HA_STOREYS || 20), floorHeight: 3.4, lobbyHeight: 6.5, accent: '#537b78' },
++    ...[49, 115, 181, 247].map((x, i) => ({ id: `R${i + 1}`, usage: 'residential', name: `云澜汇楼盘 ${i + 1} 号楼`, short: `住宅${i + 1}`, en: `YUNLAN RESIDENTIAL TOWER ${i + 1}`, x, z: -218, w: 42, d: 33.2, storeys: +((globalThis.__PROTO_ENV || globalThis.process?.env)?.R_STOREYS || 30), floorHeight: 3.4, lobbyHeight: 4.8, accent: ['#7b8470', '#9b795f', '#637e91', '#867c96'][i] })),
+   ],
+ };
+ const localWalk = (F, id, kind, r) => ({ id, kind, frame: F, rect: r, poly: lrectPoly(F, r) });
+diff --git a/src/layout/nav.js b/src/layout/nav.js
+index ad28144..a00d5c2 100644
+--- a/src/layout/nav.js
++++ b/src/layout/nav.js
+@@ -409,7 +409,21 @@ export function buildNav(layout, options = {}) {
+   }
+ 
+   // ---------- 空间索引 ----------
+-  for (const F of floors.values()) indexWalls(F);
++  // PROTOTYPE (perf study): NAV_SHARE=1 shares walls, obstacles and the wall grid between floors whose
++  // plan is identical in X/Z (typical storeys), verified element by element after a numeric hash.
++  if ((globalThis.__PROTO_ENV || globalThis.process?.env)?.NAV_SHARE) {
++    const plans = new Map(), q = (v) => Math.round(v * 1000);
++    const same = (A, B) => A.walls.length === B.walls.length && A.obstacles.length === B.obstacles.length
++      && A.walls.every((w, i) => { const o = B.walls[i]; return q(w.x0) === q(o.x0) && q(w.z0) === q(o.z0) && q(w.x1) === q(o.x1) && q(w.z1) === q(o.z1) && w.gate === o.gate; })
++      && A.obstacles.every((o, i) => o.outer.length === B.obstacles[i].outer.length && o.outer.every((p, j) => q(p[0]) === q(B.obstacles[i].outer[j][0]) && q(p[1]) === q(B.obstacles[i].outer[j][1])));
++    for (const F of floors.values()) {
++      let h = F.walls.length * 7919 + F.obstacles.length;
++      for (const w of F.walls) h = (Math.imul(h, 31) + q(w.x0) * 3 + q(w.z0) * 5 + q(w.x1) * 7 + q(w.z1) * 11 + (w.gate ? 13 : 0)) | 0;
++      const list = plans.get(h) || plans.set(h, []).get(h), T = list.find((P) => same(P, F));
++      if (T) { F.walls = T.walls; F.obstacles = T.obstacles; F.grid = T.grid; F.sharedPlan = T.id; }
++      else { indexWalls(F); list.push(F); }
++    }
++  } else for (const F of floors.values()) indexWalls(F);
+ 
+   const nav = { floors, portals, slopes, slopeById: new Map(slopes.map((s) => [s.id, s])), links: [], groundAt, gates,
+     zones: layout.accessControl?.zones || [] };
+diff --git a/src/layout/north-towers.js b/src/layout/north-towers.js
+index 031333c..30340a8 100644
+--- a/src/layout/north-towers.js
++++ b/src/layout/north-towers.js
+@@ -5,7 +5,7 @@
+ import { frame, rect, rectPoly, lrectPoly, lseg, toW, polyBounds } from './geom.js';
+ import { lift } from './mall.js';
+ import { towerStairPlan, buildTowerStairAccess } from './tower-stairs.js';
+-import { NORTH_SITE } from './community-sites.js';
++import { NORTH_SITE, NORTH_SHIFTS } from './community-sites.js';
+ import { COMMUNITY_PLANS } from './community-plan-data.js';
+ import { communityUnit, COMMUNITY_ACCENT } from './community-units.js';
+ 
+@@ -42,8 +42,14 @@ export const coreRoom = (id, type, F, rects, doors = [], extra = {}) => ({ id, t
+ const localWalk = (F, id, kind, r, extra = {}) => ({ id, kind, frame: F, rect: r, poly: lrectPoly(F, r), ...extra });
+ 
+ /** Stop lists: private W lift for the W entry floors, private E lift for the E entry floors, fire lift everywhere. */
++const stretched = (id) => { const d = COMMUNITY_PLANS.north[id]; if (!NORTH_SHIFTS.length) return d;
++  const extra = NORTH_SHIFTS.flatMap(([a, b, k]) => d.homes.filter((h) => h.levels[0] >= a && h.levels.at(-1) <= b)
++    .map((h) => ({ ...h, id: `${h.id}-s${k}`, levels: h.levels.map((v) => v + k) })));
++  return { ...d, homes: [...d.homes, ...extra] }; };
+ export function northStops(id) {
+   const n = (k) => `${id}-${k}F`, hosts = [...NORTH_SITE.hostDoorLevels];
++  if (NORTH_SHIFTS.length) { const H = stretched(id).homes, side = (s) => [...new Set(H.filter((h) => h.side === s).map((h) => h.levels[0]))].sort((a, b) => a - b).map(n);
++    return { LW: [...hosts, n(7), ...side('W'), `${id}-RF`], LE: [...hosts, n(7), ...side('E'), `${id}-RF`], LF: [...hosts, ...NORTH_SITE.levels.map((l) => `${id}-${l.short}`)] }; }
+   const flats = [7, 8, 9, 10, 11, 12, 13, 14].map(n);
+   return {
+     LW: [...hosts, ...flats, ...[16, 18, 20, 22, 24].map(n), `${id}-RF`],
+@@ -183,7 +189,7 @@ export function northTower(site, hostLevels) {
+   const [px0, px1] = site.plate, half = (px1 - px0) / 2;
+   const footprint = rect(-half, -8, half, 8), outline = lrectPoly(F, footprint);
+   const wx0 = px0 - site.frame[0], ex1 = px1 - site.frame[0];
+-  const data = COMMUNITY_PLANS.north[id];
++  const data = stretched(id);
+   const name = `云澜·北苑 ${n} 号楼`, en = `YUNLAN NORTH RESIDENCE ${n}`;
+   const stops = northStops(id);
+   const C = NORTH_CORE;
+diff --git a/src/proto-env.js b/src/proto-env.js
+new file mode 100644
+index 0000000..878b310
+--- /dev/null
++++ b/src/proto-env.js
+@@ -0,0 +1,2 @@
++// PROTOTYPE (perf study): browser stand-in for the env switches.
++globalThis.__PROTO_ENV = { WEST_STACK: 'S61', NORTH_STACK: '1', HA_STOREYS: '56', R_STOREYS: '53' };
+diff --git a/src/render/build/community.js b/src/render/build/community.js
+index b178a39..aa7e839 100644
+--- a/src/render/build/community.js
++++ b/src/render/build/community.js
+@@ -585,20 +585,38 @@ export function buildCommunityTower(ctx, b, records) {
+   const B = new BatchSet(materials), col = new Columns(), XB = keyed(B, EXTERIOR_KEYS);
+   const above = levels.filter((l) => l.elev >= 0), below = levels.filter((l) => l.elev < 0);
+   const stairs = layout.stairs.filter((s) => s.building === b.id);
+-  for (const u of above.flatMap((l) => l.units)) B.frame(u.frame, () => homeFacade(B, col, u, byId.get(u.level), pal));
++  // PROTOTYPE (design study): WEST_INSTANCE=1 draws the non-column parts of every repeated floor of a module once
++  // and instances them; storey-high walls (piers, pilasters, core) still go to the shared Columns and merge up the tower.
++  const INST = (globalThis.__PROTO_ENV || globalThis.process?.env)?.WEST_INSTANCE && b.community === 'west';
++  const modKey = (lv) => !INST ? null : lv.kind === 'community' ? `A${(globalThis.__PROTO_ENV || globalThis.process.env).WEST_FAMILIES ? Math.min(3, Math.floor((lv.levelNumber - 2) / 15)) : ''}` : lv.kind === 'refuge' ? 'R' : null;
++  const modules = new Map();
++  for (const lv of above) { const k = modKey(lv); if (k) (modules.get(k) || modules.set(k, []).get(k)).push(lv); }
++  const repOf = new Map([...modules.values()].map((ls) => [ls[0].id, new BatchSet(materials)]));
++  const NB = new BatchSet(materials);   // throwaway: direct geometry of the non-representative module floors
++  const sink = (lv) => !modKey(lv) ? B : repOf.get(lv.id) || NB;
++  for (const u of above.flatMap((l) => l.units)) { const lv = byId.get(u.level), BB = sink(lv); BB.frame(u.frame, () => homeFacade(BB, col, u, lv, pal)); }
+   B.frame(b.frame, () => {
+     for (const lv of above) {
+-      slab(B, b, lv, pal.slab);
+-      if (lv.kind === 'roof') { crown(B, b, lv, pal); coreStorey(B, col, b.frame, lv, pal, 4.2, b.footprint); roofGarden(XB, b, lv, pal); continue; }
+-      if (lv.elev > 0) band(B, b, lv.elev, pal);
+-      perimeter(B, col, layout, b, lv, pal);
+-      coreStorey(B, col, b.frame, lv, pal, lv.height, b.footprint);
++      if (lv.kind === 'roof') { slab(B, b, lv, pal.slab); crown(B, b, lv, pal); coreStorey(B, col, b.frame, lv, pal, 4.2, b.footprint); roofGarden(XB, b, lv, pal); continue; }
++      const BB = sink(lv);
++      BB.frame(b.frame, () => { slab(BB, b, lv, pal.slab); if (lv.elev > 0) band(BB, b, lv.elev, pal); perimeter(BB, col, layout, b, lv, pal); coreStorey(BB, col, b.frame, lv, pal, lv.height, b.footprint); });
+       canopy(B, layout, b, lv, pal);
+       skyDoorway(B, layout, b, lv, pal);
+     }
+   });
+   col.flush(B);
+   B.flush(group);
++  NB.sets = {};
++  for (const [k, ls] of modules) {
++    const g = new THREE.Group(), r0 = ls[0];
++    repOf.get(r0.id).flush(g);
++    for (const m of g.children) {
++      const im = new THREE.InstancedMesh(m.geometry, m.material, ls.length), M = new THREE.Matrix4();
++      ls.forEach((lv, i) => im.setMatrixAt(i, M.makeTranslation(0, lv.elev - r0.elev, 0)));
++      im.name = `${b.id}-module-${k}-${m.name}`; im.castShadow = m.castShadow; im.receiveShadow = m.receiveShadow; im.renderOrder = m.renderOrder;
++      im.computeBoundingSphere(); im.userData.module = k; group.add(im);
++    }
++  }
+   // One sign mesh: the crown name on the main facade and the plate over the street door.
+   const signMat = ctx.mats.sign(signAtlas(b, pal));
+   signMat.clippingPlanes = [plane];
+diff --git a/src/runtime.js b/src/runtime.js
+index fbc34b6..4a29567 100644
+--- a/src/runtime.js
++++ b/src/runtime.js
+@@ -1,3 +1,4 @@
++import './proto-env.js';
+ import { buildPlayableLayout } from './layout/playable.js';
+ import { createApp } from './render/app.js';
+ 
