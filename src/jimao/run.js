@@ -1,4 +1,4 @@
-// 「几猫」新模式：地图用我们现有的 FPS 地图（一期、酒店、公寓），其余全部用用户自己的「几猫」游戏：
+// 「断讯 · SIGNAL ZERO」模式（原游戏叫「几猫」）：地图用我们现有的 FPS 地图（一期、酒店、公寓），其余全部用用户自己的「几猫」游戏：
 // 步枪和双手、手感、声音、弹孔火花弹壳、界面、菜单、操作、任务流程。
 // 游戏代码原样抽在 vendor/game.js（scripts/jimao/build-vendor.mjs 生成）；这里只是接线：
 //   上下文对象 G（原游戏各模块共用的那一个）里的渲染器、场景、相机换成我们的，
@@ -8,6 +8,7 @@ import * as J from './vendor/game.js';
 import { UI_CSS } from './vendor/ui-css.js';
 import { createMapPhysics } from './physics.js';
 import { createGrade } from './grade.js';
+import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { buildNav } from '../layout/nav.js';
 import { distToPolyEdge } from '../layout/geom.js';
@@ -91,7 +92,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.audio = params.noaudio ? J.stubs.audio() : await guarded('audio', () => J.createAudio(G));
   G.player = J.createPlayer(G);
   G.combat = J.createCombat(G);
-  onProgress('正在检查几猫制式步枪', 0.75);
+  onProgress('正在检查制式步枪', 0.75);
   G.weapon = await J.createWeapon(G);
   G.weapon.setWetness?.(0);
   // 枪（相机下面的所有东西）挪到自己那一层
@@ -100,7 +101,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.hud = J.createHud(G);
   G.game = J.createGame(G);
   async function guarded(name, make) {
-    try { return await make(); } catch (error) { console.error(`[几猫] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
+    try { return await make(); } catch (error) { console.error(`[断讯] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
   }
 
   // ---- 每帧 ----
@@ -117,7 +118,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     app.state.explore = { building, level, near, metro: false, under: s.y < -0.5, position: { x: s.x, z: s.z } };
     app.refresh();
   }
-  const run = (name, dt) => { const m = G[name]; if (m?.update) try { m.update(dt); } catch (e) { if (!run.err[name]) { run.err[name] = 1; console.error(`[几猫] ${name}.update 出错`, e); } } };
+  const run = (name, dt) => { const m = G[name]; if (m?.update) try { m.update(dt); } catch (e) { if (!run.err[name]) { run.err[name] = 1; console.error(`[断讯] ${name}.update 出错`, e); } } };
   run.err = {};
   const dynamic = {
     name: 'jimao-session',
@@ -127,7 +128,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       renderer.getDrawingBufferSize(resolution);
       run('input', dt);
       let active = false;
-      try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { if (!run.err.game) { run.err.game = 1; console.error('[几猫] game.update 出错', e); } }
+      try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { if (!run.err.game) { run.err.game = 1; console.error('[断讯] game.update 出错', e); } }
       if (active) { run('player', dt); run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
       run('audio', dt); run('hud', dt);
@@ -164,6 +165,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   }
 
   if (params.autostart || params.shot) G.game.start({ skipIntro: true });
+  // 入场动画：盖在标题菜单上面放一次（自动开局、截图时不放）
+  else if (!params.nointro) playIntro({ volume: 0.5 });
   onProgress('准备就绪', 1);
   return {
     G, layoutEditor,

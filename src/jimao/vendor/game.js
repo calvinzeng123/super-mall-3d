@@ -976,7 +976,7 @@ function l3(i, e = 4) {
     }, { bleed: Ut.red }), logo_a: () => r("logo_a", 640, 192, (v, g, x, y) => {
       l(v, g, x, Ut.white, (b, m, A) => {
         b.lineWidth = m * 0.13, b.beginPath(), b.arc(0, 0, m * 0.92, 0.25 * Math.PI, 1.75 * Math.PI), b.stroke(), b.beginPath(), b.moveTo(0, -m * 1.08), b.lineTo(m * 0.26, 0), b.lineTo(0, m * 0.62), b.lineTo(-m * 0.26, 0), b.closePath(), b.fill(), b.beginPath(), b.moveTo(m * 0.5, 0), b.lineTo(m * 1.12, -m * 0.1), b.lineTo(m * 1.12, m * 0.1), b.closePath(), b.fill();
-      }, "\u51E0\u732B\u5317\u822A", "\u5317\u6781 \xB7 \u5927\u897F\u6D0B \xB7 \u652F\u7EBF\u8FD0\u8F93"), Ks(v, g, x, 0.35, y);
+      }, "\u4E91\u6F9C\u5317\u822A", "\u5317\u6781 \xB7 \u5927\u897F\u6D0B \xB7 \u652F\u7EBF\u8FD0\u8F93"), Ks(v, g, x, 0.35, y);
     }, { bleed: Ut.white, text: true }), logo_b: () => r("logo_b", 640, 192, (v, g, x, y) => {
       l(v, g, x, Ut.white, (b, m, A) => {
         b.fillStyle = A;
@@ -984,7 +984,7 @@ function l3(i, e = 4) {
           let M = -m * 0.35 + _ * m * 0.55, E = m * (0.3 - _ * 0.06);
           b.beginPath(), b.moveTo(-m * 1.05, M - m * 0.25), b.quadraticCurveTo(-m * 0.3, M - m * 0.2, 0, M + m * 0.35), b.quadraticCurveTo(m * 0.3, M - m * 0.2, m * 1.05, M - m * 0.25), b.quadraticCurveTo(m * 0.35, M + E * 0.2, 0, M + m * 0.35 + E), b.quadraticCurveTo(-m * 0.35, M + E * 0.2, -m * 1.05, M - m * 0.25), b.fill();
         }
-      }, "\u51E0\u732B\u8FDC\u6D0B", "\u96C6\u88C5\u7BB1\u8FD0\u8F93", Ut.orange), Ks(v, g, x, 0.35, y);
+      }, "\u4E91\u6F9C\u8FDC\u6D0B", "\u96C6\u88C5\u7BB1\u8FD0\u8F93", Ut.orange), Ks(v, g, x, 0.35, y);
     }, { bleed: Ut.white, text: true }), logo_c: () => r("logo_c", 640, 192, (v, g, x, y) => {
       l(v, g, x, Ut.navy, (b, m, A) => {
         b.beginPath(), b.arc(0, m * 0.25, m * 0.55, Math.PI, 0), b.closePath(), b.fill(), b.lineWidth = m * 0.1, b.lineCap = "butt";
@@ -993,11 +993,11 @@ function l3(i, e = 4) {
           b.beginPath(), b.moveTo(Math.cos(M) * m * 0.7, m * 0.25 + Math.sin(M) * m * 0.7), b.lineTo(Math.cos(M) * m * 1.05, m * 0.25 + Math.sin(M) * m * 1.05), b.stroke();
         }
         b.fillRect(-m * 1.05, m * 0.42, m * 2.1, m * 0.13), b.fillRect(-m * 0.8, m * 0.68, m * 1.6, m * 0.1);
-      }, "\u51E0\u732B\u592A\u5E73\u6D0B", "\u8FDC\u6D0B \xB7 \u51B7\u94FE \xB7 \u6563\u8D27"), Ks(v, g, x, 0.35, y);
+      }, "\u4E91\u6F9C\u592A\u5E73\u6D0B", "\u8FDC\u6D0B \xB7 \u51B7\u94FE \xB7 \u6563\u8D27"), Ks(v, g, x, 0.35, y);
     }, { bleed: Ut.navy, text: true }), logo_d: () => r("logo_d", 640, 192, (v, g, x, y) => {
       l(v, g, x, Ut.white, (b, m, A) => {
         b.fillRect(-m, -m, m * 0.5, m * 2), b.fillRect(m * 0.5, -m, m * 0.5, m * 2), b.fillRect(-m, -m * 0.2, m * 2, m * 0.4), b.fillStyle = A, b.fillRect(-m * 0.32, -m, m * 0.64, m * 0.5), b.fillRect(-m * 0.32, m * 0.5, m * 0.64, m * 0.5);
-      }, "\u51E0\u732B\u8054\u8FD0", "\u591A\u5F0F\u8054\u8FD0", Ut.yellow), Ks(v, g, x, 0.35, y);
+      }, "\u4E91\u6F9C\u8054\u8FD0", "\u591A\u5F0F\u8054\u8FD0", Ut.yellow), Ks(v, g, x, 0.35, y);
     }, { bleed: Ut.white, text: true }), berth4: () => r("berth4", 640, 224, (v, g, x, y) => {
       v.strokeStyle = An(Ut.yellow), v.lineWidth = 12, v.strokeRect(14, 14, g - 28, x - 28), v.globalCompositeOperation = "destination-out";
       for (let b of [g * 0.25, g * 0.75]) v.fillRect(b - 6, 0, 12, x);
@@ -2603,7 +2603,7 @@ function N3(i, e = {}) {
       }
       for (let b of [0.12, 0.22, 0.32]) t.cyl(a, b, b, 6e-3, d + 0.1, y, x, { seg: 20, open: true, rot: [0, 0, wi / 2] });
     }
-    t.decal(Mi(i, "\u51E0\u732B\u8239\u7528\u5236\u51B7", { color: "black", font: "sans", distress: 0.2 }), 0.05, 0.2505, 2.255, 0, [0, wi / 2, 0], 1.2);
+    t.decal(Mi(i, "\u4E91\u6F9C\u8239\u7528\u5236\u51B7", { color: "black", font: "sans", distress: 0.2 }), 0.05, 0.2505, 2.255, 0, [0, wi / 2, 0], 1.2);
     for (let g of [-1, 1]) {
       t.add(o, je(cn(0.98, 0.44), d + 4e-3, 1.16, g * 0.53, [0, wi / 2, 0]), p);
       for (let x = 0; x < 9; x++) t.box(o, 0.06, 6e-3, 0.98, d + 0.035, 0.965 + x * 0.049, g * 0.53, { r: 0, rot: [0, 0, -0.75] });
@@ -2672,7 +2672,7 @@ function B3(i, e = {}) {
       let ce = I ? R + O : R;
       for (let ve of [U - 0.5, U, U + 0.5]) le.cyl(h, 0.011, 0.011, 0.09, ce, ve, ae + 0.016, { seg: 6 });
     };
-    o.push(_o(0, 0, M - 4e-3)), T(o, 0.013, true), o.decal(Mi(i, "\u4E2D\u7EE7 " + s, { color: "yellow", font: "stencil", distress: 0.15 }), 0.12, 0.013 + O / 2, U + 0.02, 0.018, null, O - 0.1), o.decal(Mi(i, "\u6E2F\u533A\u4E3B\u63A7\u4E0A\u884C\u94FE\u8DEF", { color: "white", font: "sans", distress: 0.15 }), 0.034, 0.013 + O / 2, U - 0.1, 0.018, null, O - 0.1), o.decal(Jn(i, "hazard_voltage"), 0.13, 0.013 + O / 2 + 0.1, U + 0.14, 0.018, null), o.pop();
+    o.push(_o(0, 0, M - 4e-3)), T(o, 0.013, true), o.decal(Mi(i, "\u4E2D\u7EE7 " + s, { color: "yellow", font: "stencil", distress: 0.15 }), 0.12, 0.013 + O / 2, U + 0.02, 0.018, null, O - 0.1), o.decal(Mi(i, "\u4E91\u6F9C\u6C47\u4E0A\u884C\u94FE\u8DEF", { color: "white", font: "sans", distress: 0.15 }), 0.034, 0.013 + O / 2, U - 0.1, 0.018, null, O - 0.1), o.decal(Jn(i, "hazard_voltage"), 0.13, 0.013 + O / 2 + 0.1, U + 0.14, 0.018, null), o.pop();
     let D = [-0.487, 0, M - 4e-3];
     T(r, 0, false), r.decal(Jn(i, "hazard_general"), 0.13, O / 2, U + 0.1, 0.018, null), r.box(c, O - 0.1, 0.03, 0.014, O / 2, U + 0.55, -0.018, { r: 3e-3 }), r.box(c, O - 0.1, 0.03, 0.014, O / 2, U - 0.55, -0.018, { r: 3e-3 }), r.box(c, 0.03, 1.1, 0.014, 0.07, U, -0.018, { r: 3e-3 }), r.box(c, 0.03, 1.1, 0.014, O - 0.07, U, -0.018, { r: 3e-3 }), r.box(u, 0.24, 0.3, 0.02, O / 2, U - 0.05, -0.02, { r: 4e-3 }), r.add(Mi(i, "\u63A5\u7EBF\u56FE SLT-R4", { color: "white", font: "sans", distress: 0.1 }).material, je(cn(0.2, 0.03), O / 2, U + 0.03, -0.0305, [0, es, 0]), null, true);
     for (let le of [U + 0.36, U - 0.4]) r.add(c, je(cn(O - 0.14, 0.3), O / 2, le, -0.0125, [0, es, 0]), g);
@@ -3252,7 +3252,7 @@ function GA(i, e) {
 // ---- qA  (bundle line 21179–21195)
 function qA(i, e) {
     let t = new Kn(i, "crate_stack", e.seed || 0), n = t.rng;
-    E1(t, 1.2, 0.95, 1, { label: "\u91CD\u7269", code: "\u51E0\u732B04" + t.seed % 2 });
+    E1(t, 1.2, 0.95, 1, { label: "\u91CD\u7269", code: "YL04" + t.seed % 2 });
     let s = { x: n.range(-0.1, 0.02), z: n.range(-0.05, 0.05), th: (n() < 0.5 ? -1 : 1) * n.range(0.1, 0.16), L: 0.86, W: 0.72 };
     t.push({ p: [s.x, 0.95, s.z], r: [0, s.th, 0] }), E1(t, s.L, 0.6, s.W, { detail: false, skids: false, label: "\u6613\u788E\u7269\u54C1", code: "B4-204" }), t.pop();
     let o = { x: s.x + n.range(-0.05, 0.05), z: s.z + n.range(-0.04, 0.04), th: n.range(-0.12, 0.12) };
@@ -3328,7 +3328,7 @@ function YA(i, e) {
         let m = b * At / 3 + 0.3;
         t.add("steel_galv", ot(0.017, 0.017, 0.014, 6), { p: [Math.cos(m) * 0.3, Math.sin(m) * 0.3, y * (r + 6e-3)], r: [tt, 0, 0] }, n.range(0.5, 0.9));
       }
-      t.label(y > 0 ? "NYY-J 4x95 mm2  500 m" : "\u51E0\u732B\u6E2F\u533A", { color: "white", font: "stencil", distress: 0.45 }, 0.7, 0.085, { p: [0, 0.4, y * (r + 6e-3)], r: [0, y > 0 ? 0 : At, 0] }), y > 0 && t.decal(i.mats.decal("arrow"), 0.2, { p: [0.36, -0.2, r + 6e-3], r: [0, 0, -1.2] });
+      t.label(y > 0 ? "NYY-J 4x95 mm2  500 m" : "\u4E91\u6F9C\u6C47", { color: "white", font: "stencil", distress: 0.45 }, 0.7, 0.085, { p: [0, 0.4, y * (r + 6e-3)], r: [0, y > 0 ? 0 : At, 0] }), y > 0 && t.decal(i.mats.decal("arrow"), 0.2, { p: [0.36, -0.2, r + 6e-3], r: [0, 0, -1.2] });
     }
     let u = 16, h = r - a, f = 2 * h / u, p = 0.47, d = [];
     for (let y = 0; y <= u; y++) d.push([p - 0.017, -h + y * f]), y < u && d.push([p, -h + (y + 0.5) * f]);
@@ -3718,7 +3718,7 @@ function oR(i, e) {
         K.x += 0.03 * ie * (K.x < 0 ? 1 : 0);
       }
     }), t.add(a, gr(A), { p: [-1.39, 0.915, 0] }, c(0.97)), t.add(a, Ge(0.56, 0.37, 0.64, 0.05), { p: [-1.4, 0.43, 0] }, c(0.85)), t.add("hazard_stripes", Ge(0.014, 0.085, 0.84, 4e-3), { p: [-1.702, 0.77, 0] }, 0.95), t.label(f, { color: "black", font: "stencil", distress: 0.35 }, 0.4, 0.2, { p: [-1.703, 0.96, 0], r: [0, -tt, 0] });
-    for (let K of [1, -1]) t.add(i.mats.emissive(16722450, 0.16), Ge(0.012, 0.05, 0.11, 4e-3), { p: [-1.69, 1.1, K * 0.37] }, 1, { raw: true }), t.add(u, Ge(0.016, 0.066, 0.126, 4e-3), { p: [-1.684, 1.1, K * 0.37] }, 0.4), t.label("\u51E0\u732B", { color: "black", font: "sans", distress: 0.3 }, 0.42, 0.085, { p: [-1.39, 0.99, K * 0.5625], r: [0, K > 0 ? 0 : At, 0] }), t.add(u, Ge(0.06, 0.05, 0.02, 4e-3), { p: [-1.67, 0.44, K * 0.05] }, 0.5);
+    for (let K of [1, -1]) t.add(i.mats.emissive(16722450, 0.16), Ge(0.012, 0.05, 0.11, 4e-3), { p: [-1.69, 1.1, K * 0.37] }, 1, { raw: true }), t.add(u, Ge(0.016, 0.066, 0.126, 4e-3), { p: [-1.684, 1.1, K * 0.37] }, 0.4), t.label("\u4E91\u6F9C", { color: "black", font: "sans", distress: 0.3 }, 0.42, 0.085, { p: [-1.39, 0.99, K * 0.5625], r: [0, K > 0 ? 0 : At, 0] }), t.add(u, Ge(0.06, 0.05, 0.02, 4e-3), { p: [-1.67, 0.44, K * 0.05] }, 0.5);
     t.add("steel_worn", ot(0.02, 0.02, 0.13, 8), { p: [-1.68, 0.44, 0] }, 0.7), t.add(a, Ge(0.98, 0.46, 0.94, 0.04), { p: [-0.59, 0.79, 0] }, c());
     for (let K of [1, -1]) {
       t.label(f, { color: "black", font: "stencil", distress: 0.35 }, 0.3, 0.19, { p: [-0.84, 0.8, K * 0.4715], r: [0, K > 0 ? 0 : At, 0] }), t.add(u, $e(0.34, 0.2, 4e-3), { p: [-0.36, 0.8, K * 0.47] }, 0.2);
@@ -7141,7 +7141,7 @@ function Dv(i, e, t, n, s = 4) {
 // ---- fC  (bundle line 27145)
 var fC = (i, e, t, n, s) => [[i + s, e], [t - s, e], [t, e + s], [t, n - s], [t - s, n], [i + s, n], [i, n - s], [i, e + s]];
 // ---- mi  (bundle line 27145)
-var mi = { name: "\u51E0\u732B\u4E5D\u5F0F\u7A81\u51FB\u6B65\u67AA", muzzle: [0, 0, -0.531], eject: [0.023, 4e-3, -0.028], sightY: 0.069, lensF: 0.0285, window: [[-0.016, 0.057], [0.016, 0.057], [0.016, 0.0772], [0.0122, 0.081], [-0.0122, 0.081], [-0.016, 0.0772]], magPos: [0, -0.02, -0.0665], boltTravel: 0.062, railTop: 0.0435, grip: [0, -0.1, 0.073], handguard: [0, 0, -0.255], handguardR: 0.021, handlePos: [-0.026, 7e-3, -0.078], squeeze: 0.86 };
+var mi = { name: "\u4E5D\u5F0F\u7A81\u51FB\u6B65\u67AA", muzzle: [0, 0, -0.531], eject: [0.023, 4e-3, -0.028], sightY: 0.069, lensF: 0.0285, window: [[-0.016, 0.057], [0.016, 0.057], [0.016, 0.0772], [0.0122, 0.081], [-0.0122, 0.081], [-0.016, 0.0772]], magPos: [0, -0.02, -0.0665], boltTravel: 0.062, railTop: 0.0435, grip: [0, -0.1, 0.073], handguard: [0, 0, -0.255], handguardR: 0.021, handlePos: [-0.026, 7e-3, -0.078], squeeze: 0.86 };
 // ---- w_  (bundle line 27146–27290)
 function w_() {
     let i = [1, 1, 1], e = [1, 1, 1], t = [5.5, 5.5, 5.7], n = [0.4, 0.4, 0.42], s = [1, 1, 1], o = [0.022, 0.022, 0.023], r = [], a = [], l = [], c = [], u = [], h = [], f = [], p = 9, d = 5, v = 0.6, g = [[-0.1, -0.02], [0.1, -0.02], [0.1, 0.027], [0.093, 0.034], [-0.088, 0.034], [-0.1, 0.024]];
@@ -7641,7 +7641,7 @@ function TC() {
       let [v, g, x, y] = hm[u];
       e.font = f, e.fillStyle = p, e.textAlign = d, e.fillText(h, d === "left" ? v + 2 : v + x / 2, g + y / 2 + 1, x - 4);
     }, n = '"PingFang SC", "PingFang SC", Arial, sans-serif', s = '"PingFang SC", "PingFang SC", monospace', o = '"PingFang SC", "PingFang SC", Impact, sans-serif', r = "rgba(196,198,194,0.92)";
-    t("model", "PAC-9", `700 78px ${o}`, r), t("maker", "\u51E0\u732B\u5175\u5DE5\u5382 \xB7 \u6E2F\u533A\u88C5\u5907", `600 30px ${n}`, r), t("cal", "CAL 5.8\xD740   SN PA-004217", `500 27px ${s}`, r), t("prop", "\u6E2F\u52A1\u5C40\u88C5\u5907 \xB7 \u56DB\u53F7\u6CCA\u4F4D\u6B66\u5668\u5E93", `600 28px ${n}`, r), t("safe", "S", `700 30px ${n}`, r, "center"), t("semi", "1", `700 30px ${n}`, r, "center"), t("auto", "A", `700 30px ${n}`, "rgba(205,60,40,0.95)", "center"), t("rack", "B4-07", `800 104px ${o}`, "rgba(214,206,170,0.9)", "center");
+    t("model", "PAC-9", `700 78px ${o}`, r), t("maker", "\u4E91\u6F9C\u7279\u52E4 \xB7 \u5236\u5F0F\u88C5\u5907", `600 30px ${n}`, r), t("cal", "CAL 5.8\xD740   SN PA-004217", `500 27px ${s}`, r), t("prop", "\u7279\u52E4\u7EC4\u88C5\u5907 \xB7 \u897F\u7FFC\u6B66\u5668\u5E93", `600 28px ${n}`, r), t("safe", "S", `700 30px ${n}`, r, "center"), t("semi", "1", `700 30px ${n}`, r, "center"), t("auto", "A", `700 30px ${n}`, "rgba(205,60,40,0.95)", "center"), t("rack", "B4-07", `800 104px ${o}`, "rgba(214,206,170,0.9)", "center");
     for (let u of [2, 4, 6, 8, 10, 12]) t("r" + u, "T" + u, `600 30px ${s}`, "rgba(190,192,188,0.85)", "center");
     t("optic", "HX-2 \u53CD\u5C04\u7784\u5177", `700 44px ${n}`, r, "center"), t("light", "900 LM  IPX8", `600 40px ${n}`, r, "center");
     {
@@ -9347,11 +9347,11 @@ function pM(i, e) {
     <div class="m-veil"></div>
     <div class="m-bars"><i></i><i></i></div>
 
-    <section class="m-screen m-title" data-s="title" aria-label="\u51E0\u732B">
+    <section class="m-screen m-title" data-s="title" aria-label="\u65AD\u8BAF SIGNAL ZERO">
       <div class="m-title-main">
-        <div class="m-eyebrow"><span class="m-tag">B4</span><span>\u51E0\u732B\u7A81\u51FB\u5C0F\u961F</span><span class="m-dim">\u51E0\u732B\u6E2F\u533A \xB7 05:42</span></div>
-        <h1 class="m-word">\u51E0\u732B<span class="m-subtitle">3A\u5927\u4F5C</span></h1>
-        <p class="m-premise">\u6E2F\u533A\u9632\u5FA1\u7CFB\u7EDF\u5931\u63A7\u3002\u5207\u65AD\u4E09\u5904\u4E2D\u7EE7\uFF0C\u7A81\u7834\u5C01\u9501\uFF0C\u767B\u8239\u64A4\u79BB\u3002</p>
+        <div class="m-eyebrow"><span class="m-tag">B4</span><span>\u4E91\u6F9C\u7279\u52E4\u7EC4</span><span class="m-dim">\u4E91\u6F9C\u6C47 \xB7 00:00</span></div>
+        <h1 class="m-word">\u65AD\u8BAF<span class="m-subtitle">SIGNAL ZERO</span></h1>
+        <p class="m-premise">\u4E91\u6F9C\u6C47\u7684\u901A\u4FE1\u88AB\u52AB\u6301\uFF0C\u673A\u68B0\u5B88\u536B\u5931\u63A7\u3002\u5207\u65AD\u4E09\u5904\u4E2D\u7EE7\uFF0C\u7A81\u7834\u5C01\u9501\uFF0C\u64A4\u79BB\u3002</p>
         <div class="m-actions">
           <button class="btn primary" data-act="deploy">\u5F00\u59CB\u884C\u52A8</button>
           <button class="btn" data-act="settings">\u8BBE\u7F6E</button>
@@ -9387,8 +9387,8 @@ function pM(i, e) {
     </section>
 
     <section class="m-screen m-card m-debrief" data-s="complete" aria-label="\u884C\u52A8\u7B80\u62A5">
-      <div class="m-k">\u56DB\u53F7\u6CCA\u4F4D \xB7 \u884C\u52A8\u7B80\u62A5</div>
-      <h2 class="m-h">\u51E0\u732B\u6E2F\u533A\u5DF2\u89E3\u9664\u5C01\u9501</h2>
+      <div class="m-k">\u4E91\u6F9C\u6C47 \xB7 \u884C\u52A8\u7B80\u62A5</div>
+      <h2 class="m-h">\u4E91\u6F9C\u6C47\u901A\u4FE1\u5DF2\u6062\u590D</h2>
       <div class="m-rating"><span>\u884C\u52A8\u8BC4\u7EA7</span><b data-f="rating">\u5E72\u51C0\u5229\u843D</b></div>
       <dl class="m-stats">
         <div><dt>\u7528\u65F6</dt><dd data-f="time">00:00</dd></div>
@@ -9409,8 +9409,8 @@ function pM(i, e) {
         <button class="btn small" data-act="close-panel">\u5173\u95ED</button>
       </header>
       <div class="panel-b about-copy" data-pane="about" hidden>
-        <h3>\u51E0\u732B3A\u5927\u4F5C</h3>
-        <p>\u5404\u4F4D\u8001\u5E08\u3001\u540C\u5B66\u597D\uFF01\u5BA3\u4F20\u4E00\u4E0B\u6211\u4EEC\u6700\u8FD1\u4F7F\u7528 Fable5.2 \u81EA\u4E3B\u7814\u53D1\u7684\u4E00\u6B3E\u56FD\u4EA7 3A FPS \u5927\u4F5C\u2014\u2014<strong>\u300A\u51E0\u732B\u300B</strong>\uFF01\u{1F3AE}</p>
+        <h3>\u65AD\u8BAF \xB7 SIGNAL ZERO</h3>
+        <p>\u5404\u4F4D\u8001\u5E08\u3001\u540C\u5B66\u597D\uFF01\u5BA3\u4F20\u4E00\u4E0B\u6211\u4EEC\u6700\u8FD1\u4F7F\u7528 Fable5.2 \u81EA\u4E3B\u7814\u53D1\u7684\u4E00\u6B3E\u56FD\u4EA7 3A FPS \u5927\u4F5C\u2014\u2014<strong>\u300A\u65AD\u8BAF\u300B</strong>\uFF01\u{1F3AE}</p>
         <p>\u6211\u4EEC\u81F4\u529B\u4E8E\u6253\u9020\u5177\u6709\u4E2D\u56FD\u7279\u8272\u7684\u9AD8\u54C1\u8D28\u7B2C\u4E00\u4EBA\u79F0\u5C04\u51FB\u6E38\u620F\uFF0C\u878D\u5408\u6C89\u6D78\u5F0F\u6218\u6597\u4F53\u9A8C\u3001\u521B\u65B0\u73A9\u6CD5\u4E0E\u6B21\u4E16\u4EE3\u89C6\u89C9\u8868\u73B0\uFF0C\u63A2\u7D22\u56FD\u4EA7 FPS \u6E38\u620F\u7684\u66F4\u591A\u53EF\u80FD\u6027\u3002</p>
         <p>\u76EE\u524D\u9879\u76EE\u4ECD\u5728\u6301\u7EED\u5F00\u53D1\u4E0E\u4F18\u5316\u4E2D\uFF0C\u8DDD\u79BB\u56FD\u9645\u9876\u5C16 3A \u6C34\u51C6\u8FD8\u6709\u4E00\u5B9A\u5DEE\u8DDD\u3002</p>
         <p>\u975E\u5E38\u6B22\u8FCE\u5404\u4F4D\u8001\u5E08\u3001\u540C\u5B66\u5173\u6CE8\u3001\u4F53\u9A8C\u5E76\u63D0\u51FA\u5B9D\u8D35\u5EFA\u8BAE\uFF0C\u671F\u5F85\u4E0E\u6E38\u620F\u5F00\u53D1\u3001\u56FE\u5F62\u5B66\u53CA AI \u65B9\u5411\u7684\u670B\u53CB\u6DF1\u5165\u4EA4\u6D41\uFF01\u{1F431}\u{1F525}</p>
@@ -9434,7 +9434,7 @@ function pM(i, e) {
       </div>
     </div>
 
-    <div class="loc-card" aria-hidden="true"><i></i><b>\u51E0\u732B\u6E2F\u533A \xB7 \u56DB\u53F7\u6CCA\u4F4D \xB7 05:42</b><span>\u51E0\u732B\u7A81\u51FB\u5C0F\u961F \xB7 \u5355\u5175\u884C\u52A8\uFF0C\u65E0\u4EBA\u652F\u63F4</span></div>
+    <div class="loc-card" aria-hidden="true"><i></i><b>\u4E91\u6F9C\u6C47 \xB7 \u4E00\u671F\u897F\u7FFC \xB7 00:00</b><span>\u4E91\u6F9C\u7279\u52E4\u7EC4 \xB7 \u5355\u5175\u884C\u52A8\uFF0C\u65E0\u4EBA\u652F\u63F4</span></div>
   `, t.appendChild(s);
     let o = (U) => s.querySelector(U), r = (U) => [...s.querySelectorAll(U)], a = o(".panel"), l = o(".loc-card"), c = (U) => s.querySelector(`[data-f="${U}"]`), u = o("#s-sens"), h = o("#s-vol"), f = o("#s-fov"), p = "none", d = null;
     function v(U) {
@@ -9554,7 +9554,7 @@ var Yi = { introSeconds: 3.5, retryIntroSeconds: 1.3, interactRange: 2.2, intera
 // ---- jC  (bundle line 29292)
 var jC = ["\u5317\u65B9", "\u4E1C\u5317\u65B9", "\u4E1C\u65B9", "\u4E1C\u5357\u65B9", "\u5357\u65B9", "\u897F\u5357\u65B9", "\u897F\u65B9", "\u897F\u5317\u65B9"];
 // ---- _l  (bundle line 29292)
-var _l = { intro: "\u51E0\u732B\u961F\u5458\uFF0C\u8FD9\u91CC\u662F\u6307\u6325\u4E2D\u5FC3\u3002\u6E2F\u533A\u4E3B\u63A7\u5DF2\u5C01\u9501\u6CCA\u4F4D\u3002\u5207\u65AD\u5806\u573A\u3001\u4ED3\u5E93\u3001\u7801\u5934\u7684\u4E09\u5904\u4E2D\u7EE7\u3002", contact: "\u4F60\u5DF2\u88AB\u53D1\u73B0\uFF01\u7A7A\u4E2D\u6709\u673A\u68B0\u98DE\u9E25\uFF0C\u5730\u9762\u6709\u673A\u68B0\u730E\u72AC\u3002\u6D88\u706D\u5B83\u4EEC\u3002", cut: ["\u7B2C\u4E00\u5904\u4E2D\u7EE7\u5DF2\u65AD\u5F00\u3002\u654C\u65B9\u5DF2\u5BDF\u89C9\uFF0C\u673A\u68B0\u5B88\u536B\u6B63\u5728\u8D76\u6765\u3002", "\u7B2C\u4E8C\u5904\u4E2D\u7EE7\u5DF2\u65AD\u5F00\u3002\u654C\u65B9\u6B63\u5168\u529B\u56F4\u653B\uFF0C\u5C0F\u5FC3\u5E94\u5BF9\u3002"], all: "\u4E09\u5904\u4E2D\u7EE7\u5168\u90E8\u65AD\u5F00\uFF01\u64A4\u79BB\u8247\u5728\u7801\u5934\u5357\u7AEF\u7684\u8237\u68AF\u65C1\uFF0C\u5FEB\u64A4\uFF01", low: "\u4F24\u52BF\u4E25\u91CD\uFF01\u627E\u63A9\u4F53\u8EB2\u907F\uFF0C\u7A0D\u4F5C\u6062\u590D\u3002", done: "\u51E0\u732B\u961F\u5458\u5DF2\u767B\u8239\uFF0C\u6E2F\u533A\u5C01\u9501\u89E3\u9664\u3002\u5E72\u5F97\u6F02\u4EAE\uFF01" };
+var _l = { intro: "\u7279\u52E4\u7EC4\uFF0C\u8FD9\u91CC\u662F\u6307\u6325\u4E2D\u5FC3\u3002\u4E91\u6F9C\u6C47\u7684\u901A\u4FE1\u88AB\u4EBA\u52AB\u6301\u4E86\u3002\u5207\u65AD\u5546\u573A\u897F\u7FFC\u3001\u9152\u5E97\u4E8C\u697C\u3001\u5730\u4E0B\u5927\u5385\u7684\u4E09\u5904\u4E0A\u884C\u4E2D\u7EE7\u3002", contact: "\u4F60\u5DF2\u88AB\u53D1\u73B0\uFF01\u7A7A\u4E2D\u6709\u673A\u68B0\u98DE\u9E25\uFF0C\u5730\u9762\u6709\u673A\u68B0\u730E\u72AC\u3002\u6D88\u706D\u5B83\u4EEC\u3002", cut: ["\u7B2C\u4E00\u5904\u4E2D\u7EE7\u5DF2\u65AD\u5F00\u3002\u654C\u65B9\u5DF2\u5BDF\u89C9\uFF0C\u673A\u68B0\u5B88\u536B\u6B63\u5728\u8D76\u6765\u3002", "\u7B2C\u4E8C\u5904\u4E2D\u7EE7\u5DF2\u65AD\u5F00\u3002\u654C\u65B9\u6B63\u5168\u529B\u56F4\u653B\uFF0C\u5C0F\u5FC3\u5E94\u5BF9\u3002"], all: "\u4E09\u5904\u4E2D\u7EE7\u5168\u90E8\u65AD\u5F00\uFF01\u63A5\u5E94\u8F66\u5728\u516C\u5BD3\u5730\u4E0B\u8F66\u5E93\uFF0C\u5FEB\u64A4\uFF01", low: "\u4F24\u52BF\u4E25\u91CD\uFF01\u627E\u63A9\u4F53\u8EB2\u907F\uFF0C\u7A0D\u4F5C\u6062\u590D\u3002", done: "\u7279\u52E4\u7EC4\u5DF2\u5B89\u5168\u64A4\u79BB\uFF0C\u4E91\u6F9C\u6C47\u901A\u4FE1\u6062\u590D\u3002\u5E72\u5F97\u6F02\u4EAE\uFF01" };
 // ---- mM  (bundle line 29293–29567)
 function mM(i) {
     let e = i.render && i.render.post || {}, t = typeof e.saturation == "number" ? e.saturation : 1, n = i.player, s = i.level, o = i.hud, r = i.input, a = (P, V, ...Y) => {
@@ -9627,7 +9627,7 @@ function mM(i) {
     function q() {
       if (!o.setMarkers) return;
       let P = c.relays.filter((V) => !V.cut).map((V) => ({ id: V.id, short: V.short, label: V.o.label || "\u4E2D\u7EE7 " + V.short, pos: V.o.pos, kind: "relay" }));
-      c.allCut && s.extraction && P.push({ id: "extract", short: "\u64A4\u79BB", label: "\u64A4\u79BB\u8247", pos: s.extraction.pos, kind: "extract" }), o.setMarkers(P);
+      c.allCut && s.extraction && P.push({ id: "extract", short: "\u64A4\u79BB", label: "\u63A5\u5E94\u8F66", pos: s.extraction.pos, kind: "extract" }), o.setMarkers(P);
     }
     function U({ skipIntro: P = false, quick: V = false, keepRetries: Y = false } = {}) {
       if (Y || (c.retries = 0), l.show("none"), l.locationCard(false), a(i.audio, "setPaused", false), H(), a(i.weapon, "setVisible", true), g = false, P) {
@@ -9640,7 +9640,7 @@ function mM(i) {
       n.enabled = true, o.show(true), r.setGameplay && r.setGameplay(true), o.setObjective(D()), M("playing"), C(true);
     }
     function D() {
-      if (c.allCut) return "\u524D\u5F80\u64A4\u79BB\u8247";
+      if (c.allCut) return "\u524D\u5F80\u63A5\u5E94\u8F66";
       let P = c.relays.length - c.cut;
       return c.cut === 0 ? "\u5207\u65AD\u4E09\u5904\u4E0A\u884C\u4E2D\u7EE7" : P === 1 ? "\u5207\u65AD\u6700\u540E\u4E00\u5904\u4E2D\u7EE7" : `\u5207\u65AD\u5269\u4F59 ${P} \u5904\u4E2D\u7EE7`;
     }
@@ -9789,7 +9789,7 @@ function mM(i) {
       let Y = s.extraction;
       if (Y && Y.pos) {
         let L = Math.hypot(Y.pos.x - n.pos.x, Y.pos.z - n.pos.z), Z = L < (Y.radius || 2.5) && Math.abs(Y.pos.y - n.pos.y) < 3.5;
-        Z && c.allCut && n.alive ? ee() : Z && !c.allCut && c.extractHint <= 0 && (c.extractHint = 8, o.message("\u4E2D\u7EE7\u5C1A\u672A\u65AD\u5F00\uFF0C\u64A4\u79BB\u8247\u65E0\u6CD5\u5728\u706B\u529B\u4E0B\u63A5\u5E94", 3.5)), c.extractHint = Math.max(0, c.extractHint - P);
+        Z && c.allCut && n.alive ? ee() : Z && !c.allCut && c.extractHint <= 0 && (c.extractHint = 8, o.message("\u4E2D\u7EE7\u5C1A\u672A\u65AD\u5F00\uFF0C\u63A5\u5E94\u8F66\u65E0\u6CD5\u5728\u706B\u529B\u4E0B\u63A5\u5E94", 3.5)), c.extractHint = Math.max(0, c.extractHint - P);
       }
     }
     function me(P) {

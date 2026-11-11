@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transform } from 'esbuild';
+import { rebrand } from './rebrand.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const source = path.join(root, 'vendor/jimao/source.html');
@@ -52,7 +53,10 @@ try {
   execFileSync(process.execPath, [path.join(root, 'scripts/jimao/extract-closure.cjs'), '--src', prettyFile, '--game-start', String(gameStart),
     '--entries', Object.keys(ENTRIES).join(','), '--export', Object.entries(ENTRIES).map(([k, v]) => `${k}:${v}`).join(','),
     '--out', out, '--report', report, '--target-three', path.join(root, 'node_modules/three'), '--label', '几猫：除关卡和渲染以外的全部模块'], { stdio: 'inherit' });
-  await writeFile(out, (await readFile(out, 'utf8')) + FOOTER);
+  // 改名（见 rebrand.mjs）：界面、台词、刻字里的「几猫」换成新模式「断讯」的世界观
+  const renamed = rebrand((await readFile(out, 'utf8')) + FOOTER);
+  await writeFile(out, renamed.code);
+  console.log(`改名：${renamed.counts.length} 条，共替换 ${renamed.counts.reduce((a, b) => a + b, 0)} 处`);
   const r = JSON.parse(await readFile(report, 'utf8'));
   // 报告里只留能复核的数字：不留本机的临时路径，也不留逐条的清单（五百多条，模块文件头上已经有摘要）
   const builtins = new Set(Object.getOwnPropertyNames(globalThis).concat(['window', 'document', 'navigator', 'location', 'localStorage', 'performance', 'screen', 'matchMedia',
