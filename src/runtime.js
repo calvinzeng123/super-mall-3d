@@ -2,15 +2,19 @@ import { buildPlayableLayout } from './layout/playable.js';
 import { createApp } from './render/app.js';
 
 export async function startRuntime(mode,onProgress=()=>{}) {
-  if(!['tour','fps','arcade'].includes(mode))throw new Error('未知模式');
+  if(!['tour','fps','arcade','jimao'].includes(mode))throw new Error('未知模式');
   document.body.dataset.mode=mode;
   document.getElementById('fatal').hidden=true;
-  const layout=buildPlayableLayout({mode});
+  // 几猫模式用的是 FPS 那张地图（一期、酒店、公寓）
+  const layout=buildPlayableLayout({mode:mode==='jimao'?'fps':mode});
   const app=await createApp(layout,document.getElementById('stage'),{
     onProgress:(label,p)=>onProgress(label,p*.76),
   });
   window.__mall=app;
-  if(mode==='fps'){
+  if(mode==='jimao'){
+    const {createJimaoGame}=await import('./jimao/run.js');
+    window.__jimao=await createJimaoGame(app,{onProgress:(label,p)=>onProgress(label,.76+p*.24)});
+  }else if(mode==='fps'){
     const {createFPSGame}=await import('./fps/game.js');
     window.__fps=await createFPSGame(app,{onProgress:(label,p)=>onProgress(label,.76+p*.24)});
   }else{

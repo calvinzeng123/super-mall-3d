@@ -2,6 +2,16 @@
 
 > 最后更新：2026-11-11。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
+## 2026-11-11 最新交接（五）：几猫模式（第一轮）
+
+用户决定：地图只用我们现有的 FPS 地图，其余一切都用他自己的「几猫」游戏（vendor/jimao/source.html，单文件、压缩打包）。封面多了「几猫 · 商场突围」入口（mode `jimao`），旧的「竞技 FPS」原样保留，等用户试过再决定删不删。
+
+- **游戏代码是原样抽出来的，不是重写**：`node scripts/jimao/build-vendor.mjs` 把 source.html 排版开，按依赖把需要的顶层声明原样切成 `src/jimao/vendor/game.js`（约 9,800 行），three 的内部名字改从本项目的 three 包按公开名字取；HUD 样式另存为 `src/jimao/vendor/ui-css.js`。两个文件都是生成的，不要手改；改 source.html 后重跑脚本。报告在 `vendor/jimao/extract-report.json`。脚本要 acorn 和 eslint-scope（`npm i --no-save acorn eslint-scope`）。
+- **接线在 `src/jimao/run.js`**：原游戏各模块共用一个上下文对象 G；这里把渲染器、场景、相机换成我们的，枪画在第 3 层、用自己的 54° 相机在世界之后再画一遍（`ctx.afterRender`），点光源池按太阳亮度比例缩小。原游戏的后处理没搬，受伤红边、黑场、去色用一层网页遮罩（`.jimao-veil`）。
+- **物理在 `src/jimao/physics.js`**：实现原游戏的 moveCapsule / raycast / lineOfSight / groundHeight / nav 接口，底下是我们的导航网格（水平走 `nav.step`，竖直按原游戏的跳跃和贴地规则；射线打墙线、障碍物（按 1.15 m 高）和楼板，中庭洞口不挡）。为此 `nav.js` 的 `supported()` 改成了导出。原游戏「掉海里」的救援通过把 `LEVEL_BOUNDS` 的海平面改到 −10000 关掉了，否则地下层会被当成海。
+- **第一轮已有**：步枪、手感（后坐力、散布、晃动、换弹、开镜、跳跃）、声音、弹孔火花弹壳、HUD、菜单、键鼠和触屏操作、任务框架（三个中继：商场西翼终端、酒店二楼、一期 B1M；撤离点是公寓 B1 车库）。**还没有**：敌人（用的是空模块）、道具、天空和阴影、电梯。
+- **已知**：软件渲染下开火后单帧要 4–7 秒，同时跑别的重任务时浏览器会被内存杀掉；真机没测。测试 `tests/jimao.test.js`。
+
 ## 2026-11-11 最新交接（四）：HDR 光影、画面设置、室内光影
 
 用户的要求：加 HDR 模式，贴图更细腻更反光；画质设置更细致；增加光影；住宅、酒店的地板、墙壁和家具在不大改的前提下更真实。详细说明、各档对照表、花费和限制见 [docs/hdr.md](docs/hdr.md)。

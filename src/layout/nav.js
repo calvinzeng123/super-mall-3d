@@ -543,7 +543,7 @@ function wallsNear(F, x0, z0, x1, z1) {
 // ---------------------------------------------------------------------------
 // 判定
 
-function supported(F, x, z) {
+export function supported(F, x, z) {
   for (const zp of F.zones) if (pointInPoly([x, z], zp)) return true;
   for (const p of F.pieces) {
     const b = p.bb;

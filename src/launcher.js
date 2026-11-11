@@ -35,6 +35,7 @@ export function mountLauncher({ onSelect, backgroundUrl = COVER_URL } = {}) {
       </section>
       <nav class="yl-mode-list" aria-label="选择游戏模式">
         <button class="yl-mode yl-mode-primary" data-mode="fps"><b>竞技 FPS</b><span>单人 + AI 队友 · 搜索与撤离</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
+        <button class="yl-mode yl-mode-primary" data-mode="jimao"><b>几猫 · 商场突围</b><span>新版 · 几猫的枪械、手感、声音和界面，地图是云澜汇</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
         <button class="yl-mode" data-mode="arcade"><b>小游戏合集</b><span>无人机送外卖 · 夜间潜入 · 更多陆续开放</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
         <button class="yl-mode yl-mode-wide" data-mode="tour"><b>完整园区探索</b><span>一期 · 二期 · 三期 · 住宅 · 地铁</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
       </nav>
