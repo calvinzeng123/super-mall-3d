@@ -59,7 +59,8 @@ test('核心筒穿过一期每个宿主楼层：用房落在核心筒矩形上�
   }
   const want = ['B1M', '1F', '2F', '3F', '4F', '5F', '6F'].flatMap((s) => [`P1-${s}-SQ-N1`, `P1-${s}-SQ-N5`]).concat(['P1-1F-SQ-NW', 'P1-1F-SQ-N3']);
   assert.deepEqual([...L.northResidences.removedUnits].sort(), want.sort());
-  assert.equal(L.levels.filter((l) => l.building === 'P1').flatMap((l) => l.units).length, 367);
+  // 367 − 38：云澜大中庭第一轮把方庭西侧一排铺位和西边四个岛铺让给了大中庭（tests/campus-deltas/p1-atrium.js）
+  assert.equal(L.levels.filter((l) => l.building === 'P1').flatMap((l) => l.units).length, 329);
 });
 
 test('方庭北门西移至 SQ-N3：门段 x[−232,−224]，从北外环广场 (−228,−245) 走进方庭', () => {

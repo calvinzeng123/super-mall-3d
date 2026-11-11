@@ -67,7 +67,7 @@ export function buildTourSteps(layout) {
     const sky = '云澜·北苑 · 商场天台空中大堂（刷卡直达住宅电梯）';
     const skySteps = lv('T1-7F')?.skyLobby ? [
       // Between the 方庭 canopy's north columns (−236 / −247, −218): the column stands ~8° off the view axis.
-      { caption: sky, building: 'P1', pos: V(-241.5, 35.7, -207), target: V(-235, 36.3, -226), dur: 5, shadow: 90 },
+      { caption: sky, building: 'P1', pos: V(-250, 35.7, -221), target: V(-235, 36.3, -226), dur: 5, shadow: 90 }, // 方庭天窗开大以后站到天窗北边的屋面上
       { caption: sky, building: 'T1', focus: 'T1-7F', pos: V(-243, 43.5, -217.5), target: V(-252, 34.6, -232), dur: 5, shadow: 70 },
     ] : [];
     return [

@@ -118,14 +118,15 @@ test('一期屋面：塔楼底板边线的墙只在空中大堂的两樘门处�
 for (const t of TOWERS) {
   test(`住户回家 ${t.id}：一期天台方庭观光梯出口 → 南门 → 空中大堂 → 刷卡闸机（不刷卡过不去）→ 候梯厅 → 两部私家梯直达`, () => {
     resetGates(nav);
+    // 云澜大中庭：方庭观光梯挪到中庭北边（layout/square-atrium.js 的 SQ_GLASS），天台出口就在北苑南门那排前面
     const gw = stopOf('P1-SQ-GW', 'P1-RF');
-    assert.deepEqual([gw.x, gw.z], [-237.8, -200]);
+    assert.deepEqual([gw.x, gw.z].map((v) => +v.toFixed(2)), [-241.5, -219.8]);
     let r = { s: S('P1-RF', gw.x, gw.z), now: 0 };
     assert.ok(clear(nav, r.s));
-    assert.equal(label(r.s), '一期 · RF 天台花园');
+    // 方庭观光梯的天台出口现在就在北苑空中大堂前庭里
+    assert.ok(['一期 · RF 天台花园', '云澜·北苑 空中大堂前庭（一期 RF）'].includes(label(r.s)), label(r.s));
     // 沿方庭天幕北排柱西侧 / 天窗北侧走到南门前，穿门进 7F
-    r = route(r, t.id === 'T1' ? [[-238.5, -205], [-238.5, -221], [t.door, -221], [t.door, -225.6]]
-      : [[-238.5, -205], [-238.5, -213], [t.door, -213], [t.door, -221], [t.door, -225.6]]);
+    r = route(r, [[-241.5, -221], [t.door, -221], [t.door, -225.6]]);
     assert.equal(r.s.floor, `${t.id}-7F`, `没有从南门走进 ${t.id}-7F`);
     assert.ok(at(r.s, [t.door, -225.6]));
     assert.equal(label(r.s), `云澜·北苑 ${t.n} 号楼 · 空中大堂（7F）`);
@@ -155,16 +156,15 @@ for (const t of TOWERS) {
   });
 }
 
-test('乘 6F → 天台扶梯 P1-SQ-P7-U 上来，沿天台花园走到 1 号楼南门进空中大堂', () => {
+// 云澜大中庭：方庭原来的 6F → 天台扶梯（SQ-P7）在新中庭里没有位置了，方庭上天台改坐两部观光梯
+test('方庭 6F 坐观光梯 P1-SQ-GE 上天台，沿天台花园走到 1 号楼南门进空中大堂', () => {
   resetGates(nav);
-  const e = L.escalators.find((q) => q.id === 'P1-SQ-P7-U');
-  assert.deepEqual([e.from, e.to, e.dir], ['P1-6F', 'P1-RF', 'up']);
-  const len = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z), ux = (e.top.x - e.bottom.x) / len, uz = (e.top.z - e.bottom.z) / len;
-  let r = { s: S('P1-6F', e.bottom.x - ux * 2, e.bottom.z - uz * 2), now: 0 };
+  const s6 = stopOf('P1-SQ-GE', 'P1-6F');
+  let r = { s: S('P1-6F', s6.x, s6.z), now: 0 };
   assert.ok(clear(nav, r.s));
-  r = walk(r, [e.top.x + ux * 1.8, e.top.z + uz * 1.8]);
-  assert.equal(r.s.floor, 'P1-RF', '扶梯没有上到天台');
-  r = route(r, [[-254.8, r.s.z], [-254.8, -221], [-249, -221], [-249, -226]]);
+  r = ride(r, 'P1-SQ-GE', 'P1-RF');
+  assert.equal(r.s.floor, 'P1-RF', '观光梯没有上到天台');
+  r = route(r, [[r.s.x, -221], [-249, -221], [-249, -226]]);
   assert.equal(r.s.floor, 'T1-7F');
   assert.ok(at(r.s, [-249, -226]), `(${r.s.x.toFixed(2)},${r.s.z.toFixed(2)})`);
 });
@@ -405,7 +405,8 @@ test('目录 / 楼层栏进 7F：落在空中大堂南门内 1.6 m（公共区�
 
 test('一期天台导视：方庭观光梯、方庭扶梯顶、SQ-E 电梯与五组主电梯出口都有指向空中大堂的双面牌，立杆是导航障碍物且不挡出口', () => {
   const rf = lvl('P1-RF'), signs = rf.skySigns || [];
-  assert.deepEqual(signs.map((s) => s.id).sort(), ['C-GE', 'C-GW', 'N', 'NW', 'SE', 'SQ-E', 'SQ-GE', 'SQ-GW', 'SQ-P7', 'SQ-canopy-N', 'W'].sort());
+  // 云澜大中庭：方庭 6F → 天台扶梯（SQ-P7）取消，它那块牌子也没了
+  assert.deepEqual(signs.map((s) => s.id).sort(), ['C-GE', 'C-GW', 'N', 'NW', 'SE', 'SQ-E', 'SQ-GE', 'SQ-GW', 'SQ-canopy-N', 'W'].sort());
   const doors = TOWERS.map((t) => [t.door, lvl(`${t.id}-7F`).spawn.z + 1.6]);
   for (const s of signs) {
     assert.equal(s.faces.length, 2, `${s.id} 不是双面牌`);

@@ -20,15 +20,18 @@ export const SQ_DECKS = {
 };
 /** 大瀑布：落水面在 x=−43.4，宽 20 米；1F 水池（局部） */
 export const WATERFALL = { x: -43.4, z0: -10, z1: 10, pool: rect(-44, -11, -31, 11), top: 33.6 };
-/** 两部观光梯：立在中庭南北两条长边的中段（6F 洞口边上），门朝商铺那一侧。
+/** 两部观光梯：立在中庭北边长边上（6F 洞口边上），门朝商铺那一侧。
  * 西侧观瀑平台在 4F 以上南半边是室外退台（外墙往里收），放不下。 */
-export const SQ_GLASS = [['GW', -16, -19.5, 'N'], ['GE', -16, 19.5, 'S']];
+// 都在北边：南边 6F 外墙收到 z=24、天台边在 z=20，南边的观光梯到不了天台。
+// x=−21.5 / −2.5 关于中庭中线（x=−12）对称，各落在天台玻璃天幕两根周边柱（x=−27/−16、−16/−5）之间。
+// z=−17.5：井道正好站在 6F 洞口北边（6F 上两部梯都在中庭里，门口对着楼板边），也在天台玻璃天幕（z≥−18）底下。
+export const SQ_GLASS = [['GW', -21.5, -17.5, 'N'], ['GE', -2.5, -17.5, 'N']];
 /** 东端交叉扶梯：1F→2F 往西上、2F→3F 往东上……两组左右错开 */
 export const SQ_STACK = [['1F', '2F', -1, -2], ['2F', '3F', 1, 2], ['3F', '4F', -1, -2], ['4F', '5F', 1, 2], ['5F', '6F', -1, -2]];
 const STACK_END = 26;
 /** 让出来的铺位 */
 const DROP = new Set(['W1', 'W2', 'W3', 'INW-a', 'INW-b', 'ISW-a', 'ISW-b']);
-const LEVELS = ['1F', '2F', '3F', '4F', '5F', '6F'];
+const LEVELS = ['1F', '2F', '3F', '4F', '5F', '6F', 'RF'];
 
 /** 改造方庭的扶梯表：去掉原来在中庭里的，加上东端交叉扶梯 */
 export function grandSquareEscalators(list) {
@@ -40,7 +43,7 @@ export function grandSquareEscalators(list) {
   return [...keep, ...stack];
 }
 
-/** 观光梯挪到瀑布两边，只到 1F–6F */
+/** 观光梯挪到南北长边中段，1F 到天台（天台上住户回家、去江景台都靠它们） */
 export function grandSquareSetup(bid, byShort, lift) {
   const r = squareSetup(bid, byShort, lift);
   const serves = LEVELS.filter((s) => byShort[s]).map((s) => byShort[s].id);
@@ -60,6 +63,9 @@ export function grandSquareLevel(lv, picker, state) {
   const s = lv.short;
   if (lv.kind === 'parking' || s === 'B1M') return out;
   // 让出来的铺位
+  // 改造前这一层全部铺位的原顺序记在一个不可枚举的字段上：p1-expansion 给 4F–6F 重新取店名时按原顺序（连让出来的铺位一起）取，
+  // 品牌池的消耗和改造前一模一样，后面八座附楼的店名不跟着挪
+  Object.defineProperty(lv, 'grandOrder', { value: [...lv.units], enumerable: false, configurable: true });
   lv.units = lv.units.filter((u) => !(u.square && DROP.has(u.slot.replace(/^SQ-/, ''))));
   for (const u of lv.units.filter((q) => q.square && q.slot === 'SQ-kids')) {
     // 儿童乐园原来延伸到 z=−10，挡住观瀑平台；收到 z=−18（和西北角铺位齐）
@@ -75,7 +81,8 @@ export function grandSquareLevel(lv, picker, state) {
     // 原来西侧扶梯的玻璃亭不要了；屋顶农场收到天窗西边
     lv.features = lv.features.filter((f) => !(f.square && f.type === 'pavilion'));
     for (const f of lv.features.filter((q) => q.type === 'farm' && q.frame === F_SQ)) f.rect = rect(-58, -22, -38.5, 20);
-    lv.walk = cutWalk(lv.walk, [sky], (w) => w.frame === F_SQ);
+    for (const [id, x, z] of SQ_GLASS) lv.voids.push({ id: `SQ-glass-shaft-${id}`, kind: 'shaft', poly: shaftPoly(x, z), frame: F_SQ, rect: rect(x - 1.3, z - 1.3, x + 1.3, z + 1.3), square: true });
+    lv.walk = cutWalk(lv.walk, [sky, ...SQ_GLASS.map(([, x, z]) => shaftPoly(x, z))], (w) => w.frame === F_SQ);
     return out;
   }
   for (const [id, x, z] of SQ_GLASS) lv.voids.push({ id: `SQ-glass-shaft-${id}`, kind: 'shaft', poly: shaftPoly(x, z), frame: F_SQ, rect: rect(x - 1.3, z - 1.3, x + 1.3, z + 1.3), square: true });

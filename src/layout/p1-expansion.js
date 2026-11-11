@@ -346,7 +346,7 @@ function addPublicFixtures(layout) {
 }
 export function applyP1Expansion(layout,picker) {
   layout.expansion={version:1,group:'P1',buildingIds:['P1',...P1_EXPANSION_IDS],routes:[],tourOnly:true};
-  for(const lv of layout.levels.filter(l=>l.building==='P1'&&['4F','5F','6F'].includes(l.short)))for(const u of lv.units){u.brand=picker.take(u.brand.cat);finalizeUnit(u);}
+  for(const lv of layout.levels.filter(l=>l.building==='P1'&&['4F','5F','6F'].includes(l.short))){const kept=new Set(lv.units),order=lv.grandOrder?[...lv.grandOrder,...lv.units.filter(u=>!lv.grandOrder.includes(u))]:lv.units;for(const u of order){u.brand=picker.take(u.brand.cat);if(kept.has(u))finalizeUnit(u);}}
   mainTerraces(layout);
   for(const d of DEFINITIONS){const p=buildAnnex(d,picker);layout.buildings.push(p.building);for(const k of ['levels','stairs','elevators','escalators','entrances','ramps'])layout[k].push(...p[k]);}
   groundEntrances(layout);integrateGarageKiosks(layout);connectLoop(layout);reclaimForecourt(layout);addSunkenArtCourt(layout);addWestArrival(layout);

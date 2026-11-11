@@ -193,7 +193,7 @@ test('紧凑 FPS 布局哈希不变', () => {
   assert.equal(createHash('sha256').update(json).digest('hex'), pinned);
 });
 
-test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和：今天 338 层、76 部电梯、106 部楼梯、664 个商铺、1,066 条住宅记录（1,046 户）', () => {
+test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和：今天 338 层、76 部电梯、106 部楼梯、626 个商铺、1,066 条住宅记录（1,046 户）', () => {
   // The pinned totals live in tests/campus-deltas (base.js + one delta file per supertall package), so each
   // package changes only its own file.
   const units = L.levels.flatMap((l) => l.units || []), res = units.filter((u) => u.residence);
@@ -201,7 +201,8 @@ test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和�
   assert.equal(L.elevators.length, CAMPUS.lifts);
   assert.equal(L.stairs.length, CAMPUS.stairs);
   assert.equal(units.length - res.length, CAMPUS.shops);
-  assert.equal(units.filter((u) => !u.residence && lvl(u.level).building === 'P1').length, 367);
+  // 367 − 38：云澜大中庭第一轮（tests/campus-deltas/p1-atrium.js）
+  assert.equal(units.filter((u) => !u.residence && lvl(u.level).building === 'P1').length, 329);
   assert.equal(res.length, CAMPUS.records);
   assert.equal(new Set(res.map((u) => u.residence.home ?? u.id)).size, CAMPUS.homes);
   const homes = (c) => new Set(res.filter((u) => u.residence.community === c).map((u) => u.residence.home ?? u.id)).size;
@@ -234,7 +235,8 @@ test('位置提示：江景台、玻璃挑台、星湾桥与跨中挑台、南�
 });
 
 test('方庭 3F 去江景台的北通道口正对走廊：北侧扶梯移到通道口以东，3F 走廊沿 x 方向能直接走进通道并到江景台', () => {
-  const art = L.escalators.filter((e) => /SQ-ART-(3F|5F)/.test(e.id));
+  // 云澜大中庭：方庭原来的 3F/5F 北侧扶梯换成东端交叉扶梯（SQ-X2/X3 两对经过 3F），都在通道口以东
+  const art = L.escalators.filter((e) => e.square && /SQ-X[23]-/.test(e.id));
   assert.equal(art.length, 4);
   for (const e of art) assert.ok(Math.min(e.bottom.x, e.top.x) > -216, `${e.id} 仍挡在通道口前 (${e.bottom.x.toFixed(2)})`);
   // 通道口 x[−224,−216] 南侧 4 m 内整条可站（不再只剩扶梯与口线之间 1.1 m 的缝）。
