@@ -4,6 +4,9 @@
 
 ## 2026-11-11 最新交接（五）：几猫模式（第一轮）
 
+**已部署**：滨江新站 https://yunlan-mall-calvin-v2.netlify.app/ ，部署 `6af46ebc9f6a25ea2ce60701`（提交 `6cd3951`，2026-11-11 13:33 UTC，状态 ready，`squad-order` 函数仍在）。线上的启动脚本、天空素材与 `dist/netlify` 逐个校验一致；首页只多了 Netlify 自己注入的注释和脚本。线上打开「几猫 · 商场突围」开局正常、无报错。
+云端会话里部署要让 netlify-cli 走代理：`NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt NETLIFY_AUTH_TOKEN=proxy-injected npx netlify-cli@17 deploy --prod --dir dist/netlify --functions netlify/functions --site b9d32e8f-84f0-4958-b426-fd2e491c3676`（令牌由环境的网络密钥注入，不写进任何文件）。
+
 用户决定：地图只用我们现有的 FPS 地图，其余一切都用他自己的「几猫」游戏（vendor/jimao/source.html，单文件、压缩打包）。封面多了「几猫 · 商场突围」入口（mode `jimao`），旧的「竞技 FPS」原样保留，等用户试过再决定删不删。
 
 - **游戏代码是原样抽出来的，不是重写**：`node scripts/jimao/build-vendor.mjs` 把 source.html 排版开，按依赖把需要的顶层声明原样切成 `src/jimao/vendor/game.js`（约 9,800 行），three 的内部名字改从本项目的 three 包按公开名字取；HUD 样式另存为 `src/jimao/vendor/ui-css.js`。两个文件都是生成的，不要手改；改 source.html 后重跑脚本。报告在 `vendor/jimao/extract-report.json`。脚本要 acorn 和 eslint-scope（`npm i --no-save acorn eslint-scope`）。
