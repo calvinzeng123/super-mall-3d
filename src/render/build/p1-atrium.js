@@ -21,7 +21,7 @@ export function buildP1Atrium(ctx) {
     if (!L) continue;
     const next = levels[i + 1];
     if (lv !== rf) columnSegment(L.batch, F, f, lv.elev, next ? next.elev : lv.elev + lv.height);
-    if (lv.elev > 0) balcony(ctx, L.shellBatch, lv);
+    if (lv.elev > 0) balcony(ctx, L.shellBatch || L.batch, lv);
   }
   if (rf && ctx.levels[rf.id]) canopies(ctx.levels[rf.id].batch, F, f, rf.elev);
   const L1 = ctx.levels['P1-1F'];
@@ -74,7 +74,7 @@ function canopies(B, F, f, y0) {
           }
           prev = p;
         }
-        B.get('glowSoft').sphere(prev.x, prev.y, prev.z, 0.16, WARM);
+        B.get('glowSoft').sphere(prev.x, prev.y, prev.z, 0.16, WARM, undefined, undefined, 'sphereLo');
       }
       // 一圈连接肋梢的细环
       for (let k = 0; k < 20; k++) {
@@ -112,19 +112,19 @@ function balcony(ctx, B, lv) {
       B.get('matte').box(mx + nx * 0.34, y - 0.2, mz + nz * 0.34, pl, 0.26, 0.28, '#ece8df', ang);
       for (let q = 0; q < 3; q++) {
         const s = (q - 1) * pl * 0.32 + (rand() - 0.5) * 0.2;
-        B.get('foliage').sphere(mx + ux * s + nx * 0.36, y - 0.02, mz + uz * s + nz * 0.36, 0.3, rand() < 0.5 ? LEAF : LEAF2, 0.18, 0.2, 'sphereLo');
+        B.get('foliage').sphere(mx + ux * s + nx * 0.36, y - 0.02, mz + uz * s + nz * 0.36, 0.3, rand() < 0.5 ? LEAF : LEAF2, 0.18, 0.2, 'ico0');
       }
       const vines = rand() < 0.35 ? 0 : 1 + Math.floor(rand() * 2);
       for (let q = 0; q < vines; q++) {
         const s = (rand() - 0.5) * pl * 0.9, L = 0.5 + rand() * (lv.height > 5 ? 1.7 : 1.2), sway = (rand() - 0.5) * 0.25;
-        for (let d = 0.1; d < L; d += 0.13) {
+        for (let d = 0.1; d < L; d += 0.17) {
           const t = d / L, jx = Math.sin(d * 7 + s * 3) * 0.05;
-          B.get('foliage').sphere(mx + ux * (s + jx + sway * t) + nx * (0.47 + t * 0.06), y - 0.3 - d, mz + uz * (s + jx + sway * t) + nz * (0.47 + t * 0.06), 0.085 - 0.03 * t, rand() < 0.5 ? '#5f9447' : '#4a803c', 0.07, 0.04, 'ico0');
+          B.get('foliage').sphere(mx + ux * (s + jx + sway * t) + nx * (0.47 + t * 0.06), y - 0.3 - d, mz + uz * (s + jx + sway * t) + nz * (0.47 + t * 0.06), 0.1 - 0.035 * t, rand() < 0.5 ? '#5f9447' : '#4a803c', 0.08, 0.045, 'ico0');
         }
       }
       if (rand() < 0.5) for (let q = 0; q < 3; q++) {
         const s = (rand() - 0.5) * pl * 0.85;
-        B.get('foliage').sphere(mx + ux * s + nx * (0.3 + rand() * 0.15), y + 0.1, mz + uz * s + nz * (0.3 + rand() * 0.15), 0.09 + rand() * 0.04, FLOWERS[Math.floor(rand() * FLOWERS.length)], undefined, undefined, 'sphereLo');
+        B.get('foliage').sphere(mx + ux * s + nx * (0.3 + rand() * 0.15), y + 0.1, mz + uz * s + nz * (0.3 + rand() * 0.15), 0.09 + rand() * 0.04, FLOWERS[Math.floor(rand() * FLOWERS.length)], undefined, undefined, 'ico0');
       }
     }
   }
@@ -149,7 +149,7 @@ function fountain(B, F, p, y0) {
         prev = q;
       }
     }
-    B.get('glowSoft').sphere(u, y0 + 0.75 + H + 0.3, v, 0.28, WARM);
+    B.get('glowSoft').sphere(u, y0 + 0.75 + H + 0.3, v, 0.28, WARM, undefined, undefined, 'sphereLo');
     // 中间一根细水柱，池边 16 道水弧
     B.get('glowSoft').cyl(u, y0 + 0.75, v, 0.06, 4.2, '#e6f5fa', 10);
     for (let k = 0; k < 16; k++) {
@@ -165,7 +165,7 @@ function fountain(B, F, p, y0) {
     const rand = rng(41);
     for (let k = 0; k < 40; k++) {
       const a = (k / 40) * Math.PI * 2;
-      B.get('foliage').sphere(u + Math.cos(a) * (r - 0.15), y0 + 0.66, v + Math.sin(a) * (r - 0.15), 0.16, rand() < 0.4 ? LEAF : FLOWERS[k % FLOWERS.length]);
+      B.get('foliage').sphere(u + Math.cos(a) * (r - 0.15), y0 + 0.66, v + Math.sin(a) * (r - 0.15), 0.16, rand() < 0.4 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
     }
   });
 }
@@ -174,22 +174,22 @@ function fountain(B, F, p, y0) {
 function cascade(B, F, p, y0) {
   B.frame(F, () => {
     const { u, v, rx, rz } = p, rand = rng(77);
-    B.get('travertine').sphere(u, y0 + 0.2, v, rx, '#d8cfbf', 0.4, rz);
-    B.get('water').sphere(u, y0 + 0.36, v, rx - 0.35, '#3a7f9b', 0.12, rz - 0.35);
+    B.get('travertine').sphere(u, y0 + 0.2, v, rx, '#d8cfbf', 0.4, rz, 'sphereLo');
+    B.get('water').sphere(u, y0 + 0.36, v, rx - 0.35, '#3a7f9b', 0.12, rz - 0.35, 'sphereLo');
     // 石头堆在远离中庭中心的一侧（v 更负）
     const back = v - rz * 0.45;
     for (let k = 0; k < 26; k++) {
       const s = (rand() - 0.5) * rx * 1.6, h = rand();
-      B.get('matte').sphere(u + s, y0 + 0.4 + h * 2.6 * (1 - Math.abs(s) / (rx * 0.9)), back - rand() * 1.2, 0.6 + rand() * 0.6, rand() < 0.5 ? '#8c8579' : '#a39b8c', 0.45 + rand() * 0.35, 0.55 + rand() * 0.3);
+      B.get('matte').sphere(u + s, y0 + 0.4 + h * 2.6 * (1 - Math.abs(s) / (rx * 0.9)), back - rand() * 1.2, 0.6 + rand() * 0.6, rand() < 0.5 ? '#8c8579' : '#a39b8c', 0.45 + rand() * 0.35, 0.55 + rand() * 0.3, 'sphereLo');
     }
     for (const s of [-1.6, 0, 1.6]) {
       const top = y0 + 2.4 - Math.abs(s) * 0.5;
       B.get('glowSoft').box(u + s, (top + y0 + 0.4) / 2, back + 0.55, 0.9, top - y0 - 0.4, 0.04, '#e8f4f6');
-      B.get('glowSoft').sphere(u + s, y0 + 0.42, back + 0.8, 0.5, '#f4fbfc', 0.08, 0.35);
+      B.get('glowSoft').sphere(u + s, y0 + 0.42, back + 0.8, 0.5, '#f4fbfc', 0.08, 0.35, 'sphereLo');
     }
     for (let k = 0; k < 34; k++) {
       const a = Math.PI * 0.05 + (k / 34) * Math.PI * 0.9;
-      B.get('foliage').sphere(u + Math.cos(a) * (rx - 0.1), y0 + 0.45, v + Math.sin(a) * (rz - 0.1), 0.18, rand() < 0.45 ? LEAF : FLOWERS[k % FLOWERS.length]);
+      B.get('foliage').sphere(u + Math.cos(a) * (rx - 0.1), y0 + 0.45, v + Math.sin(a) * (rz - 0.1), 0.18, rand() < 0.45 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
     }
   });
 }
@@ -203,7 +203,7 @@ function palm(B, F, p, y0, seed) {
     B.get('foliage').cyl(u, y0 + 0.5, v, r - 0.08, 0.06, '#5a4632', 32);
     for (let k = 0; k < 14; k++) {
       const a = rand() * Math.PI * 2, d = rand() * (r - 0.3);
-      B.get('foliage').sphere(u + Math.cos(a) * d, y0 + 0.62, v + Math.sin(a) * d, 0.16, rand() < 0.5 ? LEAF : FLOWERS[k % FLOWERS.length]);
+      B.get('foliage').sphere(u + Math.cos(a) * d, y0 + 0.62, v + Math.sin(a) * d, 0.16, rand() < 0.5 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
     }
     const H = 5.5 + rand() * 1.8, lean = (rand() - 0.5) * 0.5, la = rand() * Math.PI * 2;
     let prev = { x: u, y: y0 + 0.55, z: v };

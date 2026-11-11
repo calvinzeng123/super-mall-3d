@@ -82,3 +82,11 @@ test('庭院喷泉水面露出池沿之下，没有被实心池顶盖住', () =>
     assert.ok(trianglesIn([tour.site.group], box(x - .15, .25, z - .15, x + .15, .33, z + .15)) > 0, `${f.id} 没有水面`);
   }
 });
+
+test('样板中庭：1F 喷泉/树形柱、各层栏板花槽、6F 两块大屏和吊灯、天台树形柱伞顶都有几何', () => {
+  const n = (id, b) => trianglesIn([tour.levels[id].base], b);
+  assert.ok(n('P1-1F', box(-140, 0, -140, -72, 10, -72)) > 2000, '1F 中庭几何太少');
+  assert.ok(n('P1-4F', box(-140, 16, -140, -72, 18, -72)) > 500, '4F 栏板花槽');
+  assert.ok(n('P1-RF', box(-140, 34, -140, -72, 44, -72)) > 500, '天台伞顶');
+  assert.equal(meshes(tour.levels['P1-6F'].base).filter(m => m.name === 'P1-atrium-screen').length, 4);
+});
