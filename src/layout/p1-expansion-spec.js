@@ -4,9 +4,10 @@ import { grandSquareEscalators, grandSquareSetup, grandSquareLevel } from './squ
 
 /** 中庭洞口：[楼层, 进深的一半, 圆角半径] */
 // 云澜大中庭第二轮：两端也逐层退（每层 3 米），两部观光梯挪到 x=±30（6F 洞口两端以外，门朝外对着翼楼口）。
-export const ATRIUM_STEPS = [['3F', 20, 11.5, 7], ['4F', 23, 14, 8], ['5F', 26, 16, 9], ['6F', 28, 17, 10], ['RF', 28, 17, 10]];
+export const ATRIUM_STEPS = [['3F', 20, 11.5, 7], ['4F', 23, 14, 8], ['5F', 26, 16, 9], ['6F', 28, 17, 10], ['RF', 22, 17, 9]]; // 天台天窗两端收到 ±22：沿四翼中轴还能走进光穹里（u=24）
 /** 圆厅观光梯的新位置（套件坐标） */
-export const ROTUNDA_GLASS = [{ id: 'GW', x: -30, z: 0, door: 'W' }, { id: 'GE', x: 30, z: 0, door: 'E' }];
+// 偏开翼楼中轴 5 米：天台上沿东南翼、西北翼中轴走进光穹的路不被井道挡住，也离光穹的柱子 ≥2.9 米
+export const ROTUNDA_GLASS = [{ id: 'GW', x: -30, z: 5, door: 'W' }, { id: 'GE', x: 30, z: -5, door: 'E' }];
 
 export function buildExpandedP1Spec(original) {
   const copy = v => Array.isArray(v) ? v.map(copy) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k,x])=>[k,copy(x)])) : v;

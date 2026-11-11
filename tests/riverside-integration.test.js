@@ -193,7 +193,7 @@ test('紧凑 FPS 布局哈希不变', () => {
   assert.equal(createHash('sha256').update(json).digest('hex'), pinned);
 });
 
-test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和：今天 338 层、76 部电梯、106 部楼梯、626 个商铺、1,066 条住宅记录（1,046 户）', () => {
+test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和：今天 338 层、76 部电梯、106 部楼梯、596 个商铺、1,066 条住宅记录（1,046 户）', () => {
   // The pinned totals live in tests/campus-deltas (base.js + one delta file per supertall package), so each
   // package changes only its own file.
   const units = L.levels.flatMap((l) => l.units || []), res = units.filter((u) => u.residence);
@@ -201,8 +201,8 @@ test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和�
   assert.equal(L.elevators.length, CAMPUS.lifts);
   assert.equal(L.stairs.length, CAMPUS.stairs);
   assert.equal(units.length - res.length, CAMPUS.shops);
-  // 367 − 38：云澜大中庭第一轮（tests/campus-deltas/p1-atrium.js）
-  assert.equal(units.filter((u) => !u.residence && lvl(u.level).building === 'P1').length, 329);
+  // 367 − 68：云澜大中庭（tests/campus-deltas/p1-atrium.js）
+  assert.equal(units.filter((u) => !u.residence && lvl(u.level).building === 'P1').length, 299);
   assert.equal(res.length, CAMPUS.records);
   assert.equal(new Set(res.map((u) => u.residence.home ?? u.id)).size, CAMPUS.homes);
   const homes = (c) => new Set(res.filter((u) => u.residence.community === c).map((u) => u.residence.home ?? u.id)).size;

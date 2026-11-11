@@ -17,7 +17,8 @@ test('3F–RF 的中庭洞口逐层加深（两端每层退 3 米、长边每层
   for (const [short, hx, half] of ATRIUM_STEPS) {
     const v = lvl(`P1-${short}`).voids.find((x) => x.id === 'C-void');
     assert.deepEqual([v.rect.x0, v.rect.x1, v.rect.z0, v.rect.z1], [-hx, hx, -half, half], short);
-    assert.ok(hx >= prev[0] && half >= prev[1], `${short} 不比下一层小`); prev = [hx, half];
+    // 天台天窗两端故意收到 ±22（沿四翼中轴能走进光穹），只检查 3F–6F 的退台
+    if (short !== 'RF') { assert.ok(hx >= prev[0] && half >= prev[1], `${short} 不比下一层小`); prev = [hx, half]; }
   }
   const glass = L.elevators.filter((e) => e.type === 'glass' && e.building === 'P1' && !e.square);
   assert.deepEqual(glass.map((g) => Math.abs(g.lu)), [30, 30]);

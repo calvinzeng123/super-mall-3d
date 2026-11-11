@@ -27,8 +27,8 @@ test('方庭在一期地块内、离道路 ≥5m；东南斜面与西北翼末�
 
 test('方庭与西北翼铺位数量', () => {
   // 1F 方庭让出 4 铺：北苑 T1 住户大堂（SQ-NW）、两座住户核心筒（SQ-N1/N5）与西移的方庭北门（SQ-N3）
-  // 云澜大中庭第一轮（layout/square-atrium.js）：方庭西侧一排铺位（W1–W3）和西边四个岛铺让给大中庭和观瀑平台，每层再少 7 家
-  const need = { '1F': 13, '2F': 15, '3F': 10, B1M: 18 };
+  // 云澜大中庭（layout/square-atrium.js）：方庭西侧一排、东边商铺带、中间 8 个岛铺让给大中庭和观瀑平台
+  const need = { '1F': 7, '2F': 10, '3F': 7, B1M: 18 };
   for (const [s, n] of Object.entries(need)) {
     const lv = lvl(`P1-${s}`);
     const k = lv.units.filter((u) => u.square).length;

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN, rng } from '../textures.js';
 import { pointInPoly, lrectPoly, toW } from '../../layout/geom.js';
 import { F_SQ } from '../../layout/square.js';
-import { WATERFALL, SQ_DECKS } from '../../layout/square-atrium.js';
+import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
 const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
 const FLOWERS = ['#e58fb5', '#c96aa8', '#f2b6c8', '#a77bd1', '#f6e7a1'];
@@ -373,6 +373,19 @@ function grandSquare(ctx, levels) {
     }
   });
   for (const [u, v] of [[-28, -14], [-28, 14], [-16, -16], [-16, 16]]) palm(B, F_SQ, { u, v, r: 1.4 }, lv1.elev, u * 3 + v);
+  // 中轴花坛：石材池边、灌木团、花，每个花坛中间一棵小树
+  const rb = rng(55);
+  B.frame(F_SQ, () => {
+    for (const r of SQ_GROUND.beds) {
+      const cx = (r.x0 + r.x1) / 2, czb = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
+      B.get('travertine').box(cx, 0.25, czb, w, 0.5, d, '#e6dfd2');
+      B.get('foliage').box(cx, 0.52, czb, w - 0.3, 0.06, d - 0.3, '#5a4632');
+      for (let k = 0; k < 16; k++) B.get('foliage').sphere(r.x0 + 0.4 + rb() * (w - 0.8), 0.7, r.z0 + 0.4 + rb() * (d - 0.8), 0.28 + rb() * 0.12, k % 3 ? (rb() < 0.5 ? LEAF : LEAF2) : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
+    }
+  });
+  for (const r of SQ_GROUND.beds) B.prop('plant_tall', (r.x0 + r.x1) / 2, lv1.elev + 0.5, (r.z0 + r.z1) / 2, 0, 1.3);
+  // 咖啡外摆：一个小吧台 + 四张圆桌、每张配椅子和遮阳伞
+  for (const r of SQ_GROUND.cafes) cafe(B, r, lv1.elev);
   // 各层玻璃观景台：玻璃地板、三边暖光、一对望远镜
   for (const lv of levels) {
     const d = SQ_DECKS[lv.short], L = ctx.levels[lv.id];
@@ -429,4 +442,23 @@ function waterMaterial(ctx) {
   const front = make(0.85), back = make(0.55);
   ctx.dynamic?.push({ name: 'p1-waterfall', update(dt) { front.map.offset.y += dt * 0.9; back.map.offset.y += dt * 0.6; } });
   return (ctx.p1Waterfall = { front, back });
+}
+
+/** 中庭里的咖啡外摆（方庭局部坐标的一块矩形）：小吧台、木地台、四张圆桌带椅子和伞 */
+function cafe(B, r, y0) {
+  B.frame(F_SQ, () => {
+    const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
+    B.get('wood').box(cx, y0 + 0.04, cz, w, 0.08, d, '#b08b62');
+    // 吧台靠一端
+    B.get('satin').box(r.x0 + 0.8, y0 + 0.55, cz, 1.0, 1.1, Math.min(2.6, d - 0.6), '#f2ece2');
+    B.get('wood').box(r.x0 + 0.8, y0 + 1.13, cz, 1.2, 0.06, Math.min(2.8, d - 0.4), '#8a6a48');
+    B.get('glow').box(r.x0 + 0.27, y0 + 0.3, cz, 0.03, 0.05, Math.min(2.4, d - 0.8), WARM);
+    for (const [fx, fz] of [[0.35, 0.28], [0.75, 0.28], [0.35, 0.72], [0.75, 0.72]]) {
+      const x = r.x0 + 1.6 + (w - 2.2) * fx, z = r.z0 + d * fz;
+      if (!B.prop('cafe_table_round', x, y0 + 0.08, z, 0)) B.get('wood').cyl(x, y0 + 0.08, z, 0.4, 0.74, '#7a5a3c', 12);
+      for (const a of [0, Math.PI]) B.prop('cafe_chair', x + Math.cos(a) * 0.75, y0 + 0.08, z + Math.sin(a) * 0.75, a + Math.PI / 2);
+      B.get('metal').cyl(x, y0 + 0.08, z, 0.03, 2.3, '#6d7276', 8);
+      B.get('matte').cone(x, y0 + 2.1, z, 1.15, 0.45, ['#f3ead9', '#e7d3b0', '#d9e4dc'][Math.round(fx * 10 + fz * 10) % 3], 10);
+    }
+  });
 }

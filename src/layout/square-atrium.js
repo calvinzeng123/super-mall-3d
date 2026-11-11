@@ -21,6 +21,12 @@ export const SQ_DECKS = {
 };
 /** 大瀑布：落水面在 x=−43.4，宽 20 米；1F 水池（局部） */
 export const WATERFALL = { x: -43.4, z0: -10, z1: 10, pool: rect(-44, -11, -31, 11), top: 33.6 };
+/** 1F 中庭地面：沿中轴的花坛（灌木 + 花）和三处咖啡外摆（局部矩形），都挡人。
+ * 避开 B1M↔1F 扶梯洞口（|x|<5、|z|<8）、东门（z=±4）、服务台（14, 13）、观光梯门口、瀑布水池和棕榈。 */
+export const SQ_GROUND = {
+  beds: [rect(-25, 5.8, -19, 8.2), rect(-25, -8.2, -19, -5.8), rect(17, 7.8, 23, 10.2), rect(17, -10.2, 23, -7.8), rect(27, 7.8, 33, 10.2), rect(27, -10.2, 33, -7.8)],
+  cafes: [rect(-12.5, 11.5, -7, 16.5), rect(-12.5, -16.5, -7, -11.5), rect(31, 11, 38, 16.5)],
+};
 /** 两部观光梯：立在中庭北边长边上（6F 洞口边上），门朝商铺那一侧。
  * 西侧观瀑平台在 4F 以上南半边是室外退台（外墙往里收），放不下。 */
 // 都在北边：南边 6F 外墙收到 z=24、天台边在 z=20，南边的观光梯到不了天台。
@@ -117,6 +123,8 @@ export function grandSquareLevel(lv, picker, state) {
   if (s === '1F') {
     lv.navObstacles ||= [];
     lv.navObstacles.push({ id: 'SQ-waterfall-pool', poly: lroundPoly(F_SQ, WATERFALL.pool, 4) });
+    SQ_GROUND.beds.forEach((r, i) => lv.navObstacles.push({ id: `SQ-bed-${i}`, poly: lroundPoly(F_SQ, r, 1) }));
+    SQ_GROUND.cafes.forEach((r, i) => lv.navObstacles.push({ id: `SQ-cafe-${i}`, poly: lrectPoly(F_SQ, r) }));
   }
   return out;
 }
