@@ -1,6 +1,9 @@
 // Preserve the legacy P1 spec for the compact FPS while tour expands vertically.
 import { KIT } from './constants.js';
 
+/** 中庭洞口：[楼层, 进深的一半, 圆角半径] */
+export const ATRIUM_STEPS = [['3F', 11.5, 6], ['4F', 14, 7], ['5F', 16, 8], ['6F', 17, 9], ['RF', 17, 9]];
+
 export function buildExpandedP1Spec(original) {
   const copy = v => Array.isArray(v) ? v.map(copy) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k,x])=>[k,copy(x)])) : v;
   const spec=copy(original);
@@ -14,6 +17,13 @@ export function buildExpandedP1Spec(original) {
   spec.levels=spec.levels.filter(l=>l.short!=='RF');
   for(const [short,name,elev,key,floor,accent,label,cats]of themes)spec.levels.push({short,name,kind:'retail',elev,height:5.5,theme:{key,floor,accent,label},widths:short==='5F'?[20,18,22]:[13,16,12,15],cats,rot:{C:{void:KIT.voidUp}},wings:{SE:{end:'lounge'},W:{end:'lounge'},N:{end:'lounge'},NW:{}}});
   spec.levels.push(roof);
+  // 样板中庭：2F 以上的中庭洞口逐层加深（长边方向），从下往上看是一圈圈退台；天台天窗开到和 6F 一样大，
+  // 从中庭里能看到上面的云澜光穹。洞口长边固定 ±17（两部观光梯的门正好在洞口两端），
+  // 进深受扶梯限制：2F 的 1F↔2F 扶梯落在 ±10，3F 的 2F↔3F 扶梯在 ±15.15，4F–RF 的扶梯开洞在 ±21 以外。
+  for (const [short, half, r] of ATRIUM_STEPS) {
+    const lv = spec.levels.find(l => l.short === short);
+    lv.rot = { ...lv.rot, C: { ...lv.rot.C, void: { rect: { x0: -17, z0: -half, x1: 17, z1: half }, r } } };
+  }
   spec.escalators=spec.escalators.map(e=>e.to==='RF'?{...e,from:'6F',...(e.rot==='C'?{cross:Math.sign(e.cross)*26}:{}),label:'6F ↔ 天台花园'}:e);
   for(const [from,to]of [['3F','4F'],['4F','5F'],['5F','6F']]){
     const cross=from==='4F'?26:21;

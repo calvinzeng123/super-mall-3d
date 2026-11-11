@@ -413,6 +413,8 @@ function atriumArt(ctx, b, levels) {
   const roof = levels.find((l) => l.kind === 'roof');
   if (!top || !roof) return;
   const B = ctx.levels[top.id].batch;
+  // 一期样板中庭换成了金色光环吊灯（p1-atrium.js）
+  if (b.id === 'P1' && ctx.layout.fidelity?.atrium) return;
   for (const r of b.rotundas) {
     const v = top.voids.find((x) => x.kind === 'atrium' && x.frame === r.kitF);
     if (!v) continue;
