@@ -10,7 +10,8 @@ import { createMapPhysics } from './physics.js';
 import { createGrade } from './grade.js';
 import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
-import { buildNav } from '../layout/nav.js';
+import { addSoldiers } from './soldier.js';
+import { buildNav, landAt } from '../layout/nav.js';
 import { distToPolyEdge } from '../layout/geom.js';
 import { createMissionLayout } from '../fps/mission-layout.js';
 import { MOBILE } from '../render/device.js';
@@ -103,7 +104,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.weapon.setWetness?.(0);
   // 枪（相机下面的所有东西）挪到自己那一层
   camera.traverse((o) => { if (o !== camera) o.layers.set(VIEW_LAYER); });
-  G.enemies = J.stubs.enemies(); // 敌人第二轮接入
+  // 敌人：原游戏的机械飞鸥、机械猎犬，加上真人敌人「武装劫持者」（soldier.js，登记进同一个敌人模块）
+  onProgress('正在部署敌人', 0.85);
+  G.enemies = await guarded('enemies', () => J.createEnemies(G));
+  if (G.enemies.debug) addSoldiers(G, G.enemies, { patrolLines: G.level.patrolLines });
+  tuneFlow();
   G.hud = J.createHud(G);
   G.game = J.createGame(G);
   async function guarded(name, make) {
@@ -185,6 +190,22 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   };
 }
 
+/**
+ * 敌人的数量和组成（原游戏是开局 2 飞鸥 + 1 猎犬，三波 3+1、3+2、4+3）。
+ * 我们的地图是室内为主、楼层多，真人敌人当主力，机器穿插：开局 4 人 + 1 猎犬 + 1 飞鸥在各处巡逻，
+ * 每切断一个中继来一波，撤离时有追兵。同时在场最多 10 个。
+ */
+function tuneFlow() {
+  // 猎犬原来每 0.6 秒重新找一次路；我们的路跨楼层、算得慢，放宽到 1.5 秒
+  J.ENEMY_TUNE.hound.replan = 1.5;
+  Object.assign(J.GAME_FLOW, {
+    patrol: { gull: 1, hound: 1, soldier: 4 },
+    waves: [{ gull: 1, hound: 1, soldier: 3 }, { gull: 2, hound: 1, soldier: 4 }, { gull: 2, hound: 2, soldier: 5 }],
+    maxAlive: 10, spawnMax: 40,
+    pursuitMix: (r) => (r < 0.3 ? 'gull' : r < 0.75 ? 'soldier' : 'hound'),
+  });
+}
+
 /** 原游戏的关卡数据，从我们的任务布局换算：出生点、三个中继、撤离点、室内范围、标题画面的镜头路线。 */
 function buildLevel(ctx, nav) {
   const mission = createMissionLayout(ctx.layout);
@@ -200,6 +221,7 @@ function buildLevel(ctx, nav) {
     const xs = b.outline.map((p) => p[0]), zs = b.outline.map((p) => p[1]);
     return { min: new THREE.Vector3(Math.min(...xs), -30, Math.min(...zs)), max: new THREE.Vector3(Math.max(...xs), 12.5, Math.max(...zs)) };
   });
+  const { enemySpawns, coverPoints, patrolLines } = buildSpawns(mission, nav, [terminal, intel, third]);
   const s = mission.spawn, fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), eye = 1.7;
   const cinematicPath = [0, 6, 12, 18].map((d, i) => ({
     pos: [s.x + fx * d + (i % 2 ? 0.6 : -0.6), s.y + eye + 0.4, s.z + fz * d],
@@ -207,7 +229,45 @@ function buildLevel(ctx, nav) {
   }));
   return {
     stub: false, playerStart: { pos: v(s), yaw: s.yaw }, objectives: relays,
-    extraction: { pos: v(car), radius: 3.2 }, enemySpawns: [], zones: [], coverPoints: [], interiorBoxes, cinematicPath,
+    extraction: { pos: v(car), radius: 3.2 }, enemySpawns, zones: [], coverPoints, patrolLines, interiorBoxes, cinematicPath,
     groundSurfaceAt: () => 'concrete', update() {},
   };
+}
+
+/**
+ * 敌人出生点：原 FPS 任务里的七个守卫位置和它们的巡逻点、三个中继周围、掩体旁边。
+ * 地面的（猎犬、真人）就站在楼面上；空中的（飞鸥）只取头顶有 3.8 米以上净空的地上楼层，高度定在离地 2.5–4.5 米。
+ */
+export function buildSpawns(mission, nav, relays) {
+  const ground = [], seen = new Set();
+  const add = (x, y, z) => {
+    const st = landAt(nav, x, z, y + 0.6);
+    if (!st || Math.abs(st.y - y) > 0.6) return;
+    const key = `${Math.round(st.x / 2)},${Math.round(st.y)},${Math.round(st.z / 2)}`;
+    if (seen.has(key)) return;
+    seen.add(key); ground.push(new THREE.Vector3(st.x, st.y, st.z));
+  };
+  for (const e of mission.enemies) { add(e.x, e.y, e.z); for (const p of e.patrol) add(p.x, p.y, p.z); }
+  // 中继周围（同一层）：近处 6–16 米一圈，波次敌人常用的 22–34 米再一圈
+  for (const r of relays) for (let k = 0; k < 24; k++) {
+    const a = k / 24 * Math.PI * 2 + (k % 2) * 0.13, d = [6, 11, 16, 22, 28, 34][k % 6];
+    add(r.x + Math.cos(a) * d, r.y, r.z + Math.sin(a) * d);
+  }
+  const coverPoints = [];
+  for (const c of mission.cover) for (const [dx, dz] of [[c.w / 2 + 0.7, 0], [-(c.w / 2 + 0.7), 0], [0, c.d / 2 + 0.7], [0, -(c.d / 2 + 0.7)]]) {
+    const st = landAt(nav, c.x + dx, c.z + dz, c.y + 0.6);
+    if (st && Math.abs(st.y - c.y) < 0.6) coverPoints.push(new THREE.Vector3(st.x, st.y, st.z));
+  }
+  for (const p of coverPoints) add(p.x, p.y, p.z);
+  const enemySpawns = ground.map((pos) => ({ type: 'ground', pos }));
+  for (const pos of ground) {
+    if (pos.y < -0.5) continue;
+    const F = [...nav.floors.values()].find((f) => Math.abs(f.y - pos.y) < 0.3 && f.level?.height);
+    const clear = F ? F.level.height - 0.4 : 0;
+    if (clear < 3.8) continue;
+    const y = pos.y + Math.min(4.5, clear - 1.3);
+    if (y >= 2.5) enemySpawns.push({ type: 'air', pos: new THREE.Vector3(pos.x, y, pos.z) });
+  }
+  const patrolLines = mission.enemies.map((e) => e.patrol.map((p) => ({ x: p.x, y: p.y, z: p.z })));
+  return { enemySpawns, coverPoints, patrolLines };
 }

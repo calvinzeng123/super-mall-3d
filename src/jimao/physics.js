@@ -101,6 +101,15 @@ export function createMapPhysics(nav) {
       const s = landAt(nav, x, z, yMax);
       return s ? s.y : -50;
     },
+    /** 敌人（机械猎犬）贴地走到 (x, z)：水平按导航网格走（墙、栏杆、楼梯），高度平滑跟到脚下的楼面 */
+    moveFeet(pos, x, z, dt) {
+      let s = stateFor(pos);
+      if (!s) { pos.x = x; pos.z = z; return; }
+      const dx = x - s.x, dz = z - s.z, n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.15));
+      for (let i = 0; i < n; i++) s = step(nav, s, dx / n, dz / n, dt / n);
+      tracked.set(pos, s);
+      pos.x = s.x; pos.z = s.z; pos.y += (s.y - pos.y) * (1 - Math.exp(-12 * dt));
+    },
     moveCapsule(pos, vel, dt, radius = 0.32, height = 1.8, stepUp = true) {
       const res = { onGround: false, hitWall: false, hitCeil: false, surface: 'concrete' };
       let s = stateFor(pos);
@@ -125,14 +134,14 @@ export function createMapPhysics(nav) {
     },
   };
 
-  // 敌人用的寻路接口（第一轮还没有敌人；按楼面在我们的导航网格上找路）
+  // 敌人用的寻路接口（按楼面在我们的导航网格上找路，跨楼层走楼梯、扶梯）
   physics.nav = {
     cell: 0.8,
     isWalkable(x, z) { return !!landAt(nav, x, z, 1e4); },
     findPath(from, to) {
       const a = locate(from.x, from.y ?? 0, from.z), b = locate(to.x, to.y ?? 0, to.z);
       if (!a || !b) return null;
-      const path = findPath(nav, a, b, { maxNodes: 2400, cellSize: 0.8 });
+      const path = findPath(nav, a, b, { maxNodes: 12000, cellSize: 0.8 }); // 一期地下大厅到一楼这种跨楼层的长路，2400 个格子不够
       return path ? path.map((p) => new THREE.Vector3(p.x, p.y ?? 0, p.z)) : null;
     },
     randomPoint(c, r) {

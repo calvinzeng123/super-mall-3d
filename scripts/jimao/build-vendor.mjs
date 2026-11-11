@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transform } from 'esbuild';
 import { rebrand } from './rebrand.mjs';
+import { applyPatches } from './patches.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const source = path.join(root, 'vendor/jimao/source.html');
@@ -30,6 +31,8 @@ export const ENTRIES = {
   Gg: 'createMats', d3: 'createPhysics', Yg: 'createProps', Cf: 'createFx', c_: 'createAudio', v_: 'createInput', x_: 'createPlayer',
   zv: 'createCombat', dm: 'createWeapon', Em: 'createEnemies', hM: 'createHud', mM: 'createGame',
   dr: 'stubs', Dy: 'createEvents', il: 'createRng', zy: 'resolveQuality', oi: 'LEVEL_BOUNDS', Mn: 'SUN', en: 'SKY', Pi: 'PLAYER',
+  // 关卡流程（巡逻数、三波敌人、追兵）和敌人参数：导出来是为了按我们的地图调数量、加真人敌人
+  Yi: 'GAME_FLOW', Ui: 'ENEMY_TUNE',
   // 道具库的登记：原文件里是三条顶层语句（J3(_i); eb(_i); sb(_i);），抽取工具不会自动带上，下面手工补在模块末尾
   _i: 'registerProp', J3: 'registerPropsA', eb: 'registerPropsB', sb: 'registerPropsC',
 };
@@ -53,10 +56,12 @@ try {
   execFileSync(process.execPath, [path.join(root, 'scripts/jimao/extract-closure.cjs'), '--src', prettyFile, '--game-start', String(gameStart),
     '--entries', Object.keys(ENTRIES).join(','), '--export', Object.entries(ENTRIES).map(([k, v]) => `${k}:${v}`).join(','),
     '--out', out, '--report', report, '--target-three', path.join(root, 'node_modules/three'), '--label', '几猫：除关卡和渲染以外的全部模块'], { stdio: 'inherit' });
-  // 改名（见 rebrand.mjs）：界面、台词、刻字里的「几猫」换成新模式「断讯」的世界观
+  // 改名（见 rebrand.mjs）：界面、台词、刻字里的「几猫」换成新模式「零点突围」的世界观
   const renamed = rebrand((await readFile(out, 'utf8')) + FOOTER);
-  await writeFile(out, renamed.code);
-  console.log(`改名：${renamed.counts.length} 条，共替换 ${renamed.counts.reduce((a, b) => a + b, 0)} 处`);
+  // 补丁（见 patches.mjs）：多认一种真人敌人
+  const patched = applyPatches(renamed.code);
+  await writeFile(out, patched.code);
+  console.log(`改名：${renamed.counts.length} 条，共替换 ${renamed.counts.reduce((a, b) => a + b, 0)} 处；补丁 ${patched.applied} 条`);
   const r = JSON.parse(await readFile(report, 'utf8'));
   // 报告里只留能复核的数字：不留本机的临时路径，也不留逐条的清单（五百多条，模块文件头上已经有摘要）
   const builtins = new Set(Object.getOwnPropertyNames(globalThis).concat(['window', 'document', 'navigator', 'location', 'localStorage', 'performance', 'screen', 'matchMedia',

@@ -27,6 +27,8 @@
   "Mn": "SUN",
   "en": "SKY",
   "Pi": "PLAYER",
+  "Yi": "GAME_FLOW",
+  "Ui": "ENEMY_TUNE",
   "_i": "registerProp",
   "J3": "registerPropsA",
   "eb": "registerPropsB",
