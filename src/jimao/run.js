@@ -1,4 +1,4 @@
-// 「断讯 · SIGNAL ZERO」模式（原游戏叫「几猫」）：地图用我们现有的 FPS 地图（一期、酒店、公寓），其余全部用用户自己的「几猫」游戏：
+// 「零点突围 · ZERO HOUR」模式（原游戏叫「几猫」）：地图用我们现有的 FPS 地图（一期、酒店、公寓），其余全部用用户自己的「几猫」游戏：
 // 步枪和双手、手感、声音、弹孔火花弹壳、界面、菜单、操作、任务流程。
 // 游戏代码原样抽在 vendor/game.js（scripts/jimao/build-vendor.mjs 生成）；这里只是接线：
 //   上下文对象 G（原游戏各模块共用的那一个）里的渲染器、场景、相机换成我们的，
@@ -15,6 +15,12 @@ import { distToPolyEdge } from '../layout/geom.js';
 import { createMissionLayout } from '../fps/mission-layout.js';
 import { MOBILE } from '../render/device.js';
 
+/** 标题是四个字（原游戏是两个字）：字号收小、不换行，手机横屏按高度算 */
+const TITLE_CSS = `
+.m-word { font-size: clamp(40px, 7.6vw, 108px) !important; white-space: nowrap !important; letter-spacing: .1em !important; }
+@media (max-width: 700px) { .m-word { font-size: clamp(34px, 10vw, 60px) !important; } }
+@media (max-height: 500px) { .m-word { font-size: clamp(30px, 12vh, 60px) !important; } }
+`;
 /** 枪画在单独的一层，用自己的相机（视角固定 54°）在世界之后再画一遍，永远不会插进墙里。 */
 const VIEW_LAYER = 3;
 /** 原游戏的灯光按它自己的亮度标定（太阳 9）；我们的太阳是 2.1，枪口闪光等点光源按这个比例缩。 */
@@ -30,7 +36,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -101,7 +107,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.hud = J.createHud(G);
   G.game = J.createGame(G);
   async function guarded(name, make) {
-    try { return await make(); } catch (error) { console.error(`[断讯] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
+    try { return await make(); } catch (error) { console.error(`[零点突围] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
   }
 
   // ---- 每帧 ----
@@ -118,7 +124,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     app.state.explore = { building, level, near, metro: false, under: s.y < -0.5, position: { x: s.x, z: s.z } };
     app.refresh();
   }
-  const run = (name, dt) => { const m = G[name]; if (m?.update) try { m.update(dt); } catch (e) { if (!run.err[name]) { run.err[name] = 1; console.error(`[断讯] ${name}.update 出错`, e); } } };
+  const run = (name, dt) => { const m = G[name]; if (m?.update) try { m.update(dt); } catch (e) { if (!run.err[name]) { run.err[name] = 1; console.error(`[零点突围] ${name}.update 出错`, e); } } };
   run.err = {};
   const dynamic = {
     name: 'jimao-session',
@@ -128,7 +134,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       renderer.getDrawingBufferSize(resolution);
       run('input', dt);
       let active = false;
-      try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { if (!run.err.game) { run.err.game = 1; console.error('[断讯] game.update 出错', e); } }
+      try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { if (!run.err.game) { run.err.game = 1; console.error('[零点突围] game.update 出错', e); } }
       if (active) { run('player', dt); run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
       run('audio', dt); run('hud', dt);

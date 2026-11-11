@@ -77,11 +77,11 @@ test('界面布局：读出来的设置逐项检查，坏数据退回默认，�
   for (const it of LAYOUT_ITEMS) assert.ok(UI_CSS.includes(it.sel + ' {') || UI_CSS.includes(it.sel + ' '), it.sel);
 });
 
-test('改名：游戏里不再出现「几猫」，标题是「断讯 SIGNAL ZERO」，封面入口也改了', async () => {
+test('改名：游戏里不再出现「几猫」，标题是「零点突围 ZERO HOUR」，封面入口也改了', async () => {
   const { REBRAND, escapeLikeEsbuild } = await import('../scripts/jimao/rebrand.mjs');
   const code = readFileSync('src/jimao/vendor/game.js', 'utf8');
   assert.ok(!code.includes(escapeLikeEsbuild('几猫')));
-  assert.ok(code.includes(escapeLikeEsbuild('断讯<span class="m-subtitle">SIGNAL ZERO</span>')));
+  assert.ok(code.includes(escapeLikeEsbuild('零点突围<span class="m-subtitle">ZERO HOUR</span>')));
   for (const [, to] of REBRAND) assert.ok(code.includes(escapeLikeEsbuild(to)), to);
-  assert.match(readFileSync('src/launcher.js', 'utf8'), /data-mode="jimao"><b>断讯 · SIGNAL ZERO<\/b>/);
+  assert.match(readFileSync('src/launcher.js', 'utf8'), /data-mode="jimao"><b>零点突围 · ZERO HOUR<\/b>/);
 });

@@ -1,6 +1,6 @@
-// 「断讯 · SIGNAL ZERO」的入场动画：载入完成后、标题菜单出现之前放一次，约 3.6 秒，点一下或按任意键跳过。
+// 「零点突围 · ZERO HOUR」的入场动画：载入完成后、标题菜单出现之前放一次，约 3.6 秒，点一下或按任意键跳过。
 // 画面：黑场里的信号杂波和扫描线 → 「信号中断」的提示闪烁 → 「断」「讯」两个字带着色差和横向撕裂出现 →
-// SIGNAL ZERO 逐字点亮、一道扫描光划过 → 时间地点 → 整块画面像信号恢复一样被切开，露出标题菜单和商场。
+// ZERO HOUR 逐字点亮、一道扫描光划过 → 时间地点 → 整块画面像信号恢复一样被切开，露出标题菜单和商场。
 // 声音用网页音频现场合成（静电噪声、低频冲击、一声提示音），不带任何文件。系统设了「减少动态效果」时只做一个淡出。
 export const INTRO_MS = 3600;
 
@@ -15,10 +15,10 @@ const CSS = `
 .sz-core { position: relative; text-align: center; z-index: 1; }
 .sz-lost { font: 600 12px/1 ui-monospace, 'PingFang SC', monospace; letter-spacing: .5em; margin-right: -.5em; color: #ff5a40; opacity: 0;
   animation: sz-blink .9s steps(2) .15s 1 forwards, sz-out .25s ease-in 1.05s forwards; }
-.sz-word { position: relative; font-weight: 900; font-size: clamp(76px, 19vw, 200px); line-height: 1; letter-spacing: .18em; margin-right: -.18em; opacity: 0;
+.sz-word { position: relative; font-weight: 900; font-size: clamp(56px, 13vw, 168px); line-height: 1; letter-spacing: .12em; margin-right: -.12em; opacity: 0;
   animation: sz-in .05s linear .95s forwards; }
 .sz-word span { display: inline-block; position: relative; animation: sz-glitch .7s steps(1) .95s 1 both; }
-.sz-word span:nth-child(2) { animation-delay: 1.12s; }
+.sz-word span:nth-child(2) { animation-delay: 1.06s; } .sz-word span:nth-child(3) { animation-delay: 1.17s; } .sz-word span:nth-child(4) { animation-delay: 1.28s; }
 .sz-word span::before, .sz-word span::after { content: attr(data-c); position: absolute; inset: 0; opacity: .85; mix-blend-mode: screen; }
 .sz-word span::before { color: #ff3b2f; animation: sz-split-r 1.1s ease-out .95s both; }
 .sz-word span::after { color: #2fd3ff; animation: sz-split-b 1.1s ease-out .95s both; }
@@ -103,10 +103,10 @@ function playSound(volume = 0.5) {
 export function playIntro({ place = '云澜汇 · 一期西翼', time = '00:00', volume = 0.5 } = {}) {
   return new Promise((resolve) => {
     const style = document.createElement('style'); style.textContent = CSS; document.head.append(style);
-    const root = document.createElement('div'); root.className = 'sz-intro'; root.setAttribute('role', 'img'); root.setAttribute('aria-label', '断讯 SIGNAL ZERO');
-    const en = 'SIGNAL ZERO'.split('').map((c, i) => `<i style="animation-delay:${(1.45 + i * 0.045).toFixed(3)}s">${c === ' ' ? '&nbsp;' : c}</i>`).join('');
-    root.innerHTML = `<div class="sz-sweep"></div><div class="sz-core"><div class="sz-lost">信号中断 · NO SIGNAL</div>
-      <div class="sz-word"><span data-c="断">断</span><span data-c="讯">讯</span></div><div class="sz-en">${en}</div>
+    const root = document.createElement('div'); root.className = 'sz-intro'; root.setAttribute('role', 'img'); root.setAttribute('aria-label', '零点突围 ZERO HOUR');
+    const en = 'ZERO HOUR'.split('').map((c, i) => `<i style="animation-delay:${(1.45 + i * 0.045).toFixed(3)}s">${c === ' ' ? '&nbsp;' : c}</i>`).join('');
+    root.innerHTML = `<div class="sz-sweep"></div><div class="sz-core"><div class="sz-lost">信号中断 · 00:00</div>
+      <div class="sz-word">${"零点突围".split("").map((c) => `<span data-c="${c}">${c}</span>`).join("")}</div><div class="sz-en">${en}</div>
       <div class="sz-meta"><b>${place}</b> · ${time} · 单兵行动</div></div><div class="sz-skip">点击跳过</div><i class="sz-clock"></i>`;
     root.prepend(noiseCanvas());
     document.body.append(root);

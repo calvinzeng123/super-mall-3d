@@ -9347,10 +9347,10 @@ function pM(i, e) {
     <div class="m-veil"></div>
     <div class="m-bars"><i></i><i></i></div>
 
-    <section class="m-screen m-title" data-s="title" aria-label="\u65AD\u8BAF SIGNAL ZERO">
+    <section class="m-screen m-title" data-s="title" aria-label="\u96F6\u70B9\u7A81\u56F4 ZERO HOUR">
       <div class="m-title-main">
         <div class="m-eyebrow"><span class="m-tag">B4</span><span>\u4E91\u6F9C\u7279\u52E4\u7EC4</span><span class="m-dim">\u4E91\u6F9C\u6C47 \xB7 00:00</span></div>
-        <h1 class="m-word">\u65AD\u8BAF<span class="m-subtitle">SIGNAL ZERO</span></h1>
+        <h1 class="m-word">\u96F6\u70B9\u7A81\u56F4<span class="m-subtitle">ZERO HOUR</span></h1>
         <p class="m-premise">\u4E91\u6F9C\u6C47\u7684\u901A\u4FE1\u88AB\u52AB\u6301\uFF0C\u673A\u68B0\u5B88\u536B\u5931\u63A7\u3002\u5207\u65AD\u4E09\u5904\u4E2D\u7EE7\uFF0C\u7A81\u7834\u5C01\u9501\uFF0C\u64A4\u79BB\u3002</p>
         <div class="m-actions">
           <button class="btn primary" data-act="deploy">\u5F00\u59CB\u884C\u52A8</button>
@@ -9409,8 +9409,8 @@ function pM(i, e) {
         <button class="btn small" data-act="close-panel">\u5173\u95ED</button>
       </header>
       <div class="panel-b about-copy" data-pane="about" hidden>
-        <h3>\u65AD\u8BAF \xB7 SIGNAL ZERO</h3>
-        <p>\u5404\u4F4D\u8001\u5E08\u3001\u540C\u5B66\u597D\uFF01\u5BA3\u4F20\u4E00\u4E0B\u6211\u4EEC\u6700\u8FD1\u4F7F\u7528 Fable5.2 \u81EA\u4E3B\u7814\u53D1\u7684\u4E00\u6B3E\u56FD\u4EA7 3A FPS \u5927\u4F5C\u2014\u2014<strong>\u300A\u65AD\u8BAF\u300B</strong>\uFF01\u{1F3AE}</p>
+        <h3>\u96F6\u70B9\u7A81\u56F4 \xB7 ZERO HOUR</h3>
+        <p>\u5404\u4F4D\u8001\u5E08\u3001\u540C\u5B66\u597D\uFF01\u5BA3\u4F20\u4E00\u4E0B\u6211\u4EEC\u6700\u8FD1\u4F7F\u7528 Fable5.2 \u81EA\u4E3B\u7814\u53D1\u7684\u4E00\u6B3E\u56FD\u4EA7 3A FPS \u5927\u4F5C\u2014\u2014<strong>\u300A\u96F6\u70B9\u7A81\u56F4\u300B</strong>\uFF01\u{1F3AE}</p>
         <p>\u6211\u4EEC\u81F4\u529B\u4E8E\u6253\u9020\u5177\u6709\u4E2D\u56FD\u7279\u8272\u7684\u9AD8\u54C1\u8D28\u7B2C\u4E00\u4EBA\u79F0\u5C04\u51FB\u6E38\u620F\uFF0C\u878D\u5408\u6C89\u6D78\u5F0F\u6218\u6597\u4F53\u9A8C\u3001\u521B\u65B0\u73A9\u6CD5\u4E0E\u6B21\u4E16\u4EE3\u89C6\u89C9\u8868\u73B0\uFF0C\u63A2\u7D22\u56FD\u4EA7 FPS \u6E38\u620F\u7684\u66F4\u591A\u53EF\u80FD\u6027\u3002</p>
         <p>\u76EE\u524D\u9879\u76EE\u4ECD\u5728\u6301\u7EED\u5F00\u53D1\u4E0E\u4F18\u5316\u4E2D\uFF0C\u8DDD\u79BB\u56FD\u9645\u9876\u5C16 3A \u6C34\u51C6\u8FD8\u6709\u4E00\u5B9A\u5DEE\u8DDD\u3002</p>
         <p>\u975E\u5E38\u6B22\u8FCE\u5404\u4F4D\u8001\u5E08\u3001\u540C\u5B66\u5173\u6CE8\u3001\u4F53\u9A8C\u5E76\u63D0\u51FA\u5B9D\u8D35\u5EFA\u8BAE\uFF0C\u671F\u5F85\u4E0E\u6E38\u620F\u5F00\u53D1\u3001\u56FE\u5F62\u5B66\u53CA AI \u65B9\u5411\u7684\u670B\u53CB\u6DF1\u5165\u4EA4\u6D41\uFF01\u{1F431}\u{1F525}</p>

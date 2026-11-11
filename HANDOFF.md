@@ -4,7 +4,7 @@
 
 ## 2026-11-11 最新交接（五）：几猫模式（第一轮）
 
-**改名**：用户不要「几猫」这个名字，新模式叫「断讯 · SIGNAL ZERO」（云澜汇、午夜零点、通信被劫持）。`scripts/jimao/rebrand.mjs` 在抽取时把界面、台词、枪上刻字、道具标签里的名字换掉（24 条，每条都必须命中，否则报错）；内部的模式 id、目录名仍是 `jimao`。入场动画在 `src/jimao/intro.js`（约 3.6 秒，可点击跳过，「减少动态效果」时只淡出，声音现场合成）。
+**改名**：用户不要「几猫」这个名字，新模式叫「零点突围 · ZERO HOUR」（云澜汇、午夜零点、通信被劫持；中间短暂叫过「断讯」）。`scripts/jimao/rebrand.mjs` 在抽取时把界面、台词、枪上刻字、道具标签里的名字换掉（24 条，每条都必须命中，否则报错）；内部的模式 id、目录名仍是 `jimao`。入场动画在 `src/jimao/intro.js`（约 3.6 秒，可点击跳过，「减少动态效果」时只淡出，声音现场合成）。
 
 **已部署**：滨江新站 https://yunlan-mall-calvin-v2.netlify.app/ ，部署 `6af46ebc9f6a25ea2ce60701`（提交 `6cd3951`，2026-11-11 13:33 UTC，状态 ready，`squad-order` 函数仍在）。线上的启动脚本、天空素材与 `dist/netlify` 逐个校验一致；首页只多了 Netlify 自己注入的注释和脚本。线上打开「几猫 · 商场突围」开局正常、无报错。
 云端会话里部署要让 netlify-cli 走代理：`NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt NETLIFY_AUTH_TOKEN=proxy-injected npx netlify-cli@17 deploy --prod --dir dist/netlify --functions netlify/functions --site b9d32e8f-84f0-4958-b426-fd2e491c3676`（令牌由环境的网络密钥注入，不写进任何文件）。
