@@ -3,12 +3,15 @@ import { KIT } from './constants.js';
 import { grandSquareEscalators, grandSquareSetup, grandSquareLevel } from './square-atrium.js';
 
 /** 中庭洞口：[楼层, 进深的一半, 圆角半径] */
-export const ATRIUM_STEPS = [['3F', 11.5, 6], ['4F', 14, 7], ['5F', 16, 8], ['6F', 17, 9], ['RF', 17, 9]];
+// 云澜大中庭第二轮：两端也逐层退（每层 3 米），两部观光梯挪到 x=±30（6F 洞口两端以外，门朝外对着翼楼口）。
+export const ATRIUM_STEPS = [['3F', 20, 11.5, 7], ['4F', 23, 14, 8], ['5F', 26, 16, 9], ['6F', 28, 17, 10], ['RF', 28, 17, 10]];
+/** 圆厅观光梯的新位置（套件坐标） */
+export const ROTUNDA_GLASS = [{ id: 'GW', x: -30, z: 0, door: 'W' }, { id: 'GE', x: 30, z: 0, door: 'E' }];
 
 export function buildExpandedP1Spec(original) {
   const copy = v => Array.isArray(v) ? v.map(copy) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k,x])=>[k,copy(x)])) : v;
   const spec=copy(original);
-  spec.rotundas=spec.rotundas.map(r=>({...r,glass:[...r.glass.filter(s=>s!=='RF'),'4F','5F','6F','RF']}));
+  spec.rotundas=spec.rotundas.map(r=>({...r,glass:[...r.glass.filter(s=>s!=='RF'),'4F','5F','6F','RF'],...(r.id==='C'?{glassAt:ROTUNDA_GLASS}:{})}));
   const themes=[
     ['4F','4F 设计与文化',17.5,'design','terrazzo-warm','#b58a5b','设计家居 · 书店 · 运动体验',['home','books','sports','studio','cafe']],
     ['5F','5F 剧场与娱乐',23,'culture','wood-warm','#915f64','影城 · 小剧场 · 沉浸娱乐',['cinema','arcade','edu','kids','restaurant']],
@@ -21,9 +24,9 @@ export function buildExpandedP1Spec(original) {
   // 样板中庭：2F 以上的中庭洞口逐层加深（长边方向），从下往上看是一圈圈退台；天台天窗开到和 6F 一样大，
   // 从中庭里能看到上面的云澜光穹。洞口长边固定 ±17（两部观光梯的门正好在洞口两端），
   // 进深受扶梯限制：2F 的 1F↔2F 扶梯落在 ±10，3F 的 2F↔3F 扶梯在 ±15.15，4F–RF 的扶梯开洞在 ±21 以外。
-  for (const [short, half, r] of ATRIUM_STEPS) {
+  for (const [short, hx, half, r] of ATRIUM_STEPS) {
     const lv = spec.levels.find(l => l.short === short);
-    lv.rot = { ...lv.rot, C: { ...lv.rot.C, void: { rect: { x0: -17, z0: -half, x1: 17, z1: half }, r } } };
+    lv.rot = { ...lv.rot, C: { ...lv.rot.C, void: { rect: { x0: -hx, z0: -half, x1: hx, z1: half }, r } } };
   }
   spec.escalators=spec.escalators.map(e=>e.to==='RF'?{...e,from:'6F',...(e.rot==='C'?{cross:Math.sign(e.cross)*26}:{}),label:'6F ↔ 天台花园'}:e);
   for(const [from,to]of [['3F','4F'],['4F','5F'],['5F','6F']]){
@@ -38,5 +41,7 @@ export function buildExpandedP1Spec(original) {
   // 云澜大中庭第一轮：方庭改成超大退台中庭（square-atrium.js）；要在上面加完方庭 3F–6F 扶梯之后
   spec.escalators = grandSquareEscalators(spec.escalators);
   spec.square = { ...spec.square, setup: grandSquareSetup, level: grandSquareLevel };
+  // 观光梯挪到洞口外面以后，2F–6F 也要在楼板上开井道
+  for (const lv of spec.levels.filter((l) => ['2F', '3F', '4F', '5F', '6F'].includes(l.short))) lv.rot = { ...lv.rot, C: { ...lv.rot.C, shafts: true } };
   return spec;
 }

@@ -12,14 +12,16 @@ const nav = buildNav(L);
 const P1 = L.buildings.find((b) => b.id === 'P1'), F = P1.rotundas[0].kitF;
 const lvl = (id) => L.levels.find((l) => l.id === id);
 
-test('3F–RF 的中庭洞口逐层加深（退台），长边固定在两部观光梯门口', () => {
-  let prev = 10; // 2F 原样
-  for (const [short, half] of ATRIUM_STEPS) {
+test('3F–RF 的中庭洞口逐层加深（两端每层退 3 米、长边每层退 1.5–2.5 米），两部观光梯挪到 6F 洞口两端以外', () => {
+  let prev = [17, 10]; // 2F 原样
+  for (const [short, hx, half] of ATRIUM_STEPS) {
     const v = lvl(`P1-${short}`).voids.find((x) => x.id === 'C-void');
-    assert.deepEqual([v.rect.x0, v.rect.x1, v.rect.z0, v.rect.z1], [-17, 17, -half, half], short);
-    assert.ok(half >= prev, `${short} 不比下一层小`); prev = half;
+    assert.deepEqual([v.rect.x0, v.rect.x1, v.rect.z0, v.rect.z1], [-hx, hx, -half, half], short);
+    assert.ok(hx >= prev[0] && half >= prev[1], `${short} 不比下一层小`); prev = [hx, half];
   }
-  for (const g of L.elevators.filter((e) => e.type === 'glass' && e.building === 'P1' && !e.square)) assert.equal(Math.abs(g.lu), 15.5);
+  const glass = L.elevators.filter((e) => e.type === 'glass' && e.building === 'P1' && !e.square);
+  assert.deepEqual(glass.map((g) => Math.abs(g.lu)), [30, 30]);
+  for (const g of glass) for (const f of g.serves) assert.ok(lvl(f).voids.some((v) => v.kind === 'shaft' && pointInPoly([g.x, g.z], v.poly)), `${g.id} ${f} 没有井道`);
 });
 
 test('扶梯两端都落在楼板上，离洞口至少 1.5 米', () => {

@@ -133,7 +133,8 @@ export function buildMall(sourceSpec, site, picker) {
   for (const r of Object.values(rots)) {
     if (!r.glass) continue;
     const serves = r.glass.map((s) => byShort[s].id);
-    for (const g of KIT.glass) elevators.push(lift(`${bid}-${r.id}-${g.id}`, bid, 'glass', r.kitF, g.x, g.z, KIT.shaft, KIT.shaft, g.door, serves));
+    // r.glassAt：游览模式的大中庭把两部观光梯挪到洞口两端以外（p1-expansion-spec.js），FPS 用默认位置
+    for (const g of r.glassAt || KIT.glass) elevators.push(lift(`${bid}-${r.id}-${g.id}`, bid, 'glass', r.kitF, g.x, g.z, KIT.shaft, KIT.shaft, g.door, serves));
   }
   if (spec.square) {
     const sq = spec.square.setup(bid, byShort, lift);
@@ -293,7 +294,7 @@ function rotundaFloor(ctx, lv, kindDefault) {
     if (rc.rampVoid) lv.voids.push({ id: `${r.id}-ramp`, kind: 'ramp', poly: lrectPoly(F, rc.rampVoid), frame: F, rect: rc.rampVoid });
     if (rc.shafts) {
       const h = KIT.shaft / 2;
-      for (const g of KIT.glass) lv.voids.push({ id: `${r.id}-shaft-${g.id}`, kind: 'shaft', poly: lrectPoly(F, rect(g.x - h, g.z - h, g.x + h, g.z + h)), frame: F });
+      for (const g of r.glassAt || KIT.glass) lv.voids.push({ id: `${r.id}-shaft-${g.id}`, kind: 'shaft', poly: lrectPoly(F, rect(g.x - h, g.z - h, g.x + h, g.z + h)), frame: F });
     }
     const hole = rc.hole || (rc.void && rc.void.rect) || null;
     ringPieces(r, F, hole).forEach((poly, k) => lv.walk.push({ id: `${r.id}-${k}`, kind: rc.kind || kindDefault, poly, rot: r.id }));
