@@ -67,3 +67,12 @@ test('射线：朝下打到楼面，朝着墙打到墙，视线被墙挡住', ()
   // 地下层的楼面高度
   assert.equal(physics.groundHeight(-151, -94, -4), -4.5);
 });
+
+test('界面布局：读出来的设置逐项检查，坏数据退回默认，越界的值夹回范围', async () => {
+  const { normalizeLayout, LAYOUT_ITEMS } = await import('../src/jimao/layout-editor.js');
+  assert.deepEqual(normalizeLayout(null), { landscape: {}, portrait: {}, opacity: 1 });
+  const v = normalizeLayout({ opacity: 0.1, landscape: { fire: { dx: 3, dy: -0.2, s: 9 }, nope: { dx: 0, dy: 0, s: 1 }, ads: { dx: 'x' } }, portrait: { ammo: { dx: 0.1, dy: 0.1, s: 0.8 } } });
+  assert.deepEqual(v, { landscape: { fire: { dx: 1, dy: -0.2, s: 1.8 } }, portrait: { ammo: { dx: 0.1, dy: 0.1, s: 0.8 } }, opacity: 0.25 });
+  // 每一项都对得上原游戏样式里的选择器
+  for (const it of LAYOUT_ITEMS) assert.ok(UI_CSS.includes(it.sel + ' {') || UI_CSS.includes(it.sel + ' '), it.sel);
+});

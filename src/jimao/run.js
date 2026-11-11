@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import * as J from './vendor/game.js';
 import { UI_CSS } from './vendor/ui-css.js';
 import { createMapPhysics } from './physics.js';
+import { createGrade } from './grade.js';
+import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { buildNav } from '../layout/nav.js';
 import { distToPolyEdge } from '../layout/geom.js';
 import { createMissionLayout } from '../fps/mission-layout.js';
@@ -27,9 +29,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
-  const veil = document.createElement('div'); veil.className = 'jimao-veil'; document.body.append(veil);
 
   // ---- 共享上下文 ----
   const viewCamera = new THREE.PerspectiveCamera(J.PLAYER.viewFov || 54, camera.aspect, 0.01, 10);
@@ -62,7 +63,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const resolution = new THREE.Vector2();
   const render = {
     renderer, scene, camera, viewCamera, lightPool, resolution, exposure: 1,
-    // 原游戏的调色参数（受伤、低血量、开镜、黑场、饱和度）：我们没有它的后处理，用一层网页遮罩表现其中几样
+    // 原游戏的调色参数（受伤、低血量、开镜、闪白、黑场、饱和度），由 grade.js 画出来
     post: { damage: 0, lowHealth: 0, ads: 0, flash: 0, fade: 0, saturation: 1, focusDist: 0, shake: 0, wet: 0 },
     addPrePass() {}, setQuality() {}, onLevelReady() {}, frame() {}, renderWorld() {}, stats: () => ({}),
   };
@@ -132,10 +133,6 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       run('audio', dt); run('hud', dt);
       lightPool.update(dt);
       syncVisibility();
-      const p = render.post;
-      veil.style.setProperty('--fade', String(p.fade || 0));
-      veil.style.setProperty('--hurt', String(Math.min(1, (p.damage || 0) + (p.lowHealth || 0) * 0.6)));
-      veil.style.setProperty('--grey', String(1 - (p.saturation ?? 1)));
       G.input.endFrame?.();
     },
   };
@@ -150,15 +147,31 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     renderer.render(scene, viewCamera);
     scene.environmentIntensity = envI; scene.fog = fog; renderer.autoClear = auto;
   };
-  ctx.afterRender.push(drawView);
+  // 画面反馈：世界和枪先画进离屏图（包一层 env.render），枪画完以后贴回屏幕
+  const grade = createGrade(renderer, render.post, { samples: MOBILE ? 2 : 4 });
+  const env = app.env, baseRender = env.render;
+  env.render = function () { grade.begin(); return baseRender.call(this); };
+  const finish = () => grade.end(G.time.t);
+  ctx.afterRender.push(drawView, finish);
+  // 界面布局：设置面板里加一行「界面布局 · 调整」
+  const layoutEditor = createLayoutEditor(ui);
+  const fsRow = ui.querySelector('[data-row="fs"]');
+  if (fsRow) {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = '<label id="l-layout">界面布局</label><button class="btn small" data-act="jm-layout" aria-labelledby="l-layout">拖动调整</button>';
+    row.querySelector('button').addEventListener('click', () => layoutEditor.open());
+    fsRow.after(row);
+  }
 
   if (params.autostart || params.shot) G.game.start({ skipIntro: true });
   onProgress('准备就绪', 1);
   return {
-    G,
+    G, layoutEditor,
     dispose() {
-      ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1); ctx.afterRender.splice(ctx.afterRender.indexOf(drawView), 1);
-      ui.remove(); veil.remove(); style.remove(); for (const l of lights) l.removeFromParent();
+      ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
+      for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
+      env.render = baseRender; grade.dispose(); layoutEditor.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent();
     },
   };
 }
