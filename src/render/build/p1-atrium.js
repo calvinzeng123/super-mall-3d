@@ -108,17 +108,23 @@ function balcony(ctx, B, lv) {
       B.get('satin').box(mx + nx * 0.1, y - 0.42, mz + nz * 0.1, pl, 0.88, 0.16, WHITE, ang);
       B.get('glow').box(mx + nx * 0.19, y - 0.84, mz + nz * 0.19, pl, 0.045, 0.03, WARM, ang);
       if (roof || skip(mx, mz)) continue;
-      // 花槽挂在栏板外侧，藤蔓往下垂，偶尔开花
-      B.get('matte').box(mx + nx * 0.36, y - 0.18, mz + nz * 0.36, pl, 0.3, 0.32, '#e9e4da', ang);
-      B.get('foliage').box(mx + nx * 0.36, y + 0.02, mz + nz * 0.36, pl * 0.98, 0.18, 0.3, rand() < 0.5 ? LEAF : LEAF2, ang);
-      const vines = 2 + Math.floor(rand() * 3);
-      for (let q = 0; q < vines; q++) {
-        const s = (rand() - 0.5) * pl * 0.9, L = 0.5 + rand() * (lv.height > 5 ? 2.2 : 1.6);
-        B.get('foliage').box(mx + ux * s + nx * 0.5, y - 0.3 - L / 2, mz + uz * s + nz * 0.5, 0.16, L, 0.06, rand() < 0.5 ? LEAF : LEAF2, ang);
+      // 花槽挂在栏板外侧：浅色槽身、上面一排鼓起来的灌木团，几串小叶子垂下来，偶尔开花
+      B.get('matte').box(mx + nx * 0.34, y - 0.2, mz + nz * 0.34, pl, 0.26, 0.28, '#ece8df', ang);
+      for (let q = 0; q < 3; q++) {
+        const s = (q - 1) * pl * 0.32 + (rand() - 0.5) * 0.2;
+        B.get('foliage').sphere(mx + ux * s + nx * 0.36, y - 0.02, mz + uz * s + nz * 0.36, 0.3, rand() < 0.5 ? LEAF : LEAF2, 0.18, 0.2, 'sphereLo');
       }
-      if (rand() < 0.55) for (let q = 0; q < 3; q++) {
+      const vines = rand() < 0.35 ? 0 : 1 + Math.floor(rand() * 2);
+      for (let q = 0; q < vines; q++) {
+        const s = (rand() - 0.5) * pl * 0.9, L = 0.5 + rand() * (lv.height > 5 ? 1.7 : 1.2), sway = (rand() - 0.5) * 0.25;
+        for (let d = 0.1; d < L; d += 0.13) {
+          const t = d / L, jx = Math.sin(d * 7 + s * 3) * 0.05;
+          B.get('foliage').sphere(mx + ux * (s + jx + sway * t) + nx * (0.47 + t * 0.06), y - 0.3 - d, mz + uz * (s + jx + sway * t) + nz * (0.47 + t * 0.06), 0.085 - 0.03 * t, rand() < 0.5 ? '#5f9447' : '#4a803c', 0.07, 0.04, 'ico0');
+        }
+      }
+      if (rand() < 0.5) for (let q = 0; q < 3; q++) {
         const s = (rand() - 0.5) * pl * 0.85;
-        B.get('foliage').sphere(mx + ux * s + nx * (0.3 + rand() * 0.15), y + 0.12, mz + uz * s + nz * (0.3 + rand() * 0.15), 0.1 + rand() * 0.05, FLOWERS[Math.floor(rand() * FLOWERS.length)]);
+        B.get('foliage').sphere(mx + ux * s + nx * (0.3 + rand() * 0.15), y + 0.1, mz + uz * s + nz * (0.3 + rand() * 0.15), 0.09 + rand() * 0.04, FLOWERS[Math.floor(rand() * FLOWERS.length)], undefined, undefined, 'sphereLo');
       }
     }
   }
@@ -145,13 +151,13 @@ function fountain(B, F, p, y0) {
     }
     B.get('glowSoft').sphere(u, y0 + 0.75 + H + 0.3, v, 0.28, WARM);
     // 中间一根细水柱，池边 16 道水弧
-    B.get('glass').cyl(u, y0 + 0.75, v, 0.08, 4.2, '#ffffff', 10);
+    B.get('glowSoft').cyl(u, y0 + 0.75, v, 0.06, 4.2, '#e6f5fa', 10);
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * Math.PI * 2;
       let prev = null;
       for (let s = 0; s <= 6; s++) {
         const t = s / 6, rad = (r - 0.35) * (1 - t * 0.55), q = { x: u + Math.cos(a) * rad, y: y0 + 0.5 + 2.2 * 4 * t * (1 - t) * 0.6, z: v + Math.sin(a) * rad };
-        if (prev) B.get('glass').bar(prev, q, 0.05, '#ffffff');
+        if (prev) B.get('glowSoft').bar(prev, q, 0.045, '#e6f5fa');
         prev = q;
       }
     }
@@ -266,10 +272,15 @@ function screens(ctx, L, F) {
     mesh.rotation.y = Math.atan2(cx - x, cz - z);
     mesh.name = 'P1-atrium-screen';
     L.base.add(mesh);
-    const back = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, h + 0.3, 0.25), ctx.mats.base.metal);
-    back.position.copy(mesh.position).add(new THREE.Vector3(Math.sin(mesh.rotation.y), 0, Math.cos(mesh.rotation.y)).multiplyScalar(-0.15));
-    back.rotation.y = mesh.rotation.y;
-    L.base.add(back);
+    // 背面也是同一张画面（从对面楼层看过来不是一块黑板），四周一圈白色边框
+    const rear = mesh.clone(); rear.rotation.y += Math.PI;
+    rear.position.add(new THREE.Vector3(Math.sin(mesh.rotation.y), 0, Math.cos(mesh.rotation.y)).multiplyScalar(-0.12));
+    L.base.add(rear);
+    L.batch.frame(F, () => {
+      const sv = v - side * 0.06;
+      for (const du of [-(w / 2 + 0.08), w / 2 + 0.08]) L.batch.get('satin').box(du, yMid, sv, 0.16, h + 0.32, 0.2, WHITE);
+      for (const dy of [-(h / 2 + 0.08), h / 2 + 0.08]) L.batch.get('satin').box(0, yMid + dy, sv, w + 0.32, 0.16, 0.2, WHITE);
+    });
     // 吊杆
     L.batch.frame(F, () => { for (const du of [-1.6, 1.6]) L.batch.get('metal').box(du, yMid + h / 2 + 1.4, v, 0.05, 2.8, 0.05, '#9aa0a6'); });
   }
