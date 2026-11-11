@@ -363,9 +363,10 @@ function grandSquare(ctx, levels) {
     const cx = (p.x0 + p.x1) / 2, pw = p.x1 - p.x0, pd = p.z1 - p.z0;
     B.get('travertine').box(cx, 0.28, cz, pw, 0.56, pd, '#e6dfd2');
     B.get('water').box(cx, 0.5, cz, pw - 0.6, 0.1, pd - 0.6, '#3c88a8');
-    for (let k = 0; k < 46; k++) {
-      B.get('glowSoft').sphere(W.x + 0.6 + rand() * 2.4, 0.6 + rand() * 1.4, W.z0 + rand() * width, 0.35 + rand() * 0.55, '#eef8fb', undefined, undefined, 'sphereLo');
-    }
+    // 落水处一条白色水花带 + 往外散的几圈波纹（扁平的，不是一团团的球）
+    B.get('glowSoft').box(W.x + 0.7, 0.57, cz, 1.4, 0.05, width, '#f2fafc');
+    for (let k = 0; k < 3; k++) B.get('glowSoft').box(W.x + 2.2 + k * 1.6, 0.56, cz, 0.12, 0.02, width * (0.92 - k * 0.12), '#d9eef5');
+    for (let k = 0; k < 24; k++) B.get('glowSoft').box(W.x + 0.4 + rand() * 1.2, 0.6 + rand() * 0.25, W.z0 + rand() * width, 0.25, 0.05, 0.25, '#ffffff');
     for (let k = 0; k < 30; k++) {
       const z = p.z0 + 0.2 + rand() * (pd - 0.4);
       B.get('foliage').sphere(p.x1 - 0.25, 0.62, z, 0.18, rand() < 0.4 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');

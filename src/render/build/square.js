@@ -14,7 +14,9 @@ export function buildSquare(ctx) {
     const F = b.square.F;
     const lv = (s) => ctx.layout.levels.find((l) => l.building === b.id && l.short === s);
     const rf = lv('RF');
-    atrium(ctx, F, lv('1F'), lv('2F'), rf?.playableCap ? rf.elev - .75 : null);
+    // 游览模式的大中庭（layout/square-atrium.js）挂的是金色光环吊灯，不再挂云朵灯组
+    const grand = lv('2F')?.voids.some((v) => v.id === 'SQ-void' && v.deck);
+    atrium(ctx, F, lv('1F'), grand ? null : lv('2F'), rf?.playableCap ? rf.elev - .75 : null);
     if (!rf) continue;
     const L = ctx.levels[rf.id];
     for (const f of rf.features) {
