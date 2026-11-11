@@ -5,6 +5,8 @@
 import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN, rng } from '../textures.js';
 import { pointInPoly, lrectPoly, toW } from '../../layout/geom.js';
+import { F_SQ } from '../../layout/square.js';
+import { WATERFALL, SQ_DECKS } from '../../layout/square-atrium.js';
 
 const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
 const FLOWERS = ['#e58fb5', '#c96aa8', '#f2b6c8', '#a77bd1', '#f6e7a1'];
@@ -29,6 +31,7 @@ export function buildP1Atrium(ctx) {
   cascade(L1.batch, F, f.cascade, lv1.elev);
   for (const p of f.palms) palm(L1.batch, F, p, lv1.elev, p.u * 7 + p.v);
   for (const s of f.lounges) lounge(L1.batch, F, s, lv1.elev);
+  grandSquare(ctx, levels);
   const top = levels.find((l) => l.id === 'P1-6F');
   if (top && rf && ctx.levels[top.id]) {
     chandeliers(ctx.levels[top.id].batch, F, rf.elev);
@@ -87,13 +90,17 @@ function canopies(B, F, f, y0) {
 
 /** 一层洞口边：白色弧形栏板（盖住楼板边）+ 底边暖光灯带 + 外挂花槽和垂下来的藤蔓、花。扶梯口、观光梯门前不挂花槽。 */
 function balcony(ctx, B, lv) {
-  const v = lv.voids.find((x) => x.id === 'C-void');
-  if (!v) return;
+  for (const v of lv.voids.filter((x) => x.id === 'C-void' || x.id === 'SQ-void' || x.id === 'SQ-sky')) balconyEdge(ctx, B, lv, v);
+}
+
+function balconyEdge(ctx, B, lv, v) {
   const gaps = [];
   for (const e of ctx.layout.escalators) for (const end of [[e.top, e.to], [e.bottom, e.from]]) if (end[1] === lv.id) gaps.push([end[0].x, end[0].z, 4.2]);
   for (const g of ctx.layout.elevators) if (g.type === 'glass' && g.serves.includes(lv.id)) { const [x, z] = toW(g.frame, g.lu, g.lv); gaps.push([x, z, 3]); }
   const skip = (x, z) => gaps.some(([gx, gz, r]) => Math.hypot(x - gx, z - gz) < r);
-  const rand = rng(lv.elev * 13 + 7), P = v.poly, y = lv.elev, roof = lv.kind === 'roof';
+  const fall = [toW(F_SQ, WATERFALL.x, WATERFALL.z0), toW(F_SQ, WATERFALL.x, WATERFALL.z1)];
+  const nearFall = (x, z) => v.id === 'SQ-void' && Math.abs(x - fall[0][0]) < 2 && z > Math.min(fall[0][1], fall[1][1]) - 1.5 && z < Math.max(fall[0][1], fall[1][1]) + 1.5;
+  const rand = rng(lv.elev * 13 + 7 + v.poly.length), P = v.poly, y = lv.elev, roof = lv.kind === 'roof';
   for (let i = 0; i < P.length; i++) {
     const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);
     if (len < 0.05) continue;
@@ -107,7 +114,7 @@ function balcony(ctx, B, lv) {
       // 栏板：楼板边包一圈白色弧面（0.9 米高），底下一条暖光
       B.get('satin').box(mx + nx * 0.1, y - 0.42, mz + nz * 0.1, pl, 0.88, 0.16, WHITE, ang);
       B.get('glow').box(mx + nx * 0.19, y - 0.84, mz + nz * 0.19, pl, 0.045, 0.03, WARM, ang);
-      if (roof || skip(mx, mz)) continue;
+      if (roof || skip(mx, mz) || nearFall(mx, mz)) continue;
       // 花槽挂在栏板外侧：浅色槽身、上面一排鼓起来的灌木团，几串小叶子垂下来，偶尔开花
       B.get('matte').box(mx + nx * 0.34, y - 0.2, mz + nz * 0.34, pl, 0.26, 0.28, '#ece8df', ang);
       for (let q = 0; q < 3; q++) {
@@ -310,4 +317,115 @@ function screenTexture(ctx) {
   g.font = `400 30px ${FONT_CN}`; g.fillText('城市客厅 · 光影中庭', c.width / 2, 320);
   g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(c.width / 2 - 60, 345, 120, 3);
   return (ctx.p1AtriumScreen = canvasTexture(c, { clamp: true }));
+}
+
+// ---------------- 云澜大中庭第一轮：方庭 ----------------
+/** 方庭大中庭：大瀑布（按楼层切段的落水面 + 顶上的出水口 + 1F 水池和水雾）、各层玻璃观景台、两组光环吊灯、水池边的棕榈 */
+function grandSquare(ctx, levels) {
+  const lv1 = levels.find((l) => l.id === 'P1-1F'), rf = levels.find((l) => l.kind === 'roof');
+  if (!lv1?.voids.some((v) => v.id === 'SQ-void') || !rf) return;
+  const water = waterMaterial(ctx);
+  const W = WATERFALL, width = W.z1 - W.z0, cz = (W.z0 + W.z1) / 2;
+  const topY = rf.elev - 0.5;
+  for (let i = 0; i < levels.length; i++) {
+    const lv = levels[i], L = ctx.levels[lv.id];
+    if (!L || lv.kind === 'roof') continue;
+    // 这一层高度范围里的那一段落水（两层：前面一层快、后面一层慢，看起来有厚度）
+    const y0 = lv.id === 'P1-1F' ? lv.elev + 0.45 : lv.elev, y1 = Math.min(topY, levels[i + 1]?.elev ?? topY);
+    if (y1 <= y0) continue;
+    for (const [dx, mat] of [[0, water.front], [-0.35, water.back]]) {
+      const g = new THREE.PlaneGeometry(width, y1 - y0);
+      // 贴图按世界高度对齐，各段接得上
+      const uv = g.attributes.uv;
+      for (let k = 0; k < uv.count; k++) uv.setY(k, (uv.getY(k) * (y1 - y0) + y0) / 6);
+      const m = new THREE.Mesh(g, mat);
+      const [x, z] = toW(F_SQ, W.x + dx, cz);
+      m.position.set(x, (y0 + y1) / 2, z);
+      m.rotation.y = Math.PI / 2; // 面朝 +x（中庭）
+      m.name = 'P1-SQ-waterfall'; m.renderOrder = 3;
+      L.base.add(m);
+    }
+    // 每层楼板边上一道横向的出水石檐（水好像从每层溢下来）
+    if (lv.id !== 'P1-1F') L.batch.frame(F_SQ, () => {
+      L.batch.get('travertine').box(W.x - 0.25, lv.elev - 0.35, cz, 0.7, 0.5, width + 0.8, '#d9d0bf');
+      L.batch.get('glowSoft').box(W.x + 0.12, lv.elev - 0.62, cz, 0.06, 0.06, width, '#dff3fa');
+    });
+  }
+  const R = ctx.levels[rf.id];
+  // 顶上的出水口：天台楼板下面一道铜色水槽
+  R.batch.frame(F_SQ, () => {
+    R.batch.get('facadeBronze').box(W.x - 0.4, rf.elev - 0.45, cz, 1.2, 0.7, width + 1.4, GOLD);
+    R.batch.get('glow').box(W.x + 0.22, rf.elev - 0.82, cz, 0.05, 0.05, width + 1.2, WARM);
+  });
+  // 1F 水池：石沿、水面、溅起的水雾
+  const L1 = ctx.levels[lv1.id], B = L1.batch, p = W.pool, rand = rng(9);
+  B.frame(F_SQ, () => {
+    const cx = (p.x0 + p.x1) / 2, pw = p.x1 - p.x0, pd = p.z1 - p.z0;
+    B.get('travertine').box(cx, 0.28, cz, pw, 0.56, pd, '#e6dfd2');
+    B.get('water').box(cx, 0.5, cz, pw - 0.6, 0.1, pd - 0.6, '#3c88a8');
+    for (let k = 0; k < 46; k++) {
+      B.get('glowSoft').sphere(W.x + 0.6 + rand() * 2.4, 0.6 + rand() * 1.4, W.z0 + rand() * width, 0.35 + rand() * 0.55, '#eef8fb', undefined, undefined, 'sphereLo');
+    }
+    for (let k = 0; k < 30; k++) {
+      const z = p.z0 + 0.2 + rand() * (pd - 0.4);
+      B.get('foliage').sphere(p.x1 - 0.25, 0.62, z, 0.18, rand() < 0.4 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
+    }
+  });
+  for (const [u, v] of [[-28, -14], [-28, 14], [-16, -16], [-16, 16]]) palm(B, F_SQ, { u, v, r: 1.4 }, lv1.elev, u * 3 + v);
+  // 各层玻璃观景台：玻璃地板、三边暖光、一对望远镜
+  for (const lv of levels) {
+    const d = SQ_DECKS[lv.short], L = ctx.levels[lv.id];
+    if (!d || !L) continue;
+    const Bd = L.batch, y = lv.elev, cx = (d.x0 + d.x1) / 2, czd = (d.z0 + d.z1) / 2, w = d.x1 - d.x0, dd = d.z1 - d.z0;
+    const out = czd > 0 ? -1 : 1; // 观景台伸向 z=0 的那一边
+    Bd.frame(F_SQ, () => {
+      Bd.get('glass').box(cx, y + 0.03, czd, w - 0.1, 0.04, dd - 0.1, '#bfe6ef');
+      Bd.get('satin').box(cx, y - 0.25, czd, w, 0.5, dd, WHITE);
+      Bd.get('glow').box(cx, y - 0.5, out > 0 ? d.z1 : d.z0, w, 0.05, 0.05, WARM);
+      for (const x of [d.x0, d.x1]) Bd.get('glow').box(x, y - 0.5, czd, 0.05, 0.05, dd, WARM);
+      for (const k of [-1, 1]) {
+        const bx = cx + k * 1.2, bz = (out > 0 ? d.z1 : d.z0) - out * 0.8;
+        Bd.get('metal').cyl(bx, y, bz, 0.06, 1.1, '#6d7276', 10);
+        Bd.get('metal').box(bx, y + 1.18, bz, 0.22, 0.16, 0.42, '#3d4246');
+      }
+    });
+  }
+  // 两组光环吊灯，挂在方庭玻璃天幕下面
+  const top = levels.find((l) => l.id === 'P1-6F');
+  if (top && ctx.levels[top.id]) {
+    const Bt = ctx.levels[top.id].batch;
+    Bt.frame(F_SQ, () => {
+      for (const [u, R0] of [[-14, 7], [6, 5]]) for (const [k, y] of [[1, rf.elev - 2.4], [0.7, rf.elev - 4.6], [0.42, rf.elev - 6.6]]) {
+        const Rr = R0 * k, n = Math.round(Rr * 8);
+        for (let j = 0; j < n; j++) {
+          const a0 = (j / n) * Math.PI * 2, a1 = ((j + 1) / n) * Math.PI * 2;
+          const p0 = { x: u + Math.cos(a0) * Rr, y, z: Math.sin(a0) * Rr }, p1 = { x: u + Math.cos(a1) * Rr, y, z: Math.sin(a1) * Rr };
+          Bt.get('facadeBronze').bar(p0, p1, 0.16, GOLD);
+          Bt.get('glow').bar({ ...p0, y: y - 0.1 }, { ...p1, y: y - 0.1 }, 0.06, WARM);
+        }
+        if (k === 1) for (let j = 0; j < 4; j++) { const a = j * Math.PI / 2 + 0.3; Bt.get('metal').bar({ x: u + Math.cos(a) * Rr, y, z: Math.sin(a) * Rr }, { x: u, y: rf.elev + 8, z: 0 }, 0.012, '#9aa0a6'); }
+      }
+    });
+  }
+}
+
+/** 落水的材质：竖向水纹贴图往下流（每帧挪贴图），前后两层速度不同 */
+function waterMaterial(ctx) {
+  if (ctx.p1Waterfall) return ctx.p1Waterfall;
+  const c = makeCanvas(256, 512), g = c.getContext('2d'), rand = rng(31);
+  g.fillStyle = 'rgba(0,0,0,0)'; g.clearRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 260; i++) {
+    const x = rand() * c.width, w = 1 + rand() * 4, y = rand() * c.height, h = 40 + rand() * 260, a = 0.25 + rand() * 0.55;
+    const grad = g.createLinearGradient(0, y, 0, y + h);
+    grad.addColorStop(0, `rgba(235,248,252,0)`); grad.addColorStop(0.5, `rgba(235,248,252,${a})`); grad.addColorStop(1, `rgba(235,248,252,0)`);
+    g.fillStyle = grad; g.fillRect(x, y, w, h); g.fillRect(x, y - c.height, w, h);
+  }
+  const make = (opacity) => {
+    const tex = canvasTexture(c, { repeat: 1 });
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(3, 1);
+    return new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.15, 1.25, 1.3), transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, toneMapped: true });
+  };
+  const front = make(0.85), back = make(0.55);
+  ctx.dynamic?.push({ name: 'p1-waterfall', update(dt) { front.map.offset.y += dt * 0.9; back.map.offset.y += dt * 0.6; } });
+  return (ctx.p1Waterfall = { front, back });
 }

@@ -19,7 +19,7 @@ test('3F–RF 的中庭洞口逐层加深（退台），长边固定在两部观
     assert.deepEqual([v.rect.x0, v.rect.x1, v.rect.z0, v.rect.z1], [-17, 17, -half, half], short);
     assert.ok(half >= prev, `${short} 不比下一层小`); prev = half;
   }
-  for (const g of L.elevators.filter((e) => e.type === 'glass' && e.building === 'P1')) assert.equal(Math.abs(g.lu), 15.5);
+  for (const g of L.elevators.filter((e) => e.type === 'glass' && e.building === 'P1' && !e.square)) assert.equal(Math.abs(g.lu), 15.5);
 });
 
 test('扶梯两端都落在楼板上，离洞口至少 1.5 米', () => {

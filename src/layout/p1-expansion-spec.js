@@ -1,5 +1,6 @@
 // Preserve the legacy P1 spec for the compact FPS while tour expands vertically.
 import { KIT } from './constants.js';
+import { grandSquareEscalators, grandSquareSetup, grandSquareLevel } from './square-atrium.js';
 
 /** 中庭洞口：[楼层, 进深的一半, 圆角半径] */
 export const ATRIUM_STEPS = [['3F', 11.5, 6], ['4F', 14, 7], ['5F', 16, 8], ['6F', 17, 9], ['RF', 17, 9]];
@@ -34,5 +35,8 @@ export function buildExpandedP1Spec(original) {
     // so the passage opens straight onto the 方庭 corridor instead of hiding behind the escalator.
     spec.escalators.push({...template,pair:`SQ-ART-${from}`,from,to,cross:from==='4F'?21:-21,...(from==='4F'?{}:{bottom:4.8}),label:`方庭 ${from} ↔ ${to}`});
   }
+  // 云澜大中庭第一轮：方庭改成超大退台中庭（square-atrium.js）；要在上面加完方庭 3F–6F 扶梯之后
+  spec.escalators = grandSquareEscalators(spec.escalators);
+  spec.square = { ...spec.square, setup: grandSquareSetup, level: grandSquareLevel };
   return spec;
 }
