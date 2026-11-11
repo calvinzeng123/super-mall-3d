@@ -16,6 +16,8 @@
 
 **贴图模型**（2026-11-10）：探索和小游戏里的桌椅、沙发、绿植、摆件换成了 101 个带贴图的模型（Poly Haven，CC0），树换成带树叶贴图的树冠，保安和无人机也重做了。同一天的第二轮把每一件模型的摆放按规则核对了一遍（朝向、通道、落地、不穿墙），并给商场加了贴地阴影和天花分格。说明、出处和性能数字见 [贴图模型](docs/props.md)。FPS 不受影响。
 
+**HDR 光影和画面设置**（2026-11-11）：探索和小游戏里多了「HDR 光影」——真实天空的反射和环境光、更通透的色彩、亮面的石材和金属；画面设置拆成十三个可以单独调的细项，多了「极致」档（环境光遮蔽、高光柔光、室内灯光）。商场灯下有光斑，社区住宅加了吊顶、吸顶灯、落地阴影、窗边天光，客厅沙发和阳台盆栽换成了模型。手机默认还是「流畅」，新加的效果一个都不开。这里的 HDR 是渲染上的，不是让屏幕输出 HDR 信号。说明、各档的花费和已知限制见 [HDR 光影说明](docs/hdr.md)。
+
 **只有 FPS 裁剪地图。** 探索模式恢复原完整园区与 01/02/03 住宅模型，并保留上层原套房。酒店、公寓 1F 改为挑高大堂、接待、餐厅、健身及配套服务区；公寓顶层仍有 10 套复式。
 
 一期按获批[概念 A](docs/planning/2026-10-28-p1-expansion/PLAN.md)扩建：保留原圈地、Y 形主楼及西北方庭，主商业从 3 层升至 6 层，3–6F 设置可步行退台，RF 标高 34m。新增 7 层艺文馆、3 层南庭餐饮曲廊、两座 3–4 层花园馆，以及四座 2–3 层创意里巷小楼。10 条二层连廊接入原楼，8 部新观光梯与 10 座连续楼梯服务附楼和屋顶；下沉艺术庭院接 B1M。材质复用已有 CC0 石材、木纹与砖面，分区采用陶土、玻璃、石廊、木构和折板屋顶。酒店、公寓的位置与其它期完整布局保持。
@@ -125,6 +127,8 @@ netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2
 | `src/fps/hud.js` | iPhone 横竖屏控制、设置、自定义布局、结算 |
 | `src/fps/viewmodel.js`、`world.js` | 真实手臂/枪械动画、队友/敌人、任务道具 |
 | `src/render/`、`src/shell.html` | 原建筑渲染、精装套房、导览与页面模板 |
+| `src/render/env.js`、`post.js`、`sky.js`、`quality*.js`、`indoor-lighting.js` | 天空与灯光、HDR 光影和后处理、画面设置、跟着人走的室内灯光 |
+| `scripts/sky/`、`assets/sky/` | 天空 HDR 素材的加工脚本、成品和出处清单 |
 | `assets/models/fps/`、`scripts/fps-assets/` | 枪械模型、许可、源校验和可复现预处理 |
 | `netlify/functions/squad-order.mjs` | 默认关闭的可选模型指令接口 |
 | `build.mjs`、`scripts/build-netlify.mjs` | 开发/离线与线上拆包构建 |
@@ -139,6 +143,7 @@ netlify deploy --prod --no-build --dir dist/netlify --site 3af33d60-6f93-4be3-a2
 
 - 枪械与手臂：DJMaesen / ELIZION，**CC BY 4.0**，署名及修改声明随发布包保留。
 - 园区 PBR：Poly Haven，**CC0**，[来源清单](docs/texture-sources.md)。
+- 天空 HDR 图：Poly Haven「Kloofendal 48d Partly Cloudy (Pure Sky)」，Greg Zaal、Jarod Guest，**CC0**，出处和校验值见 [assets/sky/manifest.json](assets/sky/manifest.json)。
 - 贴图人物：Microsoft Rocketbox，**MIT**，[来源说明](docs/people-models.md)。
 - Three.js：**MIT**，[许可](docs/licenses/three-MIT.txt)。
 - 几何裁切：polygon-clipping、splaytree（MIT）及 robust-predicates（Unlicense），[随包许可](docs/licenses/geometry-libraries.txt)。

@@ -905,7 +905,10 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     env.indoorTarget = (ex && (ex.under || ex.metro)) || (lv && lv.kind !== 'roof') ? 1 : 0;
   };
   /** 贴地阴影、灯下光斑这些贴花的开关。 */
-  const applyDecals = (on) => { for (const m of Object.values(mats.base)) if (m.userData?.decal) m.visible = on; };
+  const applyDecals = (on) => {
+    for (const m of Object.values(mats.base)) if (m.userData?.decal) m.visible = on;
+    mats.setNight(mats.night); // 各栋楼克隆的那份材质在昼夜回调里和原件对齐
+  };
   applyDecals(initialQuality.decals);
   qualityManager.subscribe(quality => {
     const shadowsChanged = ctx.quality.shadows !== quality.shadows;

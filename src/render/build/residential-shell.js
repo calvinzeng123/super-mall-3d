@@ -24,6 +24,8 @@ export function clipMaterial(ctx,key,base,plane) {
     if(m.emissive)m.emissive.copy(base.emissive);
     m.emissiveIntensity=base.emissiveIntensity;
     m.opacity=base.opacity;
+    // 画面设置里关掉「贴地阴影与光斑」时，各栋楼自己那份贴花材质也跟着隐藏
+    m.visible=base.visible;
   });
   return m;
 }

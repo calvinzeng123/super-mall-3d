@@ -1,6 +1,25 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-10。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-11。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+
+## 2026-11-11 最新交接（四）：HDR 光影、画面设置、室内光影
+
+用户的要求：加 HDR 模式，贴图更细腻更反光；画质设置更细致；增加光影；住宅、酒店的地板、墙壁和家具在不大改的前提下更真实。详细说明、各档对照表、花费和限制见 [docs/hdr.md](docs/hdr.md)。
+
+- **HDR 是渲染上的，不是屏幕输出**：光照按超过 1 的亮度范围算，最后压回 sRGB。文档和面板的说明里都写明了，别改成「HDR 显示」之类的说法。
+- **天空素材**：`scripts/sky/build-sky.mjs` 从 Poly Haven 的一张纯天空 HDRI（CC0）生成 `assets/sky/` 下的两个文件和清单。运行时由 `src/render/sky-data.js` 给地址；`build.mjs` 和 `scripts/build-netlify.mjs` 都会替换这个模块（和 `prop-data.js` 一个路数）。开了 HDR 才加载。
+- **环境图分室内外**：`scene.environment` 还是原来的室内环境图；室外材质通过 `MaterialLib.outdoor()` 登记后改用天空环境图。**各栋楼会克隆共享材质**（`clipMaterial()`、`plainInstanceMaterial()` 等），所以登记时把 `clone()` 包了一层，克隆出来的自动登记——少了这一步，夜里塔楼会被白天的天空照得发白（开发中真出过这个问题）。新建室外材质时记得调 `ctx.mats.outdoor(material)`，漏了也只是维持原样（反射室内环境图）。
+- **调校只在画的那一刻生效**：`Environment.grade()` 在画之前把曝光、半球光、环境图强度乘上 `HDR_GRADE` 的倍数，画完还原。`residential-lighting.js`、`suite-lighting.js` 每帧设的是绝对值，所以不能直接改那些值。曝光和补光按 `env.indoor`（0 – 1，`app.js` 的 `describeView()` 每帧给目标值）在室内外之间过渡。
+- **后处理有两条路**：不开 HDR 时还是原来的 `EffectComposer`（只有夜景泛光）；开着时是 `src/render/post.js` 的 `HdrPipeline`，对外的接口一样。只开 HDR、不开遮蔽和高光柔光时白天不建任何缓冲。遮蔽用 three 自带的 GTAO 和降噪着色器，但只喂主画面的深度图（three 的 `GTAOPass` 这条路在 r170 里是坏的，所以没用它的 Pass）。
+- **画面设置**：`quality.js` 的 `QUALITY_PRESETS` 多了 `ultra`，开关项在 `QUALITY_SWITCHES`，多选一在 `QUALITY_CHOICES`。面板用 `data-quality-switch` / `data-quality-choice` / `data-quality-needs` 绑定，`tests/hdr-lighting.test.js` 检查面板和模型一一对应：加一项设置要同时改 `quality.js`、`src/shell.html`，再在 `app.js` 的订阅里用上它。`props.setTier()` 现在吃的是 `quality.detail`，不是 `quality.tier`。
+- **室内灯光**（`src/render/indoor-lighting.js`）：灯位记在 `ctx.levels[id].lamps`（`[x, y, z, 光强?]`）。商场的在 `shell.js` 的 `ceilingLights()` 里记，社区住宅的在 `buildResidenceFloor()` 里记、楼层换出时摘掉。灯亮着时 `env.lamp` 让补光再压一些（不开 HDR 也生效）。隐藏的灯才不占着色器的灯位，所以用不上时整池 `visible = false`。
+- **光斑贴花**：`MaterialLib` 多了 `lightPool`（灯下，夜里更亮）和 `dayPool`（窗边天光，入夜淡出）两个贴花材质，`BatchSet.pool()` 和 `edge(…, key, color)` 画。和 `aoBlob` / `aoEdge` 一样只在 `depthCues`（非 FPS）时有。
+- **社区住宅**（`residence-interiors.js`）：`homeMatte`（带细抹灰纹理、夜里亮度和 `matte` 一样）通过 `Object.create(ctx.mats.base, { matte })` 顶替 `matte`，批次的名字没变，所以测试里按材质名找网格的写法不受影响。平顶和吸顶灯画在 `lintel` 那一批里（俯瞰时隐藏）；平顶是一张朝下的面，不是盒子，为的是不占 1,500 盒的预算。`groundCues()` 按房间画落地阴影、墙根和窗边天光。沙发和阳台盆栽在有模型库时用模型（`R.prop()` / `frameOn().prop()`），占地不变。楼层的释放函数现在认 `userData.sharedProp`（模型的几何是共用的，不能 dispose）。
+- **各项的花费**（软件渲染下量的，只看比例，详表在 docs/hdr.md）：HDR 光影本身开关差不到 2%；环境光遮蔽 +4% – 26%；高光柔光 +0.3% – 6%；室内灯光 8 盏 +40% 左右，是最贵的一项。量耗时要在每帧画完后读回一个像素——Chrome 里的 `gl.finish()` 不等显卡做完，直接计时量到的只是提交命令的时间。
+- **测试**：669 / 669，新增 16 项（`tests/hdr-lighting.test.js`）。
+- **构建**：单文件版 84.7 MB，在线包 101 个文件 61.30 MiB（多了两个天空文件）。两个包都实际打开跑过。
+- **核对**：FPS 和上一版同机位比对，一百万像素里 11 个有差别；手机尺寸默认「流畅」、新效果全关、不下载天空素材。对比图在 `docs/qa/hdr-2026-11-11/`。
+- **没做的**：没有真机测试，「极致」在手机上多半带不动；车、桥这些单独建材质的室外物体没登记天空反射；塔楼住宅和套房没加窗边天光；床、柜子还是方块；没有部署。
 
 ## 2026-11-10 最新交接（三）：摆放核对和立体感
 
