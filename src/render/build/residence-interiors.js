@@ -24,12 +24,19 @@ export function buildResidenceFloor(ctx, L) {
   group.name = `residence-${lv.id}`;
   // 云澜社区住宅楼层只用六个材质批次（≤ 8 个网格）。
   const community = lv.units.some((u) => u.residence?.kind === 'community');
-  const raw = new BatchSet(ctx.mats.base);
+  // 墙面和家具用带细抹灰纹理的材质（完整页面里才有；单元测试的材质表没有它，照旧用纯色的 matte）。批次的名字不变。
+  const homeMatte = community && ctx.mats.base.homeMatte?.userData?.homeFinish ? ctx.mats.base.homeMatte : null;
+  const raw = new BatchSet(homeMatte ? Object.create(ctx.mats.base, { matte: { value: homeMatte } }) : ctx.mats.base);
   // The wall above every door (and its head casing) is a batch of its own: hidden whenever the camera looks down
   // from above this floor's ceiling (orbit cutaway, top views), so each doorway reads as a gap in the wall.
-  const lintels = community ? new BatchSet({ lintel: ctx.mats.base.matte }) : null;
+  // 各房间的吊顶和吸顶灯也在这一批里：从上往下看时一并隐藏，不挡住户内。
+  const lintels = community ? new BatchSet({ lintel: homeMatte || ctx.mats.base.matte }) : null;
+  // 贴花（落地阴影、墙根渐暗、窗边天光）和贴图模型直接交给底下的批次；单元测试里这些材质和模型库都没有，什么也不画
   const B = community ? { get: (k) => k === 'lintel' ? lintels.get('lintel') : raw.get(COMMUNITY_KEYS[k] || k),
-    frame: (F, fn) => raw.frame(F, () => lintels.frame(F, fn)), flush: (g) => { raw.flush(g); lintels.flush(g); }, sets: raw.sets } : raw;
+    frame: (F, fn) => raw.frame(F, () => lintels.frame(F, fn)), flush: (g) => { raw.flush(g); lintels.flush(g); }, sets: raw.sets,
+    blob: (...a) => raw.blob(...a), edge: (...a) => raw.edge(...a), pool: (...a) => raw.pool(...a), prop: (...a) => raw.prop(...a) } : raw;
+  /** 这一层各房间吸顶灯的位置（世界坐标）：「室内灯光」从里面挑离人最近的几盏点亮。 */
+  const lamps = [];
   const height = Math.max(2.6, (lv.height || lv.h || 3.5) - .30);
   const y0 = lv.elev;
   const labels = [];
@@ -38,7 +45,7 @@ export function buildResidenceFloor(ctx, L) {
   for (const u of lv.units) {
     const residence = u.residence;
     if (!residence) continue;
-    if (residence.kind === 'community') { communityHome(B, u, y0, height, labels, wallKeys, lv.height || lv.h || 3.5); continue; }
+    if (residence.kind === 'community') { communityHome(B, u, y0, height, labels, wallKeys, lv.height || lv.h || 3.5, lamps); continue; }
     if (residence.prototype || (residence.suitePlan && ctx.suiteAsset)) {
       const entry = residence.entryDoor;
       const [x,z] = toW(u.frame, entry.at - entry.width / 2 - .24, -.12);
@@ -190,9 +197,10 @@ export function buildResidenceFloor(ctx, L) {
   if (residential) group.add(residential.group);
   const atlas = labelAtlas(labels, y0, group);
   const lintel = group.children.find((m) => m.isMesh && m.name === 'lintel') || null;
+  if (lamps.length) L.lamps = lamps;
   let disposed = false;
   return {
-    group, lintel,
+    group, lintel, lamps,
     update(app) {
       suite?.update(app); residential?.update(app);
       if (lintel) lintel.visible = !!app.state.explore || app.camera.position.y < y0 + height;
@@ -200,10 +208,16 @@ export function buildResidenceFloor(ctx, L) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      if (L.lamps === lamps) delete L.lamps;
       suite?.dispose();
       residential?.dispose();
       group.removeFromParent();
-      group.traverse((o) => { if (o.isMesh && !o.geometry.userData.sharedSuite && !o.geometry.userData.sharedResidential) o.geometry.dispose(); });
+      // 贴图模型（userData.sharedProp）的几何和材质是全园区共用的：只通知模型库把这一块摘掉，不放掉几何
+      group.traverse((o) => {
+        if (!o.isMesh) return;
+        if (o.userData.sharedProp) o.dispose?.();
+        else if (!o.geometry.userData.sharedSuite && !o.geometry.userData.sharedResidential) o.geometry.dispose();
+      });
       group.clear();
       atlas?.texture.dispose();
       atlas?.material.dispose();
@@ -244,7 +258,10 @@ export function buildResidenceFloor(ctx, L) {
 function makeRoomTools(B, y0) {
   const P = (key, a, b, y, w, d, h, color, rot = 0) => B.get(key).box(a, y, b, w, h, d, color, rot);
   const F = { ang: 0, nx: 0, nz: -1, at: (x, z) => [x, z] };
-  return interiorDetail(B, F, P, y0);
+  const tools = interiorDetail(B, F, P, y0);
+  /** 摆一个贴图模型（户内坐标，离楼面 h）。没有模型库（单元测试、只算布局的空跑）时返回 false，调用方照旧画方块。 */
+  tools.prop = (id, a, b, h = 0, ry = 0, scale = 1, opts) => (B.prop ? B.prop(id, a, y0 + h, b, ry, scale, opts) : false);
+  return tools;
 }
 
 function bedSet(R, bed, color, room, beds = []) {
@@ -509,7 +526,13 @@ function doorSide(res, room) {
 /** World frame centred on a unit-local point, turned so that canonical −z (front) faces `side`. */
 const roomFrame = (u, cx, cz, side) => frame(...toW(u.frame, cx, cz), u.frame.deg + ROT[side]);
 
-function communityHome(B, u, y0, height, labels, wallKeys, storey = height + .3) {
+const FACE_DOWN = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI), _cp = new THREE.Vector3(), _cs = new THREE.Vector3();
+/** 房间小到装不下一盏吸顶灯的最短边（米）。 */
+const LAMP_MIN = 1.5;
+/** 住宅吸顶灯的光强：按房间面积配，客厅大一些（见 indoor-lighting.js 的说明）。 */
+const lampPower = (area) => Math.min(13, Math.max(6, 5 + area * .32));
+
+function communityHome(B, u, y0, height, labels, wallKeys, storey = height + .3, lamps = null) {
   const res = u.residence, W = res.width, D = res.depth, ext = new Set(res.exteriorSides || []);
   const R = makeRoomTools(B, y0), { box, cylinder } = R;
   const wall = (a, b, door, color = '#eeeae1', t = .12) => {
@@ -572,6 +595,18 @@ function communityHome(B, u, y0, height, labels, wallKeys, storey = height + .3)
     }
     stairTreads(R, res);
     curtainFolds(R, res, y0, storey);
+    // 吊顶和吸顶灯：每个房间一块平顶、正中一盏灯。画在门楣那一批里（从上往下看时隐藏）。阳台、楼梯、挑空不做。
+    for (const r of res.rooms) {
+      if (r.kind === 'stair' || r.kind === 'void' || r.kind === 'balcony') continue;
+      const q = r.rect, w = q.x1 - q.x0, d = q.z1 - q.z0, cx = (q.x0 + q.x1) / 2, cz = (q.z0 + q.z1) / 2;
+      // 平顶是一张朝下的面（两个三角形），灯是一块薄的方形面板：整层的盒体预算（≤ 1,500）不用为它们让路
+      // 楼板底面在层高以下 0.31 米（社区外壳的做法）；平顶再低 2 厘米，盖住那块不发光的楼板底
+      const top = y0 + height - .03;
+      B.get('lintel').shape('planeUp', _cp.set(cx, top, cz), FACE_DOWN, _cs.set(w - .02, 1, d - .02), '#f6f3ec');
+      if (Math.min(w, d) < LAMP_MIN) continue;
+      B.get('lintel').box(cx, top - .025, cz, .46, .05, .46, '#fffaf0');
+      if (lamps) { const [wx, wz] = toW(u.frame, cx, cz); lamps.push([wx, top - .1, wz, lampPower(w * d)]); }
+    }
   });
   communityFurniture(B, u, y0);
 }
@@ -703,9 +738,52 @@ export function communityFurniture(B, u, y0) {
       else if (r.kind === 'laundry') laundryPlan(R, P);
       else if (r.kind === 'kitchen') kitchenPlan(R, P, OPPOSITE[res.kitchen?.door?.side || doorSide(res, r)]);
       for (const q of P.solids) summary.solids.push({ room: r.id, ...q });
+      if (B.blob) groundCues(B, u, r, P, y0 + .024);
     }
   });
   return summary;
+}
+
+/** 太阳的水平方向（世界坐标，和 env.js 的 sunDir 一致）：朝着它的窗进来的是暖的直射光，背着它的是偏冷的天光。 */
+const SUN_XZ = [-.664, .748];
+const DAYLIT = new Set(['living', 'dining', 'bedroom', 'study', 'family', 'kitchen']);
+/**
+ * 一个房间里让东西「落地」、让窗「进光」的贴花（都只是贴在地面上的半透明图，不改任何家具和墙）：
+ *   家具、床脚下的一团软阴影（按布局里已经占掉的位置来，门扇那种细条不垫）；
+ *   实墙墙根的一条渐暗带（门洞、落地窗、开敞的一边不画）；
+ *   外墙或落地玻璃一侧地面上的天光，朝阳的一面暖而亮，背阴的一面冷而淡，入夜淡出。
+ */
+function groundCues(B, u, room, P, y) {
+  const r = P.rect;
+  for (const q of P.taken) {
+    const w = q.x1 - q.x0, d = q.z1 - q.z0;
+    if (Math.min(w, d) < .25) continue;
+    B.blob((q.x0 + q.x1) / 2, y, (q.z0 + q.z1) / 2, w + .34, d + .34);
+  }
+  for (const side of SIDES) {
+    const S = P.sides[side];
+    for (const [a, b] of S.stretches) {
+      // 顺时针走一圈（N 边向 +x、E 边向 +z、S 边向 −x、W 边向 −z），渐暗带都落在房间这一侧
+      if (side === 'N') B.edge(a, S.line, b, S.line, y, .42);
+      else if (side === 'E') B.edge(S.line, a, S.line, b, y, .42);
+      else if (side === 'S') B.edge(b, S.line, a, S.line, y, .42);
+      else B.edge(S.line, b, S.line, a, y, .42);
+    }
+    if (!(S.exterior || S.glass) || !DAYLIT.has(room.kind)) continue;
+    // 进光的那几段：外墙上是窗洞，户内是落地玻璃（整条边去掉实墙）
+    let lit = S.onOutline ? S.cuts.map((c) => [Math.max(S.span[0], c[0]), Math.min(S.span[1], c[1])]) : [[...S.span]];
+    if (!S.onOutline) for (const w of S.wall) lit = subtractInterval(lit, w);
+    const [ox, oz] = OUT[side], [wx, wz] = toW(u.frame, ox, oz), [w0, z0] = toW(u.frame, 0, 0);
+    const sunny = (wx - w0) * SUN_XZ[0] + (wz - z0) * SUN_XZ[1] > .15;
+    const reach = Math.min((S.horiz ? r.z1 - r.z0 : r.x1 - r.x0) - .2, sunny ? 3.2 : 2.3), color = sunny ? 0xffe2b0 : 0x8497a8;
+    if (reach < 1) continue;
+    for (const [a, b] of mergeIv(lit.filter(([p, q]) => q - p >= .5))) {
+      if (side === 'N') B.edge(a, S.line, b, S.line, y, reach, 1, 'dayPool', color);
+      else if (side === 'E') B.edge(S.line, a, S.line, b, y, reach, 1, 'dayPool', color);
+      else if (side === 'S') B.edge(b, S.line, a, S.line, y, reach, 1, 'dayPool', color);
+      else B.edge(S.line, b, S.line, a, y, reach, 1, 'dayPool', color);
+    }
+  }
 }
 
 /** Batches that draw nothing: communityFurniture run for its plan only (same placement as the drawn floor). */
@@ -753,6 +831,8 @@ const hashCode = (s) => {
   return (h >>> 0) % 9973;
 };
 const SOFA = ['#9eaea2', '#b9a78e', '#8e9fb3', '#c4b9a8', '#a6938a', '#7f948a', '#cbb89d', '#98a3ad', '#b28f7c'];
+/** 给贴图模型染色用：把一户的色调向白色靠七成，模型自己的布纹和明暗留着。 */
+const softTint = (hex) => { const n = parseInt(hex.slice(1), 16), k = (v) => Math.round(255 - (255 - v) * .3); return (k(n >> 16) << 16) | (k((n >> 8) & 255) << 8) | k(n & 255); };
 const RUG = ['#c6c6b6', '#d9cfbe', '#b7c1bf', '#cfc0b1', '#bdb4a6', '#d5d1c5', '#a9b2ae'];
 const CABINET = ['#d9c6a6', '#b8946c', '#e2d8c6', '#8f6f52', '#cdb48f'];
 const SIDES = ['N', 'S', 'W', 'E'];
@@ -887,6 +967,8 @@ function roomPlanner(res, ext, room, beds, leaves = []) {
       box: (key, u, v, y, lu, lv, h, color) => { const [x, z, w, d] = m(u, v, lu, lv); R.box(key, x, z, y, w, d, h, color); },
       cyl: (key, u, v, y, rad, h, color, seg = 8) => { const [x, z] = m(u, v, 0, 0); R.cylinder(key, x, z, y, rad, h, color, seg); },
       rect: (u0, v0, u1, v1) => { const [xa, za] = m(u0, v0, 0, 0), [xb, zb] = m(u1, v1, 0, 0); return { x0: Math.min(xa, xb), x1: Math.max(xa, xb), z0: Math.min(za, zb), z1: Math.max(za, zb) }; },
+      // 贴图模型：中心在 (u, v)；dir = 1 时正面朝墙（−v，沙发对着电视墙），dir = −1 时背靠墙、正面朝屋里（+v）
+      prop: (id, u, v, y, dir, scale, opts) => { const [x, z] = m(u, v, 0, 0); return R.prop(id, x, z, y, { N: Math.PI, S: 0, W: -Math.PI / 2, E: Math.PI / 2 }[side] + (dir < 0 ? Math.PI : 0), scale, opts); },
     };
   };
   const closet = res.partitions.some((p) => p.door && p.id.split('/').includes(room.id) && p.id.split('/').some((id) => res.rooms.find((q) => q.id === id)?.kind === 'closet'));
@@ -970,9 +1052,16 @@ function livingPlan(R, P, res, seed, tone) {
   const tvW = Math.min(cl - .1, big ? 1.9 : mid ? 1.65 : 1.4);
   T.box('matte', 0, .055, 1.3, tvW, .05, tvW * .57, '#161d1b');
   const pieces = ['tv-wall'];
+  /** 沙发用的是贴图模型（true）还是方块（false）：转角那一段跟着它，模型配脚凳，方块配方块。 */
+  let softSofa = true;
   /** Sofa whose front is at vf and back at vf + dir · depth (seat, back, arms, cushions). */
   const drawSofa = (F, du, vf, len, dir) => {
     const at = (o) => vf + dir * o;
+    // 有贴图模型时用布艺沙发模型，拉伸到这张沙发的占地（长 len、深 sofaD）；颜色在模型本色上带一点这一户的色调。
+    // 没有模型库（单元测试、模型包没下载下来）时照旧画方块。
+    const id = len >= 2.2 ? 'sofa3' : 'sofa2', [mw, md] = id === 'sofa3' ? [2.731, .925] : [1.807, .818];
+    if (F.prop(id, du, at(sofaD / 2 + .015), .02, dir, [len / mw, id === 'sofa3' ? .82 : 1.08, (sofaD - .03) / md], { color: softTint(sofaColor) })) return true;
+    softSofa = false;
     F.box('matte', du, at(.46), .22, len, .86, .26, sofaColor);
     F.box('matte', du, at(sofaD - .12), .6, len, .2, .52, sofaColor);
     for (const s of [-1, 1]) F.box('matte', du + s * (len / 2 - .1), at(.46), .43, .2, .86, .3, sofaColor);
@@ -999,8 +1088,11 @@ function livingPlan(R, P, res, seed, tone) {
       const q = T.rect(du + s * (len / 2 - .9), v - .75, du + s * len / 2, v);
       if (!P.free(q)) continue;
       P.taken.push(q);
-      T.box('matte', du + s * (len / 2 - .45), v - .32, .22, .9, .86, .26, sofaColor);
-      T.box('matte', du + s * (len / 2 - .1), v - .32, .43, .2, .86, .3, sofaColor);
+      // 沙发是贴图模型时，转角这一段换成同色调的脚凳（占地还是这块 0.9 × 0.75）
+      if (!softSofa || !T.prop('ottoman', du + s * (len / 2 - .45), v - .36, .02, 1, [.9 / .885, .72, .68 / .621], { color: softTint(sofaColor) })) {
+        T.box('matte', du + s * (len / 2 - .45), v - .32, .22, .9, .86, .26, sofaColor);
+        T.box('matte', du + s * (len / 2 - .1), v - .32, .43, .2, .86, .3, sofaColor);
+      }
       pieces.push('chaise'); break;
     }
     // Rug and coffee table between sofa and TV.
@@ -1199,7 +1291,13 @@ function balconyPlan(R, P, seed) {
   }
   // Planter at the other end of the balcony when it fits.
   const pc = c > (a0 + a1) / 2 ? a0 + .45 : a1 - .45;
-  if (Math.abs(pc - c) > 1.4) { const [px, pz] = m(pc, mid); R.cylinder('matte', px, pz, 0, .22, .4, '#b4b8a5', 8); R.cylinder('foliage', px, pz, .4, .3, .6, '#617d58', 7); }
+  if (Math.abs(pc - c) > 1.4) {
+    const [px, pz] = m(pc, mid);
+    // 阳台另一头的盆栽：有贴图模型就用真的盆栽，没有就画花盆加一团叶子
+    if (!R.prop(seed % 2 ? 'plant_tall' : 'plant_pachira_small', px, pz, .024, (seed % 8) * .785, seed % 2 ? .95 : .8, { outdoor: true })) {
+      R.cylinder('matte', px, pz, 0, .22, .4, '#b4b8a5', 8); R.cylinder('foliage', px, pz, .4, .3, .6, '#617d58', 7);
+    }
+  }
   return { table: m(c, mid), span };
 }
 

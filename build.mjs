@@ -66,6 +66,11 @@ const coverURL = `data:${COVER_MIME};base64,${(await readFile(COVER_SOURCE)).toS
 // 贴图小模型：所有 GLB 首尾相接打成一包，内嵌成一段 base64。
 const props = await packProps();
 const propModule = `export const PROP_ASSETS = ${JSON.stringify(props.assets)};\nexport const PROP_PACK = ${JSON.stringify({ url: `data:application/octet-stream;base64,${props.bytes.toString('base64')}` })};`;
+// HDR 天空素材（两个小文件，约 210 KB）：内嵌成 data: 地址。
+const skyModule = `export const SKY_ASSETS = ${JSON.stringify({
+  radiance: `data:application/octet-stream;base64,${(await readFile('assets/sky/day-radiance.hdr')).toString('base64')}`,
+  photo: `data:image/jpeg;base64,${(await readFile('assets/sky/day-sky.jpg')).toString('base64')}`,
+})};`;
 const out = await build({
   entryPoints: ['src/main.js'],
   bundle: true,
@@ -78,6 +83,7 @@ const out = await build({
     b.onLoad({filter:/[\\/]fps[\\/]model-data\.js$/},()=>({contents:`export const FPS_MODEL_ASSETS = ${JSON.stringify(embeddedFPS)};`,loader:'js'}));
     b.onLoad({filter:/[\\/]cover-data\.js$/},()=>({contents:`export const COVER_URL = ${JSON.stringify(coverURL)};`,loader:'js'}));
     b.onLoad({filter:/[\\/]props[\\/]prop-data\.js$/},()=>({contents:propModule,loader:'js'}));
+    b.onLoad({filter:/[\\/]render[\\/]sky-data\.js$/},()=>({contents:skyModule,loader:'js'}));
   }}],
 });
 const code = out.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');

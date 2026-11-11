@@ -1,0 +1,55 @@
+{
+ "license": "CC0-1.0",
+ "source": {
+  "id": "kloofendal_48d_partly_cloudy_puresky",
+  "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+  "url": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+  "authors": {
+   "Greg Zaal": "Original",
+   "Jarod Guest": "Sky edits"
+  },
+  "license": "CC0-1.0",
+  "file": {
+   "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+   "md5": "2eba3a4d7eeb23cbfbeca364c97e7980",
+   "bytes": 5451493,
+   "resolution": "2k"
+  }
+ },
+ "sun": {
+  "sourceU": 0.59516,
+  "elevationDeg": 47.89,
+  "sceneDir": [
+   -0.55,
+   0.78,
+   0.62
+  ],
+  "sceneU": 0.86549,
+  "shiftColumns": 554,
+  "peakLuminance": 72843.3
+ },
+ "processing": {
+  "sunClamp": 24,
+  "radianceSaturation": 0.6,
+  "skyExposure": 0.62
+ },
+ "horizonSrgb": [
+  0.5366,
+  0.5539,
+  0.6049
+ ],
+ "radiance": {
+  "file": "day-radiance.hdr",
+  "width": 256,
+  "height": 128,
+  "bytes": 131121,
+  "sha256": "7c0baec716b9ab9b5fe3cb9109b0d625183b8800ea40f97e2c27e21540485923"
+ },
+ "sky": {
+  "file": "day-sky.jpg",
+  "width": 2048,
+  "height": 512,
+  "bytes": 81385,
+  "sha256": "cddda50e003a891515cf1b75621aa8e67769a700687361d6a3610a03a93b4a65"
+ }
+}

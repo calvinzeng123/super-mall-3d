@@ -201,10 +201,12 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 .directory.collapsed { display: none; }
 .tool.dir-btn { display: inline-flex; }
 .quality-panel { position: absolute; z-index: 8; top: calc(66px + env(safe-area-inset-top,0px)); right: 16px; width: min(360px,calc(100% - 32px)); max-height: calc(100dvh - 90px - env(safe-area-inset-top,0px)); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 14px; border-radius: 24px; }
+/* 设置项多、小字多：这块面板的底比别的玻璃面板实一些，压在地图上也看得清 */
+#app .quality-panel.panel { background: var(--glass-solid); background: color-mix(in srgb, var(--glass-solid) 80%, transparent); }
 .quality-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .quality-head h2 { margin: 0; font-size: 18px; }
 .quality-head p { margin: 0; color: var(--ink-2); font-size: 12px; }
-.quality-presets { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; padding: 4px; margin: 12px 0; border-radius: 20px; background: var(--chip); }
+.quality-presets { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 3px; padding: 4px; margin: 12px 0; border-radius: 20px; background: var(--chip); }
 .quality-presets button { border: 0; background: transparent; min-height: 44px; border-radius: 16px; cursor: pointer; }
 .quality-presets button[aria-pressed="true"] { background: var(--glass-selected,var(--panel-solid)); color: var(--accent); box-shadow: 0 2px 7px rgba(20,35,50,.12); font-weight: 700; }
 .quality-row { display: flex; align-items: center; justify-content: space-between; min-height: 48px; gap: 16px; border-top: 1px solid var(--line); }
@@ -213,6 +215,13 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 .quality-row input[type="checkbox"]::after { content: ''; position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #fff; left: 2px; top: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.15); transition: transform .18s; }
 .quality-row input[type="checkbox"]:checked { background: var(--accent); }
 .quality-row input[type="checkbox"]:checked::after { transform: translateX(20px); }
+.quality-row input[type="checkbox"]:disabled { opacity: .4; cursor: not-allowed; }
+.quality-row.is-off > span { opacity: .5; }
+.quality-group { margin: 16px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--ink-2); }
+.quality-seg { display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 3px; border-radius: 14px; background: var(--chip); flex: none; }
+.quality-seg button { border: 0; background: transparent; color: inherit; font: inherit; min-width: 44px; min-height: 36px; padding: 0 10px; border-radius: 11px; cursor: pointer; }
+.quality-seg button[aria-pressed="true"] { background: var(--glass-selected,var(--panel-solid)); color: var(--accent); box-shadow: 0 2px 7px rgba(20,35,50,.12); font-weight: 700; }
+.quality-seg button:disabled { opacity: .4; cursor: not-allowed; }
 .quality-slider { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding-top: 10px; }
 .quality-slider input { grid-column: 1 / -1; width: 100%; min-height: 32px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .quality-slider output { color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -456,12 +465,23 @@ body.quality-low #app .panel { -webkit-backdrop-filter: blur(1.5px) saturate(.8)
   <section class="quality-panel panel" id="qualityPanel" role="dialog" aria-modal="false" aria-labelledby="qualityTitle" aria-describedby="qualityHint" hidden>
     <div class="quality-head"><div><h2 id="qualityTitle">画面设置</h2><p id="qualityStatus" role="status"></p></div><button type="button" class="dir-close" id="qualityClose" aria-label="关闭画面设置">×</button></div>
     <div class="quality-presets" role="group" aria-label="画质档位">
-      <button type="button" data-quality-preset="auto" aria-pressed="true">自动</button><button type="button" data-quality-preset="low" aria-pressed="false">流畅</button><button type="button" data-quality-preset="balanced" aria-pressed="false">均衡</button><button type="button" data-quality-preset="high" aria-pressed="false">精细</button>
+      <button type="button" data-quality-preset="auto" aria-pressed="true">自动</button><button type="button" data-quality-preset="low" aria-pressed="false">流畅</button><button type="button" data-quality-preset="balanced" aria-pressed="false">均衡</button><button type="button" data-quality-preset="high" aria-pressed="false">精细</button><button type="button" data-quality-preset="ultra" aria-pressed="false">极致</button>
     </div>
+    <h3 class="quality-group">清晰度与流畅度</h3>
     <label class="quality-slider" for="qualityResolution"><span>画面清晰度</span><output id="qualityResolutionValue" for="qualityResolution">85%</output><input id="qualityResolution" type="range" min="0.65" max="2" step="0.05" value="0.85"></label>
-    <label class="quality-row" for="qualityShadows"><span>建筑与人物阴影<small>关闭可减轻手机负担</small></span><input type="checkbox" id="qualityShadows" role="switch"></label>
-    <label class="quality-row" for="qualityBloom"><span>夜景柔光<small>夜间灯光边缘泛光</small></span><input type="checkbox" id="qualityBloom" role="switch"></label>
+    <div class="quality-row" role="group" aria-label="帧率上限"><span>帧率上限<small>调低更省电、少发热</small></span><div class="quality-seg" data-quality-choice="maxFps"><button type="button" data-value="30">30</button><button type="button" data-value="45">45</button><button type="button" data-value="60">60</button></div></div>
+    <div class="quality-row" role="group" aria-label="贴图清晰度"><span>贴图清晰度<small>斜着看地面、墙面时纹理更清楚</small></span><div class="quality-seg" data-quality-choice="textures"><button type="button" data-value="standard">标准</button><button type="button" data-value="high">高</button></div></div>
+    <div class="quality-row" role="group" aria-label="模型细节"><span>模型细节<small>家具、绿植在多远以内用精细模型</small></span><div class="quality-seg" data-quality-choice="detail"><button type="button" data-value="low">低</button><button type="button" data-value="balanced">中</button><button type="button" data-value="high">高</button></div></div>
     <label class="quality-slider" for="qualityCrowd"><span>人群密度</span><output id="qualityCrowdValue" for="qualityCrowd">22%</output><input id="qualityCrowd" type="range" min="0" max="1" step="0.01" value="0.22"></label>
+    <h3 class="quality-group">光影</h3>
+    <label class="quality-row" for="qualityHdr"><span>HDR 光影<small>真实天空的反射和环境光、更通透的色彩、亮面的石材和金属</small></span><input type="checkbox" id="qualityHdr" role="switch" data-quality-switch="hdr"></label>
+    <label class="quality-row" for="qualityAo"><span>环境光遮蔽<small>墙角、家具脚下自然变暗；比较吃显卡，需要开着 HDR 光影</small></span><input type="checkbox" id="qualityAo" role="switch" data-quality-switch="ao" data-quality-needs="hdr"></label>
+    <label class="quality-row" for="qualityDayBloom"><span>高光柔光<small>灯具和阳光下的反光溢出一点光；需要开着 HDR 光影</small></span><input type="checkbox" id="qualityDayBloom" role="switch" data-quality-switch="dayBloom" data-quality-needs="hdr"></label>
+    <label class="quality-row" for="qualityBloom"><span>夜景柔光<small>夜间灯光边缘泛光</small></span><input type="checkbox" id="qualityBloom" role="switch" data-quality-switch="bloom"></label>
+    <label class="quality-row" for="qualityShadows"><span>太阳阴影<small>建筑与人物的影子；关闭可减轻手机负担</small></span><input type="checkbox" id="qualityShadows" role="switch" data-quality-switch="shadows"></label>
+    <div class="quality-row" role="group" aria-label="阴影精度"><span>阴影精度<small>影子边缘的清晰程度</small></span><div class="quality-seg" data-quality-choice="shadowSize" data-quality-needs="shadows"><button type="button" data-value="1024">低</button><button type="button" data-value="2048">中</button><button type="button" data-value="4096">高</button></div></div>
+    <div class="quality-row" role="group" aria-label="室内灯光"><span>室内灯光<small>商场和住宅里，离你最近的几盏灯真的照亮周围</small></span><div class="quality-seg" data-quality-choice="indoorLights"><button type="button" data-value="0">关</button><button type="button" data-value="4">4 盏</button><button type="button" data-value="8">8 盏</button></div></div>
+    <label class="quality-row" for="qualityDecals"><span>贴地阴影与光斑<small>家具脚下的影子、灯下和窗边的光斑；几乎不花性能</small></span><input type="checkbox" id="qualityDecals" role="switch" data-quality-switch="decals"></label>
     <p class="quality-hint" id="qualityHint"></p>
   </section>
 

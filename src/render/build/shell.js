@@ -205,6 +205,13 @@ export function ceilingLights(ctx) {
         const t = Math.max(0, Math.min(1, ((x - r.from.x) * dx + (z - r.from.z) * dz) / (dx * dx + dz * dz)));
         return y - (r.from.y + (r.to.y - r.from.y) * t) < (r.headroom ?? 2.6);
       });
+      // 灯下的光斑贴在下面那层的地面上；灯位也记下来，「室内灯光」从里面挑离人最近的几盏点亮
+      const Bb = ctx.depthCues ? ctx.levels[below.id].batch : null, floorHole = (x, z) => below.voids.some((v) => pointInPoly([x, z], v.poly));
+      const lamp = (x, z) => {
+        if (!Bb || floorHole(x, z)) return;
+        Bb.pool(x, below.elev, z, 5.2);
+        (ctx.levels[below.id].lamps ||= []).push([x, y - 0.06, z]);
+      };
       const seen = new Set();
       const once = (x, z, k = 2) => {
         const key = `${Math.round(x / k)},${Math.round(z / k)}`;
@@ -240,6 +247,7 @@ export function ceilingLights(ctx) {
             // 灯离洞口边至少 0.5 m（洞口边有一道边梁）
             if ([[.5, 0], [-.5, 0], [0, .5], [0, -.5]].some(([dx, dz]) => inVoid(x + dx, z + dz)) || !once(x, z)) continue;
             Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+            lamp(x, z);
           }
         }
         for (const w of below.walk) {
@@ -251,6 +259,7 @@ export function ceilingLights(ctx) {
               if (bays?.some((bay) => pointInPoly([x, z], bay.w.poly))) continue;
               if (!once(x, z)) continue;
               Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+              if (B.b.kind === 'mall' || B.b.kind === 'annex') lamp(x, z);
             }
           }
         }

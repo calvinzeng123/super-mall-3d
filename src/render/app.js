@@ -42,6 +42,7 @@ import { SUITE_MODEL_URL } from './suite-data.js';
 import { createSuiteLighting } from './suite-lighting.js';
 import { loadResidentialAssets } from './residential-asset.js';
 import { createResidentialLighting } from './residential-lighting.js';
+import { createIndoorLighting } from './indoor-lighting.js';
 import { toW, frame, IDENTITY } from '../layout/geom.js';
 import { riverPicks } from './build/river.js';
 import { declutterLabels, towerOccluders } from './label-declutter.js';
@@ -83,6 +84,15 @@ const OVERVIEW = [V(125, 480, 590), V(-90, 30, -35)];
 // (e) Overview shadow radius (SPEC §0.8-6, perf.md §4.6): 410 also covers W1 at x ≈ −458, which 380 missed.
 export const OVERVIEW_SHADOW = 410;
 
+/**
+ * 套房和塔楼住宅模型里该是亮面的几种材质（木地板、洞石、石材台面）在「HDR 光影」下的粗糙度。
+ * 按材质名登记到材质库，开关 HDR 时跟着切换；模型文件本身不改。
+ */
+const MODEL_FINISH = Object.freeze({ floor: 0.36, trav: 0.3, oak: 0.5, 'Yunlan oak': 0.72, 'Yunlan stone': 0.55 });
+function glossFinish(mats, materials) {
+  for (const material of materials || []) if (MODEL_FINISH[material.name] != null) mats.finish(material, MODEL_FINISH[material.name]);
+}
+
 export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
   const fps = layout.playable?.mode === 'fps';
   let storage;
@@ -101,7 +111,9 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false;
   if (fps) renderer.info.autoReset = false;
-  setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+  // 贴图清晰度：standard 是 8 倍各向异性过滤（原来的做法），high 用到显卡支持的上限（最多 16 倍），斜着看地面和墙面更清楚
+  const anisotropyFor = (level) => Math.min(level === 'high' ? 16 : 8, renderer.capabilities.getMaxAnisotropy());
+  setAnisotropy(anisotropyFor(initialQuality.textures));
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, canvas.clientWidth / canvas.clientHeight, 0.3, 12000);
@@ -116,14 +128,14 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   controls.screenSpacePanning = true;
 
   onProgress('加载石材、木纹与街区铺装', 0);
-  const surfaces = await loadSurfaceTextures(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+  const surfaces = await loadSurfaceTextures(anisotropyFor(initialQuality.textures));
   const mats = new MaterialLib(surfaces, { depthCues: !fps });
   const env = new Environment(renderer, scene, camera, mats, initialQuality);
   const root = new THREE.Group();
   scene.add(root);
 
   // 贴图小模型（家具、绿植、摆件）。FPS 不用：它的地图和开场流程保持原样。
-  let props = fps ? null : createPropLibrary({ mats, anisotropy: renderer.capabilities.getMaxAnisotropy(), tier: initialQuality.tier,
+  let props = fps ? null : createPropLibrary({ mats, anisotropy: renderer.capabilities.getMaxAnisotropy(), tier: initialQuality.detail,
     onChange: () => { renderer.shadowMap.needsUpdate = true; } });
   if (props) {
     onProgress('加载家具、绿植与摆件模型', 0.01);
@@ -139,6 +151,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   ctx.suiteAsset = null;
   const suiteResource = createDeferredResource(async () => {
     ctx.suiteAsset = await loadSuiteAsset(SUITE_MODEL_URL, assetAnisotropy);
+    glossFinish(mats, ctx.suiteAsset.materials);
     return ctx.suiteAsset;
   }, detailQueue);
   // FPS keeps its compact-map startup contract. The complete tour only parses
@@ -148,12 +161,15 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     await suiteResource.request();
   }
   ctx.suiteLighting = createSuiteLighting(ctx);
+  // 室内灯光（商场走道、社区住宅）：FPS 不用
+  if (!fps) ctx.indoorLighting = createIndoorLighting(ctx);
   ctx.residentialAssets = { stats: { models: 0, templates: 0 }, templates: new Map() };
   ctx.residentialLighting = null;
   const residentialResource = createDeferredResource(async () => {
     const assets = await loadResidentialAssets((await import('./residential-data.js')).RESIDENTIAL_ASSETS,
       assetAnisotropy, unit => { residentialProgress = `正在展开 ${unit} 户型家具与材质`; syncDetailStatus(); });
     ctx.residentialAssets = assets;
+    glossFinish(mats, assets.materials);
     ctx.residentialLighting = createResidentialLighting(ctx);
     return assets;
   }, detailQueue);
@@ -826,6 +842,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
       if (pos && target) camera.lookAt(controls.target);
       else if (!state.explore) controls.update();
       updateNear();
+      describeView();
+      env.indoor = env.indoorTarget;
       for (let i = 0; i < n; i++) {
         env.night = env.target;
         env.apply();
@@ -880,13 +898,31 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   window.addEventListener('resize', resize);
   new ResizeObserver(resize).observe(canvas);
 
+  /** 告诉环境这一帧相机的处境：离焦点多远（俯瞰）、在不在室内（漫游走进了楼里，或者俯瞰时聚焦着某一层）。 */
+  const describeView = () => {
+    const ex = state.explore, lv = ctx.lvById[ex ? ex.level : state.focus];
+    env.viewDistance = ex ? 0 : camera.position.distanceTo(controls.target);
+    env.indoorTarget = (ex && (ex.under || ex.metro)) || (lv && lv.kind !== 'roof') ? 1 : 0;
+  };
+  /** 贴地阴影、灯下光斑这些贴花的开关。 */
+  const applyDecals = (on) => { for (const m of Object.values(mats.base)) if (m.userData?.decal) m.visible = on; };
+  applyDecals(initialQuality.decals);
   qualityManager.subscribe(quality => {
     const shadowsChanged = ctx.quality.shadows !== quality.shadows;
+    const texturesChanged = ctx.quality.textures !== quality.textures;
     ctx.quality = quality;
     renderer.setPixelRatio(quality.pixelRatio);
     env.setQuality(quality);
     ctx.peopleQuality?.setDensity(quality.crowdDensity);
-    props?.setTier(quality.tier);
+    props?.setTier(quality.detail);
+    applyDecals(quality.decals);
+    if (texturesChanged) {
+      const anisotropy = anisotropyFor(quality.textures);
+      setAnisotropy(anisotropy);
+      for (const asset of Object.values(surfaces)) for (const texture of Object.values(asset.maps)) {
+        if (texture.anisotropy !== anisotropy) { texture.anisotropy = anisotropy; texture.needsUpdate = true; }
+      }
+    }
     if (shadowsChanged) scene.traverse(o => {
       if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true;
     });
@@ -922,6 +958,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     // state.arcadeCamera：小游戏自己摆相机（无人机追尾视角等），轨道控制器让开
     if (!state.touring && !state.explore && !state.arcadeCamera) controls.update();
     updateNear();
+    describeView();
     env.update(dt);
     for (const d of ctx.dynamic) d.update(dt, elapsed, app);
     highlight.update(elapsed, ctx);

@@ -358,10 +358,10 @@ export class BatchSet {
   }
   /**
    * 墙根的一条渐暗带：沿线段 (ax, az) → (bx, bz) 铺，贴着线的一侧最深，向 side 指的那一侧（1 是行进方向的左手边，−1 是右手边）
-   * 淡出 width 米。贴在标高 y 的面上。
+   * 淡出 width 米。贴在标高 y 的面上。key 换成 'dayPool' 就是窗边的天光（加色，color 是光的颜色），画法一样。
    */
-  edge(ax, az, bx, bz, y, width = 0.7, side = 1) {
-    if (!this.shaded) return;
+  edge(ax, az, bx, bz, y, width = 0.7, side = 1, key = 'aoEdge', color = 0xffffff) {
+    if (!this.materials[key]?.userData?.decal) return;
     const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
     if (len < 0.2) return;
     // 贴图深的一边在模板的 −Z 一侧；转 θ 后模板 +X 对准线段方向，+Z 对准 (−dz, dx)
@@ -369,7 +369,16 @@ export class BatchSet {
     _p.set((ax + bx) / 2 + nx * width / 2, y + 0.024, (az + bz) / 2 + nz * width / 2);
     _q.setFromAxisAngle(Y, Math.atan2(-dz, dx) + (side > 0 ? 0 : Math.PI));
     _s.set(len, 1, width);
-    this.get('aoEdge').shape('planeUp', _p, _q, _s, 0xffffff);
+    this.get(key).shape('planeUp', _p, _q, _s, color);
+  }
+  /**
+   * 地上的一团光：灯正下方、窗边的地面。以 (x, z) 为中心、w × d，贴在标高 y 的面上；color 是光的颜色（越暗越淡）。
+   * 和贴地阴影一样只是一张贴花，不花性能；FPS 和单元测试里没有这种材质，什么也不做。
+   */
+  pool(x, y, z, w, d = w, color = 0xffe9c4, ry = 0, key = 'lightPool') {
+    if (!this.materials[key]?.userData?.decal) return;
+    _p.set(x, y + 0.02, z); _q.setFromAxisAngle(Y, ry); _s.set(w, 1, d);
+    this.get(key).shape('planeUp', _p, _q, _s, color);
   }
   /** 模型库里有没有这个模型（决定要不要走程序化的画法）。 */
   hasProp(id) { return !!propLibrary?.has(id); }
