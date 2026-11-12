@@ -415,7 +415,7 @@ function megaShops(layout, befores, plaza) {
       M.shops++;
     };
     const clashes = (poly) => others.some((h) => hit(poly, h)) || doors.some((h) => hit(poly, h)) || strips.some((h) => hit(poly, h))
-      || lv.units.some((x) => x.polys.some((p) => hit(shrink(poly, 0.05), p)));
+      || lv.units.some((x) => x.polys.some((p) => hit(grow(poly, 0.02), p)));
     const inFloor = (F, r) => [0.05, 0.5, 0.95].every((t) => [r.z0 + 0.3, (r.z0 + r.z1) / 2, r.z1 - 0.3].every((v) => { const q = toW(F, r.x0 + (r.x1 - r.x0) * t, v); return inside(q, lv.outline) && (inInfill(q) || inBand(q) || megaZone(q)); }));
     // ① 环形店铺：沿中庭边每 9 米一间，门脸离洞口 7 米（回游走廊），进深尽量做深（16 → 10 米）
     const RC = MEGA_RING.corridor;

@@ -3,4 +3,4 @@
 // 两座二层艺术环廊天桥落在新楼面上，换成附楼外墙上的门（记录组 P1、fidelity 已在 p1-atrium.js 里声明改动）。
 // 改动的记录组：P1C（南门改成直通商场）、P1W4（二层连廊门挪到东墙）、site（室外步道、喷泉）、extensions（拆两座桥）、
 // expansion（环廊路线、西门位置）。
-export default { shops: 5, expansionChanged: ['P1C', 'P1W4', 'site', 'extensions', 'expansion'] };
+export default { shops: 6, expansionChanged: ['P1C', 'P1W4', 'site', 'extensions', 'expansion'] };
