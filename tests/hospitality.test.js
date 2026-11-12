@@ -109,7 +109,11 @@ test('地下、空中连接为真实连续宽度的通道，门户两侧等标�
     assert.equal(a.elev, b.elev, `${e.id} 门户有高差`);
     // A façade opening may coincide with the bridge portal. Its outward
     // threshold is then physically on a connected source-owned bridge plate.
-    const support=(lv,q)=>accessible(lv,q)||(e.architecturalOpening&&paths.some(path=>
+    // Mega mall (p1-mega.js): where a bridge was replaced by floor plate, the threshold is on the neighbouring
+    // level's walk, reached through the portal in the same wall (P1C-2F → P1-2F).
+    const viaPortal=(lv,q)=>e.architecturalOpening&&L.entrances.some(p=>p.level===lv.id&&p.to!==lv.id&&p.to!=='site'&&!p.architecturalOpening&&
+      Math.hypot(midOf(p.seg)[0]-x,midOf(p.seg)[1]-z)<1.5&&accessible(L.levels.find(l=>l.id===p.to),[q[0]+e.nx*.3,q[1]+e.nz*.3]));
+    const support=(lv,q)=>accessible(lv,q)||viaPortal(lv,q)||(e.architecturalOpening&&paths.some(path=>
       [path.from,path.to].includes(lv.id)&&path.slab.pieces.some(s=>pointInPoly(q,s.outer)&&!s.holes.some(h=>pointInPoly(q,h)))));
     assert.ok(support(a, [x - e.nx, z - e.nz]) && support(b, [x + e.nx, z + e.nz]), `${e.id} 门两侧没有实体走道`);
   }

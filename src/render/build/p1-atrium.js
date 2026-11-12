@@ -90,7 +90,7 @@ function canopies(B, F, f, y0) {
 
 /** 一层洞口边：白色弧形栏板（盖住楼板边）+ 底边暖光灯带 + 外挂花槽和垂下来的藤蔓、花。扶梯口、观光梯门前不挂花槽。 */
 function balcony(ctx, B, lv) {
-  for (const v of lv.voids.filter((x) => x.id === 'C-void' || x.id === 'SQ-void' || x.id === 'SQ-sky')) balconyEdge(ctx, B, lv, v);
+  for (const v of lv.voids.filter((x) => /^(C-void|SQ-void|SQ-sky|MEGA-void)/.test(x.id))) balconyEdge(ctx, B, lv, v);
 }
 
 function balconyEdge(ctx, B, lv, v) {
@@ -99,7 +99,7 @@ function balconyEdge(ctx, B, lv, v) {
   for (const g of ctx.layout.elevators) if (g.type === 'glass' && g.serves.includes(lv.id)) { const [x, z] = toW(g.frame, g.lu, g.lv); gaps.push([x, z, 3]); }
   const skip = (x, z) => gaps.some(([gx, gz, r]) => Math.hypot(x - gx, z - gz) < r);
   const fall = [toW(F_SQ, WATERFALL.x, WATERFALL.z0), toW(F_SQ, WATERFALL.x, WATERFALL.z1)];
-  const nearFall = (x, z) => v.id === 'SQ-void' && Math.abs(x - fall[0][0]) < 2 && z > Math.min(fall[0][1], fall[1][1]) - 1.5 && z < Math.max(fall[0][1], fall[1][1]) + 1.5;
+  const nearFall = (x, z) => (v.id === 'SQ-void' || v.square) && Math.abs(x - fall[0][0]) < 2 && z > Math.min(fall[0][1], fall[1][1]) - 1.5 && z < Math.max(fall[0][1], fall[1][1]) + 1.5;
   const rand = rng(lv.elev * 13 + 7 + v.poly.length), P = v.poly, y = lv.elev, roof = lv.kind === 'roof';
   for (let i = 0; i < P.length; i++) {
     const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);

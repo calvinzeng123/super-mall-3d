@@ -1,4 +1,5 @@
-import { rect, lrectPoly, pointInPoly, distToPolyEdge } from './geom.js';
+import clipping from 'polygon-clipping';
+import { rect, lrectPoly, pointInPoly, distToPolyEdge, polyArea } from './geom.js';
 
 const inside = (p, poly) => pointInPoly(p, poly) || distToPolyEdge(p, poly) < 1e-6;
 
@@ -47,7 +48,16 @@ export function prepareRideableElevators(layout) {
         if (!piece.holes.some(h => poly.every(q => inside(q, h)))) {
           // Nested duplicate holes make Earcut fill parts of the shaft back in.
           piece.holes = piece.holes.filter(h => !h.every(q => inside(q, poly)));
-          piece.holes.push(poly);
+          // A shaft that overlaps a bigger hole (an atrium edge) is merged into it: overlapping holes make
+          // Earcut fill slab back in elsewhere.
+          const ring = (p) => [...p, p[0]];
+          const over = piece.holes.filter(h => { try { return clipping.intersection([ring(h)], [ring(poly)]).some(m => Math.abs(polyArea(m[0].slice(0, -1))) > 1e-3); } catch { return false; } });
+          let merged = null;
+          if (over.length) { try { merged = clipping.union([ring(poly)], ...over.map(h => [ring(h)])); } catch { merged = null; } }
+          if (merged && merged.every(m => m.length === 1)) {
+            piece.holes = piece.holes.filter(h => !over.includes(h));
+            piece.holes.push(...merged.map(m => m[0].slice(0, -1)));
+          } else piece.holes.push(poly);
         }
       }
       if (hosts.length && !lv.voids.some(v => v.elevator === e.id

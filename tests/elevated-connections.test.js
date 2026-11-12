@@ -43,8 +43,9 @@ test('附楼上层与一期 3F 以上的玻璃幕墙有碰撞，门洞处仍可�
 
 // Oblique bridge ends left wedges of deck and side glass running through the
 // stone beside a narrower door; every bridge now meets its doors square.
-test('十座艺术环廊天桥都垂直进出门洞，门洞与桥面同宽，门洞上方有门楣', () => {
-  assert.equal(L.expansion.routes.length, 10);
+// 超级商业中心：P1-ART-C、P1-ART-W-RETURN 两座桥落在新楼面上，换成附楼外墙上的门，剩 8 座
+test('八座艺术环廊天桥都垂直进出门洞，门洞与桥面同宽，门洞上方有门楣', () => {
+  assert.equal(L.expansion.routes.length, 8);
   for (const r of L.expansion.routes) {
     const path = L.extensions.paths.find(p => p.id === r.id);
     const ends = [['start', path.points[0], path.points[1]], ['target', path.points.at(-1), path.points.at(-2)]];

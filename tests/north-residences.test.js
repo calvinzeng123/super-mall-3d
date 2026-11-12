@@ -60,7 +60,8 @@ test('核心筒穿过一期每个宿主楼层：用房落在核心筒矩形上�
   const want = ['B1M', '1F', '2F', '3F', '4F', '5F', '6F'].flatMap((s) => [`P1-${s}-SQ-N1`, `P1-${s}-SQ-N5`]).concat(['P1-1F-SQ-NW', 'P1-1F-SQ-N3']);
   assert.deepEqual([...L.northResidences.removedUnits].sort(), want.sort());
   // 367 − 68：云澜大中庭把方庭西侧一排、东边商铺带和中间 8 个岛铺让给了大中庭（tests/campus-deltas/p1-atrium.js）
-  assert.equal(L.levels.filter((l) => l.building === 'P1').flatMap((l) => l.units).length, 299);
+  // +17：超级商业中心洞口里的铺位让出、A/B 贴墙新铺位（tests/campus-deltas/p1-mega.js）
+  assert.equal(L.levels.filter((l) => l.building === 'P1').flatMap((l) => l.units).length, 316);
 });
 
 test('方庭北门西移至 SQ-N3：门段 x[−232,−224]，从北外环广场 (−228,−245) 走进方庭', () => {
@@ -82,7 +83,8 @@ test('一期屋面：塔楼底板下的六部商场竖向交通止于 6F，屋�
     const v = L.elevators.find((e) => e.id === id) || L.stairs.find((s) => s.id === id);
     assert.ok(!v.serves.includes('P1-RF') && v.serves.includes('P1-6F'), id);
   }
-  assert.equal(L.elevators.filter((e) => e.type === 'passenger' && e.serves.includes('P1-RF')).length, 11);
+  // 超级商业中心：西北翼两部客梯（NW-L1/L2）落在大中庭洞口里，只到 1F
+  assert.equal(L.elevators.filter((e) => e.type === 'passenger' && e.serves.includes('P1-RF')).length, 9);
   assert.equal(L.stairs.filter((s) => s.serves.includes('P1-RF')).length, 16);
   const feature = (t) => rf.features.find((f) => f.type === t);
   assert.deepEqual(feature('farm').rect, rect(-278, -222.5, -260, -211));

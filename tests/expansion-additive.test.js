@@ -12,7 +12,8 @@ import { BASE, DELTAS, EXPANSION_BASELINE } from './campus-deltas/index.js';
 
 test('剥去约定字段后，游览布局的每个记录组都与 e6948b9 相同', () => {
   const now = groupHashes(L), changed = new Set(DELTAS.flatMap((d) => d.expansionChanged || []));
-  assert.ok(Object.keys(EXPANSION_BASELINE).length >= 30);
+  // 超级商业中心（campus-deltas/p1-mega.js）有意改了 site、extensions、expansion 和两座附楼，基线组从 31 降到 26
+  assert.ok(Object.keys(EXPANSION_BASELINE).length >= 25);
   for (const [g, sha] of Object.entries(EXPANSION_BASELINE)) assert.equal(now[g], sha, `record group ${g} changed (list it in your campus-deltas expansionChanged if on purpose)`);
   for (const g of Object.keys(now)) assert.ok(g in BASE.expansionGroups || changed.has(g), `new record group ${g}`);
 });

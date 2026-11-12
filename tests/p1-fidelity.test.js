@@ -173,11 +173,13 @@ test('地面景观：两处喷泉雕塑、东南大台阶、两条行道树带�
   const sq = (x, z, h) => rectPoly(rect(x - h, z - h, x + h, z + h));
   const items = [...D.fountains.map(f => [f.id, f.poly]), [D.steps.id, D.steps.poly], ['sunken-canopy', sq(D.sculpture.x, D.sculpture.z, 1.1)],
     ...D.trees.map(t => ['tree', sq(t.x, t.z, .45)]), ['H-dropoff-planter', D.hotelLoop.planterPoly]];
+  // 超级商业中心：两处庭院喷泉所在的庭院盖成了 A、B 楼面，喷泉搬进 1F 中庭广场（f.indoor），只查室外的那些压不压建筑
+  const indoor = new Set(D.fountains.filter((f) => f.indoor).map((f) => f.id));
   for (const [id, poly] of items) {
     for (const q of solids) assert.ok(!convexOverlap(poly, q), `${id} 压坡口/路口`);
-    for (const q of outlines) assert.ok(!polysOverlap(poly, q), `${id} 压建筑`);
+    if (!indoor.has(id)) for (const q of outlines) assert.ok(!polysOverlap(poly, q), `${id} 压建筑`);
   }
-  for (const f of D.fountains) assert.ok(!standable('ground', f.x + f.r - .6, f.z), `${f.id} 可以走进水池`);
+  for (const f of D.fountains) assert.ok(!standable(f.indoor ? f.level : 'ground', f.x + f.r - .6, f.z), `${f.id} 可以走进水池`);
   const [sx, sz] = toW(D.steps.frame, (D.steps.rect.x0 + D.steps.rect.x1) / 2, (D.steps.rect.z0 + D.steps.rect.z1) / 2);
   assert.ok(!standable('ground', sx, sz), '大台阶可以穿过');
   assert.ok(!standable('ground', D.sculpture.x, D.sculpture.z), '云伞底座可以穿过');

@@ -105,8 +105,10 @@ test('public terrace doors lead onto supported open decks on all new upper main 
   }
 });
 
-test('two-floor art loop has real joined slabs and all ten bridges cross their destination door in both directions',()=>{
-  assert.equal(L.expansion.routes.length,10);
+// Mega mall (p1-mega.js): the P1-ART-C and P1-ART-W-RETURN bridges ran over the new A/B floor plates, so they are
+// replaced by doors straight through the annex walls (L.fidelity.mega.links); eight bridges remain.
+test('two-floor art loop has real joined slabs and all eight remaining bridges cross their destination door in both directions',()=>{
+  assert.equal(L.expansion.routes.length,8);
   for(const r of L.expansion.routes) {
     const path=L.extensions.paths.find(p=>p.id===r.id),a=L.entrances.find(e=>e.id===`${r.id}-start`),e=L.entrances.find(e=>e.id===`${r.id}-target`);
     const first={x:path.points[0][0]-a.nx*.7,z:path.points[0][2]-a.nz*.7,y:6.5,floor:r.from};
@@ -114,7 +116,9 @@ test('two-floor art loop has real joined slabs and all ten bridges cross their d
     const points=[first,...path.points.map(([x,y,z])=>({x,y,z})),last];
     for(const reverse of [false,true]){const route=reverse?[...points].reverse():points;let s={...route[0],slope:null};assert.ok(clear(nav,s),`${r.id} threshold blocked`);for(const p of route.slice(1))s=move(s,p);}
   }
-  const adjacency=new Map();for(const r of L.expansion.routes){if(!adjacency.has(r.from))adjacency.set(r.from,[]);adjacency.get(r.from).push(r.to);}
+  const adjacency=new Map(),link=(a,b)=>{if(!adjacency.has(a))adjacency.set(a,[]);adjacency.get(a).push(b);};
+  for(const r of L.expansion.routes)link(r.from,r.to);
+  for(const k of L.fidelity.mega.links){link(k.from,k.to);link(k.to,k.from);}
   assert.ok(adjacency.get('P1-2F').includes('P1C-2F'));assert.ok(adjacency.get('P1C-2F').includes('P1-2F'));
   assert.ok(adjacency.get('P1-2F').includes('P1W2-2F'));assert.ok(adjacency.get('P1W4-2F').includes('P1-2F'));
 });

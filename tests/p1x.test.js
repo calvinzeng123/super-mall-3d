@@ -38,9 +38,10 @@ test('方庭与西北翼铺位数量', () => {
   }
 });
 
-test('方庭 4 个人行入口均非主入口；一期 1F 仍恰有 1 个主入口', () => {
+test('方庭 3 个人行入口均非主入口；一期 1F 仍恰有 1 个主入口', () => {
   const sq = L.entrances.filter((e) => e.building === 'P1' && e.square);
-  assert.equal(sq.length, 4);
+  // 超级商业中心：方庭东门（SQ-E）外面盖成了 A 区楼面，不再是对外的门
+  assert.equal(sq.length, 3);
   assert.ok(sq.every((e) => !e.main));
   assert.ok(directionCount(sq) >= 3);
   assert.equal(L.entrances.filter((e) => e.building === 'P1' && e.level === 'P1-1F' && e.main).length, 1);

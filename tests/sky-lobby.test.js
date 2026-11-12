@@ -406,7 +406,8 @@ test('目录 / 楼层栏进 7F：落在空中大堂南门内 1.6 m（公共区�
 test('一期天台导视：方庭观光梯、方庭扶梯顶、SQ-E 电梯与五组主电梯出口都有指向空中大堂的双面牌，立杆是导航障碍物且不挡出口', () => {
   const rf = lvl('P1-RF'), signs = rf.skySigns || [];
   // 云澜大中庭：方庭 6F → 天台扶梯（SQ-P7）取消，它那块牌子也没了
-  assert.deepEqual(signs.map((s) => s.id).sort(), ['C-GE', 'C-GW', 'N', 'NW', 'SE', 'SQ-E', 'SQ-GE', 'SQ-GW', 'SQ-canopy-N', 'W'].sort());
+  // 超级商业中心：西北翼客梯（NW）只到 1F，天台上没有它的出口，牌子也没了
+  assert.deepEqual(signs.map((s) => s.id).sort(), ['C-GE', 'C-GW', 'N', 'SE', 'SQ-E', 'SQ-GE', 'SQ-GW', 'SQ-canopy-N', 'W'].sort());
   const doors = TOWERS.map((t) => [t.door, lvl(`${t.id}-7F`).spawn.z + 1.6]);
   for (const s of signs) {
     assert.equal(s.faces.length, 2, `${s.id} 不是双面牌`);

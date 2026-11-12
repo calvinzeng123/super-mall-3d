@@ -11,17 +11,21 @@ import { ATRIUM } from '../src/layout/p1-atrium.js';
 const nav = buildNav(L);
 const P1 = L.buildings.find((b) => b.id === 'P1'), F = P1.rotundas[0].kitF;
 const lvl = (id) => L.levels.find((l) => l.id === id);
+// 超级商业中心把圆厅、方庭和西北翼的洞口合成一个：原来的洞口记录在合并记录的 parts 里（rect 不变），poly 用合并后的
+const part = (lv, id) => { const v = lv.voids.find((x) => x.id === id) || lv.voids.find((x) => x.parts?.some((p) => p.id === id));
+  return v && { ...(v.parts?.find((p) => p.id === id) || v), poly: v.poly }; };
 
 test('3F–RF 的中庭洞口逐层加深（两端每层退 3 米、长边每层退 1.5–2.5 米），两部观光梯挪到 6F 洞口两端以外', () => {
   let prev = [17, 10]; // 2F 原样
   for (const [short, hx, half] of ATRIUM_STEPS) {
-    const v = lvl(`P1-${short}`).voids.find((x) => x.id === 'C-void');
+    const v = part(lvl(`P1-${short}`), 'C-void');
     assert.deepEqual([v.rect.x0, v.rect.x1, v.rect.z0, v.rect.z1], [-hx, hx, -half, half], short);
     // 天台天窗两端故意收到 ±22（沿四翼中轴能走进光穹），只检查 3F–6F 的退台
     if (short !== 'RF') { assert.ok(hx >= prev[0] && half >= prev[1], `${short} 不比下一层小`); prev = [hx, half]; }
   }
   const glass = L.elevators.filter((e) => e.type === 'glass' && e.building === 'P1' && !e.square);
-  assert.deepEqual(glass.map((g) => Math.abs(g.lu)), [30, 30]);
+  // 超级商业中心：西观光梯（GW）往外挪 4 米，给圆厅到西北翼的「颈」让路
+  assert.deepEqual(glass.map((g) => Math.abs(g.lu)), [34, 30]);
   for (const g of glass) for (const f of g.serves) assert.ok(lvl(f).voids.some((v) => v.kind === 'shaft' && pointInPoly([g.x, g.z], v.poly)), `${g.id} ${f} 没有井道`);
 });
 
@@ -59,7 +63,7 @@ import { F_SQ } from '../src/layout/square.js';
 test('方庭大中庭：2F–6F 洞口每层都比下一层大（南北每层退 2.5 米），观景台是楼板（能站人）', () => {
   let prev = null;
   for (const s of ['2F', '3F', '4F', '5F', '6F']) {
-    const lv = lvl(`P1-${s}`), v = lv.voids.find((x) => x.id === 'SQ-void'), [x0, x1, h] = SQ_STEPS[s];
+    const lv = lvl(`P1-${s}`), v = part(lv, 'SQ-void'), [x0, x1, h] = SQ_STEPS[s];
     assert.deepEqual([v.rect.x0, v.rect.x1, v.rect.z1], [x0, x1, h], s);
     if (prev) assert.ok(h - prev[2] >= 2.5 && x1 > prev[1], `${s} 没有退台`);
     prev = SQ_STEPS[s];
@@ -90,4 +94,58 @@ test('方庭大中庭：东端交叉扶梯 1F→6F 连续，每一头都走得�
   let s = landAt(nav, ...toW(F_SQ, p.x1 + 4, 0), 0.6);
   for (let i = 0; i < 80; i++) { const dx = cx - s.x, dz = cz - s.z, d = Math.hypot(dx, dz); if (d < 1e-3) break; s = step(nav, s, (dx / d) * 0.1, (dz / d) * 0.1, 0.03); }
   assert.ok(toW(F_SQ, p.x1, 0)[0] - s.x < 0.1 || Math.hypot(s.x - cx, s.z - cz) > 3, '走进了瀑布水池');
+});
+
+// ---------- 超级商业中心第一步：A、B 楼面，方庭 + 西北翼 + 圆厅一个洞口 ----------
+import { NW_FRAME, megaVoidParts } from '../src/layout/p1-mega.js';
+
+test('超级商业中心：6F 一个洞口从方庭直通圆厅（一眼望到头），2F–6F 每层都有西北翼大椭圆', () => {
+  const rc = toW(NW_FRAME, 0, 0), sc = [-220, -200];
+  const six = lvl('P1-6F').voids.find((v) => pointInPoly(rc, v.poly));
+  assert.ok(six && pointInPoly(sc, six.poly), '6F 方庭和圆厅不在同一个洞口里');
+  for (const s of ['2F', '3F', '4F', '5F', '6F']) {
+    const lv = lvl(`P1-${s}`), { oval } = megaVoidParts(s);
+    const c = oval.reduce((a, q) => [a[0] + q[0] / oval.length, a[1] + q[1] / oval.length], [0, 0]);
+    assert.ok(lv.voids.some((v) => v.kind === 'atrium' && v.mega && pointInPoly(c, v.poly)), `${s} 没有大椭圆洞口`);
+    // 楼板上对应开洞
+    assert.ok(lv.slab.pieces[0].holes.some((h) => pointInPoly(c, h)), `${s} 楼板没开洞`);
+  }
+  // 洞口逐层往外退：上一层的洞口面积比下一层大
+  const areaOf = (P) => Math.abs(P.reduce((a, p, i) => { const q = P[(i + 1) % P.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0) / 2);
+  const total = (s) => lvl(`P1-${s}`).voids.filter((v) => v.mega).reduce((n, v) => n + areaOf(v.poly), 0);
+  for (const [a, b] of [['2F', '3F'], ['3F', '4F'], ['4F', '5F'], ['5F', '6F']]) assert.ok(total(b) > total(a), `${b} 洞口不比 ${a} 大`);
+});
+
+test('超级商业中心：1F 洞口正下方没有铺位（中庭广场），两座庭院喷泉搬进广场且挡人；新铺位门口有走道', () => {
+  const lv = lvl('P1-1F'), two = lvl('P1-2F');
+  const holes = two.voids.filter((v) => v.mega).map((v) => v.poly);
+  for (const u of lv.units) for (const p of u.polys) {
+    const c = p.reduce((a, q) => [a[0] + q[0] / p.length, a[1] + q[1] / p.length], [0, 0]);
+    assert.ok(!holes.some((h) => pointInPoly(c, h)), `${u.id} 在 2F 洞口正下方`);
+  }
+  const fountains = L.fidelity.landscape.fountains.filter((f) => f.indoor);
+  assert.equal(fountains.length, 2);
+  for (const f of fountains) assert.ok(holes.some((h) => pointInPoly([f.x, f.z], h)), `${f.id} 不在中庭广场上`);
+  const mega = L.levels.flatMap((l) => l.units.filter((u) => u.mega));
+  assert.ok(mega.length >= 50, `新铺位只有 ${mega.length} 家`);
+  for (const u of mega) {
+    const f = u.wfronts[0], m = [(f.x0 + f.x1) / 2 + f.nx * 1.5, (f.z0 + f.z1) / 2 + f.nz * 1.5], l = lvl(u.level);
+    assert.equal(landAt(nav, m[0], m[1], l.elev + 0.6)?.floor, u.level, `${u.id} 门口站不住`);
+  }
+});
+
+test('超级商业中心：两座天桥换成附楼外墙上的门（2F 到艺文馆、西苑 P1W4），1F 艺文馆南门直通商场，都能双向走过', () => {
+  const links = L.fidelity.mega.links;
+  assert.deepEqual(links.map((k) => k.id).sort(), ['P1-ART-C', 'P1-ART-W-RETURN', 'P1-MEGA-P1C']);
+  assert.ok(!L.extensions.paths.some((p) => p.id === 'P1-ART-C' || p.id === 'P1-ART-W-RETURN'), '桥还在');
+  for (const k of links) {
+    const e = L.entrances.find((q) => q.id === k.doors[0]), [mx, mz] = [(e.seg.x0 + e.seg.x1) / 2, (e.seg.z0 + e.seg.z1) / 2];
+    const a = lvl(e.level), b = lvl(e.to);
+    for (const [from, to, sign] of [[a, b, 1], [b, a, -1]]) {
+      let s = landAt(nav, mx - e.nx * 2 * sign, mz - e.nz * 2 * sign, from.elev + 0.6);
+      assert.equal(s?.floor, from.id, `${k.id} ${from.id} 一侧站不住`);
+      for (let i = 0; i < 40; i++) s = step(nav, s, e.nx * 0.1 * sign, e.nz * 0.1 * sign);
+      assert.equal(s.floor, to.id, `${k.id} 从 ${from.id} 过不去`);
+    }
+  }
 });

@@ -37,7 +37,8 @@ test('一期卫生间：B1M 与 1F–6F 每层 ≥2 组，B1/B2/RF ≥1 组，�
 
 test('一期 Y 形部分（圆厅与三翼）垂直交通：观光梯 2 部；扶梯 16 对 32 部，八段都有上下行', () => {
   assert.equal(L.elevators.filter((e) => e.building === 'P1' && e.type === 'glass' && !e.square).length, 2);
-  const E = L.escalators.filter((e) => e.building === 'P1' && !e.square && e.wing !== 'NW');
+  // 西北翼（K7/K8）和超级商业中心 A 区的交叉扶梯（MEGA-X*）不算在 Y 形部分里
+  const E = L.escalators.filter((e) => e.building === 'P1' && !e.square && e.wing !== 'NW' && !/MEGA-X/.test(e.pair));
   assert.equal(E.length, 32);
   assert.equal(new Set(E.map((e) => e.pair)).size, 16);
   for (const [a, b] of [['B1', 'B1M'], ['B1M', '1F'], ['1F', '2F'], ['2F', '3F'], ['3F', '4F'], ['4F', '5F'], ['5F', '6F'], ['6F', 'RF']]) {
