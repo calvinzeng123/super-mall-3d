@@ -10,6 +10,7 @@ import { frame, toW, toL, rect, rectPoly, lrectPoly, circlePoly } from './geom.j
 import { WEST_GATE_AXIS } from './west-parking.js';
 import { BrandPicker } from './brands.js';
 import { CATEGORIES } from './constants.js';
+import { expansionFacadeWalls } from './p1-expansion.js';
 import { lseg, polysConnect } from './geom.js';
 
 export const NW_FRAME = frame(-106, -106, 225, 'P1-NW-MEGA');
@@ -255,6 +256,10 @@ export function applyP1Mega(layout) {
   for (const e of layout.elevators.filter((q) => q.id === 'P1-NW-L1' || q.id === 'P1-NW-L2')) e.serves = e.serves.filter((id) => !UPPER.some((s) => id === `P1-${s}`) && id !== 'P1-RF');
   layout.fidelity = { ...(layout.fidelity || {}), mega: { version: 1, links: [], indoorFountains: [], gaps: [], shops: 0 } };
   megaSite(layout, plaza);
+  // 3F 以上的立面导航墙按并进 A、B 以后的立面重算（原来那条西北翼外墙会把新楼面拦断）
+  for (const lv of layout.levels.filter((l) => befores[l.id] && l.expansion?.facadePolys && l.navWalls)) {
+    lv.navWalls = lv.navWalls.filter((w) => !w.facade).concat(expansionFacadeWalls(lv, layout.entrances));
+  }
   megaShops(layout, befores, plaza);
   megaIslands(layout, befores);
   for (const lv of layout.levels.filter((l) => befores[l.id])) pruneIslands(lv);
@@ -382,6 +387,8 @@ function megaShops(layout, befores, plaza) {
       ...(lv.rooms || []).flatMap((r) => r.polys || []), ...(lv.navObstacles || []).map((o) => o.poly)];
     const doors = layout.entrances.filter((e) => e.level === lv.id || e.to === lv.id).map((e) => { const [x, z] = midSeg(e.seg); return [[x - 4.5, z - 4.5], [x + 4.5, z - 4.5], [x + 4.5, z + 4.5], [x - 4.5, z + 4.5]]; });
     for (const g of M.gaps) if (g.level === lv.id) doors.push(g.poly);
+    // 1F：2F 各个洞口正下方都是中庭广场，不放铺位
+    if (lv.short === '1F') others.push(...(layout.levels.find((l) => l.id === 'P1-2F')?.voids || []).filter((v) => v.mega).map((v) => v.poly));
     // 中庭（1F 是广场）：环形店铺朝它开门
     const rings = lv.short === '1F' ? plaza.map((m) => open(m[0])) : lv.voids.filter((v) => v.mega).map((v) => v.poly);
     const strips = accessStrips(layout, lv, rings);
