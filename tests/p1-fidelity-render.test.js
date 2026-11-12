@@ -75,12 +75,25 @@ test('西里坡屋顶下 3.8m、南庭棚架下 2.6–3.7m 除周边柱外没有
 });
 
 test('庭院喷泉水面露出池沿之下，没有被实心池顶盖住', () => {
-  for (const f of L.fidelity.landscape.fountains) {
+  // 超级商业中心：搬进 1F 中庭广场的喷泉（f.indoor）画在 P1-1F 里，见下一条
+  for (const f of L.fidelity.landscape.fountains.filter((q) => !q.indoor)) {
     const a = Math.PI / 12, x = f.x + Math.cos(a) * 3, z = f.z + Math.sin(a) * 3;
     // Plaza at -0.14: water top at 0.32, rim top at 0.46.
     assert.equal(trianglesIn([tour.site.group], box(x - .15, .34, z - .15, x + .15, .6, z + .15)), 0, `${f.id} 水面被盖住`);
     assert.ok(trianglesIn([tour.site.group], box(x - .15, .25, z - .15, x + .15, .33, z + .15)) > 0, `${f.id} 没有水面`);
   }
+});
+
+test('超级商业中心：1F 中庭广场的螺旋喷泉有水面和金色缎带，棕榈、樱花树池有几何', () => {
+  const indoor = L.fidelity.landscape.fountains.filter((q) => q.indoor);
+  assert.equal(indoor.length, 2);
+  const B = [tour.levels['P1-1F'].base];
+  for (const f of indoor) {
+    assert.equal(trianglesIn([tour.site.group], box(f.x - 1, 0, f.z - 1, f.x + 1, 3, f.z + 1)), 0, `${f.id} 还画在室外`);
+    assert.ok(trianglesIn(B, box(f.x - 1.5, 4, f.z - 1.5, f.x + 1.5, 8, f.z + 1.5)) > 0, `${f.id} 没有螺旋缎带`);
+    assert.ok(trianglesIn(B, box(f.x + 2, 0.3, f.z - .3, f.x + 3, 0.5, f.z + .3)) > 0, `${f.id} 没有水面`);
+  }
+  for (const t of L.fidelity.mega.plaza.trees) assert.ok(trianglesIn(B, box(t.x - .5, 3, t.z - .5, t.x + .5, 5, t.z + .5)) > 0, `${t.id} 没有树冠/树干`);
 });
 
 test('样板中庭：1F 喷泉/树形柱、各层栏板花槽、6F 两块大屏和吊灯、天台树形柱伞顶都有几何', () => {

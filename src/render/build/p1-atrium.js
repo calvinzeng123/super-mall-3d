@@ -4,7 +4,8 @@
 // 跨楼层的东西（树形柱）按楼层切段画进各层自己的批次，楼层分开显示（爆炸视图、只看某层）时各段跟着自己那层走。
 import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN, rng } from '../textures.js';
-import { pointInPoly, lrectPoly, toW } from '../../layout/geom.js';
+import { pointInPoly, lrectPoly, toW, IDENTITY } from '../../layout/geom.js';
+import { NW_FRAME, MEGA_OVAL } from '../../layout/p1-mega.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
@@ -32,6 +33,7 @@ export function buildP1Atrium(ctx) {
   for (const p of f.palms) palm(L1.batch, F, p, lv1.elev, p.u * 7 + p.v);
   for (const s of f.lounges) lounge(L1.batch, F, s, lv1.elev);
   grandSquare(ctx, levels);
+  megaAtrium(ctx, levels);
   const top = levels.find((l) => l.id === 'P1-6F');
   if (top && rf && ctx.levels[top.id]) {
     chandeliers(ctx.levels[top.id].batch, F, rf.elev);
@@ -140,13 +142,13 @@ function balconyEdge(ctx, B, lv, v) {
 /** 螺旋雕塑喷泉：石材池沿、水面、两条绕着上升的金色/白色缎带（9 米高），一圈水柱拱向中间 */
 function fountain(B, F, p, y0) {
   B.frame(F, () => {
-    const { u, v, r } = p;
+    const { u, v, r } = p, Hs = p.H || 9;
     B.get('travertine').cyl(u, y0, v, r, 0.55, '#e8e1d4', 48);
     B.get('satin').cyl(u, y0 + 0.55, v, r + 0.05, 0.06, '#f6f3ec', 48);
     B.get('water').cyl(u, y0 + 0.02, v, r - 0.25, 0.46, '#3f86a6', 48);
     B.get('travertine').cyl(u, y0, v, 1.1, 0.75, '#ddd4c4', 32);
     // 两条缎带：从底座盘旋到 9 米，半径从 1.3 收到 0.5
-    const H = 9, turns = 2.2;
+    const H = Hs, turns = 2.2 * Hs / 9;
     for (const [phase, color, key] of [[0, GOLD, 'facadeBronze'], [Math.PI, '#eef1f2', 'metal']]) {
       let prev = null;
       for (let s = 0; s <= 64; s++) {
@@ -445,8 +447,8 @@ function waterMaterial(ctx) {
 }
 
 /** 中庭里的咖啡外摆（方庭局部坐标的一块矩形）：小吧台、木地台、四张圆桌带椅子和伞 */
-function cafe(B, r, y0) {
-  B.frame(F_SQ, () => {
+function cafe(B, r, y0, F = F_SQ) {
+  B.frame(F, () => {
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
     B.get('wood').box(cx, y0 + 0.04, cz, w, 0.08, d, '#b08b62');
     // 吧台靠一端
@@ -461,4 +463,91 @@ function cafe(B, r, y0) {
       B.get('matte').cone(x, y0 + 2.1, z, 1.15, 0.45, ['#f3ead9', '#e7d3b0', '#d9e4dc'][Math.round(fx * 10 + fz * 10) % 3], 10);
     }
   });
+}
+
+// ---------------- 超级商业中心：西北翼大中庭（布局见 layout/p1-mega.js） ----------------
+/** 1F 中庭广场：两座金色螺旋喷泉（大的 12 米）、一圈棕榈和樱花树池、喷泉外两道金色地面圆环；
+ *  大椭圆上空（6F 往上）三组金色光环吊灯。 */
+function megaAtrium(ctx, levels) {
+  const M = ctx.layout.fidelity?.mega, D = ctx.layout.fidelity?.landscape;
+  const L1 = ctx.levels['P1-1F'], lv1 = levels.find((l) => l.id === 'P1-1F');
+  if (!M || !L1 || !lv1) return;
+  const B = L1.batch, y0 = lv1.elev;
+  for (const f of (D?.fountains || []).filter((q) => q.indoor)) {
+    fountain(B, IDENTITY, { u: f.x, v: f.z, r: f.r - 0.4, H: f.r >= 6 ? 12 : 9 }, y0);
+    for (const [R, w] of [[f.r + 1.2, 0.14], [f.r + 2.2, 0.08]]) floorRing(B, f.x, f.z, R, w, y0);
+  }
+  // A、B 走道里的岛柜（粉白玻璃柜 + 灯箱顶）和咖啡外摆
+  for (const it of M.islands || []) {
+    const L = ctx.levels[it.level], lv = levels.find((l) => l.id === it.level);
+    if (!L || !lv) continue;
+    if (it.kind === 'cafe') cafe(L.batch, { x0: it.x - it.hx, x1: it.x + it.hx, z0: it.z - it.hz, z1: it.z + it.hz }, lv.elev, IDENTITY);
+    else kiosk(L.batch, it, lv.elev, it.x * 3 + it.z);
+  }
+  M.plaza?.trees.forEach((t, i) => (t.kind === 'palm' ? palm(B, IDENTITY, { u: t.x, v: t.z, r: t.r }, y0, i * 13 + 5) : blossom(B, t, y0, i)));
+  const six = levels.find((l) => l.id === 'P1-6F'), rf = levels.find((l) => l.kind === 'roof');
+  if (six && rf && ctx.levels[six.id]) {
+    const roofY = rf.elev;
+    for (const [u, R] of [[MEGA_OVAL.u - 18, 4], [MEGA_OVAL.u, 6.5], [MEGA_OVAL.u + 18, 4]]) {
+      const [x, z] = toW(NW_FRAME, u, MEGA_OVAL.v);
+      haloRing(ctx.levels[six.id].batch, x, z, R, roofY - 2.4, roofY);
+      haloRing(ctx.levels[six.id].batch, x, z, R * 0.66, roofY - 4.6, roofY);
+    }
+  }
+}
+
+function floorRing(B, x, z, R, w, y0) {
+  const n = Math.max(32, Math.round(R * 6));
+  for (let k = 0; k < n; k++) {
+    const a0 = (k / n) * Math.PI * 2, a1 = ((k + 1) / n) * Math.PI * 2;
+    B.get('facadeBronze').bar({ x: x + Math.cos(a0) * R, y: y0 + 0.012, z: z + Math.sin(a0) * R }, { x: x + Math.cos(a1) * R, y: y0 + 0.012, z: z + Math.sin(a1) * R }, w, GOLD);
+  }
+}
+
+function haloRing(B, x, z, R, y, roofY) {
+  const n = Math.max(24, Math.round(R * 8));
+  for (let k = 0; k < n; k++) {
+    const a0 = (k / n) * Math.PI * 2, a1 = ((k + 1) / n) * Math.PI * 2;
+    const p = { x: x + Math.cos(a0) * R, y, z: z + Math.sin(a0) * R }, q = { x: x + Math.cos(a1) * R, y, z: z + Math.sin(a1) * R };
+    B.get('facadeBronze').bar(p, q, 0.16, GOLD);
+    B.get('glow').bar({ ...p, y: y - 0.1 }, { ...q, y: y - 0.1 }, 0.06, WARM);
+  }
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + 0.4;
+    B.get('metal').bar({ x: x + Math.cos(a) * R, y, z: z + Math.sin(a) * R }, { x: x + Math.cos(a) * R * 0.2, y: roofY - 0.2, z: z + Math.sin(a) * R * 0.2 }, 0.012, '#9aa0a6');
+  }
+}
+
+/** 樱花树池：石材圆池、深色树干分三叉，一团团粉色花冠（低面数球） */
+function blossom(B, t, y0, seed) {
+  const rand = rng(seed * 31 + 11), { x, z, r } = t;
+  B.get('travertine').cyl(x, y0, z, r, 0.5, '#e6dfd2', 28);
+  B.get('foliage').cyl(x, y0 + 0.5, z, r - 0.08, 0.06, '#5a4632', 28);
+  for (let k = 0; k < 10; k++) {
+    const a = rand() * Math.PI * 2, d = rand() * (r - 0.3);
+    B.get('foliage').sphere(x + Math.cos(a) * d, y0 + 0.62, z + Math.sin(a) * d, 0.15, k % 3 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
+  }
+  const top = { x, y: y0 + 2.4, z };
+  B.get('wood').bar({ x, y: y0 + 0.55, z }, top, 0.2, '#5b4636');
+  const pinks = ['#f2b6c8', '#e58fb5', '#f7cfdc', '#d97aa6'];
+  for (let b = 0; b < 3; b++) {
+    const a = b * 2.1 + rand(), tip = { x: x + Math.cos(a) * 1.4, y: y0 + 3.6 + rand() * 0.6, z: z + Math.sin(a) * 1.4 };
+    B.get('wood').bar(top, tip, 0.12, '#5b4636');
+    for (let k = 0; k < 5; k++) {
+      B.get('foliage').sphere(tip.x + (rand() - 0.5) * 1.6, tip.y + (rand() - 0.2) * 0.9, tip.z + (rand() - 0.5) * 1.6, 0.7 + rand() * 0.4, pinks[(b + k) % pinks.length], 0.55 + rand() * 0.2, 0.7 + rand() * 0.3, 'ico0');
+    }
+  }
+}
+
+/** 岛柜：白色柜体、粉色或薄荷色腰带、玻璃展示台、四根细柱撑起的灯箱顶 */
+function kiosk(B, it, y0, seed) {
+  const { x, z, hx, hz } = it, tint = ['#f2b6c8', '#bfe3d4', '#f6e7a1', '#cdb8ec'][Math.abs(Math.round(seed)) % 4];
+  B.get('satin').box(x, y0 + 0.5, z, hx * 2, 1.0, hz * 2, '#f6f3ec');
+  B.get('matte').box(x, y0 + 0.75, z, hx * 2 + 0.04, 0.22, hz * 2 + 0.04, tint);
+  B.get('glass').box(x, y0 + 1.2, z, hx * 2 - 0.3, 0.4, hz * 2 - 0.3, '#ffffff');
+  B.get('glow').box(x, y0 + 1.02, z, hx * 2 - 0.4, 0.03, hz * 2 - 0.4, WARM);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.get('metal').cyl(x + sx * (hx - 0.1), y0 + 1, z + sz * (hz - 0.1), 0.04, 1.5, '#c8a25a', 6);
+  B.get('satin').box(x, y0 + 2.6, z, hx * 2 + 0.3, 0.22, hz * 2 + 0.3, '#f6f3ec');
+  B.get('glow').box(x, y0 + 2.48, z, hx * 2 + 0.1, 0.03, hz * 2 + 0.1, WARM);
+  B.get('matte').box(x, y0 + 2.6, z - hz - 0.16, hx * 2, 0.16, 0.02, tint);
 }

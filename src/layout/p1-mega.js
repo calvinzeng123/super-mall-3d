@@ -160,6 +160,13 @@ export function applyP1Mega(layout) {
       lv.units = lv.units.filter((x) => !removed.includes(x));
     }
     befores[lv.id] = before;
+    // 3F 以上的一期立面（退台的「艺术露台」外墙）也把 A、B 并进去，不然原来西北翼的外墙会画在中庭里
+    const X = lv.expansion;
+    if (X) {
+      const grow = (list) => { try { return clipping.union(...list.map((q) => [close(q)]), ...infill.map((q) => [q])).map((m) => fix(open(m[0]))); } catch { return list; } };
+      if (X.facadePolys?.length) { X.facadePolys = grow(X.facadePolys); X.facadePoly = X.facadePolys.slice().sort((a, b) => Math.abs(area(b)) - Math.abs(area(a)))[0]; }
+      if (X.floorPolys?.length) X.floorPolys = grow(X.floorPolys);
+    }
     // 楼板：只改主楼板（外轮廓那一块）；其它块（楼梯薄平台、连廊、车库小厅等）原样保留。
     // 主楼板上的洞：原圆厅、方庭洞口换成合并后的洞口，其余（井道、扶梯开洞、塔楼底板）留着
     const pieces = lv.slab?.pieces || [];
@@ -199,6 +206,7 @@ export function applyP1Mega(layout) {
   layout.fidelity = { ...(layout.fidelity || {}), mega: { version: 1, links: [], indoorFountains: [], gaps: [], shops: 0 } };
   megaSite(layout, plaza);
   megaShops(layout, befores);
+  megaIslands(layout, befores);
   for (const lv of layout.levels.filter((l) => befores[l.id])) pruneIslands(lv);
   return layout;
 }
@@ -268,6 +276,24 @@ function megaSite(layout, plaza) {
     fc.obstacles = fc.obstacles.filter((o) => o.id !== f.id);
     (lv1.navObstacles ||= []).push({ id: `P1-mega-${f.id}`, poly: f.poly });
     M.indoorFountains.push(f.id);
+  }
+  // 1F 中庭广场：原来西北翼走道的地毯条去掉（一整片广场铺地）；喷泉周围一圈棕榈、樱花树池（导航障碍），中间留出 4 米以上的口子
+  for (const w of lv1.walk) if (w.rect && overlapArea(w.poly, plaza) > 1) { w.rect = undefined; w.plaza = true; }
+  const fountains = (D?.fountains || []).filter((f) => f.indoor);
+  const blocked = [...lv1.units.flatMap((x) => x.polys), ...keepOuts(layout, lv1), ...(lv1.rooms || []).flatMap((r) => r.polys || [])];
+  M.plaza = { trees: [] };
+  for (const f of fountains) {
+    const R = f.r + 3.4, n = 8;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.2, x = f.x + Math.cos(a) * R, z = f.z + Math.sin(a) * R, r = 1.4;
+      const poly = circlePoly(x, z, r, 16);
+      if (!plaza.some((m) => inside([x, z], open(m[0])))) continue;
+      if (blocked.some((b) => hit(poly, b))) continue;
+      if ((lv1.navObstacles || []).some((o) => hit(poly, o.poly))) continue;
+      const kind = i % 2 ? 'blossom' : 'palm';
+      M.plaza.trees.push({ id: `P1-mega-${kind}-${M.plaza.trees.length}`, kind, x, z, r });
+      lv1.navObstacles.push({ id: `P1-mega-${kind}-${M.plaza.trees.length - 1}`, poly });
+    }
   }
   // ---- 西门挪到 B 西墙
   const W = layout.expansion.westArrival, e = W && ent(W.entry);
@@ -355,4 +381,37 @@ function pruneIslands(lv) {
   const size = new Array(c).fill(0), cut = new Array(c).fill(true);
   W.forEach((w, i) => { size[comp[i]] += Math.abs(area(w.poly)); if (!(w.mega || /-m\d+$|-s\d+-\d+$/.test(w.id))) cut[comp[i]] = false; });
   lv.walk = W.filter((w, i) => !(cut[comp[i]] && size[comp[i]] < 40));
+}
+
+/** A、B 宽走道里的岛：每层最多 2 个岛柜（3×2 米）和 1 处咖啡外摆（7×5 米）。岛四周外扩 3.5 米（咖啡 3 米）都得是走道，
+ *  不碰铺位、洞口、楼梯电梯扶梯、门、别的障碍；两岛相距 ≥ 14 米。都是 navObstacles，画在 render/build/p1-atrium.js。 */
+function megaIslands(layout, befores) {
+  const M = layout.fidelity.mega, xs = [...INFILL.A, ...INFILL.B].map((p) => p[0]), zs = [...INFILL.A, ...INFILL.B].map((p) => p[1]);
+  M.islands = [];
+  const box = (x, z, hx, hz) => [[x - hx, z - hz], [x + hx, z - hz], [x + hx, z + hz], [x - hx, z + hz]];
+  for (const lv of layout.levels.filter((l) => l.building === 'P1' && ['1F', ...UPPER].includes(l.short) && befores[l.id])) {
+    const walks = lv.walk.filter((w) => w.mega);
+    const onWalk = (q) => walks.some((w) => inside(q, w.poly));
+    const blocked = [...lv.units.flatMap((u) => u.polys), ...lv.voids.map((v) => v.poly), ...keepOuts(layout, lv), ...(lv.rooms || []).flatMap((r) => r.polys || []),
+      ...(lv.navObstacles || []).map((o) => o.poly), ...M.gaps.filter((g) => g.level === lv.id).map((g) => g.poly),
+      ...layout.entrances.filter((e) => e.level === lv.id || e.to === lv.id).map((e) => { const [x, z] = midSeg(e.seg); return box(x, z, 5, 5); })];
+    const placed = [];
+    const want = [['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5]];
+    for (const [kind, hx, hz, m] of want) {
+      let best = null;
+      for (let x = Math.min(...xs) + 4; x < Math.max(...xs) - 4; x += 3) for (let z = Math.min(...zs) + 4; z < Math.max(...zs) - 4; z += 3) {
+        if (!inInfill([x, z]) || placed.some((p) => Math.hypot(p.x - x, p.z - z) < 14)) continue;
+        const clearBox = box(x, z, hx + m, hz + m);
+        if (![...clearBox, [x, z]].every(onWalk)) continue;
+        if (blocked.some((b) => hit(clearBox, b))) continue;
+        // 离 A、B 中心近的优先（走道最宽的地方），A、B 轮流
+        const score = Math.min(...[[-135, -185], [-190, -130]].map(([cx, cz]) => Math.hypot(x - cx, z - cz)));
+        if (!best || score < best.score) best = { x, z, score };
+      }
+      if (!best) continue;
+      const it = { id: `${lv.id}-mega-${kind}-${placed.length}`, kind, level: lv.id, x: best.x, z: best.z, hx, hz, poly: box(best.x, best.z, hx, hz) };
+      placed.push(it); M.islands.push(it);
+      (lv.navObstacles ||= []).push({ id: it.id, poly: it.poly });
+    }
+  }
 }

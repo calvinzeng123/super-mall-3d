@@ -14,7 +14,8 @@ export function buildP1Landscape(ctx) {
   const D = ctx.layout.fidelity.landscape;
   if (!D) return;
   const B = ctx.site.batch, y = -0.14, trees = [];
-  for (const f of D.fountains) courtFountain(B, f, y);
+  // 超级商业中心：搬进 1F 中庭广场的喷泉由 p1-atrium.js 画成螺旋喷泉
+  for (const f of D.fountains) if (!f.indoor) courtFountain(B, f, y);
   if (D.steps) seatingSteps(B, D.steps, y, trees);
   for (const t of D.trees) {
     B.get('ext').box(t.x, y + .03, t.z, 1.7, .06, 1.7, '#4a4d4c');
