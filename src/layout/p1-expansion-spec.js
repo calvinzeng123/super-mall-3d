@@ -1,4 +1,5 @@
 // Preserve the legacy P1 spec for the compact FPS while tour expands vertically.
+import { MEGA_OVAL } from './p1-mega.js';
 import { KIT } from './constants.js';
 import { grandSquareEscalators, grandSquareSetup, grandSquareLevel } from './square-atrium.js';
 import { frame, toW, toL } from './geom.js';
@@ -47,9 +48,11 @@ export function buildExpandedP1Spec(original) {
   // 超级商业中心（p1-mega.js）：西北翼变成大中庭，原来的 K7/K8 去掉，A 里加一组交叉扶梯（1F→6F，两道 v=44/48 交替）
   const nwF = frame(-106, -106, 225, 'P1-NW-MEGA');
   spec.escalators = spec.escalators.filter((e) => !['K7', 'K8'].includes(e.pair));
-  [['1F', '2F'], ['2F', '3F'], ['3F', '4F'], ['4F', '5F'], ['5F', '6F']].forEach(([from, to], i) => {
-    const sign = i % 2 ? 1 : -1;
-    spec.escalators.push({ pair: `MEGA-X${i + 1}`, frame: nwF, from, to, axis: 'x', sign, cross: i % 2 ? 48 : 44, slot: true, label: `中庭 ${from} ↔ ${to}`, ...(sign < 0 ? { top: 60 } : { bottom: 60 }) });
+  // 第二轮：扶梯改成从每层洞口边往外爬的「退台扶梯」——下端站在本层回退出来的楼板上（离本层洞口边 3.5 米），
+  // 沿西北翼局部 v 方向（背离中庭）升到上一层，上一层楼板开扶梯洞；两组在 u=76/88 左右交替，从中庭看是一级级往上爬的扶梯
+  [['1F', '2F', 10], ['2F', '3F', 14], ['3F', '4F', 18], ['4F', '5F', 22], ['5F', '6F', 26]].forEach(([from, to, b], i) => {
+    const cross = i % 2 ? 88 : 76, edge = MEGA_OVAL.v + b * Math.sqrt(1 - ((cross - MEGA_OVAL.u) / (MEGA_OVAL.steps[to][0] - 4)) ** 2);
+    spec.escalators.push({ pair: `MEGA-X${i + 1}`, frame: nwF, from, to, axis: 'z', sign: 1, cross, slot: true, megaCascade: true, label: `中庭 ${from} ↔ ${to}`, bottom: edge + 3.5 });
   });
   spec.square = { ...spec.square, setup: grandSquareSetup, level: grandSquareLevel };
   // 观光梯挪到洞口外面以后，2F–6F 也要在楼板上开井道

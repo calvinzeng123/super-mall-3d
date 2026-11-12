@@ -134,12 +134,13 @@ function grow(P, m) {
 }
 const boxAround = (pts, m) => { const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]); const x0 = Math.min(...xs) - m, x1 = Math.max(...xs) + m, z0 = Math.min(...zs) - m, z1 = Math.max(...zs) + m; return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]; };
 /** 这一层要留出来的楼梯、电梯、扶梯范围（外扩：楼梯 3 米、电梯 3.5 米、扶梯 3 米） */
-function keepOuts(layout, lv) {
+function keepOuts(layout, lv, { forVoid = false } = {}) {
   const out = [];
   for (const s of layout.stairs || []) if (s.poly && (s.serves || []).includes(lv.id)) out.push(grow(s.poly, 3));
   for (const e of layout.elevators || []) if ((e.serves || []).includes(lv.id)) { const p = e.shaftPoly || (e.frame && e.w ? [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => toW(e.frame, e.lu + (a * e.w) / 2, e.lv + (b * e.d) / 2)) : null); if (p) out.push(grow(p, 3.5)); }
   // 扶梯：沿梯身的斜矩形（两边各 1.5 米，两头各留 3 米梯口），不用外接方框（45° 的翼楼里外接方框大得多）
-  for (const e of layout.escalators || []) if (e.from === lv.id || e.to === lv.id) {
+  // 中庭退台扶梯（MEGA-X）本来就是从洞口里往上爬的：开洞时不躲它们（扶梯洞另算）
+  for (const e of layout.escalators || []) if ((e.from === lv.id || e.to === lv.id) && !(forVoid && /MEGA-X/.test(e.pair))) {
     const ax = e.top.x - e.bottom.x, az = e.top.z - e.bottom.z, L = Math.hypot(ax, az) || 1, ux = ax / L, uz = az / L, h = 1.5 + (e.width || 1.2) / 2;
     const a = [e.bottom.x - ux * 3, e.bottom.z - uz * 3], b = [e.top.x + ux * 3, e.top.z + uz * 3];
     out.push([[a[0] - uz * h, a[1] + ux * h], [b[0] - uz * h, b[1] + ux * h], [b[0] + uz * h, b[1] - ux * h], [a[0] + uz * h, a[1] - ux * h]]);
@@ -151,7 +152,7 @@ function keepOuts(layout, lv) {
 function addedVoid(layout, lv) {
   const { oval, neck, throat } = megaVoidParts(lv.short);
   let added = clipping.union([[close(oval)]], [[close(neck)]], [[close(throat)]]);
-  for (const k of keepOuts(layout, lv)) { try { added = clipping.difference(added, [[close(k)]]); } catch { /* 跳过 */ } }
+  for (const k of keepOuts(layout, lv, { forVoid: true })) { try { added = clipping.difference(added, [[close(k)]]); } catch { /* 跳过 */ } }
   return added;
 }
 /** 布尔运算前坐标取整到 0.1 mm；算完把落在原有顶点 0.3 mm 内的点还原成原值（门洞、连廊端头要和楼板边严丝合缝） */
@@ -261,6 +262,7 @@ export function applyP1Mega(layout) {
     lv.navWalls = lv.navWalls.filter((w) => !w.facade).concat(expansionFacadeWalls(lv, layout.entrances));
   }
   megaShops(layout, befores, plaza);
+  megaSideFronts(layout);
   megaIslands(layout, befores);
   for (const lv of layout.levels.filter((l) => befores[l.id])) pruneIslands(lv);
   return layout;
@@ -509,6 +511,23 @@ function megaIslands(layout, befores) {
       const it = { id: `${lv.id}-mega-${kind}-${placed.length}`, kind, level: lv.id, x: best.x, z: best.z, hx, hz, poly: box(best.x, best.z, hx, hz), seed: placed.length };
       placed.push(it); M.islands.push(it);
       (lv.navObstacles ||= []).push({ id: it.id, poly: it.poly });
+    }
+  }
+}
+
+/** 新铺位两侧如果对着走道（不是贴着别的铺位或墙），侧面也做成玻璃店面：
+ *  效果图里的店都是通透的玻璃盒子，侧面露出来的白墙看着像没做完。 */
+function megaSideFronts(layout) {
+  for (const lv of layout.levels.filter((l) => l.building === 'P1')) {
+    const walkAt = (q) => lv.walk.some((w) => inside(q, w.poly)) && !lv.units.some((u) => u.polys.some((p) => inside(q, p)));
+    for (const u of lv.units.filter((x) => x.mega)) {
+      const r = u.rects[0];
+      for (const [side, x] of [['W', r.x0], ['E', r.x1]]) {
+        const out = side === 'W' ? -1.2 : 1.2, probes = [0.3, 0.5, 0.7].map((t) => toW(u.frame, x + out, r.z0 + (r.z1 - r.z0) * t));
+        if (!probes.every(walkAt)) continue;
+        const f = { x0: x, z0: r.z0, x1: x, z1: r.z1, side };
+        u.fronts.push(f); u.wfronts.push(lseg(u.frame, f));
+      }
     }
   }
 }

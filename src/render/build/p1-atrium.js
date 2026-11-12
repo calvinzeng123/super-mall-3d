@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN, rng } from '../textures.js';
 import { pointInPoly, lrectPoly, toW, IDENTITY } from '../../layout/geom.js';
 import { NW_FRAME, MEGA_OVAL } from '../../layout/p1-mega.js';
+import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
@@ -480,6 +481,20 @@ function megaAtrium(ctx, levels) {
   for (const f of (D?.fountains || []).filter((q) => q.indoor)) {
     fountain(B, IDENTITY, { u: f.x, v: f.z, r: f.r - 0.4, H: f.r >= 6 ? 12 : 9 }, y0);
     for (const [R, w] of [[f.r + 1.2, 0.14], [f.r + 2.2, 0.08]]) floorRing(B, f.x, f.z, R, w, y0);
+  }
+  // 新楼面天花：沿西北翼方向的暖光灯带（3 米一条，6 米一行），只挂在头顶真有楼板的地方
+  for (let i = 0; i < levels.length - 1; i++) {
+    const lv = levels[i], up = levels[i + 1], L = ctx.levels[lv.id];
+    if (!L || !/^[1-6]F$/.test(lv.short)) continue;
+    const y = up.elev - (SLAB_T[up.kind] ?? 0.45) - 0.03, walks = lv.walk.filter((w) => w.mega);
+    const holes = up.voids.map((v) => v.poly);
+    for (let u = 20; u <= 130; u += 6) for (let v = -80; v <= 80; v += 6) {
+      const [x, z] = toW(NW_FRAME, u, v);
+      if (!walks.some((w) => pointInPoly([x, z], w.poly)) || holes.some((h) => pointInPoly([x, z], h))) continue;
+      const a = toW(NW_FRAME, u - 1.5, v), b = toW(NW_FRAME, u + 1.5, v);
+      if (holes.some((h) => pointInPoly(a, h) || pointInPoly(b, h))) continue;
+      L.batch.get('glowSoft').bar({ x: a[0], y, z: a[1] }, { x: b[0], y, z: b[1] }, 0.09, '#ffe2b8');
+    }
   }
   // A、B 走道里的岛柜（粉白玻璃柜 + 灯箱顶）和咖啡外摆
   for (const it of M.islands || []) {
