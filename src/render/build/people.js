@@ -21,7 +21,8 @@ export async function buildPeople(ctx) {
     if (!paths.length) continue;
     // 一期样板中庭的几层人多一些（预想图里中庭人很多）；手机按画质的人群密度再打折
     const busy = lv.building === 'P1' && lv.kind === 'retail' && ctx.layout.fidelity?.atrium;
-    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? 120 : COUNT[lv.kind] || 20;
+    // 超级商业中心（一期并进 A、B 两块楼面）每层再多 80 人
+    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 200 : 120) : COUNT[lv.kind] || 20;
     const variants = assets.map(asset => {
       const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, count);
       mesh.name = `textured-people-${lv.id}-${asset.id}`;

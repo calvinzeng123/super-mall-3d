@@ -100,6 +100,7 @@ function balconyEdge(ctx, B, lv, v) {
   for (const e of ctx.layout.escalators) for (const end of [[e.top, e.to], [e.bottom, e.from]]) if (end[1] === lv.id) gaps.push([end[0].x, end[0].z, 4.2]);
   for (const g of ctx.layout.elevators) if (g.type === 'glass' && g.serves.includes(lv.id)) { const [x, z] = toW(g.frame, g.lu, g.lv); gaps.push([x, z, 3]); }
   const skip = (x, z) => gaps.some(([gx, gz, r]) => Math.hypot(x - gx, z - gz) < r);
+  const inUnit = (x, z) => lv.units.some((u) => u.polys.some((q) => pointInPoly([x, z], q))) || lv.voids.some((q) => pointInPoly([x, z], q.poly));
   const fall = [toW(F_SQ, WATERFALL.x, WATERFALL.z0), toW(F_SQ, WATERFALL.x, WATERFALL.z1)];
   const nearFall = (x, z) => (v.id === 'SQ-void' || v.square) && Math.abs(x - fall[0][0]) < 2 && z > Math.min(fall[0][1], fall[1][1]) - 1.5 && z < Math.max(fall[0][1], fall[1][1]) + 1.5;
   const rand = rng(lv.elev * 13 + 7 + v.poly.length), P = v.poly, y = lv.elev, roof = lv.kind === 'roof';
@@ -116,6 +117,9 @@ function balconyEdge(ctx, B, lv, v) {
       // 栏板：楼板边包一圈白色弧面（0.9 米高），底下一条暖光
       B.get('satin').box(mx + nx * 0.1, y - 0.42, mz + nz * 0.1, pl, 0.88, 0.16, WHITE, ang);
       B.get('glow').box(mx + nx * 0.19, y - 0.84, mz + nz * 0.19, pl, 0.045, 0.03, WARM, ang);
+      // 地面上一条跟着栏板走的暖光线（离栏板 2.2 米），扶梯口、观光梯门前、铺位里不画
+      const gx = mx - nx * 2.2, gz = mz - nz * 2.2;
+      if (!roof && v.mega && !skip(gx, gz) && !inUnit(gx, gz)) B.get('glow').box(gx, y + 0.012, gz, pl, 0.012, 0.08, WARM, ang);
       if (roof || skip(mx, mz) || nearFall(mx, mz)) continue;
       // 花槽挂在栏板外侧：浅色槽身、上面一排鼓起来的灌木团，几串小叶子垂下来，偶尔开花
       B.get('matte').box(mx + nx * 0.34, y - 0.2, mz + nz * 0.34, pl, 0.26, 0.28, '#ece8df', ang);

@@ -33,6 +33,36 @@ const W3 = (F, u, v, y) => {
   return [x, y, z];
 };
 
+/** 超级商业中心（layout/p1-mega.js）：沿大洞口栏板往后 3 米的回游线（落在走道上、不进铺位的连续段），
+ *  1F 广场两座喷泉外各一圈，再加一条从方庭到圆厅的中轴线。 */
+function megaPaths(layout, P) {
+  const M = layout.fidelity?.mega;
+  if (!M) return;
+  const onWalk = (lv, p) => lv.walk.some((w) => pointInPoly(p, w.poly)) && !lv.units.some((u) => u.polys.some((q) => pointInPoly(p, q)))
+    && !(lv.navObstacles || []).some((o) => pointInPoly(p, o.poly)) && !lv.voids.some((v) => pointInPoly(p, v.poly));
+  for (const lv of layout.levels.filter((l) => l.building === 'P1' && l.kind !== 'roof')) {
+    const y = lv.elev + 0.07;
+    for (const v of lv.voids.filter((q) => q.mega)) {
+      const pts = [], Q = v.poly;
+      for (let i = 0; i < Q.length; i++) {
+        const a = Q[i], b = Q[(i + 1) % Q.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 1e-6) continue;
+        let nx = -(b[1] - a[1]) / len, nz = (b[0] - a[0]) / len;
+        const mid = [(a[0] + b[0]) / 2 + nx * 0.3, (a[1] + b[1]) / 2 + nz * 0.3];
+        if (pointInPoly(mid, Q)) { nx = -nx; nz = -nz; }
+        for (let t = 0; t < len; t += 2) pts.push([a[0] + (b[0] - a[0]) * (t / len) + nx * 3, a[1] + (b[1] - a[1]) * (t / len) + nz * 3]);
+      }
+      let run = [];
+      const flush = () => { if (run.length >= 6) P(lv.id).people.push({ loop: false, pts: run.map(([x, z]) => [x, y, z]), name: '中庭回游线' }); run = []; };
+      for (const p of pts) { if (onWalk(lv, p) && (!run.length || Math.hypot(p[0] - run.at(-1)[0], p[1] - run.at(-1)[1]) < 4)) run.push(p); else flush(); }
+      flush();
+    }
+  }
+  const lv1 = layout.levels.find((l) => l.id === 'P1-1F'), D = layout.fidelity.landscape;
+  if (!lv1) return;
+  for (const f of (D?.fountains || []).filter((q) => q.indoor)) P(lv1.id).people.push({ loop: true, pts: ring(f.x, f.z, f.r + 0.9, lv1.elev + 0.07, 28), name: '喷泉环' });
+}
+
 export function levelPaths(layout) {
   const out = {};
   const P = (id) => (out[id] = out[id] || { people: [], vehicle: [], goods: [] });
@@ -81,6 +111,7 @@ export function levelPaths(layout) {
       }
     }
   }
+  megaPaths(layout, P);
   // 扶梯：上行沿斜面向上，下行向下
   for (const e of layout.escalators) {
     const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z);
