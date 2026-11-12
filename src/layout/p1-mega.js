@@ -125,6 +125,8 @@ const bboxHit = (p, [x0, z0, x1, z1]) => p.some(([x, z]) => x >= x0 && x <= x1 &
 const inside = ([x, z], P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, zi] = P[i], [xj, zj] = P[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; };
 const hit = (a, b) => clipping.intersection([[close(a)]], [[close(b)]]).length > 0;
 
+/** 多边形往里收 m 米（凸多边形，判相邻是否真的压上用） */
+const shrink = (P, m) => grow(P, -m);
 const boxOf = (P, m) => { const xs = P.map((p) => p[0]), zs = P.map((p) => p[1]); return [Math.min(...xs) - m, Math.min(...zs) - m, Math.max(...xs) + m, Math.max(...zs) + m]; };
 /** 凸多边形（楼梯、井道都是斜放的矩形）往外扩 m 米：每条边平移后相邻两条求交 */
 function grow(P, m) {
@@ -413,7 +415,7 @@ function megaShops(layout, befores, plaza) {
       M.shops++;
     };
     const clashes = (poly) => others.some((h) => hit(poly, h)) || doors.some((h) => hit(poly, h)) || strips.some((h) => hit(poly, h))
-      || lv.units.some((x) => x.polys.some((p) => overlapArea(poly, [[close(p)]]) > 0.05));
+      || lv.units.some((x) => x.polys.some((p) => hit(shrink(poly, 0.05), p)));
     const inFloor = (F, r) => [0.05, 0.5, 0.95].every((t) => [r.z0 + 0.3, (r.z0 + r.z1) / 2, r.z1 - 0.3].every((v) => { const q = toW(F, r.x0 + (r.x1 - r.x0) * t, v); return inside(q, lv.outline) && (inInfill(q) || inBand(q) || megaZone(q)); }));
     // ① 环形店铺：沿中庭边每 9 米一间，门脸离洞口 7 米（回游走廊），进深尽量做深（16 → 10 米）
     const RC = MEGA_RING.corridor;

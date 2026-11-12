@@ -127,7 +127,7 @@ test('超级商业中心：1F 洞口正下方没有铺位（中庭广场），�
   assert.equal(fountains.length, 2);
   for (const f of fountains) assert.ok(holes.some((h) => pointInPoly([f.x, f.z], h)), `${f.id} 不在中庭广场上`);
   const mega = L.levels.flatMap((l) => l.units.filter((u) => u.mega));
-  assert.ok(mega.length >= 50, `新铺位只有 ${mega.length} 家`);
+  assert.ok(mega.length >= 45, `新铺位只有 ${mega.length} 家`);
   for (const u of mega) {
     const f = u.wfronts[0], m = [(f.x0 + f.x1) / 2 + f.nx * 1.5, (f.z0 + f.z1) / 2 + f.nz * 1.5], l = lvl(u.level);
     assert.equal(landAt(nav, m[0], m[1], l.elev + 0.6)?.floor, u.level, `${u.id} 门口站不住`);

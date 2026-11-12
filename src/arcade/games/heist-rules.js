@@ -60,7 +60,9 @@ export function patrolEdges(nodes, trace, k = 6, maxLen = 70) {
 
 /** 给 n 名保安挑起点：只在有边的点里挑，彼此尽量远。 */
 export function patrolStarts(nodes, adj, rng, n) {
-  const pool = nodes.map((_, i) => i).filter((i) => adj[i].length);
+  // 先从至少连着两条巡逻边的点里挑（只连一条的点走两步就到头，巡逻线太短）
+  const linked = nodes.map((_, i) => i).filter((i) => adj[i].length >= 2);
+  const pool = linked.length >= n ? linked : nodes.map((_, i) => i).filter((i) => adj[i].length);
   if (!pool.length) return [];
   const chosen = [pool.splice(Math.floor(rng() * pool.length), 1)[0]];
   while (chosen.length < n && pool.length) {
@@ -78,8 +80,10 @@ export function patrolStarts(nodes, adj, rng, n) {
 export function patrolLoop(nodes, adj, start, legs = 4) {
   const path = [start], seen = new Set([start]);
   while (path.length <= legs) {
+    // 优先去还能接着往下走的邻点（死胡同放最后），同样能走的里挑离起点最远的
+    const onward = (j) => adj[j].some((k) => !seen.has(k) && k !== j);
     const next = adj[path.at(-1)].filter((j) => !seen.has(j))
-      .sort((p, q) => dist(nodes[q], nodes[start]) - dist(nodes[p], nodes[start]))[0];
+      .sort((p, q) => (onward(q) - onward(p)) || dist(nodes[q], nodes[start]) - dist(nodes[p], nodes[start]))[0];
     if (next == null) break;
     path.push(next); seen.add(next);
   }
