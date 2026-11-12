@@ -119,7 +119,7 @@ function balconyEdge(ctx, B, lv, v) {
       B.get('glow').box(mx + nx * 0.19, y - 0.84, mz + nz * 0.19, pl, 0.045, 0.03, WARM, ang);
       // 地面上一条跟着栏板走的暖光线（离栏板 2.2 米），扶梯口、观光梯门前、铺位里不画
       const gx = mx - nx * 2.2, gz = mz - nz * 2.2;
-      if (!roof && v.mega && !skip(gx, gz) && !inUnit(gx, gz)) B.get('glow').box(gx, y + 0.012, gz, pl, 0.012, 0.08, WARM, ang);
+      if (!roof && v.mega && !skip(gx, gz) && !inUnit(gx, gz)) B.get('glowSoft').box(gx, y + 0.008, gz, pl, 0.006, 0.045, '#ffe6bf', ang);
       if (roof || skip(mx, mz) || nearFall(mx, mz)) continue;
       // 花槽挂在栏板外侧：浅色槽身、上面一排鼓起来的灌木团，几串小叶子垂下来，偶尔开花
       B.get('matte').box(mx + nx * 0.34, y - 0.2, mz + nz * 0.34, pl, 0.26, 0.28, '#ece8df', ang);
