@@ -25,6 +25,13 @@ export const MEGA_OVAL = { u: 82, v: 11, steps: { '2F': [26, 14], '3F': [30, 18]
 /** 圆厅到大椭圆的「颈」：u 20–52，半宽（避开北翼口袋楼梯 v≥13.6） */
 export const MEGA_NECK = { u0: 20, u1: 52, steps: { '2F': 6, '3F': 7.5, '4F': 9, '5F': 10.5, '6F': 12 } };
 /** 方庭到大椭圆的「喉」（方庭局部坐标，原点 (−220,−200)）：从方庭洞口东端斜着接到椭圆西北头，半宽每层 +1.5 米，2F 起每层都连通 */
+/** 东南翼采光长廊（东南翼局部坐标：原点圆厅圆心、u 沿 45° 朝东南主入口）：u 26–74 一条圆头长洞口接上圆厅，
+ *  半宽每层 +1.5 米（2F 5 → 6F 11）。从东南主入口经圆厅、颈、大椭圆、喉到方庭一条线 */
+export const SE_FRAME = frame(-106, -106, 45, 'P1-SE-MEGA');
+export const SE_GALLERIA = { u0: 26, u1: 74, steps: { '2F': 5, '3F': 6.5, '4F': 8, '5F': 9.5, '6F': 11 } };
+/** 西翼退台长廊（西翼 165°，u 26–84），和 B 区、酒店连廊连成一片；步距同东南翼 */
+export const W_FRAME = frame(-106, -106, 165, 'P1-W-MEGA');
+export const W_GALLERIA = { u0: 26, u1: 70, steps: SE_GALLERIA.steps };
 export const MEGA_THROAT = { x0: 24, x1: 50, z1: 10, steps: { '2F': 5, '3F': 6.5, '4F': 8, '5F': 9.5, '6F': 11 } };
 /** 1F 中庭广场上两座喷泉的位置（西北翼局部 u、v：大椭圆中轴上） */
 export const MEGA_FOUNTAINS = [[68, 9], [96, 9]];
@@ -106,7 +113,11 @@ export function megaVoidParts(short) {
   const neck = [[MEGA_NECK.u0, -h], [MEGA_NECK.u1, -h], [MEGA_NECK.u1, h], [MEGA_NECK.u0, h]].map(([u, v]) => nw(u, v));
   const t = MEGA_THROAT, th = t.steps[short], sq = ([x, z]) => [x - 220, z - 200];
   const throat = [[t.x0, -th], [t.x1, t.z1 - th], [t.x1, t.z1 + th], [t.x0, th]].map(sq);
-  return { oval, neck, throat };
+  // 东南翼长廊：两头半圆
+  const stadium = (g, F) => { const gh = g.steps[short], arc = (cu, a0) => Array.from({ length: 13 }, (_, i) => { const a = a0 + (i / 12) * Math.PI; return [cu + Math.cos(a) * gh, Math.sin(a) * gh]; });
+    return [...arc(g.u1 - gh, -Math.PI / 2), ...arc(g.u0 + gh, Math.PI / 2)].map(([u, v]) => toW(F, u, v)); };
+  const galleria = stadium(SE_GALLERIA, SE_FRAME), west = stadium(W_GALLERIA, W_FRAME);
+  return { oval, neck, throat, galleria, west };
 }
 
 /** 多边形集合 → 不带洞的简单多边形（带洞的块从洞的中线竖切开） */
@@ -152,8 +163,8 @@ function keepOuts(layout, lv, { forVoid = false } = {}) {
 
 /** 这一层新加的洞口（椭圆 ∪ 颈 − 楼梯、电梯、扶梯留出的范围） */
 function addedVoid(layout, lv) {
-  const { oval, neck, throat } = megaVoidParts(lv.short);
-  let added = clipping.union([[close(oval)]], [[close(neck)]], [[close(throat)]]);
+  const { oval, neck, throat, galleria, west } = megaVoidParts(lv.short);
+  let added = clipping.union([[close(oval)]], [[close(neck)]], [[close(throat)]], [[close(galleria)]], [[close(west)]]);
   for (const k of keepOuts(layout, lv, { forVoid: true })) { try { added = clipping.difference(added, [[close(k)]]); } catch { /* 跳过 */ } }
   return added;
 }
@@ -182,7 +193,7 @@ export function applyP1Mega(layout) {
     const merged = clipping.union([[close(lv.outline)]], ...infill.map((p) => [p]));
     const fix = unsnapper([before], [INFILL.A, INFILL.B], lv.walk.map((w) => w.poly), lv.units.flatMap((x) => x.polys), lv.voids.map((v) => v.poly));
     lv.outline = fix(open(merged.sort((x, y) => Math.abs(area(open(y[0]))) - Math.abs(area(open(x[0]))))[0][0]));
-    let holes = [], removed = [], oldVoidPolys = [];
+    let holes = [], removed = [], oldVoidPolys = [], freed = [];
     if (UPPER.includes(lv.short)) {
       const old = lv.voids.filter((v) => v.id === 'C-void' || v.id === 'SQ-void');
       oldVoidPolys = old.map((v) => v.poly);
@@ -205,6 +216,21 @@ export function applyP1Mega(layout) {
         holes.push(poly);
       });
       const poly = holes[0];
+      // 东南翼、西翼两侧铺位：长廊变宽以后店面往后退（门脸离洞口 4 米），剩下的进深 ≥ 7 米就留着，让出来的那条变成走道
+      for (const [wing, g] of [['SE', SE_GALLERIA], ['W', W_GALLERIA]]) {
+        const hw = g.steps[lv.short] + 4;
+        for (const x of lv.units.filter((q) => q.wing === wing && q.rects?.length === 1 && !q.mega)) {
+          const r = x.rects[0];
+          if (r.x1 <= g.u0 || r.x0 >= g.u1) continue;
+          const north = r.z0 >= 0, nr = north ? { ...r, z0: Math.max(r.z0, hw) } : { ...r, z1: Math.min(r.z1, -hw) };
+          if ((north && nr.z0 === r.z0) || (!north && nr.z1 === r.z1) || r.z0 < 0 && r.z1 > 0) continue;
+          if (nr.z1 - nr.z0 < 7) continue;
+          freed.push(...x.polys);
+          x.rects = [nr]; x.polys = [lrectPoly(x.frame, nr)];
+          x.fronts = x.fronts.map((f) => (f.side === 'N' && north ? { ...f, z0: nr.z0, z1: nr.z0 } : f.side === 'S' && !north ? { ...f, z0: nr.z1, z1: nr.z1 } : f.side === 'W' || f.side === 'E' ? { ...f, z0: Math.max(f.z0, nr.z0), z1: Math.min(f.z1, nr.z1) } : f));
+          x.wfronts = x.fronts.map((f) => lseg(x.frame, f));
+        }
+      }
       // 洞口里的铺位、卫生间、客梯厅去掉
       removed = lv.units.filter((x) => x.polys.some((p) => holes.some((h) => hit(p, h))));
       lv.units = lv.units.filter((x) => !removed.includes(x));
@@ -247,9 +273,12 @@ export function applyP1Mega(layout) {
     let add = clipping.difference(clipping.union(...infill.map((p) => [p])), [[close(before)]]);
     // 去掉的铺位原地变成走道（铺位里原来没有走道）
     for (const x of removed) for (const p of x.polys) { try { add = clipping.union(add, [[close(p)]]); } catch { /* 跳过 */ } }
+    for (const p of freed) { try { add = clipping.union(add, [[close(p)]]); } catch { /* 跳过 */ } }
     for (const r of (lv.rooms || []).filter((q) => q._megaRemoved)) for (const p of r._megaRemoved) { try { add = clipping.union(add, [[close(p)]]); } catch { /* 跳过 */ } }
+    // 只减和新加走道有交的（A、B 加上让出来的铺位范围）
+    const extra = [...removed.flatMap((x) => x.polys), ...freed].map((p) => boxOf(p, 0.5));
     for (const c of cut) {
-      if (!bboxHit(c, INFILL_BOX)) continue;
+      if (!bboxHit(c, INFILL_BOX) && !extra.some((b) => bboxHit(c, b))) continue;
       try { add = clipping.difference(add, [[close(c)]]); } catch { /* 极少数共线边算不出来：跳过这一块，走道略大一点 */ }
     }
     noHoles(add).forEach((p, i) => walk.push({ id: `P1-mega-${lv.short}-${i}`, kind: lv.kind === 'roof' ? 'deck' : 'atrium', poly: fix(p), frame: NW_FRAME, mega: true }));
@@ -353,6 +382,25 @@ function megaSite(layout, plaza) {
       M.plaza.trees.push({ id: `P1-mega-${kind}-${M.plaza.trees.length}`, kind, x, z, r });
       lv1.navObstacles.push({ id: `P1-mega-${kind}-${M.plaza.trees.length - 1}`, poly });
     }
+  }
+  // ---- 东南主入口落客环岛：门前 13 米的圆环（外径 22 米、中间花坛岛），一条双向支路穿过人行道接云澜大道
+  const seDoor = ent('P1-SE');
+  if (seDoor && D) {
+    const [mx, mz] = midSeg(seDoor.seg), R = 11, cx = mx + 1.6, cz = -33;
+    const loop = { id: 'SE-dropoff', name: '东南主入口落客环岛', rect: rect(cx - R, cz - R, cx + R, cz + R), corner: R, cx, cz, planter: [4.6, 4.6], R };
+    loop.poly = circlePoly(cx, cz, R, 40);
+    loop.planterPoly = circlePoly(cx, cz, 4.9, 28);
+    loop.spur = rect(cx - 6, cz + R - 2, cx + 6, -14);
+    // 雨棚顺着东南翼轴线：门外 0.3–7 米、横向 ±7 米（东南翼局部坐标）
+    const [du] = toL(SE_FRAME, mx, mz);
+    loop.canopy = { frame: SE_FRAME, u0: du + 0.3, u1: du + 7, v0: -7, v1: 7, height: 5.2 };
+    S.driveways.push(loop.poly, rectPoly(loop.spur));
+    fc.obstacles.push({ id: 'SE-dropoff-planter', poly: loop.planterPoly });
+    // 环岛范围里的行道树挪走
+    const gone = new Set();
+    D.trees = (D.trees || []).filter((t) => { const hitLoop = Math.hypot(t.x - cx, t.z - cz) < R + 1.2 || (t.x > loop.spur.x0 - 1.2 && t.x < loop.spur.x1 + 1.2 && t.z > loop.spur.z0 - 1.2 && t.z < loop.spur.z1 + 1.2); if (hitLoop) gone.add(`belt-tree-${t.x.toFixed(1)}-${t.z.toFixed(1)}`); return !hitLoop; });
+    fc.obstacles = fc.obstacles.filter((o) => !gone.has(o.id));
+    D.seLoop = loop;
   }
   // ---- 西门挪到 B 西墙
   const W = layout.expansion.westArrival, e = W && ent(W.entry);

@@ -88,6 +88,7 @@ export function p1PavingCutouts(layout, baseHoles) {
     ...(layout.extensions?.roads || []).flatMap(r => r.polys || []),
     ...(layout.extensions?.surfaceParking || []).map(p => p.poly),
     ...(D?.hotelLoop ? [roundedRectPoly(D.hotelLoop.rect, D.hotelLoop.corner, 6)] : []),
+    ...(D?.seLoop ? [D.seLoop.poly] : []),
     ...(D?.fountains || []).map(f => circlePoly(f.x, f.z, f.r, 48)),
     ...(D?.trees || []).map(t => rectPoly({ x0: t.x - .85, x1: t.x + .85, z0: t.z - .85, z1: t.z + .85 }))];
 }
