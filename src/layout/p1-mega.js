@@ -6,7 +6,7 @@
 //   · 椭圆里原来的西北翼铺位、卫生间去掉；西北翼两部客梯只到 1F；原来的西北翼扶梯（K7、K8）换成 A 里的一组交叉扶梯（p1-expansion-spec.js）。
 // 坐标：西北翼局部坐标（NW 翼 frame：原点圆厅圆心、u 沿 225° 朝方庭，v 正向朝北翼一侧 = A、负向 = B）。
 import clipping from 'polygon-clipping';
-import { frame, toW, rect, rectPoly, lrectPoly, circlePoly } from './geom.js';
+import { frame, toW, toL, rect, rectPoly, lrectPoly, circlePoly } from './geom.js';
 import { WEST_GATE_AXIS } from './west-parking.js';
 import { BrandPicker } from './brands.js';
 import { CATEGORIES } from './constants.js';
@@ -19,9 +19,12 @@ export const INFILL = {
   B: [[-210, -160], [-192.5, -160], [-150.4, -117.9], [-204.7, -103.4], [-203.8, -100], [-210, -100]],
 };
 /** 大椭圆（西北翼局部）：圆心、每层的半长（沿 u）和半宽（沿 v） */
-export const MEGA_OVAL = { u: 82, v: 11, steps: { '2F': [28, 16], '3F': [30, 19], '4F': [32, 22], '5F': [34, 25], '6F': [36, 28] } };
+// 每层往外退 4 米（长向）、3–4 米（宽向）：2F 52×28 米 → 6F 84×60 米
+export const MEGA_OVAL = { u: 82, v: 11, steps: { '2F': [26, 14], '3F': [30, 18], '4F': [34, 22], '5F': [38, 26], '6F': [42, 30] } };
 /** 圆厅到大椭圆的「颈」：u 20–52，半宽（避开北翼口袋楼梯 v≥13.6） */
-export const MEGA_NECK = { u0: 20, u1: 52, steps: { '2F': 6, '3F': 7, '4F': 8, '5F': 9, '6F': 9 } };
+export const MEGA_NECK = { u0: 20, u1: 52, steps: { '2F': 6, '3F': 7.5, '4F': 9, '5F': 10.5, '6F': 12 } };
+/** 方庭到大椭圆的「喉」（方庭局部坐标，原点 (−220,−200)）：从方庭洞口东端斜着接到椭圆西北头，半宽每层 +1.5 米，2F 起每层都连通 */
+export const MEGA_THROAT = { x0: 24, x1: 50, z1: 10, steps: { '2F': 5, '3F': 6.5, '4F': 8, '5F': 9.5, '6F': 11 } };
 /** 1F 中庭广场上两座喷泉的位置（西北翼局部 u、v：大椭圆中轴上） */
 export const MEGA_FOUNTAINS = [[68, 9], [96, 9]];
 /** 新楼面贴墙一圈铺位：墙线（世界坐标，起点→终点）、进深 */
@@ -33,6 +36,40 @@ export const MEGA_SHOP_WALLS = [
   { id: 'BN', a: [-192.5, -160], b: [-150.4, -117.9] },    // B 东北：贴西北翼南侧铺位背墙
   { id: 'BS', a: [-150.4, -117.9], b: [-204.7, -103.4] },  // B 南：贴西翼北侧铺位背墙
 ];
+/** 中庭环形店铺：门脸离洞口 7 米，每间 9 米开间，进深 16 → 10 米能放多深放多深 */
+export const MEGA_RING = { corridor: 7, width: 9, depths: [16, 14, 12, 10] };
+// 西北翼原来那条翼楼（局部 u 15–125、v ±24）也能排环形店铺
+// 方庭（x < −194）和圆厅（圆心 30 米内）原有布局不动，其余楼面都能排环形店铺
+const megaZone = (q) => q[0] > -194 && Math.hypot(q[0] + 106, q[1] + 106) > 30;
+const inBand = (q) => { const [u, v] = toL(NW_FRAME, q[0], q[1]); return u > 15 && u < 125 && Math.abs(v) < 24; };
+/** 门、扶梯口、楼梯门、电梯门到中庭边的 6 米宽通道：环形店铺不能挡 */
+function accessStrips(layout, lv, rings) {
+  const pts = [];
+  for (const e of layout.entrances) if (e.level === lv.id || e.to === lv.id) pts.push(midSeg(e.seg));
+  for (const g of layout.fidelity.mega.gaps) if (g.level === lv.id) pts.push(g.poly.reduce((a, q) => [a[0] + q[0] / 4, a[1] + q[1] / 4], [0, 0]));
+  for (const e of layout.escalators) {
+    const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z), ux = (e.top.x - e.bottom.x) / run, uz = (e.top.z - e.bottom.z) / run;
+    if (e.from === lv.id) pts.push([e.bottom.x - ux * 2, e.bottom.z - uz * 2]);
+    if (e.to === lv.id) pts.push([e.top.x + ux * 2, e.top.z + uz * 2]);
+  }
+  for (const s of layout.stairs) if (s.serves?.includes(lv.id)) { const d = s.wdoorByLevel?.[lv.id] || s.wdoor; if (d) pts.push([(d.x0 + d.x1) / 2 + d.nx * 1.2, (d.z0 + d.z1) / 2 + d.nz * 1.2]); }
+  for (const e of layout.elevators) if (e.serves?.includes(lv.id) && e.nx != null) pts.push([e.x + e.nx * ((e.reach || 1.5) + 0.6), e.z + e.nz * ((e.reach || 1.5) + 0.6)]);
+  const out = [];
+  for (const p of pts) {
+    if (!(inInfill(p) || inBand(p))) continue;
+    let best = null;
+    for (const V of rings) for (let i = 0; i < V.length; i++) {
+      const a = V[i], b = V[(i + 1) % V.length], dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / L2)), q = [a[0] + dx * t, a[1] + dz * t], d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (!best || d < best.d) best = { q, d };
+    }
+    if (!best || best.d < 0.5) continue;
+    const ux = (best.q[0] - p[0]) / best.d, uz = (best.q[1] - p[1]) / best.d, h = 3;
+    const a = [p[0] - ux * 1.5, p[1] - uz * 1.5], b = best.q;
+    out.push([[a[0] - uz * h, a[1] + ux * h], [b[0] - uz * h, b[1] + ux * h], [b[0] + uz * h, b[1] - ux * h], [a[0] + uz * h, a[1] - ux * h]]);
+  }
+  return out;
+}
 export const MEGA_SHOP = { depth: 11, width: 8.5, corridor: 5, cats: ['fashion', 'cafe', 'beauty', 'shoes', 'tech', 'accessory', 'tea', 'sports', 'jewelry', 'home', 'snack', 'books', 'toys', 'bakery'] };
 const UPPER = ['2F', '3F', '4F', '5F', '6F'];
 const ABOVE = ['1F', ...UPPER, 'RF'];
@@ -66,7 +103,9 @@ export function megaVoidParts(short) {
   const [a, b] = MEGA_OVAL.steps[short], h = MEGA_NECK.steps[short];
   const oval = Array.from({ length: 64 }, (_, i) => { const t = (i / 64) * Math.PI * 2; return nw(MEGA_OVAL.u + a * Math.cos(t), MEGA_OVAL.v + b * Math.sin(t)); });
   const neck = [[MEGA_NECK.u0, -h], [MEGA_NECK.u1, -h], [MEGA_NECK.u1, h], [MEGA_NECK.u0, h]].map(([u, v]) => nw(u, v));
-  return { oval, neck };
+  const t = MEGA_THROAT, th = t.steps[short], sq = ([x, z]) => [x - 220, z - 200];
+  const throat = [[t.x0, -th], [t.x1, t.z1 - th], [t.x1, t.z1 + th], [t.x0, th]].map(sq);
+  return { oval, neck, throat };
 }
 
 /** 多边形集合 → 不带洞的简单多边形（带洞的块从洞的中线竖切开） */
@@ -86,20 +125,31 @@ const inside = ([x, z], P) => { let c = false; for (let i = 0, j = P.length - 1;
 const hit = (a, b) => clipping.intersection([[close(a)]], [[close(b)]]).length > 0;
 
 const boxOf = (P, m) => { const xs = P.map((p) => p[0]), zs = P.map((p) => p[1]); return [Math.min(...xs) - m, Math.min(...zs) - m, Math.max(...xs) + m, Math.max(...zs) + m]; };
+/** 凸多边形（楼梯、井道都是斜放的矩形）往外扩 m 米：每条边平移后相邻两条求交 */
+function grow(P, m) {
+  const n = P.length, sgn = area(P) > 0 ? 1 : -1, lines = [];
+  for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = (sgn * (b[1] - a[1])) / L, nz = (-sgn * (b[0] - a[0])) / L; lines.push([[a[0] + nx * m, a[1] + nz * m], [b[0] + nx * m, b[1] + nz * m]]); }
+  return lines.map((l, i) => { const k = lines[(i + n - 1) % n], [p, q] = k, [r, t] = l, d = (q[0] - p[0]) * (t[1] - r[1]) - (q[1] - p[1]) * (t[0] - r[0]); if (Math.abs(d) < 1e-9) return l[0]; const u = ((r[0] - p[0]) * (t[1] - r[1]) - (r[1] - p[1]) * (t[0] - r[0])) / d; return [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u]; });
+}
 const boxAround = (pts, m) => { const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]); const x0 = Math.min(...xs) - m, x1 = Math.max(...xs) + m, z0 = Math.min(...zs) - m, z1 = Math.max(...zs) + m; return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]; };
 /** 这一层要留出来的楼梯、电梯、扶梯范围（外扩：楼梯 3 米、电梯 3.5 米、扶梯 3 米） */
 function keepOuts(layout, lv) {
   const out = [];
-  for (const s of layout.stairs || []) if (s.poly && (s.serves || []).includes(lv.id)) out.push(boxAround(s.poly, 3));
-  for (const e of layout.elevators || []) if (e.shaftPoly && (e.serves || []).includes(lv.id)) out.push(boxAround(e.shaftPoly, 3.5));
-  for (const e of layout.escalators || []) if (e.from === lv.id || e.to === lv.id) out.push(boxAround([[e.bottom.x, e.bottom.z], [e.top.x, e.top.z]], 3));
+  for (const s of layout.stairs || []) if (s.poly && (s.serves || []).includes(lv.id)) out.push(grow(s.poly, 3));
+  for (const e of layout.elevators || []) if ((e.serves || []).includes(lv.id)) { const p = e.shaftPoly || (e.frame && e.w ? [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => toW(e.frame, e.lu + (a * e.w) / 2, e.lv + (b * e.d) / 2)) : null); if (p) out.push(grow(p, 3.5)); }
+  // 扶梯：沿梯身的斜矩形（两边各 1.5 米，两头各留 3 米梯口），不用外接方框（45° 的翼楼里外接方框大得多）
+  for (const e of layout.escalators || []) if (e.from === lv.id || e.to === lv.id) {
+    const ax = e.top.x - e.bottom.x, az = e.top.z - e.bottom.z, L = Math.hypot(ax, az) || 1, ux = ax / L, uz = az / L, h = 1.5 + (e.width || 1.2) / 2;
+    const a = [e.bottom.x - ux * 3, e.bottom.z - uz * 3], b = [e.top.x + ux * 3, e.top.z + uz * 3];
+    out.push([[a[0] - uz * h, a[1] + ux * h], [b[0] - uz * h, b[1] + ux * h], [b[0] + uz * h, b[1] - ux * h], [a[0] + uz * h, a[1] - ux * h]]);
+  }
   return out;
 }
 
 /** 这一层新加的洞口（椭圆 ∪ 颈 − 楼梯、电梯、扶梯留出的范围） */
 function addedVoid(layout, lv) {
-  const { oval, neck } = megaVoidParts(lv.short);
-  let added = clipping.union([[close(oval)]], [[close(neck)]]);
+  const { oval, neck, throat } = megaVoidParts(lv.short);
+  let added = clipping.union([[close(oval)]], [[close(neck)]], [[close(throat)]]);
   for (const k of keepOuts(layout, lv)) { try { added = clipping.difference(added, [[close(k)]]); } catch { /* 跳过 */ } }
   return added;
 }
@@ -205,7 +255,7 @@ export function applyP1Mega(layout) {
   for (const e of layout.elevators.filter((q) => q.id === 'P1-NW-L1' || q.id === 'P1-NW-L2')) e.serves = e.serves.filter((id) => !UPPER.some((s) => id === `P1-${s}`) && id !== 'P1-RF');
   layout.fidelity = { ...(layout.fidelity || {}), mega: { version: 1, links: [], indoorFountains: [], gaps: [], shops: 0 } };
   megaSite(layout, plaza);
-  megaShops(layout, befores);
+  megaShops(layout, befores, plaza);
   megaIslands(layout, befores);
   for (const lv of layout.levels.filter((l) => befores[l.id])) pruneIslands(lv);
   return layout;
@@ -318,11 +368,12 @@ function megaSite(layout, plaza) {
 
 /** A、B 贴墙一圈铺位（1F–6F）：每段墙按 8.5 米开间、11 米进深排；离中庭洞口留 5 米走道，
  *  避开楼梯、电梯、扶梯、门、喷泉、原有铺位和用房；放不下的开间就空着当走道。品牌另起一个取名器（不动园区原来的取号顺序）。 */
-function megaShops(layout, befores) {
+function megaShops(layout, befores, plaza) {
   const picker = new BrandPicker(2031);
   for (const lv of layout.levels) for (const u of lv.units || []) if (u.brand) picker.mark(u.brand);
   const { depth: D, width: W, corridor: C, cats } = MEGA_SHOP;
   let k = 0;
+  const M = layout.fidelity.mega;
   for (const lv of layout.levels.filter((l) => l.building === 'P1' && ['1F', ...UPPER].includes(l.short))) {
     const before = befores[lv.id];
     if (!before) continue;
@@ -330,39 +381,75 @@ function megaShops(layout, befores) {
     const others = [...lv.voids.filter((v) => v.kind !== 'atrium' && v.kind !== 'skylight').map((v) => v.poly), ...keepOuts(layout, lv),
       ...(lv.rooms || []).flatMap((r) => r.polys || []), ...(lv.navObstacles || []).map((o) => o.poly)];
     const doors = layout.entrances.filter((e) => e.level === lv.id || e.to === lv.id).map((e) => { const [x, z] = midSeg(e.seg); return [[x - 4.5, z - 4.5], [x + 4.5, z - 4.5], [x + 4.5, z + 4.5], [x - 4.5, z + 4.5]]; });
-    for (const g of layout.fidelity.mega.gaps) if (g.level === lv.id) doors.push(g.poly);
+    for (const g of M.gaps) if (g.level === lv.id) doors.push(g.poly);
+    // 中庭（1F 是广场）：环形店铺朝它开门
+    const rings = lv.short === '1F' ? plaza.map((m) => open(m[0])) : lv.voids.filter((v) => v.mega).map((v) => v.poly);
+    const strips = accessStrips(layout, lv, rings);
+    M.strips = [...(M.strips || []), ...strips.map((poly) => ({ level: lv.id, poly }))];
     let n = 0;
+    const add = (F, r, wall) => {
+      const poly = lrectPoly(F, r), cat = cats[k++ % cats.length], brand = picker.take(cat);
+      brand.catLabel = CATEGORIES[cat]?.label || cat;
+      const slot = `MG${String(++n).padStart(2, '0')}`;
+      const fr = wall === 'ring' ? { x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z0, side: 'N' } : { x0: r.x0, z0: r.z1, x1: r.x1, z1: r.z1, side: 'S' };
+      lv.units.push({ id: `${lv.id}-${slot}`, slot, level: lv.id, building: 'P1', brand, frame: F, rects: [r], fronts: [fr], style: 'glass', wing: 'NW', mega: wall,
+        polys: [poly], wfronts: [lseg(F, fr)], code: `M${lv.short}-${String(n).padStart(2, '0')}` });
+      lv.walk = lv.walk.flatMap((wk) => {
+        if (!hit(wk.poly, poly)) return [wk];
+        let res; try { res = clipping.difference([[close(wk.poly)]], [[close(poly)]]); } catch { return [wk]; }
+        // 铺位和墙之间挤出来的细条（半宽不到 0.6 米或面积不到 8 平方米）不留
+        return noHoles(res).filter((q) => { const A = Math.abs(area(q)); let per = 0; for (let j = 0; j < q.length; j++) { const a = q[j], b = q[(j + 1) % q.length]; per += Math.hypot(b[0] - a[0], b[1] - a[1]); } return A >= 8 && (2 * A) / per >= 0.6; })
+          .map((q, j) => ({ ...wk, id: `${wk.id}-s${n}-${j}`, poly: q, rect: undefined, lpoly: undefined }));
+      });
+      M.shops++;
+    };
+    const clashes = (poly) => others.some((h) => hit(poly, h)) || doors.some((h) => hit(poly, h)) || strips.some((h) => hit(poly, h))
+      || lv.units.some((x) => x.polys.some((p) => overlapArea(poly, [[close(p)]]) > 0.05));
+    const inFloor = (F, r) => [0.05, 0.5, 0.95].every((t) => [r.z0 + 0.3, (r.z0 + r.z1) / 2, r.z1 - 0.3].every((v) => { const q = toW(F, r.x0 + (r.x1 - r.x0) * t, v); return inside(q, lv.outline) && (inInfill(q) || inBand(q) || megaZone(q)); }));
+    // ① 环形店铺：沿中庭边每 9 米一间，门脸离洞口 7 米（回游走廊），进深尽量做深（16 → 10 米）
+    const RC = MEGA_RING.corridor;
+    for (const V of rings) {
+      const per = V.reduce((a, q, i) => a + Math.hypot(V[(i + 1) % V.length][0] - q[0], V[(i + 1) % V.length][1] - q[1]), 0);
+      const at = (d) => { d = ((d % per) + per) % per; for (let i = 0; i < V.length; i++) { const a = V[i], b = V[(i + 1) % V.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (d <= l) return [a[0] + ((b[0] - a[0]) * d) / (l || 1), a[1] + ((b[1] - a[1]) * d) / (l || 1)]; d -= l; } return V[0]; };
+      for (let d = 0; d < per; d += MEGA_RING.width) {
+        let p0 = at(d), p1 = at(d + MEGA_RING.width);
+        const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+        if (len < 6) continue;
+        let F = frame(p0[0], p0[1], (Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) * 180) / Math.PI);
+        // 朝外：弧线中点往 +v 走 2 米要在洞口外面（弦的中点在凸弧里面，不能拿它判断）
+        const pm = at(d + MEGA_RING.width / 2), vd = [-F.s, F.c];
+        if (inside([pm[0] + vd[0] * 2, pm[1] + vd[1] * 2], V)) F = frame(p1[0], p1[1], (Math.atan2(p0[1] - p1[1], p0[0] - p1[0]) * 180) / Math.PI);
+        for (const depth of MEGA_RING.depths) {
+          const r = rect(0.2, RC, len - 0.2, RC + depth), poly = lrectPoly(F, r);
+          if (!inFloor(F, r)) continue;
+          if (atria.some((h) => hit(lrectPoly(F, rect(r.x0 - 0.5, RC - 1.5, r.x1 + 0.5, r.z1 + 0.3)), h))) continue;
+          if (clashes(poly)) continue;
+          add(F, r, 'ring');
+          break;
+        }
+      }
+    }
+    // ② 贴墙铺位：只放在门前还留得出 5 米走道的地方（不对着环形店铺的背面）
     for (const wall of MEGA_SHOP_WALLS) {
       // 1F 西北翼北侧铺位已经让给中庭广场，A 西南这道墙在 1F 不存在
       if (wall.id === 'AS' && lv.short === '1F') continue;
       const len = Math.hypot(wall.b[0] - wall.a[0], wall.b[1] - wall.a[1]);
       let F = frame(wall.a[0], wall.a[1], (Math.atan2(wall.b[1] - wall.a[1], wall.b[0] - wall.a[0]) * 180) / Math.PI);
-      // v 朝楼里：墙中点往 v 正向 1 米要落在 A 或 B 里，不然把墙反过来
       if (!inInfill(toW(F, len / 2, 1))) F = frame(wall.b[0], wall.b[1], (Math.atan2(wall.a[1] - wall.b[1], wall.a[0] - wall.b[0]) * 180) / Math.PI);
       const cnt = Math.max(1, Math.round(len / W)), w = len / cnt;
       for (let i = 0; i < cnt; i++) {
-        const r = rect(i * w + 0.15, 0.15, (i + 1) * w - 0.15, D), poly = lrectPoly(F, r);
-        const front = lrectPoly(F, rect(r.x0 - 1, 0.2, r.x1 + 1, D + C));
-        if (overlapArea(poly, [[close(before)]]) > 0.5) continue;                       // 原来的楼里不放
-        if (![0.05, 0.5, 0.95].every((t) => [0.3, D - 0.3].every((v) => inside(toW(F, r.x0 + (r.x1 - r.x0) * t, v), lv.outline)))) continue;
-        if (atria.some((h) => hit(front, h))) continue;                                     // 门前要有 5 米走道
-        if (others.some((h) => hit(poly, h)) || doors.some((h) => hit(poly, h))) continue;
-        if (lv.units.some((x) => x.polys.some((p) => overlapArea(poly, [[close(p)]]) > 0.05))) continue;
-        const cat = cats[k++ % cats.length], brand = picker.take(cat);
-        brand.catLabel = CATEGORIES[cat]?.label || cat;
-        const slot = `MG${String(++n).padStart(2, '0')}`;
-        const fr = { x0: r.x0, z0: D, x1: r.x1, z1: D, side: 'S' };
-        lv.units.push({ id: `${lv.id}-${slot}`, slot, level: lv.id, building: 'P1', brand, frame: F, rects: [r], fronts: [fr], style: 'glass', wing: 'NW', mega: wall.id,
-          polys: [poly], wfronts: [lseg(F, fr)], code: `M${lv.short}-${String(n).padStart(2, '0')}` });
-        // 铺位从走道里挖掉
-        lv.walk = lv.walk.flatMap((wk) => {
-          if (!wk.mega || !hit(wk.poly, poly)) return [wk];
-          let res; try { res = clipping.difference([[close(wk.poly)]], [[close(poly)]]); } catch { return [wk]; }
-          // 铺位和墙之间挤出来的细条（半宽不到 0.6 米或面积不到 8 平方米）不留：走不进去，也连不上别的走道
-          return noHoles(res).filter((q) => { const A = Math.abs(area(q)); let per = 0; for (let j = 0; j < q.length; j++) { const a = q[j], b = q[(j + 1) % q.length]; per += Math.hypot(b[0] - a[0], b[1] - a[1]); } return A >= 8 && (2 * A) / per >= 0.6; })
-            .map((q, j) => ({ ...wk, id: `${wk.id}-s${n}-${j}`, poly: q }));
-        });
-        layout.fidelity.mega.shops++;
+        // 进深能深就深（20 → 11 米），门前留 5 米走道
+        for (const depth of [20, 17, 14, D]) {
+          const r = rect(i * w + 0.15, 0.15, (i + 1) * w - 0.15, depth), poly = lrectPoly(F, r);
+          const front = lrectPoly(F, rect(r.x0 - 1, 0.2, r.x1 + 1, depth + C));
+          if (overlapArea(poly, [[close(before)]]) > 0.5) continue;
+          if (![0.05, 0.5, 0.95].every((t) => [0.3, depth - 0.3].every((v) => inside(toW(F, r.x0 + (r.x1 - r.x0) * t, v), lv.outline)))) continue;
+          if (atria.some((h) => hit(front, h))) continue;
+          if (clashes(poly)) continue;
+          if (lv.units.some((x) => x.polys.some((p) => overlapArea(lrectPoly(F, rect(r.x0, depth, r.x1, depth + C)), [[close(p)]]) > 0.5))) continue;
+          add(F, r, wall.id);
+          break;
+        }
       }
     }
   }
@@ -390,17 +477,20 @@ function megaIslands(layout, befores) {
   M.islands = [];
   const box = (x, z, hx, hz) => [[x - hx, z - hz], [x + hx, z - hz], [x + hx, z + hz], [x - hx, z + hz]];
   for (const lv of layout.levels.filter((l) => l.building === 'P1' && ['1F', ...UPPER].includes(l.short) && befores[l.id])) {
-    const walks = lv.walk.filter((w) => w.mega);
+    const walks = lv.walk.filter((w) => w.mega || w.plaza || /-m\d+$/.test(w.id));
     const onWalk = (q) => walks.some((w) => inside(q, w.poly));
     const blocked = [...lv.units.flatMap((u) => u.polys), ...lv.voids.map((v) => v.poly), ...keepOuts(layout, lv), ...(lv.rooms || []).flatMap((r) => r.polys || []),
       ...(lv.navObstacles || []).map((o) => o.poly), ...M.gaps.filter((g) => g.level === lv.id).map((g) => g.poly),
-      ...layout.entrances.filter((e) => e.level === lv.id || e.to === lv.id).map((e) => { const [x, z] = midSeg(e.seg); return box(x, z, 5, 5); })];
+      ...layout.entrances.filter((e) => e.level === lv.id || e.to === lv.id).map((e) => { const [x, z] = midSeg(e.seg); return box(x, z, 5, 5); }),
+      ...(M.strips || []).filter((q) => q.level === lv.id).map((q) => q.poly)];
     const placed = [];
-    const want = [['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5]];
+    // 岛柜、咖啡外摆，再用休憩花园（树池 + 两条长椅）把空出来的大块地面填上
+    const want = [['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5],
+      ...Array.from({ length: 10 }, () => ['garden', 3, 2, 2.5])];
     for (const [kind, hx, hz, m] of want) {
       let best = null;
       for (let x = Math.min(...xs) + 4; x < Math.max(...xs) - 4; x += 3) for (let z = Math.min(...zs) + 4; z < Math.max(...zs) - 4; z += 3) {
-        if (!inInfill([x, z]) || placed.some((p) => Math.hypot(p.x - x, p.z - z) < 14)) continue;
+        if (!(inInfill([x, z]) || inBand([x, z])) || placed.some((p) => Math.hypot(p.x - x, p.z - z) < (kind === 'garden' || p.kind === 'garden' ? 9 : 14))) continue;
         const clearBox = box(x, z, hx + m, hz + m);
         if (![...clearBox, [x, z]].every(onWalk)) continue;
         if (blocked.some((b) => hit(clearBox, b))) continue;
@@ -409,7 +499,7 @@ function megaIslands(layout, befores) {
         if (!best || score < best.score) best = { x, z, score };
       }
       if (!best) continue;
-      const it = { id: `${lv.id}-mega-${kind}-${placed.length}`, kind, level: lv.id, x: best.x, z: best.z, hx, hz, poly: box(best.x, best.z, hx, hz) };
+      const it = { id: `${lv.id}-mega-${kind}-${placed.length}`, kind, level: lv.id, x: best.x, z: best.z, hx, hz, poly: box(best.x, best.z, hx, hz), seed: placed.length };
       placed.push(it); M.islands.push(it);
       (lv.navObstacles ||= []).push({ id: it.id, poly: it.poly });
     }

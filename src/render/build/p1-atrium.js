@@ -486,6 +486,7 @@ function megaAtrium(ctx, levels) {
     const L = ctx.levels[it.level], lv = levels.find((l) => l.id === it.level);
     if (!L || !lv) continue;
     if (it.kind === 'cafe') cafe(L.batch, { x0: it.x - it.hx, x1: it.x + it.hx, z0: it.z - it.hz, z1: it.z + it.hz }, lv.elev, IDENTITY);
+    else if (it.kind === 'garden') garden(L.batch, it, lv.elev);
     else kiosk(L.batch, it, lv.elev, it.x * 3 + it.z);
   }
   M.plaza?.trees.forEach((t, i) => (t.kind === 'palm' ? palm(B, IDENTITY, { u: t.x, v: t.z, r: t.r }, y0, i * 13 + 5) : blossom(B, t, y0, i)));
@@ -554,4 +555,20 @@ function kiosk(B, it, y0, seed) {
   B.get('satin').box(x, y0 + 2.6, z, hx * 2 + 0.3, 0.22, hz * 2 + 0.3, '#f6f3ec');
   B.get('glow').box(x, y0 + 2.48, z, hx * 2 + 0.1, 0.03, hz * 2 + 0.1, WARM);
   B.get('matte').box(x, y0 + 2.6, z - hz - 0.16, hx * 2, 0.16, 0.02, tint);
+}
+
+/** 休憩花园：石材长花池（灌木和花）+ 一棵树（樱花或棕榈交替）+ 两侧木面长椅 */
+function garden(B, it, y0) {
+  const { x, z, hx, hz } = it, rand = rng(Math.round(Math.abs(x * 7 + z * 13)) + 1), along = hx >= hz;
+  B.get('travertine').box(x, y0 + 0.25, z, along ? hx * 2 - 2.2 : 1.6, 0.5, along ? 1.6 : hz * 2 - 2.2, '#e6dfd2');
+  for (let k = 0; k < 14; k++) {
+    const s = (rand() - 0.5) * (Math.max(hx, hz) * 2 - 2.8), t = (rand() - 0.5) * 1.2;
+    B.get('foliage').sphere(x + (along ? s : t), y0 + 0.62, z + (along ? t : s), 0.22 + rand() * 0.12, rand() < 0.5 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
+  }
+  if (it.seed % 2) blossom(B, { x, z, r: 0.9 }, y0 + 0.0, it.seed + 3); else palm(B, IDENTITY, { u: x, v: z, r: 0.9 }, y0, it.seed * 11 + 2);
+  for (const sg of [-1, 1]) {
+    const bx = along ? x : x + sg * (hx - 0.35), bz = along ? z + sg * (hz - 0.35) : z, w = along ? hx * 2 - 1.2 : 0.5, d = along ? 0.5 : hz * 2 - 1.2;
+    B.get('satin').box(bx, y0 + 0.2, bz, w * 0.9, 0.4, d * 0.9, '#efe9df');
+    B.get('wood').box(bx, y0 + 0.43, bz, w, 0.06, d, '#a77f58');
+  }
 }
