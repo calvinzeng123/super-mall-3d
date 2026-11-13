@@ -182,3 +182,15 @@ test('大椭圆中庭顶上开玻璃天窗：屋面开洞在 6F 洞口里面、�
   const cinema = rf.features.find((f) => f.type === 'cinema-open');
   assert.ok(cinema && ![[cinema.rect.x0, cinema.rect.z0], [cinema.rect.x1, cinema.rect.z0], [cinema.rect.x1, cinema.rect.z1], [cinema.rect.x0, cinema.rect.z1]].some((q) => pointInPoly(q, sky.poly)), '露天影院压在天窗上');
 });
+
+test('同一层里同一个坐标系 id 只对应一个坐标系：隔墙、店面按 frame.id 分组，空 id 或重名会把墙画到别的铺位的坐标系里', () => {
+  for (const lv of L.levels) {
+    const seen = new Map();
+    for (const x of [...lv.units, ...(lv.rooms || [])]) {
+      if (!x.frame) continue;
+      const sig = [x.frame.ox, x.frame.oz, x.frame.deg].map((v) => v.toFixed(3)).join();
+      if (seen.has(x.frame.id)) assert.equal(seen.get(x.frame.id), sig, `${lv.id} ${x.id}：坐标系 id ${JSON.stringify(x.frame.id)} 重名`);
+      else seen.set(x.frame.id, sig);
+    }
+  }
+});

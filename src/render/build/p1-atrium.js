@@ -4,7 +4,7 @@
 // 跨楼层的东西（树形柱）按楼层切段画进各层自己的批次，楼层分开显示（爆炸视图、只看某层）时各段跟着自己那层走。
 import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN, rng } from '../textures.js';
-import { pointInPoly, lrectPoly, toW, toL, IDENTITY, distToPolyEdge } from '../../layout/geom.js';
+import { pointInPoly, lrectPoly, toW, toL, frame, IDENTITY, distToPolyEdge } from '../../layout/geom.js';
 import clipping from 'polygon-clipping';
 import { NW_FRAME, MEGA_OVAL, MEGA_SKY } from '../../layout/p1-mega.js';
 import { SLAB_T } from './shell.js';
@@ -497,6 +497,20 @@ function megaAtrium(ctx, levels) {
       L.batch.get('glowSoft').bar({ x: a[0], y, z: a[1] }, { x: b[0], y, z: b[1] }, 0.09, '#ffe2b8');
     }
   }
+  // 店面溢光：每家店门脸外面地上一片暖光（贴花，不加实时光源），让走道地面像效果图那样被店里的灯照亮
+  for (const lv of levels.filter((l) => /^[1-6]F$/.test(l.short))) {
+    const L = ctx.levels[lv.id];
+    if (!L) continue;
+    const holes = lv.voids.map((v) => v.poly);
+    for (const u of lv.units) for (const f of u.wfronts || []) {
+      const dx = f.x1 - f.x0, dz = f.z1 - f.z0, len = Math.hypot(dx, dz);
+      if (len < 2 || f.nx === undefined) continue;
+      const cx = (f.x0 + f.x1) / 2 + f.nx * 1.9, cz = (f.z0 + f.z1) / 2 + f.nz * 1.9;
+      if (holes.some((h) => pointInPoly([cx, cz], h)) || !lv.walk.some((w) => pointInPoly([cx, cz], w.poly))) continue;
+      L.batch.pool(cx, lv.elev, cz, len * 0.95, 3.6, 0xffdcae, Math.atan2(-dz, dx));
+    }
+  }
+  greenWalls(ctx, levels);
   // A、B 走道里的岛柜（粉白玻璃柜 + 灯箱顶）和咖啡外摆
   for (const it of M.islands || []) {
     const L = ctx.levels[it.level], lv = levels.find((l) => l.id === it.level);
@@ -581,6 +595,63 @@ function skyShell(B, v, y0) {
     const p0 = toW(NW_FRAME, cu + a * 0.55 * Math.cos(t0), cv + b * 0.55 * Math.sin(t0)), p1 = toW(NW_FRAME, cu + a * 0.55 * Math.cos(t1), cv + b * 0.55 * Math.sin(t1));
     if (!pointInPoly(p0, P) || !pointInPoly(p1, P)) continue;
     B.get('facadeBronze').bar({ x: p0[0], y: H(...p0) + 0.1, z: p0[1] }, { x: p1[0], y: H(...p1) + 0.1, z: p1[1] }, 0.22, GOLD);
+  }
+}
+
+/**
+ * 和别的楼贴着的实墙（艺文馆、西苑附楼、酒店那几面，墙外 1 米就在另一栋楼里）前面是走道、又排不下铺位的地方，
+ * 从中庭对面看过去是一大块白墙。每层做一面落地的垂直绿墙：铜色边框、成片的叶团和几簇花、底部一条暖光洗墙灯。
+ * 只挑连续 ≥ 6 米、前面 1.5 米是走道（不是铺位、用房）的墙段；门口两边各 3 米留空。
+ */
+function greenWalls(ctx, levels) {
+  const others = ctx.layout.buildings.filter((b) => b.id !== 'P1' && b.outline && !b.undergroundOnly && b.kind !== 'metro').map((b) => b.outline);
+  for (let i = 0; i < levels.length - 1; i++) {
+    const lv = levels[i], up = levels[i + 1], L = ctx.levels[lv.id];
+    if (!L || !/^[1-6]F$/.test(lv.short)) continue;
+    const top = up.elev - (SLAB_T[up.kind] ?? 0.45) - 0.5, y0 = lv.elev;
+    const solid = [...lv.units.flatMap((u) => u.polys), ...(lv.rooms || []).flatMap((r) => r.polys || []), ...lv.voids.map((v) => v.poly), ...(lv.navObstacles || []).map((o) => o.poly)];
+    const walkAt = (q) => lv.walk.some((w) => pointInPoly(q, w.poly)) && !solid.some((p) => pointInPoly(q, p));
+    const doors = ctx.layout.entrances.filter((e) => e.level === lv.id || e.to === lv.id).map((e) => [(e.seg.x0 + e.seg.x1) / 2, (e.seg.z0 + e.seg.z1) / 2]);
+    const rand = rng(lv.elev * 13 + 7);
+    for (const P of lv.expansion?.facadePolys || [lv.outline]) for (let k = 0; k < P.length; k++) {
+      const a = P[k], b = P[(k + 1) % P.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 6) continue;
+      const tx = (b[0] - a[0]) / len, tz = (b[1] - a[1]) / len;
+      // 墙的两侧：一侧在别的楼里（实墙），另一侧是走道
+      const at = (t, off) => [a[0] + tx * t - tz * off, a[1] + tz * t + tx * off];
+      const n = Math.floor(len), ok = [];
+      for (let j = 0; j < n; j++) {
+        const t = j + 0.5;
+        let side = 0;
+        for (const sgn of [1, -1]) if (others.some((o) => pointInPoly(at(t, -sgn * 1.0), o)) && walkAt(at(t, sgn * 1.5))) side = sgn;
+        ok.push(side && !doors.some(([x, z]) => Math.hypot(x - at(t, 0)[0], z - at(t, 0)[1]) < 3) ? side : 0);
+      }
+      for (let j = 0; j < n;) {
+        if (!ok[j]) { j++; continue; }
+        let e = j; while (e < n && ok[e] === ok[j]) e++;
+        if (e - j >= 6) {
+          const sgn = ok[j], t0 = j + 0.3, t1 = e - 0.3, mid = (t0 + t1) / 2, w = t1 - t0, h = top - y0 - 0.2;
+          const F = frame(...at(mid, sgn * 0.2), (Math.atan2(tz, tx) * 180) / Math.PI);
+          const nv = sgn; // 局部 +v 朝走道（sgn=1）或 −v
+          L.batch.frame(F, () => {
+            L.batch.get('foliage').box(0, y0 + 0.1 + h / 2, nv * 0.12, w, h, 0.24, LEAF2);
+            for (let q = 0; q < Math.round(w * h * 1.6); q++) {
+              const u = (rand() - 0.5) * (w - 0.4), yy = y0 + 0.3 + rand() * (h - 0.4), rr = 0.22 + rand() * 0.22;
+              const col = rand() < 0.12 ? FLOWERS[Math.floor(rand() * FLOWERS.length)] : rand() < 0.5 ? LEAF : '#5f9a48';
+              L.batch.get('foliage').sphere(u, yy, nv * (0.3 + rand() * 0.08), rr, col, rr * 0.9, rr * 0.55, 'ico0');
+            }
+            L.batch.get('facadeBronze').box(0, y0 + 0.1 + h + 0.06, nv * 0.2, w + 0.2, 0.12, 0.4, GOLD);
+            L.batch.get('facadeBronze').box(0, y0 + 0.06, nv * 0.25, w + 0.2, 0.12, 0.5, GOLD);
+            for (const u of [-w / 2 - 0.05, w / 2 + 0.05]) L.batch.get('facadeBronze').box(u, y0 + 0.1 + h / 2, nv * 0.2, 0.1, h, 0.4, GOLD);
+            L.batch.get('glowSoft').box(0, y0 + 0.16, nv * 0.48, w - 0.2, 0.04, 0.06, WARM);
+          });
+          const [px, pz] = at(mid, sgn * 1.6);
+          L.batch.pool(px, lv.elev, pz, w, 2.4, 0xffd9a0, Math.atan2(-tz, tx));
+          (ctx.greenWallCount = (ctx.greenWallCount || 0) + 1);
+        }
+        j = e;
+      }
+    }
   }
 }
 

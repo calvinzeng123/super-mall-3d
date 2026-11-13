@@ -576,7 +576,9 @@ function megaShops(layout, befores, plaza) {
     const strips = accessStrips(layout, lv, rings);
     M.strips = [...(M.strips || []), ...strips.map((poly) => ({ level: lv.id, poly }))];
     let n = 0;
-    const add = (F, r, wall) => {
+    const add = (F0, r, wall) => {
+      // 每家新铺位自己一个坐标系 id：隔墙、店面按 frame.id 分组，空 id 会把不同朝向的铺位并成一组、墙画到别处去
+      const F = F0.id ? F0 : { ...F0, id: `${lv.id}-MG${String(n + 1).padStart(2, '0')}` };
       const poly = lrectPoly(F, r), cat = cats[k++ % cats.length], brand = picker.take(cat);
       brand.catLabel = CATEGORIES[cat]?.label || cat;
       const slot = `MG${String(++n).padStart(2, '0')}`;
@@ -700,12 +702,17 @@ function megaIslands(layout, befores) {
 function megaSideFronts(layout) {
   for (const lv of layout.levels.filter((l) => l.building === 'P1')) {
     const walkAt = (q) => lv.walk.some((w) => inside(q, w.poly)) && !lv.units.some((u) => u.polys.some((p) => inside(q, p)));
-    for (const u of lv.units.filter((x) => x.mega)) {
+    // 新铺位 + 1F–6F 原有的单块矩形铺位：四条边里外面是走道、还没有门脸的，都做成玻璃面（中庭对面看过去不再是一块块白墙）
+    const all = /^[1-6]F$/.test(lv.short);
+    for (const u of lv.units.filter((x) => (x.mega || all) && x.rects?.length === 1 && x.frame && x.fronts)) {
       const r = u.rects[0];
-      for (const [side, x] of [['W', r.x0], ['E', r.x1]]) {
-        const out = side === 'W' ? -1.2 : 1.2, probes = [0.3, 0.5, 0.7].map((t) => toW(u.frame, x + out, r.z0 + (r.z1 - r.z0) * t));
+      const sides = [['W', r.x0, true], ['E', r.x1, true], ['N', r.z0, false], ['S', r.z1, false]];
+      for (const [side, c, vert] of sides) {
+        if (u.fronts.some((f) => f.side === side)) continue;
+        const out = side === 'W' || side === 'N' ? -1.2 : 1.2;
+        const probes = [0.3, 0.5, 0.7].map((t) => (vert ? toW(u.frame, c + out, r.z0 + (r.z1 - r.z0) * t) : toW(u.frame, r.x0 + (r.x1 - r.x0) * t, c + out)));
         if (!probes.every(walkAt)) continue;
-        const f = { x0: x, z0: r.z0, x1: x, z1: r.z1, side };
+        const f = vert ? { x0: c, z0: r.z0, x1: c, z1: r.z1, side } : { x0: r.x0, z0: c, x1: r.x1, z1: c, side };
         u.fronts.push(f); u.wfronts.push(lseg(u.frame, f));
       }
     }
