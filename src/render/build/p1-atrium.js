@@ -551,6 +551,7 @@ function megaAtrium(ctx, levels) {
   }
   greenWalls(ctx, levels);
   directoryTotems(ctx, levels);
+  for (const lv of levels.filter((l) => /^[2-6]F$/.test(l.short))) if (ctx.levels[lv.id]) balconyInlay(ctx.levels[lv.id].batch, lv);
   blossomClouds(ctx, levels);
   // A、B 走道里的岛柜（粉白玻璃柜 + 灯箱顶）和咖啡外摆
   for (const it of M.islands || []) {
@@ -949,6 +950,28 @@ function plazaBaffles(ctx, lv1) {
   for (const q of placed) {
     if (placed.filter((o) => o !== q && Math.hypot(o.cx - q.cx, o.cz - q.cz) < 1.6).length < 2) continue;
     L.batch.get('wood').box(q.cx, ceil - 0.16, q.cz, 0.07, 0.22, q.len, '#b88a5a', q.ry);
+  }
+}
+
+/** 2F–6F 走道上沿本层大中庭洞口边往外 2.2 米一条深色石带 + 金线（和 1F 广场的拼花呼应，楼上走道不再是一整片素色） */
+function balconyInlay(B, lv) {
+  const blocked = [...(lv.navObstacles || []).map((o) => o.poly), ...lv.units.flatMap((u) => u.polys)];
+  const free = (x, z) => !lv.voids.some((v) => pointInPoly([x, z], v.poly)) && lv.walk.some((w) => pointInPoly([x, z], w.poly)) && !blocked.some((q) => pointInPoly([x, z], q));
+  for (const v of lv.voids.filter((q) => q.mega)) {
+    const P = v.poly;
+    for (let i = 0; i < P.length; i++) {
+      const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 0.3) continue;
+      let nx = -(z1 - z0) / len, nz = (x1 - x0) / len;
+      if (pointInPoly([(x0 + x1) / 2 + nx * 0.3, (z0 + z1) / 2 + nz * 0.3], P)) { nx = -nx; nz = -nz; } // 朝走道
+      const ang = Math.atan2(-(z1 - z0), x1 - x0), n = Math.max(1, Math.ceil(len / 1.2));
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t + nx * 2.2, mz = z0 + (z1 - z0) * t + nz * 2.2, pl = len / n + 0.02;
+        if (!free(mx, mz)) continue;
+        B.get('stone').box(mx, lv.elev + 0.006, mz, pl, 0.012, 0.3, '#6e6359', ang);
+        B.get('facadeBronze').box(mx + nx * 0.24, lv.elev + 0.007, mz + nz * 0.24, pl, 0.012, 0.05, GOLD, ang);
+      }
+    }
   }
 }
 
