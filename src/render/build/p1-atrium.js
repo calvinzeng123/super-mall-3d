@@ -493,6 +493,7 @@ function megaAtrium(ctx, levels) {
     fountain(B, IDENTITY, { u: f.x, v: f.z, r: f.r - 0.4, H: f.r >= 6 ? 12 : 9 }, y0);
     for (const [R, w] of [[f.r + 1.2, 0.14], [f.r + 2.2, 0.08]]) floorRing(B, f.x, f.z, R, w, y0);
   }
+  floorInlay(ctx, B, lv1, y0, (D?.fountains || []).filter((q) => q.indoor));
   // 新楼面天花：沿西北翼方向的暖光灯带（3 米一条，6 米一行），只挂在头顶真有楼板的地方
   for (let i = 0; i < levels.length - 1; i++) {
     const lv = levels[i], up = levels[i + 1], L = ctx.levels[lv.id];
@@ -661,6 +662,44 @@ function greenWalls(ctx, levels) {
         }
         j = e;
       }
+    }
+  }
+}
+
+/**
+ * 1F 中庭地面的石材拼花（效果图里广场地面有深色石材镶边和放射纹，不是一整片素色）：
+ * ① 沿 2F 大中庭洞口（方庭、大椭圆、圆厅、长廊）的投影往里 1.2 米一圈 0.36 米宽深色石带，外侧贴一条 6 厘米金线；
+ * ② 每座喷泉外一圈 24 条放射石线（深浅相间）。石材面比地面高 1–2 厘米，压在倒影膜上面（不然被倒影洗淡看不见）。碰到树池、喷泉、咖啡外摆这些障碍或不在走道上的段落不画。
+ */
+function floorInlay(ctx, B, lv1, y0, fountains) {
+  const lv2 = ctx.layout.levels.find((l) => l.id === 'P1-2F');
+  if (!lv2) return;
+  const blocked = (lv1.navObstacles || []).map((o) => o.poly);
+  const free = (x, z) => lv1.walk.some((w) => pointInPoly([x, z], w.poly)) && !blocked.some((q) => pointInPoly([x, z], q))
+    && !lv1.voids.some((v) => pointInPoly([x, z], v.poly));
+  // 大中庭洞口（方庭 + 大椭圆合成的 SQ-void、圆厅 C-void、长廊 MEGA-void-*）
+  for (const v of lv2.voids.filter((q) => q.mega && /^(SQ-void|C-void|MEGA-void)/.test(q.id))) {
+    const P = v.poly;
+    for (let i = 0; i < P.length; i++) {
+      const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 0.3) continue;
+      let nx = -(z1 - z0) / len, nz = (x1 - x0) / len;
+      if (!pointInPoly([(x0 + x1) / 2 + nx * 0.3, (z0 + z1) / 2 + nz * 0.3], P)) { nx = -nx; nz = -nz; }
+      const ang = Math.atan2(-(z1 - z0), x1 - x0), n = Math.max(1, Math.ceil(len / 1.2));
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t + nx * 1.2, mz = z0 + (z1 - z0) * t + nz * 1.2, pl = len / n + 0.02;
+        if (!free(mx, mz)) continue;
+        B.get('stone').box(mx, y0 + 0.014, mz, pl, 0.01, 0.36, '#6e6359', ang);
+        B.get('facadeBronze').box(mx - nx * 0.3, y0 + 0.015, mz - nz * 0.3, pl, 0.01, 0.06, GOLD, ang);
+      }
+    }
+  }
+  for (const f of fountains) {
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2, r0 = f.r + 2.7, r1 = f.r + 6.5;
+      const ax = f.x + Math.cos(a) * r0, az = f.z + Math.sin(a) * r0, bx = f.x + Math.cos(a) * r1, bz = f.z + Math.sin(a) * r1;
+      if (![0, .5, 1].every((t) => free(ax + (bx - ax) * t, az + (bz - az) * t))) continue;
+      B.get('stone').box((ax + bx) / 2, y0 + 0.014, (az + bz) / 2, r1 - r0, 0.01, k % 2 ? 0.1 : 0.16, k % 2 ? '#a89a86' : '#7d7064', Math.atan2(-(bz - az), bx - ax));
     }
   }
 }
