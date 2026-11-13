@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN, rng } from '../textures.js';
 import { pointInPoly, lrectPoly, toW, toL, frame, IDENTITY, distToPolyEdge } from '../../layout/geom.js';
 import clipping from 'polygon-clipping';
-import { NW_FRAME, MEGA_OVAL, MEGA_SKY } from '../../layout/p1-mega.js';
+import { NW_FRAME, SE_FRAME, MEGA_OVAL, MEGA_SKY } from '../../layout/p1-mega.js';
 import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
@@ -551,6 +551,7 @@ function megaAtrium(ctx, levels) {
   }
   greenWalls(ctx, levels);
   directoryTotems(ctx, levels);
+  blossomClouds(ctx, levels);
   // A、B 走道里的岛柜（粉白玻璃柜 + 灯箱顶）和咖啡外摆
   for (const it of M.islands || []) {
     const L = ctx.levels[it.level], lv = levels.find((l) => l.id === it.level);
@@ -573,6 +574,33 @@ function megaAtrium(ctx, levels) {
     }
   }
 }
+
+/** 东南入口长廊的洞口里吊三团樱花花云（2F–3F 之间，进门一抬头就看见）：几十个粉白小花球攒成椭球，腰上一圈金环，细吊索拉到屋面 */
+function blossomClouds(ctx, levels) {
+  const lv2 = levels.find((l) => l.id === 'P1-2F'), lv3 = levels.find((l) => l.id === 'P1-3F'), rf = levels.find((l) => l.kind === 'roof');
+  const L = lv2 && ctx.levels[lv2.id];
+  if (!L || !lv3 || !rf) return;
+  const pinks = ['#f2b6c8', '#e58fb5', '#f7cfdc', '#d97aa6', '#fbe3ea', '#ffffff'];
+  for (const u of [44, 54, 64]) {
+    const [x, z] = toW(SE_FRAME, u, 0);
+    // 2F、3F 的洞口里离边都要 ≥ 2.6 米（花云半径 1.6 米）
+    if (![lv2, lv3].every((lv) => lv.voids.some((v) => v.mega && pointInPoly([x, z], v.poly) && distToPolyEdge([x, z], v.poly) > 2.6))) continue;
+    const rand = rng(u * 7 + 3), cy = (lv2.elev + lv3.elev) / 2 + 0.6;
+    for (let k = 0; k < 46; k++) {
+      const a = rand() * Math.PI * 2, b = Math.acos(rand() * 2 - 1), r = 0.55 + rand() * 0.45;
+      B2(L).get('foliage').sphere(x + Math.sin(b) * Math.cos(a) * 1.5 * r, cy + Math.cos(b) * 0.95 * r, z + Math.sin(b) * Math.sin(a) * 1.5 * r,
+        0.42 + rand() * 0.22, pinks[Math.floor(rand() * pinks.length)], undefined, undefined, 'ico');
+    }
+    for (let k = 0; k < 6; k++) { const a = rand() * Math.PI * 2; B2(L).get('foliage').sphere(x + Math.cos(a) * 1.2, cy - 0.5 + rand() * 0.4, z + Math.sin(a) * 1.2, 0.3, LEAF, 0.2, 0.3, 'ico0'); }
+    const n = 28;
+    for (let k = 0; k < n; k++) {
+      const a0 = (k / n) * Math.PI * 2, a1 = ((k + 1) / n) * Math.PI * 2;
+      B2(L).get('facadeBronze').bar({ x: x + Math.cos(a0) * 1.75, y: cy, z: z + Math.sin(a0) * 1.75 }, { x: x + Math.cos(a1) * 1.75, y: cy, z: z + Math.sin(a1) * 1.75 }, 0.05, GOLD);
+    }
+    for (const a of [0, 2.09, 4.19]) B2(L).get('metal').bar({ x: x + Math.cos(a) * 1.75, y: cy, z: z + Math.sin(a) * 1.75 }, { x: x + Math.cos(a) * 0.6, y: rf.elev, z: z + Math.sin(a) * 0.6 }, 0.012, '#9aa0a6');
+  }
+}
+const B2 = (L) => L.batch;
 
 /** 楼层导览牌的画面：顶上楼层号、下面按业态列出本层的店（虚构品牌，取自布局里的品牌记录） */
 function directoryTexture(ctx, lv) {
