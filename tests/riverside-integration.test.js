@@ -201,8 +201,8 @@ test('园区总数（游览布局，实测）等于 tests/campus-deltas 之和�
   assert.equal(L.elevators.length, CAMPUS.lifts);
   assert.equal(L.stairs.length, CAMPUS.stairs);
   assert.equal(units.length - res.length, CAMPUS.shops);
-  // 367 − 68：云澜大中庭（tests/campus-deltas/p1-atrium.js）；+6：超级商业中心（tests/campus-deltas/p1-mega.js）
-  assert.equal(units.filter((u) => !u.residence && lvl(u.level).building === 'P1').length, 305);
+  // 367 − 68：云澜大中庭（tests/campus-deltas/p1-atrium.js）；+7：超级商业中心（tests/campus-deltas/p1-mega.js）
+  assert.equal(units.filter((u) => !u.residence && lvl(u.level).building === 'P1').length, 306);
   assert.equal(res.length, CAMPUS.records);
   assert.equal(new Set(res.map((u) => u.residence.home ?? u.id)).size, CAMPUS.homes);
   const homes = (c) => new Set(res.filter((u) => u.residence.community === c).map((u) => u.residence.home ?? u.id)).size;

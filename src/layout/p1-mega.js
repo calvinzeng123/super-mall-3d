@@ -147,9 +147,11 @@ function grow(P, m) {
 }
 const boxAround = (pts, m) => { const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]); const x0 = Math.min(...xs) - m, x1 = Math.max(...xs) + m, z0 = Math.min(...zs) - m, z1 = Math.max(...zs) + m; return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]; };
 /** 这一层要留出来的楼梯、电梯、扶梯范围（外扩：楼梯 3 米、电梯 3.5 米、扶梯 3 米） */
-function keepOuts(layout, lv, { forVoid = false } = {}) {
+export function keepOuts(layout, lv, { forVoid = false } = {}) {
   const out = [];
   for (const s of layout.stairs || []) if (s.poly && (s.serves || []).includes(lv.id)) out.push(grow(s.poly, 3));
+  // 卫生间、核心筒用房（西北翼那两间在洞口里，本来就要拆）：开洞时绕开，门前留 2 米
+  if (forVoid) for (const r of lv.rooms || []) if (!['NW-core', 'NW-wc'].includes(r.id)) for (const p of r.polys || []) if (p.length === 4) out.push(grow(p, 2));
   for (const e of layout.elevators || []) if ((e.serves || []).includes(lv.id)) { const p = e.shaftPoly || (e.frame && e.w ? [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => toW(e.frame, e.lu + (a * e.w) / 2, e.lv + (b * e.d) / 2)) : null); if (p) out.push(grow(p, 3.5)); }
   // 扶梯：沿梯身的斜矩形（两边各 1.5 米，两头各留 3 米梯口），不用外接方框（45° 的翼楼里外接方框大得多）
   // 中庭退台扶梯（MEGA-X）本来就是从洞口里往上爬的：开洞时不躲它们（扶梯洞另算）
@@ -162,10 +164,22 @@ function keepOuts(layout, lv, { forVoid = false } = {}) {
 }
 
 /** 这一层新加的洞口（椭圆 ∪ 颈 − 楼梯、电梯、扶梯留出的范围） */
-function addedVoid(layout, lv) {
+export function addedVoid(layout, lv) {
   const { oval, neck, throat, galleria, west } = megaVoidParts(lv.short);
   let added = clipping.union([[close(oval)]], [[close(neck)]], [[close(throat)]], [[close(galleria)]], [[close(west)]]);
-  for (const k of keepOuts(layout, lv, { forVoid: true })) { try { added = clipping.difference(added, [[close(k)]]); } catch { /* 跳过 */ } }
+  // 扶梯口落在新洞口中间（东南翼、西翼街心的扶梯）：在梯口外加一道 4 米宽、横跨洞口的连桥，接到两边走廊，梯口不会悬空
+  const raw = added, inRaw = (q) => raw.some((m) => inside(q, open(m[0])) && !m.slice(1).some((h) => inside(q, open(h))));
+  const bridges = [];
+  for (const e of layout.escalators || []) {
+    if (/MEGA-X/.test(e.pair)) continue;
+    const ax = e.top.x - e.bottom.x, az = e.top.z - e.bottom.z, L = Math.hypot(ax, az) || 1, ux = ax / L, uz = az / L;
+    for (const [p, sgn, here] of [[e.bottom, -1, e.from === lv.id], [e.top, 1, e.to === lv.id]]) {
+      if (!here || !inRaw([p.x, p.z])) continue;
+      const c = [p.x + ux * sgn * 2, p.z + uz * sgn * 2], hl = 15, hw = 2.5;
+      bridges.push([[c[0] - ux * hw - uz * hl, c[1] - uz * hw + ux * hl], [c[0] + ux * hw - uz * hl, c[1] + uz * hw + ux * hl], [c[0] + ux * hw + uz * hl, c[1] + uz * hw - ux * hl], [c[0] - ux * hw + uz * hl, c[1] - uz * hw - ux * hl]]);
+    }
+  }
+  for (const k of [...keepOuts(layout, lv, { forVoid: true }), ...bridges]) { try { added = clipping.difference(added, [[close(k)]]); } catch { /* 跳过 */ } }
   return added;
 }
 /** 布尔运算前坐标取整到 0.1 mm；算完把落在原有顶点 0.3 mm 内的点还原成原值（门洞、连廊端头要和楼板边严丝合缝） */

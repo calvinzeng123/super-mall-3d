@@ -160,8 +160,9 @@ test('楼梯、电梯在每个停靠层的互动点都可站立', () => {
 
 test('飞行落地：一期东南翼上空 9m 落到 2F', () => {
   const se = L.buildings.find((b) => b.id === 'P1').wings.find((w) => w.id === 'SE');
-  // u=55 在 2F 商业街两段通高缝 [40,52]、[58,72] 之间（缝里本来就该掉到 1F）
-  const [x, z] = toW(se.F, 55, 0);
+  // u=55 在 2F 商业街两段通高缝 [40,52]、[58,72] 之间（缝里本来就该掉到 1F）；
+  // 超级商业中心在东南翼街心开了长廊（2F 半宽 5 米），落点挪到长廊边的走廊上（v=6）
+  const [x, z] = toW(se.F, 55, 6);
   const s = landAt(nav, x, z, 9);
   assert.equal(s && s.floor, 'P1-2F');
 });
