@@ -345,7 +345,8 @@ function railings(ctx, lv) {
         const pl = len / n + 0.02;
         B.edge(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n, x0 + (x1 - x0) * (k + 1) / n, z0 + (z1 - z0) * (k + 1) / n, lv.elev, 0.6, floorSide);
         B.get('glass').box(mx, lv.elev + 0.62, mz, pl, 1.0, 0.03, 0xffffff, ang);
-        B.get('metal').box(mx, lv.elev + 1.12, mz, pl, 0.06, 0.09, th.trim, ang);
+        // 超级商业中心的中庭（游览模式）：效果图里是通透玻璃栏板 + 细长的黄铜扶手
+        B.get('metal').box(mx, lv.elev + 1.12, mz, pl, 0.06, 0.09, v.mega && ctx.depthCues ? '#c9a35f' : th.trim, ang);
         B.get('satin').box(mx, lv.elev + 0.07, mz, pl, 0.14, 0.24, th.column, ang);
       }
     }

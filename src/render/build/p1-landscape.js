@@ -24,6 +24,13 @@ export function buildP1Landscape(ctx) {
   }
   if (D.sculpture) cloudUmbrella(B, D.sculpture, y);
   if (D.hotelLoop) dropOffLoop(B, D.hotelLoop, trees);
+  // 酒店南侧人行带：树之间的低矮石材花池，种灌木和花
+  for (const p of D.hotelFront?.planters || []) {
+    B.get('ext').box(p.x, y + .24, p.z, p.hx * 2, .48, p.hz * 2, '#cfc6b6');
+    B.get('ext').box(p.x, y + .47, p.z, p.hx * 2 - .12, .04, p.hz * 2 - .12, '#4a3a2c');
+    for (let k = 0; k < 5; k++) B.get('foliage').sphere(p.x - p.hx + .35 + k * (p.hx * 2 - .7) / 4, y + .62, p.z + (k % 2 ? .08 : -.08), .32, k % 2 ? '#4f7f3c' : '#5d8f45', .26, .3, 'ico0');
+    for (let k = 0; k < 4; k++) B.get('foliage').sphere(p.x - p.hx + .6 + k * (p.hx * 2 - 1.2) / 3, y + .8, p.z, .1, ['#e58fb5', '#f6e7a1', '#c96aa8', '#f2b6c8'][k], undefined, undefined, 'ico0');
+  }
   // 超级商业中心：东南主入口落客环岛 + 门前玻璃雨棚
   if (D.seLoop) { dropOffLoop(B, D.seLoop, trees); seCanopy(B, D.seLoop.canopy); if (D.seLoop.walkway) seCanopy(B, D.seLoop.walkway); }
   if (trees.length) addTrees(ctx.site.group, ctx.mats, trees, 207);

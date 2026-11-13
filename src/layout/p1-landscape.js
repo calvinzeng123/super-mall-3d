@@ -25,7 +25,32 @@ export function planP1Landscape(layout, P1) {
   out.sculpture = { ...c };
   block(c.id, circlePoly(c.x, c.z, 1.1, 12));
   out.hotelLoop = hotelDropOff(layout, block);
+  out.hotelFront = hotelFrontage(layout, block, out.trees);
   return out;
+}
+
+/** 酒店南立面和共享停车场之间那条 5 米人行带：每 8 米一棵行道树（树池），树之间一段低矮花池，靠墙留 1.9 米通道；
+ *  避开 B1 的南开口（x −241…−235）前后 5 米，和已有的障碍、开口、车道。树进 out.trees（一起画树池），花池在这里返回。 */
+function hotelFrontage(layout, block, trees) {
+  const H = layout.buildings.find(b => b.id === 'H'), lot = layout.extensions.surfaceParking.find(l => l.id === 'hotel-shared-parking');
+  if (!H || !lot) return null;
+  const S = layout.site, fc = S.forecourt, z = -59.8;
+  const solids = [...S.trenches, ...S.openings, ...S.driveways, ...(S.crossings || []).map(c => c.poly), ...fc.obstacles.map(o => o.poly)];
+  const clear = (poly) => !solids.some(q => convexOverlap(q, poly)) && !layout.buildings.some(b => !b.undergroundOnly && polysOverlap(b.outline, poly));
+  const skip = (x0, x1) => x1 > -246 && x0 < -230;
+  const planters = [];
+  for (let x = -274; x <= -218; x += 8) {
+    const pit = rectPoly(rect(x - .45, z - .45, x + .45, z + .45));
+    if (skip(x - .45, x + .45) || !clear(pit)) continue;
+    trees.push({ x, z, s: .95 });
+    block(`hotel-front-tree-${x}`, pit);
+    const p = { id: `hotel-front-planter-${x}`, x: x + 4, z, hx: 1.5, hz: .4 };
+    p.poly = rectPoly(rect(p.x - p.hx, z - p.hz, p.x + p.hx, z + p.hz));
+    if (p.x + p.hx > -213 || skip(p.x - p.hx, p.x + p.hx) || !clear(p.poly)) continue;
+    planters.push(p);
+    block(p.id, p.poly);
+  }
+  return { planters };
 }
 
 /** Avenue and 星湾路 belts every 8 m plus a grove on the SE plaza, wherever
