@@ -11,6 +11,7 @@ import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
+const leafE = new THREE.Euler(0, 0, 0, 'YXZ'), leafQ = new THREE.Quaternion(), leafP = new THREE.Vector3(), leafS = new THREE.Vector3();
 const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', GOLD_LED = '#ffc675', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
 const FLOWERS = ['#e58fb5', '#c96aa8', '#f2b6c8', '#a77bd1', '#f6e7a1'];
 
@@ -136,9 +137,16 @@ function balconyEdge(ctx, B, lv, v) {
       const vines = rand() < 0.35 ? 0 : 1 + Math.floor(rand() * 2);
       for (let q = 0; q < vines; q++) {
         const s = (rand() - 0.5) * pl * 0.9, L = 0.5 + rand() * (lv.height > 5 ? 1.7 : 1.2), sway = (rand() - 0.5) * 0.25;
+        // 一串串垂下来的藤叶：每一节左右两片小叶，随机偏转、略微下垂（原来是一串小球，远看像珠帘）
         for (let d = 0.1; d < L; d += 0.17) {
-          const t = d / L, jx = Math.sin(d * 7 + s * 3) * 0.05;
-          B.get('foliage').sphere(mx + ux * (s + jx + sway * t) + nx * (0.47 + t * 0.06), y - 0.3 - d, mz + uz * (s + jx + sway * t) + nz * (0.47 + t * 0.06), 0.1 - 0.035 * t, rand() < 0.5 ? '#5f9447' : '#4a803c', 0.08, 0.045, 'ico0');
+          const t = d / L, jx = Math.sin(d * 7 + s * 3) * 0.05, lx = mx + ux * (s + jx + sway * t) + nx * (0.47 + t * 0.06), lz = mz + uz * (s + jx + sway * t) + nz * (0.47 + t * 0.06);
+          for (const side of [1, -1]) {
+            const yaw = Math.atan2(-uz, ux) + side * (0.6 + rand() * 0.5);
+            leafE.set(-0.35 - rand() * 0.4, yaw, side * 0.3); leafQ.setFromEuler(leafE);
+            leafP.set(lx + ux * side * 0.045, y - 0.3 - d - (side > 0 ? 0 : 0.07), lz + uz * side * 0.045);
+            leafS.set(0.13 - 0.04 * t, 0.012, 0.075 - 0.02 * t);
+            B.get('foliage').shape('box', leafP, leafQ, leafS, rand() < 0.5 ? '#5f9447' : (rand() < 0.5 ? '#4a803c' : '#76a85a'));
+          }
         }
       }
       if (rand() < 0.5) for (let q = 0; q < 3; q++) {
