@@ -108,6 +108,9 @@ function balconyEdge(ctx, B, lv, v) {
   const fall = [toW(F_SQ, WATERFALL.x, WATERFALL.z0), toW(F_SQ, WATERFALL.x, WATERFALL.z1)];
   const nearFall = (x, z) => (v.id === 'SQ-void' || v.square) && Math.abs(x - fall[0][0]) < 2 && z > Math.min(fall[0][1], fall[1][1]) - 1.5 && z < Math.max(fall[0][1], fall[1][1]) + 1.5;
   const rand = rng(lv.elev * 13 + 7 + v.poly.length), P = v.poly, y = lv.elev, roof = lv.kind === 'roof';
+  // 栏杆里侧每隔 13 米一棵盆栽小树（效果图里各层走道沿栏杆一排绿树），离栏板 0.75 米，扶梯口、观光梯门前、铺位里、障碍物上不放
+  const blocked = (lv.navObstacles || []).map((o) => o.poly);
+  let acc = 6.5;
   for (let i = 0; i < P.length; i++) {
     const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);
     if (len < 0.05) continue;
@@ -116,6 +119,12 @@ function balconyEdge(ctx, B, lv, v) {
     let nx = -uz, nz = ux;
     if (!pointInPoly([(x0 + x1) / 2 + nx * 0.3, (z0 + z1) / 2 + nz * 0.3], P)) { nx = -nx; nz = -nz; }
     const ang = Math.atan2(-uz, ux), n = Math.max(1, Math.ceil(len / 1.6));
+    for (let d = 13 - acc; !roof && d < len; d += 13) {
+      const tx = x0 + ux * d - nx * 0.75, tz = z0 + uz * d - nz * 0.75;
+      if (skip(tx, tz) || nearFall(tx, tz) || inUnit(tx, tz) || !lv.walk.some((w) => pointInPoly([tx, tz], w.poly)) || blocked.some((q) => pointInPoly([tx, tz], q))) continue;
+      railTree(B, tx, tz, y, Math.round(Math.abs(tx * 17 + tz * 5)));
+    }
+    acc = (acc + len) % 13;
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t, mz = z0 + (z1 - z0) * t, pl = len / n + 0.03;
       // 栏板：楼板边包一圈白色弧面（0.9 米高），底下一条暖光
@@ -157,6 +166,25 @@ function balconyEdge(ctx, B, lv, v) {
         B.get('foliage').sphere(mx + ux * s + nx * (0.3 + rand() * 0.15), y + 0.1, mz + uz * s + nz * (0.3 + rand() * 0.15), 0.09 + rand() * 0.04, FLOWERS[Math.floor(rand() * FLOWERS.length)], undefined, undefined, 'ico0');
       }
     }
+  }
+}
+
+/** 栏杆边的盆栽小树：白色圆盆（金色细边）、一根细干分两三杈，顶上一团由十几个小叶团攒成的圆冠（约 2.3 米高） */
+function railTree(B, x, z, y0, seed) {
+  const rand = rng(seed + 29);
+  B.get('satin').cyl(x, y0, z, 0.3, 0.55, '#f1ede6', 16);
+  B.get('facadeBronze').cyl(x, y0 + 0.53, z, 0.31, 0.03, GOLD, 16);
+  B.get('foliage').cyl(x, y0 + 0.5, z, 0.26, 0.04, '#4a3a2a', 12);
+  const top = { x: x + (rand() - 0.5) * 0.12, y: y0 + 1.45, z: z + (rand() - 0.5) * 0.12 };
+  B.get('wood').bar({ x, y: y0 + 0.52, z }, top, 0.06, '#7a6048');
+  const cy = y0 + 1.85, greens = ['#5f9447', '#4f7f3c', '#6f9f50', '#47753a'];
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2 + rand(), q = { x: top.x + Math.cos(a) * 0.22, y: cy - 0.05, z: top.z + Math.sin(a) * 0.22 };
+    B.get('wood').bar(top, q, 0.035, '#7a6048');
+  }
+  for (let k = 0; k < 14; k++) {
+    const h = rand() * 2 - 1, a = rand() * Math.PI * 2, rr = Math.sqrt(1 - h * h) * 0.42;
+    B.get('foliage').sphere(top.x + Math.cos(a) * rr, cy + h * 0.36, top.z + Math.sin(a) * rr, 0.17 + rand() * 0.06, greens[k % greens.length], undefined, undefined, 'ico0');
   }
 }
 
