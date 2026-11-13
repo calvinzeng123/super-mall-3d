@@ -581,6 +581,7 @@ function megaAtrium(ctx, levels) {
     if (!L || !lv) continue;
     if (it.kind === 'cafe') cafe(L.batch, { x0: it.x - it.hx, x1: it.x + it.hx, z0: it.z - it.hz, z1: it.z + it.hz }, lv.elev, IDENTITY);
     else if (it.kind === 'garden') garden(L.batch, it, lv.elev);
+    else if (it.kind === 'lounge') lounge(L.batch, IDENTITY, { u: it.x, v: it.z, w: 3.6, d: 2.2 }, lv.elev);
     else kiosk(L.batch, it, lv.elev, it.x * 3 + it.z);
   }
   M.plaza?.trees.forEach((t, i) => (t.kind === 'palm' ? palm(B, IDENTITY, { u: t.x, v: t.z, r: t.r }, y0, i * 13 + 5) : blossom(B, t, y0, i)));

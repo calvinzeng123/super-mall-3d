@@ -709,12 +709,13 @@ function megaIslands(layout, befores) {
       }
     }
     // 岛柜、咖啡外摆，再用休憩花园（树池 + 两条长椅）把空出来的大块地面填上
+    // 最后再用休息区（三人沙发 + 圆茶几 + 地毯 + 落地绿植，2.6 × 4 米）填剩下的大块空地
     const want = [['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5],
-      ...Array.from({ length: 10 }, () => ['garden', 3, 2, 2.5])];
+      ...Array.from({ length: 10 }, () => ['garden', 3, 2, 2.5]), ...Array.from({ length: 4 }, () => ['lounge', 1.3, 2, 2.2])];
     for (const [kind, hx, hz, m] of want) {
       let best = null;
       for (let x = Math.min(...xs) + 4; x < Math.max(...xs) - 4; x += 3) for (let z = Math.min(...zs) + 4; z < Math.max(...zs) - 4; z += 3) {
-        if (!(inInfill([x, z]) || inBand([x, z])) || placed.some((p) => Math.hypot(p.x - x, p.z - z) < (kind === 'garden' || p.kind === 'garden' ? 9 : 14))) continue;
+        if (!(inInfill([x, z]) || inBand([x, z])) || placed.some((p) => Math.hypot(p.x - x, p.z - z) < (['garden', 'lounge'].includes(kind) || ['garden', 'lounge'].includes(p.kind) ? 9 : 14))) continue;
         const clearBox = box(x, z, hx + m, hz + m);
         if (![...clearBox, [x, z]].every(onWalk)) continue;
         if (blocked.some((b) => hit(clearBox, b))) continue;
