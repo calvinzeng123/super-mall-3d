@@ -42,7 +42,8 @@ function megaPaths(layout, P) {
     && !(lv.navObstacles || []).some((o) => pointInPoly(p, o.poly)) && !lv.voids.some((v) => pointInPoly(p, v.poly));
   for (const lv of layout.levels.filter((l) => l.building === 'P1' && l.kind !== 'roof')) {
     const y = lv.elev + 0.07;
-    for (const v of lv.voids.filter((q) => q.mega)) {
+    // 两圈：离洞口 3 米的回游线，和贴着栏杆 1.3 米、慢慢走着往中庭里看的一圈（效果图里每层栏杆边都站满了人）
+    for (const v of lv.voids.filter((q) => q.mega)) for (const [off, name] of [[3, '中庭回游线'], [1.3, '中庭栏杆边']]) {
       const pts = [], Q = v.poly;
       for (let i = 0; i < Q.length; i++) {
         const a = Q[i], b = Q[(i + 1) % Q.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -50,10 +51,10 @@ function megaPaths(layout, P) {
         let nx = -(b[1] - a[1]) / len, nz = (b[0] - a[0]) / len;
         const mid = [(a[0] + b[0]) / 2 + nx * 0.3, (a[1] + b[1]) / 2 + nz * 0.3];
         if (pointInPoly(mid, Q)) { nx = -nx; nz = -nz; }
-        for (let t = 0; t < len; t += 2) pts.push([a[0] + (b[0] - a[0]) * (t / len) + nx * 3, a[1] + (b[1] - a[1]) * (t / len) + nz * 3]);
+        for (let t = 0; t < len; t += 2) pts.push([a[0] + (b[0] - a[0]) * (t / len) + nx * off, a[1] + (b[1] - a[1]) * (t / len) + nz * off]);
       }
       let run = [];
-      const flush = () => { if (run.length >= 6) P(lv.id).people.push({ loop: false, pts: run.map(([x, z]) => [x, y, z]), name: '中庭回游线' }); run = []; };
+      const flush = () => { if (run.length >= 6) P(lv.id).people.push({ loop: false, pts: run.map(([x, z]) => [x, y, z]), name }); run = []; };
       for (const p of pts) { if (onWalk(lv, p) && (!run.length || Math.hypot(p[0] - run.at(-1)[0], p[1] - run.at(-1)[1]) < 4)) run.push(p); else flush(); }
       flush();
     }

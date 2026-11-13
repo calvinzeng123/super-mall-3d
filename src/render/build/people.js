@@ -22,7 +22,9 @@ export async function buildPeople(ctx) {
     // 一期样板中庭的几层人多一些（预想图里中庭人很多）；手机按画质的人群密度再打折
     const busy = lv.building === 'P1' && lv.kind === 'retail' && ctx.layout.fidelity?.atrium;
     // 超级商业中心（一期并进 A、B 两块楼面）每层再多 80 人
-    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 200 : 120) : COUNT[lv.kind] || 20;
+    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 260 : 120) : COUNT[lv.kind] || 20;
+    // 中庭边的两圈（回游线、栏杆边）：一期每层四成的人走这里，中庭四周才像效果图那样热闹
+    const atrium = paths.filter(path => !path.escalator && /^中庭/.test(path.name || ''));
     const variants = assets.map(asset => {
       const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, count);
       mesh.name = `textured-people-${lv.id}-${asset.id}`;
@@ -38,15 +40,16 @@ export async function buildPeople(ctx) {
     });
     const list = [];
     for (let i = 0; i < count; i++) {
-      const onEsc = rand() < .16;
-      const pool = paths.filter(path => !!path.escalator === onEsc);
+      const onEsc = rand() < .16, toAtrium = !onEsc && atrium.length && rand() < .4;
+      const pool = toAtrium ? atrium : paths.filter(path => !!path.escalator === onEsc);
       const available = pool.length ? pool : paths;
       const path = available[Math.floor(rand() * available.length)];
-      const pl = polyline(path.pts, path.loop);
+      const pl = polyline(path.pts, path.loop), rail = path.name === '中庭栏杆边';
       list.push({ pl, loop: path.loop, escalator: !!path.escalator,
-        d: rand() * pl.total, speed: path.escalator ? .5 : .85 + rand() * .55,
+        // 栏杆边的人走得慢（逛着看），也不往两边散开，免得贴到栏板上
+        d: rand() * pl.total, speed: path.escalator ? .5 : rail ? .3 + rand() * .3 : .85 + rand() * .55,
         dir: path.loop && rand() < .5 ? -1 : 1,
-        lateral: path.escalator ? (rand() - .5) * .25 : (rand() - .5) * (lv.kind === 'parking' ? .6 : 2.4),
+        lateral: path.escalator ? (rand() - .5) * .25 : rail ? (rand() - .5) * .5 : (rand() - .5) * (lv.kind === 'parking' ? .6 : 2.4),
         phase: rand(), size: .94 + rand() * .1, variant: i % assets.length,
         // A deterministic rank keeps the same population while changing quality.
         rank: (i + .5) / count,
