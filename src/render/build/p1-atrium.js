@@ -11,6 +11,7 @@ import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
+const sgE = new THREE.Euler(), sgQ = new THREE.Quaternion(), sgP = new THREE.Vector3(), sgS = new THREE.Vector3();
 const leafE = new THREE.Euler(0, 0, 0, 'YXZ'), leafQ = new THREE.Quaternion(), leafP = new THREE.Vector3(), leafS = new THREE.Vector3();
 const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', GOLD_LED = '#ffc675', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
 const FLOWERS = ['#e58fb5', '#c96aa8', '#f2b6c8', '#a77bd1', '#f6e7a1'];
@@ -524,19 +525,40 @@ function megaAtrium(ctx, levels) {
   for (const lv of levels.filter((l) => /^[1-6]F$/.test(l.short))) {
     const L = ctx.levels[lv.id];
     if (!L) continue;
-    const holes = lv.voids.map((v) => v.poly);
+    const holes = lv.voids.map((v) => v.poly), pots = [];
     for (const u of lv.units) for (const f of u.wfronts || []) {
       const dx = f.x1 - f.x0, dz = f.z1 - f.z0, len = Math.hypot(dx, dz);
       if (len < 2 || f.nx === undefined) continue;
       const cx = (f.x0 + f.x1) / 2 + f.nx * 1.9, cz = (f.z0 + f.z1) / 2 + f.nz * 1.9;
       if (holes.some((h) => pointInPoly([cx, cz], h)) || !lv.walk.some((w) => pointInPoly([cx, cz], w.poly))) continue;
       L.batch.pool(cx, lv.elev, cz, len * 0.95, 3.6, 0xffdcae, Math.atan2(-dz, dx));
+      // 餐饮店（咖啡、茶饮、餐厅、烘焙、小吃）门口一块 A 字黑板立牌：离玻璃 1.3 米、门脸中点偏 1.4 米
+      if (['cafe', 'tea', 'restaurant', 'bakery', 'snack'].includes(u.brand?.cat) && len >= 4) {
+        const ux = dx / len, uz = dz / len, ax = (f.x0 + f.x1) / 2 + ux * 1.4 + f.nx * 1.3, az = (f.z0 + f.z1) / 2 + uz * 1.4 + f.nz * 1.3;
+        if (!holes.some((h) => pointInPoly([ax, az], h)) && lv.walk.some((w) => pointInPoly([ax, az], w.poly)) && !(lv.navObstacles || []).some((o) => pointInPoly([ax, az], o.poly))) {
+          const ry = Math.atan2(f.nx, f.nz), y = lv.elev;
+          for (const side of [1, -1]) {
+            sgE.set(-side * 0.2, ry, 0, 'YXZ'); sgQ.setFromEuler(sgE); // 两块板顶部往中间靠（A 字）
+            sgP.set(ax + f.nx * side * 0.14, y + 0.47, az + f.nz * side * 0.14);
+            L.batch.get('wood').shape('box', sgP, sgQ, sgS.set(0.62, 0.95, 0.035), '#7a5a3c');
+            sgP.set(ax + f.nx * side * 0.16, y + 0.5, az + f.nz * side * 0.16);
+            L.batch.get('matte').shape('box', sgP, sgQ, sgS.set(0.5, 0.7, 0.012), '#25302b');
+            sgP.set(ax + f.nx * side * 0.17, y + 0.62, az + f.nz * side * 0.17);
+            L.batch.get('matte').shape('box', sgP, sgQ, sgS.set(0.36, 0.05, 0.006), '#f3efe4');
+            sgP.set(ax + f.nx * side * 0.17, y + 0.48, az + f.nz * side * 0.17);
+            L.batch.get('matte').shape('box', sgP, sgQ, sgS.set(0.28, 0.035, 0.006), '#e8b4c4');
+          }
+        }
+      }
       // 门脸两端各一盆绿植（离玻璃 0.55 米、离端头 0.5 米）：白色或炭灰色圆盆，灌木团或一棵小橄榄树
       if (len < 5) continue;
       const blocked = (lv.navObstacles || []).map((o) => o.poly);
       for (const end of [0, 1]) {
         const t = end ? 1 - 0.5 / len : 0.5 / len, px = f.x0 + dx * t + f.nx * 0.55, pz = f.z0 + dz * t + f.nz * 0.55;
         if (holes.some((h) => pointInPoly([px, pz], h)) || !lv.walk.some((w) => pointInPoly([px, pz], w.poly)) || blocked.some((q) => pointInPoly([px, pz], q))) continue;
+        // 相邻两家门脸的端头挨着，两盆会并排挤在一起：1.2 米内已有一盆就不放
+        if (pots.some(([qx, qz]) => Math.hypot(qx - px, qz - pz) < 1.2)) continue;
+        pots.push([px, pz]);
         const seed = Math.abs(Math.round(px * 13 + pz * 7)), y = lv.elev;
         L.batch.get('satin').cyl(px, y, pz, 0.27, 0.5, seed % 2 ? '#f2efe8' : '#3a3c40', 18);
         L.batch.get('foliage').cyl(px, y + 0.5, pz, 0.24, 0.03, '#4a3a2c', 14);
