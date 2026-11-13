@@ -9,10 +9,14 @@ from mathutils import Vector, Matrix
 source_dir, output_dir = map(Path, sys.argv[sys.argv.index('--') + 1:])
 output_dir.mkdir(parents=True, exist_ok=True)
 results=[]
-for sex, short in [('Male','m'),('Female','f')]:
+# avatars.json is written by prepare_people.py: sex, Rocketbox folder, output id, standing height.
+avatars=json.loads((source_dir/'avatars.json').read_text()) if (source_dir/'avatars.json').exists() else \
+    [dict(sex='Male',folder='Male_Adult_01',id='m',height=1.80),dict(sex='Female',folder='Female_Adult_01',id='f',height=1.69)]
+for avatar in avatars:
+    sex,short,folder=avatar['sex'],avatar['id'],avatar['folder']
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    src=source_dir/'Assets/Avatars/Adults'/f'{sex}_Adult_01'
-    bpy.ops.import_scene.fbx(filepath=str(src/'Export'/f'{sex}_Adult_01.fbx'))
+    src=source_dir/'Assets/Avatars/Adults'/folder
+    bpy.ops.import_scene.fbx(filepath=str(src/'Export'/f'{folder}.fbx'))
     rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
     mesh=next(o for o in bpy.data.objects if o.type=='MESH')
     rig.animation_data_clear()
@@ -29,7 +33,7 @@ for sex, short in [('Male','m'),('Female','f')]:
         ox,oy=(0,0.5) if 'body' in name else ((.5,.5) if 'head' in name else (0,0))
         for li in poly.loop_indices: uv[li].uv=uv[li].uv*.5+Vector((ox,oy))
         poly.material_index=0
-    mat=bpy.data.materials.new(f'{sex} textured skin clothing hair');mat.use_nodes=True
+    mat=bpy.data.materials.new(f'{folder} textured skin clothing hair');mat.use_nodes=True
     bs=mat.node_tree.nodes.get('Principled BSDF')
     bs.inputs['Base Color'].default_value=(1,1,1,1)
     bs.inputs['Roughness'].default_value=.82
@@ -74,7 +78,7 @@ for sex, short in [('Male','m'),('Female','f')]:
         for v in pose:v.z-=minz
     minz=0
     maxz=max(v.z for pose in poses for v in pose)
-    target_h=1.80 if sex=='Male' else 1.69
+    target_h=avatar['height']
     scale=target_h/(maxz-minz)
     for pose in poses:
         for v in pose:v.z-=minz;v*=scale
@@ -95,6 +99,6 @@ for sex, short in [('Male','m'),('Female','f')]:
     bpy.context.view_layer.objects.active=obj;obj.select_set(True)
     # FBX forward direction is Blender -Y, glTF +Z after export axis conversion.
     bpy.ops.export_scene.gltf(filepath=str(output_dir/f'rocketbox-{short}.glb'),export_format='GLB',use_selection=True,export_animations=False,export_morph=True,export_morph_normal=True,export_skins=False,export_extras=True,export_image_format='AUTO')
-    results.append({'id':short,'name':f'{sex}_Adult_01','vertices':len(baked.vertices),'triangles':sum(len(p.vertices)-2 for p in baked.polygons),'height':target_h,'poses':8,'cycleSeconds':32/30,'file':f'rocketbox-{short}.glb'})
+    results.append({'id':short,'name':folder,'vertices':len(baked.vertices),'triangles':sum(len(p.vertices)-2 for p in baked.polygons),'height':target_h,'poses':8,'cycleSeconds':32/30,'file':f'rocketbox-{short}.glb'})
 print('PEOPLE_RESULT',json.dumps(results))
 (output_dir/'bake-metrics.json').write_text(json.dumps(results,indent=2)+'\n')
