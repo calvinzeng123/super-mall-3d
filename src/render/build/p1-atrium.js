@@ -871,6 +871,16 @@ function haloRing(B, x, z, R, y, roofY) {
 function blossom(B, t, y0, seed) {
   const rand = rng(seed * 31 + 11), { x, z, r } = t;
   B.get('travertine').cyl(x, y0, z, r, 0.5, '#e6dfd2', 28);
+  if (t.bench) {
+    // 树池外一圈环形座椅：白色石材座墩 + 木条坐面，底下一圈暖光
+    const n = 24, R = r + 0.28;
+    for (let k = 0; k < n; k++) {
+      const a = ((k + 0.5) / n) * Math.PI * 2, len = (2 * Math.PI * R) / n + 0.02, cx = x + Math.cos(a) * R, cz = z + Math.sin(a) * R, ang = -a + Math.PI / 2;
+      B.get('satin').box(cx, y0 + 0.19, cz, len, 0.38, 0.4, '#f1ede4', ang);
+      B.get('wood').box(cx, y0 + 0.415, cz, len - 0.01, 0.07, 0.48, '#9a6e46', ang);
+      B.get('glowSoft').box(x + Math.cos(a) * (R + 0.21), y0 + 0.02, z + Math.sin(a) * (R + 0.21), len, 0.02, 0.03, '#ffe2b8', ang);
+    }
+  }
   B.get('foliage').cyl(x, y0 + 0.5, z, r - 0.08, 0.06, '#5a4632', 28);
   for (let k = 0; k < 10; k++) {
     const a = rand() * Math.PI * 2, d = rand() * (r - 0.3);

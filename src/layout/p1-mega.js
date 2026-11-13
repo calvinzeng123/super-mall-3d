@@ -490,13 +490,14 @@ function megaSite(layout, plaza) {
   for (const f of fountains) {
     const R = f.r + 3.4, n = 8;
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + 0.2, x = f.x + Math.cos(a) * R, z = f.z + Math.sin(a) * R, r = 1.4;
-      const poly = circlePoly(x, z, r, 16);
+      // 樱花树池外再围一圈 0.55 米宽的环形木座椅（障碍跟着放大）
+      const a = (i / n) * Math.PI * 2 + 0.2, x = f.x + Math.cos(a) * R, z = f.z + Math.sin(a) * R, r = 1.4, bench = i % 2 === 1;
+      const poly = circlePoly(x, z, r + (bench ? 0.55 : 0), 16);
       if (!plaza.some((m) => inside([x, z], open(m[0])))) continue;
       if (blocked.some((b) => hit(poly, b))) continue;
       if ((lv1.navObstacles || []).some((o) => hit(poly, o.poly))) continue;
       const kind = i % 2 ? 'blossom' : 'palm';
-      M.plaza.trees.push({ id: `P1-mega-${kind}-${M.plaza.trees.length}`, kind, x, z, r });
+      M.plaza.trees.push({ id: `P1-mega-${kind}-${M.plaza.trees.length}`, kind, x, z, r, bench });
       lv1.navObstacles.push({ id: `P1-mega-${kind}-${M.plaza.trees.length - 1}`, poly });
     }
   }
