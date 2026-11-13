@@ -502,6 +502,7 @@ function megaAtrium(ctx, levels) {
     for (const [R, w] of [[f.r + 1.2, 0.14], [f.r + 2.2, 0.08]]) floorRing(B, f.x, f.z, R, w, y0);
   }
   floorInlay(ctx, B, lv1, y0, (D?.fountains || []).filter((q) => q.indoor));
+  plazaPendants(ctx, lv1);
   // 新楼面天花：沿西北翼方向的暖光灯带（3 米一条，6 米一行），只挂在头顶真有楼板的地方
   for (let i = 0; i < levels.length - 1; i++) {
     const lv = levels[i], up = levels[i + 1], L = ctx.levels[lv.id];
@@ -841,6 +842,35 @@ function floorInlay(ctx, B, lv1, y0, fountains) {
       const ax = f.x + Math.cos(a) * r0, az = f.z + Math.sin(a) * r0, bx = f.x + Math.cos(a) * r1, bz = f.z + Math.sin(a) * r1;
       if (![0, .5, 1].every((t) => free(ax + (bx - ax) * t, az + (bz - az) * t))) continue;
       B.get('stone').box((ax + bx) / 2, y0 + 0.014, (az + bz) / 2, r1 - r0, 0.01, k % 2 ? 0.1 : 0.16, k % 2 ? '#a89a86' : '#7d7064', Math.atan2(-(bz - az), bx - ax));
+    }
+  }
+}
+
+/** 1F 广场四周：2F 楼板底下、离洞口边 1.6 米每 4 米吊一盏暖色球灯（吊线、铜色灯帽、发光球、地上一团光） */
+function plazaPendants(ctx, lv1) {
+  const lv2 = ctx.layout.levels.find((l) => l.id === 'P1-2F'), L = ctx.levels[lv1.id];
+  if (!lv2 || !L) return;
+  const ceil = lv2.elev - (SLAB_T[lv2.kind] ?? 0.45), voids2 = lv2.voids.map((v) => v.poly);
+  const blocked = [...(lv1.navObstacles || []).map((o) => o.poly), ...lv1.units.flatMap((u) => u.polys), ...lv1.voids.map((v) => v.poly)];
+  const placed = [];
+  for (const v of lv2.voids.filter((q) => q.mega && /^(SQ-void|C-void|MEGA-void)/.test(q.id))) {
+    const P = v.poly;
+    for (let i = 0; i < P.length; i++) {
+      const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 0.5) continue;
+      let nx = -(z1 - z0) / len, nz = (x1 - x0) / len;
+      if (pointInPoly([(x0 + x1) / 2 + nx * 0.3, (z0 + z1) / 2 + nz * 0.3], P)) { nx = -nx; nz = -nz; } // 朝楼板（洞口外）
+      for (let d = 2; d < len - 1; d += 4) {
+        const x = x0 + (x1 - x0) * (d / len) + nx * 1.6, z = z0 + (z1 - z0) * (d / len) + nz * 1.6;
+        if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < 3.5)) continue;
+        if (voids2.some((h) => pointInPoly([x, z], h)) || !lv1.walk.some((w) => pointInPoly([x, z], w.poly)) || blocked.some((q) => pointInPoly([x, z], q))) continue;
+        placed.push([x, z]);
+        const drop = ceil - 1.7;
+        L.batch.get('metal').bar({ x, y: ceil, z }, { x, y: drop + 0.28, z }, 0.012, '#2b2b2b');
+        L.batch.get('facadeBronze').cyl(x, drop + 0.2, z, 0.12, 0.1, GOLD, 12);
+        L.batch.get('glow').sphere(x, drop, z, 0.44, '#ffd9a0', undefined, undefined, 'sphereLo');
+        L.batch.pool(x, lv1.elev, z, 3.2, 3.2, 0xffd6a0);
+      }
     }
   }
 }
