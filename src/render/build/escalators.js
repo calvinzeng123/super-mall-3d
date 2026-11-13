@@ -19,6 +19,8 @@ export function buildEscalators(ctx) {
   for (const e of ctx.layout.escalators) {
     const short = ctx.lvById[e.from].short;
     const strip = drawEscalator(ctx.levels[e.from].batch, e, short === '1F' || short === 'B1M' ? '#b9a27a' : '#c3c9cf');
+    // 游览模式里一期的扶梯：裙板顶上一条暖光灯带、桁架底面两侧各一条暖光线（效果图里扶梯也是亮的）
+    if (ctx.depthCues && e.building === 'P1') escalatorLights(ctx.levels[e.from].batch, strip);
     if (!strips[e.from]) strips[e.from] = { up: [], down: [] };
     strips[e.from][e.dir].push(strip);
   }
@@ -87,6 +89,17 @@ export function drawEscalator(B, e, trussCol) {
     }
   }
   return { e, ux, uz, px, pz, run, y0, y1 };
+}
+
+/** 扶梯灯带：沿斜段的裙板内侧顶边、桁架底面两侧边各一条暖光（glow 材质，夜里更亮） */
+export function escalatorLights(B, { e, ux, uz, px, pz, run, y0, y1 }) {
+  const cos = Math.cos(PITCH), sin = Math.sin(PITCH), slope = Math.hypot(run, y1 - y0), midY = (y0 + y1) / 2;
+  const Xs = new THREE.Vector3(ux * cos, sin, uz * cos), Ys = new THREE.Vector3(-ux * sin, cos, -uz * sin), Zs = new THREE.Vector3(px, 0, pz);
+  const at = (s, t, y) => new THREE.Vector3(e.bottom.x + ux * s + px * t, y, e.bottom.z + uz * s + pz * t);
+  for (const side of [-1, 1]) {
+    orientedBox(B, 'glow', at(run / 2, side * (e.width / 2 - 0.16), midY + 0.12 / cos).addScaledVector(Ys, 0.13), slope - 0.2, 0.025, 0.02, Xs, Ys, Zs, '#ffe2b0');
+    orientedBox(B, 'glow', at(run / 2, side * (e.width / 2 - 0.04), midY - 0.55 / cos).addScaledVector(Ys, -0.505), slope + 0.3, 0.02, 0.05, Xs, Ys, Zs, '#ffd39a');
+  }
 }
 
 /** 踏步带几何：下平台 → 斜段 → 上平台，UV 的 v 以 0.4m 为一级 */
