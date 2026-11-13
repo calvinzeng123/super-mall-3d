@@ -134,6 +134,12 @@ function balconyEdge(ctx, B, lv, v) {
       B.get('glow').box(mx + nx * 0.1, y - 0.865, mz + nz * 0.1, pl, 0.012, 0.1, WARM, ang);
       // 夜里栏板里的上照灯把洞口边往里 2.5 米的天花洗亮一条（贴花，越往里越暗），天花不再整片一样亮
       if (!roof) B.ceilPool(mx - nx * 1.1, y - (SLAB_T[lv.kind] ?? 0.45), mz - nz * 1.1, pl + 0.4, 2.6, 0xffc27a, ang);
+      // 楼板底面沿洞口边一圈顺弧走的木条吊顶（效果图里每层挑台底下是一圈暖色木格栅）：六根木条、离栏板 0.35–1.6 米。
+      // 2F 底下（1F 广场上空）已经有放射状木格栅，从 3F 往上才做；扶梯口、铺位里不做
+      if (!roof && v.mega && lv.elev > 7 && !skip(mx, mz) && !inUnit(mx - nx * 0.9, mz - nz * 0.9) && !inUnit(mx - nx * 1.6, mz - nz * 1.6)) {
+        const cy = y - (SLAB_T[lv.kind] ?? 0.45) - 0.055;
+        for (const o of [0.35, 0.6, 0.85, 1.1, 1.35, 1.6]) B.get('wood').box(mx - nx * o, cy, mz - nz * o, pl, 0.09, 0.05, '#d8ad7c', ang);
+      }
       // 地面上一条跟着栏板走的暖光线（离栏板 2.2 米），扶梯口、观光梯门前、铺位里不画
       const gx = mx - nx * 2.2, gz = mz - nz * 2.2;
       if (!roof && v.mega && !skip(gx, gz) && !inUnit(gx, gz)) B.get('glowSoft').box(gx, y + 0.008, gz, pl, 0.006, 0.045, '#ffe6bf', ang);
