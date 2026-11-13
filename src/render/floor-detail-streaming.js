@@ -41,6 +41,22 @@ export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8
     // include them explicitly: preload before stepping onto a long bridge.
     for (const e of layout.entrances || []) if (e.id?.startsWith(`${path.id}-`)) connect(from, to, e.seg, path);
   }
+  // 通高中庭（超级商业中心的大洞口，void.mega）：站在中庭边上能看到上下每一层的店，这些层的室内细节都要在。
+  // 每层记下中庭洞口（1F 没有洞口，用 2F 的）；人在洞口里或离洞口边 20 米以内，就按离本层远近把同一栋的中庭层加进来，
+  // 但留一个名额给天桥另一头那栋楼（见下面的 portals）
+  const atrium = new Map(), atriumFloors = new Map();
+  for (const b of layout.buildings) {
+    const sorted = layout.levels.filter(l => l.building === b.id && eligible.has(l.id)).sort((x, y) => x.elev - y.elev);
+    const withVoids = sorted.filter(l => (l.voids || []).some(v => v.mega));
+    if (!withVoids.length) continue;
+    const floors = sorted.filter(l => l.elev <= withVoids.at(-1).elev && l.elev >= withVoids[0].elev - 7).map(l => l.id);
+    for (const l of sorted) if (floors.includes(l.id)) {
+      atrium.set(l.id, ((withVoids.find(w => w.elev >= l.elev) || l).voids || []).filter(v => v.mega).map(v => v.poly));
+      atriumFloors.set(l.id, floors);
+    }
+  }
+  const nearAtrium = (id, p) => (atrium.get(id) || []).some(P => pointInPoly([p.x, p.z], P)
+    || P.some((a, i) => { const b = P[(i + 1) % P.length]; return segmentDistance(p, { x0: a[0], z0: a[1], x1: b[0], z1: b[1] }) < 20; }));
   let lastPrimary = null, lastRemote = null;
 
   const select = state => {
@@ -71,6 +87,11 @@ export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8
       for (const id of adjacent.get(ex.elevator.to) || []) add(id);
       lastPrimary = primary; lastRemote = null;
       return wanted;
+    }
+    if (ex?.position && nearAtrium(primary, ex.position)) {
+      const here = levels.get(primary).elev;
+      for (const id of [...atriumFloors.get(primary)].sort((a, b) => Math.abs(levels.get(a).elev - here) - Math.abs(levels.get(b).elev - here)))
+        if (wanted.size < limit - 1) add(id);
     }
     if (ex && (ex.position || route)) {
       const preferred = primary === lastPrimary ? lastRemote : primary === lastRemote ? lastPrimary : null;
