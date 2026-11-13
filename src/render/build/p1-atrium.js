@@ -1157,10 +1157,11 @@ function blossom(B, t, y0, seed) {
     for (let c = 0; c < 2; c++) {
       const a2 = a + (c ? 0.45 : -0.45), tip = { x: mid.x + Math.cos(a2) * (0.8 + rand() * 0.4), y: mid.y + 0.6 + rand() * 0.5, z: mid.z + Math.sin(a2) * (0.8 + rand() * 0.4) };
       B.get('wood').bar(mid, tip, 0.07, '#5b4636');
-      for (let k = 0; k < 18; k++) {
-        const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.35) * 0.8;
-        B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 1.1, tip.y + h, tip.z + Math.sin(u) * rr * 1.1,
-          0.2 + rand() * 0.16, pinks[Math.floor(rand() * pinks.length)], undefined, undefined, 'ico');
+      // 花簇：30 个小一点、圆一点的花球（原来 18 个大多面体，近看一颗颗棱角分明的大球）；外层略扁，像一层层压着的花
+      for (let k = 0; k < 30; k++) {
+        const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.35) * 0.8, sz = 0.13 + rand() * 0.11;
+        B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 1.15, tip.y + h, tip.z + Math.sin(u) * rr * 1.15,
+          sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'sphereLo');
       }
     }
   }
