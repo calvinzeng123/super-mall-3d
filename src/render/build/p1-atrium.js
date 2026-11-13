@@ -269,7 +269,30 @@ function lounge(B, F, s, y0) {
     if (!B.prop('sofa3', s.u, y0, s.v, face + Math.PI / 2)) B.get('matte').box(s.u, y0 + 0.4, s.v, 0.9, 0.8, 2.4, '#e9e3d6');
     B.prop('coffee_table_round', s.u + (s.v > 0 ? 1 : -1) * 0, y0, s.v + (s.v > 0 ? -1.2 : 1.2), 0);
     B.prop('plant_tall', s.u - 0.6, y0, s.v + (s.v > 0 ? 1.6 : -1.6), 0, 0.9);
+    // 效果图里沙发边上那种金色高花瓶插一大捧粉花：地毯两个外角各一只
+    const sv = s.v > 0 ? 1 : -1;
+    flowerUrn(B, s.u + 0.85, s.v - sv * 1.7, y0, Math.round(Math.abs(s.u * 13 + s.v * 7)));
+    flowerUrn(B, s.u + 0.85, s.v + sv * 1.75, y0, Math.round(Math.abs(s.u * 7 + s.v * 13)) + 5);
   });
+}
+
+/** 金色花瓶 + 一大捧花（粉、玫红、白，底下一圈叶子）：瓶身鼓肚、细颈、外翻口，花团是半球上攒很多小花球 */
+function flowerUrn(B, x, z, y0, seed) {
+  const rand = rng(seed + 11);
+  B.get('facadeBronze').cyl(x, y0, z, 0.2, 0.08, GOLD, 16);
+  B.get('facadeBronze').sphere(x, y0 + 0.42, z, 0.27, GOLD, 0.36, 0.27);
+  B.get('facadeBronze').cyl(x, y0 + 0.72, z, 0.15, 0.12, GOLD, 16);
+  B.get('facadeBronze').cyl(x, y0 + 0.84, z, 0.24, 0.05, GOLD, 16);
+  const cy = y0 + 0.92, pinks = ['#f0a6c4', '#e27aa6', '#f7d2df', '#fbeef2', '#d9649a'];
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * Math.PI * 2 + rand() * 0.3;
+    B.get('foliage').sphere(x + Math.cos(a) * 0.36, cy + 0.02, z + Math.sin(a) * 0.36, 0.13, k % 2 ? LEAF : LEAF2, 0.07, 0.13, 'sphereLo');
+  }
+  for (let k = 0; k < 34; k++) {
+    // 半球面上均匀撒点（高度均匀 → 面积均匀）
+    const h = rand(), a = rand() * Math.PI * 2, rr = Math.sqrt(1 - h * h) * 0.42;
+    B.get('foliage').sphere(x + Math.cos(a) * rr, cy + 0.06 + h * 0.4, z + Math.sin(a) * rr, 0.08 + rand() * 0.04, pinks[k % pinks.length], undefined, undefined, 'ico0');
+  }
 }
 
 /** 三组金色光环吊灯：中庭正中一组三环，两部观光梯前各一组两环；细吊索挂到光穹里 */
@@ -488,6 +511,21 @@ function cafe(B, r, y0, F = F_SQ) {
       for (const a of [0, Math.PI]) B.prop('cafe_chair', x + Math.cos(a) * 0.75, y0 + 0.08, z + Math.sin(a) * 0.75, a + Math.PI / 2);
       B.get('metal').cyl(x, y0 + 0.08, z, 0.03, 2.3, '#6d7276', 8);
       B.get('matte').cone(x, y0 + 2.1, z, 1.15, 0.45, ['#f3ead9', '#e7d3b0', '#d9e4dc'][Math.round(fx * 10 + fz * 10) % 3], 10);
+    }
+    // 串灯：外摆四角各一根细灯杆（3 米），四边和两条对角拉一串下垂的暖色小灯泡（伞顶之上）
+    const top = y0 + 3.0, corners = [[r.x0 + 0.1, r.z0 + 0.1], [r.x1 - 0.1, r.z0 + 0.1], [r.x1 - 0.1, r.z1 - 0.1], [r.x0 + 0.1, r.z1 - 0.1]];
+    for (const [px, pz] of corners) { B.get('metal').cyl(px, y0 + 0.08, pz, 0.025, top - y0 - 0.08, '#2f3336', 6); B.get('glow').sphere(px, top + 0.03, pz, 0.09, WARM, undefined, undefined, 'sphereLo'); }
+    const strings = [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2], [1, 3]];
+    for (const [i, j] of strings) {
+      const [ax, az] = corners[i], [bx, bz] = corners[j], len = Math.hypot(bx - ax, bz - az), n = Math.max(4, Math.round(len / 0.45));
+      let prev = null;
+      for (let k = 0; k <= n; k++) {
+        const t = k / n, sag = 0.45 * 4 * t * (1 - t) * Math.min(1, len / 6);
+        const pt = { x: ax + (bx - ax) * t, y: top - sag, z: az + (bz - az) * t };
+        if (prev) B.get('metal').bar(prev, pt, 0.008, '#2f3336');
+        if (k > 0 && k < n) B.get('glow').sphere(pt.x, pt.y - 0.06, pt.z, 0.075, '#ffe0a8', undefined, undefined, 'sphereLo');
+        prev = pt;
+      }
     }
   });
 }
