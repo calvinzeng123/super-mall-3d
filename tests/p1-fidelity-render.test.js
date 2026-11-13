@@ -93,7 +93,10 @@ test('超级商业中心：1F 中庭广场的螺旋喷泉有水面和金色缎�
   for (const f of indoor) {
     assert.equal(trianglesIn([tour.site.group], box(f.x - 1, 0, f.z - 1, f.x + 1, 3, f.z + 1)), 0, `${f.id} 还画在室外`);
     assert.ok(trianglesIn(B, box(f.x - 1.5, 4, f.z - 1.5, f.x + 1.5, 8, f.z + 1.5)) > 0, `${f.id} 没有螺旋缎带`);
-    assert.ok(trianglesIn(B, box(f.x + 2, 0.3, f.z - .3, f.x + 3, 0.5, f.z + .3)) > 0, `${f.id} 没有水面`);
+    // 水面在实心池身顶面（0.55）之上一点（0.565），池沿压顶是一圈环、不盖住水面
+    assert.ok(trianglesIn(B, box(f.x + 2, 0.5, f.z - .3, f.x + 3, 0.62, f.z + .3)) > 0, `${f.id} 没有水面`);
+    // 水面上方不能有东西盖着（取两道水弧之间、0°和 22.5°中间的一小块）
+    assert.equal(trianglesIn(B, box(f.x + 2.3, 0.585, f.z + .38, f.x + 2.6, 0.7, f.z + .6)), 0, `${f.id} 水面被盖住`);
   }
   for (const t of L.fidelity.mega.plaza.trees) assert.ok(trianglesIn(B, box(t.x - .5, 3, t.z - .5, t.x + .5, 5, t.z + .5)) > 0, `${t.id} 没有树冠/树干`);
 });

@@ -175,6 +175,27 @@ function balconyEdge(ctx, B, lv, v) {
   }
 }
 
+/** 圆形树池里的花境（效果图里树底下是一整片开花的地被，不是露着土）：外圈一环开花的小丛，里面铺满低矮的绿团，中间零星几丛花 */
+const BED = ['#f3a6c6', '#e070a4', '#fbe1ea', '#b98ee0', '#ffffff', '#f6d36b', '#ff9fb1'];
+function flowerBed(B, x, z, r, y, rand) {
+  const area = Math.PI * r * r, nGreen = Math.min(60, Math.round(area * 7)), ring = Math.max(12, Math.round(2 * Math.PI * r / 0.22));
+  for (let k = 0; k < nGreen; k++) {
+    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (r - 0.15), rr = 0.14 + rand() * 0.08;
+    B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.05, z + Math.sin(a) * d, rr, ['#4f7f3c', '#5f9447', '#3d6a32', '#6f9f50'][k % 4], rr * 0.6, rr, 'ico0');
+  }
+  // 外圈一环花：同一段颜色连着几丛（成片），不是每个点随机换色
+  let col = BED[Math.floor(rand() * BED.length)];
+  for (let k = 0; k < ring; k++) {
+    if (k % 5 === 0) col = BED[Math.floor(rand() * BED.length)];
+    const a = (k / ring) * Math.PI * 2 + rand() * 0.05, d = r - 0.12 - rand() * 0.1;
+    B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.1 + rand() * 0.05, z + Math.sin(a) * d, 0.09 + rand() * 0.035, col, undefined, undefined, 'ico0');
+  }
+  for (let k = 0; k < Math.round(area * 2.5); k++) {
+    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (r - 0.35);
+    B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.14, z + Math.sin(a) * d, 0.07 + rand() * 0.03, BED[Math.floor(rand() * BED.length)], undefined, undefined, 'ico0');
+  }
+}
+
 /** 栏杆边的盆栽小树：白色圆盆（金色细边）、一根细干分两三杈，顶上一团由十几个小叶团攒成的圆冠（约 2.3 米高） */
 function railTree(B, x, z, y0, seed) {
   const rand = rng(seed + 29);
@@ -199,8 +220,14 @@ function fountain(B, F, p, y0) {
   B.frame(F, () => {
     const { u, v, r } = p, Hs = p.H || 9;
     B.get('travertine').cyl(u, y0, v, r, 0.55, '#e8e1d4', 48);
-    B.get('satin').cyl(u, y0 + 0.55, v, r + 0.05, 0.06, '#f6f3ec', 48);
-    B.get('water').cyl(u, y0 + 0.02, v, r - 0.25, 0.46, '#3f86a6', 48);
+    // 池沿压顶：一圈 0.36 米宽的白石环（原来是一整块实心圆盘，把水面整个盖住了，从楼上看喷泉是一片白）
+    for (let k = 0; k < 48; k++) {
+      const a = ((k + 0.5) / 48) * Math.PI * 2, R = r - 0.13;
+      B.get('satin').box(u + Math.cos(a) * R, y0 + 0.58, v + Math.sin(a) * R, (2 * Math.PI * R) / 48 + 0.03, 0.06, 0.36, '#f6f3ec', -a + Math.PI / 2);
+    }
+    // 水面：比池身顶面高一点（池身是实心圆柱），室内用缎面湖蓝（'water' 是高金属度反射天空的室外材质，在中庭里反出一片白），中间深一圈
+    B.get('satin').cyl(u, y0 + 0.02, v, r - 0.28, 0.545, '#2f86a8', 48);
+    B.get('satin').cyl(u, y0 + 0.02, v, (r - 0.28) * 0.72, 0.55, '#226f90', 40);
     B.get('travertine').cyl(u, y0, v, 1.1, 0.75, '#ddd4c4', 32);
     // 两条缎带：从底座盘旋到 9 米，半径从 1.3 收到 0.5
     const H = Hs, turns = 2.2 * Hs / 9;
@@ -265,10 +292,7 @@ function palm(B, F, p, y0, seed) {
     const { u, v, r } = p;
     B.get('travertine').cyl(u, y0, v, r, 0.5, '#e6dfd2', 32);
     B.get('foliage').cyl(u, y0 + 0.5, v, r - 0.08, 0.06, '#5a4632', 32);
-    for (let k = 0; k < 14; k++) {
-      const a = rand() * Math.PI * 2, d = rand() * (r - 0.3);
-      B.get('foliage').sphere(u + Math.cos(a) * d, y0 + 0.62, v + Math.sin(a) * d, 0.16, rand() < 0.5 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
-    }
+    flowerBed(B, u, v, r - 0.12, y0 + 0.53, rand);
     const H = 5.5 + rand() * 1.8, lean = (rand() - 0.5) * 0.5, la = rand() * Math.PI * 2;
     let prev = { x: u, y: y0 + 0.55, z: v };
     for (let s = 1; s <= 8; s++) {
@@ -1107,10 +1131,7 @@ function blossom(B, t, y0, seed) {
     }
   }
   B.get('foliage').cyl(x, y0 + 0.5, z, r - 0.08, 0.06, '#5a4632', 28);
-  for (let k = 0; k < 10; k++) {
-    const a = rand() * Math.PI * 2, d = rand() * (r - 0.3);
-    B.get('foliage').sphere(x + Math.cos(a) * d, y0 + 0.62, z + Math.sin(a) * d, 0.15, k % 3 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
-  }
+  flowerBed(B, x, z, r - 0.12, y0 + 0.53, rand);
   const top = { x, y: y0 + 2.4, z };
   B.get('wood').bar({ x, y: y0 + 0.55, z }, top, 0.2, '#5b4636');
   // 树冠：主枝分叉成小枝，每根小枝顶上一团由许多小花球攒成的花簇（效果图里樱花是一大团软软的粉色，不是几块大多面体）
