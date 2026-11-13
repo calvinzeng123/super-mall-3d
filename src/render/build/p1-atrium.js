@@ -527,6 +527,22 @@ function megaAtrium(ctx, levels) {
       const cx = (f.x0 + f.x1) / 2 + f.nx * 1.9, cz = (f.z0 + f.z1) / 2 + f.nz * 1.9;
       if (holes.some((h) => pointInPoly([cx, cz], h)) || !lv.walk.some((w) => pointInPoly([cx, cz], w.poly))) continue;
       L.batch.pool(cx, lv.elev, cz, len * 0.95, 3.6, 0xffdcae, Math.atan2(-dz, dx));
+      // 门脸两端各一盆绿植（离玻璃 0.55 米、离端头 0.5 米）：白色或炭灰色圆盆，灌木团或一棵小橄榄树
+      if (len < 5) continue;
+      const blocked = (lv.navObstacles || []).map((o) => o.poly);
+      for (const end of [0, 1]) {
+        const t = end ? 1 - 0.5 / len : 0.5 / len, px = f.x0 + dx * t + f.nx * 0.55, pz = f.z0 + dz * t + f.nz * 0.55;
+        if (holes.some((h) => pointInPoly([px, pz], h)) || !lv.walk.some((w) => pointInPoly([px, pz], w.poly)) || blocked.some((q) => pointInPoly([px, pz], q))) continue;
+        const seed = Math.abs(Math.round(px * 13 + pz * 7)), y = lv.elev;
+        L.batch.get('satin').cyl(px, y, pz, 0.27, 0.5, seed % 2 ? '#f2efe8' : '#3a3c40', 18);
+        L.batch.get('foliage').cyl(px, y + 0.5, pz, 0.24, 0.03, '#4a3a2c', 14);
+        if (seed % 3 === 0) {
+          L.batch.get('wood').bar({ x: px, y: y + 0.5, z: pz }, { x: px, y: y + 1.5, z: pz }, 0.05, '#6b5440');
+          L.batch.get('foliage').sphere(px, y + 1.75, pz, 0.75, '#6f8f52', 0.62, 0.75, 'ico');
+        } else {
+          for (let k = 0; k < 3; k++) L.batch.get('foliage').sphere(px + Math.cos(k * 2.1) * 0.12, y + 0.72 + k * 0.08, pz + Math.sin(k * 2.1) * 0.12, 0.42, k % 2 ? LEAF : '#5d8f45', 0.38, 0.42, 'ico');
+        }
+      }
     }
   }
   greenWalls(ctx, levels);
@@ -542,6 +558,7 @@ function megaAtrium(ctx, levels) {
   const six = levels.find((l) => l.id === 'P1-6F'), rf = levels.find((l) => l.kind === 'roof');
   const sky = rf?.voids.find((v) => v.id === 'MEGA-sky');
   if (sky && ctx.levels[rf.id]) skyShell(ctx.levels[rf.id].shellBatch || ctx.levels[rf.id].batch, sky, rf.elev);
+  if (six && rf && ctx.levels[six.id]) banners(ctx, ctx.levels[six.id], [six, levels.find((l) => l.id === 'P1-5F')].filter(Boolean), rf.elev);
   if (six && rf && ctx.levels[six.id]) {
     const roofY = rf.elev;
     for (const [u, R] of [[MEGA_OVAL.u - 18, 4], [MEGA_OVAL.u, 6.5], [MEGA_OVAL.u + 18, 4]]) {
@@ -549,6 +566,56 @@ function megaAtrium(ctx, levels) {
       haloRing(ctx.levels[six.id].batch, x, z, R, roofY - 2.4, roofY);
       haloRing(ctx.levels[six.id].batch, x, z, R * 0.66, roofY - 4.6, roofY);
     }
+  }
+}
+
+/** 竖向布幔的四种画面（虚构活动名）：底色渐变、竖排大字、上下金线 */
+const BANNERS = [
+  { top: '#f7c6d5', bottom: '#e07fa3', title: '春日花市', sub: 'SPRING BLOOM', ink: '#ffffff' },
+  { top: '#c8303a', bottom: '#8e1622', title: '周年庆典', sub: 'ANNIVERSARY', ink: '#ffe3a3' },
+  { top: '#bfe3d8', bottom: '#2f8f7c', title: '云澜艺术季', sub: 'ART SEASON', ink: '#ffffff' },
+  { top: '#2b3a6b', bottom: '#151c38', title: '夜光市集', sub: 'NIGHT MARKET', ink: '#ffd98a' },
+];
+function bannerTexture(ctx, i) {
+  ctx.p1Banners ||= [];
+  if (ctx.p1Banners[i]) return ctx.p1Banners[i];
+  const d = BANNERS[i], c = makeCanvas(256, 1440), g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, c.height);
+  grad.addColorStop(0, d.top); grad.addColorStop(1, d.bottom);
+  g.fillStyle = grad; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#d8b56a'; for (const y of [28, 40, c.height - 44, c.height - 32]) g.fillRect(16, y, c.width - 32, 4);
+  g.fillStyle = d.ink; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `600 44px ${FONT_CN}`; g.fillText('云澜汇', c.width / 2, 110);
+  const chars = [...d.title], step = Math.min(190, 900 / chars.length);
+  g.font = `700 ${Math.round(step * 0.82)}px ${FONT_CN}`;
+  chars.forEach((ch, k) => g.fillText(ch, c.width / 2, 260 + step * (k + 0.5)));
+  g.font = `500 30px ${FONT_EN}`; g.fillText(d.sub, c.width / 2, c.height - 150);
+  if (i === 3) { const r = rng(17); g.fillStyle = 'rgba(255,230,170,0.8)'; for (let k = 0; k < 60; k++) g.fillRect(r() * c.width, r() * c.height, 2, 2); }
+  return (ctx.p1Banners[i] = canvasTexture(c, { clamp: true }));
+}
+
+/** 大椭圆中庭里挂一圈竖向布幔（9 米长、1.6 米宽、朝圆心），从天窗下的金色横杆垂下，夜里自发光。
+ *  布幔下端落到 5F 楼板以上 2 米，而洞口越往下越小，所以位置要同时在 6F 和 5F 的洞口里（离边 ≥ 2 米） */
+function banners(ctx, L, lvs, roofY) {
+  const holesBy = lvs.map((lv) => lv.voids.filter((v) => v.mega).map((v) => v.poly));
+  const [u0, v0] = [MEGA_OVAL.u, MEGA_OVAL.v], [a, b] = MEGA_OVAL.steps['6F'], [cx, cz] = toW(NW_FRAME, u0, v0);
+  const mats = BANNERS.map((_, i) => { const m = ctx.mats.sign(bannerTexture(ctx, i)); m.side = THREE.DoubleSide; return m; });
+  const geom = new THREE.PlaneGeometry(1.6, 9);
+  let k = 0;
+  for (let i = 0; i < 16; i++) {
+    const t = (i / 16) * Math.PI * 2, [x, z] = toW(NW_FRAME, u0 + Math.cos(t) * (a - 8), v0 + Math.sin(t) * (b - 8));
+    if (!holesBy.every((holes) => holes.some((h) => pointInPoly([x, z], h) && distToPolyEdge([x, z], h) > 2))) continue;
+    const mesh = new THREE.Mesh(geom, mats[k % mats.length]);
+    const top = roofY + 0.4, yMid = top - 4.6;
+    mesh.position.set(x, yMid, z);
+    mesh.rotation.y = Math.atan2(cx - x, cz - z);
+    mesh.name = 'P1-atrium-banner';
+    L.base.add(mesh);
+    const ry = mesh.rotation.y, dx = Math.cos(ry) * 0.9, dz = -Math.sin(ry) * 0.9;
+    L.batch.get('metal').bar({ x: x - dx, y: top, z: z - dz }, { x: x + dx, y: top, z: z + dz }, 0.06, GOLD);
+    for (const sgn of [-1, 1]) L.batch.get('metal').bar({ x: x + sgn * dx * 0.9, y: top, z: z + sgn * dz * 0.9 }, { x: x + sgn * dx * 0.9, y: top + 1.2, z: z + sgn * dz * 0.9 }, 0.015, '#9aa0a6');
+    L.batch.get('metal').bar({ x: x - dx, y: top - 9.2, z: z - dz }, { x: x + dx, y: top - 9.2, z: z + dz }, 0.04, GOLD);
+    k++;
   }
 }
 
