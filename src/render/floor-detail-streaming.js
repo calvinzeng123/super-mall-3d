@@ -13,7 +13,7 @@ const segmentDistance = (position, seg) => {
   return Math.hypot(position.x - seg.x0 - dx * t, position.z - seg.z0 - dz * t);
 };
 
-export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8, portalDistance = 40 } = {}) {
+export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8, portalDistance = 40, atriumLimit = limit - 1 } = {}) {
   const levels = new Map(layout.levels.map(l => [l.id, l]));
   const buildings = new Map(layout.buildings.map(b => [b.id, b]));
   const eligible = new Set(layout.levels.filter(l => isStreamableFloor(l, buildings.get(l.building))).map(l => l.id));
@@ -43,7 +43,7 @@ export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8
   }
   // 通高中庭（超级商业中心的大洞口，void.mega）：站在中庭边上能看到上下每一层的店，这些层的室内细节都要在。
   // 每层记下中庭洞口（1F 没有洞口，用 2F 的）；人在洞口里或离洞口边 20 米以内，就按离本层远近把同一栋的中庭层加进来，
-  // 但留一个名额给天桥另一头那栋楼（见下面的 portals）
+  // 最多 atriumLimit 层，再留一个名额给天桥另一头那栋楼（见下面的 portals）
   const atrium = new Map(), atriumFloors = new Map();
   for (const b of layout.buildings) {
     const sorted = layout.levels.filter(l => l.building === b.id && eligible.has(l.id)).sort((x, y) => x.elev - y.elev);
@@ -61,7 +61,8 @@ export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8
 
   const select = state => {
     const wanted = new Set();
-    const add = id => { if (eligible.has(id) && wanted.size < limit) wanted.add(id); };
+    let cap = limit;
+    const add = id => { if (eligible.has(id) && wanted.size < cap) wanted.add(id); };
     // The building overview keeps façades and shells only. Exploded view still
     // draws every structural storey, but detail is a bounded window around the
     // selected floor (ground floors initially), including on mobile devices.
@@ -90,8 +91,10 @@ export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8
     }
     if (ex?.position && nearAtrium(primary, ex.position)) {
       const here = levels.get(primary).elev;
+      // 中庭层最多 atriumLimit 层（桌面 6 层＝一期 1F–6F 全部），再留 1 个名额给天桥另一头
+      cap = Math.max(limit, atriumLimit + 1);
       for (const id of [...atriumFloors.get(primary)].sort((a, b) => Math.abs(levels.get(a).elev - here) - Math.abs(levels.get(b).elev - here)))
-        if (wanted.size < limit - 1) add(id);
+        if (wanted.size < atriumLimit) add(id);
     }
     if (ex && (ex.position || route)) {
       const preferred = primary === lastPrimary ? lastRemote : primary === lastRemote ? lastPrimary : null;

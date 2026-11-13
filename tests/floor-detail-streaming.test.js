@@ -193,13 +193,13 @@ test('超级商业中心：站在大中庭边上，一期 1F–6F 的室内细�
   const { buildLayout } = await import('../src/layout/layout.js');
   const { createFloorDetailSelector } = await import('../src/render/floor-detail-streaming.js');
   const T = buildLayout();
-  const sel = createFloorDetailSelector(T, { limit: 6 });
-  // 6 个名额留 1 个给天桥另一头：中庭边上加载离本层最近的 5 层
+  // 桌面（app.js）：中庭层最多 6 层，再留 1 个名额给天桥另一头（缓存硬上限 8）
+  const sel = createFloorDetailSelector(T, { limit: 6, atriumLimit: 6 });
   const near = sel.select({ explore: { level: 'P1-1F', position: { x: -164, z: -164 } } });
-  assert.deepEqual([...near].sort(), ['P1-1F', 'P1-2F', 'P1-3F', 'P1-4F', 'P1-5F']);
+  assert.deepEqual([...near].sort(), ['P1-1F', 'P1-2F', 'P1-3F', 'P1-4F', 'P1-5F', 'P1-6F']);
   const mid = sel.select({ explore: { level: 'P1-3F', position: { x: -164, z: -164 } } });
   for (const f of [1, 2, 3, 4, 5]) assert.ok(mid.has(`P1-${f}F`), `3F 中庭边缺 ${f}F`);
-  const phone = createFloorDetailSelector(T, { limit: 4 }).select({ explore: { level: 'P1-3F', position: { x: -164, z: -164 } } });
+  const phone = createFloorDetailSelector(T, { limit: 4, atriumLimit: 3 }).select({ explore: { level: 'P1-3F', position: { x: -164, z: -164 } } });
   assert.ok(phone.size <= 4, '手机仍然最多 4 层');
   const far = sel.select({ explore: { level: 'P1-1F', position: { x: -270, z: -130 } } });
   assert.ok(!far.has('P1-4F'), '西里附楼那头离中庭远，不该把 4F 也加载');

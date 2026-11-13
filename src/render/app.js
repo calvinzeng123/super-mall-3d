@@ -176,7 +176,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const detailResources = { suite: suiteResource, residential: residentialResource };
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
-  const floorSelector = fps ? null : createFloorDetailSelector(layout, { limit: MOBILE ? 4 : 6, explodedLimit: MOBILE ? 4 : 8 });
+  const floorSelector = fps ? null : createFloorDetailSelector(layout, { limit: MOBILE ? 4 : 6, explodedLimit: MOBILE ? 4 : 8, atriumLimit: MOBILE ? 3 : 6 });
   const lazyAtlasLevels = new Set(layout.levels.filter(l => floorSelector?.eligible.has(l.id)
     && (ctx.bById[l.building].kind === 'annex' || usesExpansionFacade(l))).map(l => l.id));
   const wayfindingEntries = WAYFINDING.map(w => ({ id: w.id,

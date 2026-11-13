@@ -686,6 +686,27 @@ function megaIslands(layout, befores) {
       ...layout.entrances.filter((e) => e.level === lv.id || e.to === lv.id).map((e) => { const [x, z] = midSeg(e.seg); return box(x, z, 5, 5); }),
       ...(M.strips || []).filter((q) => q.level === lv.id).map((q) => q.poly)];
     const placed = [];
+    // 1F 中庭广场（2F 大洞口正下方）：效果图里喷泉四周有几处带遮阳伞的咖啡外摆。离喷泉 13 米上下最好，四周留 1.8 米走道，彼此相距 ≥ 10 米，最多 3 处
+    if (lv.short === '1F') {
+      const under = (layout.levels.find((l) => l.id === 'P1-2F')?.voids || []).filter((v) => v.mega && /^MEGA-void/.test(v.id)).map((v) => v.poly);
+      const springs = MEGA_FOUNTAINS.map(([u, v]) => nw(u, v));
+      const pts = under.flat(), [x0, x1] = [Math.min(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[0]))], [z0, z1] = [Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[1]))];
+      for (let n = 0; n < 3; n++) {
+        let best = null;
+        for (let x = x0 + 4; x < x1 - 4; x += 1) for (let z = z0 + 4; z < z1 - 4; z += 1) {
+          if (!under.some((P) => inside([x, z], P)) || placed.some((p) => Math.hypot(p.x - x, p.z - z) < 10)) continue;
+          const clearBox = box(x, z, 3.5 + 1.8, 2.5 + 1.8);
+          if (![...clearBox, [x, z]].every(onWalk) || blocked.some((b) => hit(clearBox, b))) continue;
+          const score = Math.abs(Math.min(...springs.map(([fx, fz]) => Math.hypot(x - fx, z - fz))) - 13);
+          if (!best || score < best.score) best = { x, z, score };
+        }
+        if (!best) break;
+        const it = { id: `${lv.id}-mega-plaza-cafe-${n}`, kind: 'cafe', plaza: true, level: lv.id, x: best.x, z: best.z, hx: 3.5, hz: 2.5, poly: box(best.x, best.z, 3.5, 2.5), seed: 50 + n };
+        placed.push(it); M.islands.push(it);
+        (lv.navObstacles ||= []).push({ id: it.id, poly: it.poly });
+        blocked.push(it.poly);
+      }
+    }
     // 岛柜、咖啡外摆，再用休憩花园（树池 + 两条长椅）把空出来的大块地面填上
     const want = [['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5], ['cafe', 3.5, 2.5, 3], ['kiosk', 1.5, 1, 3.5],
       ...Array.from({ length: 10 }, () => ['garden', 3, 2, 2.5])];
