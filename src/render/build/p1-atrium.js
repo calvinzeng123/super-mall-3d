@@ -761,15 +761,40 @@ function blossom(B, t, y0, seed) {
 
 /** 岛柜：白色柜体、粉色或薄荷色腰带、玻璃展示台、四根细柱撑起的灯箱顶 */
 function kiosk(B, it, y0, seed) {
-  const { x, z, hx, hz } = it, tint = ['#f2b6c8', '#bfe3d4', '#f6e7a1', '#cdb8ec'][Math.abs(Math.round(seed)) % 4];
+  const { x, z, hx, hz } = it, rand = rng(Math.abs(Math.round(seed * 37)) + 5);
+  const tint = ['#f2b6c8', '#bfe3d4', '#f6e7a1', '#cdb8ec'][Math.abs(Math.round(seed)) % 4];
+  const deep = ['#d9809f', '#6fb59a', '#d9b445', '#9a7fd1'][Math.abs(Math.round(seed)) % 4];
+  // 柜台：白色柜体、金色踢脚、彩色腰带，玻璃展示台里摆一排商品，台面下一条暖光
   B.get('satin').box(x, y0 + 0.5, z, hx * 2, 1.0, hz * 2, '#f6f3ec');
+  B.get('facadeBronze').box(x, y0 + 0.05, z, hx * 2 + 0.02, 0.1, hz * 2 + 0.02, GOLD);
   B.get('matte').box(x, y0 + 0.75, z, hx * 2 + 0.04, 0.22, hz * 2 + 0.04, tint);
   B.get('glass').box(x, y0 + 1.2, z, hx * 2 - 0.3, 0.4, hz * 2 - 0.3, '#ffffff');
   B.get('glow').box(x, y0 + 1.02, z, hx * 2 - 0.4, 0.03, hz * 2 - 0.4, WARM);
-  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.get('metal').cyl(x + sx * (hx - 0.1), y0 + 1, z + sz * (hz - 0.1), 0.04, 1.5, '#c8a25a', 6);
-  B.get('satin').box(x, y0 + 2.6, z, hx * 2 + 0.3, 0.22, hz * 2 + 0.3, '#f6f3ec');
-  B.get('glow').box(x, y0 + 2.48, z, hx * 2 + 0.1, 0.03, hz * 2 + 0.1, WARM);
-  B.get('matte').box(x, y0 + 2.6, z - hz - 0.16, hx * 2, 0.16, 0.02, tint);
+  const goods = ['#ffffff', tint, deep, '#2f3a4a', '#e8d2a6'];
+  for (let k = 0; k < 9; k++) {
+    const gx = x - hx + 0.35 + (k / 8) * (hx * 2 - 0.7), gz = z + (rand() - 0.5) * (hz - 0.4);
+    if (k % 3 === 1) B.get('satin').sphere(gx, y0 + 1.12, gz, 0.16, goods[k % goods.length], 0.1, 0.16, 'sphereLo');
+    else B.get('satin').box(gx, y0 + 1.1, gz, 0.16, 0.12 + rand() * 0.1, 0.12, goods[k % goods.length], rand());
+  }
+  // 四根金色立柱撑起双坡条纹遮阳篷（白色和店色相间），篷檐一排扇形垂边
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.get('metal').cyl(x + sx * (hx - 0.1), y0 + 1, z + sz * (hz - 0.1), 0.04, 1.6, GOLD, 6);
+  const eave = y0 + 2.55, ridge = y0 + 2.95, half = hz + 0.35, slope = Math.atan2(ridge - eave, half), run = Math.hypot(half, ridge - eave);
+  const n = Math.max(4, Math.round((hx * 2 + 0.5) / 0.38)), sw = (hx * 2 + 0.5) / n;
+  const q = new THREE.Quaternion(), e = new THREE.Euler(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    const sx = x - hx - 0.25 + (i + 0.5) * sw, col = i % 2 ? '#fbf8f1' : tint;
+    for (const side of [1, -1]) {
+      e.set(side * slope, 0, 0); q.setFromEuler(e);
+      pos.set(sx, (eave + ridge) / 2, z + side * half / 2); scl.set(sw + 0.005, 0.03, run);
+      B.get('matte').shape('box', pos, q, scl, col);
+      B.get('matte').sphere(sx, eave - 0.07, z + side * half, sw * 0.95, col, 0.15, 0.04, 'sphereLo');
+    }
+  }
+  B.get('glowSoft').box(x, eave - 0.04, z, hx * 2 - 0.2, 0.02, hz * 2 - 0.2, '#fff1d6');
+  // 屋脊上一块店招（店色底、金边、上下两条暖光）
+  B.get('matte').box(x, ridge + 0.26, z, hx * 1.3, 0.4, 0.08, deep);
+  B.get('facadeBronze').box(x, ridge + 0.26, z, hx * 1.3 + 0.08, 0.48, 0.05, GOLD);
+  for (const dy of [0.06, 0.46]) B.get('glow').box(x, ridge + dy, z, hx * 1.2, 0.025, 0.1, WARM);
 }
 
 /** 休憩花园：石材长花池（灌木和花）+ 一棵树（樱花或棕榈交替）+ 两侧木面长椅 */
