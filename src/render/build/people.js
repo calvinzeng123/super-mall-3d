@@ -6,6 +6,9 @@ import { rng } from '../textures.js';
 import { loadPeopleAssets } from '../people-asset.js';
 import { createPeopleSupport } from '../people-support.js';
 
+// 上衣颜色（sRGB）：白、米、黑、藏青、浅蓝、酒红、砖红、芥黄、橄榄、墨绿、灰、粉
+const OUTFITS = ['#f4f2ec', '#d9c7a4', '#2a2b2e', '#2b3d6b', '#6f9fd8', '#8f1f33', '#c8452f', '#e0a42a', '#6b7a35', '#1f6b55', '#7d8085', '#e98aa8']
+  .map((c) => new THREE.Color(c));
 const COUNT = { parking: 12, food: 70, retail: 75, roof: 45, street: 40, concourse: 80, platform: 56 };
 
 export async function buildPeople(ctx) {
@@ -35,6 +38,7 @@ export async function buildPeople(ctx) {
       // Allocate morph texture at full capacity before distance/density culling
       // reduces draw count; later quality increases must not overflow it.
       mesh.setMorphAt(0, asset.source);
+      mesh.setColorAt(0, OUTFITS[0]); // 先把实例颜色缓冲按满容量建好（着色器只给衣服换色）
       ctx.levels[lv.id].people.add(mesh);
       return { mesh, asset, visible: 0 };
     });
@@ -53,6 +57,7 @@ export async function buildPeople(ctx) {
         phase: rand(), size: .94 + rand() * .1, variant: i % assets.length,
         // A deterministic rank keeps the same population while changing quality.
         rank: (i + .5) / count,
+        outfit: OUTFITS[Math.floor(rand() * OUTFITS.length)],
       });
     }
     const extraPieces = (ctx.layout.extensions?.paths || []).filter(path => path.level === lv.id)
@@ -88,6 +93,7 @@ export async function buildPeople(ctx) {
       scale.setScalar(actor.size);
       matrix.compose(position, rotation, scale);
       mesh.setMatrixAt(variant.visible, matrix);
+      mesh.setColorAt(variant.visible, actor.outfit);
       const weights = asset.source.morphTargetInfluences;
       weights.fill(0);
       // Standing pose on escalators. Distant pedestrians update at the same
@@ -101,6 +107,7 @@ export async function buildPeople(ctx) {
     for (const { mesh, visible } of walker.variants) {
       mesh.count = visible;
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.morphTexture.needsUpdate = true;
       stats.visible += visible;
     }
