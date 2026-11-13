@@ -5,6 +5,8 @@ import { L } from './helpers.js';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { BatchSet } from '../src/render/batch.js';
 import { buildP1Fidelity } from '../src/render/build/p1-fidelity.js';
+import { buildAtriumReflection } from '../src/render/build/floor-reflection.js';
+import { pointInPoly } from '../src/layout/geom.js';
 
 // Posters paint on a canvas; under Node a no-op 2D context is enough.
 const paint = new Proxy({}, {
@@ -102,4 +104,38 @@ test('样板中庭：1F 喷泉/树形柱、各层栏板花槽、6F 两块大屏�
   assert.ok(n('P1-4F', box(-140, 16, -140, -72, 18, -72)) > 500, '4F 栏板花槽');
   assert.ok(n('P1-RF', box(-140, 34, -140, -72, 44, -72)) > 500, '天台伞顶');
   assert.equal(meshes(tour.levels['P1-6F'].base).filter(m => m.name === 'P1-atrium-screen').length, 4);
+});
+
+test('大中庭 1F 地面倒影膜：铺满一期 1F 公共走道、不进铺位和井道；只在 HDR + 漫游时开', () => {
+  const base = new THREE.Group(), dynamic = [], hooks = [];
+  const ctx = { layout: L, levels: { 'P1-1F': { base } }, dynamic, camera: new THREE.PerspectiveCamera(), renderer: null,
+    mats: { hdr: false, onNight: (fn) => { hooks.push(fn); fn(0); } } };
+  const mesh = buildAtriumReflection(ctx);
+  assert.ok(mesh && base.children.includes(mesh), '没有倒影膜');
+  mesh.updateMatrixWorld(true);
+  const lv1 = level('P1-1F'), p = mesh.geometry.attributes.position, idx = mesh.geometry.index;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  let area = 0, outside = 0;
+  for (let i = 0; i < idx.count; i += 3) {
+    a.fromBufferAttribute(p, idx.getX(i)).applyMatrix4(mesh.matrixWorld);
+    b.fromBufferAttribute(p, idx.getX(i + 1)).applyMatrix4(mesh.matrixWorld);
+    c.fromBufferAttribute(p, idx.getX(i + 2)).applyMatrix4(mesh.matrixWorld);
+    assert.ok(Math.abs(a.y - lv1.elev - 0.004) < 1e-6, '倒影膜不在 1F 地面上');
+    const s = Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
+    area += s;
+    const m = [(a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3];
+    if (!lv1.walk.some((w) => pointInPoly(m, w.poly)) || lv1.units.some((u) => u.polys.some((q) => pointInPoly(m, q)))) outside += s;
+  }
+  assert.ok(area > 15000, `倒影膜只有 ${area.toFixed(0)} m²`);
+  // 铺位和墙之间半宽不到 0.6 米的细条不算走道（p1-mega.js 切走道时丢掉），倒影膜照样铺着、被墙脚压住，允许几平方米
+  assert.ok(outside < 12, `倒影膜有 ${outside.toFixed(1)} m² 落在走道外或铺位里`);
+  const sw = dynamic.find((d) => d.name === 'p1-atrium-reflection');
+  sw.update(0.016, 0, { explore: { active: true } });
+  assert.equal(mesh.visible, false, '均衡画质（没开 HDR）也在画倒影');
+  ctx.mats.hdr = true;
+  ctx.camera.position.set(mesh.geometry.boundingSphere.center.x, 2, -mesh.geometry.boundingSphere.center.y);
+  sw.update(0.016, 0, { explore: { active: false } });
+  assert.equal(mesh.visible, false, '鸟瞰（不在漫游）也在画倒影');
+  sw.update(0.016, 0, { explore: { active: true } });
+  assert.equal(mesh.visible, true, '漫游走到中庭里倒影没开');
 });

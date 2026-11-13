@@ -11,7 +11,7 @@ import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
-const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
+const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', GOLD_LED = '#ffc675', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
 const FLOWERS = ['#e58fb5', '#c96aa8', '#f2b6c8', '#a77bd1', '#f6e7a1'];
 
 export function buildP1Atrium(ctx) {
@@ -118,7 +118,9 @@ function balconyEdge(ctx, B, lv, v) {
       const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t, mz = z0 + (z1 - z0) * t, pl = len / n + 0.03;
       // 栏板：楼板边包一圈白色弧面（0.9 米高），底下一条暖光
       B.get('satin').box(mx + nx * 0.1, y - 0.42, mz + nz * 0.1, pl, 0.88, 0.16, WHITE, ang);
-      B.get('glow').box(mx + nx * 0.19, y - 0.84, mz + nz * 0.19, pl, 0.045, 0.03, WARM, ang);
+      // 栏板下沿的暖金色灯带（效果图里每层一圈金色光带）：外侧一条 9 厘米高的灯带，底面一条朝下的灯槽
+      B.get('glow').box(mx + nx * 0.19, y - 0.79, mz + nz * 0.19, pl, 0.09, 0.03, GOLD_LED, ang);
+      B.get('glow').box(mx + nx * 0.1, y - 0.865, mz + nz * 0.1, pl, 0.012, 0.1, WARM, ang);
       // 地面上一条跟着栏板走的暖光线（离栏板 2.2 米），扶梯口、观光梯门前、铺位里不画
       const gx = mx - nx * 2.2, gz = mz - nz * 2.2;
       if (!roof && v.mega && !skip(gx, gz) && !inUnit(gx, gz)) B.get('glowSoft').box(gx, y + 0.008, gz, pl, 0.006, 0.045, '#ffe6bf', ang);

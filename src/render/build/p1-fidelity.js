@@ -9,6 +9,7 @@ import { COLORS } from '../theme.js';
 import { buildP1Roofscape, ROOFSCAPE_TYPES } from './p1-roofscape.js';
 import { buildP1Landscape } from './p1-landscape.js';
 import { buildP1Atrium } from './p1-atrium.js';
+import { buildAtriumReflection } from './floor-reflection.js';
 
 const STEEL = '#c9cdc8';
 const FORM_TYPES = new Set(['art-dome', 'glass-canopy', 'canyon-skylight']);
@@ -28,6 +29,7 @@ export function buildP1Fidelity(ctx) {
   buildPosters(ctx);
   buildP1Landscape(ctx);
   buildP1Atrium(ctx);
+  if (ctx.depthCues) buildAtriumReflection(ctx);
 }
 
 /** Spherical cap on a ring beam carried by columns; diagrid of meridians, rings and diagonals. */

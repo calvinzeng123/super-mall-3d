@@ -44,6 +44,8 @@ export const MEGA_SHOP_WALLS = [
   { id: 'BN', a: [-192.5, -160], b: [-150.4, -117.9] },    // B 东北：贴西北翼南侧铺位背墙
   { id: 'BS', a: [-150.4, -117.9], b: [-204.7, -103.4] },  // B 南：贴西翼北侧铺位背墙
 ];
+/** 原来就空着的角落（不是走道也没有铺位）：方庭南排铺位东头到外墙那块 16×16 米，做成一间朝走道开门的铺位。x0..x1、z0..z1 是世界坐标，门脸在 z1 一侧 */
+export const MEGA_POCKETS = [{ id: 'SQ-SE', x0: -176, z0: -240, x1: -160, z1: -224 }];
 /** 中庭环形店铺：门脸离洞口 7 米，每间 9 米开间，进深 16 → 10 米能放多深放多深 */
 export const MEGA_RING = { corridor: 7, width: 9, depths: [16, 14, 12, 10] };
 // 西北翼原来那条翼楼（局部 u 15–125、v ±24）也能排环形店铺
@@ -642,6 +644,15 @@ function megaShops(layout, befores, plaza) {
           break;
         }
       }
+    }
+    // ③ 角落空地：整块都在外墙里、不碰别的东西、门口 1.5 米外是走道，才排一间
+    for (const pk of MEGA_POCKETS) {
+      const F = frame(pk.x0, pk.z0, 0), r = rect(0.15, 0.15, pk.x1 - pk.x0 - 0.15, pk.z1 - pk.z0), poly = lrectPoly(F, r);
+      const probes = [0.1, 0.5, 0.9].flatMap((a) => [0.1, 0.5, 0.9].map((b) => toW(F, r.x0 + (r.x1 - r.x0) * a, r.z0 + (r.z1 - r.z0) * b)));
+      if (!probes.every((q) => inside(q, lv.outline)) || clashes(poly)) continue;
+      const door = toW(F, (r.x0 + r.x1) / 2, r.z1 + 1.5);
+      if (!lv.walk.some((w) => inside(door, w.poly))) continue;
+      add(F, r, pk.id);
     }
   }
 }
