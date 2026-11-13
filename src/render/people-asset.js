@@ -84,7 +84,8 @@ function outfits(material, geometry) {
   float warm = step(c.b, c.g) * step(c.g, c.r) * smoothstep(.24, .34, sat);
   float dark = 1. - smoothstep(.03, .09, lum);
   float body = step(vBodyY, uNeck);
-  vec3 tint = vBodyY > uWaist ? vColor : vec3(.05, .055, .07) + vColor.gbr * .22;
+  vec3 ic = vColor.rgb; // 有的程序变体里 vColor 是 vec4（USE_COLOR_ALPHA），统一取 rgb
+  vec3 tint = vBodyY > uWaist ? ic : vec3(.05, .055, .07) + ic.gbr * .22;
   vec3 recolor = tint * (.35 + .7 * lum);
   diffuseColor.rgb = mix(c, recolor, body * (1. - max(warm, dark)));
 }

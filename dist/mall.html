@@ -5038,7 +5038,8 @@ uniform float uWaist, uNeck;`).replace("#include <color_fragment>","").replace("
   float warm = step(c.b, c.g) * step(c.g, c.r) * smoothstep(.24, .34, sat);
   float dark = 1. - smoothstep(.03, .09, lum);
   float body = step(vBodyY, uNeck);
-  vec3 tint = vBodyY > uWaist ? vColor : vec3(.05, .055, .07) + vColor.gbr * .22;
+  vec3 ic = vColor.rgb; // \u6709\u7684\u7A0B\u5E8F\u53D8\u4F53\u91CC vColor \u662F vec4\uFF08USE_COLOR_ALPHA\uFF09\uFF0C\u7EDF\u4E00\u53D6 rgb
+  vec3 tint = vBodyY > uWaist ? ic : vec3(.05, .055, .07) + ic.gbr * .22;
   vec3 recolor = tint * (.35 + .7 * lum);
   diffuseColor.rgb = mix(c, recolor, body * (1. - max(warm, dark)));
 }
