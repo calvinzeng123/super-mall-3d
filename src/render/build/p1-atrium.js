@@ -505,6 +505,7 @@ function megaAtrium(ctx, levels) {
   }
   floorInlay(ctx, B, lv1, y0, (D?.fountains || []).filter((q) => q.indoor));
   plazaPendants(ctx, lv1);
+  plazaBaffles(ctx, lv1);
   // 新楼面天花：沿西北翼方向的暖光灯带（3 米一条，6 米一行），只挂在头顶真有楼板的地方
   for (let i = 0; i < levels.length - 1; i++) {
     const lv = levels[i], up = levels[i + 1], L = ctx.levels[lv.id];
@@ -874,6 +875,51 @@ function plazaPendants(ctx, lv1) {
         L.batch.pool(x, lv1.elev, z, 3.2, 3.2, 0xffd6a0);
       }
     }
+  }
+}
+
+/**
+ * 1F 广场四周的木格栅吊顶：2F 楼板底下，沿大中庭洞口边每 0.75 米一根木条，垂直于洞口边、从离边 2.5 米伸到 9 米，
+ * 绕着洞口呈放射状。只检查木条的起点、中点、终点（都要在走道上、不在洞口和铺位房间里），不行就退成 2.5–6 米的短条。
+ */
+function plazaBaffles(ctx, lv1) {
+  const lv2 = ctx.layout.levels.find((l) => l.id === 'P1-2F'), L = ctx.levels[lv1.id];
+  if (!lv2 || !L) return;
+  const ceil = lv2.elev - (SLAB_T[lv2.kind] ?? 0.45), voids2 = lv2.voids.map((v) => v.poly);
+  const solid = [...lv1.units.flatMap((u) => u.polys), ...(lv1.rooms || []).flatMap((r) => r.polys || []), ...lv1.voids.map((v) => v.poly)];
+  // 多边形先配一个外框，点不在框里就不做 pointInPoly（几十个大多边形逐个精算太慢，开场会卡）
+  const boxed = (polys) => polys.map((P) => ({ P, b: P.reduce((r, [x, z]) => [Math.min(r[0], x), Math.min(r[1], z), Math.max(r[2], x), Math.max(r[3], z)], [Infinity, Infinity, -Infinity, -Infinity]) }));
+  const hitAny = (list, x, z) => list.some(({ P, b }) => x >= b[0] && x <= b[2] && z >= b[1] && z <= b[3] && pointInPoly([x, z], P));
+  const V = boxed(voids2), W = boxed(lv1.walk.map((w) => w.poly)), S = boxed(solid);
+  const ok = (x, z) => !hitAny(V, x, z) && hitAny(W, x, z) && !hitAny(S, x, z);
+  const placed = [], segDist = (x, z, q) => {
+    const dx = q.x1 - q.x0, dz = q.z1 - q.z0, t = Math.max(0, Math.min(1, ((x - q.x0) * dx + (z - q.z0) * dz) / (dx * dx + dz * dz)));
+    return Math.hypot(x - q.x0 - dx * t, z - q.z0 - dz * t);
+  };
+  for (const v of lv2.voids.filter((q) => q.mega && /^(SQ-void|C-void|MEGA-void)/.test(q.id))) {
+    const P = v.poly;
+    for (let i = 0; i < P.length; i++) {
+      const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 0.75) continue;
+      let nx = -(z1 - z0) / len, nz = (x1 - x0) / len;
+      if (pointInPoly([(x0 + x1) / 2 + nx * 0.3, (z0 + z1) / 2 + nz * 0.3], P)) { nx = -nx; nz = -nz; }
+      for (let d = 0.375; d < len; d += 0.75) {
+        const bx = x0 + (x1 - x0) * (d / len), bz = z0 + (z1 - z0) * (d / len);
+        for (const [a, b] of [[2.5, 9], [2.5, 6]]) {
+          if (![a, (a + b) / 2, b].every((t) => ok(bx + nx * t, bz + nz * t))) continue;
+          // 洞口拐角处相邻两条边的木条会交叉成 X：离已放的木条不到 0.3 米就不放
+          const seg = { x0: bx + nx * a, z0: bz + nz * a, x1: bx + nx * b, z1: bz + nz * b };
+          if ([0, 0.25, 0.5, 0.75, 1].some((t) => placed.some((q) => segDist(seg.x0 + (seg.x1 - seg.x0) * t, seg.z0 + (seg.z1 - seg.z0) * t, q) < 0.3))) break;
+          placed.push({ ...seg, cx: bx + nx * (a + b) / 2, cz: bz + nz * (a + b) / 2, len: b - a, ry: Math.atan2(nx, nz) });
+          break;
+        }
+      }
+    }
+  }
+  // 孤零零的一两根木条看着像掉下来的梁：只画 1.6 米内至少有两根邻居的
+  for (const q of placed) {
+    if (placed.filter((o) => o !== q && Math.hypot(o.cx - q.cx, o.cz - q.cz) < 1.6).length < 2) continue;
+    L.batch.get('wood').box(q.cx, ceil - 0.16, q.cz, 0.07, 0.22, q.len, '#b88a5a', q.ry);
   }
 }
 
