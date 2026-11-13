@@ -546,6 +546,7 @@ function megaAtrium(ctx, levels) {
     }
   }
   greenWalls(ctx, levels);
+  directoryTotems(ctx, levels);
   // A、B 走道里的岛柜（粉白玻璃柜 + 灯箱顶）和咖啡外摆
   for (const it of M.islands || []) {
     const L = ctx.levels[it.level], lv = levels.find((l) => l.id === it.level);
@@ -565,6 +566,71 @@ function megaAtrium(ctx, levels) {
       const [x, z] = toW(NW_FRAME, u, MEGA_OVAL.v);
       haloRing(ctx.levels[six.id].batch, x, z, R, roofY - 2.4, roofY);
       haloRing(ctx.levels[six.id].batch, x, z, R * 0.66, roofY - 4.6, roofY);
+    }
+  }
+}
+
+/** 楼层导览牌的画面：顶上楼层号、下面按业态列出本层的店（虚构品牌，取自布局里的品牌记录） */
+function directoryTexture(ctx, lv) {
+  ctx.p1Directory ||= {};
+  if (ctx.p1Directory[lv.id]) return ctx.p1Directory[lv.id];
+  const c = makeCanvas(320, 1000), g = c.getContext('2d');
+  g.fillStyle = '#fbf9f4'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#26324d'; g.fillRect(0, 0, c.width, 190);
+  g.fillStyle = '#d8b56a'; g.fillRect(0, 186, c.width, 6);
+  g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `700 108px ${FONT_EN}`; g.fillText(lv.short, c.width / 2, 92);
+  g.font = `500 24px ${FONT_CN}`; g.fillText('楼层导览 · DIRECTORY', c.width / 2, 160);
+  const by = new Map();
+  for (const u of lv.units) { const k = u.brand?.catLabel; if (!k || !u.brand?.name) continue; if (!by.has(k)) by.set(k, []); by.get(k).push(u.brand.name); }
+  let y = 230;
+  g.textAlign = 'left';
+  for (const [cat, names] of [...by].sort((a, b) => b[1].length - a[1].length)) {
+    if (y > c.height - 70) break;
+    g.fillStyle = '#b08a3e'; g.font = `600 26px ${FONT_CN}`; g.fillText(cat, 26, y); y += 36;
+    g.fillStyle = '#3a3f4a'; g.font = `400 22px ${FONT_CN}`;
+    for (const n of names.slice(0, 4)) { if (y > c.height - 40) break; g.fillText('· ' + n, 40, y); y += 30; }
+    y += 12;
+  }
+  return (ctx.p1Directory[lv.id] = canvasTexture(c, { clamp: true }));
+}
+
+/** 扶梯口旁边立一块楼层导览牌（白色立牌、金边、深蓝顶条，两面都是本层导览，夜里自发光）。
+ *  位置：扶梯端头侧面 1.2 米、往外 1.2 米；要在走道上、不在洞口和障碍上，同层两块之间 ≥ 8 米 */
+function directoryTotems(ctx, levels) {
+  for (const lv of levels.filter((l) => /^[1-6]F$/.test(l.short))) {
+    const L = ctx.levels[lv.id];
+    if (!L) continue;
+    const blocked = [...(lv.navObstacles || []).map((o) => o.poly), ...lv.units.flatMap((u) => u.polys), ...lv.voids.map((v) => v.poly)];
+    const ok = (x, z) => lv.walk.some((w) => pointInPoly([x, z], w.poly)) && !blocked.some((q) => pointInPoly([x, z], q))
+      && lv.voids.every((v) => !pointInPoly([x, z], v.poly) && distToPolyEdge([x, z], v.poly) > 0.8);
+    const placed = [];
+    let mat = null;
+    for (const e of ctx.layout.escalators) {
+      for (const [end, sign] of [[e.bottom, -1], [e.top, 1]]) {
+        if ((sign < 0 ? e.from : e.to) !== lv.id) continue;
+        const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z), ux = (e.top.x - e.bottom.x) / run, uz = (e.top.z - e.bottom.z) / run;
+        for (const side of [1, -1]) {
+          const x = end.x + ux * sign * 1.2 + -uz * side * (e.width / 2 + 1.2), z = end.z + uz * sign * 1.2 + ux * side * (e.width / 2 + 1.2);
+          if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < 8)) continue;
+          if (![[0, 0], [0.4, 0], [-0.4, 0], [0, 0.4], [0, -0.4]].every(([dx, dz]) => ok(x + dx, z + dz))) continue;
+          placed.push([x, z]);
+          const ang = Math.atan2(-uz, ux) + Math.PI / 2, y = lv.elev;
+          L.batch.get('satin').box(x, y + 1.1, z, 0.74, 2.2, 0.16, '#f6f3ec', ang);
+          L.batch.get('facadeBronze').box(x, y + 0.04, z, 0.82, 0.08, 0.24, GOLD, ang);
+          L.batch.get('facadeBronze').box(x, y + 2.22, z, 0.8, 0.04, 0.2, GOLD, ang);
+          mat ||= ctx.mats.sign(directoryTexture(ctx, lv));
+          for (const face of [1, -1]) {
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 1.94), mat);
+            const fx = Math.sin(ang + (face > 0 ? 0 : Math.PI)), fz = Math.cos(ang + (face > 0 ? 0 : Math.PI));
+            m.position.set(x + fx * 0.081, y + 1.15, z + fz * 0.081);
+            m.rotation.y = ang + (face > 0 ? 0 : Math.PI);
+            m.name = 'P1-directory-totem';
+            L.base.add(m);
+          }
+          break;
+        }
+      }
     }
   }
 }
