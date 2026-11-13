@@ -231,12 +231,18 @@ function palm(B, F, p, y0, seed) {
       B.get('wood').bar(prev, q, 0.24 - 0.08 * t, '#8a7259');
       prev = q;
     }
+    // 棕榈叶：一根细叶轴，两侧一排排往下垂的小叶（羽状），不是一根粗方条
     for (let k = 0; k < 11; k++) {
-      const a = (k / 11) * Math.PI * 2 + rand() * 0.3, len = 2.2 + rand() * 0.9;
+      const a = (k / 11) * Math.PI * 2 + rand() * 0.3, len = 2.4 + rand() * 0.9, col = k % 2 ? LEAF : LEAF2;
+      const ca = Math.cos(a), sa = Math.sin(a), px = -sa, pz = ca;
       let fp = prev;
-      for (let s = 1; s <= 4; s++) {
-        const t = s / 4, q = { x: prev.x + Math.cos(a) * len * t, y: prev.y + 0.6 * t - 1.6 * t * t, z: prev.z + Math.sin(a) * len * t };
-        B.get('foliage').bar(fp, q, 0.36 - 0.2 * t, k % 2 ? LEAF : LEAF2);
+      for (let s = 1; s <= 8; s++) {
+        const t = s / 8, q = { x: prev.x + ca * len * t, y: prev.y + 0.6 * t - 1.6 * t * t, z: prev.z + sa * len * t };
+        B.get('foliage').bar(fp, q, 0.06, col);
+        if (s > 1) {
+          const ll = 0.75 * (1 - t * 0.55);
+          for (const side of [1, -1]) B.get('foliage').bar(q, { x: q.x + (px * side * 0.9 + ca * 0.35) * ll, y: q.y - 0.32 * ll, z: q.z + (pz * side * 0.9 + sa * 0.35) * ll }, 0.07, col);
+        }
         fp = q;
       }
     }
@@ -692,13 +698,25 @@ function blossom(B, t, y0, seed) {
   }
   const top = { x, y: y0 + 2.4, z };
   B.get('wood').bar({ x, y: y0 + 0.55, z }, top, 0.2, '#5b4636');
-  const pinks = ['#f2b6c8', '#e58fb5', '#f7cfdc', '#d97aa6'];
-  for (let b = 0; b < 3; b++) {
-    const a = b * 2.1 + rand(), tip = { x: x + Math.cos(a) * 1.4, y: y0 + 3.6 + rand() * 0.6, z: z + Math.sin(a) * 1.4 };
-    B.get('wood').bar(top, tip, 0.12, '#5b4636');
-    for (let k = 0; k < 5; k++) {
-      B.get('foliage').sphere(tip.x + (rand() - 0.5) * 1.6, tip.y + (rand() - 0.2) * 0.9, tip.z + (rand() - 0.5) * 1.6, 0.7 + rand() * 0.4, pinks[(b + k) % pinks.length], 0.55 + rand() * 0.2, 0.7 + rand() * 0.3, 'ico0');
+  // 树冠：主枝分叉成小枝，每根小枝顶上一团由许多小花球攒成的花簇（效果图里樱花是一大团软软的粉色，不是几块大多面体）
+  const pinks = ['#f2b6c8', '#e58fb5', '#f7cfdc', '#d97aa6', '#fbe3ea'];
+  for (let b = 0; b < 4; b++) {
+    const a = b * 1.57 + rand() * 0.6, mid = { x: x + Math.cos(a) * 0.9, y: y0 + 3.2 + rand() * 0.3, z: z + Math.sin(a) * 0.9 };
+    B.get('wood').bar(top, mid, 0.13, '#5b4636');
+    for (let c = 0; c < 2; c++) {
+      const a2 = a + (c ? 0.45 : -0.45), tip = { x: mid.x + Math.cos(a2) * (0.8 + rand() * 0.4), y: mid.y + 0.6 + rand() * 0.5, z: mid.z + Math.sin(a2) * (0.8 + rand() * 0.4) };
+      B.get('wood').bar(mid, tip, 0.07, '#5b4636');
+      for (let k = 0; k < 18; k++) {
+        const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.35) * 0.8;
+        B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 1.1, tip.y + h, tip.z + Math.sin(u) * rr * 1.1,
+          0.2 + rand() * 0.16, pinks[Math.floor(rand() * pinks.length)], undefined, undefined, 'ico');
+      }
     }
+  }
+  // 树池里落了一些花瓣
+  for (let k = 0; k < 14; k++) {
+    const a = rand() * Math.PI * 2, d = 0.4 + rand() * (r - 0.6);
+    B.get('foliage').box(x + Math.cos(a) * d, y0 + 0.535, z + Math.sin(a) * d, 0.09, 0.008, 0.07, pinks[k % pinks.length], rand() * 3);
   }
 }
 
