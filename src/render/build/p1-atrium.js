@@ -12,6 +12,7 @@ import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
 const sgE = new THREE.Euler(), sgQ = new THREE.Quaternion(), sgP = new THREE.Vector3(), sgS = new THREE.Vector3();
+const palmDir = new THREE.Vector3(), X_AXIS = new THREE.Vector3(1, 0, 0);
 const leafE = new THREE.Euler(0, 0, 0, 'YXZ'), leafQ = new THREE.Quaternion(), leafP = new THREE.Vector3(), leafS = new THREE.Vector3();
 const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', GOLD_LED = '#ffc675', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
 const FLOWERS = ['#e58fb5', '#c96aa8', '#f2b6c8', '#a77bd1', '#f6e7a1'];
@@ -311,12 +312,20 @@ function palm(B, F, p, y0, seed) {
       const a = (k / 11) * Math.PI * 2 + rand() * 0.3, len = 2.4 + rand() * 0.9, col = k % 2 ? LEAF : LEAF2;
       const ca = Math.cos(a), sa = Math.sin(a), px = -sa, pz = ca;
       let fp = prev;
-      for (let s = 1; s <= 8; s++) {
-        const t = s / 8, q = { x: prev.x + ca * len * t, y: prev.y + 0.6 * t - 1.6 * t * t, z: prev.z + sa * len * t };
+      for (let s = 1; s <= 12; s++) {
+        const t = s / 12, q = { x: prev.x + ca * len * t, y: prev.y + 0.6 * t - 1.6 * t * t, z: prev.z + sa * len * t };
         B.get('foliage').bar(fp, q, 0.06, col);
-        if (s > 1) {
-          const ll = 0.75 * (1 - t * 0.55);
-          for (const side of [1, -1]) B.get('foliage').bar(q, { x: q.x + (px * side * 0.9 + ca * 0.35) * ll, y: q.y - 0.32 * ll, z: q.z + (pz * side * 0.9 + sa * 0.35) * ll }, 0.07, col);
+        if (s > 2) {
+          // 小叶：扁平的狭长叶片（不是细方条），从叶轴斜向外、往下垂，越往叶尖越短
+          const ll = 0.8 * (1 - t * 0.55);
+          for (const side of [1, -1]) {
+            const dx = px * side * 0.9 + ca * 0.35, dy = -0.42, dz = pz * side * 0.9 + sa * 0.35;
+            palmDir.set(dx, dy, dz).normalize();
+            leafQ.setFromUnitVectors(X_AXIS, palmDir);
+            leafP.set(q.x + palmDir.x * ll * 0.5, q.y + palmDir.y * ll * 0.5, q.z + palmDir.z * ll * 0.5);
+            leafS.set(ll, 0.012, 0.22 - 0.1 * t);
+            B.get('foliage').shape('box', leafP, leafQ, leafS, col);
+          }
         }
         fp = q;
       }
