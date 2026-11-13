@@ -125,6 +125,12 @@ function balconyEdge(ctx, B, lv, v) {
       if (skip(tx, tz) || nearFall(tx, tz) || inUnit(tx, tz) || !lv.walk.some((w) => pointInPoly([tx, tz], w.poly)) || blocked.some((q) => pointInPoly([tx, tz], q))) continue;
       railTree(B, tx, tz, y, Math.round(Math.abs(tx * 17 + tz * 5)));
     }
+    // 两棵树中间一张面朝中庭的长凳（离栏板 0.8 米，背靠走道）：白石墩、木条坐面和靠背
+    for (let d = ((6.5 - acc) % 13 + 13) % 13; !roof && d < len; d += 13) {
+      const bx = x0 + ux * d - nx * 0.8, bz = z0 + uz * d - nz * 0.8;
+      if ([-0.9, 0, 0.9].some((o) => { const px = bx + ux * o, pz = bz + uz * o; return skip(px, pz) || nearFall(px, pz) || inUnit(px, pz) || !lv.walk.some((w) => pointInPoly([px, pz], w.poly)) || blocked.some((q) => pointInPoly([px, pz], q)); })) continue;
+      railBench(B, bx, bz, y, ang, nx, nz);
+    }
     acc = (acc + len) % 13;
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t, mz = z0 + (z1 - z0) * t, pl = len / n + 0.03;
@@ -195,6 +201,17 @@ function flowerBed(B, x, z, r, y, rand) {
     const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (r - 0.35);
     B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.14, z + Math.sin(a) * d, 0.07 + rand() * 0.03, BED[Math.floor(rand() * BED.length)], undefined, undefined, 'ico0');
   }
+}
+
+/** 栏杆边的长凳：两个白石墩、木条坐面，走道那一侧一块矮靠背（人坐着面朝中庭）。ang 是栏板方向，(nx, nz) 指向洞口 */
+function railBench(B, x, z, y0, ang, nx, nz) {
+  const ux = Math.cos(ang), uz = -Math.sin(ang);
+  for (const o of [-0.6, 0.6]) B.get('satin').box(x + ux * o, y0 + 0.2, z + uz * o, 0.22, 0.4, 0.42, '#f1ede4', ang);
+  for (const o of [-0.16, -0.05, 0.06, 0.17]) B.get('wood').box(x + nx * o, y0 + 0.43, z + nz * o, 1.7, 0.05, 0.1, '#a77a50', ang);
+  const bx = x - nx * 0.26, bz = z - nz * 0.26;
+  B.get('facadeBronze').box(bx + ux * 0.6, y0 + 0.62, bz + uz * 0.6, 0.04, 0.4, 0.04, GOLD, ang);
+  B.get('facadeBronze').box(bx - ux * 0.6, y0 + 0.62, bz - uz * 0.6, 0.04, 0.4, 0.04, GOLD, ang);
+  for (const h of [0.6, 0.74]) B.get('wood').box(bx, y0 + h, bz, 1.7, 0.1, 0.04, '#a77a50', ang);
 }
 
 /** 栏杆边的盆栽小树：白色圆盆（金色细边）、一根细干分两三杈，顶上一团由十几个小叶团攒成的圆冠（约 2.3 米高） */
