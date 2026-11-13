@@ -252,11 +252,17 @@ function fountain(B, F, p, y0) {
         prev = q;
       }
     }
-    // 池边一圈花
-    const rand = rng(41);
-    for (let k = 0; k < 40; k++) {
-      const a = (k / 40) * Math.PI * 2;
-      B.get('foliage').sphere(u + Math.cos(a) * (r - 0.15), y0 + 0.66, v + Math.sin(a) * (r - 0.15), 0.16, rand() < 0.4 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
+    // 池沿上一圈花：每一丛是一个低矮的绿垫 + 五六朵小花攒在上面，相邻几丛同色成段（原来是 40 个大多面体球，近看像一排彩色石头）
+    const rand = rng(41), n = Math.round(2 * Math.PI * (r - 0.13) / 0.36);
+    let col = BED[0];
+    for (let k = 0; k < n; k++) {
+      if (k % 4 === 0) col = BED[Math.floor(rand() * BED.length)];
+      const a = (k / n) * Math.PI * 2, R = r - 0.13, cx = u + Math.cos(a) * R, cz = v + Math.sin(a) * R;
+      B.get('foliage').sphere(cx, y0 + 0.63, cz, 0.18, k % 2 ? LEAF : LEAF2, 0.07, 0.18, 'ico0');
+      for (let q = 0; q < 6; q++) {
+        const b = rand() * Math.PI * 2, d = rand() * 0.15;
+        B.get('foliage').sphere(cx + Math.cos(b) * d, y0 + 0.69 + rand() * 0.05, cz + Math.sin(b) * d, 0.055 + rand() * 0.025, rand() < 0.15 ? '#ffffff' : col, undefined, undefined, 'ico0');
+      }
     }
   });
 }
