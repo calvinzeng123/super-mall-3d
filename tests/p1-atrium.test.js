@@ -5,6 +5,7 @@ import { L } from './helpers.js';
 import { buildNav, landAt, step } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
 import { toW, pointInPoly } from '../src/layout/geom.js';
+import clipping from 'polygon-clipping';
 import { ATRIUM_STEPS } from '../src/layout/p1-expansion-spec.js';
 import { ATRIUM } from '../src/layout/p1-atrium.js';
 
@@ -148,4 +149,36 @@ test('超级商业中心：两座天桥换成附楼外墙上的门（2F 到艺�
       assert.equal(s.floor, to.id, `${k.id} 从 ${from.id} 过不去`);
     }
   }
+});
+
+test('楼板三角剖分不补洞：每块楼板剖分出来的面积 = 外轮廓 − 洞（重叠的洞会让 Earcut 把中庭洞口补上，从 1F 往上看成了一整块天花）', async () => {
+  const THREE = await import('three');
+  const area = (P) => { let a = 0; for (let i = 0; i < P.length; i++) { const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length]; a += x0 * z1 - x1 * z0; } return Math.abs(a / 2); };
+  for (const lv of L.levels.filter((l) => l.building === 'P1')) {
+    lv.slab.pieces.forEach((piece, k) => {
+      const want = area(piece.outer) - (piece.holes || []).reduce((s, h) => s + area(h), 0);
+      const shape = new THREE.Shape(piece.outer.map(([x, z]) => new THREE.Vector2(x, -z)));
+      for (const h of piece.holes || []) shape.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
+      const g = new THREE.ShapeGeometry(shape, 6), p = g.attributes.position, idx = g.index;
+      let got = 0;
+      for (let i = 0; i < idx.count; i += 3) {
+        const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
+        got += Math.abs((p.getX(b) - p.getX(a)) * (p.getY(c) - p.getY(a)) - (p.getX(c) - p.getX(a)) * (p.getY(b) - p.getY(a))) / 2;
+      }
+      assert.ok(Math.abs(got - want) < 2, `${lv.id} 楼板 ${k}：剖分 ${got.toFixed(0)} m²，应为 ${want.toFixed(0)} m²`);
+    });
+  }
+});
+
+test('大椭圆中庭顶上开玻璃天窗：屋面开洞在 6F 洞口里面、不压楼梯电梯；天窗下面一圈屋顶咖啡座和花池都在真屋面上', () => {
+  const rf = lvl('P1-RF'), six = lvl('P1-6F'), sky = rf.voids.find((v) => v.id === 'MEGA-sky');
+  assert.ok(sky, '屋面没有大天窗');
+  const open6 = six.voids.filter((v) => v.kind === 'atrium');
+  const ring = (P) => [[...P, P[0]]], areaMP = (mp) => mp.reduce((t, poly) => t + poly.reduce((u, r, i) => { let a = 0; for (let k = 0; k < r.length - 1; k++) a += r[k][0] * r[k + 1][1] - r[k + 1][0] * r[k][1]; return u + (i ? -1 : 1) * Math.abs(a / 2); }, 0), 0);
+  const outside = areaMP(clipping.difference([ring(sky.poly)], ...open6.map((v) => [ring(v.poly)])));
+  assert.ok(outside < 1, `天窗有 ${outside.toFixed(1)} m² 不在 6F 洞口上方`);
+  assert.ok(rf.slab.pieces.some((p) => p.holes.includes(sky.poly)), '屋面楼板没开洞');
+  for (const s of L.stairs.filter((x) => x.poly && x.serves.includes('P1-RF'))) assert.ok(!s.poly.some((q) => pointInPoly(q, sky.poly)), `${s.id} 在天窗里`);
+  const cinema = rf.features.find((f) => f.type === 'cinema-open');
+  assert.ok(cinema && ![[cinema.rect.x0, cinema.rect.z0], [cinema.rect.x1, cinema.rect.z0], [cinema.rect.x1, cinema.rect.z1], [cinema.rect.x0, cinema.rect.z1]].some((q) => pointInPoly(q, sky.poly)), '露天影院压在天窗上');
 });

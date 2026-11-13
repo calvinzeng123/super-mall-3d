@@ -163,6 +163,80 @@ export function keepOuts(layout, lv, { forVoid = false } = {}) {
   return out;
 }
 
+/** 楼板上互相压着的洞（扶梯开洞伸进中庭洞口）并成一个：三角剖分遇到重叠的洞会把整个洞补上（从下面看中庭顶上成了一整块天花） */
+function mergeOverlapping(list) {
+  const out = list.slice();
+  for (let i = 0; i < out.length; i++) {
+    for (let j = i + 1; j < out.length; j++) {
+      let both;
+      try { if (!hit(out[i], out[j])) continue; both = clipping.union([[close(out[i])]], [[close(out[j])]]); } catch { continue; }
+      if (both.length !== 1) continue;
+      out[i] = clean(open(both[0][0]));
+      out.splice(j, 1);
+      j = i;
+    }
+  }
+  return out;
+}
+
+/** 大椭圆中庭顶上的玻璃天窗（屋面开洞）：比 6F 洞口每边收 5 米，避开屋面的楼梯、电梯、扶梯和用房 */
+export const MEGA_SKY = { a: 37, b: 25, neck: [40, 56, 6] };
+function convexHull(P) {
+  const pts = P.slice().sort((p, q) => p[0] - q[0] || p[1] - q[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], hi = [];
+  for (const p of pts) { while (lo.length >= 2 && cr(lo.at(-2), lo.at(-1), p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of pts.reverse()) { while (hi.length >= 2 && cr(hi.at(-2), hi.at(-1), p) <= 0) hi.pop(); hi.push(p); }
+  return [...lo.slice(0, -1), ...hi.slice(0, -1)];
+}
+/** 天窗外圈补回屋顶花园：天窗压掉的咖啡座（两张圆桌 + 木平台）沿天窗外 7 米、16 米两圈重新摆，花池沿上下两条长边摆一排。
+ * 只放在真屋面上：避开洞口、用房、铺位、已有屋面设施和导航障碍、光穹柱环、方庭天幕。桌子和花池都是导航障碍。 */
+function roofRing(lv) {
+  const dome = lv.features.find((f) => f.type === 'art-dome'), canopy = lv.features.find((f) => f.type === 'glass-canopy');
+  const onDeck = (p) => lv.slab.pieces.some((sp) => inside(p, sp.outer) && !(sp.holes || []).some((h) => inside(p, h))) && !lv.voids.some((v) => inside(p, v.poly));
+  const taken = [...(lv.rooms || []).flatMap((r) => r.polys || []), ...lv.units.flatMap((x) => x.polys),
+    ...lv.features.filter((f) => f.rect && f.frame).map((f) => grow(lrectPoly(f.frame, f.rect), 0.8)),
+    ...(lv.navObstacles || []).map((o) => boxAround(o.poly, 0.6)), ...(canopy ? [rectPoly(canopy.rect)] : [])];
+  const free = (P) => {
+    const xs = P.map((q) => q[0]), zs = P.map((q) => q[1]);
+    for (let x = Math.min(...xs); x <= Math.max(...xs) + 1e-6; x += 0.8) for (let z = Math.min(...zs); z <= Math.max(...zs) + 1e-6; z += 0.8) if (inside([x, z], P) && !onDeck([x, z])) return false;
+    if (!grow(P, 0.6).every((q) => onDeck(q))) return false;
+    if (dome && P.some(([x, z]) => Math.hypot(x - dome.cx, z - dome.cz) < dome.radius + 4.5)) return false;
+    return !taken.some((t) => hit(t, grow(P, 0.5)));
+  };
+  const add = (f, poly, obstacles) => { lv.features.push(f); taken.push(grow(poly, 0.5)); lv.navObstacles.push(...obstacles); };
+  const { a, b } = MEGA_SKY;
+  for (const [d, n] of [[7, 28], [16, 36]]) for (let k = 0; k < n; k++) {
+    const t = (k / n) * Math.PI * 2, u = MEGA_OVAL.u + (a + d) * Math.cos(t), v = MEGA_OVAL.v + (b + d) * Math.sin(t);
+    const r = rect(u - 3.25, v - 2.4, u + 3.25, v + 2.4), poly = lrectPoly(NW_FRAME, r);
+    if (!free(poly)) continue;
+    const tablesAt = [0.27, 0.73].map((q) => toW(NW_FRAME, r.x0 + (r.x1 - r.x0) * q, (r.z0 + r.z1) / 2));
+    add({ type: 'cafe-cluster', frame: NW_FRAME, rect: r, expansion: true, mega: true, tablesAt }, poly, tablesAt.map(([x, z]) => ({ id: 'P1-RF-cafe-table', poly: circlePoly(x, z, 1.15, 10) })));
+  }
+  for (const s of [-1, 1]) for (let u = MEGA_OVAL.u - 16; u <= MEGA_OVAL.u + 16; u += 8) {
+    const v = MEGA_OVAL.v + s * (b + 2.6), r = rect(u - 2.1, v - 0.75, u + 2.1, v + 0.75), poly = lrectPoly(NW_FRAME, r);
+    if (free(poly)) add({ type: 'planter-bed', frame: NW_FRAME, rect: r, tree: u === MEGA_OVAL.u, expansion: true, mega: true }, poly, [{ id: 'P1-RF-planter', poly }]);
+  }
+}
+
+function megaSkylight(layout, lv) {
+  const { a, b } = MEGA_SKY;
+  const ell = Array.from({ length: 72 }, (_, i) => { const t = (i / 72) * Math.PI * 2; return nw(MEGA_OVAL.u + a * Math.cos(t), MEGA_OVAL.v + b * Math.sin(t)); });
+  const neck = [[MEGA_SKY.neck[0], -MEGA_SKY.neck[2]], [MEGA_SKY.neck[1], -MEGA_SKY.neck[2]], [MEGA_SKY.neck[1], MEGA_SKY.neck[2]], [MEGA_SKY.neck[0], MEGA_SKY.neck[2]]].map(([u, v]) => nw(u, v));
+  let sky = clipping.union([[close(ell)]], [[close(neck)]]);
+  const all = [ell, neck], near = (k) => all.some((P) => hit(k, P));
+  const off = (P, m) => (P.length === 4 ? grow(P, m) : boxAround(P, m));
+  const avoid = [...keepOuts(layout, lv, { forVoid: true }), ...lv.voids.map((v) => off(v.poly, 1.5)),
+    ...lv.units.flatMap((x) => x.polys.map((p) => off(p, 2))), ...(lv.rooms || []).flatMap((r) => (r.polys || []).map((p) => off(p, 2)))];
+  for (const k of avoid) { if (!near(k)) continue; try { sky = clipping.difference(sky, [[close(k)]]); } catch { /* 跳过 */ } }
+  sky = clipping.intersection(sky, [[close(lv.outline)]]);
+  // 天窗下面必须是 6F 的中庭洞口（6F 上还躲了几处电梯、用房，屋面上没有）
+  const six = layout.levels.find((l) => l.building === 'P1' && l.short === '6F');
+  const atria = (six?.voids || []).filter((v) => v.kind === 'atrium');
+  if (atria.length) { try { sky = clipping.intersection(sky, clipping.union(...atria.map((v) => [[close(v.poly)]]))); } catch { /* 保留原样 */ } }
+  const pieces = sky.map((m) => clean(open(m[0]))).filter((p) => Math.abs(area(p)) > 50).sort((p, q) => Math.abs(area(q)) - Math.abs(area(p)));
+  return pieces[0] || null;
+}
+
 /** 这一层新加的洞口（椭圆 ∪ 颈 − 楼梯、电梯、扶梯留出的范围） */
 export function addedVoid(layout, lv) {
   const { oval, neck, throat, galleria, west } = megaVoidParts(lv.short);
@@ -252,6 +326,31 @@ export function applyP1Mega(layout) {
     } else if (lv.short === '1F' && plaza.length) {
       removed = lv.units.filter((x) => x.polys.some((p) => overlapArea(p, plaza) > 1));
       lv.units = lv.units.filter((x) => !removed.includes(x));
+    } else if (lv.kind === 'roof') {
+      // 西北翼核心筒的客梯只到 1F 了，屋面上那间电梯机房也拆掉（腾给天窗）
+      lv.rooms = (lv.rooms || []).filter((r) => !(['NW-core', 'NW-wc'].includes(r.id)));
+      // 原来西北翼屋面那条小天窗在大天窗里面，拆掉（屋面开洞一起去掉）
+      const oldSky = lv.voids.filter((v) => v.id === 'NW-sky-44');
+      lv.voids = lv.voids.filter((v) => !oldSky.includes(v));
+      for (const piece of lv.slab?.pieces || []) piece.holes = (piece.holes || []).filter((h) => !oldSky.some((v) => v.poly === h));
+      const sky = megaSkylight(layout, lv);
+      if (sky) {
+        holes.push(sky);
+        lv.voids.push({ id: 'MEGA-sky', kind: 'skylight', poly: sky, frame: NW_FRAME, mega: true, oval: { u: MEGA_OVAL.u, v: MEGA_OVAL.v, a: MEGA_SKY.a, b: MEGA_SKY.b } });
+        // 天窗压到的屋顶花园（咖啡座、花池）和它们的导航障碍一起拿掉
+        const zone = grow(sky.length > 3 ? convexHull(sky) : sky, 1);
+        const gone = (P) => P && hit(P, zone);
+        lv.features = lv.features.filter((f) => !(f.expansion && f.rect && f.frame && gone(lrectPoly(f.frame, f.rect))));
+        lv.navObstacles = (lv.navObstacles || []).filter((o) => !gone(o.poly));
+        // 方庭天台的露天影院原来压在椭圆西北头上：整块往北挪（尺寸不变），挪过去压到的咖啡座也拿掉
+        const cine = lv.features.find((f) => f.type === 'cinema-open' && f.rect && hit(rectPoly(f.rect), zone));
+        if (cine) {
+          cine.rect = rect(-191, -239.5, -167, -210);
+          const area0 = grow(rectPoly(cine.rect), 0.8);
+          lv.features = lv.features.filter((f) => f === cine || !(f.expansion && f.rect && f.frame && hit(lrectPoly(f.frame, f.rect), area0)));
+          lv.navObstacles = lv.navObstacles.filter((o) => !hit(o.poly, area0));
+        }
+      }
     }
     befores[lv.id] = before;
     // 3F 以上的一期立面（退台的「艺术露台」外墙）也把 A、B 并进去，不然原来西北翼的外墙会画在中庭里
@@ -271,7 +370,7 @@ export function applyP1Mega(layout) {
       if (holes.length) {
         // 合并后的洞口代替原来的圆厅、方庭洞口；落在新洞口里的小洞（井道、开洞）不要了
         const rest = (main.holes || []).filter((h) => !oldVoidPolys.includes(h) && !holes.some((H) => inside(centroid(h), H)));
-        main.holes = [...rest, ...holes];
+        main.holes = mergeOverlapping([...rest, ...holes]);
       }
     } else lv.slab = { pieces: [{ outer: lv.outline, holes: lv.voids.map((v) => v.poly) }] };
     // 走道：原来的走道减去洞口，再加上 A、B 两块（减去洞口、铺位、井道、扶梯开洞）
@@ -297,6 +396,8 @@ export function applyP1Mega(layout) {
     }
     noHoles(add).forEach((p, i) => walk.push({ id: `P1-mega-${lv.short}-${i}`, kind: lv.kind === 'roof' ? 'deck' : 'atrium', poly: fix(p), frame: NW_FRAME, mega: true }));
     lv.walk = walk;
+    // 屋面：楼板并进 A、B 以后，再沿天窗外圈补回咖啡座和花池
+    if (lv.kind === 'roof' && lv.voids.some((v) => v.id === 'MEGA-sky')) roofRing(lv);
   }
   // 西北翼两部客梯：洞口里只到 1F
   for (const e of layout.elevators.filter((q) => q.id === 'P1-NW-L1' || q.id === 'P1-NW-L2')) e.serves = e.serves.filter((id) => !UPPER.some((s) => id === `P1-${s}`) && id !== 'P1-RF');
@@ -397,17 +498,32 @@ function megaSite(layout, plaza) {
       lv1.navObstacles.push({ id: `P1-mega-${kind}-${M.plaza.trees.length - 1}`, poly });
     }
   }
-  // ---- 东南主入口落客环岛：门前 13 米的圆环（外径 22 米、中间花坛岛），一条双向支路穿过人行道接云澜大道
+  // ---- 东南主入口落客环岛：门正前方是地铁 A 口，环岛放在 A 口东侧（外径 20 米、中间花坛岛），
+  // 一条双向短支路接云澜大道；门口雨棚接一条风雨连廊，沿 A 口东北侧走到环岛上下客点
   const seDoor = ent('P1-SE');
   if (seDoor && D) {
-    const [mx, mz] = midSeg(seDoor.seg), R = 11, cx = mx + 1.6, cz = -33;
+    const [mx, mz] = midSeg(seDoor.seg), R = 10, cx = -22.5, cz = -26;
     const loop = { id: 'SE-dropoff', name: '东南主入口落客环岛', rect: rect(cx - R, cz - R, cx + R, cz + R), corner: R, cx, cz, planter: [4.6, 4.6], R };
     loop.poly = circlePoly(cx, cz, R, 40);
     loop.planterPoly = circlePoly(cx, cz, 4.9, 28);
-    loop.spur = rect(cx - 6, cz + R - 2, cx + 6, -14);
-    // 雨棚顺着东南翼轴线：门外 0.3–7 米、横向 ±7 米（东南翼局部坐标）
-    const [du] = toL(SE_FRAME, mx, mz);
+    loop.spur = rect(cx - 5, cz + R - 2, cx + 5, -14);
+    // 雨棚顺着东南翼轴线：门外 0.3–7 米、横向 ±7 米（东南翼局部坐标）；连廊再往外接到环岛边
+    const [du] = toL(SE_FRAME, mx, mz), [lu] = toL(SE_FRAME, cx, cz);
     loop.canopy = { frame: SE_FRAME, u0: du + 0.3, u1: du + 7, v0: -7, v1: 7, height: 5.2 };
+    // 顶棚伸出路缘 1.2 米罩住上下客车位，柱子留在路缘里面
+    loop.walkway = { frame: SE_FRAME, u0: du + 7, u1: lu - R + 1.2, postEnd: lu - R - 0.5, v0: -5, v1: 1.5, height: 4.4 };
+    // 柱子（两侧，每段不超过 8 米）也是行人障碍
+    for (const c of [loop.canopy, loop.walkway]) {
+      const end = c.postEnd ?? c.u1 - 0.4, n = Math.max(1, Math.ceil((end - c.u0 - 0.5) / 8));
+      c.posts = [];
+      for (let i = 0; i <= n; i++) {
+        const u = c.u0 + 0.5 + (end - c.u0 - 0.5) * i / n;
+        if (c === loop.canopy && i === 0) continue; // 门口那排柱子不立（贴着门）
+        if (c === loop.walkway && i === 0) continue; // 和门口雨棚外沿的柱子重合
+        for (const v of [c.v0 + 0.4, c.v1 - 0.4]) c.posts.push([u, v]);
+      }
+      for (const [i, [u, v]] of c.posts.entries()) fc.obstacles.push({ id: `SE-canopy-post-${c === loop.canopy ? 'd' : 'w'}${i}`, poly: circlePoly(...toW(SE_FRAME, u, v), 0.2, 8) });
+    }
     S.driveways.push(loop.poly, rectPoly(loop.spur));
     fc.obstacles.push({ id: 'SE-dropoff-planter', poly: loop.planterPoly });
     // 环岛范围里的行道树挪走

@@ -93,6 +93,8 @@ function penthouseLobbies(ctx, b, lv, B) {
   const y0 = lv.elev;
   for (const w of b.wings) {
     if (!w.core) continue;
+    // 超级商业中心：西北翼客梯只到 1F，屋面这里是大天窗
+    if (w.id === 'NW' && lv.voids.some((v) => v.id === 'MEGA-sky')) continue;
     const s = w.core.band, c = w.core.u;
     const v0 = s * 7, v1 = s * 3.6;
     const h = 4.2;

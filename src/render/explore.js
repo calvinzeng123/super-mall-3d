@@ -157,7 +157,7 @@ export function attachExplore(app, ui) {
   function place(st) {
     s = { floor: st.floor, x: st.x, z: st.z, y: st.y, slope: st.slope || null };
     if (st.yaw !== undefined) yaw = st.yaw;
-    pitch = 0;
+    pitch = st.pitch !== undefined ? Math.max(-PITCH, Math.min(PITCH, st.pitch)) : 0;
   }
 
   /** 黑场传送（楼梯、电梯、目录） */

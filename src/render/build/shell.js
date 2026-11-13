@@ -110,6 +110,9 @@ export function buildShell(ctx) {
   const { layout, mats } = ctx;
   const slabBody = new THREE.MeshStandardMaterial({ color: 0xdcdcd8, roughness: 0.9 });
   mats.onNight((t) => slabBody.emissive.setRGB(t * 0.12, t * 0.11, t * 0.1));
+  // 游览模式里商场的楼板底面（各层天花）用暖米色，夜里泛暖光（FPS 保持原来的冷灰）
+  const mallSlab = ctx.depthCues ? new THREE.MeshStandardMaterial({ color: 0xefe7da, roughness: 0.85 }) : slabBody;
+  if (mallSlab !== slabBody) mats.onNight((t) => mallSlab.emissive.setRGB(t * 0.17, t * 0.14, t * 0.1));
   const edgesCache = new Map();
   ctx.outlineEdges = (lv) => {
     if (!edgesCache.has(lv.id)) edgesCache.set(lv.id, (lv.expansion?.floorPolys || [lv.outline])
@@ -137,7 +140,7 @@ export function buildShell(ctx) {
         top.name = 'floor';
         L.shell.add(top);
       }
-      const body = new THREE.Mesh(bodies.length > 1 ? mergeGeometries(bodies) : bodies[0], slabBody);
+      const body = new THREE.Mesh(bodies.length > 1 ? mergeGeometries(bodies) : bodies[0], ctx.bById[lv.building]?.kind === 'mall' ? mallSlab : slabBody);
       body.castShadow = true;
       body.receiveShadow = true;
       L.shell.add(body);
@@ -588,6 +591,7 @@ function roofTop(ctx, lv) {
   for (const v of lv.voids) {
     if (v.kind !== 'skylight') continue;
     if (lv.expansion?.zone === 'main' && v.id === 'C-void') continue;
+    if (v.mega) continue; // 大椭圆中庭的玻璃网壳天窗在 p1-atrium.js 里画
     if (v.radius) vault(B, v, y, 3.6);
     else ridge(B, v, y);
   }

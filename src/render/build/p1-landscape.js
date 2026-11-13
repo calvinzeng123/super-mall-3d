@@ -25,7 +25,7 @@ export function buildP1Landscape(ctx) {
   if (D.sculpture) cloudUmbrella(B, D.sculpture, y);
   if (D.hotelLoop) dropOffLoop(B, D.hotelLoop, trees);
   // 超级商业中心：东南主入口落客环岛 + 门前玻璃雨棚
-  if (D.seLoop) { dropOffLoop(B, D.seLoop, trees); seCanopy(B, D.seLoop.canopy); }
+  if (D.seLoop) { dropOffLoop(B, D.seLoop, trees); seCanopy(B, D.seLoop.canopy); if (D.seLoop.walkway) seCanopy(B, D.seLoop.walkway); }
   if (trees.length) addTrees(ctx.site.group, ctx.mats, trees, 207);
 }
 
@@ -106,14 +106,15 @@ function dropOffLoop(B, loop, trees) {
   }
 }
 
-/** 东南主入口落客雨棚：顺东南翼轴线，四根铜色柱子撑起一片玻璃顶，前沿一条暖光 */
-function seCanopy(B, c) {
-  const { u0, u1, v0, v1, height: h } = c, cu = (u0 + u1) / 2;
+/** 东南主入口落客雨棚 + 风雨连廊：顺东南翼轴线，铜色柱子撑起玻璃顶，外沿一条暖光 */
+function seCanopy(B, c, open = false) {
+  const { u0, u1, v0, v1, height: h } = c, cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, dv = v1 - v0;
   B.frame(c.frame, () => {
-    for (const u of [u0 + .5, u1 - .4]) for (const v of [v0 + .4, v1 - .4]) if (u > u0 + 1) B.get('facadeBronze').cyl(u, 0, v, .14, h, '#8a6a3c', 10);
-    B.get('glass').box(cu, h + .05, 0, u1 - u0, .08, v1 - v0, '#dfeef2');
-    B.get('facadeBronze').box(u1, h - .1, 0, .2, .3, v1 - v0 + .2, '#8a6a3c');
+    for (const [u, v] of c.posts || []) B.get('facadeBronze').cyl(u, 0, v, .14, h, '#8a6a3c', 10);
+    B.get('glass').box(cu, h + .05, cv, u1 - u0, .08, dv, '#dfeef2');
+    if (!open) B.get('facadeBronze').box(u1, h - .1, cv, .2, .3, dv + .2, '#8a6a3c');
     for (const v of [v0, v1]) B.get('facadeBronze').box(cu, h - .1, v, u1 - u0, .3, .2, '#8a6a3c');
-    B.get('glowSoft').box(u1 - .05, h - .28, 0, .06, .04, v1 - v0 - .4, '#ffe2b8');
+    for (const v of [v0 + .15, v1 - .15]) B.get('glowSoft').box(cu, h - .28, v, u1 - u0 - .4, .04, .06, '#ffe2b8');
+    if (!open) B.get('glowSoft').box(u1 - .05, h - .28, cv, .06, .04, dv - .4, '#ffe2b8');
   });
 }

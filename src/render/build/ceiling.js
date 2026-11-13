@@ -49,7 +49,7 @@ export function ceilingRelief(ctx, b, lv) {
     && !near.some((q) => pointInPoly([x, z], q.poly));
 
   // ---------- 分格梁 ----------
-  const tone = '#d3d0c7';
+  const tone = '#e4dccd';
   for (const bay of ceilingBays(lv)) {
     const { w, r, nx, nz } = bay, F = w.frame, bb = bounds(w.poly);
     const near = voids.filter((q) => touching(q.bb, bb)), earlier = bay.earlier.filter((P) => touching(bounds(P), bb, 0));

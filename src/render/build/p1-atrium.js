@@ -4,8 +4,9 @@
 // 跨楼层的东西（树形柱）按楼层切段画进各层自己的批次，楼层分开显示（爆炸视图、只看某层）时各段跟着自己那层走。
 import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN, rng } from '../textures.js';
-import { pointInPoly, lrectPoly, toW, IDENTITY } from '../../layout/geom.js';
-import { NW_FRAME, MEGA_OVAL } from '../../layout/p1-mega.js';
+import { pointInPoly, lrectPoly, toW, toL, IDENTITY, distToPolyEdge } from '../../layout/geom.js';
+import clipping from 'polygon-clipping';
+import { NW_FRAME, MEGA_OVAL, MEGA_SKY } from '../../layout/p1-mega.js';
 import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
@@ -506,6 +507,8 @@ function megaAtrium(ctx, levels) {
   }
   M.plaza?.trees.forEach((t, i) => (t.kind === 'palm' ? palm(B, IDENTITY, { u: t.x, v: t.z, r: t.r }, y0, i * 13 + 5) : blossom(B, t, y0, i)));
   const six = levels.find((l) => l.id === 'P1-6F'), rf = levels.find((l) => l.kind === 'roof');
+  const sky = rf?.voids.find((v) => v.id === 'MEGA-sky');
+  if (sky && ctx.levels[rf.id]) skyShell(ctx.levels[rf.id].shellBatch || ctx.levels[rf.id].batch, sky, rf.elev);
   if (six && rf && ctx.levels[six.id]) {
     const roofY = rf.elev;
     for (const [u, R] of [[MEGA_OVAL.u - 18, 4], [MEGA_OVAL.u, 6.5], [MEGA_OVAL.u + 18, 4]]) {
@@ -513,6 +516,71 @@ function megaAtrium(ctx, levels) {
       haloRing(ctx.levels[six.id].batch, x, z, R, roofY - 2.4, roofY);
       haloRing(ctx.levels[six.id].batch, x, z, R * 0.66, roofY - 4.6, roofY);
     }
+  }
+}
+
+/**
+ * 大椭圆中庭顶上的玻璃网壳：屋面开洞一圈 1 米高的石材压顶，上面一片鼓起来的玻璃（椭圆穹顶，靠边按 1:1.6 的坡收回到压顶高度，
+ * 天窗被楼梯间让出来的凹口处也一样落回去），玻璃按 3 米网格分块，网格线是白色钢肋，中间一圈金色环梁。
+ * 高度场：h = min(穹顶 rise·(1 − r²), 离边线距离 / 1.6)，r 是相对大椭圆的半径。
+ */
+function skyShell(B, v, y0) {
+  const P = v.poly, base = y0 + 1.0, rise = 7.5, { a, b } = MEGA_SKY, cu = MEGA_OVAL.u, cv = MEGA_OVAL.v;
+  const H = (x, z) => {
+    const [u, w] = toL(NW_FRAME, x, z), r2 = ((u - cu) / a) ** 2 + ((w - cv) / b) ** 2;
+    return base + Math.max(0, Math.min(rise * (1 - r2), distToPolyEdge([x, z], P) / 1.6));
+  };
+  // 压顶
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i], q = P[(i + 1) % P.length];
+    B.get('satin').bar({ x: p[0], y: y0 + 0.5, z: p[1] }, { x: q[0], y: y0 + 0.5, z: q[1] }, 0.5, '#d9d2c3');
+    B.get('satin').bar({ x: p[0], y: base - 0.04, z: p[1] }, { x: q[0], y: base - 0.04, z: q[1] }, 0.32, '#e9e4da');
+  }
+  // 玻璃：NW 局部坐标 3 m 网格，每格和天窗多边形求交，交出来的块按高度场抬起来（三角扇）
+  const loc = P.map(([x, z]) => toL(NW_FRAME, x, z)), us = loc.map((q) => q[0]), ws = loc.map((q) => q[1]);
+  const G = 3, u0 = Math.floor(Math.min(...us) / G) * G, u1 = Math.max(...us), w0 = Math.floor(Math.min(...ws) / G) * G, w1 = Math.max(...ws);
+  const ring = [[...P, P[0]].map(([x, z]) => [x, z])];
+  const pos = [], nor = [];
+  const tri = (A, Bp, C) => {
+    const ux = Bp[0] - A[0], uy = Bp[1] - A[1], uz = Bp[2] - A[2], vx = C[0] - A[0], vy = C[1] - A[1], vz = C[2] - A[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; [Bp, C] = [C, Bp]; }
+    pos.push(...A, ...Bp, ...C); for (let k = 0; k < 3; k++) nor.push(nx, ny, nz);
+  };
+  for (let u = u0; u < u1; u += G) for (let w = w0; w < w1; w += G) {
+    const cell = [[u, w], [u + G, w], [u + G, w + G], [u, w + G], [u, w]].map(([p, q]) => toW(NW_FRAME, p, q));
+    let parts;
+    try { parts = clipping.intersection([ring], [cell]); } catch { continue; }
+    for (const poly of parts) {
+      const pts = poly[0].slice(0, -1).map(([x, z]) => [x, H(x, z), z]);
+      if (pts.length < 3) continue;
+      const c = pts.reduce((s, q) => [s[0] + q[0] / pts.length, 0, s[2] + q[2] / pts.length], [0, 0, 0]);
+      c[1] = H(c[0], c[2]);
+      for (let i = 0; i < pts.length; i++) tri(c, pts[i], pts[(i + 1) % pts.length]);
+    }
+  }
+  if (pos.length) B.get('glass').push({ pos: new Float32Array(pos), nor: new Float32Array(nor), count: pos.length / 3 }, new THREE.Matrix4(), '#ffffff');
+  // 钢肋：网格线沿高度场走，只画在天窗里面的段
+  const rib = (pa, pb, t, col) => {
+    const n = Math.max(1, Math.ceil(Math.hypot(pb[0] - pa[0], pb[1] - pa[1]) / 1.5));
+    let prev = null;
+    for (let i = 0; i <= n; i++) {
+      const x = pa[0] + (pb[0] - pa[0]) * i / n, z = pa[1] + (pb[1] - pa[1]) * i / n;
+      const inn = pointInPoly([x, z], P) && distToPolyEdge([x, z], P) > 0.15;
+      const cur = inn ? { x, y: H(x, z) + 0.06, z } : null;
+      if (prev && cur) B.get('metal').bar(prev, cur, t, col);
+      prev = cur;
+    }
+  };
+  for (let u = u0; u <= u1; u += G) rib(toW(NW_FRAME, u, w0), toW(NW_FRAME, u, w1), 0.12, '#f4f2ec');
+  for (let w = w0; w <= w1; w += G) rib(toW(NW_FRAME, u0, w), toW(NW_FRAME, u1, w), 0.12, '#f4f2ec');
+  // 金色环梁（穹顶半高处一圈）
+  const n = 72;
+  for (let k = 0; k < n; k++) {
+    const t0 = (k / n) * Math.PI * 2, t1 = ((k + 1) / n) * Math.PI * 2;
+    const p0 = toW(NW_FRAME, cu + a * 0.55 * Math.cos(t0), cv + b * 0.55 * Math.sin(t0)), p1 = toW(NW_FRAME, cu + a * 0.55 * Math.cos(t1), cv + b * 0.55 * Math.sin(t1));
+    if (!pointInPoly(p0, P) || !pointInPoly(p1, P)) continue;
+    B.get('facadeBronze').bar({ x: p0[0], y: H(...p0) + 0.1, z: p0[1] }, { x: p1[0], y: H(...p1) + 0.1, z: p1[1] }, 0.22, GOLD);
   }
 }
 
