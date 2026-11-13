@@ -54,7 +54,8 @@ export async function buildPeople(ctx) {
         d: rand() * pl.total, speed: path.escalator ? .5 : rail ? .3 + rand() * .3 : .85 + rand() * .55,
         dir: path.loop && rand() < .5 ? -1 : 1,
         lateral: path.escalator ? (rand() - .5) * .25 : rail ? (rand() - .5) * .5 : (rand() - .5) * (lv.kind === 'parking' ? .6 : 2.4),
-        phase: rand(), size: .94 + rand() * .1, variant: i % assets.length,
+        // 体型：每人自己的身高、胖瘦（模型只有一男一女）；约 8% 是小孩（0.58–0.72 倍）
+        phase: rand(), size: rand() < .08 ? .58 + rand() * .14 : .92 + rand() * .14, girth: .88 + rand() * .26, variant: i % assets.length,
         // A deterministic rank keeps the same population while changing quality.
         rank: (i + .5) / count,
         outfit: OUTFITS[Math.floor(rand() * OUTFITS.length)],
@@ -90,7 +91,7 @@ export async function buildPeople(ctx) {
       if (!walker.support(position.x, position.z, actor.escalator)) continue;
       const variant = walker.variants[actor.variant], { mesh, asset } = variant;
       rotation.setFromAxisAngle(up, Math.atan2(dir[0] * actor.dir, dir[2] * actor.dir));
-      scale.setScalar(actor.size);
+      scale.set(actor.size * actor.girth, actor.size, actor.size * (.5 + actor.girth / 2));
       matrix.compose(position, rotation, scale);
       mesh.setMatrixAt(variant.visible, matrix);
       mesh.setColorAt(variant.visible, actor.outfit);
