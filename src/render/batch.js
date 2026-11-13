@@ -380,6 +380,12 @@ export class BatchSet {
     _p.set(x, y + 0.02, z); _q.setFromAxisAngle(Y, ry); _s.set(w, 1, d);
     this.get(key).shape('planeUp', _p, _q, _s, color);
   }
+  /** 天花上的一团光（夜里才有）：以 (x, z) 为中心、w × d，贴在标高 y 的天花底面下面一点。 */
+  ceilPool(x, y, z, w, d = w, color = 0xffd9a8, ry = 0) {
+    if (!this.materials.ceilPool?.userData?.decal) return;
+    _p.set(x, y - 0.015, z); _q.setFromAxisAngle(Y, ry); _s.set(w, 1, d);
+    this.get('ceilPool').shape('planeUp', _p, _q, _s, color);
+  }
   /** 模型库里有没有这个模型（决定要不要走程序化的画法）。 */
   hasProp(id) { return !!propLibrary?.has(id); }
   /**

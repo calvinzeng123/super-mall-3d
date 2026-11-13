@@ -126,6 +126,14 @@ export class MaterialLib {
       this.onNight((t) => { m.opacity = (this.hdr ? 0.2 : 0.13) + t * 0.16; });
     }
     if (shadows) {
+      // 天花上的一团光（灯周围、灯槽洗亮的一条）：和 lightPool 同一张贴图，正反两面都画（从下往上看），只在夜里出现
+      const m = new THREE.MeshBasicMaterial({ map: shadows.pool, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+        side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      m.name = 'ceilPool'; m.userData.decal = true;
+      this.base.ceilPool = m;
+      this.onNight((t) => { m.opacity = t * (this.hdr ? 0.5 : 0.42); m.visible = t > 0.01; });
+    }
+    if (shadows) {
       // 窗边的天光：只在白天有，入夜淡出
       const m = new THREE.MeshBasicMaterial({ map: shadows.spill, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });

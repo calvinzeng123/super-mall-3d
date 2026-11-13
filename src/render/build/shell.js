@@ -112,7 +112,8 @@ export function buildShell(ctx) {
   mats.onNight((t) => slabBody.emissive.setRGB(t * 0.12, t * 0.11, t * 0.1));
   // 游览模式里商场的楼板底面（各层天花）用暖米色，夜里泛暖光（FPS 保持原来的冷灰）
   const mallSlab = ctx.depthCues ? new THREE.MeshStandardMaterial({ color: 0xefe7da, roughness: 0.85 }) : slabBody;
-  if (mallSlab !== slabBody) mats.onNight((t) => mallSlab.emissive.setRGB(t * 0.17, t * 0.14, t * 0.1));
+  // 夜里天花本身只微微泛暖（0.17 → 0.07），亮的是灯周围一圈和洞口边灯槽洗亮的一条（ceilPool 贴花），天花有明有暗
+  if (mallSlab !== slabBody) mats.onNight((t) => mallSlab.emissive.setRGB(t * 0.07, t * 0.058, t * 0.042));
   const edgesCache = new Map();
   ctx.outlineEdges = (lv) => {
     if (!edgesCache.has(lv.id)) edgesCache.set(lv.id, (lv.expansion?.floorPolys || [lv.outline])
@@ -250,6 +251,7 @@ export function ceilingLights(ctx) {
             // 灯离洞口边至少 0.5 m（洞口边有一道边梁）
             if ([[.5, 0], [-.5, 0], [0, .5], [0, -.5]].some(([dx, dz]) => inVoid(x + dx, z + dz)) || !once(x, z)) continue;
             Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+            Bt.ceilPool(x, y + 0.04, z, 2.4);
             lamp(x, z);
           }
         }
@@ -262,6 +264,7 @@ export function ceilingLights(ctx) {
               if (bays?.some((bay) => pointInPoly([x, z], bay.w.poly))) continue;
               if (!once(x, z)) continue;
               Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+              if (B.b.kind === 'mall') Bt.ceilPool(x, y + 0.04, z, 2.4);
               if (B.b.kind === 'mall' || B.b.kind === 'annex') lamp(x, z);
             }
           }
