@@ -144,8 +144,8 @@ function balconyEdge(ctx, B, lv, v) {
       // 楼板底面沿洞口边一圈顺弧走的木条吊顶（效果图里每层挑台底下是一圈暖色木格栅）：六根木条、离栏板 0.35–1.6 米。
       // 2F 底下（1F 广场上空）已经有放射状木格栅，从 3F 往上才做；扶梯口、铺位里不做
       if (!roof && v.mega && lv.elev > 7 && !skip(mx, mz) && !inUnit(mx - nx * 0.9, mz - nz * 0.9) && !inUnit(mx - nx * 1.6, mz - nz * 1.6)) {
-        const cy = y - (SLAB_T[lv.kind] ?? 0.45) - 0.055;
-        for (const o of [0.35, 0.6, 0.85, 1.1, 1.35, 1.6]) B.get('wood').box(mx - nx * o, cy, mz - nz * o, pl, 0.09, 0.05, '#d8ad7c', ang);
+        const cy = y - (SLAB_T[lv.kind] ?? 0.45) - 0.045;
+        for (const o of [0.35, 0.6, 0.85, 1.1, 1.35, 1.6]) B.get('satin').box(mx - nx * o, cy, mz - nz * o, pl, 0.07, 0.05, '#e2c299', ang);
       }
       // 地面上一条跟着栏板走的暖光线（离栏板 2.2 米），扶梯口、观光梯门前、铺位里不画
       const gx = mx - nx * 2.2, gz = mz - nz * 2.2;
