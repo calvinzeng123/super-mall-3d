@@ -130,9 +130,11 @@ function balconyEdge(ctx, B, lv, v) {
       if (roof || skip(mx, mz) || nearFall(mx, mz)) continue;
       // 花槽挂在栏板外侧：浅色槽身、上面一排鼓起来的灌木团，几串小叶子垂下来，偶尔开花
       B.get('matte').box(mx + nx * 0.34, y - 0.2, mz + nz * 0.34, pl, 0.26, 0.28, '#ece8df', ang);
-      for (let q = 0; q < 3; q++) {
-        const s = (q - 1) * pl * 0.32 + (rand() - 0.5) * 0.2;
-        B.get('foliage').sphere(mx + ux * s + nx * 0.36, y - 0.02, mz + uz * s + nz * 0.36, 0.3, rand() < 0.5 ? LEAF : LEAF2, 0.18, 0.2, 'ico0');
+      // 花槽里的灌木：五小团深浅不一的绿（原来三大团深绿多面体，远看像一排石块）
+      for (let q = 0; q < 5; q++) {
+        const s = (q - 2) * pl * 0.2 + (rand() - 0.5) * 0.15, rr = 0.17 + rand() * 0.07;
+        B.get('foliage').sphere(mx + ux * s + nx * (0.32 + rand() * 0.08), y - 0.04 + rand() * 0.08, mz + uz * s + nz * (0.32 + rand() * 0.08), rr,
+          ['#5f9447', '#4f7f3c', '#76a85a', '#6a9a4c'][Math.floor(rand() * 4)], rr * 0.7, rr * 0.85, 'ico0');
       }
       const vines = rand() < 0.35 ? 0 : 1 + Math.floor(rand() * 2);
       for (let q = 0; q < vines; q++) {
