@@ -33,7 +33,54 @@ export function buildP1Streets(ctx) {
     B.get('extSatin').box(sx * 10.6, Y_WALK + 0.01, z, 0.6, 0.012, 2.4, '#e2c94a');
     poles.push([x, z]);
   }
-  ctx.p1Streets = { arrows: arrows.length, poles };
+  ctx.p1Streets = { arrows: arrows.length, poles, court: courtGreen(ctx) };
+}
+
+/** 云谷艺术广场（下沉广场）的挡土墙：墙顶往下垂一排藤蔓、墙脚一条低矮花带（灌木团 + 花），
+ *  楼梯、两个通道口、舞台、座椅前后让开。返回花带段数。 */
+function courtGreen(ctx) {
+  const court = ctx.layout.expansion?.sunkenCourt, L = court && ctx.levels[court.level];
+  if (!L) return 0;
+  const B = L.batch, P = court.poly, y0 = court.elev, top = 0;
+  const lv = ctx.layout.levels.find((l) => l.id === court.level);
+  const blocked = (lv?.navObstacles || []).filter((o) => /court/.test(o.id || '')).map((o) => o.poly);
+  const portals = court.portals.map((q) => [(q.seg.x0 + q.seg.x1) / 2, (q.seg.z0 + q.seg.z1) / 2]);
+  const stairX = court.stair.bottom.x, stairW = 3.6;
+  let rand = 7; const rnd = () => ((rand = (rand * 16807) % 2147483647) / 2147483647);
+  let beds = 0;
+  for (let i = 0; i < P.length; i++) {
+    const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], len = Math.hypot(x1 - x0, z1 - z0);
+    if (len < 2) continue;
+    const ux = (x1 - x0) / len, uz = (z1 - z0) / len;
+    let nx = -uz, nz = ux;
+    if (!pointIn([(x0 + x1) / 2 + nx * 0.5, (z0 + z1) / 2 + nz * 0.5], P)) { nx = -nx; nz = -nz; } // 朝广场里面
+    for (let d = 0.4; d < len - 0.3; d += 0.55) {
+      const wx = x0 + ux * d, wz = z0 + uz * d;
+      if (portals.some(([px, pz]) => Math.hypot(px - wx, pz - wz) < 3.2)) continue;
+      if (Math.abs(wx - stairX) < stairW && wz > -30.5) continue; // 楼梯顶口
+      // 藤蔓：从墙顶往下垂 0.8–2.6 米，叶片左右交错
+      const L1 = 0.8 + rnd() * 1.8;
+      for (let t = 0.15; t < L1; t += 0.2) {
+        const sway = Math.sin(t * 4 + d) * 0.05;
+        B.get('foliage').sphere(wx + ux * sway + nx * 0.35, top - t, wz + uz * sway + nz * 0.35, 0.16 - t * 0.03, rnd() < 0.5 ? '#5f9447' : '#4a803c', 0.12, 0.1, 'ico0');
+      }
+      // 墙脚花带：0.55 米宽，挡在障碍物（舞台、座椅、雕塑、树池）上就不放
+      const bx = wx + nx * 0.6, bz = wz + nz * 0.6;
+      if (blocked.some((q) => pointIn([bx, bz], q) || pointIn([bx + nx * 0.5, bz + nz * 0.5], q))) continue;
+      B.get('facadeTravertine').box(bx, y0 + 0.3, bz, 0.58, 0.6, 0.6, '#d9d1c3', Math.atan2(-uz, ux));
+      B.get('foliage').sphere(bx, y0 + 0.78, bz, 0.36, rnd() < 0.25 ? ['#e58fb5', '#f2b6c8', '#a77bd1', '#f6e7a1'][Math.floor(rnd() * 4)] : (rnd() < 0.5 ? '#5f9447' : '#4f7f3c'), 0.3, 0.34, 'ico0');
+      beds++;
+    }
+  }
+  return beds;
+}
+function pointIn([x, z], P) {
+  let c = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [xi, zi] = P[i], [xj, zj] = P[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
+  }
+  return c;
 }
 
 /** 路面导向箭头：局部前进方向 f，左手 l = (fz, −fx)（靠右行驶，左手朝中线）。S 直行、L 左转、SR 直行加右转 */
