@@ -3,7 +3,7 @@
 // （「云澜汇 购物中心入口 / B1M 美食广场 · 1F–6F」，两面都有）、门厅地面换成暖色石材加金色收边、两侧花箱、顶上一条暖光灯带。
 import * as THREE from 'three';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
-import { pointInPoly } from '../../layout/geom.js';
+import { pointInPoly, toW } from '../../layout/geom.js';
 
 const GOLD = '#c8a25a', CREAM = '#efe9df', WARM = '#ffd9a0';
 
@@ -36,6 +36,71 @@ export function buildP1GarageEntries(ctx) {
   }
   ctx.p1GarageEntries = portals;
   escalatorHeads(ctx);
+  rampDetails(ctx);
+}
+
+/** 一期两处车库车行口（方庭北口、星湾东口）路面和门口的细节：坡口外的引道上画白色行车箭头、入口前一道黄黑减速带、
+ *  出口车道一条停车线；入口车道靠马路一侧立一块剩余车位 LED 屏（「云澜汇停车场 · B1/B2 剩余车位 · 限高 2.8m」，两面都有） */
+function rampDetails(ctx) {
+  const S = ctx.site?.batch;
+  if (!S) return;
+  const ramps = ctx.layout.ramps.filter((r) => r.building === 'P1' && r.expansion && /^street-(in|out)$/.test(r.type) && r.frame);
+  const boards = [];
+  for (const r of ramps) {
+    const F = r.frame, inbound = r.type === 'street-in', half = r.width / 2, y = 0.022;
+    const W = (u, v) => toW(F, u, v), ang = -F.a; // 局部 x 沿车道（坡道里面是 +u）
+    const flat = (u, v, su, sv, color) => { const [x, z] = W(u, v); S.get('satin').box(x, y, z, su, 0.012, sv, color, ang); };
+    // 行车箭头：入口朝坡道里（+u），出口朝马路（−u）
+    const dir = inbound ? 1 : -1, au = -5.5;
+    flat(au - dir * 0.6, 0, 2.2, 0.22, '#f4f4f0');
+    for (const side of [-1, 1]) {
+      const [hx, hz] = W(au + dir * 0.75, side * 0.32), tip = ang + side * dir * 0.62;
+      S.get('satin').box(hx, y, hz, 0.95, 0.012, 0.2, '#f4f4f0', tip);
+    }
+    // 减速带（黄黑相间）
+    const n = Math.max(4, Math.round(r.width / 0.5));
+    for (let k = 0; k < n; k++) {
+      const v = -half + 0.25 + (k * (r.width - 0.5)) / (n - 1), [x, z] = W(-2.4, v);
+      S.get('satin').box(x, 0.03, z, 0.32, 0.05, r.width / n - 0.02, k % 2 ? '#1d1f22' : '#f2c230', ang);
+    }
+    if (!inbound) flat(-1.2, 0, 0.3, r.width - 0.4, '#f4f4f0'); // 出口停车线
+    if (!inbound) continue;
+    // 剩余车位屏：放在离配对出口车道远的那一侧
+    const mate = ramps.find((q) => q !== r && q.quadrant === r.quadrant);
+    const sides = [-1, 1].map((sd) => { const p = W(-7, sd * (half + 1.1)), m = mate ? Math.hypot(p[0] - mate.from.x, p[1] - mate.from.z) : 0; return { sd, p, m }; });
+    const { p: [bx, bz] } = sides.sort((a, b) => b.m - a.m)[0];
+    S.get('metal').box(bx, 1.6, bz, 0.14, 3.2, 0.14, '#2f3336', ang);
+    S.get('satin').box(bx, 2.55, bz, 0.16, 1.2, 1.7, '#16191c', ang);
+    S.get('facadeBronze').box(bx, 3.18, bz, 0.18, 0.05, 1.74, '#c8a25a', ang);
+    const geo = new THREE.PlaneGeometry(1.6, 1.1), mat = ctx.mats.sign(vacancyTexture(ctx));
+    for (const side of [-1, 1]) {
+      const m = new THREE.Mesh(geo, mat), ux = Math.cos(F.a), uz = Math.sin(F.a);
+      m.position.set(bx + ux * side * 0.085, 2.55, bz + uz * side * 0.085);
+      m.rotation.y = Math.atan2(ux * side, uz * side);
+      m.name = 'P1-garage-vacancy';
+      ctx.site.group.add(m);
+    }
+    boards.push({ ramp: r.id, x: +bx.toFixed(2), z: +bz.toFixed(2) });
+  }
+  ctx.p1RampBoards = boards;
+}
+function vacancyTexture(ctx) {
+  if (ctx.p1VacancyTex) return ctx.p1VacancyTex;
+  const c = makeCanvas(512, 352), g = c.getContext('2d');
+  g.fillStyle = '#0d0f12'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#1f5fd6'; g.fillRect(0, 0, c.width, 86);
+  g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.fillStyle = '#ffffff'; g.font = `800 64px ${FONT_EN}`; g.fillText('P', 22, 44);
+  g.font = `700 40px ${FONT_CN}`; g.fillText('云澜汇停车场', 80, 44);
+  g.font = `600 34px ${FONT_CN}`; g.fillStyle = '#cfd6de';
+  g.fillText('B1 剩余', 28, 128); g.fillText('B2 剩余', 28, 190);
+  g.textAlign = 'right'; g.fillStyle = '#3cff6e'; g.font = `700 48px ${FONT_EN}`;
+  g.fillText('128', c.width - 30, 128); g.fillText('214', c.width - 30, 190);
+  g.fillStyle = '#ff4a3d'; g.beginPath(); g.arc(70, 284, 42, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(70, 284, 32, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#111111'; g.textAlign = 'center'; g.font = `700 26px ${FONT_EN}`; g.fillText('2.8m', 70, 286);
+  g.textAlign = 'left'; g.fillStyle = '#ffd36b'; g.font = `600 32px ${FONT_CN}`; g.fillText('限高 2.8 米 · 入口', 134, 286);
+  return (ctx.p1VacancyTex = canvasTexture(c, { clamp: true }));
 }
 
 /** 往下去的扶梯口（1F → B1M、B1M → B1）立一个双柱门架，上面一块发光指示牌：告诉人下面是美食广场、地铁、停车场 */
