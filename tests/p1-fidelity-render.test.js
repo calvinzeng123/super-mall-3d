@@ -7,7 +7,7 @@ import { BatchSet } from '../src/render/batch.js';
 import { buildP1Fidelity } from '../src/render/build/p1-fidelity.js';
 import { buildAtriumReflection } from '../src/render/build/floor-reflection.js';
 import { pointInPoly } from '../src/layout/geom.js';
-import { levelPaths } from '../src/render/paths.js';
+import { levelPaths, LIGHT_TREE } from '../src/render/paths.js';
 
 // Posters paint on a canvas; under Node a no-op 2D context is enough.
 const paint = new Proxy({}, {
@@ -161,4 +161,21 @@ test('走道花岛：2F–6F 都有，离人流路线 ≥ 2.8 m，四周 4 m 都
   }
   const fps = render(buildPlayableLayout({ mode: 'fps' }));
   assert.equal(fps.p1WalkIslands, undefined, 'FPS 不加花岛');
+});
+
+test('光之树：1F 广场中间有白色树干和杈梢灯盘，周围的人流圈在走道上、离花池外沿 ≥ 1.5 m；FPS 没有', () => {
+  const lv = level('P1-1F'), { x, z, r } = LIGHT_TREE;
+  const base = [tour.levels['P1-1F'].base];
+  assert.ok(trianglesIn(base, box(x - .2, 1.5, z - .2, x + .2, 2, z + .2)) > 0, '没有树干');
+  assert.ok(trianglesIn(base, box(x - 4, 4, z - 4, x + 4, 5.9, z + 4)) > 20, '没有树冠灯盘');
+  const onWalk = (px, pz) => lv.walk.some(w => pointInPoly([px, pz], w.poly)) && !lv.units.some(u => u.polys.some(q => pointInPoly([px, pz], q)));
+  for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; assert.ok(onWalk(x + Math.cos(a) * (r + .6), z + Math.sin(a) * (r + .6)), '花池和座椅出了走道'); }
+  const loops = tour.paths.levels['P1-1F'].people.filter(p => p.name === '中庭光之树');
+  assert.ok(loops.length >= 2, '光之树周围没有人流');
+  for (const p of loops) for (const q of p.pts) {
+    assert.ok(Math.hypot(q[0] - x, q[2] - z) > r + 1.5, '人流贴着花池');
+    assert.ok(onWalk(q[0], q[2]), '人流出了走道');
+  }
+  const fps = levelPaths(buildPlayableLayout({ mode: 'fps' }));
+  assert.ok(!(fps['P1-1F']?.people || []).some(p => p.name === '中庭光之树'), 'FPS 不加光之树人流');
 });

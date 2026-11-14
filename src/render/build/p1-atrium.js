@@ -10,6 +10,7 @@ import { NW_FRAME, SE_FRAME, W_FRAME, MEGA_OVAL, MEGA_SKY } from '../../layout/p
 import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
+import { LIGHT_TREE } from '../paths.js';
 
 const sgE = new THREE.Euler(), sgQ = new THREE.Quaternion(), sgP = new THREE.Vector3(), sgS = new THREE.Vector3();
 const palmDir = new THREE.Vector3(), X_AXIS = new THREE.Vector3(1, 0, 0);
@@ -757,6 +758,7 @@ function megaAtrium(ctx, levels) {
     else if (it.kind === 'lounge') lounge(L.batch, IDENTITY, { u: it.x, v: it.z, w: 3.6, d: 2.2 }, lv.elev);
     else kiosk(L.batch, it, lv.elev, it.x * 3 + it.z);
   }
+  lightTree(B, LIGHT_TREE, y0, y0 + lv1.height - (SLAB_T[levels.find((l) => l.id === 'P1-2F')?.kind] ?? 0.45) - 0.4);
   M.plaza?.trees.forEach((t, i) => (t.kind === 'palm' ? palm(B, IDENTITY, { u: t.x, v: t.z, r: t.r }, y0, i * 13 + 5) : blossom(B, t, y0, i)));
   const six = levels.find((l) => l.id === 'P1-6F'), rf = levels.find((l) => l.kind === 'roof');
   const sky = rf?.voids.find((v) => v.id === 'MEGA-sky');
@@ -1389,6 +1391,47 @@ function walkIsland(B, x, z, y0, top, kind, seed) {
       const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.4) * 0.7, sz = 0.13 + rand() * 0.1;
       B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 0.95, Math.min(top - sz, tip.y + h), tip.z + Math.sin(u) * rr * 0.95,
         sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'sphereLo');
+    }
+  }
+}
+
+/**
+ * 光之树（1F 西门喷泉艺术街广场中间）：效果图南边圆形中庭里那棵白色树形灯雕。
+ * 石材圆池 + 满池花 + 外圈环形木座椅；白色树干分六枝、每枝再分两杈，杈梢挂发光圆盘（暖白），枝杈上几道金环；
+ * 地上两道金色地环、几团暖光。树顶压在 top（2F 楼板底下 0.4 m）以下。
+ */
+function lightTree(B, T, y0, top) {
+  const { x, z, r } = T, rand = rng(4242);
+  B.get('travertine').cyl(x, y0, z, r, 0.48, '#e6dfd2', 48);
+  B.get('facadeBronze').cyl(x, y0 + 0.36, z, r + 0.012, 0.035, GOLD, 48);
+  B.get('foliage').cyl(x, y0 + 0.48, z, r - 0.08, 0.05, '#5a4632', 48);
+  flowerBed(B, x, z, r - 0.12, y0 + 0.5, rand);
+  flowerBed(B, x, z, r * 0.6, y0 + 0.52, rand);
+  const n = 36, R = r + 0.3;
+  for (let k = 0; k < n; k++) {
+    const a = ((k + 0.5) / n) * Math.PI * 2, len = (2 * Math.PI * R) / n + 0.02, cx = x + Math.cos(a) * R, cz = z + Math.sin(a) * R, ang = -a + Math.PI / 2;
+    B.get('satin').box(cx, y0 + 0.19, cz, len, 0.38, 0.4, '#f1ede4', ang);
+    B.get('wood').box(cx, y0 + 0.415, cz, len - 0.01, 0.07, 0.48, '#9a6e46', ang);
+    B.get('glowSoft').box(x + Math.cos(a) * (R + 0.21), y0 + 0.02, z + Math.sin(a) * (R + 0.21), len, 0.02, 0.03, '#ffe2b8', ang);
+  }
+  for (const [RR, w] of [[r + 1.6, 0.12], [r + 2.8, 0.07]]) floorRing(B, x, z, RR, w, y0);
+  for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; B.pool(x + Math.cos(a) * (r + 2.2), y0, z + Math.sin(a) * (r + 2.2), 3, 3, 0xffd6a0); }
+  // 树干：白色、从下往上略收，中段一道金环
+  const H = top - y0, fork = { x, y: y0 + Math.min(2.9, H * 0.5), z };
+  B.get('satin').cyl(x, y0 + 0.5, z, 0.42, 0.25, '#f3f0ea', 24);
+  B.get('satin').bar({ x, y: y0 + 0.55, z }, fork, 0.5, WHITE);
+  B.get('facadeBronze').cyl(x, fork.y - 0.9, z, 0.27, 0.06, GOLD, 24);
+  for (let b = 0; b < 6; b++) {
+    const a = (b / 6) * Math.PI * 2 + 0.2, mid = { x: x + Math.cos(a) * 1.5, y: fork.y + (H - (fork.y - y0)) * 0.55, z: z + Math.sin(a) * 1.5 };
+    B.get('satin').bar(fork, mid, 0.24, WHITE);
+    B.get('facadeBronze').cyl(mid.x, mid.y - 0.05, mid.z, 0.13, 0.05, GOLD, 12);
+    for (const da of [-0.32, 0.32]) {
+      const a2 = a + da, rr = 2.6 + rand() * 0.6, tip = { x: x + Math.cos(a2) * rr, y: top - 0.25 - rand() * 0.45, z: z + Math.sin(a2) * rr };
+      B.get('satin').bar(mid, tip, 0.12, WHITE);
+      // 杈梢的发光圆盘（压扁的球）+ 金色托
+      B.get('glow').sphere(tip.x, tip.y, tip.z, 0.5, '#fff1d6', 0.12, 0.5, 'sphereLo');
+      B.get('facadeBronze').cyl(tip.x, tip.y - 0.16, tip.z, 0.2, 0.04, GOLD, 12);
+      B.ceilPool(tip.x, top + 0.4, tip.z, 2.6, 2.6, 0xffe2b8);
     }
   }
 }

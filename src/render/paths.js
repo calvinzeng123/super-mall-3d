@@ -33,6 +33,10 @@ const W3 = (F, u, v, y) => {
   return [x, y, z];
 };
 
+/** 1F 西门喷泉艺术街广场中间的「光之树」雕塑（游览布局才有，渲染见 build/p1-atrium.js 的 lightTree）：
+ *  效果图南边圆形中庭里那棵白色树形灯雕。这里是 1F 最空的一片走道（离原有人流路线 27 m），r 是花池半径 */
+export const LIGHT_TREE = { x: -166, z: -122, r: 4 };
+
 /** 超级商业中心（layout/p1-mega.js）：沿大洞口栏板往后 3 米的回游线（落在走道上、不进铺位的连续段），
  *  1F 广场两座喷泉外各一圈，再加一条从方庭到圆厅的中轴线。 */
 function megaPaths(layout, P) {
@@ -79,6 +83,17 @@ function megaPaths(layout, P) {
     flush();
   }
   for (const f of (D?.fountains || []).filter((q) => q.indoor)) P(lv1.id).people.push({ loop: true, pts: ring(f.x, f.z, f.r + 0.9, lv1.elev + 0.07, 28), name: '喷泉环' });
+  // 光之树外两圈（6.3、9 m）：广场原来没人走，雕塑周围像效果图那样有人绕着看；落在走道上、避开岛柜外 1 m 的连续段
+  const isl = (M.islands || []).filter((it) => it.level === lv1.id);
+  for (const R of [LIGHT_TREE.r + 2.3, LIGHT_TREE.r + 5]) {
+    const pts = ring(LIGHT_TREE.x, LIGHT_TREE.z, R, y1, 40).map(([x, , z]) => [x, z]);
+    const ok = (p) => onWalk(lv1, p) && !isl.some((it) => Math.abs(it.x - p[0]) < it.hx + 1 && Math.abs(it.z - p[1]) < it.hz + 1);
+    if (pts.every(ok)) { P(lv1.id).people.push({ loop: true, pts: pts.map(([x, z]) => [x, y1, z]), name: '中庭光之树' }); continue; }
+    let run = [];
+    const flush = () => { if (run.length >= 6) P(lv1.id).people.push({ loop: false, pts: run.map(([x, z]) => [x, y1, z]), name: '中庭光之树' }); run = []; };
+    for (const p of pts) { if (ok(p)) run.push(p); else flush(); }
+    flush();
+  }
 }
 
 export function levelPaths(layout) {
