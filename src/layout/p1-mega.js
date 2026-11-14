@@ -305,6 +305,16 @@ export function applyP1Mega(layout) {
         lv.voids.push({ ...(head || {}), id, kind: 'atrium', poly, frame: head?.frame || NW_FRAME, mega: true, square: hasS, deck: hasS ? deck : null, parts });
         holes.push(poly);
       });
+      // 原来翼楼走道上的小天井（kind: 'street' 的 *-slot-*）压在合并后的洞口边上的：拿掉。不然洞口边上会多出一个方洞，
+      // 方洞自己一圈栏杆插进椭圆栏杆里（2F 的 NW-slot-59 压在椭圆西南边、3F 的 NW-slot-44 压在圆厅边上）。
+      // 方洞那块楼板补上、变成走道；在洞口里的那一半本来就是空的
+      const stale = lv.voids.filter((v) => v.kind === 'street' && /-slot-/.test(v.id) && holes.some((h) => hit(v.poly, h)));
+      if (stale.length) {
+        lv.voids = lv.voids.filter((v) => !stale.includes(v));
+        oldVoidPolys.push(...stale.map((v) => v.poly));
+        freed.push(...stale.map((v) => v.poly));
+        (layout.fidelity ||= {}).megaDroppedSlots = [...(layout.fidelity.megaDroppedSlots || []), ...stale.map((v) => `${lv.short}:${v.id}`)];
+      }
       const poly = holes[0];
       // 东南翼、西翼两侧铺位：长廊变宽以后店面往后退（门脸离洞口 4 米），剩下的进深 ≥ 7 米就留着，让出来的那条变成走道
       for (const [wing, g] of [['SE', SE_GALLERIA], ['W', W_GALLERIA]]) {

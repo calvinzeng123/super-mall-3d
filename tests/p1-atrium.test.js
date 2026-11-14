@@ -194,3 +194,18 @@ test('同一层里同一个坐标系 id 只对应一个坐标系：隔墙、店�
     }
   }
 });
+
+test('超级商业中心：翼楼走道上原来的小天井（*-slot-*）不压在合并后的中庭洞口边上（不然洞口边多出一个方洞，方洞的栏杆插进椭圆栏杆里）', () => {
+  for (const short of ['2F', '3F', '4F', '5F', '6F']) {
+    const lv = lvl(`P1-${short}`), atria = lv.voids.filter((v) => v.mega);
+    for (const s of lv.voids.filter((v) => v.kind === 'street' && /-slot-/.test(v.id))) {
+      const touch = atria.some((a) => clipping.intersection([[[...s.poly, s.poly[0]]]], [[[...a.poly, a.poly[0]]]]).length > 0);
+      assert.ok(!touch, `${short} ${s.id} 压在中庭洞口上`);
+    }
+  }
+  // 箭头指出来的那两个：2F 椭圆西南边、3F 圆厅边上
+  assert.ok(!lvl('P1-2F').voids.some((v) => v.id === 'NW-slot-59'));
+  assert.ok(!lvl('P1-3F').voids.some((v) => v.id === 'NW-slot-44'));
+  // 拿掉以后那块是走道（洞口外的一半）
+  assert.ok(lvl('P1-2F').walk.some((w) => pointInPoly([-147, -147], w.poly)));
+});
