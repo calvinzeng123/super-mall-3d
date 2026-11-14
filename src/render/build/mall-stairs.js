@@ -37,10 +37,26 @@ export function buildMallStairLevel(B,level,stairs,access,{flights=false,finish=
   for(const stair of stairs.filter(s=>s.serves.includes(level.id)))B.frame(stair.frame,()=>{
     const room=level.rooms.find(r=>r.id===stair.id),p=mallStairPlan(stair),y=level.elev;
     const h=level.kind==='roof'?3.2:level.height,d=room.doors[0];
+    const rc=stair.rect?[(stair.rect.x0+stair.rect.x1)/2,(stair.rect.z0+stair.rect.z1)/2]:null,dm=room.doors[0];
     for(const w of room.navigationWalls) {
       const dx=w.x1-w.x0,dz=w.z1-w.z0,x=(w.x0+w.x1)/2,z=(w.z0+w.z1)/2;
       B.get(wallKey).box(x,y+h/2,z,Math.abs(dx)||.15,h,Math.abs(dz)||.15,wallColor);
       B.get(kickKey).box(x,y+.08,z,Math.abs(dx)||.16,.16,Math.abs(dz)||.16,kickColor);
+      // 漫游模式一期：楼梯间外墙朝外的一面挂一块竖向绿墙（深绿底 + 一团团叶子、零星几朵花，金色边框），门所在的墙不挂
+      const len=Math.hypot(dx,dz);
+      if(finish?.greenWall&&rc&&len>=3&&level.kind!=='roof'&&!(dm&&Math.hypot((dm.x0+dm.x1)/2-x,(dm.z0+dm.z1)/2-z)<len/2+.3)) {
+        const ux=dx/len,uz=dz/len;let nx=-uz,nz=ux;
+        if((x-rc[0])*nx+(z-rc[1])*nz<0){nx=-nx;nz=-nz;}
+        const pw=len-.8,ph=Math.min(h-1.4,4.2),py=y+.45+ph/2,ox=x+nx*.12,oz=z+nz*.12,along=Math.abs(dx)>=Math.abs(dz);
+        B.get('foliage').box(ox,py,oz,along?pw:.12,ph,along?.12:pw,'#3d6a32');
+        let seed=Math.abs(Math.round(x*131+z*71+y*17))+1;const rnd=()=>((seed=(seed*16807)%2147483647)/2147483647);
+        for(let q=0;q<Math.round(pw*ph*1.6);q++) {
+          const u=(rnd()-.5)*(pw-.3),yy=py+(rnd()-.5)*(ph-.3),rr=.2+rnd()*.18,col=rnd()<.12?['#e58fb5','#f2b6c8','#a77bd1','#f6e7a1'][q%4]:rnd()<.5?'#4f7f3c':'#5f9a48';
+          B.get('foliage').sphere(ox+ux*u+nx*(.12+rnd()*.06),yy,oz+uz*u+nz*(.12+rnd()*.06),rr,col,rr*.9,rr*.55,'ico0');
+        }
+        for(const yy of [py-ph/2-.05,py+ph/2+.05])B.get('facadeBronze').box(ox+nx*.04,yy,oz+nz*.04,along?pw+.2:.25,.1,along?.25:pw+.2,'#c8a25a');
+        for(const s2 of [-1,1])B.get('facadeBronze').box(ox+ux*s2*(pw/2+.05)+nx*.04,py,oz+uz*s2*(pw/2+.05)+nz*.04,along?.1:.25,ph+.2,along?.25:.1,'#c8a25a');
+      }
     }
     const mx=(d.x0+d.x1)/2,mz=(d.z0+d.z1)/2,alongX=['N','S'].includes(d.side),[nx,nz]=NORMAL[d.side];
     B.get(wallKey).box(mx,y+(h+2.3)/2,mz,alongX?d.x1-d.x0:.15,h-2.3,alongX?.15:d.z1-d.z0,wallColor);
@@ -96,7 +112,7 @@ export function buildMallStairs(ctx) {
     const stairs=ctx.layout.stairs.filter(s=>s.building===building.id),access=building.access;
     for(const level of ctx.layout.levels.filter(l=>l.building===building.id)) {
       const L=ctx.levels[level.id];
-      buildMallStairLevel(L.batch,level,stairs,access,{finish:ctx.depthCues&&building.id==='P1'?{key:'satin',color:'#efe9df',kickKey:'facadeBronze',kick:'#c8a25a'}:null});
+      buildMallStairLevel(L.batch,level,stairs,access,{finish:ctx.depthCues&&building.id==='P1'?{key:'satin',color:'#efe9df',kickKey:'facadeBronze',kick:'#c8a25a',greenWall:true}:null});
       for(const stair of stairs.filter(s=>s.serves.includes(level.id))) {
         const d=stair.doorByLevel[level.id]||stair.door,[nx,nz]=NORMAL[d.side];
         L.signs.frame(stair.frame,()=>L.signs.place((d.x0+d.x1)/2+nx*.13,level.elev+2.55,(d.z0+d.z1)/2+nz*.13,.8,.22,d.side,ctx.atlas[level.id].cell('wf-exit')));
