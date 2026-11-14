@@ -145,23 +145,17 @@ test('大中庭 1F 地面倒影膜：铺满一期 1F 公共走道、不进铺位
   assert.equal(mesh.visible, true, '漫游走到中庭里倒影没开');
 });
 
-test('走道花岛：2F–6F 都有，离人流路线 ≥ 2.8 m，四周 4 m 都是走道（不贴店门、不探进洞口）', () => {
+test('走道弧形花坛：2F–6F 都有，树干真画出来了；FPS 没有', () => {
   const isl = tour.p1WalkIslands;
-  assert.ok(isl.length >= 10, `只有 ${isl.length} 个花岛`);
-  for (const id of ['P1-2F', 'P1-3F', 'P1-4F', 'P1-5F', 'P1-6F']) assert.ok(isl.some(q => q.level === id), `${id} 没有花岛`);
+  assert.ok(isl.length >= 20, `只有 ${isl.length} 个花坛`);
+  for (const id of ['P1-2F', 'P1-3F', 'P1-4F', 'P1-5F', 'P1-6F']) assert.ok(isl.some(q => q.level === id), `${id} 没有花坛`);
   for (const q of isl) {
-    const lv = level(q.level);
-    const onWalk = (x, z) => lv.walk.some(w => pointInPoly([x, z], w.poly)) && !lv.voids.some(v => pointInPoly([x, z], v.poly));
-    for (let k = 0; k < 16; k++) {
-      const a = k / 16 * Math.PI * 2;
-      assert.ok(onWalk(q.x + Math.cos(a) * 3.8, q.z + Math.sin(a) * 3.8), `${q.level} (${q.x}, ${q.z}) 四周不全是走道`);
-    }
-    for (const path of tour.paths.levels[q.level].people) for (const p of path.pts) assert.ok(Math.hypot(p[0] - q.x, p[2] - q.z) > 2.7, `${q.level} (${q.x}, ${q.z}) 压在人流路线 ${path.name} 上`);
-    // 树干、花池几何真在那里
-    assert.ok(trianglesIn([tour.levels[q.level].base], box(q.x - .3, lv.elev + 1, q.z - .3, q.x + .3, lv.elev + 1.4, q.z + .3)) > 0, `${q.level} (${q.x}, ${q.z}) 没有树干`);
+    const lv = level(q.level), n = q.line.length - 1, f = q.L >= 11 ? 0.5 : q.L >= 8 ? 0.3 : 0.5;
+    const [x, z] = q.line[Math.round(f * n)];
+    assert.ok(trianglesIn([tour.levels[q.level].base], box(x - .3, lv.elev + 1, z - .3, x + .3, lv.elev + 1.4, z + .3)) > 0, `${q.level} (${q.x}, ${q.z}) 没有树干`);
   }
   const fps = render(buildPlayableLayout({ mode: 'fps' }));
-  assert.equal(fps.p1WalkIslands, undefined, 'FPS 不加花岛');
+  assert.equal(fps.p1WalkIslands, undefined, 'FPS 不加花坛');
 });
 
 test('光之树：1F 广场中间有白色树干和杈梢灯盘，周围的人流圈在走道上、离花池外沿 ≥ 1.5 m；FPS 没有', () => {
@@ -181,15 +175,27 @@ test('光之树：1F 广场中间有白色树干和杈梢灯盘，周围的人�
   assert.ok(!(fps['P1-1F']?.people || []).some(p => p.name === '中庭光之树'), 'FPS 不加光之树人流');
 });
 
-test('漫游导航：花岛和光之树是实心的（站不上去、走过去会被挡住），旁边照常能站', () => {
+test('漫游导航：光之树是实心的（站不上去、走过去会被挡住），旁边照常能站', () => {
   const nav = buildNav(L, { levelSolids: (lv) => tour.navSolids?.[lv.id] });
   const at = (floor, x, z) => ({ floor, x, z, y: level(floor).elev, slope: null });
-  const cases = [...tour.p1WalkIslands.map(q => [q.level, q.x, q.z, 1.45]), ['P1-1F', LIGHT_TREE.x, LIGHT_TREE.z, LIGHT_TREE.r + .6]];
-  for (const [floor, x, z, r] of cases) {
-    assert.ok(!clear(nav, at(floor, x, z)), `${floor} (${x}, ${z}) 中心能站人`);
-    assert.ok(clear(nav, at(floor, x + r + 1, z)), `${floor} (${x}, ${z}) 旁边站不了人`);
-    let s = at(floor, x + r + 1, z);
-    for (let i = 0; i < 40; i++) s = step(nav, s, -.1, 0, 0);
-    assert.ok(Math.hypot(s.x - x, s.z - z) > r, `${floor} (${x}, ${z}) 走进了花池`);
+  const [floor, x, z, r] = ['P1-1F', LIGHT_TREE.x, LIGHT_TREE.z, LIGHT_TREE.r + .6];
+  assert.ok(!clear(nav, at(floor, x, z)), '光之树中心能站人');
+  assert.ok(clear(nav, at(floor, x + r + 1, z)), '光之树旁边站不了人');
+  let st = at(floor, x + r + 1, z);
+  for (let i = 0; i < 40; i++) st = step(nav, st, -.1, 0, 0);
+  assert.ok(Math.hypot(st.x - x, st.z - z) > r, '走进了光之树花池');
+});
+
+test('花园岛的棕榈、樱花不捅穿天花（头顶有楼板的，树冠在楼板底以下）', () => {
+  const lvs = L.levels.filter(l => l.building === 'P1' && /^[1-6]F$/.test(l.short)).sort((a, b) => a.elev - b.elev);
+  let checked = 0;
+  for (const it of (L.fidelity.mega.islands || []).filter(q => q.kind === 'garden')) {
+    const i = lvs.findIndex(l => l.id === it.level), up = lvs[i + 1];
+    if (i < 0 || !up || up.voids.some(v => pointInPoly([it.x, it.z], v.poly))) continue;
+    const ceil = up.elev - 0.45;
+    const n = trianglesIn([tour.levels[it.level].base], box(it.x - 2.5, ceil + 0.05, it.z - 2.5, it.x + 2.5, up.elev + 3, it.z + 2.5));
+    assert.equal(n, 0, `${it.level} 花园 (${it.x.toFixed(1)}, ${it.z.toFixed(1)}) 的树伸出天花 ${n} 个三角形`);
+    checked++;
   }
+  assert.ok(checked >= 2, `只查了 ${checked} 个花园`);
 });

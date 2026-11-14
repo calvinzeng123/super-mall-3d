@@ -23,6 +23,7 @@ import { applyP1Finishes } from './p1-finishes.js';
 import { applyP1Atrium } from './p1-atrium.js';
 import { applyP1Mega } from './p1-mega.js';
 import { applyP1SouthAtrium } from './p1-south-atrium.js';
+import { applyP1WalkBeds } from './p1-walk-beds.js';
 import { applyMetroInterchange } from './metro-interchange.js';
 import { addRiver } from './river.js';
 import { applyRiverTerrace } from './river-terrace.js';
@@ -75,7 +76,7 @@ export function buildLayout({ expansion = true, fidelity = expansion } = {}) {
   applySharedGarages(layout);
   if (expansion) applyP1Expansion(layout, picker);
   if (expansion && fidelity) {
-    applyP1VehicleAccess(layout); applyP1Fidelity(layout); applyP1Atrium(layout); applyP1Mega(layout); applyP1SouthAtrium(layout);
+    applyP1VehicleAccess(layout); applyP1Fidelity(layout); applyP1Atrium(layout); applyP1Mega(layout); applyP1SouthAtrium(layout); applyP1WalkBeds(layout);
     applyNorthResidences(layout);
     applyRiverTerrace(layout);
   }

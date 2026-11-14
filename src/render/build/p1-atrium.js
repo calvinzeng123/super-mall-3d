@@ -328,7 +328,8 @@ function palm(B, F, p, y0, seed) {
     B.get('travertine').cyl(u, y0, v, r, 0.5, '#e6dfd2', 32);
     B.get('foliage').cyl(u, y0 + 0.5, v, r - 0.08, 0.06, '#5a4632', 32);
     flowerBed(B, u, v, r - 0.12, y0 + 0.53, rand);
-    const H = 5.5 + rand() * 1.8, lean = (rand() - 0.5) * 0.5, la = rand() * Math.PI * 2;
+    // p.top：楼板底（楼上的花园岛净高只有 5 米左右，原来的 5.5–7.3 米树干会捅穿天花，树冠露在上一层地面上）
+    const H = Math.min(5.5 + rand() * 1.8, p.top ? p.top - y0 - 1.4 : Infinity), lean = (rand() - 0.5) * 0.5, la = rand() * Math.PI * 2;
     let prev = { x: u, y: y0 + 0.55, z: v };
     for (let s = 1; s <= 8; s++) {
       const t = s / 8, q = { x: u + Math.cos(la) * lean * t * t, y: y0 + 0.55 + H * t, z: v + Math.sin(la) * lean * t * t };
@@ -754,7 +755,11 @@ function megaAtrium(ctx, levels) {
     const L = ctx.levels[it.level], lv = levels.find((l) => l.id === it.level);
     if (!L || !lv) continue;
     if (it.kind === 'cafe') cafe(L.batch, { x0: it.x - it.hx, x1: it.x + it.hx, z0: it.z - it.hz, z1: it.z + it.hz }, lv.elev, IDENTITY);
-    else if (it.kind === 'garden') garden(L.batch, it, lv.elev);
+    else if (it.kind === 'garden') {
+      // 头顶有楼板的地方树长不过楼板底（洞口里不限）
+      const up = levels[levels.indexOf(lv) + 1], open = up && up.voids.some((v) => pointInPoly([it.x, it.z], v.poly));
+      garden(L.batch, it, lv.elev, up && !open ? up.elev - (SLAB_T[up.kind] ?? 0.45) - 0.1 : undefined);
+    }
     else if (it.kind === 'lounge') lounge(L.batch, IDENTITY, { u: it.x, v: it.z, w: 3.6, d: 2.2 }, lv.elev);
     else kiosk(L.batch, it, lv.elev, it.x * 3 + it.z);
   }
@@ -1231,15 +1236,16 @@ function blossom(B, t, y0, seed) {
   // 树冠：主枝分叉成小枝，每根小枝顶上一团由许多小花球攒成的花簇（效果图里樱花是一大团软软的粉色，不是几块大多面体）
   const pinks = ['#f2b6c8', '#e58fb5', '#f7cfdc', '#d97aa6', '#fbe3ea'];
   for (let b = 0; b < 4; b++) {
-    const a = b * 1.57 + rand() * 0.6, mid = { x: x + Math.cos(a) * 0.9, y: y0 + 3.2 + rand() * 0.3, z: z + Math.sin(a) * 0.9 };
+    const cap = t.top ? Math.min(1, (t.top - y0 - 1.2) / 4.4) : 1;
+    const a = b * 1.57 + rand() * 0.6, mid = { x: x + Math.cos(a) * 0.9, y: y0 + (3.2 + rand() * 0.3) * cap, z: z + Math.sin(a) * 0.9 };
     B.get('wood').bar(top, mid, 0.13, '#5b4636');
     for (let c = 0; c < 2; c++) {
-      const a2 = a + (c ? 0.45 : -0.45), tip = { x: mid.x + Math.cos(a2) * (0.8 + rand() * 0.4), y: mid.y + 0.6 + rand() * 0.5, z: mid.z + Math.sin(a2) * (0.8 + rand() * 0.4) };
+      const a2 = a + (c ? 0.45 : -0.45), tip = { x: mid.x + Math.cos(a2) * (0.8 + rand() * 0.4), y: mid.y + (0.6 + rand() * 0.5) * cap, z: mid.z + Math.sin(a2) * (0.8 + rand() * 0.4) };
       B.get('wood').bar(mid, tip, 0.07, '#5b4636');
       // 花簇：30 个小一点、圆一点的花球（原来 18 个大多面体，近看一颗颗棱角分明的大球）；外层略扁，像一层层压着的花
       for (let k = 0; k < 30; k++) {
         const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.35) * 0.8, sz = 0.13 + rand() * 0.11;
-        B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 1.15, tip.y + h, tip.z + Math.sin(u) * rr * 1.15,
+        B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 1.15, t.top ? Math.min(t.top - 0.3 - sz, tip.y + h) : tip.y + h, tip.z + Math.sin(u) * rr * 1.15,
           sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'sphereLo');
       }
     }
@@ -1290,14 +1296,14 @@ function kiosk(B, it, y0, seed) {
 }
 
 /** 休憩花园：石材长花池（灌木和花）+ 一棵树（樱花或棕榈交替）+ 两侧木面长椅 */
-function garden(B, it, y0) {
+function garden(B, it, y0, top) {
   const { x, z, hx, hz } = it, rand = rng(Math.round(Math.abs(x * 7 + z * 13)) + 1), along = hx >= hz;
   B.get('travertine').box(x, y0 + 0.25, z, along ? hx * 2 - 2.2 : 1.6, 0.5, along ? 1.6 : hz * 2 - 2.2, '#e6dfd2');
   for (let k = 0; k < 14; k++) {
     const s = (rand() - 0.5) * (Math.max(hx, hz) * 2 - 2.8), t = (rand() - 0.5) * 1.2;
     B.get('foliage').sphere(x + (along ? s : t), y0 + 0.62, z + (along ? t : s), 0.22 + rand() * 0.12, rand() < 0.5 ? LEAF : FLOWERS[k % FLOWERS.length], undefined, undefined, 'sphereLo');
   }
-  if (it.seed % 2) blossom(B, { x, z, r: 0.9 }, y0 + 0.0, it.seed + 3); else palm(B, IDENTITY, { u: x, v: z, r: 0.9 }, y0, it.seed * 11 + 2);
+  if (it.seed % 2) blossom(B, { x, z, r: 0.9, top }, y0 + 0.0, it.seed + 3); else palm(B, IDENTITY, { u: x, v: z, r: 0.9, top }, y0, it.seed * 11 + 2);
   for (const sg of [-1, 1]) {
     const bx = along ? x : x + sg * (hx - 0.35), bz = along ? z + sg * (hz - 0.35) : z, w = along ? hx * 2 - 1.2 : 0.5, d = along ? 0.5 : hz * 2 - 1.2;
     B.get('satin').box(bx, y0 + 0.2, bz, w * 0.9, 0.4, d * 0.9, '#efe9df');
@@ -1306,59 +1312,60 @@ function garden(B, it, y0) {
 }
 
 /**
- * 走道花岛（2F–6F）：效果图里宽走道中间隔一段就有一个圆形花池（棕榈或樱花），人从两边绕过去；
- * 我们的大楼面走道原来是一整片空地面。按 3 米网格找空地：周围 4 米一圈都在走道上（离店门、栏板、洞口都远）、
- * 离人流路线 ≥ 2.8 米、不挡门和扶梯口、离岛柜和导航障碍 ≥ 4 米、离别的花岛 ≥ 14 米。
- * 楼层净高只有 5 米左右，树都压在 4.2 米以下。
+ * 走道弧形花坛（2F–6F，布局见 layout/p1-walk-beds.js 的 fidelity.mega.beds）：效果图里宽走道中间一条条弯弯的长花坛，
+ * 人从两边绕过去，走道跟着弯。月牙形石材池壁（金色压顶线）、满池土和花，沿中线种一到三棵矮棕榈或樱花（树顶 ≤ 楼面 + 4.2 m）。
+ * 花坛在布局里是导航障碍（漫游时挡人），人流路线本来就离它 ≥ 半宽 + 2.4 m。
  */
 function walkIslands(ctx, levels, M) {
   const out = (ctx.p1WalkIslands = []);
-  for (const lv of levels.filter((l) => /^[2-6]F$/.test(l.short))) {
-    const L = ctx.levels[lv.id];
+  for (const bed of M.beds || []) {
+    const lv = levels.find((l) => l.id === bed.level), L = lv && ctx.levels[lv.id];
     if (!L) continue;
-    const B = L.batch, y0 = lv.elev, top = y0 + Math.min(4.2, lv.height - 1.3);
-    const walks = lv.walk.map((w) => w.poly), holes = lv.voids.map((v) => v.poly);
-    const onWalk = (x, z) => walks.some((w) => pointInPoly([x, z], w)) && !holes.some((h) => pointInPoly([x, z], h));
-    const segs = [];
-    for (const path of ctx.paths?.levels?.[lv.id]?.people || []) {
-      const pts = path.pts, n = pts.length;
-      for (let i = 0; i < n - (path.loop ? 0 : 1); i++) segs.push([pts[i], pts[(i + 1) % n]]);
+    const B = L.batch, y0 = lv.elev, top = y0 + Math.min(4.2, lv.height - 1.3), P = bed.poly;
+    const rand = rng(Math.abs(Math.round(bed.x * 31 + bed.z * 7)) + 3);
+    // 池壁：沿轮廓一段段石材矮墙 + 金色压顶线；墙脚一圈暖光
+    for (let k = 0; k < P.length; k++) {
+      const [ax, az] = P[k], [bx, bz] = P[(k + 1) % P.length], len = Math.hypot(bx - ax, bz - az);
+      if (len < 0.02) continue;
+      const ang = Math.atan2(-(bz - az), bx - ax), cx = (ax + bx) / 2, cz = (az + bz) / 2;
+      B.get('travertine').box(cx, y0 + 0.24, cz, len + 0.1, 0.48, 0.14, '#e6dfd2', ang);
+      B.get('facadeBronze').box(cx, y0 + 0.49, cz, len + 0.1, 0.025, 0.16, GOLD, ang);
+      B.get('glowSoft').box(cx, y0 + 0.012, cz, len + 0.1, 0.02, 0.2, '#ffe2b8', ang);
     }
-    const nearPath = (x, z, r) => segs.some(([a, b]) => {
-      const dx = b[0] - a[0], dz = b[2] - a[2], l2 = dx * dx + dz * dz || 1;
-      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[2]) * dz) / l2));
-      return Math.hypot(a[0] + dx * t - x, a[2] + dz * t - z) < r;
-    });
-    const blockers = [...(lv.navObstacles || []).map((o) => o.poly), ...lv.features.map((f) => f.poly).filter(Boolean)];
-    const items = (M.islands || []).filter((it) => it.level === lv.id);
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (const w of walks) for (const [x, z] of w) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
-    const mine = [];
-    for (let x = Math.ceil(x0 / 3) * 3; x <= x1; x += 3) for (let z = Math.ceil(z0 / 3) * 3; z <= z1; z += 3) {
-      if (!onWalk(x, z)) continue;
-      let open = true;
-      for (let k = 0; k < 12 && open; k++) {
-        const a = (k / 12) * Math.PI * 2;
-        for (const R of [2.2, 4]) if (!onWalk(x + Math.cos(a) * R, z + Math.sin(a) * R)) { open = false; break; }
+    // 池里：沿中线一串土盘和花丛（半宽随中线变细，两头收尖）
+    bed.line.forEach(([x, z, hw], i) => {
+      if (hw < 0.2) return;
+      B.get('foliage').cyl(x, y0 + 0.44, z, hw - 0.06, 0.05, '#5a4632', 20);
+      // 花草撒满整条池子（不用 flowerBed：一串圆形花池叠在一起会看出一圈圈花环）
+      for (let k = 0; k < Math.round(hw * 9); k++) {
+        const u = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (hw - 0.15), rr = 0.13 + rand() * 0.08;
+        B.get('foliage').sphere(x + Math.cos(u) * d, y0 + 0.5, z + Math.sin(u) * d, rr, ['#4f7f3c', '#5f9447', '#3d6a32', '#6f9f50'][k % 4], rr * 0.6, rr, 'ico0');
       }
-      if (!open || nearPath(x, z, 2.8) || B.unfit(x, z, 2.0)) continue;
-      if (mine.some((q) => Math.hypot(q.x - x, q.z - z) < 14) || out.some((q) => q.level !== lv.id ? false : Math.hypot(q.x - x, q.z - z) < 14)) continue;
-      if (items.some((it) => Math.abs(it.x - x) < it.hx + 4 && Math.abs(it.z - z) < it.hz + 4)) continue;
-      if (blockers.some((P) => pointInPoly([x, z], P) || distToPolyEdge([x, z], P) < 4)) continue;
-      mine.push({ level: lv.id, x, z });
-    }
-    mine.forEach((q, i) => { walkIsland(B, q.x, q.z, y0, top, (lv.elev * 7 + i) % 2 ? 'palm' : 'blossom', lv.elev * 13 + i); out.push(q); navSolid(ctx, lv.id, q.x, q.z, 1.45); });
+      for (let k = 0; k < Math.round(hw * 6); k++) {
+        const u = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (hw - 0.12);
+        B.get('foliage').sphere(x + Math.cos(u) * d, y0 + 0.56 + rand() * 0.05, z + Math.sin(u) * d, 0.08 + rand() * 0.03, BED[Math.floor(rand() * BED.length)], undefined, undefined, 'ico0');
+      }
+    });
+    // 树：5 m 的一棵在正中，8 m 两棵，11 m 三棵；棕榈、樱花交替
+    const n = bed.line.length - 1, at = bed.L >= 11 ? [0.2, 0.5, 0.8] : bed.L >= 8 ? [0.3, 0.7] : [0.5];
+    at.forEach((f, k) => {
+      const [x, z] = bed.line[Math.round(f * n)];
+      walkIsland(B, x, z, y0, top, (out.length + k) % 2 ? 'palm' : 'blossom', bed.x * 3 + bed.z + k, false);
+    });
+    out.push({ level: bed.level, x: bed.x, z: bed.z, poly: P, line: bed.line, L: bed.L });
   }
 }
 
 /** 一个走道花岛：米色石材圆池（金色腰线、底下一圈暖光）、满池花草，中间一棵矮棕榈或樱花（树顶不超过 top） */
-function walkIsland(B, x, z, y0, top, kind, seed) {
+function walkIsland(B, x, z, y0, top, kind, seed, planter = true) {
   const rand = rng(Math.abs(Math.round(seed * 53)) + 7), r = 1.35;
-  B.get('travertine').cyl(x, y0, z, r, 0.48, '#e6dfd2', 32);
-  B.get('facadeBronze').cyl(x, y0 + 0.36, z, r + 0.012, 0.035, GOLD, 32);
-  B.get('glowSoft').cyl(x, y0 + 0.005, z, r + 0.06, 0.02, '#ffe2b8', 32);
-  B.get('foliage').cyl(x, y0 + 0.48, z, r - 0.08, 0.05, '#5a4632', 32);
-  flowerBed(B, x, z, r - 0.12, y0 + 0.5, rand);
+  if (planter) {
+    B.get('travertine').cyl(x, y0, z, r, 0.48, '#e6dfd2', 32);
+    B.get('facadeBronze').cyl(x, y0 + 0.36, z, r + 0.012, 0.035, GOLD, 32);
+    B.get('glowSoft').cyl(x, y0 + 0.005, z, r + 0.06, 0.02, '#ffe2b8', 32);
+    B.get('foliage').cyl(x, y0 + 0.48, z, r - 0.08, 0.05, '#5a4632', 32);
+    flowerBed(B, x, z, r - 0.12, y0 + 0.5, rand);
+  }
   if (kind === 'palm') {
     const H = top - y0 - 1.3, lean = (rand() - 0.5) * 0.3, la = rand() * Math.PI * 2;
     let prev = { x, y: y0 + 0.52, z };
