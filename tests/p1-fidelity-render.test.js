@@ -7,6 +7,7 @@ import { BatchSet } from '../src/render/batch.js';
 import { buildP1Fidelity } from '../src/render/build/p1-fidelity.js';
 import { buildAtriumReflection } from '../src/render/build/floor-reflection.js';
 import { pointInPoly } from '../src/layout/geom.js';
+import { levelPaths } from '../src/render/paths.js';
 
 // Posters paint on a canvas; under Node a no-op 2D context is enough.
 const paint = new Proxy({}, {
@@ -21,7 +22,7 @@ function render(layout) {
     lv, base: new THREE.Group(), facade: new THREE.Group(), batch: new BatchSet(materials), facadeBatch: new BatchSet(materials),
   }]));
   const ctx = { layout, levels, site: { group: new THREE.Group(), batch: new BatchSet(materials) },
-    mats: { base: materials, sign: () => new THREE.MeshBasicMaterial(), onNight: () => {} } };
+    mats: { base: materials, sign: () => new THREE.MeshBasicMaterial(), onNight: () => {} }, paths: { levels: levelPaths(layout) } };
   buildP1Fidelity(ctx);
   for (const v of Object.values(levels)) { v.batch.flush(v.base); v.facadeBatch.flush(v.facade); }
   ctx.site.batch.flush(ctx.site.group);
@@ -141,4 +142,23 @@ test('大中庭 1F 地面倒影膜：铺满一期 1F 公共走道、不进铺位
   assert.equal(mesh.visible, false, '鸟瞰（不在漫游）也在画倒影');
   sw.update(0.016, 0, { explore: { active: true } });
   assert.equal(mesh.visible, true, '漫游走到中庭里倒影没开');
+});
+
+test('走道花岛：2F–6F 都有，离人流路线 ≥ 2.8 m，四周 4 m 都是走道（不贴店门、不探进洞口）', () => {
+  const isl = tour.p1WalkIslands;
+  assert.ok(isl.length >= 10, `只有 ${isl.length} 个花岛`);
+  for (const id of ['P1-2F', 'P1-3F', 'P1-4F', 'P1-5F', 'P1-6F']) assert.ok(isl.some(q => q.level === id), `${id} 没有花岛`);
+  for (const q of isl) {
+    const lv = level(q.level);
+    const onWalk = (x, z) => lv.walk.some(w => pointInPoly([x, z], w.poly)) && !lv.voids.some(v => pointInPoly([x, z], v.poly));
+    for (let k = 0; k < 16; k++) {
+      const a = k / 16 * Math.PI * 2;
+      assert.ok(onWalk(q.x + Math.cos(a) * 3.8, q.z + Math.sin(a) * 3.8), `${q.level} (${q.x}, ${q.z}) 四周不全是走道`);
+    }
+    for (const path of tour.paths.levels[q.level].people) for (const p of path.pts) assert.ok(Math.hypot(p[0] - q.x, p[2] - q.z) > 2.7, `${q.level} (${q.x}, ${q.z}) 压在人流路线 ${path.name} 上`);
+    // 树干、花池几何真在那里
+    assert.ok(trianglesIn([tour.levels[q.level].base], box(q.x - .3, lv.elev + 1, q.z - .3, q.x + .3, lv.elev + 1.4, q.z + .3)) > 0, `${q.level} (${q.x}, ${q.z}) 没有树干`);
+  }
+  const fps = render(buildPlayableLayout({ mode: 'fps' }));
+  assert.equal(fps.p1WalkIslands, undefined, 'FPS 不加花岛');
 });

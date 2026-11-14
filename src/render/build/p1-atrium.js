@@ -747,6 +747,7 @@ function megaAtrium(ctx, levels) {
   directoryTotems(ctx, levels);
   for (const lv of levels.filter((l) => /^[2-6]F$/.test(l.short))) if (ctx.levels[lv.id]) balconyInlay(ctx.levels[lv.id].batch, lv);
   blossomClouds(ctx, levels);
+  walkIslands(ctx, levels, M);
   // A、B 走道里的岛柜（粉白玻璃柜 + 灯箱顶）和咖啡外摆
   for (const it of M.islands || []) {
     const L = ctx.levels[it.level], lv = levels.find((l) => l.id === it.level);
@@ -1290,5 +1291,104 @@ function garden(B, it, y0) {
     const bx = along ? x : x + sg * (hx - 0.35), bz = along ? z + sg * (hz - 0.35) : z, w = along ? hx * 2 - 1.2 : 0.5, d = along ? 0.5 : hz * 2 - 1.2;
     B.get('satin').box(bx, y0 + 0.2, bz, w * 0.9, 0.4, d * 0.9, '#efe9df');
     B.get('wood').box(bx, y0 + 0.43, bz, w, 0.06, d, '#a77f58');
+  }
+}
+
+/**
+ * 走道花岛（2F–6F）：效果图里宽走道中间隔一段就有一个圆形花池（棕榈或樱花），人从两边绕过去；
+ * 我们的大楼面走道原来是一整片空地面。按 3 米网格找空地：周围 4 米一圈都在走道上（离店门、栏板、洞口都远）、
+ * 离人流路线 ≥ 2.8 米、不挡门和扶梯口、离岛柜和导航障碍 ≥ 4 米、离别的花岛 ≥ 14 米。
+ * 楼层净高只有 5 米左右，树都压在 4.2 米以下。
+ */
+function walkIslands(ctx, levels, M) {
+  const out = (ctx.p1WalkIslands = []);
+  for (const lv of levels.filter((l) => /^[2-6]F$/.test(l.short))) {
+    const L = ctx.levels[lv.id];
+    if (!L) continue;
+    const B = L.batch, y0 = lv.elev, top = y0 + Math.min(4.2, lv.height - 1.3);
+    const walks = lv.walk.map((w) => w.poly), holes = lv.voids.map((v) => v.poly);
+    const onWalk = (x, z) => walks.some((w) => pointInPoly([x, z], w)) && !holes.some((h) => pointInPoly([x, z], h));
+    const segs = [];
+    for (const path of ctx.paths?.levels?.[lv.id]?.people || []) {
+      const pts = path.pts, n = pts.length;
+      for (let i = 0; i < n - (path.loop ? 0 : 1); i++) segs.push([pts[i], pts[(i + 1) % n]]);
+    }
+    const nearPath = (x, z, r) => segs.some(([a, b]) => {
+      const dx = b[0] - a[0], dz = b[2] - a[2], l2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[2]) * dz) / l2));
+      return Math.hypot(a[0] + dx * t - x, a[2] + dz * t - z) < r;
+    });
+    const blockers = [...(lv.navObstacles || []).map((o) => o.poly), ...lv.features.map((f) => f.poly).filter(Boolean)];
+    const items = (M.islands || []).filter((it) => it.level === lv.id);
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const w of walks) for (const [x, z] of w) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    const mine = [];
+    for (let x = Math.ceil(x0 / 3) * 3; x <= x1; x += 3) for (let z = Math.ceil(z0 / 3) * 3; z <= z1; z += 3) {
+      if (!onWalk(x, z)) continue;
+      let open = true;
+      for (let k = 0; k < 12 && open; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        for (const R of [2.2, 4]) if (!onWalk(x + Math.cos(a) * R, z + Math.sin(a) * R)) { open = false; break; }
+      }
+      if (!open || nearPath(x, z, 2.8) || B.unfit(x, z, 2.0)) continue;
+      if (mine.some((q) => Math.hypot(q.x - x, q.z - z) < 14) || out.some((q) => q.level !== lv.id ? false : Math.hypot(q.x - x, q.z - z) < 14)) continue;
+      if (items.some((it) => Math.abs(it.x - x) < it.hx + 4 && Math.abs(it.z - z) < it.hz + 4)) continue;
+      if (blockers.some((P) => pointInPoly([x, z], P) || distToPolyEdge([x, z], P) < 4)) continue;
+      mine.push({ level: lv.id, x, z });
+    }
+    mine.forEach((q, i) => { walkIsland(B, q.x, q.z, y0, top, (lv.elev * 7 + i) % 2 ? 'palm' : 'blossom', lv.elev * 13 + i); out.push(q); });
+  }
+}
+
+/** 一个走道花岛：米色石材圆池（金色腰线、底下一圈暖光）、满池花草，中间一棵矮棕榈或樱花（树顶不超过 top） */
+function walkIsland(B, x, z, y0, top, kind, seed) {
+  const rand = rng(Math.abs(Math.round(seed * 53)) + 7), r = 1.35;
+  B.get('travertine').cyl(x, y0, z, r, 0.48, '#e6dfd2', 32);
+  B.get('facadeBronze').cyl(x, y0 + 0.36, z, r + 0.012, 0.035, GOLD, 32);
+  B.get('glowSoft').cyl(x, y0 + 0.005, z, r + 0.06, 0.02, '#ffe2b8', 32);
+  B.get('foliage').cyl(x, y0 + 0.48, z, r - 0.08, 0.05, '#5a4632', 32);
+  flowerBed(B, x, z, r - 0.12, y0 + 0.5, rand);
+  if (kind === 'palm') {
+    const H = top - y0 - 1.3, lean = (rand() - 0.5) * 0.3, la = rand() * Math.PI * 2;
+    let prev = { x, y: y0 + 0.52, z };
+    for (let s = 1; s <= 6; s++) {
+      const t = s / 6, q = { x: x + Math.cos(la) * lean * t * t, y: y0 + 0.52 + H * t, z: z + Math.sin(la) * lean * t * t };
+      B.get('wood').bar(prev, q, 0.18 - 0.06 * t, '#8a7259');
+      prev = q;
+    }
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * Math.PI * 2 + rand() * 0.3, len = 1.6 + rand() * 0.5, col = k % 2 ? LEAF : LEAF2;
+      const ca = Math.cos(a), sa = Math.sin(a), px = -sa, pz = ca;
+      let fp = prev;
+      for (let s = 1; s <= 8; s++) {
+        const t = s / 8, q = { x: prev.x + ca * len * t, y: prev.y + 0.45 * t - 1.1 * t * t, z: prev.z + sa * len * t };
+        B.get('foliage').bar(fp, q, 0.05, col);
+        if (s > 1) {
+          const ll = 0.6 * (1 - t * 0.5);
+          for (const side of [1, -1]) {
+            palmDir.set(px * side * 0.9 + ca * 0.35, -0.42, pz * side * 0.9 + sa * 0.35).normalize();
+            leafQ.setFromUnitVectors(X_AXIS, palmDir);
+            leafP.set(q.x + palmDir.x * ll * 0.5, q.y + palmDir.y * ll * 0.5, q.z + palmDir.z * ll * 0.5);
+            leafS.set(ll, 0.012, 0.18 - 0.08 * t);
+            B.get('foliage').shape('box', leafP, leafQ, leafS, col);
+          }
+        }
+        fp = q;
+      }
+    }
+    return;
+  }
+  // 樱花：短干分三杈，每杈顶上一团小花球（整棵树冠顶在 top 以下）
+  const fork = { x, y: Math.min(y0 + 1.8, top - 1.6), z };
+  B.get('wood').bar({ x, y: y0 + 0.52, z }, fork, 0.15, '#5b4636');
+  const pinks = ['#f2b6c8', '#e58fb5', '#f7cfdc', '#d97aa6', '#fbe3ea'];
+  for (let b = 0; b < 3; b++) {
+    const a = b * 2.09 + rand() * 0.5, tip = { x: x + Math.cos(a) * 0.75, y: top - 0.75 - rand() * 0.3, z: z + Math.sin(a) * 0.75 };
+    B.get('wood').bar(fork, tip, 0.08, '#5b4636');
+    for (let k = 0; k < 26; k++) {
+      const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.4) * 0.7, sz = 0.13 + rand() * 0.1;
+      B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 0.95, Math.min(top - sz, tip.y + h), tip.z + Math.sin(u) * rr * 0.95,
+        sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'sphereLo');
+    }
   }
 }
