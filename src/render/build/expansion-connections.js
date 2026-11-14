@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import clipping from 'polygon-clipping';
 import { BatchSet } from '../batch.js';
-import { subtractInterval } from '../../layout/geom.js';
+import { subtractInterval, pointInPoly } from '../../layout/geom.js';
 import { addCutSurfaceSlab } from './surface-shapes.js';
 
 const cleanRing = ring => {
@@ -101,14 +101,37 @@ function beam(batch, key, edge, y, height, width, color) {
 export function buildExpansionConnectionGeometry(batch, ceilingBatch, network) {
   const { y, below, pieces, boundary } = network, height = below ? 3.2 : 3.4;
   for (const piece of pieces) {
-    addCutSurfaceSlab(batch, below ? 'concrete' : 'stone', piece.outer, piece.holes, y, below ? .18 : .3, '#e6dfd1');
-    addCutSurfaceSlab(ceilingBatch, below ? 'concrete' : 'glassTint', piece.outer, piece.holes, y + height + .06, .06, '#dce6df');
+    addCutSurfaceSlab(batch, below ? 'concrete' : 'stone', piece.outer, piece.holes, y, below ? .18 : .3, below ? '#f1ece2' : '#e6dfd1');
+    // 地下通道顶板：米白缎面（带纹理的 concrete 在通道里是一片深灰褐色，像个隧道）
+    addCutSurfaceSlab(ceilingBatch, below ? 'extSatin' : 'glassTint', piece.outer, piece.holes, y + height + .06, .06, below ? '#f3efe8' : '#dce6df');
   }
+  // 地下通道顶上沿中线一条连续灯带（顶板背光，光靠两侧墙顶的灯槽不够亮）
+  if (below) for (const path of network.paths) for (let i = 1; i < path.points.length; i++) {
+    const a = path.points[i - 1], b = path.points[i];
+    beam(batch, 'glowSoft', { x0: a[0], z0: a[2], x1: b[0], z1: b[2] }, y + height - .06, .04, .16, '#fff6e2');
+  }
+  const inside = (x, z) => pieces.some((p) => pointInPoly([x, z], p.outer) && !(p.holes || []).some((h) => pointInPoly([x, z], h)));
+  let ad = 0;
   for (const edge of boundary) {
     if (below) {
-      beam(batch, 'concrete', edge, y, height, .18, '#d5dcd5');
-      beam(batch, 'extSatin', edge, y + .4, .1, .2, '#607d72');
-      beam(batch, 'glowSoft', edge, y + height - .24, .045, .19, '#eef1dc');
+      // 墙：米白缎面墙板（原来 concrete 深灰），扶手高度一道金色细线，顶上一条灯带
+      beam(batch, 'extSatin', edge, y, height, .18, '#ece6da');
+      beam(batch, 'extSatin', edge, y + .4, .06, .2, '#c8a25a');
+      beam(batch, 'glowSoft', edge, y + height - .24, .045, .19, '#fff4dc');
+      // 长墙面每 7 米一块灯箱广告（浅色画面 + 深色细边框），朝通道里面
+      const dx = edge.x1 - edge.x0, dz = edge.z1 - edge.z0, len = Math.hypot(dx, dz);
+      if (len < 5) continue;
+      const ux = dx / len, uz = dz / len, mx = (edge.x0 + edge.x1) / 2, mz = (edge.z0 + edge.z1) / 2;
+      let nx = -uz, nz = ux;
+      if (!inside(mx + nx * .4, mz + nz * .4)) { nx = -nx; nz = -nz; }
+      const n = Math.floor((len - 1.5) / 7);
+      for (let k = 0; k < n; k++) {
+        const t = (len - (n - 1) * 7) / 2 + k * 7, px = edge.x0 + ux * t + nx * .12, pz = edge.z0 + uz * t + nz * .12;
+        const seg = { x0: px - ux * .95, z0: pz - uz * .95, x1: px + ux * .95, z1: pz + uz * .95 };
+        beam(batch, 'extMetal', seg, y + 1.0, 1.24, .05, '#2b2f33');
+        const face = { x0: seg.x0 + nx * .03 + ux * .06, z0: seg.z0 + nz * .03 + uz * .06, x1: seg.x1 + nx * .03 - ux * .06, z1: seg.z1 + nz * .03 - uz * .06 };
+        beam(batch, 'glowSoft', face, y + 1.06, 1.12, .02, ['#f6d3de', '#d4e6f6', '#f7e6b8', '#d6eedb'][ad++ % 4]);
+      }
     } else {
       beam(batch, 'glass', edge, y + .2, height - .3, .035, '#ffffff');
       beam(batch, 'extMetal', edge, y - .19, .18, .18, '#6d786c');
