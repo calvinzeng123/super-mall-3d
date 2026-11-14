@@ -24,8 +24,8 @@ export async function buildPeople(ctx) {
     if (!paths.length) continue;
     // 一期样板中庭的几层人多一些（预想图里中庭人很多）；手机按画质的人群密度再打折
     const busy = lv.building === 'P1' && lv.kind === 'retail' && ctx.layout.fidelity?.atrium;
-    // 超级商业中心（一期并进 A、B 两块楼面）每层 440 人（效果图里各层走道都挤满人；手机画质按 crowdDensity 打到两三成）
-    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 440 : 120) : COUNT[lv.kind] || 20;
+    // 超级商业中心（一期并进 A、B 两块楼面）每层 600 人（效果图里各层走道都挤满人；手机画质按 crowdDensity 打到两三成）
+    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 600 : 120) : COUNT[lv.kind] || 20;
     // 中庭边的两圈（回游线、栏杆边）：一期每层四成的人走这里，中庭四周才像效果图那样热闹
     const atrium = paths.filter(path => !path.escalator && /^中庭/.test(path.name || ''));
     const variants = assets.map(asset => {
@@ -69,7 +69,8 @@ export async function buildPeople(ctx) {
   }
 
   const place = (walker, step, time) => {
-    const maxDistance = density <= .3 ? 95 : density < .8 ? 155 : 230;
+    // 一期超级商业中心整层约 300 m 宽，俯视全楼时 230 m 外的人全被裁掉，远处走道显得空；满密度（桌面高画质）放到 330 m
+    const maxDistance = density <= .3 ? 95 : density < .8 ? 155 : ctx.layout.fidelity?.mega ? 330 : 230;
     for (const variant of walker.variants) variant.visible = 0;
     for (const actor of walker.list) {
       actor.d += actor.speed * actor.dir * step;
