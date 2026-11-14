@@ -141,8 +141,13 @@ function furnish(L, atlas, lv, u, rand) {
     cinema: '#2a1d24', arcade: '#1c1530', kids: '#ffe7a8', supermarket: '#e6e8e6', restaurant: '#c9a57c', bar: '#b08a63',
     jewelry: '#2d2c33', food: '#e7dccb', snack: '#8c7b68', tea: '#c7b08a', books: '#d9c6a5', cafe: '#cfae86',
   }[cat] || shade(u.brand.bg, 0.78).getStyle();
-  const floorKey = lv.finishes ? 'carpet' : ['books', 'cafe', 'tea', 'home', 'fashion', 'luxury'].includes(cat) ? 'wood'
-    : ['jewelry', 'beauty', 'tech', 'accessory'].includes(cat) ? 'stone' : 'satin';
+  // 一期（游览布局有 lv.finishes）原来店里一律铺地毯，俯视看店里是一片暗褐色；效果图里店里是亮的石材、浅木地板。
+  // 影院、电玩还是地毯，其余和别的楼一样按业态铺浅木/石材，默认的「satin」换成抛光的奶油色石材
+  const carpeted = lv.finishes && ['cinema', 'arcade'].includes(cat);
+  // 一期的木地板只给餐饮和书店（木纹贴图俯视偏深褐色），时装、家居、奢侈品也用奶油色石材，像效果图里亮白的店面
+  const woodCats = lv.finishes ? ['books', 'cafe', 'tea', 'restaurant'] : ['books', 'cafe', 'tea', 'home', 'fashion', 'luxury'];
+  const floorKey = carpeted ? 'carpet' : woodCats.includes(cat) ? 'wood'
+    : ['jewelry', 'beauty', 'tech', 'accessory'].includes(cat) || lv.finishes ? 'stone' : 'satin';
   const carpetTint = ['cinema', 'arcade', 'jewelry'].includes(cat) ? '#607878'
     : ['restaurant', 'cafe', 'tea', 'snack'].includes(cat) ? '#b19a80'
     : ['kids', 'books', 'home', 'studio'].includes(cat) ? '#9da78b' : '#c1b5a1';
