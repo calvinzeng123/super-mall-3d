@@ -87,6 +87,8 @@ export async function buildPeople(ctx) {
       const distanceSq = (position.x - ctx.camera.position.x) ** 2 +
         (position.y + offset - ctx.camera.position.y) ** 2 + (position.z - ctx.camera.position.z) ** 2;
       if (distanceSq > maxDistance ** 2) continue;
+      // 230 m 外（只有一期超级商业中心满密度时才画到这么远）只画一半人：远处走道看着有人，三角形少一半
+      if (distanceSq > 230 ** 2 && actor.rank > density / 2) continue;
       // Test the actual laterally shifted position. The path clock above keeps
       // running while an actor crosses an opening, so it reappears on solid floor.
       if (!walker.support(position.x, position.z, actor.escalator)) continue;
