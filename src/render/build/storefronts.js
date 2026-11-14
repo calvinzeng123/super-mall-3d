@@ -52,7 +52,8 @@ function front(B, S, lv, u, f, cell, style) {
     const [x, z] = F.at(uu, v);
     B.get(key).box(x, y, z, su, sy, sv, color, F.ang);
   };
-  const frameCol = style === 'oldstreet' ? '#4a2c1a' : lv.short === '1F' ? '#a88a55' : '#3f454b';
+  // 一期游览布局：效果图里每层的店面都是暖金色细框，楼上也不用深灰色
+  const frameCol = style === 'oldstreet' ? '#4a2c1a' : lv.short === '1F' ? '#a88a55' : lv.finishes ? '#b8975e' : '#3f454b';
   const timber = style === 'oldstreet' || ['cafe', 'tea', 'restaurant', 'home', 'book'].includes(brand.cat);
   const liningKey = timber ? 'wood' : 'stone';
   const liningCol = timber ? '#dfc5a8' : '#eee8dc';
