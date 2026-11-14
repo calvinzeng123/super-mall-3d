@@ -200,10 +200,25 @@ function furnish(L, atlas, lv, u, rand) {
     for (let a = a0 + .27; a < a1 - .18; a += .65) detail.shirt(a, b, 1.73, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
   };
 
+  // 一期游览布局：大档口（≥ 100 m²）出品台前面摆堂食桌椅，不再是整片空地板只在最里面有灶台。
+  const stallSeating = () => {
+    if (!lv.finishes || W * D < 100) return;
+    const cols = Math.max(1, Math.floor((W - 1) / 2.4));
+    for (let b = 2.9; b < D * .55 - 1.3; b += 2.4) {
+      for (const a of spread(cols, u0 + 1.3, u1 - 1.3)) {
+        const [x, z] = F.at(a, b);
+        if (B.unfit(x, z, 1.4)) continue;
+        roundTable(B, x, y0, z, 3, { chair: shade(u.brand.bg, .2).getStyle() });
+        detail.tableware(a, b, .77);
+      }
+    }
+  };
+
   switch (cat) {
     case 'fashion': case 'luxury': case 'accessory': case 'shoes': case 'sports': {
       // 陈列沿两侧展开，中间保留连续进深通道；支架与衣物分开，商品有实际轮廓。
-      const bays = Math.max(1, Math.min(3, Math.floor((D - 3.4) / 1.7)));
+      // 一期游览布局：大铺位的鞋架/包架沿进深一直排到底，不再三组就停，俯视店里不再空一半。
+      const bays = Math.max(1, Math.min(lv.finishes ? 6 : 3, Math.floor((D - 3.4) / 1.7)));
       for (const a of [u0 + .47, u1 - .47]) {
         if (cat === 'shoes' || cat === 'sports' || cat === 'accessory') {
           for (let bay = 0; bay < bays; bay++) {
@@ -221,7 +236,7 @@ function furnish(L, atlas, lv, u, rand) {
             }
           }
         } else {
-          const railEnd = Math.max(2.5, Math.min(D - 2, 10.2));
+          const railEnd = Math.max(2.5, Math.min(D - 2, lv.finishes ? D : 10.2));
           P('metal', a, (2.0 + railEnd) / 2, y0 + 1.88, .035, railEnd - 2, .035, '#b4af9d');
           for (const b of [2, railEnd]) P('metal', a, b, y0 + .94, .035, .035, 1.88, '#b4af9d');
           for (let b = 2.25; b < railEnd; b += .64) detail.shirt(a, b, 1.79, CLOTHES[Math.floor(rand() * CLOTHES.length)], Math.PI / 2);
@@ -229,8 +244,11 @@ function furnish(L, atlas, lv, u, rand) {
       }
       if (W > 6 && D > 6) {
         // 岛台分居两侧，入口到收银台之间留 1.8m 中央通道。
-        for (const a of [u0 + W * .27, u1 - W * .27]) {
-          const b = D * .48, len = Math.min(1.5, W * .23);
+        // 一期游览布局：岛台与挂衣架沿进深交替排满（每 3 m 一排），而不是只在中段摆一对。
+        const islandRows = lv.finishes && D > 8.5 ? [] : [D * .48];
+        if (lv.finishes && D > 8.5) for (let b = 3.0; b < D - 2.8; b += 3.0) islandRows.push(b);
+        for (const b of islandRows) for (const a of [u0 + W * .27, u1 - W * .27]) {
+          const len = Math.min(1.5, W * .23);
           P('wood', a, b, y0 + .42, len, .9, .84, '#eee3d4');
           P('stone', a, b, y0 + .86, len + .05, .95, .06, '#f6f3eb');
           for (let k = 0; k < 3; k++) {
@@ -240,9 +258,10 @@ function furnish(L, atlas, lv, u, rand) {
             else for (let h = 0; h < 3; h++) P('matte', x, b, y0 + .92 + h * .045, .32, .38, .038, CLOTHES[(k * 2 + h) % CLOTHES.length]);
           }
         }
-        if (D > 9) {
-          rackRow(u0 + 1.6, mid - 1.0, D * .72);
-          rackRow(mid + 1.0, u1 - 1.6, D * .72);
+        const rackRows = lv.finishes && D > 8.5 ? islandRows.slice(0, -1).map(b => b + 1.5) : D > 9 ? [D * .72] : [];
+        for (const b of rackRows) {
+          rackRow(u0 + 1.6, mid - 1.0, b);
+          rackRow(mid + 1.0, u1 - 1.6, b);
         }
       }
       for (const a of (W > 5 ? [u0 + 1.15, u1 - 1.15] : [u0 + .9])) mannequin(a, 1.3, CLOTHES[Math.floor(rand() * CLOTHES.length)]);
@@ -283,7 +302,8 @@ function furnish(L, atlas, lv, u, rand) {
       const ni = Math.max(1, Math.floor(W / 3.5));
       for (let i = 0; i < ni; i++) {
         const a = u0 + (i + 0.5) * (W / ni);
-        for (const b of [D * 0.35, D * 0.65]) {
+        const rows = lv.finishes && D > 9 ? spread(Math.floor((D - 3.5) / 2.6), 2.6, D - 2.6) : [D * 0.35, D * 0.65];
+        for (const b of rows) {
           if (b > D - 1.5) continue;
           P('satin', a, b, y0 + 0.45, 1.8, 0.9, 0.9, '#fafafa');
           if (boutique) {
@@ -402,18 +422,21 @@ function furnish(L, atlas, lv, u, rand) {
     }
     case 'food': {
       stallKitchen(P, detail, u0, u1, D, y0, u.brand, rand);
+      stallSeating();
       break;
     }
     case 'snack': {
       stallKitchen(P, detail, u0, u1, D, y0, u.brand, rand);
       for (let k = 0; k < 3; k++) for (let s = 0; s < 3; s++) P('satin', u0 + 1 + k * 0.7, 1.6, y0 + 1.15 + s * 0.16, 0.5, 0.5, 0.15, '#d9c19a');
+      stallSeating();
       break;
     }
     case 'bakery': {
       const count = Math.max(1, Math.min(3, Math.floor((W - 1.5) / 1.8)));
-      for (const a of spread(count, u0 + 1.2, u1 - 1.2)) {
-        P('wood', a, D * .48, y0 + .42, 1.35, .9, .84, '#eee3d4');
-        detail.pastryCase(a, D * .48, .86);
+      const caseRows = lv.finishes && D > 9 ? [D * .3, D * .48, D * .66].filter(b => b < D - 2.6) : [D * .48];
+      for (const b of caseRows) for (const a of spread(count, u0 + 1.2, u1 - 1.2)) {
+        P('wood', a, b, y0 + .42, 1.35, .9, .84, '#eee3d4');
+        detail.pastryCase(a, b, .86);
       }
       counter(u1 - 1.4, D - 1.3, 1.8);
       for (let shelf = 0; shelf < 3; shelf++) {
@@ -451,8 +474,13 @@ function furnish(L, atlas, lv, u, rand) {
           }
         }
       }
-      for (let k = 0; k < 4; k++) {
-        const a = mid - 1.2 + (k % 2) * 2.4, b = D * .4 + Math.floor(k / 2) * 2;
+      // 一期游览布局：玻璃展柜按 2.2 m 间距排满店中间（中轴留通道），原来只有 4 个，大店中间一片空。
+      const toyCases = [];
+      if (lv.finishes && W > 6 && D > 8) {
+        const cols = Math.max(2, 2 * Math.floor((W - 3) / 4.4));
+        for (let b = 3.0; b < D - 2.2; b += 2.2) for (const a of spread(cols, u0 + 1.7, u1 - 1.7)) if (Math.abs(a - mid) > .8) toyCases.push([a, b]);
+      } else for (let k = 0; k < 4; k++) toyCases.push([mid - 1.2 + (k % 2) * 2.4, D * .4 + Math.floor(k / 2) * 2]);
+      for (const [a, b] of toyCases) {
         P('glass', a, b, y0 + 1, 1, 1, 1.6, 0xffffff);
         P('wood', a, b, y0 + .50, .95, .95, .55, '#e8dfcc');
         detail.toy(a - .18, b, .78, '#cd9c63'); detail.toy(a + .18, b, .78, '#7b9d94');
@@ -526,7 +554,7 @@ function furnish(L, atlas, lv, u, rand) {
       // 哪一组的位置挡了门、贴了墙或出了楼板，整组不摆。
       if (B.hasProp('sofa2')) {
         const free = W - 1.3, cols = free >= 4.8 ? 2 : 1, variant = [...u.id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 9973, 7);
-        for (let k = 0; k < 4 && free >= 2.3; k++) {
+        for (let k = 0; k < (lv.finishes ? 8 : 4) && free >= 2.3; k++) {
           const a = u0 + .65 + (k % cols + .5) * (free / cols), b = 3.0 + Math.floor(k / cols) * 2.6;
           if (b > D - 1.3) break;
           if (B.unfit(...F.at(a, b), 1.3)) continue;
