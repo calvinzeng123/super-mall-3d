@@ -1048,10 +1048,11 @@ function floorInlay(ctx, B, lv1, y0, fountains) {
       if (!pointInPoly([(x0 + x1) / 2 + nx * 0.3, (z0 + z1) / 2 + nz * 0.3], P)) { nx = -nx; nz = -nz; }
       const ang = Math.atan2(-(z1 - z0), x1 - x0), n = Math.max(1, Math.ceil(len / 1.2));
       for (let k = 0; k < n; k++) {
-        const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t + nx * 1.2, mz = z0 + (z1 - z0) * t + nz * 1.2, pl = len / n + 0.02;
+        // 同 2F–6F 的走道拼花带（第四十二轮）：浅暖灰石材 + 两道细金线，段长多给 0.2 米在弧线处连上（原来是一截截深褐色）
+        const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t + nx * 1.2, mz = z0 + (z1 - z0) * t + nz * 1.2, pl = len / n + 0.2;
         if (!free(mx, mz)) continue;
-        B.get('stone').box(mx, y0 + 0.014, mz, pl, 0.01, 0.36, '#6e6359', ang);
-        B.get('facadeBronze').box(mx - nx * 0.3, y0 + 0.015, mz - nz * 0.3, pl, 0.01, 0.06, GOLD, ang);
+        B.get('stone').box(mx, y0 + 0.014, mz, pl, 0.01, 0.32, '#d2c5b2', ang);
+        for (const o of [-0.2, 0.2]) B.get('facadeBronze').box(mx + nx * o, y0 + 0.015, mz + nz * o, pl, 0.01, 0.04, GOLD, ang);
       }
     }
   }
@@ -1060,7 +1061,7 @@ function floorInlay(ctx, B, lv1, y0, fountains) {
       const a = (k / 24) * Math.PI * 2, r0 = f.r + 2.7, r1 = f.r + 6.5;
       const ax = f.x + Math.cos(a) * r0, az = f.z + Math.sin(a) * r0, bx = f.x + Math.cos(a) * r1, bz = f.z + Math.sin(a) * r1;
       if (![0, .5, 1].every((t) => free(ax + (bx - ax) * t, az + (bz - az) * t))) continue;
-      B.get('stone').box((ax + bx) / 2, y0 + 0.014, (az + bz) / 2, r1 - r0, 0.01, k % 2 ? 0.1 : 0.16, k % 2 ? '#a89a86' : '#7d7064', Math.atan2(-(bz - az), bx - ax));
+      B.get('stone').box((ax + bx) / 2, y0 + 0.014, (az + bz) / 2, r1 - r0, 0.01, k % 2 ? 0.08 : 0.14, k % 2 ? '#d8ccb9' : '#c2b39c', Math.atan2(-(bz - az), bx - ax));
     }
   }
 }
@@ -1167,7 +1168,9 @@ function floorRing(B, x, z, R, w, y0) {
   const n = Math.max(32, Math.round(R * 6));
   for (let k = 0; k < n; k++) {
     const a0 = (k / n) * Math.PI * 2, a1 = ((k + 1) / n) * Math.PI * 2;
-    B.get('facadeBronze').bar({ x: x + Math.cos(a0) * R, y: y0 + 0.012, z: z + Math.sin(a0) * R }, { x: x + Math.cos(a1) * R, y: y0 + 0.012, z: z + Math.sin(a1) * R }, w, GOLD);
+    // 平贴地面的金色嵌条（原来用 bar，截面是 w×w 的方条，0.14 宽就凸出地面 8 厘米，近看像一圈木头路沿）
+    const ax = x + Math.cos(a0) * R, az = z + Math.sin(a0) * R, bx = x + Math.cos(a1) * R, bz = z + Math.sin(a1) * R;
+    B.get('facadeBronze').box((ax + bx) / 2, y0 + 0.016, (az + bz) / 2, Math.hypot(bx - ax, bz - az) + 0.02, 0.01, w, GOLD, Math.atan2(-(bz - az), bx - ax));
   }
 }
 
