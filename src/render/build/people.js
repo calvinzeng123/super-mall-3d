@@ -24,8 +24,8 @@ export async function buildPeople(ctx) {
     if (!paths.length) continue;
     // 一期样板中庭的几层人多一些（预想图里中庭人很多）；手机按画质的人群密度再打折
     const busy = lv.building === 'P1' && lv.kind === 'retail' && ctx.layout.fidelity?.atrium;
-    // 超级商业中心（一期并进 A、B 两块楼面）每层 340 人（效果图里各层走道都挤满人；手机画质按 crowdDensity 打到两三成）
-    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 340 : 120) : COUNT[lv.kind] || 20;
+    // 超级商业中心（一期并进 A、B 两块楼面）每层 440 人（效果图里各层走道都挤满人；手机画质按 crowdDensity 打到两三成）
+    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 440 : 120) : COUNT[lv.kind] || 20;
     // 中庭边的两圈（回游线、栏杆边）：一期每层四成的人走这里，中庭四周才像效果图那样热闹
     const atrium = paths.filter(path => !path.escalator && /^中庭/.test(path.name || ''));
     const variants = assets.map(asset => {
