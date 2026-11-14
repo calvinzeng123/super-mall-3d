@@ -1130,10 +1130,12 @@ function balconyInlay(B, lv) {
       if (pointInPoly([(x0 + x1) / 2 + nx * 0.3, (z0 + z1) / 2 + nz * 0.3], P)) { nx = -nx; nz = -nz; } // 朝走道
       const ang = Math.atan2(-(z1 - z0), x1 - x0), n = Math.max(1, Math.ceil(len / 1.2));
       for (let k = 0; k < n; k++) {
-        const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t + nx * 2.2, mz = z0 + (z1 - z0) * t + nz * 2.2, pl = len / n + 0.02;
+        // 段长多给 0.25 米：洞口边是弧线，往外偏 2.2 米后相邻两段之间会裂开，原来看着是一截截的深色木条
+        const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t + nx * 2.2, mz = z0 + (z1 - z0) * t + nz * 2.2, pl = len / n + 0.25;
         if (!free(mx, mz)) continue;
-        B.get('stone').box(mx, lv.elev + 0.006, mz, pl, 0.012, 0.3, '#6e6359', ang);
-        B.get('facadeBronze').box(mx + nx * 0.24, lv.elev + 0.007, mz + nz * 0.24, pl, 0.012, 0.05, GOLD, ang);
+        // 浅暖灰石材带（原来 #6e6359 加石材纹理是一条深褐色的带）+ 两侧各一道细金线
+        B.get('stone').box(mx, lv.elev + 0.006, mz, pl, 0.012, 0.26, '#d2c5b2', ang);
+        for (const o of [-0.16, 0.16]) B.get('facadeBronze').box(mx + nx * o, lv.elev + 0.007, mz + nz * o, pl, 0.012, 0.035, GOLD, ang);
       }
     }
   }
