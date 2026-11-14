@@ -758,6 +758,7 @@ function megaAtrium(ctx, levels) {
     else if (it.kind === 'lounge') lounge(L.batch, IDENTITY, { u: it.x, v: it.z, w: 3.6, d: 2.2 }, lv.elev);
     else kiosk(L.batch, it, lv.elev, it.x * 3 + it.z);
   }
+  navSolid(ctx, lv1.id, LIGHT_TREE.x, LIGHT_TREE.z, LIGHT_TREE.r + 0.6);
   lightTree(B, LIGHT_TREE, y0, y0 + lv1.height - (SLAB_T[levels.find((l) => l.id === 'P1-2F')?.kind] ?? 0.45) - 0.4);
   M.plaza?.trees.forEach((t, i) => (t.kind === 'palm' ? palm(B, IDENTITY, { u: t.x, v: t.z, r: t.r }, y0, i * 13 + 5) : blossom(B, t, y0, i)));
   const six = levels.find((l) => l.id === 'P1-6F'), rf = levels.find((l) => l.kind === 'roof');
@@ -1338,7 +1339,7 @@ function walkIslands(ctx, levels, M) {
       if (blockers.some((P) => pointInPoly([x, z], P) || distToPolyEdge([x, z], P) < 4)) continue;
       mine.push({ level: lv.id, x, z });
     }
-    mine.forEach((q, i) => { walkIsland(B, q.x, q.z, y0, top, (lv.elev * 7 + i) % 2 ? 'palm' : 'blossom', lv.elev * 13 + i); out.push(q); });
+    mine.forEach((q, i) => { walkIsland(B, q.x, q.z, y0, top, (lv.elev * 7 + i) % 2 ? 'palm' : 'blossom', lv.elev * 13 + i); out.push(q); navSolid(ctx, lv.id, q.x, q.z, 1.45); });
   }
 }
 
@@ -1434,4 +1435,10 @@ function lightTree(B, T, y0, top) {
       B.ceilPool(tip.x, top + 0.4, tip.z, 2.6, 2.6, 0xffe2b8);
     }
   }
+}
+
+/** 渲染摆下的实心景观登记成漫游导航的障碍（explore.js 建导航时读 ctx.navSolids）：圆形用 16 边形 */
+function navSolid(ctx, level, x, z, r) {
+  const poly = Array.from({ length: 16 }, (_, k) => [x + Math.cos(k / 16 * Math.PI * 2) * r, z + Math.sin(k / 16 * Math.PI * 2) * r]);
+  ((ctx.navSolids ??= {})[level] ??= []).push({ id: `solid-${level}-${x}-${z}`, poly });
 }

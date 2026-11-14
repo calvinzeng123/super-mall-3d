@@ -33,6 +33,7 @@ const CAMPUS = rect(-298, -298, 298, 298);
 /** options.gates === 'open': every card gate stays open (pathfinding, AI walkers) — also the fire-alarm
  * model (gates release on alarm), so lifts link their fire-only landings (e.fireOnly) too.
  * options.unitSolids(u): extra unit-local obstacle rects of a residence (the community homes' tall furniture).
+ * options.levelSolids(lv): extra world-space obstacle polygons ({ poly }) the renderer placed on a level (tour planters, sculptures).
  * options.share (default true): floors whose walls and obstacles are identical (typical storeys) share one
  * walls / obstacles / grid record; false builds every floor separately (the nav-share test compares both). */
 export function buildNav(layout, options = {}) {
@@ -248,6 +249,7 @@ export function buildNav(layout, options = {}) {
     // Ramp slabs that drop into a deck storey: guard lines leave the low end open.
     for (const s of lv.navWalls || []) wall(F, s.x0, s.z0, s.x1, s.z1);
     for (const o of lv.navObstacles || []) polygonObstacle(F, frame(0, 0, 0), o);
+    for (const o of options.levelSolids?.(lv) || []) polygonObstacle(F, frame(0, 0, 0), o);
     for (const f of lv.features) {
       if (f.type === 'gates') {
         const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95)));

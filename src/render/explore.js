@@ -21,6 +21,8 @@ const METRO_LINKED = new Set(['P1-B1M', 'P2-B1', 'P3-B1']);
 export function attachExplore(app, ui) {
   const { ctx, camera, controls, renderer } = app;
   const layout = ctx.layout;
+  // 渲染时摆下的实心景观（一期游览的走道花岛、光之树：ctx.navSolids[层 id] = [{ poly }]）漫游时也挡人
+  const NAV_OPTS = { unitSolids: communitySolids, levelSolids: (lv) => ctx.navSolids?.[lv.id] };
   const flyFloor = Math.min(-14,...layout.levels.map(l=>l.elev-3));
   const metroLines = layout.buildings.find(b=>b.id==='M')?.interchange?.lines || [];
   const canvas = renderer.domElement;
@@ -67,7 +69,7 @@ export function attachExplore(app, ui) {
   app.enterExplore = (opts = {}) => {
     if (on) return;
     if (app.state.touring && app.stopTour) app.stopTour();
-    if (!nav) nav = buildNav(layout, { unitSolids: communitySolids });
+    if (!nav) nav = buildNav(layout, NAV_OPTS);
     // 退出时回到进入前的俯瞰视角与选择（漫游中目录会跟着传送切换分期、楼层）
     const { building, focus, selected } = app.state;
     saved = { pos: camera.position.clone(), target: controls.target.clone(), building, focus, selected };
@@ -145,7 +147,7 @@ export function attachExplore(app, ui) {
     get rules() { return { ...rules }; },
     teleport(t) {
       if (!rules.teleport) return false;
-      if (!nav) nav = buildNav(layout, { unitSolids: communitySolids });
+      if (!nav) nav = buildNav(layout, NAV_OPTS);
       // 铺位 → 店门外面朝店（复式上层 → 户内楼梯上层到达口外）；楼栋 / 楼层 → 出生点
       const st = t.unit ? unitSpawn(nav, layout, t.unit) : spawn(nav, layout, t);
       if (!st) return;

@@ -8,6 +8,7 @@ import { buildP1Fidelity } from '../src/render/build/p1-fidelity.js';
 import { buildAtriumReflection } from '../src/render/build/floor-reflection.js';
 import { pointInPoly } from '../src/layout/geom.js';
 import { levelPaths, LIGHT_TREE } from '../src/render/paths.js';
+import { buildNav, clear, step } from '../src/layout/nav.js';
 
 // Posters paint on a canvas; under Node a no-op 2D context is enough.
 const paint = new Proxy({}, {
@@ -178,4 +179,17 @@ test('光之树：1F 广场中间有白色树干和杈梢灯盘，周围的人�
   }
   const fps = levelPaths(buildPlayableLayout({ mode: 'fps' }));
   assert.ok(!(fps['P1-1F']?.people || []).some(p => p.name === '中庭光之树'), 'FPS 不加光之树人流');
+});
+
+test('漫游导航：花岛和光之树是实心的（站不上去、走过去会被挡住），旁边照常能站', () => {
+  const nav = buildNav(L, { levelSolids: (lv) => tour.navSolids?.[lv.id] });
+  const at = (floor, x, z) => ({ floor, x, z, y: level(floor).elev, slope: null });
+  const cases = [...tour.p1WalkIslands.map(q => [q.level, q.x, q.z, 1.45]), ['P1-1F', LIGHT_TREE.x, LIGHT_TREE.z, LIGHT_TREE.r + .6]];
+  for (const [floor, x, z, r] of cases) {
+    assert.ok(!clear(nav, at(floor, x, z)), `${floor} (${x}, ${z}) 中心能站人`);
+    assert.ok(clear(nav, at(floor, x + r + 1, z)), `${floor} (${x}, ${z}) 旁边站不了人`);
+    let s = at(floor, x + r + 1, z);
+    for (let i = 0; i < 40; i++) s = step(nav, s, -.1, 0, 0);
+    assert.ok(Math.hypot(s.x - x, s.z - z) > r, `${floor} (${x}, ${z}) 走进了花池`);
+  }
 });
