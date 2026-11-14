@@ -678,6 +678,19 @@ function megaAtrium(ctx, levels) {
           }
         }
       }
+      // 餐饮店门口的外摆：门脸够长（≥ 8 米）、外面走道够宽（离玻璃 4.6 米还在走道上）时，门脸中点往另一侧 1.6、3.4 米各一张小圆桌，
+      // 两把椅子沿门脸方向摆在桌子两边（不往走道里伸），桌下一块浅色地垫
+      if (['cafe', 'tea', 'restaurant', 'bakery'].includes(u.brand?.cat) && len >= 8) {
+        const ux = dx / len, uz = dz / len, mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2, y = lv.elev;
+        const free = (px, pz) => !holes.some((h) => pointInPoly([px, pz], h)) && lv.walk.some((w) => pointInPoly([px, pz], w.poly)) && !(lv.navObstacles || []).some((o) => pointInPoly([px, pz], o.poly));
+        for (const off of [-1.6, -3.4]) {
+          const tx = mx + ux * off + f.nx * 1.5, tz = mz + uz * off + f.nz * 1.5;
+          if (![[0, 0.8], [0, 4.6], [-0.9, 1.5], [0.9, 1.5]].every(([a, b]) => free(mx + ux * (off + a) + f.nx * b, mz + uz * (off + a) + f.nz * b))) continue;
+          L.batch.get('matte').box(tx, y + 0.006, tz, 1.9, 0.012, 1.2, '#e8dccb', Math.atan2(-uz, ux));
+          if (!L.batch.prop('cafe_table_round', tx, y, tz, 0)) L.batch.get('wood').cyl(tx, y, tz, 0.35, 0.74, '#7a5a3c', 12);
+          for (const sd of [1, -1]) L.batch.prop('cafe_chair', tx + ux * sd * 0.7, y, tz + uz * sd * 0.7, Math.atan2(uz * sd, ux * sd) + Math.PI / 2); // 朝向约定同 cafe()
+        }
+      }
       // 门脸两端各一盆绿植（离玻璃 0.55 米、离端头 0.5 米）：白色或炭灰色圆盆，灌木团或一棵小橄榄树
       if (len < 5) continue;
       const blocked = (lv.navObstacles || []).map((o) => o.poly);
