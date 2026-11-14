@@ -35,6 +35,58 @@ export function buildP1GarageEntries(ctx) {
     portals.push({ pair: list[0].pair, x: +cx.toFixed(2), z: +cz.toFixed(2), width: +w.toFixed(2) });
   }
   ctx.p1GarageEntries = portals;
+  escalatorHeads(ctx);
+}
+
+/** 往下去的扶梯口（1F → B1M、B1M → B1）立一个双柱门架，上面一块发光指示牌：告诉人下面是美食广场、地铁、停车场 */
+const HEAD_TEXT = {
+  'P1-1F': ['↓ B1M 美食广场 · 地铁 · 停车场', 'FOOD COURT · METRO · PARKING'],
+  'P1-B1M': ['↓ B1 停车场 P · 电梯直达 B2', 'PARKING B1 · LIFTS TO B2'],
+};
+function escalatorHeads(ctx) {
+  const pairs = new Map();
+  for (const e of ctx.layout.escalators.filter((q) => q.building === 'P1' && HEAD_TEXT[q.to] && ['P1-B1', 'P1-B1M'].includes(q.from))) {
+    if (!pairs.has(e.pair)) pairs.set(e.pair, []);
+    pairs.get(e.pair).push(e);
+  }
+  const heads = [];
+  for (const list of pairs.values()) {
+    const lv = ctx.layout.levels.find((l) => l.id === list[0].to), L = ctx.levels[lv.id];
+    if (!L) continue;
+    const tx = list.reduce((a, e) => a + e.top.x, 0) / list.length, tz = list.reduce((a, e) => a + e.top.z, 0) / list.length;
+    const bx = list.reduce((a, e) => a + e.bottom.x, 0) / list.length, bz = list.reduce((a, e) => a + e.bottom.z, 0) / list.length;
+    const len = Math.hypot(tx - bx, tz - bz), dx = (tx - bx) / len, dz = (tz - bz) / len, px = -dz, pz = dx;
+    const cx = tx + dx * 2.6, cz = tz + dz * 2.6;
+    // 门架落在本层走道上才立（扶梯顶前面要是铺位或洞口就不立）
+    if (![-1.9, 0, 1.9].every((o) => lv.walk.some((w) => pointInPoly([cx + px * o, cz + pz * o], w.poly)) && !lv.voids.some((v) => pointInPoly([cx + px * o, cz + pz * o], v.poly)))) continue;
+    const B = L.batch, y0 = lv.elev, ang = Math.atan2(-pz, px), top = y0 + 3.1;
+    for (const o of [-1.9, 1.9]) {
+      B.get('metal').box(cx + px * o, (y0 + top) / 2, cz + pz * o, 0.1, top - y0, 0.1, '#3a3f44', ang);
+      B.get('facadeBronze').box(cx + px * o, y0 + 0.05, cz + pz * o, 0.3, 0.1, 0.3, GOLD, ang);
+    }
+    B.get('satin').box(cx, top - 0.2, cz, 4.0, 0.62, 0.2, '#2b2622', ang);
+    B.get('facadeBronze').box(cx, top + 0.12, cz, 4.0, 0.03, 0.22, GOLD, ang);
+    const mat = ctx.mats.sign(headTexture(ctx, lv.id)), geo = new THREE.PlaneGeometry(3.8, 0.52);
+    for (const side of [-1, 1]) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(cx + dx * side * 0.105, top - 0.2, cz + dz * side * 0.105);
+      m.rotation.y = Math.atan2(dx * side, dz * side);
+      m.name = 'P1-escalator-head-sign';
+      L.base.add(m);
+    }
+    heads.push({ pair: list[0].pair, level: lv.id });
+  }
+  ctx.p1EscalatorHeads = heads;
+}
+function headTexture(ctx, id) {
+  ctx.p1HeadTex ||= {};
+  if (ctx.p1HeadTex[id]) return ctx.p1HeadTex[id];
+  const [cn, en] = HEAD_TEXT[id], c = makeCanvas(1024, 140), g = c.getContext('2d');
+  g.fillStyle = '#2b2622'; g.fillRect(0, 0, c.width, c.height);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#ffffff'; g.font = `700 54px ${FONT_CN}`; g.fillText(cn, c.width / 2, 56);
+  g.fillStyle = '#d9c39a'; g.font = `500 24px ${FONT_EN}`; g.fillText(en, c.width / 2, 112);
+  return (ctx.p1HeadTex[id] = canvasTexture(c, { clamp: true }));
 }
 
 function portal(ctx, L, lv, mat, { cx, cz, dx, dz, px, pz, w, hall }) {
