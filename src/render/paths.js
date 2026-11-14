@@ -61,6 +61,23 @@ function megaPaths(layout, P) {
   }
   const lv1 = layout.levels.find((l) => l.id === 'P1-1F'), D = layout.fidelity.landscape;
   if (!lv1) return;
+  // 1F 广场：1F 自己没有洞口（广场在 2F 洞口正下方），上面的两圈只在楼上有。沿 2F 洞口轮廓往广场里缩 2.5、6、10 米
+  // 各一圈（避开树池、喷泉这些障碍，落在走道上的连续段），名字以「中庭」开头，人群按中庭路线的比例分人过来
+  const lv2 = layout.levels.find((l) => l.id === 'P1-2F'), y1 = lv1.elev + 0.07;
+  for (const v of (lv2?.voids || []).filter((q) => q.mega)) for (const off of [2.5, 6, 10]) {
+    const pts = [], Q = v.poly;
+    for (let i = 0; i < Q.length; i++) {
+      const a = Q[i], b = Q[(i + 1) % Q.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 1e-6) continue;
+      let nx = -(b[1] - a[1]) / len, nz = (b[0] - a[0]) / len;
+      if (!pointInPoly([(a[0] + b[0]) / 2 + nx * 0.3, (a[1] + b[1]) / 2 + nz * 0.3], Q)) { nx = -nx; nz = -nz; } // 朝洞口里
+      for (let t = 0; t < len; t += 2) pts.push([a[0] + (b[0] - a[0]) * (t / len) + nx * off, a[1] + (b[1] - a[1]) * (t / len) + nz * off]);
+    }
+    let run = [];
+    const flush = () => { if (run.length >= 6) P(lv1.id).people.push({ loop: false, pts: run.map(([x, z]) => [x, y1, z]), name: '中庭广场' }); run = []; };
+    for (const p of pts) { if (pointInPoly(p, Q) && onWalk(lv1, p) && (!run.length || Math.hypot(p[0] - run.at(-1)[0], p[1] - run.at(-1)[1]) < 4)) run.push(p); else flush(); }
+    flush();
+  }
   for (const f of (D?.fountains || []).filter((q) => q.indoor)) P(lv1.id).people.push({ loop: true, pts: ring(f.x, f.z, f.r + 0.9, lv1.elev + 0.07, 28), name: '喷泉环' });
 }
 
