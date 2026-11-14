@@ -123,7 +123,7 @@ export class MaterialLib {
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       m.name = 'lightPool'; m.userData.decal = true;
       this.base.lightPool = m;
-      this.onNight((t) => { m.opacity = (this.hdr ? 0.2 : 0.13) + t * 0.16; });
+      this.onNight((t) => { m.opacity = (this.hdr ? 0.32 : 0.2) + t * 0.1; }); // 白天也明显一些：效果图里店门口、走道上一片片暖光
     }
     if (shadows) {
       // 天花上的一团光（灯周围、灯槽洗亮的一条）：和 lightPool 同一张贴图，正反两面都画（从下往上看）。商场白天也开着灯，白天淡、夜里亮
@@ -131,7 +131,7 @@ export class MaterialLib {
         side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       m.name = 'ceilPool'; m.userData.decal = true;
       this.base.ceilPool = m;
-      this.onNight((t) => { m.opacity = (this.hdr ? 0.16 : 0.12) + t * (this.hdr ? 0.34 : 0.3); });
+      this.onNight((t) => { m.opacity = (this.hdr ? 0.24 : 0.18) + t * (this.hdr ? 0.26 : 0.24); });
     }
     if (shadows) {
       // 窗边的天光：只在白天有，入夜淡出
