@@ -153,6 +153,12 @@ function furnish(L, atlas, lv, u, rand) {
     : ['kids', 'books', 'home', 'studio'].includes(cat) ? '#9da78b' : '#c1b5a1';
   const floorTint = floorKey === 'carpet' ? carpetTint : floorKey === 'wood' ? '#eee6d9' : floorKey === 'stone' ? '#eeece5' : floorCol;
   for (const r of u.rects) B.get(floorKey).box((r.x0 + r.x1) / 2, y0 + 0.008, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 0.2, 0.016, r.z1 - r.z0 - 0.2, floorTint);
+  // 一期游览布局：店里地面每 3.6 m 一团暖光（灯下的光斑贴花，比走道上的暖一点），俯视时店里像效果图那样亮堂、发暖
+  if (lv.finishes && !carpeted) for (const r of u.rects) {
+    const nx = Math.max(1, Math.round((r.x1 - r.x0) / 3.6)), nz = Math.max(1, Math.round((r.z1 - r.z0) / 3.6));
+    const sx = (r.x1 - r.x0) / nx, sz = (r.z1 - r.z0) / nz;
+    for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) B.pool(r.x0 + (i + .5) * sx, y0, r.z0 + (k + .5) * sz, Math.min(3.4, sx), Math.min(3.4, sz), 0xffcf96);
+  }
 
   // 品牌背景墙（深度足够时）
   if (D >= 5 && !['cinema', 'supermarket', 'kids'].includes(cat)) {
