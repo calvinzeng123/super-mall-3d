@@ -27,6 +27,7 @@ const NIGHT = {
  *   exposureNightOut / In      夜里的曝光倍数。原来的 ACES 会把暗部整体提亮约 1.6 倍，Neutral 不会，夜景要自己补上
  *   hemiOut / hemiIn           没有方向的半球补光：室内压低，明暗才拉得开；夜里补光本来就弱，不再压
  *   hemiTint                   室外的半球补光调暖一点，抵掉天空环境图带来的偏蓝
+ *   hemiTintIn                 室内（白天）的半球补光也调暖：效果图里商场里是一片暖金色的灯光，不是日光的中性白
  *   room                       室内环境图的倍数
  *   sky / skyNight             室外材质反射的天空环境图强度（白天 / 夜里）
  *   skyGain                    看得见的天空照片的亮度倍数
@@ -37,7 +38,7 @@ const NIGHT = {
  */
 export const HDR_GRADE = Object.freeze({
   exposureOut: 1.0, exposureIn: 0.9, exposureNightOut: 1.5, exposureNightIn: 1.1,
-  hemiOut: 0.9, hemiIn: 0.6, hemiTint: Object.freeze([1.0, 0.93, 0.8]), room: 1.1,
+  hemiOut: 0.9, hemiIn: 0.6, hemiTint: Object.freeze([1.0, 0.93, 0.8]), hemiTintIn: Object.freeze([1.0, 0.88, 0.7]), room: 1.1,
   sky: 1.5, skyNight: 0.1, skyGain: 1.2,
   dayBloom: 0.3, dayThreshold: 1.5, nightBloom: 0.8, nightThreshold: 1.0, aoIntensity: 0.9,
   lampHemi: 0.72, lampRoom: 0.82,
@@ -309,8 +310,9 @@ export class Environment {
     if (this.hdr) {
       renderer.toneMappingExposure *= lerp(lerp(G.exposureOut, G.exposureIn, indoor), lerp(G.exposureNightOut, G.exposureNightIn, indoor), night);
       hemi.intensity *= lerp(lerp(G.hemiOut, G.hemiIn, indoor), 1, night);
-      const warm = (1 - indoor) * (1 - night);
-      hemi.color.setRGB(tint.r * lerp(1, G.hemiTint[0], warm), tint.g * lerp(1, G.hemiTint[1], warm), tint.b * lerp(1, G.hemiTint[2], warm));
+      const warm = (1 - indoor) * (1 - night), warmIn = indoor * (1 - night);
+      const k = (i) => lerp(1, G.hemiTint[i], warm) * lerp(1, G.hemiTintIn[i], warmIn);
+      hemi.color.setRGB(tint.r * k(0), tint.g * k(1), tint.b * k(2));
       scene.environmentIntensity *= G.room;
     }
     hemi.intensity *= lerp(1, G.lampHemi, lamp);
