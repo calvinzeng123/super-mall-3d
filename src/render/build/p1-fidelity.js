@@ -10,6 +10,7 @@ import { buildP1Roofscape, ROOFSCAPE_TYPES } from './p1-roofscape.js';
 import { buildP1Landscape } from './p1-landscape.js';
 import { buildP1Atrium } from './p1-atrium.js';
 import { buildP1GarageEntries } from './p1-garage-entries.js';
+import { buildP1Streets } from './p1-streets.js';
 import { buildAtriumReflection } from './floor-reflection.js';
 
 const STEEL = '#c9cdc8';
@@ -31,6 +32,7 @@ export function buildP1Fidelity(ctx) {
   buildP1Landscape(ctx);
   buildP1Atrium(ctx);
   buildP1GarageEntries(ctx);
+  buildP1Streets(ctx);
   if (ctx.depthCues) buildAtriumReflection(ctx);
 }
 
