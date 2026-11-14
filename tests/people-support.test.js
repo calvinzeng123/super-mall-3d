@@ -144,3 +144,44 @@ test('rendered walkers resume after crossing an opening and low density retains 
     for (const { geometry, material } of imported) { geometry.dispose(); material.dispose(); }
   }
 });
+
+test('一期游览：90 m 外的人换成简化人形（几十个三角形），90 m 内照样是贴图人', async t => {
+  const THREE = await import('three');
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const { buildPeople, FAR_LOD } = await import('../src/render/build/people.js');
+  const imported = [];
+  t.mock.method(GLTFLoader.prototype, 'parseAsync', async () => {
+    const geometry = new THREE.BoxGeometry(.3, 1.7, .3);
+    geometry.morphAttributes.position = Array.from({ length: 8 }, () => geometry.attributes.position.clone());
+    const material = new THREE.MeshStandardMaterial(), scene = new THREE.Group();
+    scene.add(new THREE.Mesh(geometry, material)); imported.push({ geometry, material });
+    return { scene };
+  });
+  const level = lvl('P1-3F'), people = new THREE.Group();
+  const camera = { position: new THREE.Vector3(-175, level.elev + 20, -126) };
+  const ctx = {
+    layout: { levels: [level], fidelity: L.fidelity }, paths: { levels: { [level.id]: levelPaths(L)[level.id] } },
+    levels: { [level.id]: { people, offset: 0 } }, camera,
+    renderer: { capabilities: { getMaxAnisotropy: () => 1 } }, dynamic: [], quality: { crowdDensity: 1 },
+  };
+  await buildPeople(ctx);
+  const matrix = new THREE.Matrix4();
+  try {
+    const far = people.children.find(m => m.name === `far-people-${level.id}`);
+    assert.ok(far, '没有远处的简化人');
+    const tris = (far.geometry.index ? far.geometry.index.count : far.geometry.attributes.position.count) / 3;
+    assert.ok(tris < 120, `简化人有 ${tris} 个三角形`);
+    let near = 0;
+    for (const mesh of people.children) for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, matrix);
+      const d = Math.hypot(matrix.elements[12] - camera.position.x, matrix.elements[13] - camera.position.y, matrix.elements[14] - camera.position.z);
+      if (mesh === far) assert.ok(d > FAR_LOD - .01, `简化人在 ${d.toFixed(1)} m`);
+      else { assert.ok(d <= FAR_LOD + .01, `贴图人在 ${d.toFixed(1)} m`); near++; }
+    }
+    assert.ok(far.count > 50 && near > 50, `远 ${far.count}、近 ${near}`);
+    assert.equal(ctx.peopleQuality.stats.capacity, 800, '超级商业中心每层 800 人');
+  } finally {
+    for (const mesh of people.children) { mesh.morphTexture?.dispose(); mesh.dispose(); }
+    for (const { geometry, material } of imported) { geometry.dispose(); material.dispose(); }
+  }
+});
