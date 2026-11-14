@@ -18,7 +18,10 @@ export function buildEscalators(ctx) {
   const strips = {}; // levelId → { up: [], down: [] }
   for (const e of ctx.layout.escalators) {
     const short = ctx.lvById[e.from].short;
-    const strip = drawEscalator(ctx.levels[e.from].batch, e, short === '1F' || short === 'B1M' ? '#b9a27a' : '#c3c9cf');
+    // 游览模式一期：桁架外包板用米白缎面（金属材质反着环境光，侧面看是一条灰黑的斜带），两侧加一道金色细线
+    const cream = ctx.depthCues && e.building === 'P1';
+    const strip = drawEscalator(ctx.levels[e.from].batch, e, cream ? '#efe9df' : short === '1F' || short === 'B1M' ? '#b9a27a' : '#c3c9cf', cream ? 'satin' : 'metal');
+    if (cream) escalatorTrim(ctx.levels[e.from].batch, strip);
     // 游览模式里一期的扶梯：裙板顶上一条暖光灯带、桁架底面两侧各一条暖光线（效果图里扶梯也是亮的）
     if (ctx.depthCues && e.building === 'P1') escalatorLights(ctx.levels[e.from].batch, strip);
     if (!strips[e.from]) strips[e.from] = { up: [], down: [] };
@@ -46,7 +49,7 @@ export function buildEscalators(ctx) {
 }
 
 /** 画一部扶梯（桁架、栏板、扶手、梳齿板），返回踏步带参数供 stripGeometry 合并；e 需 bottom/top{x,y,z}、width */
-export function drawEscalator(B, e, trussCol) {
+export function drawEscalator(B, e, trussCol, trussKey = 'metal') {
   const run = Math.hypot(e.top.x - e.bottom.x, e.top.z - e.bottom.z);
   const ux = (e.top.x - e.bottom.x) / run, uz = (e.top.z - e.bottom.z) / run;
   const px = -uz, pz = ux;
@@ -62,8 +65,8 @@ export function drawEscalator(B, e, trussCol) {
   const midY = (y0 + y1) / 2;
 
   // 桁架：斜段 + 上下水平段（外包装饰板）
-  orientedBox(B, 'metal', at(run / 2, 0, midY - 0.55 / cos), slope + 0.4, 1.0, e.width, Xs, Ys, Zs, trussCol);
-  orientedBox(B, 'metal', at(run + LANDING / 2 - 0.2, 0, y1 - 0.45), LANDING + 0.4, 0.9, e.width, Xh, Yh, Zs, trussCol);
+  orientedBox(B, trussKey, at(run / 2, 0, midY - 0.55 / cos), slope + 0.4, 1.0, e.width, Xs, Ys, Zs, trussCol);
+  orientedBox(B, trussKey, at(run + LANDING / 2 - 0.2, 0, y1 - 0.45), LANDING + 0.4, 0.9, e.width, Xh, Yh, Zs, trussCol);
   // 底部机坑盖板 / 顶部梳齿板
   orientedBox(B, 'metal', at(-LANDING / 2, 0, y0 + 0.012), LANDING, 0.02, e.width, Xh, Yh, Zs, '#9aa0a6');
   orientedBox(B, 'metal', at(run + LANDING / 2, 0, y1 + 0.012), LANDING, 0.02, e.width, Xh, Yh, Zs, '#9aa0a6');
@@ -89,6 +92,14 @@ export function drawEscalator(B, e, trussCol) {
     }
   }
   return { e, ux, uz, px, pz, run, y0, y1 };
+}
+
+/** 桁架两侧外包板上一道金色细线（斜段，离桁架底 0.25 米） */
+export function escalatorTrim(B, { e, ux, uz, px, pz, run, y0, y1 }) {
+  const cos = Math.cos(PITCH), sin = Math.sin(PITCH), slope = Math.hypot(run, y1 - y0), midY = (y0 + y1) / 2;
+  const Xs = new THREE.Vector3(ux * cos, sin, uz * cos), Ys = new THREE.Vector3(-ux * sin, cos, -uz * sin), Zs = new THREE.Vector3(px, 0, pz);
+  const at = (s, t, y) => new THREE.Vector3(e.bottom.x + ux * s + px * t, y, e.bottom.z + uz * s + pz * t);
+  for (const side of [-1, 1]) orientedBox(B, 'facadeBronze', at(run / 2, side * (e.width / 2 + 0.01), midY - 0.55 / cos).addScaledVector(Ys, -0.25), slope + 0.3, 0.05, 0.02, Xs, Ys, Zs, '#c8a25a');
 }
 
 /** 扶梯灯带：沿斜段的裙板内侧顶边、桁架底面两侧边各一条暖光（glow 材质，夜里更亮） */
