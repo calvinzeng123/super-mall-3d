@@ -435,6 +435,27 @@ function screens(ctx, L, F) {
   }
 }
 
+/** 大椭圆中庭两块竖向大屏（效果图里中庭正中挂着一块很高的 LED 屏）：长轴上离圆心 24 米各一块，4.2 × 10 米，
+ *  两面都是画面（朝两侧的长挑台），白色边框、两根吊杆；挂在 3F–5F 的高度，在金色光环吊灯下面。3F–6F 每层洞口离边都要 ≥ 2.5 米 */
+function megaScreens(ctx, L, lvs) {
+  const tex = screenTexture(ctx), mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: true, side: THREE.DoubleSide });
+  mat.color.setScalar(1.25);
+  const w = 4.2, h = 10, yMid = 19.5, geom = new THREE.PlaneGeometry(w, h);
+  for (const du of [-24, 24]) {
+    const [x, z] = toW(NW_FRAME, MEGA_OVAL.u + du, MEGA_OVAL.v);
+    if (!lvs.every((lv) => lv.voids.some((v) => v.mega && pointInPoly([x, z], v.poly) && distToPolyEdge([x, z], v.poly) > 2.5))) continue;
+    // 屏面沿长轴方向（法线指向短轴），两侧挑台上的人正对着看
+    const [ax, az] = toW(NW_FRAME, MEGA_OVAL.u + du + 1, MEGA_OVAL.v), ry = Math.atan2(ax - x, az - z) + Math.PI / 2;
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(x, yMid, z); mesh.rotation.y = ry; mesh.name = 'P1-mega-screen';
+    L.base.add(mesh);
+    const ux = Math.cos(ry), uz = -Math.sin(ry), B = L.batch;
+    for (const s2 of [-1, 1]) B.get('satin').box(x + ux * s2 * (w / 2 + 0.08), yMid, z + uz * s2 * (w / 2 + 0.08), 0.16, h + 0.32, 0.14, WHITE, ry);
+    for (const dy of [-(h / 2 + 0.08), h / 2 + 0.08]) B.get('satin').box(x, yMid + dy, z, w + 0.32, 0.16, 0.14, WHITE, ry);
+    B.get('glow').box(x, yMid - h / 2 - 0.2, z, w, 0.04, 0.1, WARM, ry);
+    for (const s2 of [-1.6, 1.6]) B.get('metal').box(x + ux * s2, yMid + h / 2 + 4, z + uz * s2, 0.05, 8, 0.05, '#9aa0a6', ry);
+  }
+}
 function screenTexture(ctx) {
   if (ctx.p1AtriumScreen) return ctx.p1AtriumScreen;
   const c = makeCanvas(384, 1056), g = c.getContext('2d');
@@ -730,6 +751,7 @@ function megaAtrium(ctx, levels) {
   const sky = rf?.voids.find((v) => v.id === 'MEGA-sky');
   if (sky && ctx.levels[rf.id]) skyShell(ctx.levels[rf.id].shellBatch || ctx.levels[rf.id].batch, sky, rf.elev);
   if (six && rf && ctx.levels[six.id]) banners(ctx, ctx.levels[six.id], [six, levels.find((l) => l.id === 'P1-5F')].filter(Boolean), rf.elev);
+  if (six && ctx.levels[six.id]) megaScreens(ctx, ctx.levels[six.id], levels.filter((l) => /^P1-[3-6]F$/.test(l.id)));
   if (six && rf && ctx.levels[six.id]) {
     const roofY = rf.elev;
     for (const [u, R] of [[MEGA_OVAL.u - 18, 4], [MEGA_OVAL.u, 6.5], [MEGA_OVAL.u + 18, 4]]) {
