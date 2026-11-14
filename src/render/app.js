@@ -130,7 +130,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   onProgress('加载石材、木纹与街区铺装', 0);
   const surfaces = await loadSurfaceTextures(anisotropyFor(initialQuality.textures));
   const mats = new MaterialLib(surfaces, { depthCues: !fps });
-  const env = new Environment(renderer, scene, camera, mats, initialQuality);
+  const env = new Environment(renderer, scene, camera, mats, initialQuality, { warmRoom: !fps });
   const root = new THREE.Group();
   scene.add(root);
 

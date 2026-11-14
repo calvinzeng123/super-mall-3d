@@ -36,6 +36,9 @@ const NIGHT = {
  *   aoIntensity                环境光遮蔽压暗的程度
  *   lampHemi / lampRoom        「室内灯光」亮着时，半球补光和室内环境图再乘的倍数（不开 HDR 光影也生效）
  */
+/** 游览模式室内环境图灯箱的颜色倍数（暖白，约 3600K） */
+const WARM_ROOM = new THREE.Color(1.0, 0.9, 0.76);
+
 export const HDR_GRADE = Object.freeze({
   exposureOut: 1.0, exposureIn: 0.9, exposureNightOut: 1.5, exposureNightIn: 1.1,
   hemiOut: 0.9, hemiIn: 0.6, hemiTint: Object.freeze([1.0, 0.93, 0.8]), hemiTintIn: Object.freeze([1.0, 0.88, 0.7]), room: 1.1,
@@ -46,7 +49,7 @@ export const HDR_GRADE = Object.freeze({
 const lerp = (a, b, t) => a + (b - a) * t;
 
 export class Environment {
-  constructor(renderer, scene, camera, mats, quality) {
+  constructor(renderer, scene, camera, mats, quality, { warmRoom = false } = {}) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
@@ -59,7 +62,12 @@ export class Environment {
     this.bloomProfile = { strength: 0, threshold: .8 };
 
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    // 室内环境图：three 自带的 RoomEnvironment 是中性白的灯箱。完整园区（游览）把灯箱调成暖白，
+    // 商场、住宅室内整体偏暖金色（效果图的氛围）；FPS 不调，画面保持原样
+    const room = new RoomEnvironment();
+    if (warmRoom) room.traverse((o) => { if (o.isMesh && o.material?.color) o.material.color.multiply(WARM_ROOM); });
+    scene.environment = pmrem.fromScene(room, 0.04).texture;
+    room.traverse((o) => { if (o.isMesh) { o.geometry?.dispose(); o.material?.dispose?.(); } });
     scene.environmentIntensity = 0.45;
     pmrem.dispose();
     // HDR 光影的状态：天空素材第一次打开时才加载
