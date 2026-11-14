@@ -31,17 +31,19 @@ export function buildMallFlightGeometry(B,f) {
 
 /** Enclosures and landings remain batched with their parent floor. No door
  * panel is drawn across the walkable opening. Thin platforms are real slabs. */
-export function buildMallStairLevel(B,level,stairs,access,{flights=false}={}) {
+export function buildMallStairLevel(B,level,stairs,access,{flights=false,finish=null}={}) {
+  // finish：漫游模式里一期中庭的楼梯间外墙换成浅色缎面 + 金色踢脚（带纹理的 concrete 在中庭里背光一侧是一块块深灰褐色方块）
+  const wallKey=finish?.key||'concrete',wallColor=finish?.color||WALL,kickKey=finish?.kickKey||'extMetal',kickColor=finish?.kick||'#9aa897';
   for(const stair of stairs.filter(s=>s.serves.includes(level.id)))B.frame(stair.frame,()=>{
     const room=level.rooms.find(r=>r.id===stair.id),p=mallStairPlan(stair),y=level.elev;
     const h=level.kind==='roof'?3.2:level.height,d=room.doors[0];
     for(const w of room.navigationWalls) {
       const dx=w.x1-w.x0,dz=w.z1-w.z0,x=(w.x0+w.x1)/2,z=(w.z0+w.z1)/2;
-      B.get('concrete').box(x,y+h/2,z,Math.abs(dx)||.15,h,Math.abs(dz)||.15,WALL);
-      B.get('extMetal').box(x,y+.08,z,Math.abs(dx)||.16,.16,Math.abs(dz)||.16,'#9aa897');
+      B.get(wallKey).box(x,y+h/2,z,Math.abs(dx)||.15,h,Math.abs(dz)||.15,wallColor);
+      B.get(kickKey).box(x,y+.08,z,Math.abs(dx)||.16,.16,Math.abs(dz)||.16,kickColor);
     }
     const mx=(d.x0+d.x1)/2,mz=(d.z0+d.z1)/2,alongX=['N','S'].includes(d.side),[nx,nz]=NORMAL[d.side];
-    B.get('concrete').box(mx,y+(h+2.3)/2,mz,alongX?d.x1-d.x0:.15,h-2.3,alongX?.15:d.z1-d.z0,WALL);
+    B.get(wallKey).box(mx,y+(h+2.3)/2,mz,alongX?d.x1-d.x0:.15,h-2.3,alongX?.15:d.z1-d.z0,wallColor);
     B.get('glowSoft').box(mx+nx*.09,y+2.55,mz+nz*.09,alongX?.8:.06,.22,alongX?.06:.8,'#70b58b');
     const center=p.point(p.span/2,.75);
     B.get('glowSoft').box(center[0],y+h-.1,center[1],p.axis==='x'?.35:1.1,.06,p.axis==='x'?1.1:.35,'#f4edd8');
@@ -93,7 +95,8 @@ export function buildMallStairs(ctx) {
   for(const building of ctx.layout.buildings.filter(b=>['mall','annex'].includes(b.kind)&&b.access?.protected)) {
     const stairs=ctx.layout.stairs.filter(s=>s.building===building.id),access=building.access;
     for(const level of ctx.layout.levels.filter(l=>l.building===building.id)) {
-      const L=ctx.levels[level.id];buildMallStairLevel(L.batch,level,stairs,access);
+      const L=ctx.levels[level.id];
+      buildMallStairLevel(L.batch,level,stairs,access,{finish:ctx.depthCues&&building.id==='P1'?{key:'satin',color:'#efe9df',kickKey:'facadeBronze',kick:'#c8a25a'}:null});
       for(const stair of stairs.filter(s=>s.serves.includes(level.id))) {
         const d=stair.doorByLevel[level.id]||stair.door,[nx,nz]=NORMAL[d.side];
         L.signs.frame(stair.frame,()=>L.signs.place((d.x0+d.x1)/2+nx*.13,level.elev+2.55,(d.z0+d.z1)/2+nz*.13,.8,.22,d.side,ctx.atlas[level.id].cell('wf-exit')));
