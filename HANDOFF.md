@@ -94,6 +94,7 @@
 - **第六十七轮（店里的光斑）**：`interiors.js`：一期游览布局、非地毯店铺的地面按 3.6 m 网格贴暖色光斑（`B.pool`，0xffcf96，贴在 y0+0.02，高于地面面层 0.016）。效果温和，整图平均亮度只升约 1，对照图 `scratchpad/cmp-pools-shops2f.jpg`。
 - **第六十八轮（光之树）**：`paths.js` 导出 `LIGHT_TREE = {x: −166, z: −122, r: 4}`（1F 西门喷泉艺术街广场，原来离任何人流 27 m 的空地）。`p1-atrium.js` 的 `lightTree`：石材花池 + 两圈花 + 环形木座椅，白色树干分六枝十二杈、杈梢发光圆盘（树顶在 2F 楼板下 0.4 m），地上两道金环和暖光斑。`megaPaths` 在 6.3、9 m 各加一圈「中庭光之树」人流（落在走道上、避开岛柜）。测试「光之树」。注意：花岛、光之树都只是渲染，没有导航障碍（第六十九轮已补：见下）。
 - **第六十九轮（花岛、光之树挡人）**：`buildNav` 加 `options.levelSolids(lv)`（渲染摆下的世界坐标多边形障碍）；`p1-atrium.js` 的 `navSolid` 把每个花岛（r 1.45）和光之树（r 4.6，含座椅）登记到 `ctx.navSolids[层 id]`，`explore.js` 建导航时传进去。布局数据没改，FPS 不受影响。测试「漫游导航」。
+- **第七十轮（南中庭，游览布局改动，用户同意）**：新文件 `src/layout/p1-south-atrium.js`（`applyP1SouthAtrium`，接在 `applyP1Mega` 后面，只在有 `fidelity.mega` 时生效，FPS 不变）。`SOUTH_ATRIUM = {x: −175.5, z: −126.5, r: 7.5}`：2F–6F 开圆洞 `SOUTH-void`（mega、south），主楼板加洞、走道减洞（被挖成环的走道块切成两半），洞口边 3 m 内的岛柜/花园/休息区连同导航障碍拿掉（17 个，记在 `fidelity.mega.southAtrium.dropped`）。圆心是按「1F–6F 离铺位、楼梯、走道边都 ≥ 10.5 m」搜出来的，最窄处洞边走道 2.85 m（4F–6F）；原先试的 r 9.5 在 2F 离铺位 MG09 只有 0.7 m。屋面不开洞，6F 天花下两圈 `haloRing`。光之树挪到洞口正中（`LIGHT_TREE` 跟着 `SOUTH_ATRIUM`），树长到约 11 m、枝展放大；1F 广场人流跳过南洞口（不然会穿过花池），楼上自动有一圈「中庭回游线」。栏板、小树、长凳走 `balconyEdge`（正则加了 `SOUTH-void`）。测试 `tests/p1-south-atrium.test.js`，记录组改动见 `tests/campus-deltas/p1-south-atrium.js`。
 - 人物模型扩充（`scripts/people/`，清单 `AVATARS`：Rocketbox 男 02–04、女 02–04）脚本已备好，需要 Blender 才能烘焙；用户决定先不加（2026-11-13），先做场景细节。
 - 截图脚本 `probe3` 的 1F 中庭机位偶尔会落到 1F 地面下（看到 B1M 的梁）：是脚本传的 `y: -4.5`，和应用无关。
 - 已知偶发：`tests/jimao.test.js`「真人敌人：巡逻…走动了」在全量并行跑时偶尔超时失败，单独跑稳定通过。

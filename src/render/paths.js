@@ -2,6 +2,7 @@
 // 车流（车库：坡道口 → 各翼外侧车道 → 圆厅环道，靠右行驶、逆时针绕圆厅）、货流（卸货区 → 北翼）。
 // 每条路径为三维折线 [[x,y,z],...]，loop=true 表示闭合环线。动线箭头与行人、车辆动画共用。
 import { frame, toW, toL, pointInPoly } from '../layout/geom.js';
+import { SOUTH_ATRIUM } from '../layout/p1-south-atrium.js';
 
 const DEG = 180 / Math.PI;
 const mod360 = (a) => ((a % 360) + 360) % 360;
@@ -35,7 +36,8 @@ const W3 = (F, u, v, y) => {
 
 /** 1F 西门喷泉艺术街广场中间的「光之树」雕塑（游览布局才有，渲染见 build/p1-atrium.js 的 lightTree）：
  *  效果图南边圆形中庭里那棵白色树形灯雕。这里是 1F 最空的一片走道（离原有人流路线 27 m），r 是花池半径 */
-export const LIGHT_TREE = { x: -166, z: -122, r: 4 };
+// 第七十轮起光之树在南中庭（layout/p1-south-atrium.js）正中，2F–6F 开了圆洞，树可以长高
+export const LIGHT_TREE = { x: SOUTH_ATRIUM.x, z: SOUTH_ATRIUM.z, r: 4 };
 
 /** 超级商业中心（layout/p1-mega.js）：沿大洞口栏板往后 3 米的回游线（落在走道上、不进铺位的连续段），
  *  1F 广场两座喷泉外各一圈，再加一条从方庭到圆厅的中轴线。 */
@@ -68,7 +70,8 @@ function megaPaths(layout, P) {
   // 1F 广场：1F 自己没有洞口（广场在 2F 洞口正下方），上面的两圈只在楼上有。沿 2F 洞口轮廓往广场里缩 2.5、6、10 米
   // 各一圈（避开树池、喷泉这些障碍，落在走道上的连续段），名字以「中庭」开头，人群按中庭路线的比例分人过来
   const lv2 = layout.levels.find((l) => l.id === 'P1-2F'), y1 = lv1.elev + 0.07;
-  for (const v of (lv2?.voids || []).filter((q) => q.mega)) for (const off of [2.5, 6, 10]) {
+  // 南中庭（q.south）下面是光之树花池，人流只走外面两圈「中庭光之树」，这里跳过
+  for (const v of (lv2?.voids || []).filter((q) => q.mega && !q.south)) for (const off of [2.5, 6, 10]) {
     const pts = [], Q = v.poly;
     for (let i = 0; i < Q.length; i++) {
       const a = Q[i], b = Q[(i + 1) % Q.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);

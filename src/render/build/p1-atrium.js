@@ -99,7 +99,7 @@ function canopies(B, F, f, y0) {
 
 /** 一层洞口边：白色弧形栏板（盖住楼板边）+ 底边暖光灯带 + 外挂花槽和垂下来的藤蔓、花。扶梯口、观光梯门前不挂花槽。 */
 function balcony(ctx, B, lv) {
-  for (const v of lv.voids.filter((x) => /^(C-void|SQ-void|SQ-sky|MEGA-void)/.test(x.id))) balconyEdge(ctx, B, lv, v);
+  for (const v of lv.voids.filter((x) => /^(C-void|SQ-void|SQ-sky|MEGA-void|SOUTH-void)/.test(x.id))) balconyEdge(ctx, B, lv, v);
 }
 
 function balconyEdge(ctx, B, lv, v) {
@@ -759,7 +759,15 @@ function megaAtrium(ctx, levels) {
     else kiosk(L.batch, it, lv.elev, it.x * 3 + it.z);
   }
   navSolid(ctx, lv1.id, LIGHT_TREE.x, LIGHT_TREE.z, LIGHT_TREE.r + 0.6);
-  lightTree(B, LIGHT_TREE, y0, y0 + lv1.height - (SLAB_T[levels.find((l) => l.id === 'P1-2F')?.kind] ?? 0.45) - 0.4);
+  // 南中庭（layout/p1-south-atrium.js）开了 2F–6F 的圆洞：树长到 2F、3F 之间（约 11 m）；没有洞口时压在 2F 楼板下
+  const south = M.southAtrium, lv2s = levels.find((l) => l.id === 'P1-2F');
+  lightTree(B, LIGHT_TREE, y0, south && lv2s ? lv2s.elev + 4.5 : y0 + lv1.height - (SLAB_T[lv2s?.kind] ?? 0.45) - 0.4);
+  const six6 = levels.find((l) => l.id === 'P1-6F'), rf6 = levels.find((l) => l.kind === 'roof');
+  if (south && six6 && rf6 && ctx.levels[six6.id]) {
+    // 南中庭顶上（屋面不开洞）：6F 天花底下两圈金色灯环，像效果图圆形中庭顶上的光环
+    haloRing(ctx.levels[six6.id].batch, south.x, south.z, south.r - 1.5, rf6.elev - 1.6, rf6.elev);
+    haloRing(ctx.levels[six6.id].batch, south.x, south.z, (south.r - 1.5) * 0.6, rf6.elev - 2.8, rf6.elev);
+  }
   M.plaza?.trees.forEach((t, i) => (t.kind === 'palm' ? palm(B, IDENTITY, { u: t.x, v: t.z, r: t.r }, y0, i * 13 + 5) : blossom(B, t, y0, i)));
   const six = levels.find((l) => l.id === 'P1-6F'), rf = levels.find((l) => l.kind === 'roof');
   const sky = rf?.voids.find((v) => v.id === 'MEGA-sky');
@@ -1418,21 +1426,22 @@ function lightTree(B, T, y0, top) {
   for (const [RR, w] of [[r + 1.6, 0.12], [r + 2.8, 0.07]]) floorRing(B, x, z, RR, w, y0);
   for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; B.pool(x + Math.cos(a) * (r + 2.2), y0, z + Math.sin(a) * (r + 2.2), 3, 3, 0xffd6a0); }
   // 树干：白色、从下往上略收，中段一道金环
-  const H = top - y0, fork = { x, y: y0 + Math.min(2.9, H * 0.5), z };
+  const H = top - y0, fork = { x, y: y0 + Math.min(2.9, H * 0.5), z }, k = Math.min(1.9, Math.max(1, H / 5.6));
   B.get('satin').cyl(x, y0 + 0.5, z, 0.42, 0.25, '#f3f0ea', 24);
   B.get('satin').bar({ x, y: y0 + 0.55, z }, fork, 0.5, WHITE);
   B.get('facadeBronze').cyl(x, fork.y - 0.9, z, 0.27, 0.06, GOLD, 24);
   for (let b = 0; b < 6; b++) {
-    const a = (b / 6) * Math.PI * 2 + 0.2, mid = { x: x + Math.cos(a) * 1.5, y: fork.y + (H - (fork.y - y0)) * 0.55, z: z + Math.sin(a) * 1.5 };
+    const a = (b / 6) * Math.PI * 2 + 0.2, mid = { x: x + Math.cos(a) * 1.5 * k, y: fork.y + (H - (fork.y - y0)) * 0.55, z: z + Math.sin(a) * 1.5 * k };
     B.get('satin').bar(fork, mid, 0.24, WHITE);
     B.get('facadeBronze').cyl(mid.x, mid.y - 0.05, mid.z, 0.13, 0.05, GOLD, 12);
     for (const da of [-0.32, 0.32]) {
-      const a2 = a + da, rr = 2.6 + rand() * 0.6, tip = { x: x + Math.cos(a2) * rr, y: top - 0.25 - rand() * 0.45, z: z + Math.sin(a2) * rr };
+      const a2 = a + da, rr = (2.6 + rand() * 0.6) * k, tip = { x: x + Math.cos(a2) * rr, y: top - 0.25 - rand() * 0.45, z: z + Math.sin(a2) * rr };
       B.get('satin').bar(mid, tip, 0.12, WHITE);
       // 杈梢的发光圆盘（压扁的球）+ 金色托
-      B.get('glow').sphere(tip.x, tip.y, tip.z, 0.5, '#fff1d6', 0.12, 0.5, 'sphereLo');
-      B.get('facadeBronze').cyl(tip.x, tip.y - 0.16, tip.z, 0.2, 0.04, GOLD, 12);
-      B.ceilPool(tip.x, top + 0.4, tip.z, 2.6, 2.6, 0xffe2b8);
+      const dr = 0.5 * Math.sqrt(k);
+      B.get('glow').sphere(tip.x, tip.y, tip.z, dr, '#fff1d6', 0.12, dr, 'sphereLo');
+      B.get('facadeBronze').cyl(tip.x, tip.y - 0.16, tip.z, dr * 0.4, 0.04, GOLD, 12);
+      if (k === 1) B.ceilPool(tip.x, top + 0.4, tip.z, 2.6, 2.6, 0xffe2b8);
     }
   }
 }

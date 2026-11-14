@@ -168,7 +168,7 @@ test('光之树：1F 广场中间有白色树干和杈梢灯盘，周围的人�
   const lv = level('P1-1F'), { x, z, r } = LIGHT_TREE;
   const base = [tour.levels['P1-1F'].base];
   assert.ok(trianglesIn(base, box(x - .2, 1.5, z - .2, x + .2, 2, z + .2)) > 0, '没有树干');
-  assert.ok(trianglesIn(base, box(x - 4, 4, z - 4, x + 4, 5.9, z + 4)) > 20, '没有树冠灯盘');
+  assert.ok(trianglesIn(base, box(x - 7, 9.5, z - 7, x + 7, 11, z + 7)) > 20, '没有树冠灯盘（南中庭里树长到 2F 以上）');
   const onWalk = (px, pz) => lv.walk.some(w => pointInPoly([px, pz], w.poly)) && !lv.units.some(u => u.polys.some(q => pointInPoly([px, pz], q)));
   for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; assert.ok(onWalk(x + Math.cos(a) * (r + .6), z + Math.sin(a) * (r + .6)), '花池和座椅出了走道'); }
   const loops = tour.paths.levels['P1-1F'].people.filter(p => p.name === '中庭光之树');
