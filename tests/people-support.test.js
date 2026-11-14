@@ -145,7 +145,7 @@ test('rendered walkers resume after crossing an opening and low density retains 
   }
 });
 
-test('一期游览：90 m 外的人换成简化人形（几十个三角形），90 m 内照样是贴图人', async t => {
+test('一期游览：60 m 外的人换成简化人形（几十个三角形），60 m 内照样是贴图人', async t => {
   const THREE = await import('three');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
   const { buildPeople, FAR_LOD } = await import('../src/render/build/people.js');
@@ -179,7 +179,7 @@ test('一期游览：90 m 外的人换成简化人形（几十个三角形），
       else { assert.ok(d <= FAR_LOD + .01, `贴图人在 ${d.toFixed(1)} m`); near++; }
     }
     assert.ok(far.count > 50 && near > 50, `远 ${far.count}、近 ${near}`);
-    assert.equal(ctx.peopleQuality.stats.capacity, 800, '超级商业中心每层 800 人');
+    assert.equal(ctx.peopleQuality.stats.capacity, 1000, '超级商业中心每层 1000 人');
   } finally {
     for (const mesh of people.children) { mesh.morphTexture?.dispose(); mesh.dispose(); }
     for (const { geometry, material } of imported) { geometry.dispose(); material.dispose(); }

@@ -9,7 +9,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // 远处的人（一期游览布局里离相机 > FAR_LOD 米）：不画 3600–4200 个三角形的贴图人，换成几十个三角形的简化人形
 //（两条腿、上身、头，按上衣颜色染色）。这么远时一个人只有几个像素高，看不出区别，人群就能更密而不增加显卡负担
-export const FAR_LOD = 90;
+export const FAR_LOD = 60;
 function farFigure() {
   const parts = [
     new THREE.CylinderGeometry(0.075, 0.06, 0.82, 5, 1).translate(-0.09, 0.41, 0),
@@ -40,8 +40,8 @@ export async function buildPeople(ctx) {
     if (!paths.length) continue;
     // 一期样板中庭的几层人多一些（预想图里中庭人很多）；手机按画质的人群密度再打折
     const busy = lv.building === 'P1' && lv.kind === 'retail' && ctx.layout.fidelity?.atrium;
-    // 超级商业中心（一期并进 A、B 两块楼面）每层 800 人（效果图里各层走道都挤满人；90 m 外换成简化人形，见 FAR_LOD；手机画质按 crowdDensity 打到两三成）
-    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 800 : 120) : COUNT[lv.kind] || 20;
+    // 超级商业中心（一期并进 A、B 两块楼面）每层 1000 人（效果图里各层走道都挤满人；60 m 外换成简化人形，见 FAR_LOD；手机画质按 crowdDensity 打到两三成）
+    const count = lv.kind === 'street' && lv.ground ? 120 : busy ? (ctx.layout.fidelity?.mega ? 1000 : 120) : COUNT[lv.kind] || 20;
     // 中庭边的两圈（回游线、栏杆边）：一期每层四成的人走这里，中庭四周才像效果图那样热闹
     const atrium = paths.filter(path => !path.escalator && /^中庭/.test(path.name || ''));
     const variants = assets.map(asset => {
