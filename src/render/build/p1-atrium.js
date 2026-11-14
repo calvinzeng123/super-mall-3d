@@ -13,6 +13,7 @@ import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 
 const sgE = new THREE.Euler(), sgQ = new THREE.Quaternion(), sgP = new THREE.Vector3(), sgS = new THREE.Vector3();
 const palmDir = new THREE.Vector3(), X_AXIS = new THREE.Vector3(1, 0, 0);
+const rbT = new THREE.Vector3(), rbY = new THREE.Vector3(), rbZ = new THREE.Vector3(), rbP = new THREE.Vector3(), rbS = new THREE.Vector3(), rbM = new THREE.Matrix4(), rbQ = new THREE.Quaternion();
 const leafE = new THREE.Euler(0, 0, 0, 'YXZ'), leafQ = new THREE.Quaternion(), leafP = new THREE.Vector3(), leafS = new THREE.Vector3();
 const WHITE = '#f3f0ea', GOLD = '#c8a25a', WARM = '#ffd9a0', GOLD_LED = '#ffc675', LEAF = '#4f7f3c', LEAF2 = '#3d6a32';
 const FLOWERS = ['#e58fb5', '#c96aa8', '#f2b6c8', '#a77bd1', '#f6e7a1'];
@@ -249,12 +250,21 @@ function fountain(B, F, p, y0) {
     B.get('travertine').cyl(u, y0, v, 1.1, 0.75, '#ddd4c4', 32);
     // 两条缎带：从底座盘旋到 9 米，半径从 1.3 收到 0.5
     const H = Hs, turns = 2.2 * Hs / 9;
+    // 缎带：扁平的带子（宽 0.42→0.2 米、厚 4 厘米，带面朝外），128 段（原来 64 段方截面粗条，近看一节一节的）
     for (const [phase, color, key] of [[0, GOLD, 'facadeBronze'], [Math.PI, '#eef1f2', 'metal']]) {
       let prev = null;
-      for (let s = 0; s <= 64; s++) {
-        const t = s / 64, a = phase + t * turns * Math.PI * 2, rad = 1.3 - 0.8 * t;
+      for (let s = 0; s <= 128; s++) {
+        const t = s / 128, a = phase + t * turns * Math.PI * 2, rad = 1.3 - 0.8 * t;
         const q = { x: u + Math.cos(a) * rad, y: y0 + 0.75 + t * H, z: v + Math.sin(a) * rad };
-        if (prev) B.get(key).bar(prev, q, 0.22 - 0.1 * t, color);
+        if (prev) {
+          rbT.set(q.x - prev.x, q.y - prev.y, q.z - prev.z); const len = rbT.length(); rbT.normalize();
+          const am = a - (turns * Math.PI * 2) / 256;
+          rbZ.set(Math.cos(am), 0, Math.sin(am)); rbZ.addScaledVector(rbT, -rbZ.dot(rbT)).normalize(); // 朝外的带面法线
+          rbY.crossVectors(rbZ, rbT);
+          rbM.makeBasis(rbT, rbY, rbZ); rbQ.setFromRotationMatrix(rbM);
+          rbP.set((prev.x + q.x) / 2, (prev.y + q.y) / 2, (prev.z + q.z) / 2);
+          B.get(key).shape('box', rbP, rbQ, rbS.set(len + 0.02, 0.42 - 0.22 * t, 0.04), color);
+        }
         prev = q;
       }
     }
