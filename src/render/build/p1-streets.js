@@ -1,6 +1,9 @@
 // 一期门口的道路配套（游览模式）：云澜大道 × 星湾路路口原来只有斑马线和停止线，没有信号灯和车道导向箭头。
 // 这里补上：四个进口道每条车道一组导向箭头（内侧左转、中间直行、外侧直右），四个路口转角各一根信号灯杆
 // （两根悬臂分别伸到大道和星湾路的车道上方挂机动车信号灯，杆身上一组行人信号灯朝人行横道），转角路缘一块盲道提示砖。
+import * as THREE from 'three';
+import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
+import { toW } from '../../layout/geom.js';
 // 靠右行驶：大道东行车在 +z 半幅、西行在 −z；星湾路往 +z 走的车在 −x 半幅。停止线已有（site.js：x=±17.5、z=±21）。
 
 const Y_PAINT = -0.106, Y_WALK = -0.135; // 同 bus-stops.js 的路面、人行道标高
@@ -33,7 +36,7 @@ export function buildP1Streets(ctx) {
     B.get('extSatin').box(sx * 10.6, Y_WALK + 0.01, z, 0.6, 0.012, 2.4, '#e2c94a');
     poles.push([x, z]);
   }
-  ctx.p1Streets = { arrows: arrows.length, poles, court: courtGreen(ctx) };
+  ctx.p1Streets = { arrows: arrows.length, poles, court: courtGreen(ctx), metro: metroExits(ctx) };
 }
 
 /** 云谷艺术广场（下沉广场）的挡土墙：墙顶往下垂一排藤蔓、墙脚一条低矮花带（灌木团 + 花），
@@ -126,4 +129,57 @@ function vehicleHead(B, x, y, z, fx, fz, lit) {
   B.get('extMetal').box(x, y, z, fx ? 0.34 : 0.4, 1.1, fx ? 0.4 : 0.34, HOUSING);
   const cols = lit === 'R' ? ['#ff4a3a', '#4a3d1c', '#1d3a28'] : ['#5a211c', '#4a3d1c', '#3cf07a'];
   [0.34, 0, -0.34].forEach((dy, i) => B.get('glowSoft').box(x + fx * 0.18, y + dy, z + fz * 0.18, fx ? 0.03 : 0.24, 0.24, fx ? 0.24 : 0.03, cols[i]));
+}
+
+/** 地铁 A、E 口外：出口前一根地铁导向立柱（深色柱身、红色地铁标、「地铁 云澜汇站 · X 口 · 7 / 12 号线」，两面都有），
+ *  两个出口之间的前广场沿大道一侧一排非机动车停放架（地面划框 + 倒 U 形停车架 + 一块小牌子）。 */
+function metroExits(ctx) {
+  const M = ctx.layout.buildings.find((b) => b.id === 'M'), B = ctx.site.batch, Y = 0.0;
+  if (!M?.exits) return 0;
+  let n = 0;
+  for (const [id, u, v] of [['A', 14.5, -3.6], ['E', 15.5, -2.6]]) {
+    const ex = M.exits.find((e) => e.id === id);
+    if (!ex) continue;
+    const F = ex.kiosk.frame, [x, z] = toW(F, u, v), ux = Math.cos(F.a), uz = Math.sin(F.a), ang = -F.a;
+    B.get('extSatin').box(x, Y + 1.4, z, 0.36, 2.8, 0.9, '#22313d', ang);
+    B.get('extSatin').box(x, Y + 2.84, z, 0.4, 0.08, 0.94, '#c8a25a', ang);
+    const geo = new THREE.PlaneGeometry(0.82, 2.4), mat = ctx.mats.sign(totemTexture(ctx, ex));
+    for (const side of [-1, 1]) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x + ux * side * 0.185, Y + 1.5, z + uz * side * 0.185);
+      m.rotation.y = Math.atan2(ux * side, uz * side);
+      m.name = `P1-metro-totem-${id}`;
+      ctx.site.group.add(m);
+    }
+    n++;
+  }
+  // 非机动车停放：x −64 … −52，z −21.6（前广场靠大道人行道的一侧）
+  const x0 = -64, x1 = -52, z = -21.6;
+  for (const zz of [z - 1.1, z + 1.1]) B.get('extSatin').box((x0 + x1) / 2, Y + 0.012, zz, x1 - x0, 0.012, 0.08, '#f2f2ee');
+  for (const xx of [x0, x1]) B.get('extSatin').box(xx, Y + 0.012, z, 0.08, 0.012, 2.2, '#f2f2ee');
+  for (let xx = x0 + 0.8; xx < x1 - 0.4; xx += 1.2) {
+    const a = { x: xx, y: Y, z: z - 0.35 }, b = { x: xx, y: Y, z: z + 0.35 };
+    B.get('extMetal').bar(a, { ...a, y: Y + 0.75 }, 0.05, '#9aa3ab');
+    B.get('extMetal').bar(b, { ...b, y: Y + 0.75 }, 0.05, '#9aa3ab');
+    B.get('extMetal').bar({ ...a, y: Y + 0.75 }, { ...b, y: Y + 0.75 }, 0.05, '#9aa3ab');
+  }
+  B.get('extMetal').box(x0 - 0.6, Y + 1.0, z, 0.06, 2.0, 0.06, '#3b4045');
+  B.get('extSatin').box(x0 - 0.6, Y + 1.85, z, 0.05, 0.42, 0.62, '#2f6fd6');
+  return n;
+}
+function totemTexture(ctx, ex) {
+  ctx.p1TotemTex ||= {};
+  if (ctx.p1TotemTex[ex.id]) return ctx.p1TotemTex[ex.id];
+  const c = makeCanvas(256, 744), g = c.getContext('2d');
+  g.fillStyle = '#22313d'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#d6332a'; g.beginPath(); g.arc(128, 110, 70, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffffff'; g.font = `800 92px ${FONT_EN}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('M', 128, 114);
+  g.font = `700 46px ${FONT_CN}`; g.fillText('地铁', 128, 236); g.fillText('云澜汇站', 128, 292);
+  g.font = `500 22px ${FONT_EN}`; g.fillStyle = '#cfd8e0'; g.fillText('YUNLAN MALL STATION', 128, 336);
+  g.fillStyle = '#f2c230'; g.fillRect(70, 384, 116, 116);
+  g.fillStyle = '#22313d'; g.font = `800 84px ${FONT_EN}`; g.fillText(ex.id, 128, 446);
+  g.fillStyle = '#ffffff'; g.font = `600 30px ${FONT_CN}`; g.fillText(`${ex.id} 口`, 128, 548);
+  g.font = `500 24px ${FONT_CN}`; g.fillStyle = '#cfd8e0'; g.fillText('7 号线 · 12 号线', 128, 600);
+  g.fillText(ex.id === 'A' ? '一期云澜汇' : '一期大道侧', 128, 640);
+  return (ctx.p1TotemTex[ex.id] = canvasTexture(c, { clamp: true }));
 }
