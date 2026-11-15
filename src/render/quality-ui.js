@@ -4,6 +4,11 @@ export function attachQualityUI(app, viewport) {
   const buttons = [...document.querySelectorAll('[data-quality-open]')];
   const switches = [...panel.querySelectorAll('[data-quality-switch]')], choices = [...panel.querySelectorAll('[data-quality-choice]')];
   let opener = null;
+  // 场景人数：百分比后面带上大概的人数（整个园区按这个比例画；人群还没建好时只显示百分比）
+  const crowdLabel = (d) => {
+    const cap = app.ctx?.peopleQuality?.stats?.capacity;
+    return cap ? `${Math.round(d * 100)}% · 约 ${Math.round(cap * d / 100) * 100} 人` : `${Math.round(d * 100)}%`;
+  };
   function close(restoreFocus = false) {
     panel.hidden = true;
     buttons.forEach(b => b.setAttribute('aria-expanded', 'false'));
@@ -30,7 +35,7 @@ export function attachQualityUI(app, viewport) {
       for (const b of group.querySelectorAll('button')) { b.setAttribute('aria-pressed', String(b.dataset.value === String(q[group.dataset.qualityChoice]))); b.disabled = off; }
     }
     document.getElementById('qualityCrowd').value = q.crowdDensity;
-    document.getElementById('qualityCrowdValue').value = `${Math.round(q.crowdDensity * 100)}%`;
+    document.getElementById('qualityCrowdValue').value = crowdLabel(q.crowdDensity);
     document.getElementById('qualityStatus').textContent = `${q.preset === 'auto' ? '自动 · ' : ''}${q.label}${q.custom ? ' · 已微调' : ''} · 最高 ${q.maxFps} 帧/秒${q.autoReduced ? ' · 已按运行速度降低画质' : ''}`;
     document.getElementById('qualityHint').textContent = q.custom ? '微调已保存。重新选择档位会恢复该档默认设置。' : q.preset === 'auto' ? '手机优先流畅；运行持续变慢时自动降低画质。设置保存在这台设备。'
       : q.preset === 'ultra' ? '「极致」把环境光遮蔽、高光柔光和室内灯光都打开，适合有独立显卡的电脑；卡顿时退回「精细」。' : '立即生效并保存在这台设备。想优先省电、减少发热，可选「流畅」。';
@@ -70,7 +75,7 @@ export function attachQualityUI(app, viewport) {
   });
   for (const [id, key, out] of [['qualityResolution', 'resolution', 'qualityResolutionValue'], ['qualityCrowd', 'crowdDensity', 'qualityCrowdValue']]) {
     const input = document.getElementById(id);
-    input.addEventListener('input', () => { document.getElementById(out).value = `${Math.round(Number(input.value) * 100)}%`; });
+    input.addEventListener('input', () => { document.getElementById(out).value = key === 'crowdDensity' ? crowdLabel(Number(input.value)) : `${Math.round(Number(input.value) * 100)}%`; });
     // Commit on release, avoiding repeated shader/buffer rebuilds while dragging.
     input.addEventListener('change', () => app.customizeQuality({ [key]: Number(input.value) }));
   }

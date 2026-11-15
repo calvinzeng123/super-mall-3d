@@ -233,6 +233,7 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 .quality-slider { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding-top: 10px; }
 .quality-slider input { grid-column: 1 / -1; width: 100%; min-height: 32px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .quality-slider output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.quality-slider small { display: block; color: var(--ink-2); font-size: 11px; }
 .quality-hint { color: var(--ink-2); margin: 10px 0 2px; font-size: 12px; }
 .quality-panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 900px), (pointer: coarse), (max-height: 520px) {
@@ -480,7 +481,7 @@ body.quality-low #app .panel { -webkit-backdrop-filter: blur(1.5px) saturate(.8)
     <div class="quality-row" role="group" aria-label="帧率上限"><span>帧率上限<small>调低更省电、少发热</small></span><div class="quality-seg" data-quality-choice="maxFps"><button type="button" data-value="30">30</button><button type="button" data-value="45">45</button><button type="button" data-value="60">60</button></div></div>
     <div class="quality-row" role="group" aria-label="贴图清晰度"><span>贴图清晰度<small>斜着看地面、墙面时纹理更清楚</small></span><div class="quality-seg" data-quality-choice="textures"><button type="button" data-value="standard">标准</button><button type="button" data-value="high">高</button></div></div>
     <div class="quality-row" role="group" aria-label="模型细节"><span>模型细节<small>家具、绿植在多远以内用精细模型</small></span><div class="quality-seg" data-quality-choice="detail"><button type="button" data-value="low">低</button><button type="button" data-value="balanced">中</button><button type="button" data-value="high">高</button></div></div>
-    <label class="quality-slider" for="qualityCrowd"><span>人群密度</span><output id="qualityCrowdValue" for="qualityCrowd">22%</output><input id="qualityCrowd" type="range" min="0" max="1" step="0.01" value="0.22"></label>
+    <label class="quality-slider" for="qualityCrowd"><span>场景人数<small>画面卡的时候先调低这一项</small></span><output id="qualityCrowdValue" for="qualityCrowd">22%</output><input id="qualityCrowd" type="range" min="0" max="1" step="0.01" value="0.22"></label>
     <h3 class="quality-group">光影</h3>
     <label class="quality-row" for="qualityHdr"><span>HDR 光影<small>真实天空的反射和环境光、更通透的色彩、亮面的石材和金属</small></span><input type="checkbox" id="qualityHdr" role="switch" data-quality-switch="hdr"></label>
     <label class="quality-row" for="qualityAo"><span>环境光遮蔽<small>墙角、家具脚下自然变暗；比较吃显卡，需要开着 HDR 光影</small></span><input type="checkbox" id="qualityAo" role="switch" data-quality-switch="ao" data-quality-needs="hdr"></label>

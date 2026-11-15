@@ -101,6 +101,7 @@
 - **发布（2026-11-15，用户确认）**：应用提交 `bd8cc8b`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`（site `b9d32e8f-84f0-4958-b426-fd2e491c3676`），部署 `6af922c27bfac122703c885b` live；首页 200，12 个 JS 与本地构建 SHA-256 一致；线上截图 `scratchpad/cut/live-south.jpg` 看到南中庭、光之树、弧形花坛。已知：相机离人群约 60 m 时简化人形看得出是纯色小人，如果嫌粗可以把 `FAR_LOD` 调回 90（每层人数相应降到 800）。真机帧率仍未测。
 - **第七十四轮（简化人像个人）**：线上截图里 60 m 处的简化人整个按上衣颜色染色，像纯色人偶。`farFigure` 改成每个部件带顶点颜色：深色裤子、肤色手臂和头、深色头发，只有上衣（`aShirt = 1`）跟每个人的上衣颜色走（`farMaterial` 用 `onBeforeCompile` 把实例颜色只乘到上衣上）。123 个三角形，测试上限 120 → 150。对照 `scratchpad/cmp-figures.jpg`。
 - **发布（2026-11-15，用户确认）**：应用提交 `0bab949` 发布到 `yunlan-mall-calvin-v2`，部署 `6af927adcd65f62627504ba2` live；首页 200、入口 `main.2TVIEYDA.js`，12 个 JS 与本地构建一致；线上截图 `scratchpad/cut/live-south2.jpg` 里南中庭周围的简化人已是深色裤子 + 彩色上衣 + 头发。真机帧率仍未测。
+- **第七十五轮（场景人数设置，用户要求「设置那里可调场景人数，不然很卡」）**：画质面板里原来就有「人群密度」滑块（`quality.crowdDensity`，0–100%，线上实测南中庭近景 100% 约 2000 人、50% 994、20% 297、0% 0），但不好找。改名「场景人数」，加说明「画面卡的时候先调低这一项」，数值显示成「30% · 约 2100 人」（`quality-ui.js` 的 `crowdLabel`，人数 = 全园容量 × 比例，取整到百位）。设置照旧存在本机，刷新后保留。截图 `scratchpad/cut/crowd-panel.png`。
 - 人物模型扩充（`scripts/people/`，清单 `AVATARS`：Rocketbox 男 02–04、女 02–04）脚本已备好，需要 Blender 才能烘焙；用户决定先不加（2026-11-13），先做场景细节。
 - 截图脚本 `probe3` 的 1F 中庭机位偶尔会落到 1F 地面下（看到 B1M 的梁）：是脚本传的 `y: -4.5`，和应用无关。
 - 已知偶发：`tests/jimao.test.js`「真人敌人：巡逻…走动了」在全量并行跑时偶尔超时失败，单独跑稳定通过。
