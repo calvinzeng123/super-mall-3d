@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { buildNav, clear, landAt } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
+import { walkNav } from './helpers.js';
 import { pointInPoly, distToPolyEdge } from '../src/layout/geom.js';
 import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, DEPART_SHOT, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
 
@@ -55,15 +56,16 @@ test('随机任务：四种都抽得到，两种撤离都抽得到，目标齐�
 test('中继、取物房间门口、撤离点都从开局点走得到', () => {
   for (const s of RELAY_SITES) assert.ok(findPath(nav, START, at(s)), `中继 ${s.where} 走不到`);
   for (const x of Object.values(EXTRACTIONS)) assert.ok(findPath(nav, START, at(x)), `${x.label}撤离点走不到`);
-  // 房间内部 findPath 进不去（门口很窄），抽查每类房间：走到房间点 4 m 内的导航点
-  for (const kind of ['apartment', 'shop', 'hotel']) {
-    const s = sites[kind][0];
-    let ok = false;
-    for (let a = 0; a < 16 && !ok; a++) for (const r of [2, 3, 4]) {
-      const p = { ...at(s), x: s.x + Math.cos(a / 16 * Math.PI * 2) * r, z: s.z + Math.sin(a / 16 * Math.PI * 2) * r };
-      if (clear(nav, p) && findPath(nav, START, p)) { ok = true; break; }
-    }
-    assert.ok(ok, `${kind} ${s.unit} 门口走不到`);
+  // 房间内部 findPath 进不去（门洞很窄）：每类房间抽 3 间，寻路到门外 1.5 米，再从门口直走进房间走到物品跟前
+  for (const kind of ['apartment', 'shop', 'hotel']) for (const s of sites[kind].slice(0, 3)) {
+    const u = L.levels.find((l) => l.id === s.floor).units.find((q) => q.id === s.unit), f = u.wfronts?.[0];
+    assert.ok(f, `${s.unit} 没有门脸`);
+    const mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2;
+    const out = [1, -1].map((g) => ({ ...at(s), x: mx + f.nx * 1.5 * g, z: mz + f.nz * 1.5 * g }))
+      .find((p) => Math.hypot(p.x - s.x, p.z - s.z) > Math.hypot(mx - s.x, mz - s.z) && clear(nav, p));
+    assert.ok(out && findPath(nav, START, out), `${s.unit} 门口走不到`);
+    const w = walkNav(nav, s.floor, [out.x, out.z], [s.x, s.z]);
+    assert.ok(Math.hypot(w.x - s.x, w.z - s.z) < 0.3, `${s.unit} 从门口走不到物品跟前`);
   }
 });
 
@@ -95,7 +97,9 @@ test('任务文字和台词跟着任务走', () => {
 
 test('原游戏补丁：任务文字、交互提示、撤离点名字、外部完成、结算等撤离镜头', () => {
   const src = readFileSync(new URL('../src/jimao/vendor/game.js', import.meta.url), 'utf8');
-  for (const needle of ['s && s.missionText', 'V.o.verb || ', 's.extraction.label || ', 'completeAll() {', 'refreshObjective() {', 's && s.outroDelay || 3.3', '已完成目标', 'RADIO']) {
+  // vendor 里的中文按 esbuild 的写法转成 \uXXXX
+  const esc = (t) => [...t].map((ch) => (ch.charCodeAt(0) > 127 ? '\\u' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0') : ch)).join('');
+  for (const needle of ['s && s.missionText', 'V.o.verb || ', 's.extraction.label || ', 'completeAll() {', 'refreshObjective() {', 's && s.outroDelay || 3.3', esc('已完成目标'), esc('击倒敌人'), 'RADIO']) {
     assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
   }
   assert.ok(DEPART_SHOT >= 5, '撤离镜头至少 5 秒，载具要来得及离场');
