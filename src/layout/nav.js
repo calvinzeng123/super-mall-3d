@@ -251,7 +251,11 @@ export function buildNav(layout, options = {}) {
     for (const o of lv.navObstacles || []) polygonObstacle(F, frame(0, 0, 0), o);
     for (const o of options.levelSolids?.(lv) || []) polygonObstacle(F, frame(0, 0, 0), o);
     for (const f of lv.features) {
-      if (f.type === 'gates') {
+      if (f.type === 'gates' && f.axis === 'x') {
+        // 沿 x 横排的闸机（地铁站厅长边栏杆上）：机柜是一道道沿 z 的短墙
+        const n = Math.max(2, Math.round((f.x1 - f.x0) / (f.pitch || 0.95)));
+        for (let i = 0; i <= n; i++) { const x = f.x0 + ((f.x1 - f.x0) * i) / n; wall(F, x, f.z - 0.85, x, f.z + 0.85); }
+      } else if (f.type === 'gates') {
         const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95)));
         for (let i = 0; i <= n; i++) { const z = f.z0 + ((f.z1 - f.z0) * i) / n; wall(F, f.x - 0.85, z, f.x + 0.85, z); }
       } else if (f.type === 'market-stall') {

@@ -212,13 +212,17 @@ test('一期楼层的用房、隔墙渲染在住户核心筒上不报错，且�
 test('地铁闸机画成常开式：扇门收在机柜面上，不压通道中心线', () => {
   const gates = L.levels.flatMap((l) => l.features.filter((f) => f.type === 'gates'));
   assert.ok(gates.length > 0);
+  assert.ok(gates.some((f) => f.axis === 'x'), '站厅长边也有闸机');
   for (const f of gates) {
-    const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95))), pitch = (f.z1 - f.z0) / n;
+    // 闸机可以沿 z 排（站厅两头）或沿 x 排（axis: 'x'，长边栏杆上）
+    const along = f.axis === 'x' ? ['x', 'w', f.x0, f.x1] : ['z', 'd', f.z0, f.z1];
+    const [k, size, a0, a1] = along;
+    const n = Math.max(2, Math.round((a1 - a0) / (f.pitch || 0.95))), pitch = (a1 - a0) / n;
     const flaps = fareGateFlaps(f);
     assert.equal(flaps.length, n * 2);
     for (let i = 0; i < n; i++) {
-      const c = f.z0 + (i + .5) * pitch;
-      assert.ok(!flaps.some((q) => Math.abs(q.z - c) < q.d / 2 + .2), `闸机通道 ${c} 被扇门挡住`);
+      const c = a0 + (i + .5) * pitch;
+      assert.ok(!flaps.some((q) => Math.abs(q[k] - c) < q[size] / 2 + .2), `闸机通道 ${c} 被扇门挡住`);
     }
   }
 });

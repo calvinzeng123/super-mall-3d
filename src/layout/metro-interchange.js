@@ -22,7 +22,7 @@ export function applyMetroInterchange(layout) {
   const B2=level('B2','B2 · 7号线 东西向','platform',-12,'#b43d42');
   const B3=level('B3','B3 十字换乘厅','concourse',-19.5,'#267d90');
   const B4=level('B4','B4 · 12号线 南北向','platform',-27,'#187b9f');
-  B1.theme.label='双线站厅 · 售票 / 24 条闸机通道';
+  B1.theme.label='双线站厅 · 售票 / 64 条闸机通道';
   B2.theme.label='7号线站台 · 东西向 · 中央下车 / 两侧上车';
   B3.theme.label='十字换乘厅 · 7 ↔ 12 号线';
   B4.theme.label='12号线站台 · 南北向 · 中央下车 / 两侧上车';
@@ -59,8 +59,23 @@ export function applyMetroInterchange(layout) {
     const dz=r.type==='wc'?-15:15,rects=r.rects.map(q=>({...q,z0:q.z0+dz,z1:q.z1+dz})),doors=r.doors.map(q=>({...q,z0:q.z0+dz,z1:q.z1+dz}));
     return {...r,rects,doors,polys:rects.map(rectPoly),wdoors:doors.map(q=>lseg(IDENTITY,q))};
   });
+  // 站厅四个角（付费区栏杆外的南北长条和东西两头连起来的地方）原来被便利店、站务室、洗手间、面包店整块占满（10 m × 6 m），
+  // 非付费区断成四段：从一期、二期通道（北侧）沿栏杆外走不到三期通道（南侧）和 E/G 口，被便利店挡住。
+  // 四间都收窄到靠外墙的 4 m（x 在 ±62..±66），门脸、门改朝站厅中间，角上空出 3 m 宽的通道
+  const corner=(q)=>{const r=q.rects[0],west=r.x0<0,x0=west?-66:62,x1=west?-62:66,face=west?-62:62,side=west?'E':'W';
+    return {rects:[{...r,x0,x1}],edge:{x0:face,z0:r.z0+1,x1:face,z1:r.z1-1,side}};};
+  for(const u of B1.units){const c=corner(u);u.rects=c.rects;u.fronts=[c.edge];u.polys=u.rects.map(r=>lrectPoly(u.frame,r));u.wfronts=u.fronts.map(f=>lseg(u.frame,f));}
+  for(const r of B1.rooms.filter(q=>['wc','equip'].includes(q.type))){const c=corner(r);r.rects=c.rects;r.polys=c.rects.map(rectPoly);r.doors=[{...c.edge,z0:(c.edge.z0+c.edge.z1)/2-1.5,z1:(c.edge.z0+c.edge.z1)/2+1.5}];r.wdoors=r.doors.map(q=>lseg(IDENTITY,q));}
   for(const x of [-59,59])for(const [z0,z1]of [[-18,-10],[10,18]])B1.features.push({type:'gates',x,z0,z1,pitch:1.3,name:'进出站闸机'});
-  for(const z of [-20,20])B1.features.push({type:'fence',x0:-59,x1:59,z});
+  // 南北两条长边的付费区栏杆上也开闸机口（axis:'x'，闸机沿栏杆横排）：大部分通道（PA/PB/PC/PD/PF/PH）从长边进站厅，
+  // 原来只有东西两头有闸机，进站要沿栏杆走三四十米。每边 4 组、每组 6 m，避开付费区里的扶梯口、侧梯和售票机前面
+  const SIDE_GATES=[-36,-22,22,36];
+  for(const z of [-20,20]){
+    for(const c of SIDE_GATES)B1.features.push({type:'gates',axis:'x',z,x0:c-3,x1:c+3,pitch:1.2,name:'进出站闸机'});
+    let x=-59;
+    for(const c of SIDE_GATES){B1.features.push({type:'fence',x0:x,x1:c-3,z});x=c+3;}
+    B1.features.push({type:'fence',x0:x,x1:59,z});
+  }
   B1.navWalls=[];
   // The 14 concourse columns keep their collision after the rebuild (render draws the same records).
   B1.navObstacles=concourseColumns(B1.id);
@@ -105,7 +120,7 @@ export function applyMetroInterchange(layout) {
   B1.walk.unshift(...carve(INTERCHANGE.concourse,B1.rooms.flatMap(r=>r.rects).concat(B1.units.flatMap(u=>u.rects))).map((r,i)=>walk(`M-hall-${i}`,'concourse',rectPoly(r))));
   for(const lv of levels)for(const v of lv.voids)for(const piece of lv.slab.pieces)if(v.poly.every(p=>pointInPoly(p,piece.outer)))piece.holes.push(v.poly);
   b.box=INTERCHANGE.concourse;b.outline=B1.outline;b.radius=85;b.levels=levels.map(l=>l.id);b.line='7 / 12 号线';
-  b.interchange={lines,transferLevel:B3.id,scheme:'spanish',boarding:'side',alighting:'central',gateLanes:24};
+  b.interchange={lines,transferLevel:B3.id,scheme:'spanish',boarding:'side',alighting:'central',gateLanes:B1.features.filter(f=>f.type==='gates').reduce((n,f)=>n+Math.max(2,Math.round(((f.axis==='x'?f.x1-f.x0:f.z1-f.z0))/(f.pitch||.95))),0)};
   b.access=buildMallStairAccess(b,levels,stairs);
   layout.levels.splice(layout.levels.findIndex(l=>l.building==='M'),2,...levels);
   for(const [key,values]of [['escalators',escalators],['stairs',stairs],['elevators',elevators]])layout[key]=layout[key].filter(x=>x.building!=='M').concat(values);

@@ -14,6 +14,14 @@ import { addCutSurfaceSlab } from './surface-shapes.js';
 
 /** Normally-open fare gates: each lane's two flaps parked flat against its cabinet faces. */
 export function fareGateFlaps(f) {
+  if (f.axis === 'x') {
+    const n = Math.max(2, Math.round((f.x1 - f.x0) / (f.pitch || 0.95))), pitch = (f.x1 - f.x0) / n, out = [];
+    for (let i = 0; i < n; i++) {
+      const x = f.x0 + i * pitch;
+      out.push({ x: x + 0.14, z: f.z, w: 0.03, d: 0.5 }, { x: x + pitch - 0.14, z: f.z, w: 0.03, d: 0.5 });
+    }
+    return out;
+  }
   const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95))), pitch = (f.z1 - f.z0) / n, out = [];
   for (let i = 0; i < n; i++) {
     const z = f.z0 + i * pitch;
@@ -430,7 +438,18 @@ function concourse(ctx, b, lv, L, atlas, S) {
   }
   // 闸机、付费区栏杆、售票机
   for (const f of lv.features) {
-    if (f.type === 'gates') {
+    if (f.type === 'gates' && f.axis === 'x') {
+      // 长边栏杆上的闸机：机柜沿 z 摆、沿 x 排开；指示灯朝付费区外（绿）和里（红）
+      const n = Math.max(2, Math.round((f.x1 - f.x0) / (f.pitch || 0.95))), pitch = (f.x1 - f.x0) / n, out = Math.sign(f.z) || 1;
+      for (let i = 0; i <= n; i++) {
+        const x = f.x0 + i * pitch;
+        B.get('satin').box(x, y0 + 0.5, f.z, 0.24, 1.0, 1.7, '#d7dce1');
+        B.get('metal').box(x, y0 + 1.02, f.z, 0.27, 0.05, 1.74, '#2b3036');
+        for (const s of [-1, 1]) B.get('glow').box(x, y0 + 0.92, f.z + s * 0.87, 0.12, 0.14, 0.02, s === out ? '#3ddc84' : '#ff5a4f');
+      }
+      for (const q of fareGateFlaps(f)) B.get('glass').box(q.x, y0 + 0.82, q.z, q.w, 0.55, q.d, 0xffffff);
+      hangSign(B, S, atlas, IDF, (f.x0 + f.x1) / 2, f.z + out * 0.6, y0 + 2.7, 0, out, 'in', 'out', 0.42, y0 + H);
+    } else if (f.type === 'gates') {
       const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95)));
       const pitch = (f.z1 - f.z0) / n;
       for (let i = 0; i <= n; i++) {

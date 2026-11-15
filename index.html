@@ -208,7 +208,7 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 .clean-hint { position: absolute; z-index: 8; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 8px 14px; background: rgba(20,26,32,.8); color: white; border-radius: 20px; pointer-events: none; white-space: nowrap; font-size: 13px; }
 .directory.collapsed { display: none; }
 .tool.dir-btn { display: inline-flex; }
-.quality-panel { position: absolute; z-index: 8; top: calc(66px + env(safe-area-inset-top,0px)); right: 16px; width: min(360px,calc(100% - 32px)); max-height: calc(100dvh - 90px - env(safe-area-inset-top,0px)); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 14px; border-radius: 24px; }
+.quality-panel { position: absolute; z-index: 8; top: calc(66px + env(safe-area-inset-top,0px)); right: 16px; width: min(400px,calc(100% - 32px)); max-height: calc(100dvh - 90px - env(safe-area-inset-top,0px)); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 14px; border-radius: 24px; }
 /* 设置项多、小字多：这块面板的底比别的玻璃面板实一些，压在地图上也看得清 */
 #app .quality-panel.panel { background: var(--glass-solid); background: color-mix(in srgb, var(--glass-solid) 80%, transparent); }
 .quality-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -235,6 +235,15 @@ body.touch .ex-prompt { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); 
 .quality-slider output { color: var(--accent); font-variant-numeric: tabular-nums; }
 .quality-slider small { display: block; color: var(--ink-2); font-size: 11px; }
 .quality-hint { color: var(--ink-2); margin: 10px 0 2px; font-size: 12px; }
+.quality-group span { display: block; margin-top: 2px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); font-size: 11px; }
+.quality-group:first-of-type { margin-top: 4px; }
+.quality-more { margin-top: 14px; border-top: 1px solid var(--line); }
+.quality-more > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; cursor: pointer; font-weight: 700; }
+.quality-more > summary::-webkit-details-marker { display: none; }
+.quality-more > summary small { display: block; font-weight: 400; color: var(--ink-2); font-size: 11px; }
+.quality-more > summary::after { content: ''; width: 9px; height: 9px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg); transition: transform .18s; flex: none; margin-right: 6px; }
+.quality-more[open] > summary::after { transform: rotate(-135deg); }
+.quality-slider:first-of-type { border-top: 0; }
 .quality-panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 900px), (pointer: coarse), (max-height: 520px) {
   #app .quality-panel { top: auto; bottom: calc(76px + env(safe-area-inset-bottom,0px)); left: max(8px,env(safe-area-inset-left,0px)); right: max(8px,env(safe-area-inset-right,0px)); margin: 0 auto; width: auto; max-width: 390px; max-height: min(65dvh,450px); }
@@ -476,21 +485,24 @@ body.quality-low #app .panel { -webkit-backdrop-filter: blur(1.5px) saturate(.8)
     <div class="quality-presets" role="group" aria-label="画质档位">
       <button type="button" data-quality-preset="auto" aria-pressed="true">自动</button><button type="button" data-quality-preset="low" aria-pressed="false">流畅</button><button type="button" data-quality-preset="balanced" aria-pressed="false">均衡</button><button type="button" data-quality-preset="high" aria-pressed="false">精细</button><button type="button" data-quality-preset="ultra" aria-pressed="false">极致</button>
     </div>
-    <h3 class="quality-group">清晰度与流畅度</h3>
+    <h3 class="quality-group">流畅度<span>画面卡顿时先调这一组</span></h3>
+    <label class="quality-slider" for="qualityCrowd"><span>场景人数<small>画面卡的时候先调低这一项</small></span><output id="qualityCrowdValue" for="qualityCrowd">22%</output><input id="qualityCrowd" type="range" min="0" max="1" step="0.01" value="0.22"></label>
     <label class="quality-slider" for="qualityResolution"><span>画面清晰度</span><output id="qualityResolutionValue" for="qualityResolution">85%</output><input id="qualityResolution" type="range" min="0.65" max="2" step="0.05" value="0.85"></label>
     <div class="quality-row" role="group" aria-label="帧率上限"><span>帧率上限<small>调低更省电、少发热</small></span><div class="quality-seg" data-quality-choice="maxFps"><button type="button" data-value="30">30</button><button type="button" data-value="45">45</button><button type="button" data-value="60">60</button></div></div>
+    <h3 class="quality-group">细节</h3>
     <div class="quality-row" role="group" aria-label="贴图清晰度"><span>贴图清晰度<small>斜着看地面、墙面时纹理更清楚</small></span><div class="quality-seg" data-quality-choice="textures"><button type="button" data-value="standard">标准</button><button type="button" data-value="high">高</button></div></div>
     <div class="quality-row" role="group" aria-label="模型细节"><span>模型细节<small>家具、绿植在多远以内用精细模型</small></span><div class="quality-seg" data-quality-choice="detail"><button type="button" data-value="low">低</button><button type="button" data-value="balanced">中</button><button type="button" data-value="high">高</button></div></div>
-    <label class="quality-slider" for="qualityCrowd"><span>场景人数<small>画面卡的时候先调低这一项</small></span><output id="qualityCrowdValue" for="qualityCrowd">22%</output><input id="qualityCrowd" type="range" min="0" max="1" step="0.01" value="0.22"></label>
-    <h3 class="quality-group">光影</h3>
-    <label class="quality-row" for="qualityHdr"><span>HDR 光影<small>真实天空的反射和环境光、更通透的色彩、亮面的石材和金属</small></span><input type="checkbox" id="qualityHdr" role="switch" data-quality-switch="hdr"></label>
-    <label class="quality-row" for="qualityAo"><span>环境光遮蔽<small>墙角、家具脚下自然变暗；比较吃显卡，需要开着 HDR 光影</small></span><input type="checkbox" id="qualityAo" role="switch" data-quality-switch="ao" data-quality-needs="hdr"></label>
-    <label class="quality-row" for="qualityDayBloom"><span>高光柔光<small>灯具和阳光下的反光溢出一点光；需要开着 HDR 光影</small></span><input type="checkbox" id="qualityDayBloom" role="switch" data-quality-switch="dayBloom" data-quality-needs="hdr"></label>
-    <label class="quality-row" for="qualityBloom"><span>夜景柔光<small>夜间灯光边缘泛光</small></span><input type="checkbox" id="qualityBloom" role="switch" data-quality-switch="bloom"></label>
-    <label class="quality-row" for="qualityShadows"><span>太阳阴影<small>建筑与人物的影子；关闭可减轻手机负担</small></span><input type="checkbox" id="qualityShadows" role="switch" data-quality-switch="shadows"></label>
-    <div class="quality-row" role="group" aria-label="阴影精度"><span>阴影精度<small>影子边缘的清晰程度</small></span><div class="quality-seg" data-quality-choice="shadowSize" data-quality-needs="shadows"><button type="button" data-value="1024">低</button><button type="button" data-value="2048">中</button><button type="button" data-value="4096">高</button></div></div>
-    <div class="quality-row" role="group" aria-label="室内灯光"><span>室内灯光<small>商场和住宅里，离你最近的几盏灯真的照亮周围</small></span><div class="quality-seg" data-quality-choice="indoorLights"><button type="button" data-value="0">关</button><button type="button" data-value="4">4 盏</button><button type="button" data-value="8">8 盏</button></div></div>
-    <label class="quality-row" for="qualityDecals"><span>贴地阴影与光斑<small>家具脚下的影子、灯下和窗边的光斑；几乎不花性能</small></span><input type="checkbox" id="qualityDecals" role="switch" data-quality-switch="decals"></label>
+    <details class="quality-more" id="qualityMore">
+      <summary><span>光影<small>HDR、阴影、柔光、室内灯光（更吃显卡）</small></span></summary>
+      <label class="quality-row" for="qualityHdr"><span>HDR 光影<small>真实天空的反射和环境光、更通透的色彩、亮面的石材和金属</small></span><input type="checkbox" id="qualityHdr" role="switch" data-quality-switch="hdr"></label>
+      <label class="quality-row" for="qualityAo"><span>环境光遮蔽<small>墙角、家具脚下自然变暗；比较吃显卡，需要开着 HDR 光影</small></span><input type="checkbox" id="qualityAo" role="switch" data-quality-switch="ao" data-quality-needs="hdr"></label>
+      <label class="quality-row" for="qualityDayBloom"><span>高光柔光<small>灯具和阳光下的反光溢出一点光；需要开着 HDR 光影</small></span><input type="checkbox" id="qualityDayBloom" role="switch" data-quality-switch="dayBloom" data-quality-needs="hdr"></label>
+      <label class="quality-row" for="qualityBloom"><span>夜景柔光<small>夜间灯光边缘泛光</small></span><input type="checkbox" id="qualityBloom" role="switch" data-quality-switch="bloom"></label>
+      <label class="quality-row" for="qualityShadows"><span>太阳阴影<small>建筑与人物的影子；关闭可减轻手机负担</small></span><input type="checkbox" id="qualityShadows" role="switch" data-quality-switch="shadows"></label>
+      <div class="quality-row" role="group" aria-label="阴影精度"><span>阴影精度<small>影子边缘的清晰程度</small></span><div class="quality-seg" data-quality-choice="shadowSize" data-quality-needs="shadows"><button type="button" data-value="1024">低</button><button type="button" data-value="2048">中</button><button type="button" data-value="4096">高</button></div></div>
+      <div class="quality-row" role="group" aria-label="室内灯光"><span>室内灯光<small>商场和住宅里，离你最近的几盏灯真的照亮周围</small></span><div class="quality-seg" data-quality-choice="indoorLights"><button type="button" data-value="0">关</button><button type="button" data-value="4">4 盏</button><button type="button" data-value="8">8 盏</button></div></div>
+      <label class="quality-row" for="qualityDecals"><span>贴地阴影与光斑<small>家具脚下的影子、灯下和窗边的光斑；几乎不花性能</small></span><input type="checkbox" id="qualityDecals" role="switch" data-quality-switch="decals"></label>
+    </details>
     <p class="quality-hint" id="qualityHint"></p>
   </section>
 

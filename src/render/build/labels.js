@@ -149,7 +149,7 @@ export function buildLabels(ctx) {
           const [x, z] = p.extension ? p.route[Math.floor(p.route.length/2)] : toW(p.F, (p.u0 + p.uEnd) / 2, 0);
           put(G, p.name, x, y + 1.8, z, 'metro', 'metro', PASSAGE_EN[p.id] || p.info?.en, 0.022);
         }
-        for (const f of lv.features.filter((q) => q.type === 'gates')) put(G, '进出站闸机', f.x, y + 2.3, (f.z0 + f.z1) / 2, 'facility', 'metro', 'FARE GATES', 0.02);
+        for (const f of lv.features.filter((q) => q.type === 'gates')) put(G, '进出站闸机', f.axis === 'x' ? (f.x0 + f.x1) / 2 : f.x, y + 2.3, f.axis === 'x' ? f.z : (f.z0 + f.z1) / 2, 'facility', 'metro', 'FARE GATES', 0.02);
       } else {
         for (const f of lv.features.filter((q) => q.type === 'rail')) put(G, f.name, f.dir * 30, y + 3.6, f.z, 'metro', 'metro', f.en, 0.022);
       }
