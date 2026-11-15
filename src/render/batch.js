@@ -44,10 +44,16 @@ export function tpl(name) {
     case 'sphereLo': g = new THREE.SphereGeometry(0.5, 8, 6); break;
     case 'ico': g = new THREE.IcosahedronGeometry(0.5, 1); break;
     case 'ico0': g = new THREE.IcosahedronGeometry(0.5, 0); break;
+    // 叶片、小花：四面体 12 个顶点、八面体 24 个（ico0 是 60 个），远看一样是一点颜色，显存省得多
+    case 'tet': g = new THREE.TetrahedronGeometry(0.5, 0); break;
+    case 'octa': g = new THREE.OctahedronGeometry(0.5, 0); break;
+    // 只朝下的一片圆（吊顶筒灯的发光面）、只朝上的一片方（地面标线）：看得见的就这一面
+    case 'discDown': g = new THREE.CircleGeometry(0.5, 10).rotateX(Math.PI / 2); break;
     case 'plane': g = new THREE.PlaneGeometry(1, 1); break; // XY 平面，朝 +z
     case 'planeUp': g = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2); break; // XZ 平面，朝 +y
     case 'torus': g = new THREE.TorusGeometry(0.5, 0.06, 6, 20); break;
     case 'halfTorus': g = new THREE.TorusGeometry(0.5, 0.06, 6, 16, Math.PI); break;
+    case 'halfTorusLo': g = new THREE.TorusGeometry(0.5, 0.06, 5, 10, Math.PI); break; // 扶梯扶手端头这种小弯，一半的顶点就够
     case 'capsule': g = new THREE.CapsuleGeometry(0.5, 1, 4, 8); break;
     default: throw new Error('unknown template ' + name);
   }
@@ -190,6 +196,24 @@ export class Batcher {
     _s.set(rx * 2, ry * 2, rz * 2);
     _m.compose(_p, _q, _s);
     this.push(tpl(name), _m, color);
+  }
+
+  /** 贴地的一片薄面（地面标线、色块）：只有朝上的一面，6 个顶点（薄盒子 36 个） */
+  flat(cx, y, cz, sx, sz, color, ry = 0) {
+    _p.set(cx, y, cz);
+    _q.setFromAxisAngle(Y, ry);
+    _s.set(sx, 1, sz);
+    _m.compose(_p, _q, _s);
+    this.push(tpl('planeUp'), _m, color);
+  }
+
+  /** 吊顶筒灯的发光面：一片朝下的圆，30 个顶点（8 边圆柱 96 个） */
+  downlight(x, y, z, r, color) {
+    _p.set(x, y, z);
+    _q.identity();
+    _s.set(r * 2, 1, r * 2);
+    _m.compose(_p, _q, _s);
+    this.push(tpl('discDown'), _m, color);
   }
 
   /** 两点之间的细杆（盒截面） */

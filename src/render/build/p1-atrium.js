@@ -11,6 +11,10 @@ import { SLAB_T } from './shell.js';
 import { F_SQ } from '../../layout/square.js';
 import { WATERFALL, SQ_DECKS, SQ_GROUND } from '../../layout/square-atrium.js';
 import { LIGHT_TREE } from '../paths.js';
+import { LITE } from '../device.js';
+
+// 叶片用压扁的四面体（12 个顶点，盒子 36 个）；四面体在 xz 面上只有 ±0.29 宽，放大 1.72 倍跟原来的盒子叶片一样大
+const TET = 1.72;
 
 const sgE = new THREE.Euler(), sgQ = new THREE.Quaternion(), sgP = new THREE.Vector3(), sgS = new THREE.Vector3();
 const palmDir = new THREE.Vector3(), X_AXIS = new THREE.Vector3(1, 0, 0);
@@ -147,7 +151,7 @@ function balconyEdge(ctx, B, lv, v) {
       // 2F 底下（1F 广场上空）已经有放射状木格栅，从 3F 往上才做；扶梯口、铺位里不做
       if (!roof && v.mega && lv.elev > 7 && !skip(mx, mz) && !inUnit(mx - nx * 0.9, mz - nz * 0.9) && !inUnit(mx - nx * 1.6, mz - nz * 1.6)) {
         const cy = y - (SLAB_T[lv.kind] ?? 0.45) - 0.045;
-        for (const o of [0.35, 0.6, 0.85, 1.1, 1.35, 1.6]) B.get('satin').box(mx - nx * o, cy, mz - nz * o, pl, 0.07, 0.05, '#e2c299', ang);
+        for (const o of LITE ? [0.35, 0.85, 1.35] : [0.35, 0.6, 0.85, 1.1, 1.35, 1.6]) B.get('satin').box(mx - nx * o, cy, mz - nz * o, pl, 0.07, 0.05, '#e2c299', ang);
       }
       // 地面上一条跟着栏板走的暖光线（离栏板 2.2 米），扶梯口、观光梯门前、铺位里不画
       const gx = mx - nx * 2.2, gz = mz - nz * 2.2;
@@ -156,29 +160,31 @@ function balconyEdge(ctx, B, lv, v) {
       // 花槽挂在栏板外侧：浅色槽身、上面一排鼓起来的灌木团，几串小叶子垂下来，偶尔开花
       B.get('matte').box(mx + nx * 0.34, y - 0.2, mz + nz * 0.34, pl, 0.26, 0.28, '#ece8df', ang);
       // 花槽里的灌木：五小团深浅不一的绿（原来三大团深绿多面体，远看像一排石块）
-      for (let q = 0; q < 5; q++) {
-        const s = (q - 2) * pl * 0.2 + (rand() - 0.5) * 0.15, rr = 0.17 + rand() * 0.07;
+      const clumps = LITE ? 2 : 4;
+      for (let q = 0; q < clumps; q++) {
+        const s = (q - (clumps - 1) / 2) * pl * (LITE ? 0.45 : 0.24) + (rand() - 0.5) * 0.15, rr = (LITE ? 0.26 : 0.19) + rand() * 0.07;
         B.get('foliage').sphere(mx + ux * s + nx * (0.32 + rand() * 0.08), y - 0.04 + rand() * 0.08, mz + uz * s + nz * (0.32 + rand() * 0.08), rr,
           ['#5f9447', '#4f7f3c', '#76a85a', '#6a9a4c'][Math.floor(rand() * 4)], rr * 0.7, rr * 0.85, 'ico0');
       }
-      const vines = rand() < 0.35 ? 0 : 1 + Math.floor(rand() * 2);
+      // 省显存档（手机、上次显存不够的设备）不挂垂藤、不点小花
+      const vines = rand() < 0.35 || LITE ? 0 : 1 + Math.floor(rand() * 2);
       for (let q = 0; q < vines; q++) {
         const s = (rand() - 0.5) * pl * 0.9, L = 0.5 + rand() * (lv.height > 5 ? 1.7 : 1.2), sway = (rand() - 0.5) * 0.25;
         // 一串串垂下来的藤叶：每一节左右两片小叶，随机偏转、略微下垂（原来是一串小球，远看像珠帘）
-        for (let d = 0.1; d < L; d += 0.17) {
+        for (let d = 0.1; d < L; d += 0.26) {
           const t = d / L, jx = Math.sin(d * 7 + s * 3) * 0.05, lx = mx + ux * (s + jx + sway * t) + nx * (0.47 + t * 0.06), lz = mz + uz * (s + jx + sway * t) + nz * (0.47 + t * 0.06);
           for (const side of [1, -1]) {
             const yaw = Math.atan2(-uz, ux) + side * (0.6 + rand() * 0.5);
             leafE.set(-0.35 - rand() * 0.4, yaw, side * 0.3); leafQ.setFromEuler(leafE);
             leafP.set(lx + ux * side * 0.045, y - 0.3 - d - (side > 0 ? 0 : 0.07), lz + uz * side * 0.045);
-            leafS.set(0.13 - 0.04 * t, 0.012, 0.075 - 0.02 * t);
-            B.get('foliage').shape('box', leafP, leafQ, leafS, rand() < 0.5 ? '#5f9447' : (rand() < 0.5 ? '#4a803c' : '#76a85a'));
+            leafS.set((0.13 - 0.04 * t) * TET, 0.012, (0.075 - 0.02 * t) * TET);
+            B.get('foliage').shape('tet', leafP, leafQ, leafS, rand() < 0.5 ? '#5f9447' : (rand() < 0.5 ? '#4a803c' : '#76a85a'));
           }
         }
       }
-      if (rand() < 0.5) for (let q = 0; q < 3; q++) {
+      if (rand() < 0.5 && !LITE) for (let q = 0; q < 3; q++) {
         const s = (rand() - 0.5) * pl * 0.85;
-        B.get('foliage').sphere(mx + ux * s + nx * (0.3 + rand() * 0.15), y + 0.1, mz + uz * s + nz * (0.3 + rand() * 0.15), 0.09 + rand() * 0.04, FLOWERS[Math.floor(rand() * FLOWERS.length)], undefined, undefined, 'ico0');
+        B.get('foliage').sphere(mx + ux * s + nx * (0.3 + rand() * 0.15), y + 0.1, mz + uz * s + nz * (0.3 + rand() * 0.15), 0.09 + rand() * 0.04, FLOWERS[Math.floor(rand() * FLOWERS.length)], undefined, undefined, 'octa');
       }
     }
   }
@@ -197,11 +203,11 @@ function flowerBed(B, x, z, r, y, rand) {
   for (let k = 0; k < ring; k++) {
     if (k % 5 === 0) col = BED[Math.floor(rand() * BED.length)];
     const a = (k / ring) * Math.PI * 2 + rand() * 0.05, d = r - 0.12 - rand() * 0.1;
-    B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.1 + rand() * 0.05, z + Math.sin(a) * d, 0.09 + rand() * 0.035, col, undefined, undefined, 'ico0');
+    B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.1 + rand() * 0.05, z + Math.sin(a) * d, 0.09 + rand() * 0.035, col, undefined, undefined, 'octa');
   }
   for (let k = 0; k < Math.round(area * 2.5); k++) {
     const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (r - 0.35);
-    B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.14, z + Math.sin(a) * d, 0.07 + rand() * 0.03, BED[Math.floor(rand() * BED.length)], undefined, undefined, 'ico0');
+    B.get('foliage').sphere(x + Math.cos(a) * d, y + 0.14, z + Math.sin(a) * d, 0.07 + rand() * 0.03, BED[Math.floor(rand() * BED.length)], undefined, undefined, 'octa');
   }
 }
 
@@ -229,7 +235,7 @@ function railTree(B, x, z, y0, seed) {
     const a = (k / 3) * Math.PI * 2 + rand(), q = { x: top.x + Math.cos(a) * 0.22, y: cy - 0.05, z: top.z + Math.sin(a) * 0.22 };
     B.get('wood').bar(top, q, 0.035, '#7a6048');
   }
-  for (let k = 0; k < 14; k++) {
+  for (let k = 0, n = LITE ? 8 : 14; k < n; k++) {
     const h = rand() * 2 - 1, a = rand() * Math.PI * 2, rr = Math.sqrt(1 - h * h) * 0.42;
     B.get('foliage').sphere(top.x + Math.cos(a) * rr, cy + h * 0.36, top.z + Math.sin(a) * rr, 0.17 + rand() * 0.06, greens[k % greens.length], undefined, undefined, 'ico0');
   }
@@ -352,8 +358,8 @@ function palm(B, F, p, y0, seed) {
             palmDir.set(dx, dy, dz).normalize();
             leafQ.setFromUnitVectors(X_AXIS, palmDir);
             leafP.set(q.x + palmDir.x * ll * 0.5, q.y + palmDir.y * ll * 0.5, q.z + palmDir.z * ll * 0.5);
-            leafS.set(ll, 0.012, 0.22 - 0.1 * t);
-            B.get('foliage').shape('box', leafP, leafQ, leafS, col);
+            leafS.set(ll * TET, 0.012, (0.22 - 0.1 * t) * TET);
+            B.get('foliage').shape('tet', leafP, leafQ, leafS, col);
           }
         }
         fp = q;
@@ -393,7 +399,7 @@ function flowerUrn(B, x, z, y0, seed) {
   for (let k = 0; k < 34; k++) {
     // 半球面上均匀撒点（高度均匀 → 面积均匀）
     const h = rand(), a = rand() * Math.PI * 2, rr = Math.sqrt(1 - h * h) * 0.42;
-    B.get('foliage').sphere(x + Math.cos(a) * rr, cy + 0.06 + h * 0.4, z + Math.sin(a) * rr, 0.08 + rand() * 0.04, pinks[k % pinks.length], undefined, undefined, 'ico0');
+    B.get('foliage').sphere(x + Math.cos(a) * rr, cy + 0.06 + h * 0.4, z + Math.sin(a) * rr, 0.08 + rand() * 0.04, pinks[k % pinks.length], undefined, undefined, 'octa');
   }
 }
 
@@ -646,7 +652,7 @@ function cafe(B, r, y0, F = F_SQ) {
         const t = k / n, sag = 0.45 * 4 * t * (1 - t) * Math.min(1, len / 6);
         const pt = { x: ax + (bx - ax) * t, y: top - sag, z: az + (bz - az) * t };
         if (prev) B.get('metal').bar(prev, pt, 0.008, '#2f3336');
-        if (k > 0 && k < n) B.get('glow').sphere(pt.x, pt.y - 0.06, pt.z, 0.075, '#ffe0a8', undefined, undefined, 'sphereLo');
+        if (k > 0 && k < n) B.get('glow').sphere(pt.x, pt.y - 0.06, pt.z, 0.075, '#ffe0a8', undefined, undefined, 'octa');
         prev = pt;
       }
     }
@@ -738,9 +744,9 @@ function megaAtrium(ctx, levels) {
         L.batch.get('foliage').cyl(px, y + 0.5, pz, 0.24, 0.03, '#4a3a2c', 14);
         if (seed % 3 === 0) {
           L.batch.get('wood').bar({ x: px, y: y + 0.5, z: pz }, { x: px, y: y + 1.5, z: pz }, 0.05, '#6b5440');
-          L.batch.get('foliage').sphere(px, y + 1.75, pz, 0.75, '#6f8f52', 0.62, 0.75, 'ico');
+          L.batch.get('foliage').sphere(px, y + 1.75, pz, 0.75, '#6f8f52', 0.62, 0.75, LITE ? 'ico0' : 'ico');
         } else {
-          for (let k = 0; k < 3; k++) L.batch.get('foliage').sphere(px + Math.cos(k * 2.1) * 0.12, y + 0.72 + k * 0.08, pz + Math.sin(k * 2.1) * 0.12, 0.42, k % 2 ? LEAF : '#5d8f45', 0.38, 0.42, 'ico');
+          for (let k = 0; k < 3; k++) L.batch.get('foliage').sphere(px + Math.cos(k * 2.1) * 0.12, y + 0.72 + k * 0.08, pz + Math.sin(k * 2.1) * 0.12, 0.42, k % 2 ? LEAF : '#5d8f45', 0.38, 0.42, LITE ? 'ico0' : 'ico');
         }
       }
     }
@@ -1184,8 +1190,8 @@ function balconyInlay(B, lv) {
         const t = (k + 0.5) / n, mx = x0 + (x1 - x0) * t + nx * 2.2, mz = z0 + (z1 - z0) * t + nz * 2.2, pl = len / n + 0.25;
         if (!free(mx, mz)) continue;
         // 浅暖灰石材带（原来 #6e6359 加石材纹理是一条深褐色的带）+ 两侧各一道细金线
-        B.get('stone').box(mx, lv.elev + 0.006, mz, pl, 0.012, 0.26, '#d2c5b2', ang);
-        for (const o of [-0.16, 0.16]) B.get('facadeBronze').box(mx + nx * o, lv.elev + 0.007, mz + nz * o, pl, 0.012, 0.035, GOLD, ang);
+        B.get('stone').flat(mx, lv.elev + 0.012, mz, pl, 0.26, '#d2c5b2', ang);
+        for (const o of [-0.16, 0.16]) B.get('facadeBronze').flat(mx + nx * o, lv.elev + 0.014, mz + nz * o, pl, 0.035, GOLD, ang);
       }
     }
   }
@@ -1246,7 +1252,7 @@ function blossom(B, t, y0, seed) {
       for (let k = 0; k < 30; k++) {
         const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.35) * 0.8, sz = 0.13 + rand() * 0.11;
         B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 1.15, t.top ? Math.min(t.top - 0.3 - sz, tip.y + h) : tip.y + h, tip.z + Math.sin(u) * rr * 1.15,
-          sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'sphereLo');
+          sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'ico0');
       }
     }
   }
@@ -1337,13 +1343,13 @@ function walkIslands(ctx, levels, M) {
       if (hw < 0.2) return;
       B.get('foliage').cyl(x, y0 + 0.44, z, hw - 0.06, 0.05, '#5a4632', 20);
       // 花草撒满整条池子（不用 flowerBed：一串圆形花池叠在一起会看出一圈圈花环）
-      for (let k = 0; k < Math.round(hw * 9); k++) {
-        const u = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (hw - 0.15), rr = 0.13 + rand() * 0.08;
+      for (let k = 0; k < Math.round(hw * 6); k++) {
+        const u = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (hw - 0.15), rr = 0.15 + rand() * 0.09;
         B.get('foliage').sphere(x + Math.cos(u) * d, y0 + 0.5, z + Math.sin(u) * d, rr, ['#4f7f3c', '#5f9447', '#3d6a32', '#6f9f50'][k % 4], rr * 0.6, rr, 'ico0');
       }
       for (let k = 0; k < Math.round(hw * 6); k++) {
         const u = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (hw - 0.12);
-        B.get('foliage').sphere(x + Math.cos(u) * d, y0 + 0.56 + rand() * 0.05, z + Math.sin(u) * d, 0.08 + rand() * 0.03, BED[Math.floor(rand() * BED.length)], undefined, undefined, 'ico0');
+        B.get('foliage').sphere(x + Math.cos(u) * d, y0 + 0.56 + rand() * 0.05, z + Math.sin(u) * d, 0.08 + rand() * 0.03, BED[Math.floor(rand() * BED.length)], undefined, undefined, 'octa');
       }
     });
     // 树：5 m 的一棵在正中，8 m 两棵，11 m 三棵；棕榈、樱花交替
@@ -1387,8 +1393,8 @@ function walkIsland(B, x, z, y0, top, kind, seed, planter = true) {
             palmDir.set(px * side * 0.9 + ca * 0.35, -0.42, pz * side * 0.9 + sa * 0.35).normalize();
             leafQ.setFromUnitVectors(X_AXIS, palmDir);
             leafP.set(q.x + palmDir.x * ll * 0.5, q.y + palmDir.y * ll * 0.5, q.z + palmDir.z * ll * 0.5);
-            leafS.set(ll, 0.012, 0.18 - 0.08 * t);
-            B.get('foliage').shape('box', leafP, leafQ, leafS, col);
+            leafS.set(ll * TET, 0.012, (0.18 - 0.08 * t) * TET);
+            B.get('foliage').shape('tet', leafP, leafQ, leafS, col);
           }
         }
         fp = q;
@@ -1406,7 +1412,7 @@ function walkIsland(B, x, z, y0, top, kind, seed, planter = true) {
     for (let k = 0; k < 26; k++) {
       const u = rand() * Math.PI * 2, rr = Math.sqrt(rand()), h = (rand() - 0.4) * 0.7, sz = 0.13 + rand() * 0.1;
       B.get('foliage').sphere(tip.x + Math.cos(u) * rr * 0.95, Math.min(top - sz, tip.y + h), tip.z + Math.sin(u) * rr * 0.95,
-        sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'sphereLo');
+        sz, pinks[Math.floor(rand() * pinks.length)], sz * 0.8, sz, 'ico0');
     }
   }
 }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PEOPLE_ASSETS } from './people-data.js';
-import { MOBILE } from './device.js';
+import { LITE as MOBILE } from './device.js';
 import { fetchBinary } from './fetch-binary.js';
 
 let pending;

@@ -30,7 +30,7 @@ import { buildPark } from './build/park.js';
 import { buildSquare } from './build/square.js';
 import { buildMetro } from './build/metro.js';
 import { createPerfMonitor } from './perf.js';
-import { MOBILE } from './device.js';
+import { MOBILE, LITE, AFTER_CONTEXT_LOSS, markContextLoss } from './device.js';
 import { createQualityManager } from './quality.js';
 import { loadSurfaceTextures } from './pbr.js';
 import { buildHospitality, setHospitalityCut, setResidentialDetailLevel } from './build/hospitality.js';
@@ -93,11 +93,11 @@ function glossFinish(mats, materials) {
   for (const material of materials || []) if (MODEL_FINISH[material.name] != null) mats.finish(material, MODEL_FINISH[material.name]);
 }
 
-export async function createApp(layout, canvas, { onProgress = () => {} } = {}) {
+export async function createApp(layout, canvas, { onProgress = () => {}, game = null } = {}) {
   const fps = layout.playable?.mode === 'fps';
   let storage;
   try { storage = window.localStorage; } catch { /* Storage can be blocked in an embedded preview. */ }
-  const qualityManager = createQualityManager({ mobile: MOBILE, pixelRatio: window.devicePixelRatio, storage: fps ? undefined : storage });
+  const qualityManager = createQualityManager({ mobile: LITE, pixelRatio: window.devicePixelRatio, storage: fps ? undefined : storage });
   // FPS has its own controls. Always begin inside the phone budget, even when
   // a previous sightseeing session saved high quality on this device.
   if (fps) { qualityManager.select('low'); qualityManager.customize({ resolution: .9, shadows: false, bloom: false, crowdDensity: 0 }); }
@@ -176,7 +176,7 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const detailResources = { suite: suiteResource, residential: residentialResource };
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
-  const floorSelector = fps ? null : createFloorDetailSelector(layout, { limit: MOBILE ? 4 : 6, explodedLimit: MOBILE ? 4 : 8, atriumLimit: MOBILE ? 3 : 6 });
+  const floorSelector = fps ? null : createFloorDetailSelector(layout, { limit: LITE ? 4 : 6, explodedLimit: LITE ? 4 : 8, atriumLimit: LITE ? 3 : 6 });
   const lazyAtlasLevels = new Set(layout.levels.filter(l => floorSelector?.eligible.has(l.id)
     && (ctx.bById[l.building].kind === 'annex' || usesExpansionFacade(l))).map(l => l.id));
   const wayfindingEntries = WAYFINDING.map(w => ({ id: w.id,
@@ -297,7 +297,8 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
   const deferredBuilders = new Set([buildWalls, buildStorefronts, buildInteriors]);
   for (let i = 0; i < steps.length; i++) {
     if (layout.playable && steps[i][1] === buildTraffic) continue;
-    if (fps && [buildPeople, buildTraffic, buildFlows, buildLabels].includes(steps[i][1])) continue;
+    // 零点突围（game: 'jimao'）用园区地图，但和 FPS 一样不放人群、车流、动线和标注
+    if ((fps || game === 'jimao') && [buildPeople, buildTraffic, buildFlows, buildLabels].includes(steps[i][1])) continue;
     onProgress(steps[i][0], i / steps.length);
     await nextFrame();
     const builder = steps[i][1];
@@ -352,17 +353,22 @@ export async function createApp(layout, canvas, { onProgress = () => {} } = {}) 
     ctx.dynamic.push({ name: 'props-lod', update() { props.update(camera); } });
   }
   releaseGeometryAfterUpload(scene);
-  // 系统回收了 WebGL 上下文（多见于手机切后台）：顶点数据已释放，无法恢复，提示刷新
+  // 系统回收了 WebGL 上下文（显存不够，或手机切后台太久）：顶点数据已释放，无法就地恢复。
+  // 记下来，刷新后走省显存档（device.js 的 LITE），不再每次进漫游都被回收。
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
-    if (window.__mallFail) window.__mallFail('显示资源被系统回收了', '手机切到后台较久时会这样，刷新页面即可恢复。');
+    const again = AFTER_CONTEXT_LOSS;
+    markContextLoss();
+    if (window.__mallFail) window.__mallFail('显示资源被系统回收了', again
+      ? '已经是省显存模式，这台设备的显存还是不够：请关掉其他标签页和应用，在「设置」里把画质调到「流畅」、场景人数调低，然后刷新。'
+      : '这台设备的显存不够用（或切到后台太久）。已自动换成省显存模式，刷新页面即可继续。', { reload: true });
   });
 
   // ---------- 状态与视图 ----------
   const state = { building: null, focus: null, exploded: false, flows: false, labels: !MOBILE, night: false, selected: null, touring: false, explore: null };
   const persistentResources = sceneResources([root]);
   const persistentGeometry = geometryStats(persistentResources.geometries);
-  const floorCache = floorSelector ? createFloorDetailCache({ limit: MOBILE ? 4 : 6, hardLimit: MOBILE ? 4 : 8,
+  const floorCache = floorSelector ? createFloorDetailCache({ limit: LITE ? 4 : 6, hardLimit: LITE ? 4 : 8,
     build: id => buildOwnedFloorDetail(ctx, ctx.levels[id], {
       protectedResources: persistentResources, release: releaseGeometryAfterUpload,
       atlas: lazyAtlasLevels.has(id) ? materials => makeFloorAtlas(ctx.lvById[id], materials) : null,

@@ -13,7 +13,8 @@ import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { addSoldiers } from './soldier.js';
 import { buildNav, landAt } from '../layout/nav.js';
 import { distToPolyEdge } from '../layout/geom.js';
-import { createMissionLayout } from '../fps/mission-layout.js';
+import { FPS_MISSION } from '../fps/mission-layout.js';
+import { createMissionDirector, RELAY_SITES, EXTRACTIONS } from './missions.js';
 import { MOBILE } from '../render/device.js';
 
 /** 标题是四个字（原游戏是两个字）：字号收小、不换行，手机横屏按高度算 */
@@ -86,6 +87,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   if (G.mats.uniforms?.wet) G.mats.uniforms.wet.value = 0; // 商场里没有雨
 
   onProgress('正在接入地图碰撞', 0.25);
+  addCover(ctx);
   const nav = buildNav(ctx.layout);
   G.physics = createMapPhysics(nav);
   G.input = J.createInput(G);
@@ -107,9 +109,16 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 敌人：原游戏的机械飞鸥、机械猎犬，加上真人敌人「武装劫持者」（soldier.js，登记进同一个敌人模块）
   onProgress('正在部署敌人', 0.85);
   G.enemies = await guarded('enemies', () => J.createEnemies(G));
-  if (G.enemies.debug) addSoldiers(G, G.enemies, { patrolLines: G.level.patrolLines });
+  // 只有真人敌人（武装劫持者）：机械飞鸥（无人机）和机械猎犬不再出场，真人敌人的池子加大到 18 个
+  if (G.enemies.debug) addSoldiers(G, G.enemies, { patrolLines: G.level.patrolLines, count: 18 });
   tuneFlow();
   G.hud = J.createHud(G);
+  // 随机任务：每局开始（含重开）抽一种任务和撤离方式，摆装置、物品和载具（missions.js）。网址参数 mission= / exit= 可以指定
+  const director = createMissionDirector(G, { scene, layout: ctx.layout, nav, J,
+    force: { type: params.mission, exit: params.exit } });
+  G.level.onReset = () => director.roll();
+  director.roll();
+  G.missions = director;
   G.game = J.createGame(G);
   async function guarded(name, make) {
     try { return await make(); } catch (error) { console.error(`[零点突围] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
@@ -142,6 +151,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { if (!run.err.game) { run.err.game = 1; console.error('[零点突围] game.update 出错', e); } }
       if (active) { run('player', dt); run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
+      // 任务物件动画、歼灭任务增援；撤离时镜头坐进直升机 / 接应车里（前 4.5 秒画面不压暗）
+      try {
+        const view = director.update(dt);
+        if (view) { camera.position.copy(view.position); camera.lookAt(view.lookAt); render.post.fade = 0; G.weapon?.setVisible?.(false); }
+      } catch (e) { if (!run.err.missions) { run.err.missions = 1; console.error('[零点突围] missions.update 出错', e); } }
       run('audio', dt); run('hud', dt);
       lightPool.update(dt);
       syncVisibility();
@@ -185,7 +199,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); layoutEditor.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); director.dispose();
     },
   };
 }
@@ -196,49 +210,63 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
  * 每切断一个中继来一波，撤离时有追兵。同时在场最多 10 个。
  */
 function tuneFlow() {
-  // 猎犬原来每 0.6 秒重新找一次路；我们的路跨楼层、算得慢，放宽到 1.5 秒
-  J.ENEMY_TUNE.hound.replan = 1.5;
+  // 只有真人敌人：开局 8 人分散巡逻，每完成一个目标来一波（5、6、7 人），撤离时还有追兵；同时在场最多 14 个
   Object.assign(J.GAME_FLOW, {
-    patrol: { gull: 1, hound: 1, soldier: 4 },
-    waves: [{ gull: 1, hound: 1, soldier: 3 }, { gull: 2, hound: 1, soldier: 4 }, { gull: 2, hound: 2, soldier: 5 }],
-    maxAlive: 10, spawnMax: 40,
-    pursuitMix: (r) => (r < 0.3 ? 'gull' : r < 0.75 ? 'soldier' : 'hound'),
+    patrol: { gull: 0, hound: 0, soldier: 8 },
+    waves: [{ gull: 0, hound: 0, soldier: 5 }, { gull: 0, hound: 0, soldier: 6 }, { gull: 0, hound: 0, soldier: 7 }],
+    maxAlive: 14, spawnMax: 60,
+    pursuitMix: () => 'soldier',
   });
 }
 
-/** 原游戏的关卡数据，从我们的任务布局换算：出生点、三个中继、撤离点、室内范围、标题画面的镜头路线。 */
+/** 掩体（旧 FPS 任务的五组设备箱、货箱、行李箱）：导航里算实心家具（market-stall），画成箱子 */
+function addCover(ctx) {
+  const dark = new THREE.MeshStandardMaterial({ color: '#2b343a', metalness: 0.4, roughness: 0.6 });
+  const metal = new THREE.MeshStandardMaterial({ color: '#7d878c', metalness: 0.75, roughness: 0.4 });
+  const wood = ctx.mats?.base?.wood || new THREE.MeshStandardMaterial({ color: '#8a6a45', roughness: 0.8 });
+  const group = new THREE.Group(); group.name = '零点突围掩体'; ctx.scene.add(group);
+  for (const c of FPS_MISSION.cover) {
+    const lv = ctx.layout.levels.find((l) => l.id === c.floor);
+    if (!lv) continue;
+    if (!lv.features.some((f) => f.id === c.id)) lv.features.push({ ...c, y: lv.elev, type: 'market-stall', tactical: true });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.height, c.d), c.style === 'cargo' ? wood : dark);
+    box.position.set(c.x, lv.elev + c.height / 2, c.z); group.add(box);
+    for (const y of [0.12, c.height - 0.12]) { const band = new THREE.Mesh(new THREE.BoxGeometry(c.w + 0.04, 0.07, c.d + 0.04), metal); band.position.set(c.x, lv.elev + y, c.z); group.add(band); }
+  }
+}
+
+/** 原游戏的关卡数据：出生点、敌人出生点、室内范围、标题画面的镜头路线。目标和撤离点由 missions.js 每局填进来 */
 function buildLevel(ctx, nav) {
-  const mission = createMissionLayout(ctx.layout);
+  const elev = (f) => ctx.layout.levels.find((l) => l.id === f)?.elev ?? 0;
   const v = (p, dy = 0) => new THREE.Vector3(p.x, (p.y ?? 0) + dy, p.z);
-  const [terminal, intel] = mission.objectives, car = mission.extractions[0];
-  const third = { x: -151, y: -4.5, z: -94 }; // 一期 B1M 地下大厅（原来的地下侦察巡逻线上）
-  const relays = [
-    { id: 'relay_a', label: '甲号中继 · 商场西翼', zone: 'mall', pos: v(terminal), object: null },
-    { id: 'relay_b', label: '乙号中继 · 酒店二楼', zone: 'hotel', pos: v(intel), object: null },
-    { id: 'relay_c', label: '丙号中继 · 地下大厅', zone: 'concourse', pos: v(third), object: null },
-  ];
+  const s = { ...FPS_MISSION.spawn, y: elev(FPS_MISSION.spawn.floor) };
   const interiorBoxes = ctx.layout.buildings.filter((b) => b.outline?.length).map((b) => {
     const xs = b.outline.map((p) => p[0]), zs = b.outline.map((p) => p[1]);
-    return { min: new THREE.Vector3(Math.min(...xs), -30, Math.min(...zs)), max: new THREE.Vector3(Math.max(...xs), 12.5, Math.max(...zs)) };
+    return { min: new THREE.Vector3(Math.min(...xs), -30, Math.min(...zs)), max: new THREE.Vector3(Math.max(...xs), 80, Math.max(...zs)) };
   });
-  const { enemySpawns, coverPoints, patrolLines } = buildSpawns(mission, nav, [terminal, intel, third]);
-  const s = mission.spawn, fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), eye = 1.7;
+  const mission = { enemies: FPS_MISSION.enemies.map((e) => ({ ...e, y: elev(e.floor), patrol: e.patrol.map((p) => ({ ...p, y: elev(p.floor) })) })),
+    cover: FPS_MISSION.cover.map((c) => ({ ...c, y: elev(c.floor) })) };
+  const anchors = [...RELAY_SITES, ...Object.values(EXTRACTIONS)].map((p) => ({ ...p, y: elev(p.floor) }));
+  const { enemySpawns, coverPoints, patrolLines } = buildSpawns(mission, nav, anchors, ctx.layout);
+  const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), eye = 1.7;
   const cinematicPath = [0, 6, 12, 18].map((d, i) => ({
     pos: [s.x + fx * d + (i % 2 ? 0.6 : -0.6), s.y + eye + 0.4, s.z + fz * d],
     look: [s.x + fx * (d + 10), s.y + eye, s.z + fz * (d + 10)],
   }));
   return {
-    stub: false, playerStart: { pos: v(s), yaw: s.yaw }, objectives: relays,
-    extraction: { pos: v(car), radius: 3.2 }, enemySpawns, zones: [], coverPoints, patrolLines, interiorBoxes, cinematicPath,
+    stub: false, playerStart: { pos: v(s), yaw: s.yaw }, objectives: [],
+    extraction: null, enemySpawns, zones: [], coverPoints, patrolLines, interiorBoxes, cinematicPath,
     groundSurfaceAt: () => 'concrete', update() {},
   };
 }
+
+const GAME_FLOORS = new Set(['P1-B1M', 'P1-1F', 'P1-2F', 'P1-3F', 'P1-RF', 'H-1F', 'H-2F', 'H-3F', 'H-4F', 'H-5F', 'H-6F', 'A-B1', 'A-1F', 'A-2F', 'A-3F', 'A-4F']);
 
 /**
  * 敌人出生点：原 FPS 任务里的七个守卫位置和它们的巡逻点、三个中继周围、掩体旁边。
  * 地面的（猎犬、真人）就站在楼面上；空中的（飞鸥）只取头顶有 3.8 米以上净空的地上楼层，高度定在离地 2.5–4.5 米。
  */
-export function buildSpawns(mission, nav, relays) {
+export function buildSpawns(mission, nav, relays, layout = null) {
   const ground = [], seen = new Set();
   const add = (x, y, z) => {
     const st = landAt(nav, x, z, y + 0.6);
@@ -259,15 +287,13 @@ export function buildSpawns(mission, nav, relays) {
     if (st && Math.abs(st.y - c.y) < 0.6) coverPoints.push(new THREE.Vector3(st.x, st.y, st.z));
   }
   for (const p of coverPoints) add(p.x, p.y, p.z);
-  const enemySpawns = ground.map((pos) => ({ type: 'ground', pos }));
-  for (const pos of ground) {
-    if (pos.y < -0.5) continue;
-    const F = [...nav.floors.values()].find((f) => Math.abs(f.y - pos.y) < 0.3 && f.level?.height);
-    const clear = F ? F.level.height - 0.4 : 0;
-    if (clear < 3.8) continue;
-    const y = pos.y + Math.min(4.5, clear - 1.3);
-    if (y >= 2.5) enemySpawns.push({ type: 'air', pos: new THREE.Vector3(pos.x, y, pos.z) });
+  // 任务会去的楼层（商场 B1M–3F、酒店 1F–6F、公寓 B1–4F、商场屋顶）的走道上每 9 米一个点：任务地点每局不同，敌人哪儿都可能来
+  if (layout) for (const lv of layout.levels.filter((l) => GAME_FLOORS.has(l.id))) for (const w of lv.walk) {
+    const xs = w.poly.map((p) => p[0]), zs = w.poly.map((p) => p[1]);
+    for (let x = Math.ceil(Math.min(...xs) / 9) * 9; x <= Math.max(...xs); x += 9) for (let z = Math.ceil(Math.min(...zs) / 9) * 9; z <= Math.max(...zs); z += 9) add(x, lv.elev, z);
   }
+  // 只有地面敌人（没有会飞的机械飞鸥了）
+  const enemySpawns = ground.map((pos) => ({ type: 'ground', pos }));
   const patrolLines = mission.enemies.map((e) => e.patrol.map((p) => ({ x: p.x, y: p.y, z: p.z })));
   return { enemySpawns, coverPoints, patrolLines };
 }

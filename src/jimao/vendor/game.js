@@ -9103,7 +9103,7 @@ function hM(i) {
     r.appendChild(s);
     let a = li("div", "h-cmarks"), l = li("div", "h-heading", "000");
     n.append(r, li("i", "h-needle"), a, l);
-    let c = li("div", "h-obj", '<div class="h-k">\u4EFB\u52A1\u76EE\u6807</div><div class="h-obj-t"></div><div class="h-relays"><span>\u4E2D\u7EE7</span><i></i><i></i><i></i><b>0/3</b></div>'), u = c.querySelector(".h-obj-t"), h = c.querySelector(".h-relays"), f = h.querySelector("b"), p = [...h.querySelectorAll("i")], d = li("div", "h-warn"), v = li("div", "h-cross", '<i class="c-t"></i><i class="c-b"></i><i class="c-l"></i><i class="c-r"></i><i class="c-dot"></i>'), g = v.querySelectorAll("i"), x = li("div", "h-hit", "<i></i><i></i><i></i><i></i>"), y = li("div", "h-arcs"), b = [];
+    let c = li("div", "h-obj", '<div class="h-k">\u4EFB\u52A1\u76EE\u6807</div><div class="h-obj-t"></div><div class="h-relays"><span>\u76EE\u6807</span><i></i><i></i><i></i><b>0/3</b></div>'), u = c.querySelector(".h-obj-t"), h = c.querySelector(".h-relays"), f = h.querySelector("b"), p = [...h.querySelectorAll("i")], d = li("div", "h-warn"), v = li("div", "h-cross", '<i class="c-t"></i><i class="c-b"></i><i class="c-l"></i><i class="c-r"></i><i class="c-dot"></i>'), g = v.querySelectorAll("i"), x = li("div", "h-hit", "<i></i><i></i><i></i><i></i>"), y = li("div", "h-arcs"), b = [];
     for (let k = 0; k < 4; k++) {
       let ce = li("div", "h-arc", '<svg viewBox="-100 -100 200 200"><path d="M -38 -84 A 92 92 0 0 1 38 -84" /><path class="tip" d="M -7 -97 L 0 -106 L 7 -97" /></svg>');
       y.appendChild(ce), b.push({ el: ce, life: 0, src: new W(), op: -1, rot: 1e9 });
@@ -9383,7 +9383,7 @@ function pM(i, e) {
     <section class="m-screen m-card m-dead" data-s="dead" aria-label="\u4FE1\u53F7\u4E2D\u65AD">
       <div class="m-k">\u7A81\u51FB\u961F\u5458\u5012\u4E0B</div>
       <h2 class="m-h">\u4FE1\u53F7\u4E2D\u65AD</h2>
-      <dl class="m-stats"><div><dt>\u751F\u5B58\u65F6\u95F4</dt><dd data-f="dead-time">00:00</dd></div><div><dt>\u5DF2\u5207\u65AD\u4E2D\u7EE7</dt><dd data-f="dead-relays">0/3</dd></div></dl>
+      <dl class="m-stats"><div><dt>\u751F\u5B58\u65F6\u95F4</dt><dd data-f="dead-time">00:00</dd></div><div><dt>\u5DF2\u5B8C\u6210\u76EE\u6807</dt><dd data-f="dead-relays">0/3</dd></div></dl>
       <div class="m-actions col"><button class="btn primary" data-act="retry">\u91CD\u8BD5</button></div>
     </section>
 
@@ -9394,7 +9394,7 @@ function pM(i, e) {
       <dl class="m-stats">
         <div><dt>\u7528\u65F6</dt><dd data-f="time">00:00</dd></div>
         <div><dt>\u547D\u4E2D\u7387</dt><dd data-f="acc">0%</dd></div>
-        <div><dt>\u6467\u6BC1\u673A\u68B0</dt><dd data-f="kills">0</dd></div>
+        <div><dt>\u51FB\u5012\u654C\u4EBA</dt><dd data-f="kills">0</dd></div>
         <div><dt>\u91CD\u8BD5\u6B21\u6570</dt><dd data-f="retries">0</dd></div>
       </dl>
       <div class="m-actions col"><button class="btn primary" data-act="redeploy">\u518D\u6B21\u51FA\u51FB</button></div>
@@ -9582,7 +9582,11 @@ function mM(i) {
       G();
     }, resume() {
       j(false);
-    }, update: B, debugCut() {
+    }, update: B, completeAll() {
+      c.allCut || (c.allCut = true, c.pursuitLeft = Yi.pursuitExtra, c.pursuitT = 12, i.events.emit("objective:all", {}), o.radio && o.radio(_l.all, 4.5), o.setObjective(D()), q());
+    }, refreshObjective() {
+      _.state === "playing" && o.setObjective(D()), q();
+    }, debugCut() {
       let P = c.relays.find((V) => !V.cut);
       P && me(P);
     } };
@@ -9612,7 +9616,7 @@ function mM(i) {
       S(E.pos, L, b), S(E.look, L, m), b.x += Math.sin(J * 0.31) * 0.05, b.y += Math.sin(J * 0.43 + 1.7) * 0.035, b.z += Math.sin(J * 0.27 + 0.6) * 0.05, m.y += Math.sin(J * 0.19) * 0.12, m.x += Math.sin(J * 0.13 + 2) * 0.2, Z.position.copy(b), Z.lookAt(m), Z.rotation.z += Math.sin(J * 0.21) * 6e-3, !i.params.fov && Math.abs(Z.fov - Yi.titleFov) > 0.01 && (Z.fov = Yi.titleFov, Z.updateProjectionMatrix()), e.fade = Math.max(1 - sl(0, 1.8, E.t), sl(V - 1.6, V, E.t));
     }
     function H() {
-      a(i.enemies, "clear"), a(i.fx, "clear"), a(i.combat, "reset"), a(i.weapon, "reset"), c.time = 0, c.cut = 0, c.allCut = false, c.queue.length = 0, c.waveHot = 0, c.alertT = 0, c.pursuitT = 0, c.pursuitLeft = 0, c.contactSaid = false, c.lowSaid = false, c.extractHint = 0, c.used.clear(), c.relays = A().map((P, V) => {
+      s && s.onReset && s.onReset(), a(i.enemies, "clear"), a(i.fx, "clear"), a(i.combat, "reset"), a(i.weapon, "reset"), c.time = 0, c.cut = 0, c.allCut = false, c.queue.length = 0, c.waveHot = 0, c.alertT = 0, c.pursuitT = 0, c.pursuitLeft = 0, c.contactSaid = false, c.lowSaid = false, c.extractHint = 0, c.used.clear(), c.relays = A().map((P, V) => {
         let Y = (/([a-z0-9])$/i.exec(String(P.id || "")) || [0, String.fromCharCode(65 + V)])[1].toUpperCase();
         return O(P, "live"), { o: P, id: P.id || "relay_" + V, short: Y, t: 0, cut: false, cutting: false };
       }), n.reset(s.playerStart), o.reset && o.reset(), e.saturation = t, e.flash = 0, q(), o.setRelays && o.setRelays(0, c.relays.length), ie();
@@ -9627,8 +9631,8 @@ function mM(i) {
     }
     function q() {
       if (!o.setMarkers) return;
-      let P = c.relays.filter((V) => !V.cut).map((V) => ({ id: V.id, short: V.short, label: V.o.label || "\u4E2D\u7EE7 " + V.short, pos: V.o.pos, kind: "relay" }));
-      c.allCut && s.extraction && P.push({ id: "extract", short: "\u64A4\u79BB", label: "\u63A5\u5E94\u8F66", pos: s.extraction.pos, kind: "extract" }), o.setMarkers(P);
+      let P = c.relays.filter((V) => !V.cut).map((V) => ({ id: V.id, short: V.short, label: V.o.label || "\u4E2D\u7EE7 " + V.short, pos: V.o.pos, kind: V.o.kind || "relay" }));
+      c.allCut && s.extraction && P.push({ id: "extract", short: "\u64A4\u79BB", label: s.extraction.label || "\u63A5\u5E94\u8F66", pos: s.extraction.pos, kind: "extract" }), o.setMarkers(P);
     }
     function U({ skipIntro: P = false, quick: V = false, keepRetries: Y = false } = {}) {
       if (Y || (c.retries = 0), l.show("none"), l.locationCard(false), a(i.audio, "setPaused", false), H(), a(i.weapon, "setVisible", true), g = false, P) {
@@ -9641,6 +9645,7 @@ function mM(i) {
       n.enabled = true, o.show(true), r.setGameplay && r.setGameplay(true), o.setObjective(D()), M("playing"), C(true);
     }
     function D() {
+      if (s && s.missionText) return s.missionText(c);
       if (c.allCut) return "\u524D\u5F80\u63A5\u5E94\u8F66";
       let P = c.relays.length - c.cut;
       return c.cut === 0 ? "\u5207\u65AD\u4E09\u5904\u4E0A\u884C\u4E2D\u7EE7" : P === 1 ? "\u5207\u65AD\u6700\u540E\u4E00\u5904\u4E2D\u7EE7" : `\u5207\u65AD\u5269\u4F59 ${P} \u5904\u4E2D\u7EE7`;
@@ -9787,11 +9792,11 @@ function mM(i) {
     function ue(P) {
       let V = n.alive ? $() : null;
       for (let L of c.relays) L.cut || (L === V && r.down("interact") ? (L.cutting || (L.cutting = true, O(L.o, "cutting")), L.t += P / Yi.cutSeconds, i.events.emit("objective:progress", { id: L.id, t: Math.min(1, L.t) }), L.t >= 1 && me(L)) : L.t > 0 && (L.t = Math.max(0, L.t - P * 1.6), L.cutting && (L.cutting = false, O(L.o, "live"), i.events.emit("objective:progress", { id: L.id, t: 0 }))));
-      V && !V.cut ? o.setPrompt && o.setPrompt("\u5207\u65AD\u4E2D\u7EE7 " + V.short, Fo(V.t)) : o.setPrompt && o.setPrompt(null);
+      V && !V.cut ? o.setPrompt && o.setPrompt((V.o.verb || "\u5207\u65AD\u4E2D\u7EE7") + " " + V.short, Fo(V.t)) : o.setPrompt && o.setPrompt(null);
       let Y = s.extraction;
       if (Y && Y.pos) {
         let L = Math.hypot(Y.pos.x - n.pos.x, Y.pos.z - n.pos.z), Z = L < (Y.radius || 2.5) && Math.abs(Y.pos.y - n.pos.y) < 3.5;
-        Z && c.allCut && n.alive ? ee() : Z && !c.allCut && c.extractHint <= 0 && (c.extractHint = 8, o.message("\u4E2D\u7EE7\u5C1A\u672A\u65AD\u5F00\uFF0C\u63A5\u5E94\u8F66\u65E0\u6CD5\u5728\u706B\u529B\u4E0B\u63A5\u5E94", 3.5)), c.extractHint = Math.max(0, c.extractHint - P);
+        Z && c.allCut && n.alive ? ee() : Z && !c.allCut && c.extractHint <= 0 && (c.extractHint = 8, o.message(s.extraction.blocked || "\u4E2D\u7EE7\u5C1A\u672A\u65AD\u5F00\uFF0C\u63A5\u5E94\u8F66\u65E0\u6CD5\u5728\u706B\u529B\u4E0B\u63A5\u5E94", 3.5)), c.extractHint = Math.max(0, c.extractHint - P);
       }
     }
     function me(P) {
@@ -9827,14 +9832,14 @@ function mM(i) {
         case "dead":
           return e.saturation = kn(e.saturation ?? 1, 0.12, 2.2, P), e.fade = kn(e.fade || 0, 0.55, 1.4, P), u > 1.5 && l.screen !== "dead" && (l.show("dead"), a(i.audio, "setIntensity", 0.15)), true;
         case "complete":
-          return e.fade = kn(e.fade || 0, 0.72, 0.9, P), e.saturation = kn(e.saturation ?? 1, t * 0.7, 1, P), u > 3.3 && l.screen !== "complete" && (l.show("complete"), a(i.audio, "setIntensity", 0.15)), true;
+          return e.fade = kn(e.fade || 0, 0.72, 0.9, P), e.saturation = kn(e.saturation ?? 1, t * 0.7, 1, P), u > (s && s.outroDelay || 3.3) && l.screen !== "complete" && (l.show("complete"), a(i.audio, "setIntensity", 0.15)), true;
       }
       return false;
     }
     return w(), n.enabled = false, o.show(false), a(i.weapon, "setVisible", false), r.setGameplay && r.setGameplay(false), a(i.audio, "setIntensity", 0.15), i.params.shot || i.params.autostart || l.show("title"), _;
   }
 
-export { Gg, Gg as createMats, d3, d3 as createPhysics, Yg, Yg as createProps, Cf, Cf as createFx, c_, c_ as createAudio, v_, v_ as createInput, x_, x_ as createPlayer, zv, zv as createCombat, dm, dm as createWeapon, Em, Em as createEnemies, hM, hM as createHud, mM, mM as createGame, dr, dr as stubs, Dy, Dy as createEvents, il, il as createRng, zy, zy as resolveQuality, oi, oi as LEVEL_BOUNDS, Mn, Mn as SUN, en, en as SKY, Pi, Pi as PLAYER, Yi, Yi as GAME_FLOW, Ui, Ui as ENEMY_TUNE, _i, _i as registerProp, J3, J3 as registerPropsA, eb, eb as registerPropsB, sb, sb as registerPropsC };
+export { Gg, Gg as createMats, d3, d3 as createPhysics, Yg, Yg as createProps, Cf, Cf as createFx, c_, c_ as createAudio, v_, v_ as createInput, x_, x_ as createPlayer, zv, zv as createCombat, dm, dm as createWeapon, Em, Em as createEnemies, hM, hM as createHud, mM, mM as createGame, dr, dr as stubs, Dy, Dy as createEvents, il, il as createRng, zy, zy as resolveQuality, oi, oi as LEVEL_BOUNDS, Mn, Mn as SUN, en, en as SKY, Pi, Pi as PLAYER, Yi, Yi as GAME_FLOW, _l, _l as RADIO, Ui, Ui as ENEMY_TUNE, _i, _i as registerProp, J3, J3 as registerPropsA, eb, eb as registerPropsB, sb, sb as registerPropsC };
 
 // 原文件里的三条顶层语句：把 36 种道具登记进道具库（抽取工具不带顶层调用，这里照原样补上）
 J3(_i);

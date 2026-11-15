@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BatchSet } from '../batch.js';
 import { mallStairPlan } from '../../layout/mall-stairs.js';
 import { NORMAL } from '../../layout/geom.js';
+import { LITE } from '../device.js';
 
 const WALL='#e0e4dc',STEP='#cdd1c5',METAL='#617568';
 const box=(B,key,r,y,h,color)=>B.get(key).box((r.x0+r.x1)/2,y+h/2,(r.z0+r.z1)/2,r.x1-r.x0,h,r.z1-r.z0,color);
@@ -50,8 +51,8 @@ export function buildMallStairLevel(B,level,stairs,access,{flights=false,finish=
         const pw=len-.8,ph=Math.min(h-1.4,4.2),py=y+.45+ph/2,ox=x+nx*.12,oz=z+nz*.12,along=Math.abs(dx)>=Math.abs(dz);
         B.get('foliage').box(ox,py,oz,along?pw:.12,ph,along?.12:pw,'#3d6a32');
         let seed=Math.abs(Math.round(x*131+z*71+y*17))+1;const rnd=()=>((seed=(seed*16807)%2147483647)/2147483647);
-        for(let q=0;q<Math.round(pw*ph*1.6);q++) {
-          const u=(rnd()-.5)*(pw-.3),yy=py+(rnd()-.5)*(ph-.3),rr=.2+rnd()*.18,col=rnd()<.12?['#e58fb5','#f2b6c8','#a77bd1','#f6e7a1'][q%4]:rnd()<.5?'#4f7f3c':'#5f9a48';
+        for(let q=0;q<Math.round(pw*ph*(LITE?.35:.8));q++) {
+          const u=(rnd()-.5)*(pw-.3),yy=py+(rnd()-.5)*(ph-.3),rr=.27+rnd()*.22,col=rnd()<.12?['#e58fb5','#f2b6c8','#a77bd1','#f6e7a1'][q%4]:rnd()<.5?'#4f7f3c':'#5f9a48';
           B.get('foliage').sphere(ox+ux*u+nx*(.12+rnd()*.06),yy,oz+uz*u+nz*(.12+rnd()*.06),rr,col,rr*.9,rr*.55,'ico0');
         }
         for(const yy of [py-ph/2-.05,py+ph/2+.05])B.get('facadeBronze').box(ox+nx*.04,yy,oz+nz*.04,along?pw+.2:.25,.1,along?.25:pw+.2,'#c8a25a');

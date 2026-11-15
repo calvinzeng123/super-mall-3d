@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { PROP_ASSETS, PROP_PACK } from './prop-data.js';
 import { fetchBinary } from '../fetch-binary.js';
-import { MOBILE } from '../device.js';
+import { LITE as MOBILE } from '../device.js';
 
 const WARM = new THREE.Color(1.0, 0.9, 0.76);
 /** 室内的模型夜里按自己的贴图发一点光（和室内其他材质一样，模拟店里的灯）。 */

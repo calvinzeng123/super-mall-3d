@@ -127,12 +127,12 @@ export function buildParking(ctx) {
           const key = `${s.frame.id}:` + (alongU ? `u${(s.lx + k * hw).toFixed(2)},${s.lz}` : `v${(s.lz + k * hw).toFixed(2)},${s.lx}`);
           if (lines.has(key)) continue;
           lines.add(key);
-          if (alongU) B.get('matte').box(s.lx + k * hw, y0 + 0.012, s.lz, 0.12, 0.01, s.d, white);
-          else B.get('matte').box(s.lx, y0 + 0.012, s.lz + k * hw, s.w, 0.01, 0.12, white);
+          if (alongU) B.get('matte').flat(s.lx + k * hw, y0 + 0.017, s.lz, 0.12, s.d, white);
+          else B.get('matte').flat(s.lx, y0 + 0.017, s.lz + k * hw, s.w, 0.12, white);
         }
         if (s.type !== 'normal') {
           const col = s.type === 'ev' ? '#2e9c6a' : '#2f6fd6';
-          B.get('matte').box(s.lx, y0 + 0.01, s.lz, s.w - 0.14, 0.01, s.d - 0.14, col);
+          B.get('matte').flat(s.lx, y0 + 0.015, s.lz, s.w - 0.14, s.d - 0.14, col);
           if (s.type === 'ev') {
             const px = s.lx + back[0] * (hd - 0.3), pz = s.lz + back[1] * (hd - 0.3);
             B.get('satin').box(px, y0 + 0.75, pz, 0.35, 1.5, 0.3, '#f4f6f7');
@@ -212,8 +212,8 @@ export function buildParking(ctx) {
         const n = Math.floor((len - 4) / 3);
         for (let i = 0; i < n; i++) {
           const t = 2 + (i + 0.25) * 3;
-          if (alongU && markFits(r.x0 + t, (r.z0 + r.z1) / 2)) B.get('matte').box(r.x0 + t, y0 + 0.014, (r.z0 + r.z1) / 2, 1.4, 0.01, 0.1, '#e7b416');
-          else if (!alongU && markFits((r.x0 + r.x1) / 2, r.z0 + t)) B.get('matte').box((r.x0 + r.x1) / 2, y0 + 0.014, r.z0 + t, 0.1, 0.01, 1.4, '#e7b416');
+          if (alongU && markFits(r.x0 + t, (r.z0 + r.z1) / 2)) B.get('matte').flat(r.x0 + t, y0 + 0.019, (r.z0 + r.z1) / 2, 1.4, 0.1, '#e7b416');
+          else if (!alongU && markFits((r.x0 + r.x1) / 2, r.z0 + t)) B.get('matte').flat((r.x0 + r.x1) / 2, y0 + 0.019, r.z0 + t, 0.1, 1.4, '#e7b416');
         }
         for (let t = 10; t < len - 6; t += 16) {
           if (alongU && markFits(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5)) arrow(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5, dir[0], dir[1]);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MOBILE } from './device.js';
+import { LITE as MOBILE } from './device.js';
 import { SURFACE_ASSETS } from './pbr-data.js';
 
 /** 图片已随构建嵌入；手机只保留 512² 纹理，六类材质跨所有楼层共享。 */

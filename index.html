@@ -152,6 +152,7 @@ button { font: inherit; color: inherit; }
 .fatal .box { max-width: 420px; padding: 20px 22px; }
 .fatal h2 { margin: 0 0 8px; font-size: 18px; }
 .fatal p { margin: 0; color: var(--ink-2); }
+.fatal .fatal-reload { margin-top: 14px; padding: 8px 18px; border: 0; border-radius: 8px; background: var(--accent, #c8a25a); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 
 
 /* 第一人称漫游 HUD（v4）：漫游时隐藏俯瞰界面；手机显示左下摇杆与右下按钮 */
@@ -554,13 +555,14 @@ body.quality-low #app .panel { -webkit-backdrop-filter: blur(1.5px) saturate(.8)
     <div class="bar"><i id="loadingBar"></i></div>
     <div id="loadingText">正在加载 3D 引擎…</div>
   </div>
-  <div class="fatal" id="fatal" hidden><div class="box panel"><h2 id="fatalTitle">无法显示 3D 场景</h2><p id="fatalText"></p></div></div>
+  <div class="fatal" id="fatal" hidden><div class="box panel"><h2 id="fatalTitle">无法显示 3D 场景</h2><p id="fatalText"></p><button type="button" class="fatal-reload" id="fatalReload" hidden onclick="location.reload()">刷新页面</button></div></div>
 </div>
 <script>
-  window.__mallFail = function (title, text) {
+  window.__mallFail = function (title, text, opts) {
     var f = document.getElementById('fatal');
     document.getElementById('fatalTitle').textContent = title;
     document.getElementById('fatalText').textContent = text;
+    document.getElementById('fatalReload').hidden = !(opts && opts.reload);
     f.hidden = false;
   };
   setTimeout(function () {

@@ -19,7 +19,8 @@ export function createExtractionVehicle(exit) {
     new THREE.MeshBasicMaterial({ color: '#dc795c' }),
   ];
   const [paint,dark,glass,steel,rubber,lamp,green,red] = materials;
-  const geometries = new Set(), wheels = [], doors = [], rotor = new THREE.Group(), tailRotor = new THREE.Group(), signals = [];
+  const geometries = new Set(), wheels = [], doors = [], rotor = new THREE.Group(), tailRotor = new THREE.Group(), signals = [], blades = [];
+  let blurDisc = null;
   const mesh = (geometry, material, x, y, z, parent = staticParts) => {
     geometries.add(geometry);
     const object = new THREE.Mesh(geometry, material); object.position.set(x,y,z); parent.add(object); return object;
@@ -55,7 +56,10 @@ export function createExtractionVehicle(exit) {
     sphere(.65,.3,1.05,0,2.32,-.55,dark);
     bar([0,2.3,-.15],[0,3.15,-.15],.09);
     rotor.position.set(0,3.12,-.15);body.add(rotor);
-    for(const a of [0,Math.PI/2]){const blade=box(10.6,.055,.23,0,0,0,dark,rotor);blade.rotation.y=a;}
+    for(const a of [0,Math.PI/2]){const blade=box(10.6,.055,.23,0,0,0,dark,rotor);blade.rotation.y=a;blades.push(blade);}
+    // 旋翼高速转动时桨叶换成一张半透明的模糊圆盘（舱内视角不会被一道道黑条挡住）
+    const blurMat=new THREE.MeshBasicMaterial({color:'#20262a',transparent:true,opacity:.16,depthWrite:false,side:THREE.DoubleSide});materials.push(blurMat);
+    blurDisc=mesh(new THREE.CircleGeometry(5.3,40),blurMat,0,.01,0,rotor);blurDisc.rotation.x=-Math.PI/2;blurDisc.visible=false;
     sphere(.23,.1,.23,0,0,0,steel,rotor);
     tailRotor.position.set(.17,2.1,-5.4);body.add(tailRotor);
     box(.05,1.65,.13,0,0,0,dark,tailRotor);box(.05,.13,1.65,0,0,0,dark,tailRotor);
@@ -107,9 +111,15 @@ export function createExtractionVehicle(exit) {
   }
   staticParts.removeFromParent();
   let elapsed=0;
-  const progressAt = time => Math.max(0,Math.min(1,(time-.75)/3.3));
+  const span=v.departSpan||3.3,progressAt = time => Math.max(0,Math.min(1,(time-.75)/span));
+  const fwd=new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),v.yaw||0),side=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),v.yaw||0);
   const offsetAt = time => {
     const t=progressAt(time),smooth=t*t*(3-2*t);
+    if(v.departPath){
+      // Scripted escape: helicopters lift straight up first, then nose away; cars pull out along their bay.
+      const [lat,rise,run]=v.departPath,lift=helicopter?Math.min(1,t/.45):smooth,go=helicopter?Math.max(0,(t-.3)/.7):smooth,g=go*go;
+      return {x:side.x*lat*g+fwd.x*run*g,y:rise*(helicopter?lift*lift*(3-2*lift):0),z:side.z*lat*g+fwd.z*run*g};
+    }
     // Ground getaway stays in the reserved bay until the closing cinematic;
     // aircraft climb above the roof before any lateral motion.
     return helicopter?{x:smooth*6,y:smooth*11,z:0}:{x:0,y:0,z:smooth*5};
@@ -118,6 +128,7 @@ export function createExtractionVehicle(exit) {
     update(dt,{ready=false,progress=0,departing=false,time=0}={}){
       elapsed+=dt;
       rotor.rotation.y+=dt*(ready?39:9);tailRotor.rotation.x+=dt*(ready?53:13);
+      const blur=ready||departing;blades.forEach(b=>b.visible=!blur);if(blurDisc)blurDisc.visible=blur;
       const offset=departing?offsetAt(time):{x:0,y:0,z:0};
       root.position.set(v.x+offset.x,exit.y+offset.y,v.z+offset.z);
       body.rotation.z=helicopter&&departing?Math.sin(progressAt(time)*Math.PI)*-.045:0;
@@ -131,6 +142,13 @@ export function createExtractionVehicle(exit) {
       const seat=new THREE.Vector3(helicopter?.4:.43,helicopter?1.68:1.72,helicopter?1.1:.65).applyAxisAngle(new THREE.Vector3(0,1,0),v.yaw||0).add(base);
       const look=new THREE.Vector3(0,helicopter?1.65:1.6,16).applyAxisAngle(new THREE.Vector3(0,1,0),v.yaw||0).add(base);
       return {position:seat,lookAt:look};
+    },
+    observerView(time){
+      // Fixed camera beside the pad or bay that tracks the vehicle as it leaves.
+      const o=v.observer||(helicopter?[-9,3.2,-10]:[4,1.6,9]),offset=offsetAt(time);
+      const position=side.clone().multiplyScalar(o[0]).add(fwd.clone().multiplyScalar(o[2])).add(new THREE.Vector3(v.x,exit.y+o[1],v.z));
+      const lookAt=new THREE.Vector3(v.x+offset.x,exit.y+offset.y+(helicopter?1.6:1),v.z+offset.z);
+      return {position,lookAt};
     },
     reset(){elapsed=0;root.position.set(v.x,exit.y,v.z);doors.forEach(d=>d.rotation.y=0);body.rotation.z=0;},
     dispose(){root.removeFromParent();for(const g of geometries)g.dispose();for(const m of materials)m.dispose();},

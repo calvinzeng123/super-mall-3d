@@ -5,10 +5,12 @@ export async function startRuntime(mode,onProgress=()=>{}) {
   if(!['tour','fps','arcade','jimao'].includes(mode))throw new Error('未知模式');
   document.body.dataset.mode=mode;
   document.getElementById('fatal').hidden=true;
-  // 几猫模式用的是 FPS 那张地图（一期、酒店、公寓）
-  const layout=buildPlayableLayout({mode:mode==='jimao'?'fps':mode});
+  // 零点突围用园区探索那张地图（一期新商场、酒店、公寓、地铁；二期三期是体块），和小游戏合集同一个范围；
+  // 画面走园区那套，但不放人群、车流、动线和标注（createApp 的 game: 'jimao'）
+  const layout=buildPlayableLayout({mode:mode==='jimao'?'arcade':mode});
+  if(mode==='jimao')layout.game='jimao';
   const app=await createApp(layout,document.getElementById('stage'),{
-    onProgress:(label,p)=>onProgress(label,p*.76),
+    onProgress:(label,p)=>onProgress(label,p*.76),game:layout.game,
   });
   window.__mall=app;
   if(mode==='jimao'){

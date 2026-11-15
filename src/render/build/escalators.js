@@ -88,7 +88,7 @@ export function drawEscalator(B, e, trussCol, trussKey = 'metal') {
       _q.setFromRotationMatrix(_m);
       const flip = s < 0 ? Math.PI / 2 : -Math.PI / 2;
       const qq = _q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), flip));
-      B.get('matte').shape('halfTorus', c, qq, new THREE.Vector3(0.82, 0.82, 1.4), '#1d2023');
+      B.get('matte').shape('halfTorusLo', c, qq, new THREE.Vector3(0.82, 0.82, 1.4), '#1d2023');
     }
   }
   return { e, ux, uz, px, pz, run, y0, y1 };

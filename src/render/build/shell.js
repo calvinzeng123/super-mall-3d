@@ -250,7 +250,7 @@ export function ceilingLights(ctx) {
             if (bay.earlier.some((P) => pointInPoly([x, z], P))) continue;
             // 灯离洞口边至少 0.5 m（洞口边有一道边梁）
             if ([[.5, 0], [-.5, 0], [0, .5], [0, -.5]].some(([dx, dz]) => inVoid(x + dx, z + dz)) || !once(x, z)) continue;
-            Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+            Bt.get('glow').downlight(x, y - 0.031, z, 0.2, '#fff3dc');
             Bt.ceilPool(x, y + 0.04, z, 2.4);
             lamp(x, z);
           }
@@ -263,7 +263,7 @@ export function ceilingLights(ctx) {
               if (!pointInPoly([x, z], w.poly) || distToPolyEdge([x, z], w.poly) < 0.8) continue;
               if (bays?.some((bay) => pointInPoly([x, z], bay.w.poly))) continue;
               if (!once(x, z)) continue;
-              Bt.get('glow').cyl(x, y - 0.03, z, 0.2, 0.04, '#fff3dc', 8);
+              Bt.get('glow').downlight(x, y - 0.031, z, 0.2, '#fff3dc');
               if (B.b.kind === 'mall') Bt.ceilPool(x, y + 0.04, z, 2.4);
               if (B.b.kind === 'mall' || B.b.kind === 'annex') lamp(x, z);
             }

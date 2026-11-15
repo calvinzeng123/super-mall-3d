@@ -97,21 +97,25 @@ test('补丁：每一条都打上了；关卡流程和敌人参数导出来了',
   assert.ok(Array.isArray(J.GAME_FLOW.waves) && J.ENEMY_TUNE.hound && J.ENEMY_TUNE.gull);
 });
 
-test('敌人出生点：地面的都站在楼面上，空中的都在头顶够高的地上楼层；每个中继 18–40 米内都有同层的出生点', async () => {
+test('敌人出生点（园区地图）：只有地面的、都站在楼面上；任务会去的楼层都有；每处中继、撤离点 18–40 米内都有同层出生点', async () => {
   globalThis.location ??= { search: '' };
   const { buildSpawns } = await import('../src/jimao/run.js');
+  const { RELAY_SITES, EXTRACTIONS } = await import('../src/jimao/missions.js');
   const { landAt } = await import('../src/layout/nav.js');
-  const relays = [mission.objectives[0], mission.objectives[1], { x: -151, y: -4.5, z: -94 }];
-  const { enemySpawns, coverPoints, patrolLines } = buildSpawns(mission, nav, relays);
-  const ground = enemySpawns.filter((s) => s.type === 'ground'), air = enemySpawns.filter((s) => s.type === 'air');
-  assert.ok(ground.length >= 60 && air.length >= 20, `${ground.length} / ${air.length}`);
-  for (const { pos } of ground) assert.ok(Math.abs(landAt(nav, pos.x, pos.z, pos.y + 0.6).y - pos.y) < 1e-6);
-  for (const { pos } of air) assert.ok(pos.y >= 2.5);
-  for (const r of relays) {
-    const near = ground.filter(({ pos }) => Math.abs(pos.y - r.y) < 0.5 && Math.hypot(pos.x - r.x, pos.z - r.z) >= 18 && Math.hypot(pos.x - r.x, pos.z - r.z) <= 40);
-    assert.ok(near.length >= 4, `中继 ${r.x},${r.z}：${near.length}`);
+  const tour = buildPlayableLayout({ mode: 'arcade' }), tnav = buildNav(tour);
+  const elev = (f) => tour.levels.find((l) => l.id === f).elev;
+  const m = createMissionLayout(tour);
+  const anchors = [...RELAY_SITES, ...Object.values(EXTRACTIONS)].map((p) => ({ ...p, y: elev(p.floor) }));
+  const { enemySpawns, coverPoints, patrolLines } = buildSpawns(m, tnav, anchors, tour);
+  assert.ok(enemySpawns.every((s) => s.type === 'ground'), '不该再有空中（机械飞鸥）出生点');
+  assert.ok(enemySpawns.length >= 300, `只有 ${enemySpawns.length} 个出生点`);
+  for (const { pos } of enemySpawns) assert.ok(Math.abs(landAt(tnav, pos.x, pos.z, pos.y + 0.6).y - pos.y) < 1e-6);
+  for (const f of ['P1-1F', 'P1-2F', 'P1-RF', 'H-3F', 'H-6F', 'A-B1', 'A-3F']) assert.ok(enemySpawns.some(({ pos }) => Math.abs(pos.y - elev(f)) < 0.3), `${f} 没有出生点`);
+  for (const r of anchors) {
+    const near = enemySpawns.filter(({ pos }) => Math.abs(pos.y - r.y) < 0.5 && Math.hypot(pos.x - r.x, pos.z - r.z) >= 18 && Math.hypot(pos.x - r.x, pos.z - r.z) <= 40);
+    assert.ok(near.length >= 4, `${r.floor} ${r.x},${r.z}：${near.length}`);
   }
-  assert.ok(coverPoints.length >= 10 && patrolLines.length === mission.enemies.length);
+  assert.ok(coverPoints.length >= 10 && patrolLines.length === m.enemies.length);
 });
 
 /** 不开浏览器也能跑的真人敌人：原游戏敌人模块的共享部分（ctx）照它的规则写一份最小的 */
