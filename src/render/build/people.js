@@ -11,14 +11,40 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 //（两条腿、上身、头，按上衣颜色染色）。这么远时一个人只有几个像素高，看不出区别，人群就能更密而不增加显卡负担
 export const FAR_LOD = 60;
 function farFigure() {
-  const parts = [
-    new THREE.CylinderGeometry(0.075, 0.06, 0.82, 5, 1).translate(-0.09, 0.41, 0),
-    new THREE.CylinderGeometry(0.075, 0.06, 0.82, 5, 1).translate(0.09, 0.41, 0),
-    new THREE.CylinderGeometry(0.2, 0.15, 0.64, 6, 1).translate(0, 1.14, 0),
-    new THREE.IcosahedronGeometry(0.11, 0).translate(0, 1.6, 0),
-  ].map((g) => (g.index ? g.toNonIndexed() : g));
-  for (const g of parts) for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
-  return mergeGeometries(parts, false);
+  // 每个部件一个顶点颜色 + aShirt（1 = 上衣，跟着每个人的上衣颜色走；0 = 裤子、皮肤，颜色固定）。
+  // 原来整个人都按上衣颜色染色，远看是一个个纯色小人偶
+  const part = (g, color, shirt) => {
+    g = g.index ? g.toNonIndexed() : g;
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
+    const n = g.attributes.position.count, c = new THREE.Color(color);
+    g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: n }, () => [c.r, c.g, c.b]).flat(), 3));
+    g.setAttribute('aShirt', new THREE.Float32BufferAttribute(new Array(n).fill(shirt), 1));
+    return g;
+  };
+  const PANTS = '#3b4150', SKIN = '#d6ab86', HAIR = '#2e2621';
+  return mergeGeometries([
+    part(new THREE.CylinderGeometry(0.075, 0.06, 0.82, 5, 1).translate(-0.09, 0.41, 0), PANTS, 0),
+    part(new THREE.CylinderGeometry(0.075, 0.06, 0.82, 5, 1).translate(0.09, 0.41, 0), PANTS, 0),
+    part(new THREE.CylinderGeometry(0.2, 0.15, 0.64, 6, 1).translate(0, 1.14, 0), '#ffffff', 1),
+    part(new THREE.CylinderGeometry(0.045, 0.04, 0.58, 3, 1).translate(-0.24, 1.12, 0), SKIN, 0),
+    part(new THREE.CylinderGeometry(0.045, 0.04, 0.58, 3, 1).translate(0.24, 1.12, 0), SKIN, 0),
+    part(new THREE.IcosahedronGeometry(0.11, 0).translate(0, 1.6, 0), SKIN, 0),
+    part(new THREE.SphereGeometry(0.115, 5, 2, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 1.62, 0), HAIR, 0),
+  ], false);
+}
+/** 简化人的材质：顶点颜色 × 只作用在上衣上的实例颜色 */
+function farMaterial() {
+  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aShirt;')
+      .replace('#include <color_vertex>', `#include <color_vertex>
+#ifdef USE_INSTANCING_COLOR
+  vColor.xyz = color * mix( vec3( 1.0 ), instanceColor.xyz, aShirt );
+#endif`);
+  };
+  m.customProgramCacheKey = () => 'far-people-shirt';
+  return m;
 }
 
 // 上衣颜色（sRGB）：白、米、黑、藏青、浅蓝、酒红、砖红、芥黄、橄榄、墨绿、灰、粉
@@ -80,7 +106,7 @@ export async function buildPeople(ctx) {
     // 远处用的简化人（只在一期游览布局，人多的超级商业中心）
     let far = null;
     if (ctx.layout.fidelity?.mega && lv.building === 'P1') {
-      const mesh = new THREE.InstancedMesh(FAR_GEO ||= farFigure(), FAR_MAT ||= new THREE.MeshLambertMaterial({ color: 0xffffff }), count);
+      const mesh = new THREE.InstancedMesh(FAR_GEO ||= farFigure(), FAR_MAT ||= farMaterial(), count);
       mesh.name = `far-people-${lv.id}`;
       mesh.castShadow = false; mesh.frustumCulled = false;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

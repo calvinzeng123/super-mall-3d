@@ -170,7 +170,7 @@ test('一期游览：60 m 外的人换成简化人形（几十个三角形），
     const far = people.children.find(m => m.name === `far-people-${level.id}`);
     assert.ok(far, '没有远处的简化人');
     const tris = (far.geometry.index ? far.geometry.index.count : far.geometry.attributes.position.count) / 3;
-    assert.ok(tris < 120, `简化人有 ${tris} 个三角形`);
+    assert.ok(tris < 150, `简化人有 ${tris} 个三角形`);
     let near = 0;
     for (const mesh of people.children) for (let i = 0; i < mesh.count; i++) {
       mesh.getMatrixAt(i, matrix);
