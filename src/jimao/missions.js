@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
-import { createExtractionVehicle } from '../fps/extraction-vehicles.js';
+import { createRideVehicle, rideLocalToWorld, RIDE_SPECS, BOARD_TIME } from './ride-vehicles.js';
 
 export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel']);
 export const ELIMINATE_TARGET = 14;
@@ -23,19 +23,20 @@ export const RELAY_SITES = Object.freeze([
   { floor: 'P1-B1M', x: -151, z: -94, where: '地下大厅' },
 ]);
 
-/** 两种撤离：直升机停在一期屋顶（从中庭扶梯一路上到 RF），接应车停在公寓 B1 车库 */
-/** 撤离镜头时长（秒）：载具起步 0.75 s + 离场 4.6–5 s。 */
-export const DEPART_SHOT = 6;
-
+/** 两种撤离：直升机停在一期屋顶（从中庭扶梯一路上到 RF），接应车停在公寓 B1 车库。
+ * 撤离点在登机门 / 车门外：走到门口就开始登机（钻进舱、坐好），然后坐在里面第一人称看着它飞走 / 开走。 */
+// 屋顶光穹（半径 30 m，圆心 -106,-106）西边、一期屋面上半径 7.5 m 都是空地的一块，离屋顶酒吧、咖啡座和花池都在 9 m 以上；机头朝南（-z）
+const HELI = Object.freeze({ kind: 'helicopter', x: -182, z: -120, yaw: Math.PI });
+const CAR = Object.freeze({ kind: 'car', x: -41, z: -220, yaw: 0 });
+const door = (veh) => { const p = rideLocalToWorld(veh, 0, RIDE_SPECS[veh.kind].doorOut); return { x: +p.x.toFixed(2), z: +p.z.toFixed(2) }; };
 export const EXTRACTIONS = Object.freeze({
-  // 屋顶光穹（半径 30 m，圆心 -106,-106）西边、一期屋面上半径 7.5 m 都是空地的一块，离屋顶酒吧、咖啡座和花池都在 9 m 以上
-  heli: { id: 'heli', label: '直升机', where: '一期商场屋顶', floor: 'P1-RF', x: -181, z: -115, radius: 4.2,
-    vehicle: { kind: 'helicopter', x: -182, z: -120, yaw: Math.PI, w: 8.8, d: 3, departSpan: 5, departPath: [6, 24, 34], observer: [-10, 2.6, 12] },
+  heli: { id: 'heli', label: '直升机', where: '一期商场屋顶', floor: 'P1-RF', ...door(HELI), radius: 1.7, vehicle: HELI,
     blocked: '任务还没完成，直升机不会在火力下降落' },
-  car: { id: 'car', label: '接应车', where: '公寓地下车库', floor: 'A-B1', x: -35, z: -220, radius: 3.2,
-    vehicle: { kind: 'car', x: -41, z: -220, yaw: 0, w: 2.4, d: 5.8, departSpan: 4.6, departPath: [0, 0, 20], observer: [4.5, 1.5, 9] },
+  car: { id: 'car', label: '接应车', where: '公寓地下车库', floor: 'A-B1', ...door(CAR), radius: 1.7, vehicle: CAR,
     blocked: '任务还没完成，接应车不会进场' },
 });
+/** 撤离镜头（登机 + 乘坐）一共多少秒 */
+export const rideShot = (kind) => BOARD_TIME + RIDE_SPECS[kind].ride;
 
 const ROOM_FLOORS = { apartment: ['A-2F', 'A-3F', 'A-4F'], shop: ['P1-1F', 'P1-2F', 'P1-3F'], hotel: ['H-2F', 'H-3F', 'H-4F', 'H-5F', 'H-6F'] };
 
@@ -174,7 +175,7 @@ export function missionRadio(m) {
  * 接到游戏上：G 是原游戏的共享上下文，level 是 G.level（buildLevel 生成的），nav 是导航网格。
  * 返回 { roll(), update(dt), mission }：roll 在每局开始时抽任务、摆模型；update 每帧推进模型、歼灭计数、增援和撤离动画。
  */
-export function createMissionDirector(G, { scene, layout, nav, J, rng = Math.random, force = {} }) {
+export function createMissionDirector(G, { scene, layout, nav, J, camera = null, rng = Math.random, force = {} }) {
   const sites = roomSites(layout, nav);
   const root = new THREE.Group(); root.name = '零点突围任务物件'; scene.add(root);
   const v = (s, dy = 0) => new THREE.Vector3(s.x, (s.y ?? 0) + dy, s.z);
@@ -182,17 +183,17 @@ export function createMissionDirector(G, { scene, layout, nav, J, rng = Math.ran
   const vehicles = {};
   for (const [id, x] of Object.entries(EXTRACTIONS)) {
     const exit = { ...x, y: elev(x.floor) };
-    vehicles[id] = createExtractionVehicle(exit);
-    vehicles[id].root.visible = false;
-    root.add(vehicles[id].root);
+    vehicles[id] = createRideVehicle(exit);
+    root.add(vehicles[id].root); // 两台都摆着（也都是导航障碍）；没抽到的那台熄火停着
   }
-  const state = { mission: null, kills: 0, departing: false, depart: 0, reinforce: 0 };
+  const state = { mission: null, kills: 0, departing: false, depart: 0, reinforce: 0, lookYaw: 0, lookPitch: 0, released: false };
+  const from = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
   let models = [];
 
   function roll() {
     for (const m of models) m.removeFromParent();
     const mission = rollMission(rng, sites, force);
-    state.mission = mission; state.kills = 0; state.departing = false; state.depart = 0; state.reinforce = 0;
+    state.mission = mission; state.kills = 0; state.departing = false; state.depart = 0; state.reinforce = 0; state.released = false;
     models = mission.objectives.map((o) => {
       const g = o.kind === 'relay' ? relayModel() : itemModel();
       const y = o.site.y ?? elev(o.site.floor);
@@ -201,13 +202,13 @@ export function createMissionDirector(G, { scene, layout, nav, J, rng = Math.ran
       o.object = g; o.pos = v({ ...o.site, y }); o.zone = o.site.floor;
       return g;
     });
-    for (const [id, veh] of Object.entries(vehicles)) { veh.reset(); veh.root.visible = id === mission.extraction.id; }
+    for (const veh of Object.values(vehicles)) veh.reset();
     const x = mission.extraction;
     Object.assign(G.level, {
       objectives: mission.objectives,
       extraction: { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked },
       missionText: (c) => missionText(mission, c, state.kills),
-      outroDelay: DEPART_SHOT + 0.6,
+      outroDelay: rideShot(x.vehicle.kind) + 0.5, keepLock: true,
     });
     Object.assign(J.RADIO, missionRadio(mission));
     return mission;
@@ -220,7 +221,41 @@ export function createMissionDirector(G, { scene, layout, nav, J, rng = Math.ran
     if (state.kills >= m.kills) G.game.completeAll?.();
     G.game.refreshObjective?.();
   });
-  G.events.on('extraction:reached', () => { state.departing = true; state.depart = 0; });
+  G.events.on('extraction:reached', () => {
+    state.departing = true; state.depart = 0; state.released = false;
+    const veh = vehicles[state.mission.extraction.id];
+    state.lookYaw = veh.kind === 'helicopter' ? 0.55 : 0.25; state.lookPitch = -0.05; // 坐下时先朝舱门外看一眼
+    if (camera) { from.pos.copy(camera.position); from.quat.copy(camera.quaternion); }
+  });
+
+  // 乘坐时能转头看（鼠标锁定时直接动鼠标；没锁定 / 触屏时按住拖）
+  const look = (dx, dy) => {
+    if (!state.departing) return;
+    const lim = state.mission?.extraction.vehicle.kind === 'helicopter' ? 2.4 : 1.9;
+    state.lookYaw = Math.max(-lim, Math.min(lim, state.lookYaw - dx * 0.0028));
+    state.lookPitch = Math.max(-1.0, Math.min(0.75, state.lookPitch - dy * 0.0028));
+  };
+  let drag = null;
+  const onMove = (e) => { if (document.pointerLockElement) look(e.movementX || 0, e.movementY || 0); else if (drag) { look(e.clientX - drag.x, e.clientY - drag.y); drag = { x: e.clientX, y: e.clientY }; } };
+  const onDown = (e) => { if (state.departing && !document.pointerLockElement) drag = { x: e.clientX, y: e.clientY }; };
+  const onUp = () => { drag = null; };
+  const onTouch = (e) => { const t = e.touches?.[0]; if (!t) { drag = null; return; } if (e.type === 'touchstart') drag = { x: t.clientX, y: t.clientY }; else onMove({ clientX: t.clientX, clientY: t.clientY }); };
+  const listeners = [['mousemove', onMove], ['mousedown', onDown], ['mouseup', onUp], ['touchstart', onTouch], ['touchmove', onTouch], ['touchend', onTouch]];
+  if (typeof document !== 'undefined') for (const [k, f] of listeners) document.addEventListener(k, f, { passive: true });
+
+  const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  const lookQuat = (eye, target) => new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(eye, target, new THREE.Vector3(0, 1, 0)));
+  /** 登机：0–1 秒走到门口（看着舱里），1–1.9 秒弯腰钻进去坐到座位上，之后坐着、关门、旋翼加速 */
+  function boardingView(veh, t) {
+    const sp = veh.spec, D = veh.toWorld(sp.doorOut), I = veh.toWorld(sp.doorIn), seat = veh.seatPose(state.lookYaw, state.lookPitch);
+    if (t < 1) {
+      const k = smooth(t), position = from.pos.clone().lerp(D, k);
+      return { position, quaternion: from.quat.clone().slerp(lookQuat(D, I.clone().lerp(seat.position, 0.5)), smooth(t * 1.3)) };
+    }
+    const k = smooth((t - 1) / 0.9), a = D.clone().lerp(I, k), b = I.clone().lerp(seat.position, k), position = a.lerp(b, k);
+    position.y += Math.sin(k * Math.PI) * -0.12; // 钻门时低一下头
+    return { position, quaternion: lookQuat(D, I.clone().lerp(seat.position, 0.5)).slerp(seat.quaternion, k) };
+  }
 
   /** 歼灭任务：场上的敌人少于 5 个时，从远处（离玩家 28 米以上、看不见的地方优先）补一个，直到计数够了 */
   function reinforce(dt) {
@@ -242,12 +277,22 @@ export function createMissionDirector(G, { scene, layout, nav, J, rng = Math.ran
     reinforce(dt);
     const veh = state.mission && vehicles[state.mission.extraction.id];
     if (!veh) return null;
+    for (const other of Object.values(vehicles)) if (other !== veh) other.update(dt);
     if (state.departing) state.depart += dt;
-    veh.update(dt, { ready: G.game?.run?.allCut, departing: state.departing, time: state.depart });
-    // 撤离：机位固定在停机坪/车位旁，镜头跟着直升机升空飞走、接应车开出车库，这段时间画面不压暗
-    return state.departing && state.depart < DEPART_SHOT ? veh.observerView(state.depart) : null;
+    const t = state.depart, ride = Math.max(0, t - BOARD_TIME);
+    veh.update(dt, { ready: G.game?.run?.allCut, board: state.departing ? t : -1, ride: state.departing ? ride : 0 });
+    if (!state.departing) return null;
+    // 撤离：先登机，再坐在舱里第一人称看着载具起飞 / 开走（能转头），最后一秒压暗，结算页出来前松开鼠标
+    const total = rideShot(veh.kind);
+    const view = t < 1.9 ? boardingView(veh, t) : veh.seatPose(state.lookYaw, state.lookPitch);
+    view.fade = Math.min(0.85, smooth((t - (total - 1)) / 1));
+    if (t >= total && !state.released) { state.released = true; if (document.pointerLockElement) document.exitPointerLock?.(); }
+    return view;
   }
 
   return { roll, update, state, sites, vehicles, root,
-    dispose() { root.removeFromParent(); for (const veh of Object.values(vehicles)) veh.dispose(); } };
+    dispose() {
+      root.removeFromParent(); for (const veh of Object.values(vehicles)) veh.dispose();
+      if (typeof document !== 'undefined') for (const [k, f] of listeners) document.removeEventListener(k, f);
+    } };
 }

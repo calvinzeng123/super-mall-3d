@@ -5,12 +5,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as THREE from 'three';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { buildNav, clear, landAt } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
 import { walkNav } from './helpers.js';
 import { pointInPoly, distToPolyEdge } from '../src/layout/geom.js';
-import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, DEPART_SHOT, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
+import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, rideShot, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
+import { createRideVehicle, rideFootprint, RIDE_SPECS, BOARD_TIME } from '../src/jimao/ride-vehicles.js';
 
 const L = buildPlayableLayout({ mode: 'arcade' });
 const nav = buildNav(L);
@@ -102,5 +104,36 @@ test('原游戏补丁：任务文字、交互提示、撤离点名字、外部�
   for (const needle of ['s && s.missionText', 'V.o.verb || ', 's.extraction.label || ', 'completeAll() {', 'refreshObjective() {', 's && s.outroDelay || 3.3', esc('已完成目标'), esc('击倒敌人'), 'RADIO']) {
     assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
   }
-  assert.ok(DEPART_SHOT >= 5, '撤离镜头至少 5 秒，载具要来得及离场');
+  assert.ok(src.includes('s && s.keepLock || r.exitLock()'), 'vendor/game.js 缺补丁：乘坐时不松开鼠标');
+  for (const k of ['helicopter', 'car']) assert.ok(rideShot(k) >= BOARD_TIME + 4, `${k} 撤离镜头太短`);
+});
+
+test('撤离载具能坐进去：门口在空地上、机身占地不压墙，座位在舱里，直升机真的飞走、车真的开走', () => {
+  for (const x of Object.values(EXTRACTIONS)) {
+    const y = elev(x.floor), r = rideFootprint(x.vehicle), name = x.label;
+    // 机身 / 车身整块落在导航上（加成障碍后不会把路堵死在墙里），登机点在占地外、离机身不远
+    for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) {
+      const px = r.x0 + (r.x1 - r.x0) * i / 6, pz = r.z0 + (r.z1 - r.z0) * j / 6;
+      assert.ok(clear(nav, { floor: x.floor, x: px, z: pz, y, slope: null }), `${name}占地 (${px.toFixed(1)}, ${pz.toFixed(1)}) 压到墙或障碍`);
+    }
+    const out = x.x < r.x0 || x.x > r.x1 || x.z < r.z0 || x.z > r.z1;
+    assert.ok(out, `${name}登机点在机身里`);
+    assert.ok(Math.max(r.x0 - x.x, x.x - r.x1, r.z0 - x.z, x.z - r.z1) < 1.2, `${name}登机点离机身太远`);
+    const veh = createRideVehicle({ ...x, y });
+    let verts = 0; veh.root.traverse((o) => { if (o.isMesh) verts += o.geometry.attributes.position.count; });
+    assert.ok(verts > 3000, `${name}模型太简单（${verts} 个顶点）`);
+    // 座位在舱里：眼睛离舱底 0.9 米以上、离舱顶 0.2 米以上
+    const seat = veh.seatPose(0, 0).position;
+    assert.ok(seat.y - y > 1.5 && seat.y - y < 1.85, `${name}座位高度 ${(seat.y - y).toFixed(2)}`);
+    assert.ok(seat.x > r.x0 && seat.x < r.x1 && seat.z > r.z0 && seat.z < r.z1, `${name}座位不在机身里`);
+    // 坐着朝前看：视线方向和机头一致
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(veh.seatPose(0, 0).quaternion), nose = new THREE.Vector3(Math.sin(x.vehicle.yaw), 0, Math.cos(x.vehicle.yaw));
+    assert.ok(fwd.dot(nose) > 0.95, `${name}座位没朝前`);
+    veh.update(0.1, { ready: true, board: BOARD_TIME + RIDE_SPECS[x.vehicle.kind].ride, ride: RIDE_SPECS[x.vehicle.kind].ride });
+    const end = veh.seatPose(0, 0).position;
+    if (x.vehicle.kind === 'helicopter') { assert.ok(end.y - seat.y > 30, '直升机没飞起来'); assert.ok(end.distanceTo(seat) > 120, '直升机没飞远'); }
+    else assert.ok(Math.hypot(end.x - seat.x, end.z - seat.z) > 18 && Math.abs(end.y - seat.y) < 0.2, '接应车没开走');
+    veh.reset(); assert.ok(veh.seatPose(0, 0).position.distanceTo(seat) < 1e-6, `${name}重开后没回到原位`);
+    veh.dispose();
+  }
 });

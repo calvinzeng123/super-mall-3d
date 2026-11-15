@@ -15,6 +15,7 @@ import { buildNav, landAt } from '../layout/nav.js';
 import { distToPolyEdge } from '../layout/geom.js';
 import { FPS_MISSION } from '../fps/mission-layout.js';
 import { createMissionDirector, RELAY_SITES, EXTRACTIONS } from './missions.js';
+import { rideFootprint } from './ride-vehicles.js';
 import { MOBILE } from '../render/device.js';
 
 /** 标题是四个字（原游戏是两个字）：字号收小、不换行，手机横屏按高度算 */
@@ -114,7 +115,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   tuneFlow();
   G.hud = J.createHud(G);
   // 随机任务：每局开始（含重开）抽一种任务和撤离方式，摆装置、物品和载具（missions.js）。网址参数 mission= / exit= 可以指定
-  const director = createMissionDirector(G, { scene, layout: ctx.layout, nav, J,
+  const director = createMissionDirector(G, { scene, layout: ctx.layout, nav, J, camera,
     force: { type: params.mission, exit: params.exit } });
   G.level.onReset = () => director.roll();
   director.roll();
@@ -151,10 +152,14 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { if (!run.err.game) { run.err.game = 1; console.error('[零点突围] game.update 出错', e); } }
       if (active) { run('player', dt); run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
-      // 任务物件动画、歼灭任务增援；撤离时镜头坐进直升机 / 接应车里（前 4.5 秒画面不压暗）
+      // 任务物件动画、歼灭任务增援；撤离时镜头登机、坐进直升机 / 接应车里（missions.js 给出位置、朝向和压暗）
       try {
         const view = director.update(dt);
-        if (view) { camera.position.copy(view.position); camera.lookAt(view.lookAt); render.post.fade = 0; G.weapon?.setVisible?.(false); }
+        if (view) {
+          camera.position.copy(view.position);
+          if (view.quaternion) camera.quaternion.copy(view.quaternion); else camera.lookAt(view.lookAt);
+          render.post.fade = view.fade ?? 0; G.weapon?.setVisible?.(false);
+        }
       } catch (e) { if (!run.err.missions) { run.err.missions = 1; console.error('[零点突围] missions.update 出错', e); } }
       run('audio', dt); run('hud', dt);
       lightPool.update(dt);
@@ -232,6 +237,12 @@ function addCover(ctx) {
     const box = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.height, c.d), c.style === 'cargo' ? wood : dark);
     box.position.set(c.x, lv.elev + c.height / 2, c.z); group.add(box);
     for (const y of [0.12, c.height - 0.12]) { const band = new THREE.Mesh(new THREE.BoxGeometry(c.w + 0.04, 0.07, c.d + 0.04), metal); band.position.set(c.x, lv.elev + y, c.z); group.add(band); }
+  }
+  // 两台撤离载具的机身 / 车身是导航障碍（人走不穿；上去是走到门口登机，见 missions.js）
+  for (const [id, x] of Object.entries(EXTRACTIONS)) {
+    const lv = ctx.layout.levels.find((l) => l.id === x.floor), r = rideFootprint(x.vehicle);
+    if (lv && !lv.features.some((f) => f.id === `ride-${id}`)) lv.features.push({ id: `ride-${id}`, type: 'market-stall', tactical: true, floor: x.floor, y: lv.elev,
+      x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2, w: r.x1 - r.x0, d: r.z1 - r.z0, height: 2.4, ride: true });
   }
 }
 

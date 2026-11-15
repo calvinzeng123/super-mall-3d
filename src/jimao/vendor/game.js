@@ -9808,7 +9808,7 @@ function mM(i) {
       _.state !== "playing" && _.state !== "paused" || (r.setGameplay && r.setGameplay(false), r.exitLock(), o.setPrompt && o.setPrompt(null), o.show(false), o.clearRadio && o.clearRadio(), l.setDead({ time: c.time, relays: c.cut, total: c.relays.length }), M("dead"));
     });
     function ee() {
-      n.invulnerable = true, n.enabled = false, r.setGameplay && r.setGameplay(false), r.exitLock(), o.setPrompt && o.setPrompt(null), o.show(false), i.events.emit("extraction:reached", {}), o.clearRadio && o.clearRadio(), o.radio && o.radio(_l.done, 2.2);
+      n.invulnerable = true, n.enabled = false, r.setGameplay && r.setGameplay(false), (s && s.keepLock || r.exitLock()), o.setPrompt && o.setPrompt(null), o.show(false), i.events.emit("extraction:reached", {}), o.clearRadio && o.clearRadio(), o.radio && o.radio(_l.done, 2.2);
       let P = i.combat && i.combat.stats || { shots: 0, hits: 0, kills: 0 }, V = P.shots > 0 ? Zn(P.hits / P.shots, 0, 1) : null, Y = (c.time < 270 ? 2 : c.time < 400 ? 1 : 0) + (V >= 0.5 ? 2 : V >= 0.3 ? 1 : 0) + (c.retries === 0 ? 1 : 0), L = ["\u9669\u8C61\u73AF\u751F", "\u706B\u529B\u5168\u5F00", "\u7A33\u624E\u7A33\u6253", "\u5E72\u51C0\u5229\u843D", "\u7CBE\u51C6\u679C\u65AD", "\u5B8C\u7F8E\u7A81\u51FB"][Y];
       l.setDebrief({ time: c.time, accuracy: V, kills: P.kills || 0, retries: c.retries, rating: L }), M("complete");
     }
