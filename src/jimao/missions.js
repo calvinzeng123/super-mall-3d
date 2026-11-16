@@ -219,7 +219,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     for (const m of models) m.removeFromParent();
     const mission = rollMission(rng, sites, force);
     Object.assign(state, { mission, kills: 0, reinforce: 0, ...FRESH() });
-    vhud.show(false);
+    vhud.show(false); deadTitle(null, null);
     if (G.player) G.player.mounted = false;
     doorGun.reset();
     models = mission.objectives.map((o) => {
@@ -245,7 +245,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
 
   G.events.on('enemy:killed', () => {
     if (G.game?.state !== 'playing') return;
-    if (state.phase === 'ride') { state.rideKills++; G.game.refreshObjective?.(); return; }
+    // 坐车时每击倒一人，下一个敌人推迟 2.2 秒才冲出来：清得快就真的能喘口气
+    if (state.phase === 'ride') { state.rideKills++; if (veh()?.kind === 'car') state.spawnT = Math.max(state.spawnT, 2.2); G.game.refreshObjective?.(); return; }
     const m = state.mission;
     if (!m || m.type !== 'eliminate') return;
     state.kills++;
@@ -327,6 +328,17 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     }
     if (state.vhp <= 0) crash(vv);
   });
+
+  /** 阵亡页的两行标题（原文「突击队员倒下 / 信号中断」）：载具坠毁时改成「…被击落 / 撤离失败」，下一局恢复 */
+  function deadTitle(kicker, head) {
+    const sec = typeof document !== 'undefined' && document.querySelector('[data-s="dead"]');
+    if (!sec) return;
+    for (const [el, text] of [[sec.querySelector('.m-k'), kicker], [sec.querySelector('.m-h'), head]]) {
+      if (!el) continue;
+      if (el.dataset.orig == null) el.dataset.orig = el.textContent;
+      el.textContent = text ?? el.dataset.orig;
+    }
+  }
 
   function boom(vv, size) {
     state.boom = true;
@@ -463,6 +475,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       if (state.crashT > dur && !state.dead) {
         // 黑场后阵亡：原游戏的阵亡页（重新出击会重抽任务）
         state.dead = true;
+        deadTitle(vv.kind === 'helicopter' ? '直升机被击落' : '接应车被击毁', '撤离失败');
         G.player.invulnerable = false;
         G.player.damage?.(9999, null);
       }
