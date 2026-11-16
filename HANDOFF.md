@@ -10,6 +10,7 @@
 - **手机 / 画质修复（2026-11-16 第二轮反馈）**：
   - 添加到主屏幕不全屏：页面 head 只有 `viewport-fit=cover`。`build.mjs` 的 `wrap()` 和 `scripts/build-netlify.mjs` 加 `apple-mobile-web-app-capable`、`black-translucent` 状态栏、`theme-color`；Netlify 版再加 `manifest.webmanifest`（`display: fullscreen`）和 `icons/`（`assets/icons/` 里 180/192/512 图标，PIL 画的）。原游戏 HUD 本来就用 safe-area 内边距。
   - 零点突围设置里切画质没反应：`run.js` 给原游戏的 `render.setQuality` 是空函数。现在原游戏 低/中/高/极致 → 我们的 流畅/均衡/精细/极致（`VENDOR_TIER`，`app.setQuality`），分辨率、阴影、HDR、柔光、AO、室内灯、贴图、细节都跟着变；开局按 `saltline.settings.v1` 里存的档位（枪、材质贴图按它生成；补丁把贴图上限 1024 → 2048）。手机 / 省显存档像素比上限 1.5（`quality.js`，`MAX_PIXEL_RATIO` 以前没被用上）。
+  - 折叠屏 / 近方形屏（用户截图约 1.42:1）：按 1000×704 横屏、704×1000 竖屏、游戏中途切到 390×844（折叠）再切回（展开）实测，画面缓冲区都会跟上（`app.js` 的 resize + ResizeObserver），HUD 自适应。用户截图里上下的黑条是原游戏开始界面的电影黑边（`.m-bars`），已去掉。
   - 手机上「不能移动」：开局朝向正对 2 米外的咖啡外摆桌椅，一推摇杆就顶住。`run.js` 的 `openYaw` 开局朝 16 个方向里往前能直走最远（≤30 米）的那个。触屏摇杆本身是好的（iPhone 模拟 CDP 触摸验证）。
 - **发布（2026-11-16，用户确认）**：提交 `fd32919`（机枪辅助瞄准、抬高视角、楼顶敌人红点、地面路线指引），部署 `6afac282e2945437b34f1d52` live；首页 200，入口 `main.S6OF7H4V.js` 和本地构建 SHA-256 一致。
 - **发布（2026-11-16，用户确认）**：提交 `78078d1`，`npm run build:netlify`（105 文件、62 MiB）后发布到 `yunlan-mall-calvin-v2`，部署 `6afa88807a55e6d6667f980e` live；首页 200，入口 `main.PB56YQQF.js` 和本地构建 SHA-256 一致。载具战斗撤离、舱门机枪、弹药补给、载具耐久和坠毁都在这一版。

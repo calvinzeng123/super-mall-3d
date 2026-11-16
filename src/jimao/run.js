@@ -27,6 +27,8 @@ const TITLE_CSS = `
 .m-word { font-size: clamp(40px, 7.6vw, 108px) !important; white-space: nowrap !important; letter-spacing: .1em !important; }
 @media (max-width: 700px) { .m-word { font-size: clamp(34px, 10vw, 60px) !important; } }
 @media (max-height: 500px) { .m-word { font-size: clamp(30px, 12vh, 60px) !important; } }
+/* 开始界面上下的电影黑边去掉：在手机、折叠屏上看起来像是没全屏 */
+.m-bars { display: none !important; }
 `;
 /** 原游戏的画质名 → 我们的画质档位 */
 const VENDOR_TIER = Object.freeze({ low: 'low', medium: 'balanced', high: 'high', ultra: 'ultra' });
