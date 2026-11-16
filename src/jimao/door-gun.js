@@ -32,7 +32,7 @@ function canLabel() {
 }
 
 /** 造枪：返回 { root（挂到机舱的转盘）, yawG, pitchG, barrels, muzzle, eject, mats, dispose } */
-export function buildDoorGun(G) {
+export function buildDoorGun(G, { post = 0.62 } = {}) {
   const M = {
     gun: material(G, 'gunmetal', { color: '#3a3d40', metalness: 0.85, roughness: 0.38 }),
     black: material(G, 'anodized_black', { color: '#161718', metalness: 0.6, roughness: 0.45 }),
@@ -52,7 +52,8 @@ export function buildDoorGun(G) {
 
   const root = new THREE.Group(); root.name = '舱门机枪';
   // 枪架：舱底立柱、转盘（左右转）
-  cyl(root, 0.035, 0.62, M.olive, 0, -0.42, 0, 12, 'y');
+  // post：立柱长度（直升机从舱底立起来 0.62 米；装甲车架在车顶环上，只要一小截）
+  cyl(root, 0.035, post, M.olive, 0, -0.11 - post / 2, 0, 12, 'y');
   cyl(root, 0.06, 0.05, M.black, 0, -0.1, 0, 16, 'y');
   for (let k = 0; k < 6; k++) box(root, 0.012, 0.03, 0.03, M.steel, Math.cos(k) * 0.065, -0.1, Math.sin(k) * 0.065);
   const yawG = new THREE.Group(); root.add(yawG);
@@ -138,37 +139,14 @@ function mergeByMaterial(group, geos) {
  * 舱门机枪的操作。mount 是机舱里的挂点（Object3D，默认枪口朝舱门外 = mount 的 +z）。
  * update(dt, { active, firing, camera }) 每帧调用；返回 { heat, overheated, inArc }。
  */
-/**
- * 辅助瞄准（舱门机枪和车上的步枪共用）：targets 里离准星最近、夹角在 cone 以内的那个，把玩家视角往它转，
- * 每秒最多转 rate 弧度，越靠近准星拉得越轻。返回锁定的 { point, angle } 或 null。
- */
-export function assistAim(G, camera, targets, { cone, rate, dt, range = 150 }) {
-  if (!camera || !targets?.length || !G.player) return null;
-  const from = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3()), to = new THREE.Vector3();
-  let best = null;
-  for (const t of targets) {
-    to.copy(t).sub(from); const dist = to.length();
-    if (dist > range || dist < 1) continue;
-    const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(dir) / dist)));
-    if (ang < cone && (!best || ang < best.angle)) best = { point: t, angle: ang };
-  }
-  if (!best) return null;
-  to.copy(best.point).sub(from).normalize();
-  const P = G.player, yaw = Math.atan2(-to.x, -to.z), pitch = Math.asin(to.y);
-  let dy = ((yaw - P.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI, dp = pitch - P.pitch;
-  const step = rate * (1 - 0.6 * best.angle / cone) * dt, n = Math.hypot(dy, dp);
-  if (n > step) { dy *= step / n; dp *= step / n; }
-  P.yaw += dy; P.pitch += dp;
-  return best;
-}
-
-export function createDoorGun(G, mount) {
-  const gun = buildDoorGun(G);
+/** label：状态条上的名字；post：立柱长度（见 buildDoorGun） */
+export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post } = {}) {
+  const gun = buildDoorGun(G, post == null ? {} : { post });
   mount.add(gun.root);
   let heat = 0, overheated = false, spin = 0, spinAngle = 0, cooldown = 0, active = false;
   const q = new THREE.Quaternion(), d = new THREE.Vector3(), dir = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vector3(), mz = new THREE.Vector3(), ej = new THREE.Vector3(), vel = new THREE.Vector3();
   let inArc = true;
-  const hud = makeHud();
+  const hud = makeHud(label);
 
   /** 准星附近最近的目标（夹角最小、150 米内）：{ point, angle } */
   let lock = null;
@@ -249,11 +227,11 @@ export function createDoorGun(G, mount) {
 }
 
 /** 屏幕下方的机枪状态条：名字、弹药不限、温度条、过热 / 超出射界提示 */
-function makeHud() {
+function makeHud(label = 'M134 舱门机枪') {
   if (typeof document === 'undefined') return { show() {}, set() {}, remove() {} };
   const el = document.createElement('div');
   el.className = 'jm-doorgun';
-  el.innerHTML = '<b>M134 舱门机枪</b><span class="inf">弹药 ∞</span><i><em></em></i><span class="st"></span>';
+  el.innerHTML = `<b>${label}</b><span class="inf">弹药 ∞</span><i><em></em></i><span class="st"></span>`;
   el.hidden = true;
   (document.getElementById('ui') || document.body).appendChild(el);
   const bar = el.querySelector('em'), st = el.querySelector('.st');

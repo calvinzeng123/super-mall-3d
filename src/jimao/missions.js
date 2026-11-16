@@ -12,10 +12,7 @@ import { landAt, clear } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
 import { createRideVehicle, rideLocalToWorld, RIDE_SPECS, BOARD_TIME } from './ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from './ride-paths.js';
-import { createDoorGun, assistAim } from './door-gun.js';
-
-/** 车上步枪的辅助瞄准：夹角范围、开火时 / 不开火时每秒最多拉多少弧度 */
-export const CAR_ASSIST = Object.freeze({ cone: 0.14, pull: 2.2, pullIdle: 0.9 });
+import { createDoorGun } from './door-gun.js';
 import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
 
 export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel']);
@@ -203,6 +200,13 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   gunMount.position.set(...RIDE_SPECS.helicopter.gunMount); gunMount.rotation.y = Math.PI / 2;
   vehicles.heli.body.add(gunMount);
   const doorGun = createDoorGun(G, gunMount);
+  // 装甲车的车顶机枪（同一挺 M134）：不用换弹、只会过热。环形枪架：圆心在射击口正中，枪挂在环上跟着视线绕人转一整圈
+  // （用户反馈：车上用步枪，换弹耽误太久）
+  const carRing = new THREE.Object3D(), carMount = new THREE.Object3D();
+  carRing.position.set(...RIDE_SPECS.car.gunRing); carMount.position.set(0, 0, RIDE_SPECS.car.gunReach);
+  carRing.add(carMount); vehicles.car.body.add(carRing);
+  const roofGun = createDoorGun(G, carMount, { label: 'M134 车顶机枪', post: 0.06 });
+  const ringQ = new THREE.Quaternion(), ringD = new THREE.Vector3();
   const carSamples = sampleRoute(CAR_ROUTE), carLength = carSamples.at(-1).s;
   const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;
   const FRESH = () => ({ phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false,
@@ -224,7 +228,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     Object.assign(state, { mission, kills: 0, reinforce: 0, ...FRESH() });
     vhud.show(false); deadTitle(null, null);
     if (G.player) G.player.mounted = false;
-    doorGun.reset();
+    doorGun.reset(); roofGun.reset();
     models = mission.objectives.map((o) => {
       const g = o.kind === 'relay' ? relayModel() : itemModel();
       const y = o.site.y ?? elev(o.site.floor);
@@ -355,7 +359,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function crash(vv) {
     if (state.phase !== 'ride') return;
     state.phase = 'crash'; state.crashT = 0; state.boom = false; state.crashStart = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0 }) };
-    doorGun.update(0, { active: false });
+    doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
     G.weapon?.setVisible?.(false);
     G.fx?.explosion?.(vv.toWorld(VEHICLE_HP.engine[vv.kind]), 1.4);
     G.player?.addShake?.(0.5);
@@ -370,7 +374,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const q = vv.seatPose(0, 0).quaternion, d = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
     G.player.yaw = Math.atan2(-d.x, -d.z); G.player.pitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
     if (vv.kind === 'helicopter') G.player.pitch = -0.42; // 坐好先往下看楼顶
-    if (vv.kind === 'car') G.weapon?.setVisible?.(true);
+    G.weapon?.setVisible?.(false); // 两种载具都用车载机枪，步枪收起来
     // 原游戏的追兵波次停掉，地图别处的敌人收掉，敌人池（18 人）留给沿路 / 楼顶刷出来的
     const run = G.game?.run;
     if (run) { run.pursuitLeft = 0; run.pursuitT = 0; if (run.queue) run.queue.length = 0; run.waveHot = 0; }
@@ -390,7 +394,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function finishRide() {
     if (state.phase !== 'ride') return;
     state.phase = 'end'; state.endT = 0;
-    doorGun.update(0, { active: false });
+    doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
     G.game?.finish?.();
   }
 
@@ -464,12 +468,15 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     // 舱门机枪的辅助瞄准目标：楼顶上活着的敌人（瞄胸口）；HUD 上给它们标红点
     const targets = heliGun ? roofEnemies().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)) : null;
     doorGun.update(dt, { active: heliGun, firing: heliGun && !!(G.input?.down?.('fire') || G.input?.fire), camera, targets });
-    // 车上用步枪也有辅助瞄准：准星 8° 以内最近的敌人把视角拉过去（开火时拉得快），顺带抵消车在走；HUD 上同样标红点
+    // 车顶机枪：先把环形枪架转到视线方向（枪始终在人前面），再按舱门机枪同一套开火、过热、辅助瞄准；目标是车周围所有敌人
     const carGun = vv.kind === 'car' && state.phase === 'ride' && G.game?.state === 'playing';
     if (carGun) {
-      const firing = !!(G.input?.down?.('fire') || G.input?.fire);
-      assistAim(G, camera, alive().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)), { cone: CAR_ASSIST.cone, rate: firing ? CAR_ASSIST.pull : CAR_ASSIST.pullIdle, dt, range: 90 });
+      vehicles.car.body.getWorldQuaternion(ringQ).invert();
+      camera.getWorldDirection(ringD).applyQuaternion(ringQ);
+      carRing.rotation.y = Math.atan2(ringD.x, ringD.z);
     }
+    roofGun.update(dt, { active: carGun, firing: carGun && !!(G.input?.down?.('fire') || G.input?.fire), camera,
+      targets: carGun ? alive().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)) : null });
     if ((state.markT -= dt) <= 0) {
       state.markT = 0.3;
       const sig = heliGun ? roofEnemies().map((e) => G.enemies.list.indexOf(e)).join(',') : carGun ? alive().map((e) => G.enemies.list.indexOf(e)).join(',') : '';
@@ -519,9 +526,10 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return null;
   }
 
-  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun,
-    get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || (state.phase === 'ride' && veh()?.kind === 'helicopter'); },
+  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun,
+    /** 步枪停用：登车、乘坐（直升机舱门机枪 / 装甲车车顶机枪）、结算、坠毁 */
+    get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || state.phase === 'ride'; },
     get riding() { return riding(); },
     get rideKind() { return riding() ? veh()?.kind === 'helicopter' ? 'helicopter' : 'car' : null; },
-    dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); vhud.remove(); } };
+    dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); roofGun.dispose(); vhud.remove(); } };
 }

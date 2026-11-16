@@ -283,23 +283,31 @@ test('低帧率：玩家按真实间隔分小步走（敌人照旧一步）；�
   assert.match(src, /stick\.apply\(\)/);
 });
 
-test('接应车：舱盖翻平不挡后方视线；车上步枪有辅助瞄准（把视角拉向准星附近的敌人）', async () => {
-  const { assistAim } = await import('../src/jimao/door-gun.js');
-  const { CAR_ASSIST } = await import('../src/jimao/missions.js');
-  // 舱盖：后方视线（眼高 2.72、往后下看 20°）上没有车顶以上的东西
+test('接应车：舱盖翻平不挡后方视线；车顶机枪架在环上、在眼睛前下方，四周都没有东西挡枪', async () => {
   const v = createRideVehicle({ vehicle: { kind: 'car', x: 0, z: 0, yaw: 0 }, y: 0 });
   v.root.updateMatrixWorld(true);
   const eye = v.toWorld(RIDE_SPECS.car.seat);
-  const ray = new THREE.Raycaster(eye.clone(), new THREE.Vector3(0, -Math.sin(0.35), -Math.cos(0.35)).normalize(), 0.05, 3);
-  const hit = ray.intersectObject(v.root, true).filter((h) => h.point.y > 2.15);
+  // 舱盖：后方视线（眼高 2.72、往后下看 20°）上没有车顶以上的东西
+  const back = new THREE.Raycaster(eye.clone(), new THREE.Vector3(0, -Math.sin(0.35), -Math.cos(0.35)).normalize(), 0.05, 3);
+  const hit = back.intersectObject(v.root, true).filter((h) => h.point.y > 2.15);
   assert.equal(hit.length, 0, `往后看被挡：${hit.map((h) => h.point.toArray().map((x) => x.toFixed(2))).join(' ')}`);
-  // 辅助瞄准：目标在准星右边 5°，拉过去；在 20° 外不理
-  const cam = new THREE.PerspectiveCamera(); cam.position.set(0, 0, 0); cam.lookAt(0, 0, -1); cam.updateMatrixWorld(true);
-  const G = { player: { yaw: 0, pitch: 0 } };
-  const t5 = new THREE.Vector3(Math.sin(0.087) * 30, 0, -Math.cos(0.087) * 30);
-  assert.ok(assistAim(G, cam, [t5], { cone: CAR_ASSIST.cone, rate: CAR_ASSIST.pull, dt: 0.016 }));
-  assert.ok(G.player.yaw < 0 && G.player.yaw > -0.087, `yaw ${G.player.yaw}`);
-  G.player.yaw = 0;
-  assert.equal(assistAim(G, cam, [new THREE.Vector3(Math.sin(0.35) * 30, 0, -Math.cos(0.35) * 30)], { cone: CAR_ASSIST.cone, rate: CAR_ASSIST.pull, dt: 0.016 }), null);
-  assert.equal(G.player.yaw, 0);
+  // 车顶机枪：环心在眼睛正下方 0.3–0.5 米，枪离环心 0.35–0.5 米
+  const S = RIDE_SPECS.car, [rx, ry, rz] = S.gunRing;
+  assert.ok(Math.abs(rx - S.seat[0]) < 1e-9 && Math.abs(rz - S.seat[2]) < 1e-9, '环心在眼睛正下方');
+  assert.ok(S.seat[1] - ry > 0.3 && S.seat[1] - ry < 0.5 && S.gunReach > 0.35 && S.gunReach < 0.5);
+  // 枪绕环一整圈（每 30° 一处），枪身高度上、往外 0.9 米以内没有车顶上的东西（原来口前的挡板已经去掉）
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+    const from = new THREE.Vector3(rx, ry + 0.04, rz), dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+    const blocked = new THREE.Raycaster(from, dir, 0.05, S.gunReach + 0.5).intersectObject(v.root, true);
+    assert.equal(blocked.length, 0, `${Math.round(a * 180 / Math.PI)}° 方向有东西挡枪`);
+  }
+  // 短立柱的机枪模型：最低点不低于转轴下 0.9 米（弹药箱），立柱只有一小截
+  const g = buildDoorGun(null, { post: 0.06 });
+  const box = new THREE.Box3().setFromObject(g.root);
+  assert.ok(box.min.y > -0.95 && box.max.y < 0.35, `机枪高度范围 ${box.min.y.toFixed(2)}…${box.max.y.toFixed(2)}`);
+  g.dispose();
+  // 乘坐时步枪停用（两种载具都用车载机枪）
+  const src = readFileSync(new URL('../src/jimao/missions.js', import.meta.url), 'utf8');
+  assert.match(src, /state\.phase === 'crash' \|\| state\.phase === 'ride'; \}/);
+  assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.06 \}\)/);
 });
