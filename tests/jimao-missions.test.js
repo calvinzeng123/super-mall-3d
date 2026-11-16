@@ -154,7 +154,7 @@ test('接应车路线：车库 → 出口坡道（−4.5 升到 0）→ 星湾�
     if (p.y > -0.01 && d > 70) { const st = landAt(nav, p.x, p.z, 0.6); assert.ok(st && Math.abs(st.y) < 0.6, `${d} 米处 (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) 不在路面上`); }
   }
   while (s < L0 - 0.05 && t < 120) { s += carSpeedAt(S, s) * 0.05; t += 0.05; }
-  assert.ok(t > 30 && t < 70, `开完要 ${t.toFixed(0)} 秒`);
+  assert.ok(t > 55 && t < 90, `开完要 ${t.toFixed(0)} 秒（开慢一点好瞄）`);
   assert.ok(Math.abs(carPoseAt(S, 0).yaw - CAR_ROUTE.start.yaw) < 1e-6, '起点朝向和停车朝向不一致');
 });
 
@@ -281,4 +281,25 @@ test('低帧率：玩家按真实间隔分小步走（敌人照旧一步）；�
   assert.match(src, /app\.setQuality\(VENDOR_TIER\[q\], \{ persist: false \}\)/);
   assert.match(src, /MOBILE && q && q\.tex > 1024/);
   assert.match(src, /stick\.apply\(\)/);
+});
+
+test('接应车：舱盖翻平不挡后方视线；车上步枪有辅助瞄准（把视角拉向准星附近的敌人）', async () => {
+  const { assistAim } = await import('../src/jimao/door-gun.js');
+  const { CAR_ASSIST } = await import('../src/jimao/missions.js');
+  // 舱盖：后方视线（眼高 2.72、往后下看 20°）上没有车顶以上的东西
+  const v = createRideVehicle({ vehicle: { kind: 'car', x: 0, z: 0, yaw: 0 }, y: 0 });
+  v.root.updateMatrixWorld(true);
+  const eye = v.toWorld(RIDE_SPECS.car.seat);
+  const ray = new THREE.Raycaster(eye.clone(), new THREE.Vector3(0, -Math.sin(0.35), -Math.cos(0.35)).normalize(), 0.05, 3);
+  const hit = ray.intersectObject(v.root, true).filter((h) => h.point.y > 2.15);
+  assert.equal(hit.length, 0, `往后看被挡：${hit.map((h) => h.point.toArray().map((x) => x.toFixed(2))).join(' ')}`);
+  // 辅助瞄准：目标在准星右边 5°，拉过去；在 20° 外不理
+  const cam = new THREE.PerspectiveCamera(); cam.position.set(0, 0, 0); cam.lookAt(0, 0, -1); cam.updateMatrixWorld(true);
+  const G = { player: { yaw: 0, pitch: 0 } };
+  const t5 = new THREE.Vector3(Math.sin(0.087) * 30, 0, -Math.cos(0.087) * 30);
+  assert.ok(assistAim(G, cam, [t5], { cone: CAR_ASSIST.cone, rate: CAR_ASSIST.pull, dt: 0.016 }));
+  assert.ok(G.player.yaw < 0 && G.player.yaw > -0.087, `yaw ${G.player.yaw}`);
+  G.player.yaw = 0;
+  assert.equal(assistAim(G, cam, [new THREE.Vector3(Math.sin(0.35) * 30, 0, -Math.cos(0.35) * 30)], { cone: CAR_ASSIST.cone, rate: CAR_ASSIST.pull, dt: 0.016 }), null);
+  assert.equal(G.player.yaw, 0);
 });

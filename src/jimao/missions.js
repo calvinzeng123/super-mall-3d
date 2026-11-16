@@ -12,7 +12,10 @@ import { landAt, clear } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
 import { createRideVehicle, rideLocalToWorld, RIDE_SPECS, BOARD_TIME } from './ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from './ride-paths.js';
-import { createDoorGun } from './door-gun.js';
+import { createDoorGun, assistAim } from './door-gun.js';
+
+/** 车上步枪的辅助瞄准：夹角范围、开火时 / 不开火时每秒最多拉多少弧度 */
+export const CAR_ASSIST = Object.freeze({ cone: 0.14, pull: 2.2, pullIdle: 0.9 });
 import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
 
 export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel']);
@@ -407,8 +410,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const roofEnemies = () => alive().filter((e) => Math.abs(e.pos.y - roofY) < 4 && Math.hypot(e.pos.x - HELI_ORBIT.center.x, e.pos.z - HELI_ORBIT.center.z) < 100);
   /** HUD 标记：坐直升机时楼顶上每个敌人一个红点（位置直接引用敌人坐标，跟着走） */
   function markers() {
-    if (state.phase !== 'ride' || veh()?.kind !== 'helicopter') return [];
-    return roofEnemies().map((e) => ({ id: `tgt-${G.enemies.list.indexOf(e)}`, short: '', label: '敌人', pos: e.pos, kind: 'enemy' }));
+    if (state.phase !== 'ride') return [];
+    return (veh()?.kind === 'helicopter' ? roofEnemies() : alive()).map((e) => ({ id: `tgt-${G.enemies.list.indexOf(e)}`, short: '', label: '敌人', pos: e.pos, kind: 'enemy' }));
   }
   function spawnAt(pos) { try { G.enemies.spawn('soldier', pos, { state: 'alert', target: G.player.pos }); return true; } catch { return false; } }
 
@@ -461,9 +464,15 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     // 舱门机枪的辅助瞄准目标：楼顶上活着的敌人（瞄胸口）；HUD 上给它们标红点
     const targets = heliGun ? roofEnemies().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)) : null;
     doorGun.update(dt, { active: heliGun, firing: heliGun && !!(G.input?.down?.('fire') || G.input?.fire), camera, targets });
+    // 车上用步枪也有辅助瞄准：准星 8° 以内最近的敌人把视角拉过去（开火时拉得快），顺带抵消车在走；HUD 上同样标红点
+    const carGun = vv.kind === 'car' && state.phase === 'ride' && G.game?.state === 'playing';
+    if (carGun) {
+      const firing = !!(G.input?.down?.('fire') || G.input?.fire);
+      assistAim(G, camera, alive().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)), { cone: CAR_ASSIST.cone, rate: firing ? CAR_ASSIST.pull : CAR_ASSIST.pullIdle, dt, range: 90 });
+    }
     if ((state.markT -= dt) <= 0) {
       state.markT = 0.3;
-      const sig = heliGun ? roofEnemies().map((e) => G.enemies.list.indexOf(e)).join(',') : '';
+      const sig = heliGun ? roofEnemies().map((e) => G.enemies.list.indexOf(e)).join(',') : carGun ? alive().map((e) => G.enemies.list.indexOf(e)).join(',') : '';
       if (sig !== state.markSig) { state.markSig = sig; G.game?.refreshObjective?.(); }
     }
     if (state.phase === 'board') {

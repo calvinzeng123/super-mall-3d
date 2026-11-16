@@ -4,7 +4,7 @@
 export const VEHICLE_HP = Object.freeze({
   radius: { helicopter: 3.2, car: 3.0 },  // 子弹离载具中心这么近算打中
   center: { helicopter: [0, 1.4, -0.3], car: [0, 1.2, 0] },
-  damage: { helicopter: 0.8, car: 1.2 }, // 直升机绕圈更低更慢（68 秒）、挨得多，单发掉得少 // 每发打中掉多少（满 100）：直升机实测不还手一圈挨约 80 发、还手约 37 发
+  damage: { helicopter: 0.8, car: 0.8 }, // 车开慢了（71 秒）挨的枪多，单发也调低 // 直升机绕圈更低更慢（68 秒）、挨得多，单发掉得少 // 每发打中掉多少（满 100）：直升机实测不还手一圈挨约 80 发、还手约 37 发
   smoke: 50, fire: 25,                    // 低于这个开始冒烟 / 起火
   warn: [60, 30],
   engine: { helicopter: [0, 2.7, -1.7], car: [0, 1.35, 1.9] },

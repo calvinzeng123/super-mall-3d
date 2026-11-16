@@ -138,6 +138,30 @@ function mergeByMaterial(group, geos) {
  * 舱门机枪的操作。mount 是机舱里的挂点（Object3D，默认枪口朝舱门外 = mount 的 +z）。
  * update(dt, { active, firing, camera }) 每帧调用；返回 { heat, overheated, inArc }。
  */
+/**
+ * 辅助瞄准（舱门机枪和车上的步枪共用）：targets 里离准星最近、夹角在 cone 以内的那个，把玩家视角往它转，
+ * 每秒最多转 rate 弧度，越靠近准星拉得越轻。返回锁定的 { point, angle } 或 null。
+ */
+export function assistAim(G, camera, targets, { cone, rate, dt, range = 150 }) {
+  if (!camera || !targets?.length || !G.player) return null;
+  const from = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3()), to = new THREE.Vector3();
+  let best = null;
+  for (const t of targets) {
+    to.copy(t).sub(from); const dist = to.length();
+    if (dist > range || dist < 1) continue;
+    const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(dir) / dist)));
+    if (ang < cone && (!best || ang < best.angle)) best = { point: t, angle: ang };
+  }
+  if (!best) return null;
+  to.copy(best.point).sub(from).normalize();
+  const P = G.player, yaw = Math.atan2(-to.x, -to.z), pitch = Math.asin(to.y);
+  let dy = ((yaw - P.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI, dp = pitch - P.pitch;
+  const step = rate * (1 - 0.6 * best.angle / cone) * dt, n = Math.hypot(dy, dp);
+  if (n > step) { dy *= step / n; dp *= step / n; }
+  P.yaw += dy; P.pitch += dp;
+  return best;
+}
+
 export function createDoorGun(G, mount) {
   const gun = buildDoorGun(G);
   mount.add(gun.root);

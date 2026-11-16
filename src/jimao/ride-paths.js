@@ -13,7 +13,7 @@ export const CAR_ROUTE = Object.freeze({
   ramp: { x0: -47, x1: -17, z0: -256, z1: -251, y0: -4.5, y1: 0 },
   garageY: -4.5,
   garage: { x0: -56, x1: -47, z0: -258, z1: -176 }, // 公寓 B1 车库里坡道底以西这一段
-  speed: { garage: 6, street: 14, accel: 3.2 },
+  speed: { garage: 4, street: 8, accel: 2.4, ramp: 0.2 }, // 慢一点好瞄（以前 6 / 14 太快，用户反馈瞄不准）
 });
 
 /** 把拐角磨圆后的折线按 0.5 米一段采样：[{x, z, s}]，s 是累计里程 */
@@ -66,11 +66,11 @@ function pointAt(samples, s) {
   return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
 }
 
-/** 车速：车库和坡道上慢（6 m/s），上了路加速到 14 m/s，最后 30 米减速停下 */
+/** 车速：车库和坡道上慢（4 m/s），上了路慢慢加速到 8 m/s，最后一段减速停下 */
 export function carSpeedAt(samples, s, route = CAR_ROUTE) {
   const total = samples.at(-1).s, p = carPoseAt(samples, s, route), sp = route.speed;
   const onStreet = p.y > -0.01 && s > 60;
-  const v = onStreet ? Math.min(sp.street, sp.garage + (s - 60) * 0.35) : sp.garage;
+  const v = onStreet ? Math.min(sp.street, sp.garage + (s - 60) * (sp.ramp ?? 0.35)) : sp.garage;
   return Math.max(1.2, Math.min(v, Math.sqrt(2 * sp.accel * Math.max(0, total - s)) + 1.2));
 }
 
