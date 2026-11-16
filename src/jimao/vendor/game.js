@@ -6904,7 +6904,7 @@ function x_(i) {
       !C.onGround && !ee && (Z = -C.vel.x, J = -C.vel.z);
       let oe = Math.hypot(Z, J), fe = L * F;
       oe <= fe || oe < 1e-6 ? (C.onGround || ee) && (C.vel.x = U.x, C.vel.z = U.z) : (C.vel.x += Z / oe * fe, C.vel.z += J / oe * fe), r = C.onGround ? Mt.coyote : Math.max(0, r - F), a = re && X.pressed("jump") ? Mt.jumpBuffer : Math.max(0, a - F), a > 0 && r > 0 && (!C.crouching || G()) && (C.vel.y = rC, a = 0, r = 0, C.onGround = false, C.crouching = false, o = Mt.standHeight, i.events.emit("player:jump", { pos: C.pos })), C.vel.y -= Mt.gravity * F * 0.5, C.vel.y < -40 && (C.vel.y = -40);
-      let le = C.vel.y, R = i.physics.moveCapsule(C.pos, C.vel, F, Pi.radius, o, l) || {};
+      let le = C.vel.y, R = C.mounted ? (C.vel.set(0, 0, 0), { onGround: true }) : i.physics.moveCapsule(C.pos, C.vel, F, Pi.radius, o, l) || {};
       R.onGround || (C.vel.y -= Mt.gravity * F * 0.5);
       let I = i.physics.bounds;
       if (I && (C.pos.x = Zn(C.pos.x, I.min.x + 0.4, I.max.x - 0.4), C.pos.z = Zn(C.pos.z, I.min.z + 0.4, I.max.z - 0.4)), C.onGround = !!R.onGround, R.surface && (q = R.surface), C.onGround) {
@@ -9584,6 +9584,8 @@ function mM(i) {
       j(false);
     }, update: B, completeAll() {
       c.allCut || (c.allCut = true, c.pursuitLeft = Yi.pursuitExtra, c.pursuitT = 12, i.events.emit("objective:all", {}), o.radio && o.radio(_l.all, 4.5), o.setObjective(D()), q());
+    }, finish() {
+      _.state === "playing" && ee();
     }, refreshObjective() {
       _.state === "playing" && o.setObjective(D()), q();
     }, debugCut() {
@@ -9632,7 +9634,7 @@ function mM(i) {
     function q() {
       if (!o.setMarkers) return;
       let P = c.relays.filter((V) => !V.cut).map((V) => ({ id: V.id, short: V.short, label: V.o.label || "\u4E2D\u7EE7 " + V.short, pos: V.o.pos, kind: V.o.kind || "relay" }));
-      c.allCut && s.extraction && P.push({ id: "extract", short: "\u64A4\u79BB", label: s.extraction.label || "\u63A5\u5E94\u8F66", pos: s.extraction.pos, kind: "extract" }), o.setMarkers(P);
+      c.allCut && s.extraction && P.push({ id: "extract", short: "\u64A4\u79BB", label: s.extraction.label || "\u63A5\u5E94\u8F66", pos: s.extraction.pos, kind: "extract" }), s && s.extraMarkers && P.push(...s.extraMarkers()), o.setMarkers(P);
     }
     function U({ skipIntro: P = false, quick: V = false, keepRetries: Y = false } = {}) {
       if (Y || (c.retries = 0), l.show("none"), l.locationCard(false), a(i.audio, "setPaused", false), H(), a(i.weapon, "setVisible", true), g = false, P) {
@@ -9796,7 +9798,7 @@ function mM(i) {
       let Y = s.extraction;
       if (Y && Y.pos) {
         let L = Math.hypot(Y.pos.x - n.pos.x, Y.pos.z - n.pos.z), Z = L < (Y.radius || 2.5) && Math.abs(Y.pos.y - n.pos.y) < 3.5;
-        Z && c.allCut && n.alive ? ee() : Z && !c.allCut && c.extractHint <= 0 && (c.extractHint = 8, o.message(s.extraction.blocked || "\u4E2D\u7EE7\u5C1A\u672A\u65AD\u5F00\uFF0C\u63A5\u5E94\u8F66\u65E0\u6CD5\u5728\u706B\u529B\u4E0B\u63A5\u5E94", 3.5)), c.extractHint = Math.max(0, c.extractHint - P);
+        Z && c.allCut && n.alive ? (s && s.onExtract ? s.onExtract() : ee()) : Z && !c.allCut && c.extractHint <= 0 && (c.extractHint = 8, o.message(s.extraction.blocked || "\u4E2D\u7EE7\u5C1A\u672A\u65AD\u5F00\uFF0C\u63A5\u5E94\u8F66\u65E0\u6CD5\u5728\u706B\u529B\u4E0B\u63A5\u5E94", 3.5)), c.extractHint = Math.max(0, c.extractHint - P);
       }
     }
     function me(P) {

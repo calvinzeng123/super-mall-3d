@@ -11,8 +11,11 @@ import { buildNav, clear, landAt } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
 import { walkNav } from './helpers.js';
 import { pointInPoly, distToPolyEdge } from '../src/layout/geom.js';
-import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, rideShot, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
-import { createRideVehicle, rideFootprint, RIDE_SPECS, BOARD_TIME } from '../src/jimao/ride-vehicles.js';
+import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, CAR_ROUTE_LENGTH, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
+import { createRideVehicle, rideFootprint, RIDE_SPECS } from '../src/jimao/ride-vehicles.js';
+import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from '../src/jimao/ride-paths.js';
+import { buildDoorGun, DOOR_GUN } from '../src/jimao/door-gun.js';
+import { crateSites, AMMO } from '../src/jimao/ammo.js';
 
 const L = buildPlayableLayout({ mode: 'arcade' });
 const nav = buildNav(L);
@@ -105,10 +108,10 @@ test('原游戏补丁：任务文字、交互提示、撤离点名字、外部�
     assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
   }
   assert.ok(src.includes('s && s.keepLock || r.exitLock()'), 'vendor/game.js 缺补丁：乘坐时不松开鼠标');
-  for (const k of ['helicopter', 'car']) assert.ok(rideShot(k) >= BOARD_TIME + 4, `${k} 撤离镜头太短`);
+  for (const needle of ['s.onExtract ? s.onExtract() : ee()', 'finish() {', 'C.mounted ?', 's.extraMarkers()']) assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
 });
 
-test('撤离载具能坐进去：门口在空地上、机身占地不压墙，座位在舱里，直升机真的飞走、车真的开走', () => {
+test('撤离载具能坐进去：门口在空地上、机身占地不压墙，乘坐位置在舱里 / 车顶射击口', () => {
   for (const x of Object.values(EXTRACTIONS)) {
     const y = elev(x.floor), r = rideFootprint(x.vehicle), name = x.label;
     // 机身 / 车身整块落在导航上（加成障碍后不会把路堵死在墙里），登机点在占地外、离机身不远
@@ -122,18 +125,69 @@ test('撤离载具能坐进去：门口在空地上、机身占地不压墙，�
     const veh = createRideVehicle({ ...x, y });
     let verts = 0; veh.root.traverse((o) => { if (o.isMesh) verts += o.geometry.attributes.position.count; });
     assert.ok(verts > 3000, `${name}模型太简单（${verts} 个顶点）`);
-    // 座位在舱里：眼睛离舱底 0.9 米以上、离舱顶 0.2 米以上
-    const seat = veh.seatPose(0, 0).position;
-    assert.ok(seat.y - y > 1.5 && seat.y - y < 1.85, `${name}座位高度 ${(seat.y - y).toFixed(2)}`);
+    // 直升机：坐在左舷机枪后面、朝舱门外；接应车：站在后排、从车顶射击口探出（眼睛高过车顶 0.6 米）
+    const seat = veh.seatPose(0, 0).position, k = x.vehicle.kind;
+    if (k === 'helicopter') assert.ok(seat.y - y > 1.5 && seat.y - y < 1.9, `直升机座位高度 ${(seat.y - y).toFixed(2)}`);
+    else assert.ok(seat.y - y > 2.6 && seat.y - y < 2.9, `车顶射击口眼高 ${(seat.y - y).toFixed(2)}`);
     assert.ok(seat.x > r.x0 && seat.x < r.x1 && seat.z > r.z0 && seat.z < r.z1, `${name}座位不在机身里`);
-    // 坐着朝前看：视线方向和机头一致
-    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(veh.seatPose(0, 0).quaternion), nose = new THREE.Vector3(Math.sin(x.vehicle.yaw), 0, Math.cos(x.vehicle.yaw));
-    assert.ok(fwd.dot(nose) > 0.95, `${name}座位没朝前`);
-    veh.update(0.1, { ready: true, board: BOARD_TIME + RIDE_SPECS[x.vehicle.kind].ride, ride: RIDE_SPECS[x.vehicle.kind].ride });
-    const end = veh.seatPose(0, 0).position;
-    if (x.vehicle.kind === 'helicopter') { assert.ok(end.y - seat.y > 30, '直升机没飞起来'); assert.ok(end.distanceTo(seat) > 120, '直升机没飞远'); }
-    else assert.ok(Math.hypot(end.x - seat.x, end.z - seat.z) > 18 && Math.abs(end.y - seat.y) < 0.2, '接应车没开走');
+    const look = new THREE.Vector3(0, 0, -1).applyQuaternion(veh.seatPose(0, 0).quaternion), yaw = x.vehicle.yaw + (RIDE_SPECS[k].seatYaw || 0);
+    assert.ok(look.dot(new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))) > 0.95, `${name}座位朝向不对`);
     veh.reset(); assert.ok(veh.seatPose(0, 0).position.distanceTo(seat) < 1e-6, `${name}重开后没回到原位`);
     veh.dispose();
   }
+});
+
+test('接应车路线：车库 → 出口坡道（−4.5 升到 0）→ 星湾路 → 云澜大道，全程 400 米以上，一路在空地上', () => {
+  const S = sampleRoute(), L0 = S.at(-1).s;
+  assert.ok(Math.abs(L0 - CAR_ROUTE_LENGTH) < 1e-6 && L0 > 400, `路线只有 ${L0.toFixed(0)} 米`);
+  const start = carPoseAt(S, 0), end = carPoseAt(S, L0);
+  assert.equal(start.y, -4.5); assert.equal(end.y, 0);
+  let prevY = -4.5, t = 0, s = 0;
+  for (let d = 0; d <= L0; d += 1) {
+    const p = carPoseAt(S, d);
+    assert.ok(p.y >= prevY - 1e-6, `${d} 米处路面往下掉了`); prevY = p.y;
+    // 车库段在公寓 B1、坡道上不查，上了街以后路面中心在导航上（星湾路、云澜大道都是 street 层）
+    if (p.y > -0.01 && d > 70) { const st = landAt(nav, p.x, p.z, 0.6); assert.ok(st && Math.abs(st.y) < 0.6, `${d} 米处 (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) 不在路面上`); }
+  }
+  while (s < L0 - 0.05 && t < 120) { s += carSpeedAt(S, s) * 0.05; t += 0.05; }
+  assert.ok(t > 30 && t < 70, `开完要 ${t.toFixed(0)} 秒`);
+  assert.ok(Math.abs(carPoseAt(S, 0).yaw - CAR_ROUTE.start.yaw) < 1e-6, '起点朝向和停车朝向不一致');
+});
+
+test('直升机路线：垂直起飞，绕一期屋顶一圈（左舷朝圈心、高过屋顶 25 米以上），再飞走', () => {
+  const y0 = elev('P1-RF'), C = HELI_ORBIT.center, T = heliDuration();
+  const p0 = heliPoseAt(0, y0);
+  assert.equal(p0.x, HELI_ORBIT.pad.x); assert.equal(p0.y, y0);
+  let swept = 0, prev = null;
+  for (let t = HELI_ORBIT.lift; t < HELI_ORBIT.lift + HELI_ORBIT.loop + HELI_ORBIT.ramp / 2; t += 0.25) {
+    const p = heliPoseAt(t, y0), left = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)), toC = new THREE.Vector3(C.x - p.x, 0, C.z - p.z).normalize();
+    assert.ok(left.dot(toC) > 0.95, `${t.toFixed(1)} 秒左舷没朝圈心`);
+    assert.ok(p.y - y0 > 25, `${t.toFixed(1)} 秒太低`);
+    const a = Math.atan2(p.z - C.z, p.x - C.x);
+    if (prev != null) swept += Math.abs(((a - prev + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    prev = a;
+  }
+  assert.ok(swept > Math.PI * 1.9, `只绕了 ${(swept / Math.PI * 180).toFixed(0)}°`);
+  const end = heliPoseAt(T, y0);
+  assert.ok(end.y - y0 > 50 && Math.hypot(end.x - C.x, end.z - C.z) > 150, '直升机最后没飞走');
+});
+
+test('舱门机枪模型：六根枪管、细节足够，射界和过热参数合理', () => {
+  const g = buildDoorGun(null);
+  let verts = 0, meshes = 0; g.root.traverse((o) => { if (o.isMesh) { verts += o.geometry.attributes.position.count; meshes++; } });
+  assert.ok(verts > 6000, `机枪模型太简单（${verts} 个顶点）`);
+  assert.ok(meshes < 40, `机枪网格太多（${meshes}）`);
+  let barrelVerts = 0; g.barrels.traverse((o) => { if (o.isMesh) barrelVerts += o.geometry.attributes.position.count; });
+  assert.ok(barrelVerts > 1500, '枪管组太简单');
+  assert.ok(DOOR_GUN.rate >= 15 && 1 / DOOR_GUN.heatPerShot / DOOR_GUN.rate > 3, '打 3 秒以内就过热');
+  g.dispose();
+});
+
+test('弹药补给：地图上至少 8 个弹药箱，都在导航空地上、分布在商场、酒店、公寓和撤离点附近', () => {
+  const crates = crateSites(L, nav);
+  assert.ok(crates.length >= 8, `只有 ${crates.length} 个弹药箱`);
+  for (const c of crates) assert.ok(clear(nav, { floor: c.floor, x: c.x, z: c.z, y: c.y, slope: null }), `${c.id} 被挡住`);
+  for (const pre of ['P1-', 'H-', 'A-']) assert.ok(crates.some((c) => c.floor.startsWith(pre)), `${pre} 没有弹药箱`);
+  assert.ok(crates.some((c) => c.floor === 'P1-RF') && crates.some((c) => c.floor === 'A-B1'), '撤离点附近没有弹药箱');
+  assert.ok(AMMO.crate > AMMO.drop && AMMO.cap >= 240);
 });

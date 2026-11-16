@@ -5,15 +5,17 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-/** 每种载具：登机门外一点（站在这里就开始登机）、门内一点、座位上眼睛的位置（都是局部坐标）、占地（导航障碍）、乘坐时长 */
+/** 每种载具：登机门外一点（站在这里就开始登机）、门内一点、乘坐时眼睛的位置和默认朝向（seatYaw，相对机头，+ 是往左转）、
+ * 占地（导航障碍）。直升机：坐在左舷舱门的机枪后面，朝舱门外；接应车：从左后门上车，站到后排、从车顶射击口探出上半身。 */
 export const RIDE_SPECS = Object.freeze({
   helicopter: {
-    doorOut: [1.75, 1.7, -0.25], doorIn: [0.75, 1.88, -0.35], seat: [0.45, 1.76, -1.25],
-    footprint: { x0: -1.2, x1: 1.2, z0: -1.9, z1: 2.4 }, ride: 9.5,
+    doorOut: [1.75, 1.7, -0.25], doorIn: [0.75, 1.88, -0.35], seat: [0.42, 1.66, -0.22], seatYaw: Math.PI / 2,
+    gunMount: [0.86, 1.36, -0.22], // 枪的转轴在眼睛前 0.44、下 0.3 米：握把就在手边，往下看得见枪身和六根枪管
+    footprint: { x0: -1.2, x1: 1.2, z0: -1.9, z1: 2.4 },
   },
   car: {
-    doorOut: [1.85, 1.65, -0.5], doorIn: [0.95, 1.52, -0.5], seat: [-0.42, 1.7, -0.6], // 从左后门上车，挪到右后座（不在司机正后方，往前看得见路）
-    footprint: { x0: -1.2, x1: 1.2, z0: -2.8, z1: 2.85 }, ride: 5,
+    doorOut: [1.85, 1.65, -0.5], doorIn: [0.95, 1.52, -0.5], seat: [0, 2.72, -0.6], seatYaw: 0,
+    footprint: { x0: -1.2, x1: 1.2, z0: -2.8, z1: 2.85 },
   },
 });
 /** 登机（走到门口 → 钻进舱 → 坐好、关门）用的秒数，之后载具才开动 */
@@ -152,8 +154,14 @@ export function createRideVehicle(exit) {
     box(2.12, 0.62, 0.95, 0, 0.88, -2.2);                                               // 车尾
     box(2.12, 1.0, 0.1, 0, 1.55, -2.62);                                                // 后门
     box(1.6, 0.5, 0.04, 0, 1.68, -2.68, M.glass);
-    box(1.95, 0.08, 4.0, 0, 2.03, -0.6);                                                // 车顶（盖到后门）
-    box(1.85, 0.02, 3.9, 0, 1.98, -0.6, M.cabin);
+    // 车顶（盖到后门），后排正上方开一个 0.8 米见方的射击口：口边一圈钢环、口前一块带观察缝的防弹挡板、掀开的舱盖
+    box(1.95, 0.08, 1.65, 0, 2.03, 0.575); box(1.95, 0.08, 1.65, 0, 2.03, -1.775);
+    for (const s of [-1, 1]) box(0.575, 0.08, 0.7, s * 0.6875, 2.03, -0.6);
+    box(1.85, 0.02, 1.6, 0, 1.98, 0.55, M.cabin); box(1.85, 0.02, 1.6, 0, 1.98, -1.75, M.cabin);
+    for (const s of [-1, 1]) { box(0.86, 0.12, 0.06, 0, 2.12, -0.6 + s * 0.4, M.trim); box(0.06, 0.12, 0.86, s * 0.4, 2.12, -0.6, M.trim); }
+    box(1.0, 0.42, 0.05, 0, 2.38, -0.12); box(0.36, 0.05, 0.06, 0, 2.42, -0.11, M.dark);       // 挡板 + 观察缝
+    for (const s of [-1, 1]) { const w = box(0.05, 0.36, 0.42, s * 0.5, 2.35, -0.33); w.rotation.y = s * 0.5; }
+    const lid = box(0.8, 0.05, 0.8, 0, 2.48, -1.05); lid.rotation.x = 1.25;                      // 往后掀开的舱盖
     for (const s of [-1, 1]) {
       if (s < 0) box(0.08, 0.6, 3.0, s * 1.03, 0.88, -0.25);                          // 右侧车身下半（整段）
       else { box(0.08, 0.6, 1.17, s * 1.03, 0.88, 0.62); box(0.08, 0.6, 0.73, s * 1.03, 0.88, -1.38); } // 左侧，中间留后门
@@ -207,38 +215,26 @@ export function createRideVehicle(exit) {
   for (const b of blinkers) body.add(b);
   parts.removeFromParent();
 
-  // ---- 运动：起飞 / 开出车位。t 是开动后的秒数 ----
-  const progress = (t) => Math.max(0, Math.min(1, t / spec.ride));
   const smooth = (x) => x * x * (3 - 2 * x);
-  /** 开动 t 秒时机身相对停机位的局部位移和姿态（俯仰 pitch、滚转 roll） */
-  function motion(t) {
-    const p = progress(t);
-    if (heli) {
-      const lift = smooth(Math.min(1, p / 0.38)), go = Math.max(0, (p - 0.22) / 0.78);
-      // 机头朝南起飞后往东偏（局部 -x 是世界 +x），避开西南边 100 米高的 T1、T2 两栋塔楼
-      return { x: -30 * go * go, y: 32 * lift + 8 * go, z: 150 * go * go * (1.4 - 0.4 * go),
-        pitch: 0.16 * Math.sin(Math.min(1, go * 1.6) * Math.PI / 2) * (1 - 0.5 * go), roll: 0.14 * Math.sin(go * Math.PI), bob: lift < 1 ? Math.sin(t * 9) * 0.02 : 0 };
-    }
-    const e = smooth(p);
-    return { x: 0, y: 0, z: 21 * e, pitch: -0.03 * Math.sin(p * Math.PI), roll: 0, bob: Math.sin(t * 13) * 0.008 * Math.min(1, p * 4) };
-  }
-
-  let spin = 0, blink = 0;
+  let spin = 0, blink = 0, roll = 0;
   const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(0, 0, 0, 'YXZ');
+  const park = () => { root.position.set(v.x, exit.y, v.z); root.rotation.set(0, v.yaw || 0, 0); body.position.set(0, 0, 0); body.rotation.set(0, 0, 0); };
   return {
-    root, kind: v.kind, spec,
-    /** 每帧：ready 撤离就绪（旋翼怠速、灯闪），board 登机秒数（< 0 表示还没登），ride 开动后的秒数 */
-    update(dt, { ready = false, board = -1, ride = 0 } = {}) {
+    root, body, kind: v.kind, spec,
+    /** 撤离路线上的位姿（世界坐标；pitch 正是低头，roll 正是往右压） */
+    setPose(p, bob = 0) {
+      root.position.set(p.x, p.y, p.z); root.rotation.set(0, p.yaw, 0);
+      body.position.set(0, bob, 0); body.rotation.set(p.pitch || 0, 0, p.roll || 0);
+    },
+    /** 每帧：ready 撤离就绪（旋翼怠速、灯闪），board 登机秒数（< 0 表示还没登），speed 车速（转车轮） */
+    update(dt, { ready = false, board = -1, speed = 0 } = {}) {
       blink += dt;
-      const m = motion(ride);
-      body.position.set(m.x, m.y + m.bob, m.z);
-      body.rotation.set(m.pitch, 0, m.roll);
       if (heli) {
         spin = ready || board >= 0 ? Math.min(1, spin + dt * 0.5) : Math.max(0, spin - dt * 0.3);
         rotor.rotation.y += dt * (6 + 36 * spin); tailRotor.rotation.x += dt * (10 + 50 * spin);
         const blur = spin > 0.45; blades.forEach((b) => { b.visible = !blur; }); blurDisc.visible = blur;
       } else {
-        wheels.forEach((w) => { w.rotation.x = -(m.z / 0.53); });
+        roll += (speed * dt) / 0.53; wheels.forEach((w) => { w.rotation.x = -roll; });
         // 登车时开门（0.3–0.9 秒），坐好后关门（1.9–2.4 秒）
         const open = board < 0 ? 0 : board < 0.9 ? smooth(Math.max(0, (board - 0.3) / 0.6)) : board < 1.9 ? 1 : 1 - smooth(Math.min(1, (board - 1.9) / 0.5));
         doors.forEach((d) => { d.rotation.y = -1.05 * open; });
@@ -251,10 +247,10 @@ export function createRideVehicle(exit) {
     seatPose(lookYaw = 0, lookPitch = 0) {
       const position = this.toWorld(spec.seat);
       body.getWorldQuaternion(tmpQ);
-      tmpE.set(lookPitch, Math.PI + lookYaw, 0);
+      tmpE.set(lookPitch, Math.PI + (spec.seatYaw || 0) + lookYaw, 0);
       return { position, quaternion: tmpQ.clone().multiply(new THREE.Quaternion().setFromEuler(tmpE)) };
     },
-    reset() { spin = 0; body.position.set(0, 0, 0); body.rotation.set(0, 0, 0); doors.forEach((d) => { d.rotation.y = 0; }); wheels.forEach((w) => { w.rotation.x = 0; }); },
+    reset() { spin = 0; roll = 0; park(); doors.forEach((d) => { d.rotation.y = 0; }); wheels.forEach((w) => { w.rotation.x = 0; }); },
     dispose() { root.removeFromParent(); geos.forEach((g) => g.dispose()); Object.values(M).forEach((m) => m.dispose()); },
   };
 }
