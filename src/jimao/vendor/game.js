@@ -9322,7 +9322,7 @@ var $C = `
     <div><dt>\u5F00\u706B</dt><dd>\u9F20\u6807\u5DE6\u952E</dd></div>
     <div><dt>\u7784\u51C6</dt><dd>\u9F20\u6807\u53F3\u952E</dd></div>
     <div><dt>\u6362\u5F39</dt><dd><kbd>R</kbd></dd></div>
-    <div><dt>\u5207\u65AD\u4E2D\u7EE7</dt><dd>\u6309\u4F4F <kbd>E</kbd></dd></div>
+    <div><dt>\u5B8C\u6210\u76EE\u6807</dt><dd>\u6309\u4F4F <kbd>E</kbd></dd></div>
     <div><dt>\u8DF3\u8DC3</dt><dd><kbd>Space</kbd></dd></div>
     <div><dt>\u51B2\u523A</dt><dd><kbd>Shift</kbd></dd></div>
     <div><dt>\u8E72\u4F0F</dt><dd><kbd>C</kbd> \u6216 <kbd>Ctrl</kbd></dd></div>
@@ -9338,7 +9338,7 @@ var ZC = `
     <div><dt>\u7784\u51C6</dt><dd>\u70B9\u51FB\u201C\u7784\u51C6\u201D\u5207\u6362\u7784\u51C6\u72B6\u6001</dd></div>
     <div><dt>\u6362\u5F39</dt><dd>\u6362\u5F39</dd></div>
     <div><dt>\u8DF3\u8DC3</dt><dd>\u8DF3\u8DC3</dd></div>
-    <div><dt>\u5207\u65AD\u4E2D\u7EE7</dt><dd>\u9760\u8FD1\u4E2D\u7EE7\u5E76\u6309\u4F4F\u201C\u4EA4\u4E92\u201D</dd></div>
+    <div><dt>\u5B8C\u6210\u76EE\u6807</dt><dd>\u9760\u8FD1\u76EE\u6807\u5E76\u6309\u4F4F\u201C\u4EA4\u4E92\u201D</dd></div>
     <div><dt>\u51B2\u523A</dt><dd>\u5C06\u6447\u6746\u63A8\u5230\u6700\u524D\u65B9</dd></div>
   </dl>`;
 // ---- pM  (bundle line 29084–29291)
@@ -9352,7 +9352,7 @@ function pM(i, e) {
       <div class="m-title-main">
         <div class="m-eyebrow"><span class="m-tag">B4</span><span>\u4E91\u6F9C\u7279\u52E4\u7EC4</span><span class="m-dim">\u4E91\u6F9C\u6C47 \xB7 00:00</span></div>
         <h1 class="m-word">\u96F6\u70B9\u7A81\u56F4<span class="m-subtitle">ZERO HOUR</span></h1>
-        <p class="m-premise">\u4E91\u6F9C\u6C47\u7684\u901A\u4FE1\u88AB\u52AB\u6301\uFF0C\u673A\u68B0\u5B88\u536B\u5931\u63A7\u3002\u5207\u65AD\u4E09\u5904\u4E2D\u7EE7\uFF0C\u7A81\u7834\u5C01\u9501\uFF0C\u64A4\u79BB\u3002</p>
+        <p class="m-premise">\u5348\u591C\u96F6\u70B9\uFF0C\u4E91\u6F9C\u6C47\u88AB\u6B66\u88C5\u5206\u5B50\u52AB\u6301\u3002\u5B8C\u6210\u6307\u6325\u4E2D\u5FC3\u4E0B\u8FBE\u7684\u4EFB\u52A1\uFF0C\u7A81\u7834\u5C01\u9501\uFF0C\u4E58\u76F4\u5347\u673A\u6216\u63A5\u5E94\u8F66\u64A4\u79BB\u3002</p>
         <div class="m-actions">
           <button class="btn primary" data-act="deploy">\u5F00\u59CB\u884C\u52A8</button>
           <button class="btn" data-act="settings">\u8BBE\u7F6E</button>
@@ -9363,7 +9363,7 @@ function pM(i, e) {
       </div>
       <aside class="m-legend" aria-label="\u64CD\u4F5C\u901F\u89C8">
         <div><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> \u79FB\u52A8</span><span><kbd>\u9F20\u6807</kbd> \u89C6\u89D2</span><span><kbd>\u5DE6\u952E</kbd> \u5F00\u706B</span><span><kbd>\u53F3\u952E</kbd> \u7784\u51C6</span><span><kbd>R</kbd> \u6362\u5F39</span></div>
-        <div><span><kbd>E</kbd> \u5207\u65AD\u4E2D\u7EE7</span><span><kbd>Space</kbd> \u8DF3\u8DC3</span><span><kbd>Shift</kbd> \u51B2\u523A</span><span><kbd>C</kbd> \u8E72\u4F0F</span><span><kbd>Esc</kbd> \u6682\u505C</span></div>
+        <div><span><kbd>E</kbd> \u5B8C\u6210\u76EE\u6807</span><span><kbd>Space</kbd> \u8DF3\u8DC3</span><span><kbd>Shift</kbd> \u51B2\u523A</span><span><kbd>C</kbd> \u8E72\u4F0F</span><span><kbd>Esc</kbd> \u6682\u505C</span></div>
         <div class="lg-touch"><em>\u89E6\u5C4F\u64CD\u4F5C</em><span>\u5DE6\u624B\u62C7\u6307\u79FB\u52A8</span><span>\u53F3\u624B\u62C7\u6307\u8F6C\u52A8\u89C6\u89D2</span><span>\u5C4F\u5E55\u6309\u94AE\uFF1A\u5F00\u706B \xB7 \u7784\u51C6 \xB7 \u6362\u5F39 \xB7 \u8DF3\u8DC3</span></div>
       </aside>
     </section>
@@ -9431,7 +9431,7 @@ function pM(i, e) {
         <p class="panel-note">\u82E5\u6D4F\u89C8\u5668\u65E0\u6CD5\u6355\u83B7\u9F20\u6807\uFF0C\u6309\u4F4F\u9F20\u6807\u6309\u94AE\u5E76\u62D6\u52A8\u4EE5\u8C03\u6574\u89C6\u89D2\uFF08\u5DE6\u952E\u540C\u65F6\u5F00\u706B\uFF0C\u53F3\u952E\u540C\u65F6\u7784\u51C6\uFF09\u3002\u65B9\u5411\u952E\u6216 <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> \u8F6C\u5411\uFF0C<kbd>Enter</kbd> \u5F00\u706B\u3002</p>
         <h3>\u89E6\u5C4F\u64CD\u4F5C</h3>${ZC}
         <h3>\u624B\u67C4</h3>
-        <p class="panel-note">\u6447\u6746\u79FB\u52A8\u4E0E\u8F6C\u52A8\u89C6\u89D2 \xB7 RT \u5F00\u706B \xB7 LT \u7784\u51C6 \xB7 A \u8DF3\u8DC3 \xB7 B \u8E72\u4F0F \xB7 X \u6362\u5F39 \xB7 Y \u5207\u65AD\u4E2D\u7EE7 \xB7 L3 \u51B2\u523A \xB7 Start \u6682\u505C\u3002</p>
+        <p class="panel-note">\u6447\u6746\u79FB\u52A8\u4E0E\u8F6C\u52A8\u89C6\u89D2 \xB7 RT \u5F00\u706B \xB7 LT \u7784\u51C6 \xB7 A \u8DF3\u8DC3 \xB7 B \u8E72\u4F0F \xB7 X \u6362\u5F39 \xB7 Y \u5B8C\u6210\u76EE\u6807 \xB7 L3 \u51B2\u523A \xB7 Start \u6682\u505C\u3002</p>
       </div>
     </div>
 

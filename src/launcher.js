@@ -28,7 +28,7 @@ export function mountLauncher({ onSelect, backgroundUrl = COVER_URL } = {}) {
     <img class="yl-cover-image" alt="云澜汇一期六层商场、艺术街区与完整园区鸟瞰" decoding="async" fetchpriority="high">
     <div class="yl-cover-shade"></div>
     <div class="yl-cover-content">
-      <header class="yl-cover-top"><span class="yl-wordmark">云澜汇</span><span class="yl-edition">YUNLAN / MOBILE EDITION</span></header>
+      <header class="yl-cover-top"><span class="yl-wordmark">云澜汇</span><span class="yl-edition">YUNLAN CAMPUS</span></header>
       <section class="yl-cover-main">
         <p class="yl-kicker">一座城市综合体，地上地下连成一片</p>
         <h1>云澜汇</h1><p class="yl-cover-subtitle">3D 城市园区</p>
@@ -37,7 +37,7 @@ export function mountLauncher({ onSelect, backgroundUrl = COVER_URL } = {}) {
       </section>
       <nav class="yl-mode-list" aria-label="选择游戏模式">
         <button class="yl-mode yl-mode-primary yl-mode-wide yl-mode-hero" data-mode="tour"><b>进入园区</b><span>一期 · 二期 · 三期 · 住宅 · 地铁 · 自由漫游、导览、看店铺</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
-        <button class="yl-mode" data-mode="jimao"><b>零点突围 · ZERO HOUR</b><span>午夜零点，切断三处中继，杀出云澜汇</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
+        <button class="yl-mode" data-mode="jimao"><b>零点突围 · ZERO HOUR</b><span>午夜零点，云澜汇被武装劫持 · 完成随机任务，乘直升机或装甲车撤离</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
         <button class="yl-mode" data-mode="arcade"><b>小游戏合集</b><span>无人机送外卖 · 夜间潜入 · 更多陆续开放</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
       </nav>
       <footer class="yl-cover-footer"><p class="yl-cover-status" role="status" aria-live="polite">选择模式，进入云澜汇</p><p>触屏可用 · 横屏视野更开阔<br>画面卡顿：进园区后在「设置」里调低场景人数</p></footer>

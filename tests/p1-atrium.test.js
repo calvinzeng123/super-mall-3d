@@ -209,3 +209,22 @@ test('超级商业中心：翼楼走道上原来的小天井（*-slot-*）不压
   // 拿掉以后那块是走道（洞口外的一半）
   assert.ok(lvl('P1-2F').walk.some((w) => pointInPoly([-147, -147], w.poly)));
 });
+
+test('扶梯头顶的楼板都开了洞：梯身上半段（人头顶 2.3 米以内）上一层没有实心楼板（完整园区和漫游版都查）', async () => {
+  const { buildPlayableLayout } = await import('../src/layout/playable.js');
+  for (const [name, layout] of [['完整', L], ['漫游', buildPlayableLayout({ mode: 'tour' })]]) {
+    const by = new Map(layout.levels.map((l) => [l.id, l]));
+    const solid = (lv, x, z) => (lv.slab?.pieces || []).some((s) => pointInPoly([x, z], s.outer) && !s.holes.some((h) => pointInPoly([x, z], h)));
+    for (const e of layout.escalators) {
+      const hi = by.get(e.to); if (!hi) continue;
+      const dx = e.top.x - e.bottom.x, dz = e.top.z - e.bottom.z, len = Math.hypot(dx, dz), nx = -dz / len, nz = dx / len;
+      let hit = 0, n = 0;
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40, y = e.bottom.y + (e.top.y - e.bottom.y) * t;
+        if (y + 2.3 <= hi.elev - 0.45 || t >= 0.97) continue;
+        for (const w of [-0.8, 0, 0.8]) { n++; if (solid(hi, e.bottom.x + dx * t + nx * w, e.bottom.z + dz * t + nz * w)) hit++; }
+      }
+      assert.equal(hit, 0, `${name} ${e.id}（${e.from} → ${e.to}）：头顶 ${hit}/${n} 个取样点是实心楼板`);
+    }
+  }
+});

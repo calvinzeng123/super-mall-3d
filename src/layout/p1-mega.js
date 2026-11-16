@@ -382,7 +382,11 @@ export function applyP1Mega(layout) {
       if (holes.length) {
         // 合并后的洞口代替原来的圆厅、方庭洞口；落在新洞口里的小洞（井道、开洞）不要了
         const rest = (main.holes || []).filter((h) => !oldVoidPolys.includes(h) && !holes.some((H) => inside(centroid(h), H)));
-        main.holes = mergeOverlapping([...rest, ...holes]);
+        // 扶梯开洞补回来：4F–6F 的楼板先被退台裁过一遍（p1-expansion.js 的 subtract），压在原洞口边上的扶梯洞（中庭退台扶梯 MEGA-X）
+        // 那时已经和原洞口并成一个洞，上面按「落在新洞口里的小洞不要了」一起被去掉——结果扶梯头顶是整块楼板，梯身从楼板里穿过去
+        const slots = lv.voids.filter((v) => v.kind === 'escalator' && v.poly && inside(centroid(v.poly), main.outer)
+          && ![...rest, ...holes].some((h) => inside(centroid(v.poly), h))).map((v) => v.poly);
+        main.holes = mergeOverlapping([...rest, ...holes, ...slots]);
       }
     } else lv.slab = { pieces: [{ outer: lv.outline, holes: lv.voids.map((v) => v.poly) }] };
     // 走道：原来的走道减去洞口，再加上 A、B 两块（减去洞口、铺位、井道、扶梯开洞）

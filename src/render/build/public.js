@@ -7,7 +7,7 @@ import { tableSet, roundTable, bench, planter } from './props.js';
 import { pocketSet } from './prop-sets.js';
 import { interiorDetail } from './interior-detail.js';
 import { clearHeight } from './shell.js';
-import { ceilingRelief } from './ceiling.js';
+import { ceilingRelief, garageCeiling } from './ceiling.js';
 
 const flatDetail = (B, y0) => interiorDetail(B, { at: (a, b) => [a, b], ang: 0, nx: 0, nz: -1 },
   (key, a, b, y, w, d, h, color, rot = 0) => B.get(key).box(a, y, b, w, h, d, color, rot), y0);
@@ -27,6 +27,7 @@ export function buildPublic(ctx, { details = true, art = true } = {}) {
       if (lv.short === '2F') popups(ctx, b, lv);
       if (b.id === 'P1' || b.id === 'P2') mallFinish(ctx, b, lv);
       ceilingRelief(ctx, b, lv); // 天花分格梁和洞口边梁（完整园区和小游戏）
+      garageCeiling(ctx, b, lv); // 地下车库：混凝土板底、梁、管线
     }
     if (art) atriumArt(ctx, b, levels);
   }

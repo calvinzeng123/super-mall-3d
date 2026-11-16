@@ -14,7 +14,7 @@ import { buildNav } from '../src/layout/nav.js';
 import { frame, toW, rect, rectPoly, pointInPoly } from '../src/layout/geom.js';
 import { unitFrame, faceAngle } from '../src/render/build/interiors.js';
 import { ceilingBays } from '../src/render/build/shell.js';
-import { ceilingRelief, runs, RIB, EDGE_BEAM } from '../src/render/build/ceiling.js';
+import { ceilingRelief, garageCeiling, GARAGE_BEAM, runs, RIB, EDGE_BEAM } from '../src/render/build/ceiling.js';
 import { pocketSet } from '../src/render/build/prop-sets.js';
 import { HEIST_PROPS, shutterPlacement } from '../src/arcade/games/heist-rules.js';
 import { HUB_CARGO } from '../src/arcade/games/drone-rules.js';
@@ -300,4 +300,36 @@ test('later furniture can ask whether earlier furniture already stands at a spot
     assert.equal(B.crowded(0.5, 0, 1, before), false, 'but not when only the earlier pieces are asked about');
     B.frame(frame(100, 0, 0), () => assert.equal(B.crowded(-90, 10, 1), true, 'local (-90, 10) is world (10, 10)'));
   } finally { usePropLibrary(null); }
+});
+
+test('车库天花：板底只从下面看得见，梁和管线只挂在头顶有楼板的地方；塔楼车库不加', () => {
+  const F = frame(0, 0, 0, 'G');
+  const aisle = { id: 'a1', kind: 'aisle', frame: F, rect: rect(0, 10, 48, 16) };
+  const lv = { id: 'G-B1', kind: 'parking', elev: -4.5, height: 4.5, walk: [aisle, { id: 's', kind: 'spine', frame: F, rect: rect(0, 0, 4, 4) }] };
+  // 上一层：整块楼板，x 30–40 有一个坡道口大的洞
+  const hole = square(30, 2, 40, 24);
+  const above = { id: 'G-1F', kind: 'retail', elev: 0, slab: { pieces: [{ outer: square(-10, -10, 60, 40), holes: [hole] }, { outer: square(70, 0, 72, 2), holes: [], thickness: 0.12 }] } };
+  const boxes = [], added = [];
+  const B = { frame: (f, fn) => fn(), get: (key) => ({ box: (x, y, z, sx, sy, sz, color) => boxes.push({ key, x, y, z, sx, sy, sz, color }) }) };
+  const ctx = { depthCues: true, mats: { onNight() {} }, lvById: { 'G-B1': lv, 'G-1F': above }, levels: { 'G-B1': { batch: B, base: { add: (m) => added.push(m) } } } };
+  garageCeiling(ctx, { id: 'G', kind: 'mall', levels: ['G-B1', 'G-1F'] }, lv);
+  const soffit = 0 - 0.45;
+  assert.equal(added.length, 1);
+  assert.equal(added[0].material.side, THREE.BackSide, '板底只从下面看得见（俯视这一层时不挡视线）');
+  const pos = added[0].geometry.attributes.position;
+  for (let i = 0; i < pos.count; i++) assert.ok(Math.abs(pos.getY(i) - (soffit - 0.012)) < 1e-6);
+  const beams = boxes.filter((b) => b.key === 'matte');
+  assert.ok(beams.length >= 8, `${beams.length} 道梁`);
+  for (const b of boxes) {
+    assert.ok(b.y + b.sy / 2 <= soffit + 1e-9 && b.y - b.sy / 2 > soffit - 1.2, `梁 / 管线挂在板底下：${b.y}`);
+    // 每一段都不伸进洞口（取样步长以内）
+    const ends = b.sx > b.sz ? [[b.x - b.sx / 2 + GARAGE_BEAM.step, b.z], [b.x + b.sx / 2 - GARAGE_BEAM.step, b.z]] : [[b.x, b.z - b.sz / 2 + GARAGE_BEAM.step], [b.x, b.z + b.sz / 2 - GARAGE_BEAM.step]];
+    for (const q of ends) assert.ok(!pointInPoly(q, hole), `(${b.x}, ${b.z}) 伸进了洞口`);
+  }
+  assert.ok(boxes.some((b) => b.color === '#b5382e'), '有消防主管');
+  // 塔楼（酒店、公寓）的车库自己有吊顶；FPS 模式不画
+  for (const [c, kind] of [[ctx, 'tower'], [{ ...ctx, depthCues: false }, 'mall']]) {
+    const n = boxes.length; garageCeiling(c, { id: 'G', kind, levels: ['G-B1', 'G-1F'] }, lv);
+    assert.equal(boxes.length, n); assert.equal(added.length, 1);
+  }
 });

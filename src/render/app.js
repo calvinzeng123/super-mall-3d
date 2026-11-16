@@ -709,7 +709,11 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
       const size = Math.max(r.x1-r.x0, r.z1-r.z0);
       return [c.clone().add(V(size*.46, size*(camera.aspect<1?1.35:.86), size*.92)), c, size];
     }
-    return [OVERVIEW[0].clone().sub(OVERVIEW[1]).multiplyScalar(camera.aspect < 1 ? 1.2 : 1).add(OVERVIEW[1]), OVERVIEW[1], OVERVIEW_SHADOW];
+    const off = OVERVIEW[0].clone().sub(OVERVIEW[1]);
+    // 竖屏：园区是横着长的，原来的俯角（约 34°）下园区只占屏幕中间一条、上面三分之一是天和地平线。
+    // 改成更俯的角度（约 58°），园区在竖直方向铺开，画面里不再出现地平线
+    if (camera.aspect < 1) { const d = off.length() * 1.2, h = Math.hypot(off.x, off.z), e = 58 * Math.PI / 180; off.set(off.x / h * Math.cos(e) * d, Math.sin(e) * d, off.z / h * Math.cos(e) * d); }
+    return [off.add(OVERVIEW[1]), OVERVIEW[1], OVERVIEW_SHADOW];
   };
 
   const flyView = ([position, target, radius], duration = 1.4) => flyTo(position, target, duration, radius);
@@ -982,7 +986,12 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
   applyVisibility();
   if (layout.playable) { const [pos, target] = overview(); camera.position.copy(pos); controls.target.copy(target); controls.update(); }
   resize();
-  if (camera.aspect < 1) camera.position.sub(controls.target).multiplyScalar(1.22 * 1.2).add(controls.target);
+  if (camera.aspect < 1) {
+    // 竖屏开场：用竖屏的总览机位（overview() 里已经放大 1.2 倍、压成更俯的角度），再按飞行时同样的 1.22 倍拉远
+    if (!layout.playable) { const [pos, target] = overview(); camera.position.copy(pos); controls.target.copy(target); }
+    camera.position.sub(controls.target).multiplyScalar(layout.playable ? 1.22 * 1.2 : 1.22).add(controls.target);
+    controls.update();
+  }
   env.setShadowFocus(controls.target.clone(), OVERVIEW_SHADOW);
   return app;
 }
