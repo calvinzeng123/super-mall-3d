@@ -9584,10 +9584,10 @@ function mM(i) {
       j(false);
     }, update: B, completeAll() {
       c.allCut || (c.allCut = true, c.pursuitLeft = Yi.pursuitExtra, c.pursuitT = 12, i.events.emit("objective:all", {}), o.radio && o.radio(_l.all, 4.5), o.setObjective(D()), q());
-    }, finish() {
-      _.state === "playing" && ee();
     }, refreshObjective() {
       _.state === "playing" && o.setObjective(D()), q();
+    }, finish() {
+      _.state === "playing" && ee();
     }, debugCut() {
       let P = c.relays.find((V) => !V.cut);
       P && me(P);
