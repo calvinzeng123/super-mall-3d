@@ -103,11 +103,11 @@ export function heliPoseAt(t, y0, o = HELI_ORBIT) {
   const ang = tau < o.ramp ? (omega * tau * tau) / (2 * o.ramp) : omega * (tau - o.ramp / 2);
   if (tau < T) {
     const th = th0 - ang, w = tau < o.ramp ? tau / o.ramp : 1;
-    return { x: C.x + R * Math.cos(th), y: top + 2.5 * Math.sin(ang * 2), z: C.z + R * Math.sin(th), yaw: yawOrbit(th), pitch: 0.06 * w, roll: -0.16 * w, phase: 'orbit' };
+    return { x: C.x + R * Math.cos(th), y: top + 2.5 * Math.sin(ang * 2), z: C.z + R * Math.sin(th), yaw: yawOrbit(th), pitch: 0.06 * w, roll: -0.22 * w, phase: 'orbit' };
   }
   // 离开：沿圈的切线方向加速、爬升
   const u = tau - T, th = th0 - Math.PI * 2, f = { x: Math.sin(th), z: -Math.cos(th) }, d = R * omega * u + 4 * u * u;
   return { x: C.x + R * Math.cos(th) + f.x * d, y: top + 3 * u * u * 0.6 + 2 * u, z: C.z + R * Math.sin(th) + f.z * d,
-    yaw: yawOrbit(th), pitch: 0.14 * smooth(u / 1.5), roll: -0.16 * (1 - smooth(u / 2)), phase: 'leave' };
+    yaw: yawOrbit(th), pitch: 0.14 * smooth(u / 1.5), roll: -0.22 * (1 - smooth(u / 2)), phase: 'leave' };
 }
 function lerpAngle(a, b, t) { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * t; }
