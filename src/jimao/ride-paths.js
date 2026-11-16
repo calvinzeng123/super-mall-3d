@@ -78,9 +78,9 @@ export function carSpeedAt(samples, s, route = CAR_ROUTE) {
 export const HELI_ORBIT = Object.freeze({
   pad: { x: -182, z: -120, yaw: Math.PI },
   center: { x: -130, z: -128 },   // 一期屋顶大致的中心（光穹、大天窗之间）
-  climb: 28,                      // 从屋面再升多少米
+  climb: 22,                      // 从屋面再升多少米（低一点，离楼顶的敌人近）
   lift: 4.5,                      // 垂直起飞秒数
-  loop: 42,                       // 绕一圈秒数
+  loop: 56,                       // 绕一圈秒数（慢一点，好瞄）
   ramp: 3,                        // 绕圈起步加速的秒数
   leave: 6,                       // 离开秒数
 });

@@ -17,6 +17,7 @@ import { FPS_MISSION } from '../fps/mission-layout.js';
 import { createMissionDirector, RELAY_SITES, EXTRACTIONS } from './missions.js';
 import { rideFootprint } from './ride-vehicles.js';
 import { createAmmoSupply } from './ammo.js';
+import { createRouteGuide } from './guide.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
@@ -31,6 +32,9 @@ const TITLE_CSS = `
 const SUPPLY_CSS = `
 .h-cm.supply, .h-wm.supply { color: #7dffb0; }
 .h-cm.supply i, .h-wm.supply i { background: #7dffb0; }
+.h-cm.enemy, .h-wm.enemy { color: #ff5a4a; }
+.h-cm.enemy i, .h-wm.enemy i { background: #ff5a4a; }
+.h-wm.enemy span, .h-wm.enemy b { display: none; }
 `;
 /** 枪画在单独的一层，用自己的相机（视角固定 54°）在世界之后再画一遍，永远不会插进墙里。 */
 const VIEW_LAYER = 3;
@@ -127,10 +131,12 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     force: { type: params.mission, exit: params.exit } });
   // 弹药补给（ammo.js）：备弹打完不会自动补，只能捡敌人掉的弹匣、开弹药箱、完成目标；坐车时击倒敌人补车里的弹药
   const ammo = createAmmoSupply(G, { scene, layout: ctx.layout, nav, isRiding: () => director.riding, rideKind: () => director.rideKind });
-  G.level.onReset = () => { director.roll(); ammo.reset(); };
-  G.level.extraMarkers = () => ammo.markers();
+  // 地面路线指引（guide.js）：脚下一串淡蓝色小箭头指向最近的目标 / 撤离点，坐载具时不画
+  const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding });
+  G.level.onReset = () => { director.roll(); ammo.reset(); guide.reset(); };
+  G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
   director.roll();
-  G.missions = director; G.ammo = ammo;
+  G.missions = director; G.ammo = ammo; G.guide = guide;
   G.game = J.createGame(G);
   async function guarded(name, make) {
     try { return await make(); } catch (error) { console.error(`[零点突围] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
@@ -165,6 +171,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (active) { try { director.prePlayer(dt); } catch (e) { if (!run.err.ride) { run.err.ride = 1; console.error('[零点突围] 载具出错', e); } } }
       if (active) { run('player', dt); if (!director.gunActive) run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { if (!run.err.ammo) { run.err.ammo = 1; console.error('[零点突围] 弹药补给出错', e); } } }
+      if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { if (!run.err.guide) { run.err.guide = 1; console.error('[零点突围] 路线指引出错', e); } } }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
       // 任务物件动画、歼灭任务增援；撤离时镜头登机、坐进直升机 / 接应车里（missions.js 给出位置、朝向和压暗）
       try {
@@ -219,7 +226,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); layoutEditor.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); director.dispose(); ammo.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

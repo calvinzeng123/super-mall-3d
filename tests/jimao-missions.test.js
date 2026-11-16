@@ -154,7 +154,7 @@ test('接应车路线：车库 → 出口坡道（−4.5 升到 0）→ 星湾�
   assert.ok(Math.abs(carPoseAt(S, 0).yaw - CAR_ROUTE.start.yaw) < 1e-6, '起点朝向和停车朝向不一致');
 });
 
-test('直升机路线：垂直起飞，绕一期屋顶一圈（左舷朝圈心、高过屋顶 25 米以上），再飞走', () => {
+test('直升机路线：垂直起飞，绕一期屋顶一圈（左舷朝圈心、高过屋顶 18 米以上），再飞走', () => {
   const y0 = elev('P1-RF'), C = HELI_ORBIT.center, T = heliDuration();
   const p0 = heliPoseAt(0, y0);
   assert.equal(p0.x, HELI_ORBIT.pad.x); assert.equal(p0.y, y0);
@@ -162,7 +162,7 @@ test('直升机路线：垂直起飞，绕一期屋顶一圈（左舷朝圈心�
   for (let t = HELI_ORBIT.lift; t < HELI_ORBIT.lift + HELI_ORBIT.loop + HELI_ORBIT.ramp / 2; t += 0.25) {
     const p = heliPoseAt(t, y0), left = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)), toC = new THREE.Vector3(C.x - p.x, 0, C.z - p.z).normalize();
     assert.ok(left.dot(toC) > 0.95, `${t.toFixed(1)} 秒左舷没朝圈心`);
-    assert.ok(p.y - y0 > 25, `${t.toFixed(1)} 秒太低`);
+    assert.ok(p.y - y0 > 18, `${t.toFixed(1)} 秒太低`);
     const a = Math.atan2(p.z - C.z, p.x - C.x);
     if (prev != null) swept += Math.abs(((a - prev + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     prev = a;
@@ -206,4 +206,22 @@ test('载具耐久：子弹擦过机身才算打中；坠毁轨迹——直升�
   assert.ok(Math.abs(yaw0 - h0.yaw) > Math.PI, '直升机没打转');
   const c0 = { x: 4, y: 0, z: -100, yaw: 0, pitch: 0, roll: 0 }, end = crashPose('car', c0, VEHICLE_HP.crash.car, 0);
   assert.ok(end.landed && end.roll > 1 && Math.hypot(end.x - c0.x, end.z - c0.z) > 4, '接应车没翻、没滑出去');
+});
+
+test('路线指引：从开局点到每种目标都能铺出一条贴地路线（房间里的物品先到门口），箭头间距均匀', async () => {
+  const { resample, doorOutside, GUIDE } = await import('../src/jimao/guide.js');
+  const goals = [RELAY_SITES[1], sites.apartment[0], sites.hotel[0], sites.shop[0]];
+  for (const g of goals) {
+    const door = doorOutside(L, g), goal = door || at(g);
+    const pts = findPath(nav, START, goal);
+    assert.ok(pts && pts.length > 1, `${g.unit || g.where} 铺不出路线`);
+    const list = pts.map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
+    if (door) list.push({ x: g.x, y: g.y ?? elev(g.floor), z: g.z });
+    const R = resample(list);
+    assert.ok(R.length > 10, '路线太短');
+    for (let i = 1; i < R.length; i++) assert.ok(Math.abs(R[i].s - R[i - 1].s - GUIDE.spacing) < 1e-6 || R[i].s - R[i - 1].s < GUIDE.spacing + 1e-6, '箭头间距不均匀');
+    const last = R.at(-1);
+    assert.ok(Math.hypot(last.x - g.x, last.z - g.z) < GUIDE.spacing + 0.1, `${g.unit || g.where} 路线没走到目标跟前`);
+    if (g.unit) assert.ok(door, `${g.unit} 找不到门`);
+  }
 });

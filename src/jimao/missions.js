@@ -203,7 +203,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const carSamples = sampleRoute(CAR_ROUTE), carLength = carSamples.at(-1).s;
   const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;
   const FRESH = () => ({ phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false,
-    vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false });
+    vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false, markT: 0, markSig: '' });
   const state = { mission: null, kills: 0, reinforce: 0, ...FRESH() };
   const vhud = makeDurabilityHud();
   const from = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
@@ -366,6 +366,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     // 视角接上座位朝向（直升机朝舱门外，车上朝前）
     const q = vv.seatPose(0, 0).quaternion, d = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
     G.player.yaw = Math.atan2(-d.x, -d.z); G.player.pitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
+    if (vv.kind === 'helicopter') G.player.pitch = -0.42; // 坐好先往下看楼顶
     if (vv.kind === 'car') G.weapon?.setVisible?.(true);
     // 原游戏的追兵波次停掉，地图别处的敌人收掉，敌人池（18 人）留给沿路 / 楼顶刷出来的
     const run = G.game?.run;
@@ -403,6 +404,12 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return roofSpots;
   }
   const alive = () => G.enemies?.list?.filter((e) => e.alive) || [];
+  const roofEnemies = () => alive().filter((e) => Math.abs(e.pos.y - roofY) < 4 && Math.hypot(e.pos.x - HELI_ORBIT.center.x, e.pos.z - HELI_ORBIT.center.z) < 100);
+  /** HUD 标记：坐直升机时楼顶上每个敌人一个红点（位置直接引用敌人坐标，跟着走） */
+  function markers() {
+    if (state.phase !== 'ride' || veh()?.kind !== 'helicopter') return [];
+    return roofEnemies().map((e) => ({ id: `tgt-${G.enemies.list.indexOf(e)}`, short: '', label: '敌人', pos: e.pos, kind: 'enemy' }));
+  }
   function spawnAt(pos) { try { G.enemies.spawn('soldier', pos, { state: 'alert', target: G.player.pos }); return true; } catch { return false; } }
 
   /** 坐车 / 坐直升机时刷兵：楼顶源源不断涌上来；车前方 28–63 米、路两侧 6–14 米冲出来，被甩在后面 45 米的收掉 */
@@ -451,7 +458,14 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     for (const other of Object.values(vehicles)) if (other !== vv) other.update(dt);
     vv.update(dt, { ready: G.game?.run?.allCut, board: state.phase === 'board' ? state.t : state.phase === 'none' ? -1 : 9, speed: state.speed });
     const heliGun = vv.kind === 'helicopter' && state.phase === 'ride' && G.game?.state === 'playing';
-    doorGun.update(dt, { active: heliGun, firing: heliGun && !!(G.input?.down?.('fire') || G.input?.fire), camera });
+    // 舱门机枪的辅助瞄准目标：楼顶上活着的敌人（瞄胸口）；HUD 上给它们标红点
+    const targets = heliGun ? roofEnemies().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)) : null;
+    doorGun.update(dt, { active: heliGun, firing: heliGun && !!(G.input?.down?.('fire') || G.input?.fire), camera, targets });
+    if ((state.markT -= dt) <= 0) {
+      state.markT = 0.3;
+      const sig = heliGun ? roofEnemies().map((e) => G.enemies.list.indexOf(e)).join(',') : '';
+      if (sig !== state.markSig) { state.markSig = sig; G.game?.refreshObjective?.(); }
+    }
     if (state.phase === 'board') {
       state.t += dt;
       if (state.t >= BOARD_TIME) { startRide(vv); return null; }
@@ -496,7 +510,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return null;
   }
 
-  return { roll, prePlayer, update, state, sites, vehicles, root, doorGun,
+  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun,
     get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || (state.phase === 'ride' && veh()?.kind === 'helicopter'); },
     get riding() { return riding(); },
     get rideKind() { return riding() ? veh()?.kind === 'helicopter' ? 'helicopter' : 'car' : null; },

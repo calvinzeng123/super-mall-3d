@@ -9,8 +9,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
  * 占地（导航障碍）。直升机：坐在左舷舱门的机枪后面，朝舱门外；接应车：从左后门上车，站到后排、从车顶射击口探出上半身。 */
 export const RIDE_SPECS = Object.freeze({
   helicopter: {
-    doorOut: [1.75, 1.7, -0.25], doorIn: [0.75, 1.88, -0.35], seat: [0.62, 1.66, -0.22], seatYaw: Math.PI / 2,
-    gunMount: [1.0, 1.36, -0.22], // 坐在舱门边，枪的转轴就在门框上（眼睛前 0.38、下 0.3 米）：往下打时舱底不挡视线
+    doorOut: [1.75, 1.7, -0.25], doorIn: [0.75, 1.88, -0.35], seat: [0.6, 1.9, -0.22], seatYaw: Math.PI / 2,
+    gunMount: [1.0, 1.3, -0.22], // 坐在舱门边、眼睛抬高（离舱底 1.1 米）：枪在视线下方 0.6 米，从枪身上面往下看楼顶，舱底不挡
     footprint: { x0: -1.2, x1: 1.2, z0: -1.9, z1: 2.4 },
   },
   car: {

@@ -4,11 +4,14 @@
 // 材质用原游戏的程序化 PBR 材质（gunmetal / anodized_black / polymer_black / steel_worn / brass），和步枪一个质感。
 // 射击：跟着视线转（左右 ±77°、上 25° 下 69° 射界），按住开火，枪管先转起来再出弹，每秒 20 发，曳光弹每发都有；
 // 弹药不限，会过热：持续打 4 秒左右过热锁死，冷却到三成才能再打，枪管越热越红。
+// 辅助瞄准：准星附近的敌人会把视角拉过去、子弹往它身上修正（直升机在绕圈，不辅助很难打中）。
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const DOOR_GUN = Object.freeze({ rate: 20, damage: 55, range: 450, spread: 0.009, heatPerShot: 0.0125, cool: 0.32, unlock: 0.3, spinUp: 0.35,
-  yaw: 1.35, pitchUp: 0.45, pitchDown: 1.2 });
+  yaw: 1.35, pitchUp: 0.45, pitchDown: 1.2,
+  // 辅助瞄准：准星 9° 以内的敌人会把视角往它身上拉（开火时拉得更快，顺带抵消直升机在动）；4° 以内子弹直接朝它飞
+  assistCone: 0.157, assistPull: 2.6, assistPullIdle: 1.1, bulletCone: 0.07 });
 
 function material(G, name, fallback) {
   try { const m = G?.mats?.get?.(name, { triplanar: true }); if (m) return m; } catch { /* 没有材质库（测试）就用后备 */ }
@@ -143,8 +146,34 @@ export function createDoorGun(G, mount) {
   let inArc = true;
   const hud = makeHud();
 
-  function update(dt, { active: on = false, firing = false, camera = null } = {}) {
+  /** 准星附近最近的目标（夹角最小、150 米内）：{ point, angle } */
+  let lock = null;
+  function pickTarget(camera, targets) {
+    camera.getWorldPosition(from); camera.getWorldDirection(dir);
+    let best = null;
+    for (const t of targets || []) {
+      to.copy(t).sub(from); const dist = to.length();
+      if (dist > 150 || dist < 1) continue;
+      const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(dir) / dist)));
+      if (ang < DOOR_GUN.assistCone && (!best || ang < best.angle)) best = { point: t, angle: ang };
+    }
+    return best;
+  }
+  /** 把玩家视角（原游戏的 yaw / pitch，世界坐标）往目标转，每秒最多转 rate 弧度，越靠近准星拉得越轻 */
+  function pull(camera, point, rate, dt) {
+    camera.getWorldPosition(from); to.copy(point).sub(from).normalize();
+    const yaw = Math.atan2(-to.x, -to.z), pitch = Math.asin(to.y), P = G.player;
+    if (!P) return;
+    let dy = ((yaw - P.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI, dp = pitch - P.pitch;
+    const step = rate * dt, n = Math.hypot(dy, dp);
+    if (n > step) { dy *= step / n; dp *= step / n; }
+    P.yaw += dy; P.pitch += dp;
+  }
+
+  function update(dt, { active: on = false, firing = false, camera = null, targets = null } = {}) {
     active = on; hud.show(on);
+    lock = on && camera ? pickTarget(camera, targets) : null;
+    if (lock) pull(camera, lock.point, (firing ? DOOR_GUN.assistPull : DOOR_GUN.assistPullIdle) * (1 - 0.6 * lock.angle / DOOR_GUN.assistCone), dt);
     heat = Math.max(0, heat - DOOR_GUN.cool * dt * (firing && !overheated ? 0.15 : 1));
     if (overheated && heat < DOOR_GUN.unlock) overheated = false;
     if (on && camera) {
@@ -165,12 +194,14 @@ export function createDoorGun(G, mount) {
       while (cooldown <= 0) { cooldown += 1 / DOOR_GUN.rate; shoot(camera); }
     } else cooldown = Math.max(cooldown, 0);
     gun.mats.hot.emissiveIntensity = Math.max(0, heat - 0.25) * 2.2;
-    hud.set(heat, overheated, inArc);
+    hud.set(heat, overheated, inArc, !!lock);
     return { heat, overheated, inArc };
   }
 
   function shoot(camera) {
     camera.getWorldPosition(from); camera.getWorldDirection(dir);
+    // 子弹修正：准星 4° 以内有敌人，就朝它身上打
+    if (lock && lock.angle < DOOR_GUN.bulletCone) dir.copy(lock.point).sub(from).normalize();
     const a = Math.random() * Math.PI * 2, r = Math.tan(DOOR_GUN.spread) * Math.sqrt(Math.random());
     const up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(dir, up).normalize(), u2 = new THREE.Vector3().crossVectors(right, dir);
     dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(u2, Math.sin(a) * r).normalize();
@@ -205,9 +236,9 @@ function makeHud() {
   let last = '';
   return {
     show(on) { if (el.hidden === on) el.hidden = !on; },
-    set(heat, over, arc) {
+    set(heat, over, arc, locked = false) {
       bar.style.width = `${Math.round(heat * 100)}%`; el.classList.toggle('hot', over);
-      const t = over ? '过热 · 冷却中' : !arc ? '超出射界' : heat > 0.7 ? '温度高' : '按住开火';
+      const t = over ? '过热 · 冷却中' : !arc ? '超出射界' : heat > 0.7 ? '温度高' : locked ? '已锁定' : '按住开火';
       if (t !== last) { last = t; st.textContent = t; }
     },
     remove() { el.remove(); },
