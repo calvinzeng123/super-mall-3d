@@ -313,7 +313,7 @@ test('车库天花：板底只从下面看得见，梁和管线只挂在头顶�
   const B = { frame: (f, fn) => fn(), get: (key) => ({ box: (x, y, z, sx, sy, sz, color) => boxes.push({ key, x, y, z, sx, sy, sz, color }) }) };
   const ctx = { depthCues: true, mats: { onNight() {} }, lvById: { 'G-B1': lv, 'G-1F': above }, levels: { 'G-B1': { batch: B, base: { add: (m) => added.push(m) } } } };
   garageCeiling(ctx, { id: 'G', kind: 'mall', levels: ['G-B1', 'G-1F'] }, lv);
-  const soffit = 0 - 0.45;
+  const soffit = 0 - 0.03 - 0.45; // 上一层楼板体的底面
   assert.equal(added.length, 1);
   assert.equal(added[0].material.side, THREE.BackSide, '板底只从下面看得见（俯视这一层时不挡视线）');
   const pos = added[0].geometry.attributes.position;

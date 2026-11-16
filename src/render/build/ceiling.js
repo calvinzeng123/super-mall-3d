@@ -115,7 +115,8 @@ export function garageCeiling(ctx, b, lv) {
   const order = b.levels || [], above = ctx.lvById?.[order[order.indexOf(lv.id) + 1]];
   if (!above?.slab) return;
   const L = ctx.levels[lv.id], B = L.batch;
-  const top = above.elev - (SLAB_T[above.kind] || 0.45);
+  // 上一层楼板体的底面在 elev − 0.03 − 板厚（shell.js 里楼板体顶面比地面低 3cm）：板底要贴在它下面，不然被楼板体挡住
+  const top = above.elev - 0.03 - (SLAB_T[above.kind] || 0.45);
   const plates = above.slab.pieces.filter((piece) => !piece.thickness).map((piece) => ({ piece, bb: bounds(piece.outer) }));
   const covered = (x, z) => plates.some(({ piece, bb }) => x >= bb[0] && x <= bb[2] && z >= bb[1] && z <= bb[3]
     && pointInPoly([x, z], piece.outer) && !(piece.holes || []).some((h) => pointInPoly([x, z], h)));
