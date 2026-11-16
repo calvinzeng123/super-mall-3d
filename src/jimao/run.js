@@ -8,7 +8,8 @@ import * as J from './vendor/game.js';
 import { UI_CSS } from './vendor/ui-css.js';
 import { createMapPhysics } from './physics.js';
 import { createGrade } from './grade.js';
-import { createTouchStick, TOUCH_STICK_CSS } from './touch-stick.js';
+import { createTouchStick, inStickZone, stickOrigin, TOUCH_STICK_CSS } from './touch-stick.js';
+import { createKeybinds, KEYS_CSS } from './keybinds.js';
 import { createDiag, DIAG_CSS } from './diag.js';
 import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
@@ -63,7 +64,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -162,7 +163,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.missions = director; G.ammo = ammo; G.guide = guide;
   G.game = J.createGame(G);
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
-  const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui });
+  const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui, geometry: () => G.stickGeo?.() });
   async function guarded(name, make) {
     try { return await make(); } catch (error) { console.error(`[零点突围] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
   }
@@ -249,14 +250,27 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const finish = () => diag.end(grade.end(G.time.t));
   G.touchStick = stick; G.diag = diag;
   ctx.afterRender.push(drawView, finish);
-  // 界面布局：设置面板里加一行「界面布局 · 调整」
+  // 键位布局：设置面板里加一行「键位布局 · 拖动调整」（摇杆、触屏按键、HUD 的位置和大小，摇杆跟随拇指 / 固定位置）
   const layoutEditor = createLayoutEditor(ui);
+  // 原游戏的摇杆（补丁）按这里给的摇杆区、中心、缩放走；备用摇杆也用同一套
+  G.stickGeo = () => layoutEditor.stick();
+  G.stickZone = (x, y) => inStickZone(layoutEditor.stick(), x, y);
+  G.stickAnchor = (x, y) => stickOrigin(layoutEditor.stick(), x, y);
+  Object.defineProperty(G, 'stickScale', { configurable: true, get: () => layoutEditor.stickScale() });
+  // 键盘按键可改（keybinds.js）：设置面板里「键盘按键 · 修改」，手机上不显示
+  const keybinds = createKeybinds(G);
   const fsRow = ui.querySelector('[data-row="fs"]');
   if (fsRow) {
     const row = document.createElement('div'); row.className = 'row';
-    row.innerHTML = '<label id="l-layout">界面布局</label><button class="btn small" data-act="jm-layout" aria-labelledby="l-layout">拖动调整</button>';
+    row.innerHTML = '<label id="l-layout">键位布局</label><button class="btn small" data-act="jm-layout" aria-labelledby="l-layout">拖动调整</button>';
     row.querySelector('button').addEventListener('click', () => layoutEditor.open());
     fsRow.after(row);
+    if (keybinds.available && !MOBILE) {
+      const kRow = document.createElement('div'); kRow.className = 'row';
+      kRow.innerHTML = '<label id="l-keys">键盘按键</label><button class="btn small" data-act="jm-keys" aria-labelledby="l-keys">修改</button>';
+      kRow.querySelector('button').addEventListener('click', () => keybinds.open());
+      row.after(kRow);
+    }
     const dRow = document.createElement('div'); dRow.className = 'row';
     dRow.innerHTML = '<label id="l-diag">诊断信息</label><button class="btn small" data-act="jm-diag" aria-labelledby="l-diag"></button>';
     const dBtn = dRow.querySelector('button'), dLabel = () => { dBtn.textContent = diag.on ? '隐藏' : '显示'; };
@@ -273,7 +287,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     dispose() {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
-      env.render = baseRender; grade.dispose(); layoutEditor.dispose(); diag.dispose(); stick.dispose();
+      env.render = baseRender; grade.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
       ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };

@@ -6621,7 +6621,7 @@ var If = 58;
 var g_ = { pause: 1 };
 // ---- v_  (bundle line 26651–26865)
 function v_(i) {
-    let e = i.renderer && i.renderer.domElement || document.getElementById("view"), t = document.getElementById("ui"), n = /* @__PURE__ */ new Set(), s = /* @__PURE__ */ new Set(), o = { key: /* @__PURE__ */ new Set(), mouse: /* @__PURE__ */ new Set(), touch: /* @__PURE__ */ new Set(), pad: /* @__PURE__ */ new Set() }, r = false, a = false, l = 0, c = 0, u = 0, h = [], f = { move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 }, fire: false, ads: false, sprint: false, crouch: false, locked: false, touch: false, gamepad: false, sensitivity: 1, invertY: false, mode: "lock", down(P) {
+    let e = i.renderer && i.renderer.domElement || document.getElementById("view"), t = document.getElementById("ui"), n = /* @__PURE__ */ new Set(), s = /* @__PURE__ */ new Set(), o = { key: /* @__PURE__ */ new Set(), mouse: /* @__PURE__ */ new Set(), touch: /* @__PURE__ */ new Set(), pad: /* @__PURE__ */ new Set() }, r = false, a = false, l = 0, c = 0, u = 0, h = [], f = { move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 }, fire: false, ads: false, sprint: false, crouch: false, locked: false, touch: false, gamepad: false, sensitivity: 1, invertY: false, mode: "lock", keyMap: h_, down(P) {
       return n.has(P) && (r || g_[P] === 1);
     }, pressed(P) {
       return s.has(P) && (r || g_[P] === 1);
@@ -6774,10 +6774,10 @@ function v_(i) {
     addEventListener("touchstart", () => {
       E = performance.now(), K();
     }, { passive: true, capture: true }), e.addEventListener("touchstart", (P) => {
-      if (P.preventDefault(), w !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === w) && ie(), q !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === q) && (q = -1), !!r) for (let V of P.changedTouches) V.clientX < innerWidth * 0.45 && w === -1 ? (w = V.identifier, S = V.clientX, z = V.clientY, H = O = 0, M && (M.stick.style.transform = `translate3d(${S}px,${z}px,0)`, M.nub.style.transform = "translate3d(0,0,0)", M.stick.classList.add("on"))) : q === -1 && (q = V.identifier, U = V.clientX, T = V.clientY);
+      if (P.preventDefault(), w !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === w) && ie(), q !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === q) && (q = -1), !!r) for (let V of P.changedTouches) V.clientX < innerWidth * (i.stickZone ? 9 : 0.45) && (!i.stickZone || i.stickZone(V.clientX, V.clientY)) && w === -1 ? (w = V.identifier, S = V.clientX, z = V.clientY, i.stickAnchor && ([S, z] = i.stickAnchor(S, z)), H = O = 0, M && (M.stick.style.transform = `translate3d(${S}px,${z}px,0)`, M.nub.style.transform = "translate3d(0,0,0)", M.stick.classList.add("on"))) : q === -1 && (q = V.identifier, U = V.clientX, T = V.clientY);
     }, { passive: false }), e.addEventListener("touchmove", (P) => {
       if (P.preventDefault(), !!r) for (let V of P.changedTouches) if (V.identifier === w) {
-        let Y = V.clientX - S, L = V.clientY - z, Z = Math.hypot(Y, L);
+        let Y = (V.clientX - S) / (i.stickScale || 1), L = (V.clientY - z) / (i.stickScale || 1), Z = Math.hypot(Y, L);
         Z > If && (Y *= If / Z, L *= If / Z), H = Y / If, O = -L / If, M && (M.nub.style.transform = `translate3d(${Y.toFixed(1)}px,${L.toFixed(1)}px,0)`);
       } else V.identifier === q && (Q(V.clientX - U, V.clientY - T), U = V.clientX, T = V.clientY);
     }, { passive: false });

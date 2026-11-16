@@ -70,11 +70,14 @@ test('射线：朝下打到楼面，朝着墙打到墙，视线被墙挡住', ()
 
 test('界面布局：读出来的设置逐项检查，坏数据退回默认，越界的值夹回范围', async () => {
   const { normalizeLayout, LAYOUT_ITEMS } = await import('../src/jimao/layout-editor.js');
-  assert.deepEqual(normalizeLayout(null), { landscape: {}, portrait: {}, opacity: 1 });
+  assert.deepEqual(normalizeLayout(null), { landscape: {}, portrait: {}, opacity: 1, stickMode: 'float' });
+  assert.equal(normalizeLayout({ stickMode: 'fixed' }).stickMode, 'fixed');
+  assert.equal(normalizeLayout({ stickMode: 'weird' }).stickMode, 'float');
   const v = normalizeLayout({ opacity: 0.1, landscape: { fire: { dx: 3, dy: -0.2, s: 9 }, nope: { dx: 0, dy: 0, s: 1 }, ads: { dx: 'x' } }, portrait: { ammo: { dx: 0.1, dy: 0.1, s: 0.8 } } });
-  assert.deepEqual(v, { landscape: { fire: { dx: 1, dy: -0.2, s: 1.8 } }, portrait: { ammo: { dx: 0.1, dy: 0.1, s: 0.8 } }, opacity: 0.25 });
+  assert.deepEqual(v, { landscape: { fire: { dx: 1, dy: -0.2, s: 1.8 } }, portrait: { ammo: { dx: 0.1, dy: 0.1, s: 0.8 } }, opacity: 0.25, stickMode: 'float' });
   // 每一项都对得上原游戏样式里的选择器
-  for (const it of LAYOUT_ITEMS) assert.ok(UI_CSS.includes(it.sel + ' {') || UI_CSS.includes(it.sel + ' '), it.sel);
+  for (const it of LAYOUT_ITEMS.filter((x) => !x.ours)) assert.ok(UI_CSS.includes(it.sel + ' {') || UI_CSS.includes(it.sel + ' '), it.sel);
+  assert.ok(LAYOUT_ITEMS.some((x) => x.key === 'stick'), '移动摇杆能调');
 });
 
 test('改名：游戏里不再出现「几猫」，标题是「零点突围 ZERO HOUR」，封面入口也改了', async () => {
@@ -251,4 +254,43 @@ test('触屏摇杆：摇杆那根手指的 touchend 被系统吞掉，下一根�
   input.update(1 / 30);
   assert.ok(input.move.y > 0.9, `换手指以后移动只有 ${input.move.y}`);
   assert.equal(input.look.dx, 0, '左半边的新手指被当成了转视角');
+});
+
+test('固定摇杆、摇杆大小：原游戏的摇杆按我们给的摇杆区、中心和缩放走', (t) => {
+  const { win } = withFakeDom(t);
+  const canvas = fakeEl('canvas');
+  const G = { renderer: { domElement: canvas }, events: { emit() {} }, stickZone: (x, y) => Math.hypot(x - 200, y - 500) < 130, stickAnchor: () => [200, 500], stickScale: 2 };
+  const input = J.createInput(G);
+  const a = { identifier: 4, clientX: 220, clientY: 520 };
+  for (const f of win.touchstart || []) f(ev([a]));
+  input.setGameplay(true);
+  canvas.dispatch('touchstart', ev([a]));
+  // 中心钉在 (200, 500)；缩放 2 倍时往上拖 58 像素只算推了一半
+  canvas.dispatch('touchmove', ev([{ ...a, clientX: 200, clientY: 442 }]));
+  input.update(1 / 30);
+  assert.ok(Math.abs(input.move.y - 0.5) < 0.02 && Math.abs(input.move.x) < 0.02, `move ${input.move.x},${input.move.y}`);
+  canvas.dispatch('touchend', ev([{ ...a }], []));
+  // 摇杆区外（左边远处）按下去不算摇杆，算转视角
+  const b = { identifier: 5, clientX: 40, clientY: 100 };
+  canvas.dispatch('touchstart', ev([b]));
+  canvas.dispatch('touchmove', ev([{ ...b, clientY: 40 }]));
+  input.update(1 / 30);
+  assert.equal(input.move.y, 0);
+});
+
+test('键盘按键：改一个动作换掉它原来的键，键被占时从别的动作上拿过来，Esc 不让改', async () => {
+  const { normalizeKeys, applyKeys, keysFor, keyLabel } = await import('../src/jimao/keybinds.js');
+  const code = readFileSync('src/jimao/vendor/game.js', 'utf8');
+  assert.ok(code.includes('keyMap: h_'), '按键表交出来了');
+  const base = { KeyW: 'forward', KeyS: 'back', Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', Escape: 'pause', KeyE: 'interact' };
+  const keys = normalizeKeys({ forward: 'ArrowUp', jump: 'KeyE', pause: 'KeyX', reload: 'Escape', nope: 'KeyZ', sprint: 7 });
+  assert.deepEqual(keys, { forward: 'ArrowUp', jump: 'KeyE' });
+  const map = applyKeys(base, keys);
+  assert.deepEqual(keysFor(map, 'forward'), ['ArrowUp']);
+  assert.deepEqual(keysFor(map, 'jump'), ['KeyE']);
+  assert.deepEqual(keysFor(map, 'interact'), [], 'E 被跳跃拿走了');
+  assert.equal(map.Escape, 'pause'); assert.equal(map.KeyW, undefined);
+  assert.deepEqual(keysFor(map, 'sprint').sort(), ['ShiftLeft', 'ShiftRight']);
+  assert.equal(normalizeKeys({ jump: 'KeyE', interact: 'KeyE' }).jump, undefined, '同一个键只给最后一个动作');
+  assert.equal(keyLabel('KeyW'), 'W'); assert.equal(keyLabel('Space'), '空格');
 });
