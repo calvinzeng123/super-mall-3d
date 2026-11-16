@@ -7,6 +7,7 @@
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
 ### 零点突围：载具战斗撤离 + 弹药补给（2026-11-16）
+- **发布（2026-11-16，用户确认）**：提交 `f2ce201`（主屏全屏、画质设置接通、开局朝向、去掉开始界面黑边），部署 `6afad9c0cb235dfc91f94237` live；首页 200、入口 `main.3RMGJYGO.js` SHA-256 一致，manifest 和主屏图标 200。
 - **手机 / 画质修复（2026-11-16 第二轮反馈）**：
   - 添加到主屏幕不全屏：页面 head 只有 `viewport-fit=cover`。`build.mjs` 的 `wrap()` 和 `scripts/build-netlify.mjs` 加 `apple-mobile-web-app-capable`、`black-translucent` 状态栏、`theme-color`；Netlify 版再加 `manifest.webmanifest`（`display: fullscreen`）和 `icons/`（`assets/icons/` 里 180/192/512 图标，PIL 画的）。原游戏 HUD 本来就用 safe-area 内边距。
   - 零点突围设置里切画质没反应：`run.js` 给原游戏的 `render.setQuality` 是空函数。现在原游戏 低/中/高/极致 → 我们的 流畅/均衡/精细/极致（`VENDOR_TIER`，`app.setQuality`），分辨率、阴影、HDR、柔光、AO、室内灯、贴图、细节都跟着变；开局按 `saltline.settings.v1` 里存的档位（枪、材质贴图按它生成；补丁把贴图上限 1024 → 2048）。手机 / 省显存档像素比上限 1.5（`quality.js`，`MAX_PIXEL_RATIO` 以前没被用上）。
