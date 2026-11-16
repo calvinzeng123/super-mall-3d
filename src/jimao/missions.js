@@ -13,6 +13,7 @@ import { toW } from '../layout/geom.js';
 import { createRideVehicle, rideLocalToWorld, RIDE_SPECS, BOARD_TIME } from './ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from './ride-paths.js';
 import { createDoorGun } from './door-gun.js';
+import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
 
 export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel']);
 export const ELIMINATE_TARGET = 14;
@@ -201,11 +202,14 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const doorGun = createDoorGun(G, gunMount);
   const carSamples = sampleRoute(CAR_ROUTE), carLength = carSamples.at(-1).s;
   const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;
-  const state = { mission: null, kills: 0, reinforce: 0, phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false };
+  const FRESH = () => ({ phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false,
+    vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false });
+  const state = { mission: null, kills: 0, reinforce: 0, ...FRESH() };
+  const vhud = makeDurabilityHud();
   const from = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
   let models = [], roofSpots = null;
   const veh = () => state.mission && vehicles[state.mission.extraction.id];
-  const riding = () => state.phase === 'board' || state.phase === 'ride' || state.phase === 'end';
+  const riding = () => state.phase === 'board' || state.phase === 'ride' || state.phase === 'end' || state.phase === 'crash';
 
   // 坐在载具里挨打少一些（直升机舱壁 + 距离，接应车有装甲挡板）
   const baseDamage = G.player?.damage?.bind(G.player);
@@ -214,7 +218,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function roll() {
     for (const m of models) m.removeFromParent();
     const mission = rollMission(rng, sites, force);
-    Object.assign(state, { mission, kills: 0, reinforce: 0, phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false });
+    Object.assign(state, { mission, kills: 0, reinforce: 0, ...FRESH() });
+    vhud.show(false);
     if (G.player) G.player.mounted = false;
     doorGun.reset();
     models = mission.objectives.map((o) => {
@@ -285,16 +290,63 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.phase === 'ride') {
       if (vv.kind === 'helicopter') {
         state.rideT += dt;
-        vv.setPose(heliPoseAt(state.rideT, roofY), Math.sin(state.rideT * 7) * 0.025);
+        vv.setPose(state.pose = heliPoseAt(state.rideT, roofY), Math.sin(state.rideT * 7) * 0.025);
         if (state.rideT >= heliDuration()) finishRide();
       } else {
         state.speed = state.carS >= carLength - 0.05 ? 0 : carSpeedAt(carSamples, state.carS);
         state.carS = Math.min(carLength, state.carS + state.speed * dt);
-        vv.setPose(carPoseAt(carSamples, state.carS), Math.sin(state.carS * 2.1) * 0.012 * Math.min(1, state.speed / 6));
+        vv.setPose(state.pose = carPoseAt(carSamples, state.carS), Math.sin(state.carS * 2.1) * 0.012 * Math.min(1, state.speed / 6));
         if (state.carS >= carLength - 0.05 && (state.stopT += dt) > 1.2) finishRide();
       }
+    } else if (state.phase === 'crash') {
+      state.crashT += dt;
+      const C = HELI_ORBIT.center, s0 = state.crashStart;
+      const ground = vv.kind === 'helicopter' ? (Math.hypot(s0.x - C.x, s0.z - C.z) < 80 ? roofY : 0) : s0.y;
+      const p = crashPose(vv.kind, s0, state.crashT, ground);
+      vv.setPose(p, 0);
+      if (p.landed && !state.boom) boom(vv, 1);
     }
     pin(vv);
+  }
+
+  // ---- 载具耐久：敌人的子弹擦过机身 / 车身就掉，打光了坠毁 ----
+  G.events.on('enemy:fire', (e) => {
+    const vv = veh();
+    if (state.phase !== 'ride' || !vv || !e?.pos || !e?.dir || G.game?.state !== 'playing') return;
+    const c = vv.toWorld(VEHICLE_HP.center[vv.kind]);
+    if (rayMiss(e.pos, e.dir, c) > VEHICLE_HP.radius[vv.kind]) return;
+    state.vhits++;
+    state.vhp = Math.max(0, state.vhp - VEHICLE_HP.damage[vv.kind]);
+    vhud.hit();
+    // 弹着点：朝射手那一侧的机身表面冒火花
+    const back = new THREE.Vector3(e.pos.x - c.x, e.pos.y - c.y, e.pos.z - c.z).normalize();
+    G.fx?.sparks?.(c.clone().addScaledVector(back, VEHICLE_HP.radius[vv.kind] * 0.55), back, 4);
+    if (state.warned < VEHICLE_HP.warn.length && state.vhp < VEHICLE_HP.warn[state.warned]) {
+      G.hud?.radio?.(state.warned === 0 ? (vv.kind === 'helicopter' ? '机体中弹！把朝我们开火的敌人清掉！' : '车被打得很惨，先打开火的那几个！') : (vv.kind === 'helicopter' ? '机体严重受损，快撑不住了！' : '发动机冒烟了，撑不了多久！'), 3.5);
+      state.warned++;
+    }
+    if (state.vhp <= 0) crash(vv);
+  });
+
+  function boom(vv, size) {
+    state.boom = true;
+    const at = vv.toWorld(VEHICLE_HP.engine[vv.kind]);
+    G.fx?.explosion?.(at, size * (vv.kind === 'helicopter' ? 3 : 2.4));
+    G.render?.lightPool?.flash?.(at, 0xff8030, 80, 18, 0.35);
+    G.player?.addShake?.(0.6);
+  }
+
+  /** 耐久打光：直升机尾桨被打断、打转下坠砸到楼顶；接应车失控侧翻。动画放完黑场、阵亡（撤离失败） */
+  function crash(vv) {
+    if (state.phase !== 'ride') return;
+    state.phase = 'crash'; state.crashT = 0; state.boom = false; state.crashStart = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0 }) };
+    doorGun.update(0, { active: false });
+    G.weapon?.setVisible?.(false);
+    G.fx?.explosion?.(vv.toWorld(VEHICLE_HP.engine[vv.kind]), 1.4);
+    G.player?.addShake?.(0.5);
+    G.hud?.clearRadio?.();
+    G.hud?.radio?.(vv.kind === 'helicopter' ? '尾桨被打断了！要坠机了！' : '车失控了！', 3);
+    G.hud?.message?.('撤离失败 · ' + (vv.kind === 'helicopter' ? '直升机被击落' : '接应车被击毁'), 4);
   }
 
   function startRide(vv) {
@@ -393,6 +445,29 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       if (state.t >= BOARD_TIME) { startRide(vv); return null; }
       return { ...(state.t < 1.9 ? boardingView(vv, state.t) : vv.seatPose(0, 0)), fade: 0 };
     }
+    // 耐久条、受损冒烟起火
+    vhud.show(state.phase === 'ride' || state.phase === 'crash', vv.kind === 'helicopter' ? '机体耐久' : '车辆耐久');
+    vhud.set(state.vhp, dt);
+    if (state.phase === 'ride' || state.phase === 'crash') {
+      state.smokeT -= dt;
+      const burning = state.phase === 'crash' || state.vhp < VEHICLE_HP.fire;
+      if ((state.vhp < VEHICLE_HP.smoke || state.phase === 'crash') && state.smokeT <= 0) {
+        state.smokeT = state.phase === 'crash' ? 0.05 : burning ? 0.09 : 0.16;
+        const at = vv.toWorld(VEHICLE_HP.engine[vv.kind]);
+        G.fx?.smoke?.(at, { size: state.phase === 'crash' ? 1.6 : 0.9, life: 2.4, color: 0x262626, rise: 1.4 });
+        if (burning) G.fx?.smoke?.(at, { size: 0.7, life: 0.5, color: 0xff6a1e, rise: 2.2 });
+      }
+    }
+    if (state.phase === 'crash') {
+      const dur = VEHICLE_HP.crash[vv.kind];
+      if (state.crashT > dur && !state.dead) {
+        // 黑场后阵亡：原游戏的阵亡页（重新出击会重抽任务）
+        state.dead = true;
+        G.player.invulnerable = false;
+        G.player.damage?.(9999, null);
+      }
+      return { fade: Math.min(0.92, smooth((state.crashT - (dur - 1)) / 1)) };
+    }
     if (state.phase === 'ride') {
       if (G.game?.state === 'playing') rideSpawns(dt, vv);
       if (vv.kind === 'car' && (state.textT -= dt) <= 0) { state.textT = 0.5; G.game?.refreshObjective?.(); }
@@ -409,8 +484,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   }
 
   return { roll, prePlayer, update, state, sites, vehicles, root, doorGun,
-    get gunActive() { return state.phase === 'board' || state.phase === 'end' || (state.phase === 'ride' && veh()?.kind === 'helicopter'); },
+    get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || (state.phase === 'ride' && veh()?.kind === 'helicopter'); },
     get riding() { return riding(); },
     get rideKind() { return riding() ? veh()?.kind === 'helicopter' ? 'helicopter' : 'car' : null; },
-    dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); } };
+    dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); vhud.remove(); } };
 }

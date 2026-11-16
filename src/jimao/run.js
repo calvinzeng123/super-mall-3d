@@ -18,6 +18,7 @@ import { createMissionDirector, RELAY_SITES, EXTRACTIONS } from './missions.js';
 import { rideFootprint } from './ride-vehicles.js';
 import { createAmmoSupply } from './ammo.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
+import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
 
 /** 标题是四个字（原游戏是两个字）：字号收小、不换行，手机横屏按高度算 */
@@ -46,7 +47,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
