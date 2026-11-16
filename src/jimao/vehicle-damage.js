@@ -4,7 +4,7 @@
 export const VEHICLE_HP = Object.freeze({
   radius: { helicopter: 3.2, car: 3.0 },  // 子弹离载具中心这么近算打中
   center: { helicopter: [0, 1.4, -0.3], car: [0, 1.2, 0] },
-  damage: { helicopter: 1.4, car: 0.75 }, // 每发打中掉多少（满 100）：直升机实测不还手一圈挨约 80 发、还手约 37 发
+  damage: { helicopter: 1.4, car: 1.3 }, // 每发打中掉多少（满 100）：直升机实测不还手一圈挨约 80 发、还手约 37 发
   smoke: 50, fire: 25,                    // 低于这个开始冒烟 / 起火
   warn: [60, 30],
   engine: { helicopter: [0, 2.7, -1.7], car: [0, 1.35, 1.9] },
@@ -25,10 +25,11 @@ export function rayMiss(p, d, c, range = 150) {
  */
 export function crashPose(kind, start, t, ground) {
   if (kind === 'helicopter') {
-    const fall = Math.min(start.y - ground - 0.6, 0.5 * 7.5 * t * t), landed = fall >= start.y - ground - 0.6;
-    const fwd = Math.min(t, 2.5) * 5 - Math.max(0, Math.min(t, 2.5) - 1) ** 2;
-    return { x: start.x + Math.sin(start.yaw) * fwd, y: start.y - fall, z: start.z + Math.cos(start.yaw) * fwd,
-      yaw: start.yaw + (landed ? 0 : 1) * (1.6 * t + 1.6 * t * t), pitch: 0.25 * Math.sin(t * 2.6), roll: (start.roll || 0) + 0.45 * Math.sin(t * 3.3) * (landed ? 0.2 : 1), landed };
+    const drop = Math.max(0, start.y - ground - 0.6), tl = Math.sqrt((2 * drop) / 7.5), tt = Math.min(t, tl), landed = t >= tl;
+    const fwd = Math.min(tt, 2.5) * 5 - Math.max(0, Math.min(tt, 2.5) - 1) ** 2;
+    // 落地以后停在落地那一刻的位置和朝向，机身歪着
+    return { x: start.x + Math.sin(start.yaw) * fwd, y: start.y - 0.5 * 7.5 * tt * tt, z: start.z + Math.cos(start.yaw) * fwd,
+      yaw: start.yaw + 1.6 * tt + 1.6 * tt * tt, pitch: landed ? 0.12 : 0.25 * Math.sin(t * 2.6), roll: landed ? 0.35 : (start.roll || 0) + 0.45 * Math.sin(t * 3.3), landed };
   }
   const k = Math.min(1, t / 1.6), e = k * k * (3 - 2 * k), slide = 7 * (1 - (1 - k) ** 2);
   return { x: start.x + Math.sin(start.yaw + 0.5 * e) * slide, y: start.y + 0.35 * Math.sin(e * Math.PI / 2), z: start.z + Math.cos(start.yaw + 0.5 * e) * slide,

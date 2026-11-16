@@ -191,3 +191,19 @@ test('弹药补给：地图上至少 8 个弹药箱，都在导航空地上、�
   assert.ok(crates.some((c) => c.floor === 'P1-RF') && crates.some((c) => c.floor === 'A-B1'), '撤离点附近没有弹药箱');
   assert.ok(AMMO.crate > AMMO.drop && AMMO.cap >= 240);
 });
+
+test('载具耐久：子弹擦过机身才算打中；坠毁轨迹——直升机打转掉到地面停住，接应车侧翻滑出后停住', async () => {
+  const { VEHICLE_HP, rayMiss, crashPose } = await import('../src/jimao/vehicle-damage.js');
+  const c = { x: 0, y: 2, z: 0 };
+  assert.ok(rayMiss({ x: 0, y: 2, z: -30 }, { x: 0, y: 0, z: 1 }, c) < 0.01, '正对着打要算中');
+  assert.ok(rayMiss({ x: 0, y: 2, z: -30 }, { x: 0, y: 0, z: -1 }, c) === Infinity, '背着打不算');
+  assert.ok(rayMiss({ x: 5, y: 2, z: -30 }, { x: 0, y: 0, z: 1 }, c) > VEHICLE_HP.radius.car, '偏 5 米不算');
+  for (const k of ['helicopter', 'car']) assert.ok(VEHICLE_HP.damage[k] > 0.8 && VEHICLE_HP.damage[k] < 3, `${k} 每发伤害不合理`);
+  const h0 = { x: -150, y: 62, z: -120, yaw: 1, pitch: 0, roll: -0.2 };
+  let landedAt = null, yaw0 = h0.yaw;
+  for (let t = 0; t <= VEHICLE_HP.crash.helicopter; t += 0.05) { const p = crashPose('helicopter', h0, t, 34); assert.ok(p.y >= 34 + 0.59); if (p.landed && landedAt == null) landedAt = t; yaw0 = p.yaw; }
+  assert.ok(landedAt != null && landedAt < VEHICLE_HP.crash.helicopter - 0.5, '直升机在动画结束前没落地');
+  assert.ok(Math.abs(yaw0 - h0.yaw) > Math.PI, '直升机没打转');
+  const c0 = { x: 4, y: 0, z: -100, yaw: 0, pitch: 0, roll: 0 }, end = crashPose('car', c0, VEHICLE_HP.crash.car, 0);
+  assert.ok(end.landed && end.roll > 1 && Math.hypot(end.x - c0.x, end.z - c0.z) > 4, '接应车没翻、没滑出去');
+});

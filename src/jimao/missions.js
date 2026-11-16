@@ -409,8 +409,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const car = carPoseAt(carSamples, state.carS);
     cull(vv);
     if (state.spawnT > 0 || car.y < -0.5 || state.carS < 45 || state.carS > carLength - 25) return;
-    state.spawnT = 1.1;
-    if (alive().length >= 9) return;
+    state.spawnT = 1.6;
+    if (alive().length >= 6) return; // 上限 6 人：清得快压力就小，放着不打就一直挨揍
     for (let k = 0; k < 6; k++) {
       const p = carPoseAt(carSamples, Math.min(carLength - 10, state.carS + 28 + rng() * 35)), side = rng() < 0.5 ? 1 : -1, off = 6 + rng() * 8;
       const x = p.x + p.dir.z * off * side, z = p.z - p.dir.x * off * side, st = landAt(nav, x, z, 0.6);
