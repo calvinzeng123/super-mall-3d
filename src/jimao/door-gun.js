@@ -139,8 +139,8 @@ function mergeByMaterial(group, geos) {
  * 舱门机枪的操作。mount 是机舱里的挂点（Object3D，默认枪口朝舱门外 = mount 的 +z）。
  * update(dt, { active, firing, camera }) 每帧调用；返回 { heat, overheated, inArc }。
  */
-/** label：状态条上的名字；post：立柱长度（见 buildDoorGun） */
-export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post } = {}) {
+/** label：状态条上的名字；post：立柱长度（见 buildDoorGun）；flash：枪口焰大小（车顶机枪就在眼前，给小一点，不然糊住准星） */
+export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, flash = 1.5 } = {}) {
   const gun = buildDoorGun(G, post == null ? {} : { post });
   mount.add(gun.root);
   let heat = 0, overheated = false, spin = 0, spinAngle = 0, cooldown = 0, active = false;
@@ -212,7 +212,7 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post } = 
     gun.muzzle.getWorldPosition(mz);
     to.copy(hit?.point || from.clone().addScaledVector(dir, 320));
     G.fx?.tracer?.(mz.clone(), to.clone(), { color: 0xffb35a, speed: 720, width: 0.055 });
-    G.fx?.muzzleFlash?.(mz.clone(), dir.clone(), { scale: 1.5 });
+    G.fx?.muzzleFlash?.(mz.clone(), dir.clone(), { scale: flash });
     G.render?.lightPool?.flash?.(mz.clone(), 0xffb060, 30, 10, 0.05);
     if (Math.random() < 0.5) { gun.eject.getWorldPosition(ej); vel.set(0, -1.5, 0).addScaledVector(right, 2.2); G.fx?.shell?.(ej.clone(), vel.clone()); }
     G.events?.emit?.('weapon:fire', { origin: from.clone(), dir: dir.clone(), muzzle: mz.clone(), ads: 0, doorGun: true });

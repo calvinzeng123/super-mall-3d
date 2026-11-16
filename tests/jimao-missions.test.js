@@ -309,5 +309,5 @@ test('接应车：舱盖翻平不挡后方视线；车顶机枪架在环上、�
   // 乘坐时步枪停用（两种载具都用车载机枪）
   const src = readFileSync(new URL('../src/jimao/missions.js', import.meta.url), 'utf8');
   assert.match(src, /state\.phase === 'crash' \|\| state\.phase === 'ride'; \}/);
-  assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.06 \}\)/);
+  assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.06, flash: 0\.55 \}\)/);
 });
