@@ -32,7 +32,7 @@ function canLabel() {
 }
 
 /** 造枪：返回 { root（挂到机舱的转盘）, yawG, pitchG, barrels, muzzle, eject, mats, dispose } */
-export function buildDoorGun(G, { post = 0.62 } = {}) {
+export function buildDoorGun(G, { post = 0.62, drop = 0.6 } = {}) {
   const M = {
     gun: material(G, 'gunmetal', { color: '#3a3d40', metalness: 0.85, roughness: 0.38 }),
     black: material(G, 'anodized_black', { color: '#161718', metalness: 0.6, roughness: 0.45 }),
@@ -102,14 +102,16 @@ export function buildDoorGun(G, { post = 0.62 } = {}) {
   box(gun, 0.25, 0.02, 0.02, M.black, 0, 0.0, -0.28);
   box(gun, 0.25, 0.02, 0.02, M.black, 0, 0.0, -0.13);
   // 软供弹槽：从供弹口往下、往后一节节连到弹药箱
-  const chute = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.19, -0.02, 0.04), new THREE.Vector3(-0.26, -0.12, 0.0), new THREE.Vector3(-0.3, -0.3, -0.08), new THREE.Vector3(-0.28, -0.46, -0.12)]);
+  // drop：弹药箱挂在转轴下面多远（直升机挂在枪架下 0.6 米；装甲车的枪贴着车顶，箱子只能挂在枪旁边）
+  const ky = drop / 0.6;
+  const chute = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.19, -0.02, 0.04), new THREE.Vector3(-0.26, -0.12 * ky, 0.0), new THREE.Vector3(-0.3, -0.3 * ky, -0.08), new THREE.Vector3(-0.28, -0.46 * ky, -0.12)]);
   for (let k = 0; k <= 16; k++) {
     const t = k / 16, p = chute.getPoint(t), tan = chute.getTangent(t);
     const seg = box(gun, 0.075, 0.035, 0.03, k % 2 ? M.black : M.steel, p.x, p.y, p.z);
     seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tan);
   }
   // 弹药箱：挂在枪下左侧，跟着枪转；提手、两个搭扣、侧面标签、露出一截弹链
-  const can = new THREE.Group(); can.position.set(-0.27, -0.6, -0.12); gun.add(can);
+  const can = new THREE.Group(); can.position.set(-0.27, -drop, -0.12); gun.add(can);
   box(can, 0.2, 0.26, 0.32, M.olive, 0, 0, 0);
   box(can, 0.21, 0.02, 0.33, M.black, 0, 0.13, 0);
   add(can, new THREE.PlaneGeometry(0.3, 0.19), M.label, -0.101, 0, 0, 0, -Math.PI / 2, 0);
@@ -140,8 +142,8 @@ function mergeByMaterial(group, geos) {
  * update(dt, { active, firing, camera }) 每帧调用；返回 { heat, overheated, inArc }。
  */
 /** label：状态条上的名字；post：立柱长度（见 buildDoorGun）；flash：枪口焰大小（车顶机枪就在眼前，给小一点，不然糊住准星） */
-export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, flash = 1.5 } = {}) {
-  const gun = buildDoorGun(G, post == null ? {} : { post });
+export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, drop, flash = 1.5 } = {}) {
+  const gun = buildDoorGun(G, { ...(post == null ? {} : { post }), ...(drop == null ? {} : { drop }) });
   mount.add(gun.root);
   let heat = 0, overheated = false, spin = 0, spinAngle = 0, cooldown = 0, active = false;
   const q = new THREE.Quaternion(), d = new THREE.Vector3(), dir = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vector3(), mz = new THREE.Vector3(), ej = new THREE.Vector3(), vel = new THREE.Vector3();

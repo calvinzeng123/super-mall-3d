@@ -205,7 +205,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const carRing = new THREE.Object3D(), carMount = new THREE.Object3D();
   carRing.position.set(...RIDE_SPECS.car.gunRing); carMount.position.set(0, 0, RIDE_SPECS.car.gunReach);
   carRing.add(carMount); vehicles.car.body.add(carRing);
-  const roofGun = createDoorGun(G, carMount, { label: 'M134 车顶机枪', post: 0.06, flash: 0.55 });
+  const roofGun = createDoorGun(G, carMount, { label: 'M134 车顶机枪', post: 0.24, drop: 0.24, flash: 0.7 });
   const ringQ = new THREE.Quaternion(), ringD = new THREE.Vector3();
   const carSamples = sampleRoute(CAR_ROUTE), carLength = carSamples.at(-1).s;
   const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;

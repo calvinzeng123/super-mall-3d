@@ -291,10 +291,12 @@ test('接应车：舱盖翻平不挡后方视线；车顶机枪架在环上、�
   const back = new THREE.Raycaster(eye.clone(), new THREE.Vector3(0, -Math.sin(0.35), -Math.cos(0.35)).normalize(), 0.05, 3);
   const hit = back.intersectObject(v.root, true).filter((h) => h.point.y > 2.15);
   assert.equal(hit.length, 0, `往后看被挡：${hit.map((h) => h.point.toArray().map((x) => x.toFixed(2))).join(' ')}`);
-  // 车顶机枪：环心在眼睛正下方 0.3–0.5 米，枪离环心 0.35–0.5 米
+  // 车顶机枪：环心在眼睛正下方约 0.3 米，枪离环心 0.8–1 米（够远，握把和机匣才在视野里：握把在视线下方 35° 以内）
   const S = RIDE_SPECS.car, [rx, ry, rz] = S.gunRing;
   assert.ok(Math.abs(rx - S.seat[0]) < 1e-9 && Math.abs(rz - S.seat[2]) < 1e-9, '环心在眼睛正下方');
-  assert.ok(S.seat[1] - ry > 0.3 && S.seat[1] - ry < 0.5 && S.gunReach > 0.35 && S.gunReach < 0.5);
+  assert.ok(S.seat[1] - ry > 0.2 && S.seat[1] - ry < 0.4 && S.gunReach > 0.8 && S.gunReach < 1.0);
+  const grip = Math.atan2(S.seat[1] - (ry + 0.04), S.gunReach - 0.28) * 180 / Math.PI;
+  assert.ok(grip < 35, `握把在视线下方 ${grip.toFixed(0)}°，看不见枪身`);
   // 枪绕环一整圈（每 30° 一处），枪身高度上、往外 0.9 米以内没有车顶上的东西（原来口前的挡板已经去掉）
   for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
     const from = new THREE.Vector3(rx, ry + 0.04, rz), dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
@@ -302,12 +304,14 @@ test('接应车：舱盖翻平不挡后方视线；车顶机枪架在环上、�
     assert.equal(blocked.length, 0, `${Math.round(a * 180 / Math.PI)}° 方向有东西挡枪`);
   }
   // 短立柱的机枪模型：最低点不低于转轴下 0.9 米（弹药箱），立柱只有一小截
-  const g = buildDoorGun(null, { post: 0.06 });
+  // 车顶上的机枪：立柱和弹药箱都不低于转盘下 0.4 米（不插进车顶）
+  const g = buildDoorGun(null, { post: 0.24, drop: 0.24 });
   const box = new THREE.Box3().setFromObject(g.root);
-  assert.ok(box.min.y > -0.95 && box.max.y < 0.35, `机枪高度范围 ${box.min.y.toFixed(2)}…${box.max.y.toFixed(2)}`);
+  assert.ok(box.min.y > -0.4 && box.max.y < 0.35, `机枪高度范围 ${box.min.y.toFixed(2)}…${box.max.y.toFixed(2)}`);
+  assert.ok(ry + box.min.y > 2.0, '机枪最低点不低于车顶');
   g.dispose();
   // 乘坐时步枪停用（两种载具都用车载机枪）
   const src = readFileSync(new URL('../src/jimao/missions.js', import.meta.url), 'utf8');
   assert.match(src, /state\.phase === 'crash' \|\| state\.phase === 'ride'; \}/);
-  assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.06, flash: 0\.55 \}\)/);
+  assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.24, drop: 0\.24, flash: 0\.7 \}\)/);
 });
