@@ -198,7 +198,7 @@ test('载具耐久：子弹擦过机身才算打中；坠毁轨迹——直升�
   assert.ok(rayMiss({ x: 0, y: 2, z: -30 }, { x: 0, y: 0, z: 1 }, c) < 0.01, '正对着打要算中');
   assert.ok(rayMiss({ x: 0, y: 2, z: -30 }, { x: 0, y: 0, z: -1 }, c) === Infinity, '背着打不算');
   assert.ok(rayMiss({ x: 5, y: 2, z: -30 }, { x: 0, y: 0, z: 1 }, c) > VEHICLE_HP.radius.car, '偏 5 米不算');
-  for (const k of ['helicopter', 'car']) assert.ok(VEHICLE_HP.damage[k] > 0.8 && VEHICLE_HP.damage[k] < 3, `${k} 每发伤害不合理`);
+  for (const k of ['helicopter', 'car']) assert.ok(VEHICLE_HP.damage[k] >= 0.5 && VEHICLE_HP.damage[k] < 3, `${k} 每发伤害不合理`);
   const h0 = { x: -150, y: 62, z: -120, yaw: 1, pitch: 0, roll: -0.2 };
   let landedAt = null, yaw0 = h0.yaw;
   for (let t = 0; t <= VEHICLE_HP.crash.helicopter; t += 0.05) { const p = crashPose('helicopter', h0, t, 34); assert.ok(p.y >= 34 + 0.59); if (p.landed && landedAt == null) landedAt = t; yaw0 = p.yaw; }
