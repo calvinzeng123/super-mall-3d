@@ -341,7 +341,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const alive = () => G.enemies?.list?.filter((e) => e.alive) || [];
   function spawnAt(pos) { try { G.enemies.spawn('soldier', pos, { state: 'alert', target: G.player.pos }); return true; } catch { return false; } }
 
-  /** 坐车 / 坐直升机时刷兵：楼顶源源不断涌上来；车前方 40–85 米的路两侧冲出来，被甩在后面 45 米的收掉 */
+  /** 坐车 / 坐直升机时刷兵：楼顶源源不断涌上来；车前方 28–63 米、路两侧 6–14 米冲出来，被甩在后面 45 米的收掉 */
   function rideSpawns(dt, vv) {
     state.spawnT -= dt;
     if (vv.kind === 'helicopter') {
@@ -357,10 +357,10 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const car = carPoseAt(carSamples, state.carS);
     cull(vv);
     if (state.spawnT > 0 || car.y < -0.5 || state.carS < 45 || state.carS > carLength - 25) return;
-    state.spawnT = 1.3;
-    if (alive().length >= 8) return;
+    state.spawnT = 1.1;
+    if (alive().length >= 9) return;
     for (let k = 0; k < 6; k++) {
-      const p = carPoseAt(carSamples, Math.min(carLength - 10, state.carS + 40 + rng() * 45)), side = rng() < 0.5 ? 1 : -1, off = 7 + rng() * 9;
+      const p = carPoseAt(carSamples, Math.min(carLength - 10, state.carS + 28 + rng() * 35)), side = rng() < 0.5 ? 1 : -1, off = 6 + rng() * 8;
       const x = p.x + p.dir.z * off * side, z = p.z - p.dir.x * off * side, st = landAt(nav, x, z, 0.6);
       if (st && Math.abs(st.y) < 1.5 && clear(nav, st)) { spawnAt(new THREE.Vector3(st.x, st.y, st.z)); break; }
     }

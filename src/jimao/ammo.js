@@ -2,12 +2,12 @@
 //   ① 击倒的武装分子掉弹匣（走过去自动捡，+30；弹药越少掉得越勤）；
 //   ② 地图上十来个绿色弹药箱（走到跟前自动打开，+90，每局每箱一次；弹药不多时 HUD 上标出最近的三个）；
 //   ③ 每完成一个目标 +30（中继机柜、证物箱里都有备用弹匣）；
-//   ④ 坐在接应车车顶射击时，车里的弹药箱每击倒一人补 8 发（直升机机枪弹药不限，只会过热）。
+//   ④ 坐在接应车车顶射击时，车里的弹药箱每秒补 6 发（补到备弹 150）、每击倒一人再补 8 发（直升机机枪弹药不限，只会过热）。
 // 备弹上限 300。第一次弹药见底时无线电提醒一次。
 import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
 
-export const AMMO = Object.freeze({ drop: 30, crate: 90, objective: 30, rideKill: 8, cap: 300, low: 60, pickupR: 1.5, crateR: 1.9, dropLife: 45 });
+export const AMMO = Object.freeze({ drop: 30, crate: 90, objective: 30, rideKill: 8, rideTrickle: 6, rideTopUp: 150, cap: 300, low: 60, pickupR: 1.5, crateR: 1.9, dropLife: 45 });
 
 /** 弹药箱放在这些地方附近（找最近的一块空地）：一期各层中庭边、地下大厅、酒店、公寓、两个撤离点旁边 */
 export const CRATE_SEEDS = Object.freeze([
@@ -98,7 +98,7 @@ export function createAmmoSupply(G, { scene, layout, nav, rng = Math.random, isR
     const model = crateModel(G); model.position.set(s.x, s.y, s.z); model.rotation.y = (s.x * 13 + s.z * 7) % Math.PI; root.add(model);
     return { ...s, model, pos: new THREE.Vector3(s.x, s.y, s.z), opened: false, open: 0 };
   });
-  let drops = [], lowSaid = false, markerT = 0, lastLow = null;
+  let drops = [], lowSaid = false, markerT = 0, lastLow = null, trickle = 0;
   const weapon = () => G.weapon && !G.weapon.stub ? G.weapon : null;
   const total = () => { const w = weapon(); return w ? (w.ammo | 0) + (w.reserve | 0) : 999; };
 
@@ -152,6 +152,8 @@ export function createAmmoSupply(G, { scene, layout, nav, rng = Math.random, isR
       }
     }
     if (!playing) return;
+    // 坐在接应车上：车里的弹药箱慢慢往弹匣包里补（每秒 6 发，补到备弹 150）
+    if (rideKind() === 'car') { const w = weapon(); if (w && (w.reserve | 0) < AMMO.rideTopUp) { trickle += dt * AMMO.rideTrickle; const n = Math.floor(trickle); if (n > 0) { trickle -= n; w.addAmmo(Math.min(n, AMMO.rideTopUp - (w.reserve | 0))); } } }
     const t = total(), low = t < 120;
     if (!lowSaid && t < AMMO.low && !isRiding()) { lowSaid = true; G.hud?.radio?.('弹药不多了！击倒的敌人会掉弹匣，地图上的绿色弹药箱也能补给。', 4.5); }
     markerT -= dt;
