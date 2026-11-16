@@ -1368,7 +1368,7 @@ function h3(i, e) {
   }
 // ---- Gg  (bundle line 19437–19513)
 async function Gg(i) {
-    let e = i.renderer || i.render && i.render.renderer, t = i.params || {}, n = +(t.tex || 0) || i.quality && i.quality.tex || 1024, s = Math.min(n, 1024), o = Math.min(8, e.capabilities.getMaxAnisotropy ? e.capabilities.getMaxAnisotropy() : 1), r = { wet: { value: t.wet !== void 0 ? +t.wet : 1 } }, a = { sets: 0, bytes: 0, ms: 0 }, l = new cr(-1, 1, 1, -1, 0, 1), c = new ir(), u = new Qe(new rn(2, 2));
+    let e = i.renderer || i.render && i.render.renderer, t = i.params || {}, n = +(t.tex || 0) || i.quality && i.quality.tex || 1024, s = Math.min(n, 2048), o = Math.min(8, e.capabilities.getMaxAnisotropy ? e.capabilities.getMaxAnisotropy() : 1), r = { wet: { value: t.wet !== void 0 ? +t.wet : 1 } }, a = { sets: 0, bytes: 0, ms: 0 }, l = new cr(-1, 1, 1, -1, 0, 1), c = new ir(), u = new Qe(new rn(2, 2));
     u.frustumCulled = false, c.add(u);
     let h = /* @__PURE__ */ new Map(), f = /* @__PURE__ */ new Map(), p = /* @__PURE__ */ new Map(), d = 0, v = null, g = (O, q) => new V0({ glslVersion: Ac, vertexShader: Qy, fragmentShader: O, uniforms: q, depthTest: false, depthWrite: false });
     function x() {

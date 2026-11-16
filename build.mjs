@@ -106,6 +106,10 @@ function wrap(body) {
   return (
     '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
+    // 添加到主屏幕后全屏打开（iOS：独立应用 + 透明状态栏，内容铺到刘海 / 灵动岛下面）
+    '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n' +
+    '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="云澜汇">\n' +
+    '<meta name="theme-color" content="#0b1218">\n' +
     '</head>\n<body>\n' + body + '\n</body>\n</html>\n'
   );
 }

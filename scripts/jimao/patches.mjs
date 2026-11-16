@@ -92,6 +92,9 @@ export const PATCHES = [
   ['撤离镜头放完再出结算页：等待时长从关卡数据里取',
     'u > 3.3 && l.screen !== "complete"',
     'u > (s && s.outroDelay || 3.3) && l.screen !== "complete"'],
+  ['材质贴图分辨率上限 1024 → 2048（极致画质时枪、金属、地面更细）',
+    's = Math.min(n, 1024)',
+    's = Math.min(n, 2048)'],
   // ---- 载具撤离（src/jimao/missions.js）：到撤离点交给关卡登车，坐车 / 坐直升机打完一段再结算 ----
   ['到达撤离点：关卡有 onExtract 时交给它（登车、坐着打一段），之后再由 finish() 结算',
     'Z && c.allCut && n.alive ? ee() :',

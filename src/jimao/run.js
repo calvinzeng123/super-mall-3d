@@ -11,7 +11,7 @@ import { createGrade } from './grade.js';
 import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { addSoldiers } from './soldier.js';
-import { buildNav, landAt } from '../layout/nav.js';
+import { buildNav, landAt, clear } from '../layout/nav.js';
 import { distToPolyEdge } from '../layout/geom.js';
 import { FPS_MISSION } from '../fps/mission-layout.js';
 import { createMissionDirector, RELAY_SITES, EXTRACTIONS } from './missions.js';
@@ -28,6 +28,12 @@ const TITLE_CSS = `
 @media (max-width: 700px) { .m-word { font-size: clamp(34px, 10vw, 60px) !important; } }
 @media (max-height: 500px) { .m-word { font-size: clamp(30px, 12vh, 60px) !important; } }
 `;
+/** 原游戏的画质名 → 我们的画质档位 */
+const VENDOR_TIER = Object.freeze({ low: 'low', medium: 'balanced', high: 'high', ultra: 'ultra' });
+/** 玩家在原游戏设置里选过的画质（auto 或没选过返回 null） */
+function savedVendorQuality() {
+  try { const q = JSON.parse(localStorage.getItem('saltline.settings.v1') || '{}').quality; return VENDOR_TIER[q] ? q : null; } catch { return null; }
+}
 /** HUD 上弹药箱的标记：绿色 */
 const SUPPLY_CSS = `
 .h-cm.supply, .h-wm.supply { color: #7dffb0; }
@@ -87,13 +93,22 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     renderer, scene, camera, viewCamera, lightPool, resolution, exposure: 1,
     // 原游戏的调色参数（受伤、低血量、开镜、闪白、黑场、饱和度），由 grade.js 画出来
     post: { damage: 0, lowHealth: 0, ads: 0, flash: 0, fade: 0, saturation: 1, focusDist: 0, shake: 0, wet: 0 },
-    addPrePass() {}, setQuality() {}, onLevelReady() {}, frame() {}, renderWorld() {}, stats: () => ({}),
+    addPrePass() {}, onLevelReady() {}, frame() {}, renderWorld() {}, stats: () => ({}),
+    // 原游戏设置面板里切画质（低 / 中 / 高 / 极致）：接到我们的画质档位（流畅 / 均衡 / 精细 / 极致），
+    // 分辨率、阴影、HDR 光影、柔光、环境光遮蔽、室内灯、贴图、模型细节都跟着变（以前这里是空函数，切了没反应）
+    setQuality(preset) {
+      G.quality = { ...preset };
+      const tier = VENDOR_TIER[preset?.name];
+      if (tier) app.setQuality(tier);
+    },
   };
   const G = {
     THREE, params, events: J.createEvents(), rng: J.createRng(+(params.seed || 4207)), time: { t: 0, dt: 0, frame: 0, real: 0 },
-    quality: J.resolveQuality(params.q || (MOBILE ? 'low' : 'medium')), render, renderer, scene, camera, viewCamera,
+    // 开局按玩家上次在设置里选的档位（原游戏存在 saltline.settings.v1）：枪、材质的贴图分辨率在开局时就按它生成
+    quality: J.resolveQuality(params.q || savedVendorQuality() || (MOBILE ? 'low' : 'medium')), render, renderer, scene, camera, viewCamera,
   };
   window.__G = G;
+  { const q = params.q || savedVendorQuality(); if (VENDOR_TIER[q]) app.setQuality(VENDOR_TIER[q]); }
 
   onProgress('正在生成涂装、锈迹与金属表面', 0.05);
   G.mats = await J.createMats(G);
@@ -268,11 +283,26 @@ function addCover(ctx) {
   }
 }
 
+/** 出生点朝哪：16 个方向里顺着导航往前直走最远（最多 30 米）的那个；一样远时选离原朝向近的 */
+export function openYaw(nav, st) {
+  let best = st.yaw, bestD = -1;
+  for (let k = 0; k < 16; k++) {
+    const yaw = st.yaw + (k / 16) * Math.PI * 2, dx = -Math.sin(yaw), dz = -Math.cos(yaw);
+    let d = 0;
+    while (d < 30 && clear(nav, { floor: st.floor, x: st.x + dx * (d + 0.5), z: st.z + dz * (d + 0.5), y: st.y, slope: null })
+      && clear(nav, { floor: st.floor, x: st.x + dx * (d + 0.5) - dz * 0.4, z: st.z + dz * (d + 0.5) + dx * 0.4, y: st.y, slope: null })
+      && clear(nav, { floor: st.floor, x: st.x + dx * (d + 0.5) + dz * 0.4, z: st.z + dz * (d + 0.5) - dx * 0.4, y: st.y, slope: null })) d += 0.5;
+    if (d > bestD + 0.25) { bestD = d; best = yaw; }
+  }
+  return best;
+}
+
 /** 原游戏的关卡数据：出生点、敌人出生点、室内范围、标题画面的镜头路线。目标和撤离点由 missions.js 每局填进来 */
 function buildLevel(ctx, nav) {
   const elev = (f) => ctx.layout.levels.find((l) => l.id === f)?.elev ?? 0;
   const v = (p, dy = 0) => new THREE.Vector3(p.x, (p.y ?? 0) + dy, p.z);
   const s = { ...FPS_MISSION.spawn, y: elev(FPS_MISSION.spawn.floor) };
+  s.yaw = openYaw(nav, s); // 开局正对最空的方向（原朝向 2 米外就是咖啡外摆桌椅，一推摇杆就顶住，手机上像是走不动）
   const interiorBoxes = ctx.layout.buildings.filter((b) => b.outline?.length).map((b) => {
     const xs = b.outline.map((p) => p[0]), zs = b.outline.map((p) => p[1]);
     return { min: new THREE.Vector3(Math.min(...xs), -30, Math.min(...zs)), max: new THREE.Vector3(Math.max(...xs), 80, Math.max(...zs)) };

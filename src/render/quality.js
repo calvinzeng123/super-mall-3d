@@ -55,7 +55,8 @@ export function resolveQuality(preferences, { mobile = false, pixelRatio = 1, au
   // 环境光遮蔽和白天的高光柔光都在 HDR 管线里做：HDR 光影关着，这两项不起作用
   if (!settings.hdr) settings.dayBloom = settings.ao = false;
   return { ...settings, preset: pref.preset, tier,
-    pixelRatio: Math.min(Math.max(0.65, pixelRatio || 1), settings.resolution),
+    // 手机 / 省显存档像素比最多 1.5（高画质在手机上按 2 画，显存很容易被系统回收）
+    pixelRatio: Math.min(Math.max(0.65, pixelRatio || 1), settings.resolution, mobile ? 1.5 : Infinity),
     custom: Object.keys(pref.overrides).length > 0,
     automatic: pref.preset === 'auto' && !Object.keys(pref.overrides).length,
     autoReduced: pref.preset === 'auto' && autoTier !== (mobile ? 'low' : 'high') };

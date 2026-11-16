@@ -225,3 +225,17 @@ test('路线指引：从开局点到每种目标都能铺出一条贴地路线�
     if (g.unit) assert.ok(door, `${g.unit} 找不到门`);
   }
 });
+
+test('开局朝向：正前方至少 20 米空地（以前正对 2 米外的咖啡外摆，推摇杆就顶住）', async () => {
+  const { openYaw } = await import('../src/jimao/run.js');
+  const { FPS_MISSION } = await import('../src/fps/mission-layout.js');
+  const s = { ...FPS_MISSION.spawn, y: elev(FPS_MISSION.spawn.floor) }, yaw = openYaw(nav, s);
+  const end = walkNav(nav, s.floor, [s.x, s.z], [s.x - Math.sin(yaw) * 20, s.z - Math.cos(yaw) * 20]);
+  assert.ok(Math.hypot(end.x - s.x, end.z - s.z) > 19.5, `往前只能走 ${Math.hypot(end.x - s.x, end.z - s.z).toFixed(1)} 米`);
+});
+
+test('画质：原游戏设置面板切画质会接到我们的画质档位（不再是空函数）', () => {
+  const src = readFileSync(new URL('../src/jimao/run.js', import.meta.url), 'utf8');
+  assert.ok(/setQuality\(preset\) \{[\s\S]{0,200}app\.setQuality\(tier\)/.test(src), 'render.setQuality 没接到 app.setQuality');
+  for (const [v, t] of [['low', 'low'], ['medium', 'balanced'], ['high', 'high'], ['ultra', 'ultra']]) assert.ok(src.includes(`${v}: '${t}'`), `缺 ${v} → ${t}`);
+});

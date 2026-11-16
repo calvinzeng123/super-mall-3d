@@ -117,8 +117,18 @@ const shell = (await readFile('src/shell.html', 'utf8'))
   .replace(/<script type="importmap">[\s\S]*?<\/script>/, '');
 if (!shell.includes('<!--APP-->')) throw new Error('src/shell.html 缺少 <!--APP--> 占位');
 const body = shell.replace('<!--APP-->', () => `<!-- Three.js license\n${license}\n-->\n<!-- Microsoft Rocketbox avatar license\n${peopleLicense}\n-->\n<script type="module" src="${script}"></script>`);
+// 添加到主屏幕：iOS 独立应用 + 透明状态栏全屏打开；安卓用 manifest（display: fullscreen）和图标
+for (const name of ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest']) {
+  await mkdir(path.join(output, 'icons'), { recursive: true });
+  const bytes = await readFile(`assets/icons/${name}`), relative = name === 'manifest.webmanifest' ? name : `icons/${name}`;
+  await writeFile(path.join(output, relative), bytes); files.push({ path: relative, bytes: bytes.length, sha256: sha256(bytes), kind: 'app-icon' });
+}
 const html = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n' +
   '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
+  '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n' +
+  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="云澜汇">\n' +
+  '<meta name="theme-color" content="#0b1218">\n' +
+  '<link rel="manifest" href="./manifest.webmanifest">\n<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">\n' +
   '</head>\n<body>\n' + body + '\n</body>\n</html>\n';
 await writeFile(path.join(output, 'index.html'), html);
 files.push({ path: 'index.html', bytes: Buffer.byteLength(html), sha256: sha256(html), kind: 'document' });
