@@ -103,7 +103,7 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false }
       if (ds > GUIDE.ahead) break;
       const wave = 0.5 + 0.5 * Math.cos(((r.s - t * GUIDE.speed) / 6) * Math.PI * 2);
       const fade = Math.min(1, ds / 3) * Math.min(1, (GUIDE.ahead - ds) / 10);
-      col.copy(base).multiplyScalar((0.16 + 0.42 * wave * wave) * fade);
+      col.copy(base).multiplyScalar((0.22 + 0.55 * wave * wave) * fade);
       q.setFromAxisAngle(up, Math.atan2(r.dx, r.dz));
       m4.compose(p3.set(r.x, r.y + 0.05, r.z), q, one);
       mesh.setMatrixAt(n, m4); mesh.setColorAt(n, col); n++;
