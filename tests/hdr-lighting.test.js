@@ -111,7 +111,7 @@ function fakeRenderer(probe = () => ({})) {
     calls, shadowMap: { enabled: true, needsUpdate: false }, autoClear: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.92,
     outputColorSpace: THREE.SRGBColorSpace, state: { buffers: { stencil: { setTest() {} } } },
     getSize: (v) => v.set(1280, 800), getPixelRatio: () => 1, getClearColor: (c) => c.set(0), getClearAlpha: () => 1,
-    setClearColor() {}, setClearAlpha() {}, clear() {}, setRenderTarget(t) { target = t; },
+    setClearColor() {}, setClearAlpha() {}, clear() {}, setRenderTarget(t) { target = t; }, getRenderTarget: () => target,
     render(what) { calls.push({ to: target ? target.texture.name || 'buffer' : 'screen', scene: !!what.isScene, exposure: renderer.toneMappingExposure, ...probe() }); },
   };
   return renderer;
@@ -163,6 +163,23 @@ test('HDR 光影：换成保色的色调映射；白天没开遮蔽和高光柔�
   assert.equal(renderer.toneMapping, THREE.ACESFilmicToneMapping);
   renderer.calls.length = 0; env.render();
   assert.deepEqual([renderer.calls[0].exposure, renderer.calls[0].hemi, renderer.calls[0].room], [renderer.toneMappingExposure, hemi.intensity, scene.environmentIntensity]);
+});
+
+test('极致档画进调用方的离屏图（零点突围先把目标指到自己的调色图）：不上屏，画完目标还是那张图', () => {
+  // 以前 HDR 管线最后一遍固定输出到屏幕，零点突围的调色图这一帧什么也没收到，再贴回屏幕就是一片黑（或卡在上一帧）
+  const { env, renderer } = fakeEnvironment();
+  env.setQuality(resolveQuality({ preset: 'ultra' }));
+  const outer = new THREE.WebGLRenderTarget(4, 4); outer.texture.name = 'jimao-scene';
+  renderer.setRenderTarget(outer); env.update(.1); env.render();
+  const order = renderer.calls.map((c) => `${c.scene ? 'scene' : 'quad'}>${c.to}`);
+  assert.ok(env.composer instanceof HdrPipeline);
+  assert.ok(!order.some((x) => x.endsWith('>screen')), `有一遍直接上了屏：${order.join(' ')}`);
+  assert.equal(order.at(-2), 'quad>jimao-scene', '合成好的画面交给调用方的离屏图');
+  assert.equal(order.at(-1), 'scene>jimao-scene', '文字标注也画在离屏图上');
+  assert.equal(renderer.getRenderTarget(), outer);
+  // 交出去的是线性 HDR（不带色调映射和 sRGB，调色那一步自己做）：用的是拷贝着色器，不是 OutputPass
+  assert.equal(env.composer.copy.uniforms.tDiffuse.value, env.composer.color.texture);
+  outer.dispose();
 });
 
 test('极致档：场景先画进 HDR 缓冲，再算遮蔽、合成、输出到屏幕；换档位时把缓冲放掉', () => {

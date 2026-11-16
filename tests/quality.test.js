@@ -141,3 +141,14 @@ test('daytime lighting and quality switches tolerate absent bloom, and lazy crea
   app.state={};update();assert.equal(env.bloom.threshold,.8);assert.equal(env.bloom.strength,env.night*.85);
   env.setQuality(resolveQuality({preset:'low'}));suite.dispose();residential.dispose();
 });
+
+test('select(..., { persist: false })：这一次换档不写进存储（零点突围按自己存的档位切，不改漫游的）', () => {
+  const writes = [];
+  const storage = { getItem: () => JSON.stringify({ preset: 'low' }), setItem: (k, v) => writes.push([k, v]) };
+  const q = createQualityManager({ storage });
+  assert.equal(q.select('ultra', { persist: false }).tier, 'ultra');
+  assert.equal(q.current.tier, 'ultra');
+  assert.deepEqual(writes, []);
+  q.select('high');
+  assert.deepEqual(writes, [[QUALITY_STORAGE_KEY, JSON.stringify(normalizeQuality({ preset: 'high' }))]]);
+});

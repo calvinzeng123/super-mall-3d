@@ -557,6 +557,9 @@ body.quality-low #app .panel { -webkit-backdrop-filter: blur(1.5px) saturate(.8)
     document.getElementById('fatalText').textContent = text;
     document.getElementById('fatalReload').hidden = !(opts && opts.reload);
     f.hidden = false;
+    // 零点突围的界面层（#ui）盖在 #app 上面：出错时把它藏起来，不然设置 / 暂停面板会挡住这条提示，看着就是一块黑屏
+    var ui = document.getElementById('ui');
+    if (ui && document.body.dataset.mode === 'jimao') ui.style.display = 'none';
   };
   setTimeout(function () {
     if (!window.__mallBooted) window.__mallFail('3D 引擎没有加载出来', '请用支持 WebGL 的浏览器打开完整的 mall.html 文件，或通过项目本地服务器访问开发版。');

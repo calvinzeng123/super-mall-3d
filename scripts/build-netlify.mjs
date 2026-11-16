@@ -1,6 +1,7 @@
 // Dedicated public output: only the application and the runtime assets it uses.
 // The existing single-file build remains available for offline delivery.
 import { build } from 'esbuild';
+import { execSync } from 'node:child_process';
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -82,6 +83,8 @@ const bundled = await build({
   entryPoints: ['src/main.js'], bundle: true, splitting:true, format: 'esm', minify: true,
   outdir:path.join(output,'assets'), entryNames:'[name].[hash]',chunkNames:'chunk.[hash]',metafile:true,
   target: 'es2022', write: false, legalComments: 'none',
+  // 诊断面板里显示的版本号（构建时间 + 提交），用来确认手机上跑的是不是新版本
+  define: { __JM_BUILD__: JSON.stringify(buildId()) },
   plugins: [{ name: 'local-runtime-assets', setup(builder) {
     builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people|model|cover|prop|sky)-data\.js$/ }, args => ({
       contents: replacements.get(path.basename(args.path)), loader: 'js',
@@ -134,3 +137,9 @@ await writeFile(path.join(output, 'index.html'), html);
 files.push({ path: 'index.html', bytes: Buffer.byteLength(html), sha256: sha256(html), kind: 'document' });
 await writeFile(path.join(output, 'asset-manifest.json'), JSON.stringify({ version: 1, files }, null, 2) + '\n');
 console.log(`dist/netlify: ${files.length + 1} files · ${(files.reduce((sum, file) => sum + file.bytes, 0) / 1024 / 1024).toFixed(2)} MiB · lazy launcher ${script}`);
+
+function buildId() {
+  let rev = 'nogit';
+  try { rev = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* 没有 git 也能构建 */ }
+  return `${new Date().toISOString().slice(0, 16).replace('T', ' ')} ${rev}`;
+}

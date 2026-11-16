@@ -16,6 +16,7 @@ import { createRideVehicle, rideFootprint, RIDE_SPECS } from '../src/jimao/ride-
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from '../src/jimao/ride-paths.js';
 import { buildDoorGun, DOOR_GUN } from '../src/jimao/door-gun.js';
 import { crateSites, AMMO } from '../src/jimao/ammo.js';
+import { createTouchStick, stickVector, STICK } from '../src/jimao/touch-stick.js';
 
 const L = buildPlayableLayout({ mode: 'arcade' });
 const nav = buildNav(L);
@@ -109,6 +110,9 @@ test('原游戏补丁：任务文字、交互提示、撤离点名字、外部�
   }
   assert.ok(src.includes('s && s.keepLock || r.exitLock()'), 'vendor/game.js 缺补丁：乘坐时不松开鼠标');
   for (const needle of ['s.onExtract ? s.onExtract() : ee()', 'finish() {', 'C.mounted ?', 's.extraMarkers()']) assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
+  // 触屏摇杆：「没有手指」只认 -1（iOS 的 Touch.identifier 可能是负数）
+  for (const needle of ['w === -1 ?', 'w !== -1 && (V += H', ': q === -1 && (q = V.identifier', 't.identifier === w) && ie()']) assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
+  assert.ok(!src.includes('w < 0 ?') && !src.includes('w >= 0 && (V += H'), 'vendor/game.js 还在拿 id < 0 当没手指');
 });
 
 test('撤离载具能坐进去：门口在空地上、机身占地不压墙，乘坐位置在舱里 / 车顶射击口', () => {
@@ -236,6 +240,45 @@ test('开局朝向：正前方至少 20 米空地（以前正对 2 米外的咖�
 
 test('画质：原游戏设置面板切画质会接到我们的画质档位（不再是空函数）', () => {
   const src = readFileSync(new URL('../src/jimao/run.js', import.meta.url), 'utf8');
-  assert.ok(/setQuality\(preset\) \{[\s\S]{0,200}app\.setQuality\(tier\)/.test(src), 'render.setQuality 没接到 app.setQuality');
+  assert.ok(/setQuality\(preset\) \{[\s\S]{0,240}app\.setQuality\(tier, \{ persist: false \}\)/.test(src), 'render.setQuality 没接到 app.setQuality（只改这一局，不改漫游存的画质）');
   for (const [v, t] of [['low', 'low'], ['medium', 'balanced'], ['high', 'high'], ['ultra', 'ultra']]) assert.ok(src.includes(`${v}: '${t}'`), `缺 ${v} → ${t}`);
+});
+
+test('备用摇杆：左半边按住拖动算出移动；原游戏的摇杆这一帧没给移动时顶上，给了就不管', () => {
+  assert.deepEqual(stickVector(0, -58), { x: 0, y: 1 });
+  const v = stickVector(200, 0); assert.ok(Math.abs(v.x - 1) < 1e-9 && Math.abs(v.y) < 1e-9, '超过半径按半径算');
+  const L = {}, canvas = { addEventListener(t, f) { (L[t] ||= []).push(f); }, removeEventListener() {} };
+  const fire = (t, e) => { for (const f of L[t] || []) f(e); };
+  const keepW = globalThis.innerWidth; globalThis.innerWidth = 1000;
+  try {
+    let playing = true;
+    const input = { move: { x: 0, y: 0 }, sprint: false, touch: true };
+    const stick = createTouchStick({ canvas, input, active: () => playing });
+    fire('pointerdown', { pointerType: 'touch', pointerId: -7, clientX: 120, clientY: 500 });
+    fire('pointermove', { pointerId: -7, clientX: 120, clientY: 440 }); // 往上推 60 像素 = 推满往前
+    assert.equal(stick.apply(), true); assert.ok(input.move.y > 0.99 && input.sprint, '推满往前：走 + 冲刺');
+    input.move = { x: 0.3, y: 0.5 }; input.sprint = false;
+    assert.equal(stick.apply(), false); assert.deepEqual(input.move, { x: 0.3, y: 0.5 }, '原游戏的摇杆在工作时不覆盖');
+    input.move = { x: 0, y: 0 }; playing = false;
+    assert.equal(stick.apply(), false, '暂停 / 菜单里不动');
+    playing = true;
+    fire('pointerdown', { pointerType: 'touch', pointerId: 3, clientX: 800, clientY: 500 }); // 右半边的手指不归摇杆
+    fire('pointermove', { pointerId: 3, clientX: 860, clientY: 500 });
+    assert.equal(stick.vector.x, 0);
+    fire('pointerup', { pointerId: -7 });
+    assert.equal(stick.held, false); assert.equal(stick.apply(), false);
+    fire('pointerdown', { pointerType: 'mouse', pointerId: 1, clientX: 100, clientY: 500 });
+    assert.equal(stick.held, false, '鼠标不当摇杆');
+    assert.equal(STICK.zone, 0.45, '跟原游戏的摇杆区一样是左边 45%');
+  } finally { globalThis.innerWidth = keepW; }
+});
+
+test('低帧率：玩家按真实间隔分小步走（敌人照旧一步）；画质切换不改漫游存的档位；手机贴图封顶 1024', () => {
+  const src = readFileSync(new URL('../src/jimao/run.js', import.meta.url), 'utf8');
+  assert.match(src, /function stepPlayer\(dt, gap\)/);
+  assert.match(src, /Math\.min\(Math\.max\(gap, dt\), 0\.15\)/);
+  assert.match(src, /stepPlayer\(dt, gap\); if \(!director\.gunActive\) run\('weapon', dt\); run\('enemies', dt\)/);
+  assert.match(src, /app\.setQuality\(VENDOR_TIER\[q\], \{ persist: false \}\)/);
+  assert.match(src, /MOBILE && q && q\.tex > 1024/);
+  assert.match(src, /stick\.apply\(\)/);
 });

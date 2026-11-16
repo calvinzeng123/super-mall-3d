@@ -124,6 +124,8 @@ export class HdrPipeline {
 
   render() {
     const { renderer, scene, camera } = this;
+    // 调用方可能已经把目标指到自己的离屏图（零点突围 grade.js 先画进离屏图、再统一调色上屏）：画完交回给它，不直接上屏
+    const outer = renderer.getRenderTarget?.() ?? null;
     this.targets();
     if (!this.ao.enabled && this.aoParts) this.disposeAo();
     const autoClear = renderer.autoClear, clearColor = renderer.getClearColor(new THREE.Color()), clearAlpha = renderer.getClearAlpha();
@@ -153,8 +155,13 @@ export class HdrPipeline {
     this.fullscreen(this.copy, this.color);
     if (this.bloomOn && this.bloom.strength > 0.001) this.bloom.render(renderer, null, this.color, 0, false);
     renderer.autoClear = true;
-    this.output.render(renderer, null, this.color);
-    renderer.setRenderTarget(null);
+    if (outer) {
+      // 调用方自己做色调映射和 sRGB：交给它线性 HDR（遮蔽、柔光已经合进 this.color）
+      const u = this.copy.uniforms;
+      u.tDiffuse.value = this.color.texture; u.tAo.value = this.white; u.aoIntensity.value = 0;
+      this.fullscreen(this.copy, outer);
+    } else this.output.render(renderer, null, this.color);
+    renderer.setRenderTarget(outer);
     renderer.setClearColor(clearColor, clearAlpha);
     renderer.autoClear = autoClear;
   }

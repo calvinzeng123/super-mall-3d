@@ -717,7 +717,7 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
   const app = {
     ctx, state, renderer, scene, camera, controls, env, emit,
     get quality() { return qualityManager.current; },
-    setQuality(preset) { return qualityManager.select(preset); },
+    setQuality(preset, opts) { return qualityManager.select(preset, opts); },
     customizeQuality(patch) { return qualityManager.customize(patch); },
     onQuality(fn) { return qualityManager.subscribe(fn); },
     ensureTowerFloor,

@@ -48,6 +48,7 @@ export function createGrade(renderer, post, { samples = 4, vignette = 0.12 } = {
     depthTest: false, depthWrite: false,
   });
   const quad = new FullScreenQuad(material), size = new THREE.Vector2();
+  let misses = 0;
   return {
     target,
     /** 这一帧往离屏图里画 */
@@ -56,14 +57,18 @@ export function createGrade(renderer, post, { samples = 4, vignette = 0.12 } = {
       if (target.width !== size.x || target.height !== size.y) target.setSize(size.x, size.y);
       renderer.setRenderTarget(target);
     },
-    /** 贴回屏幕 */
+    /** 贴回屏幕。返回 false：这一帧的世界没画进离屏图（某条后处理直接上了屏），这时不拿空图 / 旧图盖住屏幕，宁可这一帧不调色 */
     end(time) {
+      if (renderer.getRenderTarget() !== target) { renderer.setRenderTarget(null); misses++; return false; }
       Object.assign(uniforms.uAspect, { value: size.x / Math.max(1, size.y) });
       uniforms.uDamage.value = post.damage || 0; uniforms.uLowHealth.value = post.lowHealth || 0; uniforms.uAds.value = post.ads || 0;
       uniforms.uFlash.value = post.flash || 0; uniforms.uFade.value = post.fade || 0; uniforms.uSaturation.value = post.saturation ?? 1; uniforms.uTime.value = time;
       renderer.setRenderTarget(null);
       quad.render(renderer);
+      return true;
     },
+    /** 有多少帧因为没画进离屏图而跳过了调色（诊断用） */
+    get misses() { return misses; },
     dispose() { target.dispose(); material.dispose(); quad.dispose(); },
   };
 }

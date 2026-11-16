@@ -185,3 +185,70 @@ test('机械猎犬贴地走（moveFeet）：被墙挡住，不会从楼梯井掉
   assert.equal(pos.y, s.y);
   assert.ok(physics.lineOfSight(new THREE.Vector3(s.x, s.y + 1, s.z), new THREE.Vector3(pos.x, pos.y + 1, pos.z)) || Math.hypot(pos.x - s.x, pos.z - s.z) > 1);
 });
+
+// ---- 触屏摇杆：iOS 的 Touch.identifier 可能是负数，原游戏以前拿「id < 0」当没手指，摇杆圈出来了人却不动 ----
+function fakeEl(tag = 'div') {
+  const L = {}, kids = [], q = new Map();
+  return {
+    tagName: tag.toUpperCase(), style: {}, children: kids,
+    classList: { s: new Set(), add(c) { this.s.add(c); }, remove(c) { this.s.delete(c); }, toggle(c, on) { (on ?? !this.s.has(c)) ? this.s.add(c) : this.s.delete(c); }, contains(c) { return this.s.has(c); } },
+    addEventListener(t, f) { (L[t] ||= []).push(f); }, removeEventListener() {},
+    dispatch(t, ev) { for (const f of L[t] || []) f(ev); },
+    appendChild(c) { kids.push(c); return c; }, focus() {},
+    querySelector(sel) { if (!q.has(sel)) q.set(sel, fakeEl()); return q.get(sel); },
+    set innerHTML(v) { this.html = v; }, get innerHTML() { return this.html; },
+  };
+}
+function withFakeDom(t) {
+  const keep = { addEventListener: globalThis.addEventListener, removeEventListener: globalThis.removeEventListener, innerWidth: globalThis.innerWidth, innerHeight: globalThis.innerHeight, document: globalThis.document };
+  const win = {}, ui = fakeEl();
+  globalThis.addEventListener = (type, f) => { (win[type] ||= []).push(f); };
+  globalThis.removeEventListener = () => {};
+  globalThis.innerWidth = 1024; globalThis.innerHeight = 720;
+  globalThis.document = { getElementById: (id) => (id === 'ui' ? ui : null), createElement: (tag) => fakeEl(tag), addEventListener() {}, documentElement: fakeEl('html'), pointerLockElement: null };
+  t.after(() => { for (const [k, v] of Object.entries(keep)) { if (v === undefined) delete globalThis[k]; else globalThis[k] = v; } });
+  return { win, ui };
+}
+const ev = (changed, touches = changed) => ({ preventDefault() {}, stopPropagation() {}, changedTouches: changed, touches });
+
+test('触屏摇杆：Touch.identifier 是负数（iOS）也能走；开火、右半边转视角照常', (t) => {
+  const { win, ui } = withFakeDom(t);
+  for (const id of [0, 3, 2147483000, 2900000000 | 0, -2]) {
+    for (const k of Object.keys(win)) delete win[k];
+    const canvas = fakeEl('canvas'), input = J.createInput({ renderer: { domElement: canvas }, events: { emit() {} } });
+    const a = { identifier: id, clientX: 120, clientY: 520 };
+    for (const f of win.touchstart || []) f(ev([a]));
+    input.setGameplay(true);
+    canvas.dispatch('touchstart', ev([a]));
+    const a2 = { ...a, clientY: 460 }; // 往上推 60 像素 = 推满往前
+    canvas.dispatch('touchmove', ev([a2]));
+    input.update(1 / 30);
+    assert.ok(input.move.y > 0.9, `id ${id}：往前推满，移动只有 ${input.move.y}`);
+    // 右半边再按一根手指转视角，摇杆那根还按着
+    const b = { identifier: id + 7, clientX: 800, clientY: 400 };
+    canvas.dispatch('touchstart', ev([b], [a2, b]));
+    canvas.dispatch('touchmove', ev([{ ...b, clientX: 840 }], [a2, { ...b, clientX: 840 }]));
+    assert.ok(input.look.dx > 0, `id ${id}：右半边拖动没转视角`);
+    input.update(1 / 30);
+    assert.ok(input.move.y > 0.9, `id ${id}：多按一根手指后摇杆松了`);
+    // 开火键
+    const fire = ui.children.at(-1).querySelector('.t-fire'), f0 = { identifier: id + 9, clientX: 950, clientY: 600 };
+    fire.dispatch('touchstart', ev([f0])); input.update(1 / 30); assert.equal(input.fire, true, `id ${id}：开火键按不下`);
+    fire.dispatch('touchend', ev([f0])); input.update(1 / 30); assert.equal(input.fire, false, `id ${id}：开火键松不开`);
+    input.endFrame();
+  }
+});
+
+test('触屏摇杆：摇杆那根手指的 touchend 被系统吞掉，下一根手指照样能接手', (t) => {
+  const { win } = withFakeDom(t);
+  const canvas = fakeEl('canvas'), input = J.createInput({ renderer: { domElement: canvas }, events: { emit() {} } });
+  const A = { identifier: -500, clientX: 120, clientY: 520 }, B = { identifier: -499, clientX: 130, clientY: 520 };
+  for (const f of win.touchstart || []) f(ev([A]));
+  input.setGameplay(true);
+  canvas.dispatch('touchstart', ev([A]));
+  canvas.dispatch('touchstart', ev([B], [B])); // A 已经不在屏幕上了
+  canvas.dispatch('touchmove', ev([{ ...B, clientY: 460 }], [{ ...B, clientY: 460 }]));
+  input.update(1 / 30);
+  assert.ok(input.move.y > 0.9, `换手指以后移动只有 ${input.move.y}`);
+  assert.equal(input.look.dx, 0, '左半边的新手指被当成了转视角');
+});

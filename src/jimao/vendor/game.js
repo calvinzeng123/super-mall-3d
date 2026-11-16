@@ -6774,7 +6774,7 @@ function v_(i) {
     addEventListener("touchstart", () => {
       E = performance.now(), K();
     }, { passive: true, capture: true }), e.addEventListener("touchstart", (P) => {
-      if (P.preventDefault(), !!r) for (let V of P.changedTouches) V.clientX < innerWidth * 0.45 && w < 0 ? (w = V.identifier, S = V.clientX, z = V.clientY, H = O = 0, M && (M.stick.style.transform = `translate3d(${S}px,${z}px,0)`, M.nub.style.transform = "translate3d(0,0,0)", M.stick.classList.add("on"))) : q < 0 && (q = V.identifier, U = V.clientX, T = V.clientY);
+      if (P.preventDefault(), w !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === w) && ie(), q !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === q) && (q = -1), !!r) for (let V of P.changedTouches) V.clientX < innerWidth * 0.45 && w === -1 ? (w = V.identifier, S = V.clientX, z = V.clientY, H = O = 0, M && (M.stick.style.transform = `translate3d(${S}px,${z}px,0)`, M.nub.style.transform = "translate3d(0,0,0)", M.stick.classList.add("on"))) : q === -1 && (q = V.identifier, U = V.clientX, T = V.clientY);
     }, { passive: false }), e.addEventListener("touchmove", (P) => {
       if (P.preventDefault(), !!r) for (let V of P.changedTouches) if (V.identifier === w) {
         let Y = V.clientX - S, L = V.clientY - z, Z = Math.hypot(Y, L);
@@ -6822,7 +6822,7 @@ function v_(i) {
       }
       let V = 0, Y = 0, L = false;
       if (r) {
-        V = (n.has("right") ? 1 : 0) - (n.has("left") ? 1 : 0), Y = (n.has("forward") ? 1 : 0) - (n.has("back") ? 1 : 0), L = n.has("sprint"), w >= 0 && (V += H, Y += O, Math.hypot(H, O) > 0.93 && O > 0.8 && (L = true)), V += re, Y += $;
+        V = (n.has("right") ? 1 : 0) - (n.has("left") ? 1 : 0), Y = (n.has("forward") ? 1 : 0) - (n.has("back") ? 1 : 0), L = n.has("sprint"), w !== -1 && (V += H, Y += O, Math.hypot(H, O) > 0.93 && O > 0.8 && (L = true)), V += re, Y += $;
         let Z = Math.hypot(V, Y);
         Z > 1 && (V /= Z, Y /= Z);
         let J = (n.has("turnR") ? 1 : 0) - (n.has("turnL") ? 1 : 0), oe = (n.has("turnD") ? 1 : 0) - (n.has("turnU") ? 1 : 0);

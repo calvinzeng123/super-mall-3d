@@ -8,6 +8,8 @@ import * as J from './vendor/game.js';
 import { UI_CSS } from './vendor/ui-css.js';
 import { createMapPhysics } from './physics.js';
 import { createGrade } from './grade.js';
+import { createTouchStick, TOUCH_STICK_CSS } from './touch-stick.js';
+import { createDiag, DIAG_CSS } from './diag.js';
 import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { addSoldiers } from './soldier.js';
@@ -33,6 +35,8 @@ const TITLE_CSS = `
 /** 原游戏的画质名 → 我们的画质档位 */
 const VENDOR_TIER = Object.freeze({ low: 'low', medium: 'balanced', high: 'high', ultra: 'ultra' });
 /** 玩家在原游戏设置里选过的画质（auto 或没选过返回 null） */
+/** 手机上枪和材质的贴图最多 1024：2048 那套要多占约 80MB 显存，iOS 容易回收（手机屏幕上看不出差别） */
+const capTex = (q) => (MOBILE && q && q.tex > 1024 ? { ...q, tex: 1024 } : q);
 function savedVendorQuality() {
   try { const q = JSON.parse(localStorage.getItem('saltline.settings.v1') || '{}').quality; return VENDOR_TIER[q] ? q : null; } catch { return null; }
 }
@@ -59,7 +63,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -98,19 +102,21 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     addPrePass() {}, onLevelReady() {}, frame() {}, renderWorld() {}, stats: () => ({}),
     // 原游戏设置面板里切画质（低 / 中 / 高 / 极致）：接到我们的画质档位（流畅 / 均衡 / 精细 / 极致），
     // 分辨率、阴影、HDR 光影、柔光、环境光遮蔽、室内灯、贴图、模型细节都跟着变（以前这里是空函数，切了没反应）
+    // 只改这一局（persist: false）：原游戏自己存了档位，不再顺带改掉漫游存的画质
     setQuality(preset) {
-      G.quality = { ...preset };
+      G.quality = capTex({ ...preset });
       const tier = VENDOR_TIER[preset?.name];
-      if (tier) app.setQuality(tier);
+      if (tier) app.setQuality(tier, { persist: false });
     },
   };
   const G = {
     THREE, params, events: J.createEvents(), rng: J.createRng(+(params.seed || 4207)), time: { t: 0, dt: 0, frame: 0, real: 0 },
     // 开局按玩家上次在设置里选的档位（原游戏存在 saltline.settings.v1）：枪、材质的贴图分辨率在开局时就按它生成
-    quality: J.resolveQuality(params.q || savedVendorQuality() || (MOBILE ? 'low' : 'medium')), render, renderer, scene, camera, viewCamera,
+    quality: capTex(J.resolveQuality(params.q || savedVendorQuality() || (MOBILE ? 'low' : 'medium'))), render, renderer, scene, camera, viewCamera,
   };
   window.__G = G;
-  { const q = params.q || savedVendorQuality(); if (VENDOR_TIER[q]) app.setQuality(VENDOR_TIER[q]); }
+  // 画面档位跟原游戏存的档位走；手机上没选过就按流畅（不跟着漫游存的那一档，免得漫游选了极致、这里开局就很重）
+  { const q = params.q || savedVendorQuality() || (MOBILE ? 'low' : null); if (VENDOR_TIER[q]) app.setQuality(VENDOR_TIER[q], { persist: false }); }
 
   onProgress('正在生成涂装、锈迹与金属表面', 0.05);
   G.mats = await J.createMats(G);
@@ -155,6 +161,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   director.roll();
   G.missions = director; G.ammo = ammo; G.guide = guide;
   G.game = J.createGame(G);
+  // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
+  const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui });
   async function guarded(name, make) {
     try { return await make(); } catch (error) { console.error(`[零点突围] ${name} 没有加载成功，改用空模块`, error); return J.stubs[name](); }
   }
@@ -173,22 +181,37 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     app.state.explore = { building, level, near, metro: false, under: s.y < -0.5, position: { x: s.x, z: s.z } };
     app.refresh();
   }
-  const run = (name, dt) => { const m = G[name]; if (m?.update) try { m.update(dt); } catch (e) { if (!run.err[name]) { run.err[name] = 1; console.error(`[零点突围] ${name}.update 出错`, e); } } };
-  run.err = {};
+  // 每个模块各自兜住报错（只打一次控制台）；报错的名字和第一条消息留在 run.err / run.msg，诊断面板里能看到
+  const fail = (name, e, what) => { if (!run.err[name]) { run.err[name] = 1; run.msg[name] = String(e?.message || e).slice(0, 60); console.error(`[零点突围] ${what}`, e); } };
+  const run = (name, dt) => { const m = G[name]; if (m?.update) try { m.update(dt); } catch (e) { fail(name, e, `${name}.update 出错`); } };
+  run.err = {}; run.msg = {};
+  // 帧率掉到 20 以下时，每帧的步长封顶 0.05 秒会让人走得比实际时间慢（10fps 只剩一半速度）：
+  // 只有玩家按真实间隔（最多 0.15 秒）分几小步走完，敌人、特效照旧一步（不再加重这一帧）。转头只算一次。坐车 / 用机枪时不拆。
+  let lastNow = 0;
+  function stepPlayer(dt, gap) {
+    const span = gap > 0.5 ? dt : Math.min(Math.max(gap, dt), 0.15), steps = Math.max(1, Math.ceil(span / 0.05 - 1e-6));
+    if (steps === 1 || director.riding || director.gunActive) { run('player', dt); return; }
+    const L = G.input.look, dx = L.dx, dy = L.dy;
+    for (let i = 0; i < steps; i++) { run('player', span / steps); L.dx = L.dy = 0; }
+    L.dx = dx; L.dy = dy; // 枪的晃动还要用这一帧的转头量
+  }
   const dynamic = {
     name: 'jimao-session',
     update(rawDt) {
-      const dt = Math.min(rawDt, 0.05);
+      const dt = Math.min(rawDt, 0.05), now = performance.now(), gap = lastNow ? (now - lastNow) / 1000 : rawDt;
+      lastNow = now;
+      diag.begin(rawDt, dt);
       Object.assign(G.time, { dt, t: G.time.t + dt, real: performance.now() / 1000, frame: G.time.frame + 1 });
       renderer.getDrawingBufferSize(resolution);
       run('input', dt);
+      try { stick.apply(); } catch (e) { fail('stick', e, '备用摇杆出错'); }
       let active = false;
-      try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { if (!run.err.game) { run.err.game = 1; console.error('[零点突围] game.update 出错', e); } }
+      try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { fail('game', e, 'game.update 出错'); }
       // 坐在载具上：玩家更新之前先把载具和玩家摆到这一帧的位置；用舱门机枪时步枪不更新（不开火、不显示）
-      if (active) { try { director.prePlayer(dt); } catch (e) { if (!run.err.ride) { run.err.ride = 1; console.error('[零点突围] 载具出错', e); } } }
-      if (active) { run('player', dt); if (!director.gunActive) run('weapon', dt); run('enemies', dt); }
-      if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { if (!run.err.ammo) { run.err.ammo = 1; console.error('[零点突围] 弹药补给出错', e); } } }
-      if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { if (!run.err.guide) { run.err.guide = 1; console.error('[零点突围] 路线指引出错', e); } } }
+      if (active) { try { director.prePlayer(dt); } catch (e) { fail('ride', e, '载具出错'); } }
+      if (active) { stepPlayer(dt, gap); if (!director.gunActive) run('weapon', dt); run('enemies', dt); }
+      if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
+      if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { fail('guide', e, '路线指引出错'); } }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
       // 任务物件动画、歼灭任务增援；撤离时镜头登机、坐进直升机 / 接应车里（missions.js 给出位置、朝向和压暗）
       try {
@@ -199,7 +222,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
           G.weapon?.setVisible?.(false);
         }
         if (view) render.post.fade = view.fade ?? 0;
-      } catch (e) { if (!run.err.missions) { run.err.missions = 1; console.error('[零点突围] missions.update 出错', e); } }
+      } catch (e) { fail('missions', e, 'missions.update 出错'); }
       run('audio', dt); run('hud', dt);
       lightPool.update(dt);
       syncVisibility();
@@ -221,7 +244,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const grade = createGrade(renderer, render.post, { samples: MOBILE ? 2 : 4 });
   const env = app.env, baseRender = env.render;
   env.render = function () { grade.begin(); return baseRender.call(this); };
-  const finish = () => grade.end(G.time.t);
+  // 诊断面板（diag.js）：设置里「诊断信息 · 显示」或 ?diag=1
+  const diag = createDiag({ app, G, renderer, grade, stick, run, params });
+  const finish = () => diag.end(grade.end(G.time.t));
+  G.touchStick = stick; G.diag = diag;
   ctx.afterRender.push(drawView, finish);
   // 界面布局：设置面板里加一行「界面布局 · 调整」
   const layoutEditor = createLayoutEditor(ui);
@@ -231,6 +257,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     row.innerHTML = '<label id="l-layout">界面布局</label><button class="btn small" data-act="jm-layout" aria-labelledby="l-layout">拖动调整</button>';
     row.querySelector('button').addEventListener('click', () => layoutEditor.open());
     fsRow.after(row);
+    const dRow = document.createElement('div'); dRow.className = 'row';
+    dRow.innerHTML = '<label id="l-diag">诊断信息</label><button class="btn small" data-act="jm-diag" aria-labelledby="l-diag"></button>';
+    const dBtn = dRow.querySelector('button'), dLabel = () => { dBtn.textContent = diag.on ? '隐藏' : '显示'; };
+    dLabel(); dBtn.addEventListener('click', () => { diag.toggle(); dLabel(); });
+    row.after(dRow);
   }
 
   if (params.autostart || params.shot) G.game.start({ skipIntro: true });
@@ -242,7 +273,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     dispose() {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
-      env.render = baseRender; grade.dispose(); layoutEditor.dispose();
+      env.render = baseRender; grade.dispose(); layoutEditor.dispose(); diag.dispose(); stick.dispose();
       ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };

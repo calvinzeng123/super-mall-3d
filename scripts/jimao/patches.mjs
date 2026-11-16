@@ -114,6 +114,20 @@ export const PATCHES = [
   ['阵亡统计：已完成目标',
     '已切断中继',
     '已完成目标'],
+  // ---- 触屏摇杆：iOS 的 Touch.identifier 可能是负数（WebKit 里是从随机数起步的无符号计数器，到 JS 里按 long 读出来），
+  //      原游戏拿「id < 0」当「没有手指」，负数 id 按下去摇杆圈会出来、跟着拇指走，但移动一直是 0。只认 -1 为空 ----
+  ['摇杆接手指：只认 -1 为空（负数 id 也是手指）',
+    'innerWidth * 0.45 && w < 0 ?',
+    'innerWidth * 0.45 && w === -1 ?'],
+  ['摇杆位移算进移动：只认 -1 为空',
+    'w >= 0 && (V += H, Y += O',
+    'w !== -1 && (V += H, Y += O'],
+  ['右半边拖动转视角：只认 -1 为空',
+    ': q < 0 && (q = V.identifier',
+    ': q === -1 && (q = V.identifier'],
+  ['新手指按下时，丢掉已经不在屏幕上的摇杆 / 转视角手指（系统手势吞掉 touchend 时不会卡住）',
+    'if (P.preventDefault(), !!r) for (let V of P.changedTouches) V.clientX',
+    'if (P.preventDefault(), w !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === w) && ie(), q !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === q) && (q = -1), !!r) for (let V of P.changedTouches) V.clientX'],
 ];
 
 /** 打补丁；返回 { code, applied }。有一条没命中或命中不止一次就抛错。 */

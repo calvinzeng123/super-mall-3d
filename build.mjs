@@ -3,6 +3,7 @@
 //   dist/artifact.html  发布片段（无 doctype/head/body，供 Artifact 包装）
 //   dist/mall.html      完整单文件页面，可双击打开
 import { build } from 'esbuild';
+import { execSync } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
@@ -79,6 +80,8 @@ const out = await build({
   target: 'es2022',
   write: false,
   legalComments: 'none',
+  // 诊断面板里显示的版本号（构建时间 + 提交），用来确认手机上跑的是不是新版本
+  define: { __JM_BUILD__: JSON.stringify(buildId()) },
   plugins:[{name:'phone-offline-assets',setup(b){
     b.onLoad({filter:/[\\/]fps[\\/]model-data\.js$/},()=>({contents:`export const FPS_MODEL_ASSETS = ${JSON.stringify(embeddedFPS)};`,loader:'js'}));
     b.onLoad({filter:/[\\/]cover-data\.js$/},()=>({contents:`export const COVER_URL = ${JSON.stringify(coverURL)};`,loader:'js'}));
@@ -112,4 +115,10 @@ function wrap(body) {
     '<meta name="theme-color" content="#0b1218">\n' +
     '</head>\n<body>\n' + body + '\n</body>\n</html>\n'
   );
+}
+
+function buildId() {
+  let rev = 'nogit';
+  try { rev = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* 没有 git 也能构建 */ }
+  return `${new Date().toISOString().slice(0, 16).replace('T', ' ')} ${rev}`;
 }

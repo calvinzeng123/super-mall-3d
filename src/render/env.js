@@ -331,7 +331,9 @@ export class Environment {
   render() {
     const { renderer, scene, camera } = this;
     camera.layers.set(0);
-    const nightBloom = this.bloomEnabled && this.night > 0.02;
+    // 零点突围先把目标指到自己的离屏图：老的 EffectComposer（夜间柔光、不开 HDR）会直接上屏，这时不走它
+    const outer = renderer.getRenderTarget?.() ?? null;
+    const nightBloom = this.bloomEnabled && this.night > 0.02 && !(outer && !this.hdr);
     if (this.hdr || this.lamp > 0) {
       const restore = this.grade();
       if (this.hdr && (nightBloom || this.dayBloom || this.aoEnabled)) {

@@ -78,10 +78,11 @@ export function createQualityManager({ mobile = false, pixelRatio = 1, storage }
   return {
     get current() { return snapshot(); },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    select(preset) {
+    /** persist: false 只改这一次（零点突围按自己存的画质切，不改漫游存的那一档） */
+    select(preset, { persist = true } = {}) {
       pref = normalizeQuality({ preset });
       autoTier = mobile ? 'low' : 'high';
-      return change(true);
+      return change(persist);
     },
     customize(patch) {
       pref = normalizeQuality({ ...pref, overrides: { ...pref.overrides, ...patch } });
