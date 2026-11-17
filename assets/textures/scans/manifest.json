@@ -1,0 +1,1129 @@
+{
+  "version": 1,
+  "source": "Poly Haven, ambientCG",
+  "license": "CC0-1.0",
+  "licenseLegalCode": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+  "credit": "Textures from Poly Haven and ambientCG (CC0). Downloaded once by scripts/textures/fetch-scans.py and self-hosted; no runtime API requests.",
+  "totalImageBytes": 6292315,
+  "assets": [
+    {
+      "id": "carpet_loop",
+      "name": "Carpet 016",
+      "label": "圈绒地毯",
+      "use": "商场、酒店、住宅的地毯地面（亚麻、亚麻黄）",
+      "meters": [
+        1.7,
+        1.7
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Carpet016",
+      "sourceUrl": "https://ambientcg.com/a/Carpet016",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        1700,
+        1700
+      ],
+      "processing": "colour mean normalised to rgb(230, 227, 222), contrast ×1.15; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        230,
+        227,
+        222
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/carpet_loop/color.jpg",
+          "bytes": 212143,
+          "sha256": "70da433e7cc48ceefc5ef5615593a5ca66f738cf62cba7aaafe523a30d88b835",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Carpet016_1K-JPG.zip",
+          "sourceFile": "Carpet016_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "b9e67b5d42cb47cead082dedae3767ae228175c857b6b3af6fe7bd4e69237b81",
+          "sourceBytes": 1207660
+        },
+        "normal": {
+          "path": "assets/textures/scans/carpet_loop/normal.jpg",
+          "bytes": 136881,
+          "sha256": "39c8017c5d08a1e3b8a91ea31bc7f0588567ae4c522a3b63cec905597feab336",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Carpet016_1K-JPG.zip",
+          "sourceFile": "Carpet016_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "b9e67b5d42cb47cead082dedae3767ae228175c857b6b3af6fe7bd4e69237b81",
+          "sourceBytes": 2179963
+        }
+      }
+    },
+    {
+      "id": "carpet_fleck",
+      "name": "Carpet 012",
+      "label": "混纺点纹地毯",
+      "use": "商场地毯地面（海蓝、鼠尾草、陶土三种色）",
+      "meters": [
+        1.4,
+        1.4
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Carpet012",
+      "sourceUrl": "https://ambientcg.com/a/Carpet012",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "colour mean normalised to rgb(230, 227, 222), contrast ×0.7, desaturated 0.85; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        230,
+        227,
+        222
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/carpet_fleck/color.jpg",
+          "bytes": 538653,
+          "sha256": "d17951abd78d1d7107902a2a6b8dea4f46953ebf60f24c7f8ebb39ce6cd535b0",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Carpet012_1K-JPG.zip",
+          "sourceFile": "Carpet012_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "f5c459f278a3b50dc5c2bf535b8c3b6fd4bb6fc458c836b64023961b167fe4f6",
+          "sourceBytes": 1765438
+        },
+        "normal": {
+          "path": "assets/textures/scans/carpet_fleck/normal.jpg",
+          "bytes": 216323,
+          "sha256": "84a1884e3dbbec560b01c8f667e2ea3713528501c0a7d4154245f1de4deda985",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Carpet012_1K-JPG.zip",
+          "sourceFile": "Carpet012_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "f5c459f278a3b50dc5c2bf535b8c3b6fd4bb6fc458c836b64023961b167fe4f6",
+          "sourceBytes": 2648306
+        }
+      }
+    },
+    {
+      "id": "terrazzo_grey",
+      "name": "Terrazzo 005",
+      "label": "灰白水磨石",
+      "use": "地铁站厅、站台和商场的冷色水磨石地面",
+      "meters": [
+        1.6,
+        1.6
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Terrazzo005",
+      "sourceUrl": "https://ambientcg.com/a/Terrazzo005",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "source tiled 2×2 to make the grain finer; cut into 2×2 panels with joints (each panel sampled from a different offset of the seamless source); colour mean normalised to rgb(223, 222, 218), contrast ×0.55; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        223,
+        222,
+        218
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/terrazzo_grey/color.jpg",
+          "bytes": 351305,
+          "sha256": "faa3ef83e2b3d15a49ff8876cdd3e2c2aedd4244bc4fec5e8ae8072a1eb1b6b3",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Terrazzo005_1K-JPG.zip",
+          "sourceFile": "Terrazzo005_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "d8b28aa460137005f1942399985d70f459c898653fd0ed3a683192c28844ec5a",
+          "sourceBytes": 1458455
+        }
+      }
+    },
+    {
+      "id": "terrazzo_warm",
+      "name": "Terrazzo 011",
+      "label": "暖色水磨石",
+      "use": "商场的暖色水磨石地面",
+      "meters": [
+        1.6,
+        1.6
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Terrazzo011",
+      "sourceUrl": "https://ambientcg.com/a/Terrazzo011",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "source tiled 2×2 to make the grain finer; cut into 2×2 panels with joints (each panel sampled from a different offset of the seamless source); colour mean normalised to rgb(200, 190, 172), contrast ×0.7; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        200,
+        190,
+        172
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/terrazzo_warm/color.jpg",
+          "bytes": 207859,
+          "sha256": "0c36e84fdc739609ac2ee77b29713e94d044641d76ea9c43cf099d1ebd1aa10a",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Terrazzo011_1K-JPG.zip",
+          "sourceFile": "Terrazzo011_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "0cd22b5078ca608d91125e7244aaaf0c453d72b19bf0a5dde722d67b17943669",
+          "sourceBytes": 1032465
+        }
+      }
+    },
+    {
+      "id": "plaza_pavers",
+      "name": "Paving Stones 128",
+      "label": "浅色错缝广场砖",
+      "use": "一期室外广场和入口铺地",
+      "meters": [
+        3.5,
+        3.5
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "PavingStones128",
+      "sourceUrl": "https://ambientcg.com/a/PavingStones128",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        3500,
+        3500
+      ],
+      "processing": "colour mean normalised to rgb(237, 234, 229), contrast ×0.5; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        237,
+        234,
+        229
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/plaza_pavers/color.jpg",
+          "bytes": 135409,
+          "sha256": "16ab4a54a1a765ed5eb8c41a7cec66c5a002c81bb97e41e934e64e01664104de",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PavingStones128_1K-JPG.zip",
+          "sourceFile": "PavingStones128_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "0a507f47fa86318ded7c128c1b7548ac5d6a50ae233905c2015dc2f704ac0d35",
+          "sourceBytes": 1270215
+        },
+        "normal": {
+          "path": "assets/textures/scans/plaza_pavers/normal.jpg",
+          "bytes": 342350,
+          "sha256": "21ac01a9e86dce2f05efcdc4d65f2b481b0fd51b342f1a192acf1b6a35896897",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PavingStones128_1K-JPG.zip",
+          "sourceFile": "PavingStones128_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "0a507f47fa86318ded7c128c1b7548ac5d6a50ae233905c2015dc2f704ac0d35",
+          "sourceBytes": 1936800
+        }
+      }
+    },
+    {
+      "id": "stone_slabs",
+      "name": "Paving Stones 136",
+      "label": "浅色大板石材",
+      "use": "屋顶花园地面、石材铺地",
+      "meters": [
+        3.0,
+        3.0
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "PavingStones136",
+      "sourceUrl": "https://ambientcg.com/a/PavingStones136",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "colour mean normalised to rgb(227, 224, 217), contrast ×0.8, desaturated 0.5; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        227,
+        224,
+        217
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/stone_slabs/color.jpg",
+          "bytes": 176336,
+          "sha256": "ed1419e5c1e2d65d73bd40770c29e287f379fca7096e613f108e57d563e4fdf5",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PavingStones136_1K-JPG.zip",
+          "sourceFile": "PavingStones136_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "a0934b008683333265e061319aa1ceb018b3a721969147606415033b27a13ae3",
+          "sourceBytes": 1192545
+        },
+        "normal": {
+          "path": "assets/textures/scans/stone_slabs/normal.jpg",
+          "bytes": 25554,
+          "sha256": "9a9268f5d6e1099ec95dd0ae9ce2212a374886f8bdaa5aeaff5f1cdb086522be",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PavingStones136_1K-JPG.zip",
+          "sourceFile": "PavingStones136_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "a0934b008683333265e061319aa1ceb018b3a721969147606415033b27a13ae3",
+          "sourceBytes": 1210149
+        }
+      }
+    },
+    {
+      "id": "cobble_fan",
+      "name": "Paving Stones 150",
+      "label": "扇形小方石",
+      "use": "三期街巷的石块路面",
+      "meters": [
+        1.8,
+        1.8
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "PavingStones150",
+      "sourceUrl": "https://ambientcg.com/a/PavingStones150",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        900,
+        900
+      ],
+      "processing": "colour mean normalised to rgb(134, 123, 111), contrast ×0.9; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        134,
+        123,
+        111
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/cobble_fan/color.jpg",
+          "bytes": 221182,
+          "sha256": "fe610d8f041232196306878e1496c4b9778059d3aa1c5035ba8ca57b217bbef4",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PavingStones150_1K-JPG.zip",
+          "sourceFile": "PavingStones150_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "bcaffad6b5ae522394a740b698dbf1b478ff9daca465a3acca20ddbc45e1442f",
+          "sourceBytes": 737414
+        },
+        "normal": {
+          "path": "assets/textures/scans/cobble_fan/normal.jpg",
+          "bytes": 449955,
+          "sha256": "084490b567a9bfa597d902cb4209bb61fabd39daa4cafc011e634f4763af6ed9",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PavingStones150_1K-JPG.zip",
+          "sourceFile": "PavingStones150_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "bcaffad6b5ae522394a740b698dbf1b478ff9daca465a3acca20ddbc45e1442f",
+          "sourceBytes": 995888
+        }
+      }
+    },
+    {
+      "id": "garage_concrete",
+      "name": "Concrete Floor 02",
+      "label": "车库混凝土地坪",
+      "use": "地下停车场地面（蓝区、绿区）",
+      "meters": [
+        2.0,
+        2.0
+      ],
+      "source": "Poly Haven",
+      "sourceAsset": "concrete_floor_02",
+      "sourceUrl": "https://polyhaven.com/a/concrete_floor_02",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        2000,
+        2000
+      ],
+      "processing": "colour mean normalised to rgb(134, 123, 111), contrast ×0.45; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        134,
+        123,
+        111
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/garage_concrete/color.jpg",
+          "bytes": 249966,
+          "sha256": "2365c3db967bc809b6eb8e19fd5073223ace0e2414792eaa7a5c0b512014f8c1",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_diff_1k.jpg",
+          "sourceMd5": "1cfee53d2f82fa59726ab7ae6a2e8c09",
+          "sourceBytes": 776097
+        },
+        "normal": {
+          "path": "assets/textures/scans/garage_concrete/normal.jpg",
+          "bytes": 37557,
+          "sha256": "caaee85bbbf96ebb44fe60ca114865ec9c5f74f81cc28854d7739d079b54fa3e",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_nor_gl_1k.jpg",
+          "sourceMd5": "c2065fd81f571f4e39163ea5661128fb",
+          "sourceBytes": 192757
+        }
+      }
+    },
+    {
+      "id": "granite_speckle",
+      "name": "Granite 002 A",
+      "label": "芝麻灰花岗岩",
+      "use": "地铁站台地面",
+      "meters": [
+        2.4,
+        2.4
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Granite002A",
+      "sourceUrl": "https://ambientcg.com/a/Granite002A",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "cut into 4×4 panels with joints (each panel sampled from a different offset of the seamless source); colour mean normalised to rgb(205, 205, 203), contrast ×0.8; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        205,
+        205,
+        203
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/granite_speckle/color.jpg",
+          "bytes": 369536,
+          "sha256": "d478409662d846ec4a3ad267d0a6358e079ab698e590f45d1592dcbe75f26a73",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Granite002A_1K-JPG.zip",
+          "sourceFile": "Granite002A_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "551e8b2a0fac2b41eaa83e111d8f9d462c2e4d1271280746beb175fbc1981b9a",
+          "sourceBytes": 1461024
+        }
+      }
+    },
+    {
+      "id": "rubber_track",
+      "name": "Rubberized Track",
+      "label": "塑胶跑道面层",
+      "use": "屋顶跑道",
+      "meters": [
+        2.0,
+        2.0
+      ],
+      "source": "Poly Haven",
+      "sourceAsset": "rubberized_track",
+      "sourceUrl": "https://polyhaven.com/a/rubberized_track",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Charlotte Baglioni": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        2000,
+        2000
+      ],
+      "processing": "colour mean normalised to rgb(215, 215, 215), contrast ×1.4; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        215,
+        215,
+        215
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/rubber_track/color.jpg",
+          "bytes": 75617,
+          "sha256": "4a51c5fa7e814279251edda98ca4eee6c537bda3cdc503669fa7b9ae32a3e64f",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rubberized_track/rubberized_track_diff_1k.jpg",
+          "sourceMd5": "43c4cec5ce3578919440af1491d3c50e",
+          "sourceBytes": 768955
+        },
+        "normal": {
+          "path": "assets/textures/scans/rubber_track/normal.jpg",
+          "bytes": 52262,
+          "sha256": "5cfad08c59d4ef844fb5c9b96efc9c009fc7877d07c2109f78fa78ddfe068ada",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rubberized_track/rubberized_track_nor_gl_1k.jpg",
+          "sourceMd5": "4b60a99598fd2a0e24c2234468f5f31c",
+          "sourceBytes": 1162333
+        }
+      }
+    },
+    {
+      "id": "travertine_cladding",
+      "name": "Travertine 009",
+      "label": "洞石干挂板",
+      "use": "一期外立面石材、室内洞石墙板",
+      "meters": [
+        2.4,
+        2.4
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Travertine009",
+      "sourceUrl": "https://ambientcg.com/a/Travertine009",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        1200,
+        1200
+      ],
+      "processing": "cut into 2×4 panels with joints (each panel sampled from a different offset of the seamless source); colour mean normalised to rgb(227, 224, 217), contrast ×1.0; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        227,
+        224,
+        217
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/travertine_cladding/color.jpg",
+          "bytes": 145689,
+          "sha256": "78b35211e87abe0dd1ebba7d95db9960d74f551cd4db72aa4634a683aa84106b",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Travertine009_1K-JPG.zip",
+          "sourceFile": "Travertine009_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "09fa1ce1cd590e87ed4053864ebaf0186718fba6373559a8458eb4fa6146fdb7",
+          "sourceBytes": 922573
+        },
+        "normal": {
+          "path": "assets/textures/scans/travertine_cladding/normal.jpg",
+          "bytes": 35986,
+          "sha256": "50d4395fb4d232228ba241c5cec68d45c259a2e7f01264d881926c70283d7c2a",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Travertine009_1K-JPG.zip",
+          "sourceFile": "Travertine009_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "09fa1ce1cd590e87ed4053864ebaf0186718fba6373559a8458eb4fa6146fdb7",
+          "sourceBytes": 332407
+        }
+      }
+    },
+    {
+      "id": "painted_plaster",
+      "name": "Painted Plaster 017",
+      "label": "白色涂料抹灰",
+      "use": "室内墙面、住宅墙面、外墙涂料，以及纯色墙面和天花上的细纹理",
+      "meters": [
+        2.0,
+        2.0
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "PaintedPlaster017",
+      "sourceUrl": "https://ambientcg.com/a/PaintedPlaster017",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "colour mean normalised to rgb(242, 241, 239), contrast ×1.0; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        242,
+        241,
+        239
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/painted_plaster/color.jpg",
+          "bytes": 107496,
+          "sha256": "f52a412a212d2892209537076683349784b3d955a9021afb369d835bf20a201b",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PaintedPlaster017_1K-JPG.zip",
+          "sourceFile": "PaintedPlaster017_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "bae0380d82b6ccac8943b4980417cb3c9de5c896218339c108056f1dfb8e886c",
+          "sourceBytes": 378542
+        },
+        "normal": {
+          "path": "assets/textures/scans/painted_plaster/normal.jpg",
+          "bytes": 106143,
+          "sha256": "ff93eadc17cd828a0e8f65caa7ad54cbf902eb503b42c684c34573af65a76ed1",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PaintedPlaster017_1K-JPG.zip",
+          "sourceFile": "PaintedPlaster017_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "bae0380d82b6ccac8943b4980417cb3c9de5c896218339c108056f1dfb8e886c",
+          "sourceBytes": 1115299
+        }
+      }
+    },
+    {
+      "id": "ceiling_panels",
+      "name": "Painted Plaster 017",
+      "label": "石膏板吊顶",
+      "use": "各层天花（楼板底面）：1.2 米见方的涂料石膏板，带细缝",
+      "meters": [
+        2.4,
+        2.4
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "PaintedPlaster017",
+      "sourceUrl": "https://ambientcg.com/a/PaintedPlaster017",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "cut into 2×2 panels with joints (each panel sampled from a different offset of the seamless source); colour mean normalised to rgb(240, 239, 236), contrast ×1.0; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        240,
+        239,
+        236
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/ceiling_panels/color.jpg",
+          "bytes": 20451,
+          "sha256": "6e03b4ccfaf15e395d22dc3efdb6c86cc1ca097fd61dc7fbbdfe544e067b8538",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=PaintedPlaster017_1K-JPG.zip",
+          "sourceFile": "PaintedPlaster017_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "bae0380d82b6ccac8943b4980417cb3c9de5c896218339c108056f1dfb8e886c",
+          "sourceBytes": 378542
+        }
+      }
+    },
+    {
+      "id": "formed_concrete",
+      "name": "Concrete Wall 001",
+      "label": "清水混凝土",
+      "use": "外立面清水混凝土墙",
+      "meters": [
+        1.5,
+        1.5
+      ],
+      "source": "Poly Haven",
+      "sourceAsset": "concrete_wall_001",
+      "sourceUrl": "https://polyhaven.com/a/concrete_wall_001",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Dimitrios Savva": "Photography",
+        "Rico Cilliers": "Processing"
+      },
+      "sourceDimensionsMillimeters": [
+        1500,
+        1500
+      ],
+      "processing": "colour mean normalised to rgb(222, 222, 220), contrast ×0.9; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        222,
+        222,
+        220
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/formed_concrete/color.jpg",
+          "bytes": 71418,
+          "sha256": "f513776d6d8407f8a90f3056ab701247b42652035c529a0246d60101bde2cabb",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_001/concrete_wall_001_diff_1k.jpg",
+          "sourceMd5": "7be71d950acf3cf0d7927e4255a63b38",
+          "sourceBytes": 79320
+        },
+        "normal": {
+          "path": "assets/textures/scans/formed_concrete/normal.jpg",
+          "bytes": 196014,
+          "sha256": "78a8efb30d7f2e450309315a1c40116af9f7e600f8ce5dd0c1bcad0a6406322c",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_001/concrete_wall_001_nor_gl_1k.jpg",
+          "sourceMd5": "8e2d51bd8a45f18b0612a9686992958c",
+          "sourceBytes": 179270
+        }
+      }
+    },
+    {
+      "id": "timber_slats",
+      "name": "Planks 040",
+      "label": "木格栅",
+      "use": "外立面和室内的木格栅墙",
+      "meters": [
+        1.2,
+        1.2
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Planks040",
+      "sourceUrl": "https://ambientcg.com/a/Planks040",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        1200,
+        1200
+      ],
+      "processing": "rotated 90°; colour mean normalised to rgb(194, 187, 175), contrast ×1.0; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        194,
+        187,
+        175
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/timber_slats/color.jpg",
+          "bytes": 234877,
+          "sha256": "eca030d69f5a4d0acf07525708e02b799d09765bd2339aa7487d7176603d371a",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Planks040_1K-JPG.zip",
+          "sourceFile": "Planks040_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "14a48963e6252bb7939986f92e82c95da5e03c1e6c7001951ca04252709dc687",
+          "sourceBytes": 1303850
+        },
+        "normal": {
+          "path": "assets/textures/scans/timber_slats/normal.jpg",
+          "bytes": 277093,
+          "sha256": "040d20ae8ae418a0f8fe1f1ddbae4d96521fd27297330e428dc20140435c2b13",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Planks040_1K-JPG.zip",
+          "sourceFile": "Planks040_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "14a48963e6252bb7939986f92e82c95da5e03c1e6c7001951ca04252709dc687",
+          "sourceBytes": 1556856
+        }
+      }
+    },
+    {
+      "id": "ribbed_cladding",
+      "name": "Exterior Wall Cladding",
+      "label": "条形挂板",
+      "use": "外立面陶板、条形挂板",
+      "meters": [
+        2.0,
+        2.0
+      ],
+      "source": "Poly Haven",
+      "sourceAsset": "exterior_wall_cladding",
+      "sourceUrl": "https://polyhaven.com/a/exterior_wall_cladding",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Charlotte Baglioni": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        2000,
+        2000
+      ],
+      "processing": "rotated 90°; colour mean normalised to rgb(216, 210, 204), contrast ×1.3; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        216,
+        210,
+        204
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/ribbed_cladding/color.jpg",
+          "bytes": 149727,
+          "sha256": "02677553b6cee52b0b882e9cda6e4ececadfac9aad32f80ffb1948c1a98a36aa",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/exterior_wall_cladding/exterior_wall_cladding_diff_1k.jpg",
+          "sourceMd5": "d09794d0769dc6be91f0d6ca8f78ada2",
+          "sourceBytes": 422601
+        },
+        "normal": {
+          "path": "assets/textures/scans/ribbed_cladding/normal.jpg",
+          "bytes": 321202,
+          "sha256": "d8089d32f47901add8aabfde2a1fd80e63cb2d8acbf57fc4133e8f001bfb3730",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/exterior_wall_cladding/exterior_wall_cladding_nor_gl_1k.jpg",
+          "sourceMd5": "53e0461c87409a154e92f7d3e5bb097f",
+          "sourceBytes": 898524
+        }
+      }
+    },
+    {
+      "id": "brushed_metal",
+      "name": "Metal 009",
+      "label": "拉丝金属板",
+      "use": "铜色金属饰面（外立面、室内）",
+      "meters": [
+        1.0,
+        1.0
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Metal009",
+      "sourceUrl": "https://ambientcg.com/a/Metal009",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "colour mean normalised to rgb(232, 228, 219), contrast ×0.6; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        232,
+        228,
+        219
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/brushed_metal/color.jpg",
+          "bytes": 20446,
+          "sha256": "d3740c916e52eeba4e84a17785a4f20968453560250e9ff8ea08ec065022bf66",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Metal009_1K-JPG.zip",
+          "sourceFile": "Metal009_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "1b1970219b40fe707e7194b28702f1a65b0d227bbea56da69dfbc8d8b5cfcb5e",
+          "sourceBytes": 616678
+        },
+        "normal": {
+          "path": "assets/textures/scans/brushed_metal/normal.jpg",
+          "bytes": 7993,
+          "sha256": "513867d99fb19c559f5f953e1cc2ccce09bcb3330a2f04d928222a997d91a105",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Metal009_1K-JPG.zip",
+          "sourceFile": "Metal009_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "1b1970219b40fe707e7194b28702f1a65b0d227bbea56da69dfbc8d8b5cfcb5e",
+          "sourceBytes": 814572
+        }
+      }
+    },
+    {
+      "id": "clay_roof_tiles",
+      "name": "Roofing Tiles 014 A",
+      "label": "陶瓦屋面",
+      "use": "三期坡屋顶瓦面",
+      "meters": [
+        2.9,
+        2.9
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "RoofingTiles014A",
+      "sourceUrl": "https://ambientcg.com/a/RoofingTiles014A",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": [
+        2900,
+        2900
+      ],
+      "processing": "colour mean normalised to rgb(208, 209, 208), contrast ×0.9; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        208,
+        209,
+        208
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/clay_roof_tiles/color.jpg",
+          "bytes": 146827,
+          "sha256": "2212ddcc9d20342d6f140e89fd989dec3811be5807718f6ab2589c91074c5d1f",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=RoofingTiles014A_1K-JPG.zip",
+          "sourceFile": "RoofingTiles014A_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "b928f75b476df36417e01b6ab60057cb94f65abd035d7a1eaf7ea884ee0f1521",
+          "sourceBytes": 713878
+        },
+        "normal": {
+          "path": "assets/textures/scans/clay_roof_tiles/normal.jpg",
+          "bytes": 182204,
+          "sha256": "f3f1c4bdeca9d6a566e83dbd946418a31c48e001ca899e0c4d8c679191420619",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=RoofingTiles014A_1K-JPG.zip",
+          "sourceFile": "RoofingTiles014A_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "b928f75b476df36417e01b6ab60057cb94f65abd035d7a1eaf7ea884ee0f1521",
+          "sourceBytes": 837895
+        }
+      }
+    },
+    {
+      "id": "glazed_wall_tiles",
+      "name": "Long White Tiles",
+      "label": "白色釉面墙砖",
+      "use": "地铁站厅、通道墙面",
+      "meters": [
+        1.27,
+        1.27
+      ],
+      "source": "Poly Haven",
+      "sourceAsset": "long_white_tiles",
+      "sourceUrl": "https://polyhaven.com/a/long_white_tiles",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "authors": {
+        "Jenelle van Heerden": "processing",
+        "Sergej Majboroda": "photography"
+      },
+      "sourceDimensionsMillimeters": [
+        1270,
+        1270
+      ],
+      "processing": "colour mean normalised to rgb(235, 235, 233), contrast ×1.0; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        235,
+        235,
+        233
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/glazed_wall_tiles/color.jpg",
+          "bytes": 155590,
+          "sha256": "abcb745374bfc5855cccfe00d1cfc724b93992e334d11ceeee2cd8ccd2fc9f4a",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/long_white_tiles/long_white_tiles_diff_1k.jpg",
+          "sourceMd5": "49f7e4c3a0afd9a8ca3df5ac75747353",
+          "sourceBytes": 619644
+        },
+        "normal": {
+          "path": "assets/textures/scans/glazed_wall_tiles/normal.jpg",
+          "bytes": 184884,
+          "sha256": "eb1238ee39558869e846317f9fa2cee47829206eb87e0ca701a2c14affceb991",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/long_white_tiles/long_white_tiles_nor_gl_1k.jpg",
+          "sourceMd5": "7837ef3d13258d6ee2bf9ee928d48152",
+          "sourceBytes": 651009
+        },
+        "roughness": {
+          "path": "assets/textures/scans/glazed_wall_tiles/roughness.jpg",
+          "bytes": 33629,
+          "sha256": "5470139b20190e96cab976e834ac53745701832d5322311766bb3848ef823338",
+          "purpose": "roughness",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/long_white_tiles/long_white_tiles_rough_1k.jpg",
+          "sourceMd5": "d271d3837f7b6e9db9c3a565ff57c290",
+          "sourceBytes": 491268
+        }
+      }
+    },
+    {
+      "id": "tunnel_concrete",
+      "name": "Concrete 031",
+      "label": "隧道混凝土衬砌",
+      "use": "地铁隧道壁",
+      "meters": [
+        3.0,
+        3.0
+      ],
+      "source": "ambientCG",
+      "sourceAsset": "Concrete031",
+      "sourceUrl": "https://ambientcg.com/a/Concrete031",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "authors": {
+        "ambientCG (Lennart Demes)": "All"
+      },
+      "sourceDimensionsMillimeters": null,
+      "processing": "colour mean normalised to rgb(194, 193, 189), contrast ×0.9; resized and JPEG-recompressed; no generative synthesis",
+      "meanColor": [
+        194,
+        193,
+        189
+      ],
+      "maps": {
+        "color": {
+          "path": "assets/textures/scans/tunnel_concrete/color.jpg",
+          "bytes": 42815,
+          "sha256": "7941fa8a90e2d916bfd2ccc46ffe3bdc31fdff4776d841b86eccb54b0f922852",
+          "purpose": "color",
+          "colorSpace": "srgb",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Concrete031_1K-JPG.zip",
+          "sourceFile": "Concrete031_1K-JPG_Color.jpg",
+          "sourceArchiveSha256": "3068e551435d3cdae3942017799d8871b940c88ebfaf5c2b87376972ae448fd6",
+          "sourceBytes": 916356
+        },
+        "normal": {
+          "path": "assets/textures/scans/tunnel_concrete/normal.jpg",
+          "bytes": 52943,
+          "sha256": "276eba213300e8ebff24ad7026013a85c662fb09445cd0023035d75f21877ce8",
+          "purpose": "normal",
+          "colorSpace": "linear",
+          "width": 512,
+          "height": 512,
+          "mimeType": "image/jpeg",
+          "sourceResolution": "1k",
+          "sourceUrl": "https://ambientcg.com/get?file=Concrete031_1K-JPG.zip",
+          "sourceFile": "Concrete031_1K-JPG_NormalGL.jpg",
+          "sourceArchiveSha256": "3068e551435d3cdae3942017799d8871b940c88ebfaf5c2b87376972ae448fd6",
+          "sourceBytes": 1810354
+        }
+      }
+    }
+  ]
+}

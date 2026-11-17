@@ -6,6 +6,7 @@ import { pointInPoly, distToPolyEdge, frame, toW, toL, lrectPoly, subtractInterv
 import { themeOf, COLORS } from '../theme.js';
 import { makeCanvas, canvasTexture, FONT_CN, FONT_EN } from '../textures.js';
 import { buildCarpetFloor } from './floor-finishes.js';
+import { detailFor } from '../pbr.js';
 
 export const SLAB_T = { retail: 0.45, food: 0.45, parking: 0.35, roof: 0.6, street: 0.4 };
 const DEG = 180 / Math.PI;
@@ -114,6 +115,8 @@ export function buildShell(ctx) {
   const mallSlab = ctx.depthCues ? new THREE.MeshStandardMaterial({ color: 0xefe7da, roughness: 0.85 }) : slabBody;
   // 夜里天花本身只微微泛暖（0.17 → 0.07），亮的是灯周围一圈和洞口边灯槽洗亮的一条（ceilPool 贴花），天花有明有暗
   if (mallSlab !== slabBody) mats.onNight((t) => mallSlab.emissive.setRGB(t * 0.07, t * 0.058, t * 0.042));
+  // 楼板底面就是各层的天花：叠一层石膏板吊顶的纹理（一块块板、细缝；省内存档不叠）
+  for (const m of new Set([slabBody, mallSlab])) detailFor(m, mats.surfaces, 'ceiling');
   const edgesCache = new Map();
   ctx.outlineEdges = (lv) => {
     if (!edgesCache.has(lv.id)) edgesCache.set(lv.id, (lv.expansion?.floorPolys || [lv.outline])

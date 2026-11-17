@@ -8,6 +8,7 @@ import { clearHeight, flatShapeGeometry } from './shell.js';
 import { frame, rect, lrectPoly, toW, toL, IDENTITY, convexOverlap, polyBounds, pointInPoly as pointInPolyLocal } from '../../layout/geom.js';
 import { buildSharedGarageDetails } from './shared-garages.js';
 import { cutSurfaceShapes } from './surface-shapes.js';
+import { detailFor } from '../pbr.js';
 
 const CAR_COLORS = ['#f2f2f0', '#c9ccd0', '#1f2328', '#6b7178', '#2f5d9e', '#a8262b', '#d8cbb0', '#2f5f4a', '#f2f2f0', '#c9ccd0', '#1f2328'];
 
@@ -83,13 +84,15 @@ export function buildParking(ctx) {
     // 车道与步行脊漆面
     const aisleMat = new THREE.MeshStandardMaterial({ color: aisleCol, roughness: 0.85 });
     ctx.mats.onNight((t) => aisleMat.emissive.setRGB(t * 0.1, t * 0.1, t * 0.11));
+    detailFor(aisleMat, ctx.mats.surfaces, 'floorPaint');
+    const paint = ctx.mats.base.floorPaint ? 'floorPaint' : 'satin';
     const painted = [], spinePainted = [];
     for (const w of lv.walk) {
       const cuts = parkingPaintCuts(lv, w.poly);
       if (w.kind === 'aisle') {
         if (w.rect && !cuts.length) {
           const r = w.rect;
-          B.frame(w.frame, () => B.get('satin').box((r.x0 + r.x1) / 2, y0 + 0.006, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.008, r.z1 - r.z0, aisleCol));
+          B.frame(w.frame, () => B.get(paint).box((r.x0 + r.x1) / 2, y0 + 0.006, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.008, r.z1 - r.z0, aisleCol));
         } else {
           painted.push(flatShapeGeometry(cutSurfaceShapes(w.poly, cuts), y0 + .007));
         }
@@ -100,13 +103,13 @@ export function buildParking(ctx) {
           continue;
         }
         B.frame(w.frame, () => {
-          B.get('satin').box((r.x0 + r.x1) / 2, y0 + 0.008, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 0.2, 0.01, r.z1 - r.z0 - 0.2, '#c9c3b6');
+          B.get(paint).box((r.x0 + r.x1) / 2, y0 + 0.008, (r.z0 + r.z1) / 2, r.x1 - r.x0 - 0.2, 0.01, r.z1 - r.z0 - 0.2, '#c9c3b6');
           for (const v of [r.z0 + 0.3, r.z1 - 0.3]) B.get('satin').box((r.x0 + r.x1) / 2, y0 + 0.012, v, r.x1 - r.x0 - 0.4, 0.01, 0.12, band);
         });
       }
     }
     for (const [pieces, material] of [[painted, aisleMat], [spinePainted,
-      new THREE.MeshStandardMaterial({ color: '#c9c3b6', roughness: .85 })]]) {
+      detailFor(new THREE.MeshStandardMaterial({ color: '#c9c3b6', roughness: .85 }), ctx.mats.surfaces, 'floorPaint')]]) {
       if (!pieces.length) { if (material !== aisleMat) material.dispose(); continue; }
       const merged = mergeGeometries(pieces, false);
       pieces.forEach(g => g.dispose());

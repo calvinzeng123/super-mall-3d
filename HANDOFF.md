@@ -6,6 +6,19 @@
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
+### 贴图：场景面层换成网上的 CC0 真实材质（2026-11-17，用户反馈「整个游戏的贴图都很廉价」）
+- **换了什么**：以前 19 套面层里只有 6 套是 Poly Haven 的真实扫描，其余 13 套是仓库里程序画的（`scripts/procedural-*.mjs`，已删），墙、天花、楼板、车库地面是纯色。现在：
+  - 新增 20 套 CC0 材质（`assets/textures/scans/`，Poly Haven 6 套 + ambientCG 14 套，共 6.0 MB），替掉全部程序化贴图：圈绒 / 点纹地毯、灰白 / 暖色水磨石、广场错缝砖、大板石材、扇形小方石、车库混凝土、花岗岩、塑胶跑道、洞石干挂板、涂料抹灰、石膏板吊顶、清水混凝土、木格栅、条形挂板、拉丝金属、陶瓦、釉面墙砖、隧道混凝土。逐项出处、作者、校验值、加工方式在 `assets/textures/scans/manifest.json`，授权说明在同目录 `LICENSE.md`。
+  - 楼面对应表 `pbr.js` 的 `FLOOR_SURFACES`：地毯不再叠程序画的弧线花纹（`pattern` 机制还在，没有楼面在用）；`terrazzo-cool` / `terrazzo-warm` 以前借用大理石贴图，现在是真水磨石；`stone`、`cobble`、`roof-stone`、车库 `concrete-blue/green` 以前全借用同一张混凝土铺装，现在各有各的；`granite`（地铁站台）、`rubber`（屋顶跑道）以前是画布画的，现在也是扫描贴图。
+  - 立面 / 墙面：`facade-materials.js` 的 `FACADE_SURFACES` 和 `materials.js` 的 plaster / slat / travertine / bronze / carpet / homeMatte 换到新贴图。新贴图大多只有颜色 + 法线（没有粗糙度贴图），粗糙度是表里的数（按原程序化粗糙度贴图的平均值填的）；只有釉面墙砖带粗糙度贴图。
+  - **纯色面的细纹理**（`pbr.js` 的 `worldDetail` / `detailFor` / `DETAIL_SURFACES`）：`matte`（室内墙和杂项）、`ext`（室外墙、路缘、远处的楼）、各层天花（`shell.js` 的楼板体，石膏板分格）、车库顶板（清水混凝土模板纹）、车库车道地坪漆（新材质 `base.floorPaint`，`parking.js` 用）没有 UV，在片元着色器里按世界坐标投一张已载入的贴图（看法线朝向取两个坐标，每像素多取样一次），乘到底色上再除掉贴图平均色——颜色不变，只多纹理；不加顶点数据。省内存档（`MEM.decor` 为 false）不叠。克隆材质的地方（`clipMaterial`、`plainInstanceMaterial`）本来就抄 `onBeforeCompile` 和 `customProgramCacheKey`，细纹理跟着走。
+- **下载 / 处理**：`python3 -I scripts/textures/fetch-scans.py`（清单 `scripts/textures/scans.json`；要 Pillow + numpy；原图缓存在系统临时目录，不进仓库）。处理只有：缩放和 JPEG 重压、个别转 90°（木格栅、条形挂板）、`repeat`（水磨石平铺 2×2 让石子变小）、`panels`（把连续石材切成板、画板缝、法线压出凹槽：洞石、水磨石、花岗岩、吊顶）、`mean` / `contrast` / `desaturate`（**颜色贴图的平均色统一调成浅中性色**——色调由顶点色和 `tint` 给，所以换贴图没有带偏场景颜色，也不用逐处重调）。原图不是正方形的（PaintedPlaster017 是 2:1）沿短边平铺，不拉伸。
+- **构建**：`build.mjs` 读 `assets/textures/manifest.json` + `assets/textures/scans/manifest.json`（`SURFACE_ASSETS` 多了 `mean`，细纹理用它归一）；`build-netlify.mjs` 的署名页加了 ambientCG。单文件版 83.5 → 87.0 MB。
+- **内存**：手机标准档每套贴图上限 512²，26 套合计约 76 MB（以前 19 套约 80 MB：新贴图大多少了粗糙度贴图，5 套只有颜色）；电脑原始大小约多 70 MB。省内存档只留 256² 颜色贴图，没有细纹理。
+- **测试**：`tests/scan-textures.test.js`（文件和清单一致、出处授权齐全、平均色中性、每套都有材质在用、总量 < 8 MB）；删了 `tests/procedural-textures.test.js`。
+- **看过的**（Chromium + SwiftShader，电脑档）：一期 2F 走道（地毯、天花分格）、1F 中庭（洞石柱）、B1 车库（顶板模板纹、车道地坪）、天台（大板石材）、地铁站厅 / 站台（水磨石）、一期外立面（洞石干挂板）、三期街巷（小方石、砖墙）、广场铺地。截图在对话 scratchpad 的 `tex/after1`、`tex/after2`。没有着色器报错。
+- **没做 / 可以接着做**：绿植、灯笼、汽车这些低模是几何问题，不是贴图；`satin` / `metal` 没叠细纹理；远处背景楼只是 `ext` 的混凝土细纹理，没有窗墙贴图（ambientCG 有 Facade 系列可用）；真机没测。
+
 ### 内存：内存档位跟着画质走（2026-11-17，用户反馈「玩久了弹内存超出，刷新也一样」）
 - **发布（2026-11-17，用户确认）**：提交 `6f40594`（含内存档位、review 修复、扶梯开洞、车库天花、首页封面、装甲车车顶机枪），部署 `6afba92c2ff908909a09494f` live；入口 `main.ZDPI2KVX.js` 和代码块 SHA-256 与本地一致，封面 `cover.*.jpeg` 200（480 KB）。诊断面板版本号末尾 `6f40594`。全量测试 742 条通过。
 - **量出来的**（Chromium、iPhone UA、DPR 3、单文件版；脚本在对话 scratchpad 的 `mem/mem3.cjs`、`mem/break.cjs`，按 attribute 字节数和贴图像素 ×4×1.33 估算）：

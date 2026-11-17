@@ -1,7 +1,7 @@
 // 共享材质库。室内材质在夜间按自身颜色自发光（模拟室内照明），室外材质不发光。
 import * as THREE from 'three';
 import { floorTexture, stepTexture, chevronTexture } from './textures.js';
-import { FLOOR_SURFACES, pbrOptions, metricFloor } from './pbr.js';
+import { FLOOR_SURFACES, pbrOptions, metricFloor, detailFor } from './pbr.js';
 import { createFacadeMaterials } from './facade-materials.js';
 
 /** 让 emissive 乘以顶点色：夜间每个表面按自身颜色"亮起来" */
@@ -104,6 +104,11 @@ export class MaterialLib {
       water: std({ color: 0x356f8f, roughness: 0.04, metalness: 0.65, envMapIntensity: 2.2 }),
       mirror: std({ color: 0x8fb4c8, roughness: 0.02, metalness: 0.95, envMapIntensity: 2.4 }),
     };
+    // 纯色的墙、天花、家具面和室外的墙、路缘：叠一层真实贴图的细纹理（抹灰 / 混凝土），不再是一片死平的颜色。省内存档不叠。
+    detailFor(this.base.matte, surfaces, 'matte');
+    detailFor(this.base.ext, surfaces, 'ext');
+    // 车库车道的地坪漆：半亮的漆面，底下透出混凝土的深浅
+    this.base.floorPaint = detailFor(interior({ roughness: 0.62, metalness: 0 }, 0.3), surfaces, 'floorPaint');
     const shadows = depthCues ? shadowTextures() : null;
     if (shadows) for (const [key, map] of [['aoBlob', shadows.blob], ['aoEdge', shadows.edge]]) {
       // 贴花：只有透明度起作用；略微抬离地面并加深度偏移，不和地面打架；不写深度
@@ -112,9 +117,9 @@ export class MaterialLib {
       this.base[key] = m;
     }
     // 住宅里的墙面和家具：细抹灰纹理（有法线起伏，不再是一片纯色），夜里的亮度和原来的纯色墙面一样
-    if (surfaces.fine_plaster) {
-      const m = interior({ roughness: 1, metalness: 0, ...pbrOptions(surfaces.fine_plaster, 0.3) }, 0.42);
-      m.name = 'home wall · fine_plaster'; m.userData.homeFinish = true;
+    if (surfaces.painted_plaster) {
+      const m = interior({ roughness: 0.86, metalness: 0, ...pbrOptions(surfaces.painted_plaster, 0.3) }, 0.42);
+      m.name = 'home wall · painted_plaster'; m.userData.homeFinish = true;
       this.base.homeMatte = m;
     }
     if (shadows) {
@@ -145,10 +150,10 @@ export class MaterialLib {
     for (const [key, id, strength, roughness = 0.86, metalness = 0] of [
       ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22, 0.48],
       ['concrete', 'concrete_pavement_02', 0.3], ['brick', 'brick_wall_09', 0.55],
-      // 室内墙面：抹灰、木格栅、洞石墙板、拉丝铜饰面（程序化面层，粗糙度由贴图决定）
-      ['plaster', 'fine_plaster', 0.35, 1], ['slat', 'timber_slat', 0.7, 1],
-      ['travertine', 'travertine_panel', 0.5, 0.9], ['bronze', 'bronze_brushed', 0.3, 1, 0.7],
-      ['carpet', 'woven_carpet', 0.38, 1],
+      // 室内墙面：抹灰、木格栅、洞石墙板、拉丝铜饰面（CC0 扫描贴图只有颜色和法线，粗糙度是这里的数）
+      ['plaster', 'painted_plaster', 0.35, 0.86], ['slat', 'timber_slats', 0.7, 0.7],
+      ['travertine', 'travertine_cladding', 0.5, 0.62], ['bronze', 'brushed_metal', 0.3, 0.38, 0.7],
+      ['carpet', 'carpet_loop', 0.5, 1],
     ]) {
       const asset = surfaces[id];
       this.base[key] = interior({ roughness, metalness,

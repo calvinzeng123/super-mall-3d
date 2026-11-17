@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { pointInPoly, toW } from '../../layout/geom.js';
 import { SLAB_T, ceilingBays, shapeFromPoly, flatShapeGeometry } from './shell.js';
 import { MEM } from '../device.js';
+import { detailFor } from '../pbr.js';
 
 /** 梁的截面和取样步长（m）。 */
 export const RIB = Object.freeze({ width: 0.2, depth: 0.3, step: 0.25, min: 0.75 });
@@ -129,6 +130,7 @@ export function garageCeiling(ctx, b, lv) {
     // 朝下的面只吃得到地面反上来的光，偏暗偏黄：颜色给浅一点，再垫一点自发光
     const mat = new THREE.MeshStandardMaterial({ color: '#d4d7d7', roughness: 0.95, metalness: 0, side: THREE.BackSide, emissive: '#2c2e2f' });
     ctx.mats.onNight?.((t) => mat.emissive.setRGB(0.17 + t * 0.06, 0.18 + t * 0.06, 0.185 + t * 0.07));
+    detailFor(mat, ctx.mats.surfaces, 'garageSoffit'); // 车库顶板：清水混凝土的模板纹
     const mesh = new THREE.Mesh(soffits.length > 1 ? mergeGeometries(soffits, false) : soffits[0], mat);
     if (soffits.length > 1) soffits.forEach((g) => g.dispose());
     mesh.name = `${lv.id}-garage-soffit`;

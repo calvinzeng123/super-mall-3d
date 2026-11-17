@@ -4,21 +4,21 @@ import { pbrOptions } from './pbr.js';
 // Outdoor versions share the exact local CC0 texture objects with the interior
 // library. They never glow as stone/brick at night and allocate no new images.
 export const FACADE_SURFACES = Object.freeze({
-  metroTile: {id:'metro_ceramic',roughness:.9,normal:.38},
-  metroTunnel: {id:'tunnel_liner',roughness:1,normal:.45},
+  metroTile: { id: 'glazed_wall_tiles', roughness: 1, normal: .5 }, // 粗糙度由贴图给（釉面亮、砖缝糙）
+  metroTunnel: { id: 'tunnel_concrete', roughness: .92, normal: .45 },
   facadeStone: { id: 'marble_01', roughness: 0.72, normal: 0.18 },
   facadeConcrete: { id: 'concrete_pavement_02', roughness: 0.95, normal: 0.24 },
   facadeBrick: { id: 'brick_wall_09', roughness: 0.96, normal: 0.5 },
   facadeTimber: { id: 'oak_wood_planks', roughness: 0.8, normal: 0.25 },
-  // Procedural finishes from assets/textures/procedural: their roughness maps
-  // hold absolute values, so the scalar stays 1 and the map decides.
-  facadeTravertine: { id: 'travertine_panel', roughness: 1, normal: 0.7 },
-  facadeTerracotta: { id: 'terracotta_baguette', roughness: 1, normal: 0.9 },
-  facadeBronze: { id: 'bronze_brushed', roughness: 1, normal: 0.35, metalness: 0.72 },
-  roofTile: { id: 'clay_roof_tile', roughness: 1, normal: 1 },
-  facadePlaster: { id: 'fine_plaster', roughness: 1, normal: 0.4 },
-  facadeBoardConcrete: { id: 'board_concrete', roughness: 1, normal: 0.6 },
-  facadeSlat: { id: 'timber_slat', roughness: 1, normal: 0.8 },
+  // CC0 scans from assets/textures/scans (Poly Haven, ambientCG): colour + normal only,
+  // so the roughness is the scalar here.
+  facadeTravertine: { id: 'travertine_cladding', roughness: 0.68, normal: 0.7 },
+  facadeTerracotta: { id: 'ribbed_cladding', roughness: 0.72, normal: 0.9 },
+  facadeBronze: { id: 'brushed_metal', roughness: 0.38, normal: 0.35, metalness: 0.72 },
+  roofTile: { id: 'clay_roof_tiles', roughness: 0.7, normal: 1 },
+  facadePlaster: { id: 'painted_plaster', roughness: 0.86, normal: 0.4 },
+  facadeBoardConcrete: { id: 'formed_concrete', roughness: 0.88, normal: 0.6 },
+  facadeSlat: { id: 'timber_slats', roughness: 0.7, normal: 0.8 },
 });
 
 export function createFacadeMaterials(surfaces, onNight = () => {}) {
