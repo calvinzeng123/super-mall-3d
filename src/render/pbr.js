@@ -64,12 +64,24 @@ export function pbrOptions(asset, normalStrength = 0.35) {
 /** 楼面一律按米制坐标取样，不受 ShapeGeometry 或旧局部 UV 缩放影响。 */
 export function metricFloor(mat, asset, colorAsset = asset) {
   mat.onBeforeCompile = (shader) => {
+    // 按世界坐标取样（乘 modelMatrix）：省内存档把批次的顶点坐标压成了归一化整数，position 不再是米。
+    // 省内存档没有法线、粗糙度贴图：对应的 varying 不存在，要按宏判断，不然着色器编译失败、整块地面不画。
     shader.vertexShader = shader.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>
-      vec2 surfaceUv = vec2(position.x, -position.z) / vec2(${asset.meters[0].toFixed(3)}, ${asset.meters[1].toFixed(3)});
-      vMapUv = vec2(position.x, -position.z) / vec2(${colorAsset.meters[0].toFixed(3)}, ${colorAsset.meters[1].toFixed(3)});
-      vNormalMapUv = surfaceUv;
-      vRoughnessMapUv = surfaceUv;
-      vEmissiveMapUv = vMapUv;
+      vec4 surfaceWorld = modelMatrix * vec4(position, 1.0);
+      vec2 surfaceUv = vec2(surfaceWorld.x, -surfaceWorld.z) / vec2(${asset.meters[0].toFixed(3)}, ${asset.meters[1].toFixed(3)});
+      vec2 surfaceColorUv = vec2(surfaceWorld.x, -surfaceWorld.z) / vec2(${colorAsset.meters[0].toFixed(3)}, ${colorAsset.meters[1].toFixed(3)});
+      #ifdef USE_MAP
+        vMapUv = surfaceColorUv;
+      #endif
+      #ifdef USE_NORMALMAP
+        vNormalMapUv = surfaceUv;
+      #endif
+      #ifdef USE_ROUGHNESSMAP
+        vRoughnessMapUv = surfaceUv;
+      #endif
+      #ifdef USE_EMISSIVEMAP
+        vEmissiveMapUv = surfaceColorUv;
+      #endif
     `);
   };
   mat.customProgramCacheKey = () => `metric-floor-${asset.id}-${colorAsset.id}`;

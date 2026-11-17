@@ -8,7 +8,7 @@ import * as device from '../src/render/device.js';
 import { memoryNotice } from '../src/render/memory-notice.js';
 import { savedTier } from '../src/runtime.js';
 import { BatchSet, FOLIAGE_THIN, packPositions, PACK_STEP } from '../src/render/batch.js';
-import { pbrOptions } from '../src/render/pbr.js';
+import { pbrOptions, metricFloor } from '../src/render/pbr.js';
 import { QUALITY_STORAGE_KEY } from '../src/render/quality.js';
 
 test('画质档位 → 内存档位：手机 流畅 / 自动 用省内存档，均衡用标准，精细 / 极致放大贴图；电脑用原始大小', () => {
@@ -100,4 +100,18 @@ test('省内存档：顶点坐标压成 16 位，画出来的位置不变（误�
   // 范围上千米的一批：每格会超过 5 毫米，不压
   assert.equal(packPositions(new Float32Array([0, 0, 0, 900, 10, 900])), null);
   assert.ok(packPositions(new Float32Array([0, 0, 0, 300, 10, 300])));
+});
+
+test('地面材质的着色器：没有法线 / 粗糙度贴图也能编译（按宏判断），按世界坐标取样（顶点坐标压缩后照样对）', () => {
+  // 省内存档第一版：地面材质直接写 vNormalMapUv，没有法线贴图时这个 varying 不存在 → 编译失败 → 整块地砖、地毯不画
+  const mat = metricFloor(new THREE.MeshStandardMaterial(), { id: 'a', meters: [2, 2] });
+  const shader = { vertexShader: 'void main() {\n#include <uv_vertex>\n}' };
+  mat.onBeforeCompile(shader);
+  const v = shader.vertexShader;
+  for (const [macro, name] of [['USE_MAP', 'vMapUv'], ['USE_NORMALMAP', 'vNormalMapUv'], ['USE_ROUGHNESSMAP', 'vRoughnessMapUv'], ['USE_EMISSIVEMAP', 'vEmissiveMapUv']]) {
+    const at = v.indexOf(name), guard = v.lastIndexOf('#ifdef', at);
+    assert.ok(at > 0 && guard > 0 && v.slice(guard, at).includes(macro) && !v.slice(guard, at).includes('#endif'), `${name} 没有包在 #ifdef ${macro} 里`);
+  }
+  assert.match(v, /modelMatrix \* vec4\(position, 1\.0\)/);
+  assert.ok(!/vec2\(position\.x/.test(v), '不能直接用 position 当世界坐标');
 });
