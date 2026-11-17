@@ -5,6 +5,10 @@
 import * as THREE from 'three';
 import { surfaceUV } from './surface-uv.js';
 import { blockedZone, fits, grounded, crossed } from '../layout/access-zones.js';
+import { MEM } from './device.js';
+
+/** 省内存档：绿植（灌木、垂藤、花池里的叶团）每 3 个只留 1 个。一期楼层的绿植要 47MB 顶点，手机上吃不消 */
+export const FOLIAGE_THIN = 3;
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -106,6 +110,7 @@ export class Batcher {
 
   /** 写入一个模板，按矩阵变换，颜色可为 THREE.Color / 十六进制数 / CSS 字符串 */
   push(t, m, color, uvMap) {
+    if (this.thin && (this.seq = (this.seq || 0) + 1) % this.thin !== 1) return;
     const xf = this.owner ? this.owner.xf : this.xf;
     if (xf) m = _mf.multiplyMatrices(xf, m);
     if (this.n + t.count > this.cap) this.grow(this.n + t.count);
@@ -324,6 +329,7 @@ export class BatchSet {
       const textured = !!(mat?.map || mat?.normalMap || mat?.roughnessMap);
       // 贴花（假阴影）用模板自带的 UV；其余带贴图的批次按世界坐标投影 UV
       this.sets[key] = new Batcher(this, textured, textured && !mat.userData?.decal);
+      if (key === 'foliage' && !MEM.decor) this.sets[key].thin = FOLIAGE_THIN;
     }
     return this.sets[key];
   }

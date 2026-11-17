@@ -30,7 +30,8 @@ import { buildPark } from './build/park.js';
 import { buildSquare } from './build/square.js';
 import { buildMetro } from './build/metro.js';
 import { createPerfMonitor } from './perf.js';
-import { MOBILE, LITE, AFTER_CONTEXT_LOSS, markContextLoss } from './device.js';
+import { MOBILE, LITE, MEM, AFTER_CONTEXT_LOSS, markContextLoss } from './device.js';
+import { createMemoryNotice } from './memory-notice.js';
 import { createQualityManager } from './quality.js';
 import { loadSurfaceTextures } from './pbr.js';
 import { buildHospitality, setHospitalityCut, setResidentialDetailLevel } from './build/hospitality.js';
@@ -102,6 +103,9 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
   // a previous sightseeing session saved high quality on this device.
   if (fps) { qualityManager.select('low'); qualityManager.customize({ resolution: .9, shadows: false, bloom: false, crowdDensity: 0 }); }
   const initialQuality = qualityManager.current;
+  // 改画质换了内存档位（贴图大小、装饰几何）：提示重新进入后生效
+  const memoryNotice = createMemoryNotice();
+  qualityManager.subscribe((q) => memoryNotice.update(q.preset === 'auto' ? 'auto' : q.tier));
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(initialQuality.pixelRatio);
   renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
@@ -176,7 +180,7 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
   const detailResources = { suite: suiteResource, residential: residentialResource };
   ctx.lvById = Object.fromEntries(layout.levels.map((l) => [l.id, l]));
   ctx.bById = Object.fromEntries(layout.buildings.map((b) => [b.id, b]));
-  const floorSelector = fps ? null : createFloorDetailSelector(layout, { limit: LITE ? 4 : 6, explodedLimit: LITE ? 4 : 8, atriumLimit: LITE ? 3 : 6 });
+  const floorSelector = fps ? null : createFloorDetailSelector(layout, { limit: MEM.floors, explodedLimit: LITE ? MEM.floors : 8, atriumLimit: Math.min(MEM.floors, LITE ? 3 : 6) });
   const lazyAtlasLevels = new Set(layout.levels.filter(l => floorSelector?.eligible.has(l.id)
     && (ctx.bById[l.building].kind === 'annex' || usesExpansionFacade(l))).map(l => l.id));
   const wayfindingEntries = WAYFINDING.map(w => ({ id: w.id,
@@ -360,15 +364,17 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
     const again = AFTER_CONTEXT_LOSS;
     markContextLoss();
     if (window.__mallFail) window.__mallFail('显示资源被系统回收了', again
-      ? '已经是省显存模式，这台设备的显存还是不够：请关掉其他标签页和应用，在「设置」里把画质调到「流畅」、场景人数调低，然后刷新。'
-      : '这台设备的显存不够用（或切到后台太久）。已自动换成省显存模式，刷新页面即可继续。', { reload: true });
+      ? (MEM.name === 'compact'
+        ? '已经是最省内存的一档，这台设备的内存还是不够：请关掉其他标签页和应用（手机上把后台的应用划掉），在「设置」里把场景人数调低，然后刷新。'
+        : '这台设备的内存还是不够：刷新后会再降一档（贴图更小、装饰更少）。也可以在「设置」里把画质调到「流畅」。')
+      : '这台设备的内存不够用（或切到后台太久）。已自动换成省内存模式（贴图缩小、装饰减少），刷新页面即可继续。', { reload: true });
   });
 
   // ---------- 状态与视图 ----------
   const state = { building: null, focus: null, exploded: false, flows: false, labels: !MOBILE, night: false, selected: null, touring: false, explore: null };
   const persistentResources = sceneResources([root]);
   const persistentGeometry = geometryStats(persistentResources.geometries);
-  const floorCache = floorSelector ? createFloorDetailCache({ limit: LITE ? 4 : 6, hardLimit: LITE ? 4 : 8,
+  const floorCache = floorSelector ? createFloorDetailCache({ limit: MEM.floors, hardLimit: LITE ? MEM.floors : 8,
     build: id => buildOwnedFloorDetail(ctx, ctx.levels[id], {
       protectedResources: persistentResources, release: releaseGeometryAfterUpload,
       atlas: lazyAtlasLevels.has(id) ? materials => makeFloorAtlas(ctx.lvById[id], materials) : null,

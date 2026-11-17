@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PEOPLE_ASSETS } from '../render/people-data.js';
 import { fetchBinary } from '../render/fetch-binary.js';
-import { MOBILE } from '../render/device.js';
+import { MEM } from '../render/device.js';
 import { GUARD_UNIFORM, GUARD_CYCLES_PER_METRE, uniformRegion } from './guard-uniform.js';
 
 export { GUARD_UNIFORM, GUARD_CYCLES_PER_METRE, uniformRegion };
@@ -23,7 +23,7 @@ async function parsePerson(record) {
 
 /** 在贴图上把制服涂出来：每个三角形按所在分区，用半透明的制服色盖在原贴图上（留一点原来的褶皱明暗）。 */
 function paintUniform(mesh, height) {
-  const image = mesh.material.map.image, size = MOBILE ? 512 : Math.min(1024, image.width);
+  const image = mesh.material.map.image, size = Math.min(1024, image.width, MEM.modelTex);
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const g = canvas.getContext('2d');

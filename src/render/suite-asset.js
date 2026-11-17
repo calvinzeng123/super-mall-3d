@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { LITE as MOBILE } from './device.js';
+import { MEM, capImage } from './device.js';
 import { fetchBinary } from './fetch-binary.js';
 
 let cachedPromise = null;
@@ -65,19 +65,13 @@ async function prepare(dataUrl, anisotropy) {
       window: sourceName.startsWith('Window '), shared: true });
   });
   // 原图保留在GLB中；手机只在解码后缩小共享纹理，避免400户重复占用。
-  if (MOBILE) {
+  if (Number.isFinite(MEM.modelTex)) {
     const resized = new Map();
     for (const texture of textures) {
       const source = texture.image;
       const max = Math.max(source?.width || 0, source?.height || 0);
-      if (max <= 512) continue;
-      if (!resized.has(source)) {
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(source.width * 512 / max));
-        canvas.height = Math.max(1, Math.round(source.height * 512 / max));
-        canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
-        resized.set(source, canvas);
-      }
+      if (max <= MEM.modelTex) continue;
+      if (!resized.has(source)) resized.set(source, capImage(source, MEM.modelTex));
       texture.image = resized.get(source); texture.needsUpdate = true;
     }
   }

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { pointInPoly, toW } from '../../layout/geom.js';
 import { SLAB_T, ceilingBays, shapeFromPoly, flatShapeGeometry } from './shell.js';
+import { MEM } from '../device.js';
 
 /** 梁的截面和取样步长（m）。 */
 export const RIB = Object.freeze({ width: 0.2, depth: 0.3, step: 0.25, min: 0.75 });
@@ -37,7 +38,8 @@ export function runs(length, step, good) {
  * 梁只画在头顶真有楼板的地方：挑空的街谷和中庭上方不画。
  */
 export function ceilingRelief(ctx, b, lv) {
-  if (!ctx.depthCues || !['retail', 'food'].includes(lv.kind)) return;
+  // 省内存档不做天花的梁（装饰性的几何，手机上先省掉）
+  if (!ctx.depthCues || !MEM.decor || !['retail', 'food'].includes(lv.kind)) return;
   // 上一层从楼栋自己的楼层表里找：按需加载的那份上下文里，楼栋只带着当前这一层
   const order = b.levels || [], above = ctx.lvById?.[order[order.indexOf(lv.id) + 1]];
   if (!above?.slab) return;
@@ -133,7 +135,8 @@ export function garageCeiling(ctx, b, lv) {
     L.base.add(mesh);
   }
 
-  // ---------- 梁和管线 ----------
+  // ---------- 梁和管线（省内存档只留板底） ----------
+  if (!MEM.decor) return;
   const G = GARAGE_BEAM, tone = '#a9adae', y = top - G.depth / 2;
   for (const w of lv.walk) {
     if (w.kind !== 'aisle' || !w.rect) continue;

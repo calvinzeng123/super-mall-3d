@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BatchSet, tpl } from '../batch.js';
+import { MEM } from '../device.js';
 
 const PALETTES = [
   { key: 'facadeConcrete', wall: '#d4dcd8', trim: '#b9c4c5', frame: '#384c55', glass: '#6e909f', office: true },
@@ -67,14 +68,18 @@ export function buildContextBuildings(ctx, buildings) {
         box(p.key, u + (col === 0 ? pier / 4 : col === bays ? -pier / 4 : 0), b.h / 2, -0.15, edge ? pier / 2 : pier, b.h, 0.3, p.wall);
         // Narrow jambs are inset into each real opening. Full-height runs are
         // hidden by the spandrels, so they cost two boxes per bay, not per room.
+        // 省内存档：背景楼的窗框、窗台线不做（只留墙、窗玻璃和压顶）
+        if (!MEM.decor) continue;
         if (col < bays) for (const d of [pier / 2 + 0.045, pitch - pier / 2 - 0.045]) box('facadeFrame', u + d, b.h / 2, -0.08, 0.09, b.h, 0.12, p.frame);
         if (col < bays && p.office) box('facadeFrame', u + pitch / 2, b.h / 2, -0.09, 0.065, b.h, 0.1, p.frame);
       }
       for (const [floor, row] of rows.entries()) {
         box(p.key, 0, (row.bottom + row.sill) / 2, -0.15, width, row.sill - row.bottom, 0.3, p.wall);
         box(p.key, 0, (row.head + row.top) / 2, -0.15, width, row.top - row.head, 0.3, p.wall);
-        for (const y of [row.sill + 0.045, row.head - 0.045]) box('facadeFrame', 0, y, -0.08, width, 0.09, 0.12, p.frame);
-        box('facadeStone', 0, row.sill - 0.055, -0.01, width, 0.11, 0.38, p.trim);
+        if (MEM.decor) {
+          for (const y of [row.sill + 0.045, row.head - 0.045]) box('facadeFrame', 0, y, -0.08, width, 0.09, 0.12, p.frame);
+          box('facadeStone', 0, row.sill - 0.055, -0.01, width, 0.11, 0.38, p.trim);
+        }
         for (let col = 0; col < bays; col++) {
           const u = -width / 2 + (col + 0.5) * pitch;
           const occupied = ((floor * 11 + col * 7 + sideIndex * 3 + b.tint) % 9) < 3;

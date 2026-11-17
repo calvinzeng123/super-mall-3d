@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PEOPLE_ASSETS } from './people-data.js';
-import { LITE as MOBILE } from './device.js';
+import { MEM, capImage } from './device.js';
 import { fetchBinary } from './fetch-binary.js';
 
 let pending;
@@ -35,11 +35,9 @@ export function loadPeopleAssets(anisotropy = 4) {
       material.envMapIntensity = .2;
       if (material.map) {
         const image = material.map.image;
-        if (MOBILE && Math.max(image.width, image.height) > 512) {
-          const canvas = document.createElement('canvas');
-          canvas.width = canvas.height = 512;
-          canvas.getContext('2d').drawImage(image, 0, 0, 512, 512);
-          material.map.image = canvas;
+        const small = capImage(image, MEM.modelTex);
+        if (small !== image) {
+          material.map.image = small;
           material.map.needsUpdate = true;
           image.close?.();
         }

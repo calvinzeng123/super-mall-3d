@@ -1,21 +1,18 @@
 import * as THREE from 'three';
-import { LITE as MOBILE } from './device.js';
+import { MEM, capImage } from './device.js';
 import { SURFACE_ASSETS } from './pbr-data.js';
 
-/** 图片已随构建嵌入；手机只保留 512² 纹理，六类材质跨所有楼层共享。 */
+/** 图片已随构建嵌入。按内存档位（device.js 的 MEM）缩小：省内存档只留 256² 的颜色贴图（不要法线、粗糙度），
+ * 标准档 512²，手机的高清档颜色贴图 1024²，电脑原样。材质跨所有楼层共享。 */
 export async function loadSurfaceTextures(anisotropy = 4) {
   const entries = await Promise.all(SURFACE_ASSETS.map(async (asset) => {
     const maps = {};
     await Promise.all(Object.entries(asset.maps).map(async ([purpose, url]) => {
+      if (MEM.pbrMaps === 'color' && purpose !== 'color') return;
       const img = new Image();
       img.src = url;
       await img.decode();
-      let source = img;
-      if (MOBILE) {
-        source = document.createElement('canvas');
-        source.width = source.height = 512;
-        source.getContext('2d').drawImage(img, 0, 0, 512, 512);
-      }
+      const source = capImage(img, purpose === 'color' ? MEM.pbrColorSize : MEM.pbrSize);
       const t = new THREE.Texture(source);
       t.name = `${asset.id}/${purpose}`;
       t.colorSpace = purpose === 'color' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
@@ -59,8 +56,9 @@ export const FLOOR_SURFACES = {
 };
 
 export function pbrOptions(asset, normalStrength = 0.35) {
-  return { map: asset.maps.color, normalMap: asset.maps.normal,
-    roughnessMap: asset.maps.roughness, normalScale: new THREE.Vector2(normalStrength, normalStrength) };
+  // 省内存档没有法线、粗糙度贴图（只有颜色）
+  return { map: asset.maps.color, normalMap: asset.maps.normal || null,
+    roughnessMap: asset.maps.roughness || null, normalScale: new THREE.Vector2(normalStrength, normalStrength) };
 }
 
 /** 楼面一律按米制坐标取样，不受 ShapeGeometry 或旧局部 UV 缩放影响。 */

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MOBILE } from './device.js';
+import { MOBILE, MEM, capImage } from './device.js';
 import { fetchBinary } from './fetch-binary.js';
 
 const roofPattern = /roof|ceiling|屋顶|天花|顶盖|顶板/i;
@@ -75,13 +75,7 @@ export async function loadResidentialAssets(records, anisotropy = 4, onProgress 
     if (imageSources.has(hash)) texture.source = imageSources.get(hash);
     else {
       const source = texture.image, max = Math.max(source?.width || 0, source?.height || 0);
-      if (MOBILE && max > 512) {
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(source.width * 512 / max));
-        canvas.height = Math.max(1, Math.round(source.height * 512 / max));
-        canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
-        texture.image = canvas;
-      }
+      if (max > MEM.modelTex) texture.image = capImage(source, MEM.modelTex);
       imageSources.set(hash, texture.source);
     }
     texture.userData.sharedResidential = true;

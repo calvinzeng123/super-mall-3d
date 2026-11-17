@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { PROP_ASSETS, PROP_PACK } from './prop-data.js';
 import { fetchBinary } from '../fetch-binary.js';
-import { LITE as MOBILE } from '../device.js';
+import { LITE as MOBILE, MEM } from '../device.js';
 
 const WARM = new THREE.Color(1.0, 0.9, 0.76);
 /** 室内的模型夜里按自己的贴图发一点光（和室内其他材质一样，模拟店里的灯）。 */
@@ -38,9 +38,10 @@ const bytesOfDataUrl = (url) => {
 /** 手机上贴图边长减半（显存降到四分之一），上传显卡后把内存里的那份放掉。 */
 function prepareTexture(texture, anisotropy) {
   const image = texture.image;
-  if (MOBILE && image && Math.max(image.width, image.height) > 128) {
+  const shift = MEM.propShift;
+  if (shift && image && Math.max(image.width, image.height) > 128) {
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(64, image.width >> 1); canvas.height = Math.max(64, image.height >> 1);
+    canvas.width = Math.max(64, image.width >> shift); canvas.height = Math.max(64, image.height >> shift);
     canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
     texture.image = canvas;
     image.close?.();
