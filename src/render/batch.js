@@ -249,7 +249,8 @@ export class Batcher {
       return result;
     };
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(take('pos', this.n * 3), 3));
+    const position = take('pos', this.n * 3), packed = consume && MEM.packPositions ? packPositions(position) : null;
+    g.setAttribute('position', packed ? new THREE.BufferAttribute(packed.array, 3, true) : new THREE.BufferAttribute(position, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(take('nor', this.n * 3), 3, true));
     if (this.withUv) g.setAttribute('uv', new THREE.BufferAttribute(take('uv', this.n * 2), 2));
     g.setAttribute('color', new THREE.BufferAttribute(take('col', this.n * 3), 3, true));
@@ -260,10 +261,31 @@ export class Batcher {
     mesh.castShadow = shadow;
     mesh.receiveShadow = receive;
     mesh.name = name;
+    if (packed) { mesh.position.fromArray(packed.center); mesh.scale.fromArray(packed.half); g.userData.packedPositions = true; }
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
     return mesh;
   }
+}
+
+/** 压缩后的坐标每一格最多多大（米）：再大细栏杆、窗框会看得出抖 */
+export const PACK_STEP = 0.005;
+/**
+ * 省内存档：顶点坐标从 3 个 32 位浮点（12 字节）压成 3 个 16 位整数（6 字节）。整数按这一批的包围盒归一化到 [-1, 1]，
+ * 网格自己带上「中心 + 半边长」的平移和缩放，画出来位置不变（法线由 three 按非均匀缩放自动修正）。
+ * 只压范围不太大的批次：每一格不超过 5 毫米（一层楼的批次约 4 毫米；全园区一批的场地几何范围上千米，不压）。
+ * 返回 { array, center, half }，不压返回 null。
+ */
+export function packPositions(pos, maxStep = PACK_STEP) {
+  const n = pos.length / 3;
+  if (!n) return null;
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) { const v = pos[i + k]; if (v < lo[k]) lo[k] = v; if (v > hi[k]) hi[k] = v; }
+  const center = lo.map((v, k) => (v + hi[k]) / 2), half = lo.map((v, k) => Math.max(1e-3, (hi[k] - v) / 2));
+  if (!half.every((h) => Number.isFinite(h) && h / 32767 <= maxStep)) return null;
+  const array = new Int16Array(pos.length);
+  for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) array[i + k] = Math.round(((pos[i + k] - center[k]) / half[k]) * 32767);
+  return { array, center, half };
 }
 
 const SIDE_ROT = { S: 0, N: Math.PI, E: Math.PI / 2, W: -Math.PI / 2 };

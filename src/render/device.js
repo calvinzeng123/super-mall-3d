@@ -35,13 +35,13 @@ export function markContextLoss() {
 // ---------------------------------------------------------------------------------------------------------
 // 内存档位：贴图多大、装饰性的几何做不做、楼层细节留几层，跟着画质档位走（进入某个模式时由 configureMemory 定下来）。
 //   compact   省内存：手机的「流畅 / 自动」、被系统回收过显存以后。贴图再缩一档、材质只留颜色贴图、
-//             天花分格梁 / 车库梁 / 城市背景楼的窗格这类装饰几何不做、楼层细节只留 2 层。
+//             天花分格梁 / 车库梁 / 城市背景楼的窗格这类装饰几何不做、楼层细节只留 2 层、顶点坐标压成 16 位。
 //   standard  手机的「均衡」，或被回收过一次的电脑：贴图半边长（以前手机一律是这一档）。
 //   rich      手机的「精细 / 极致」：招牌、导向牌这些程序化贴图 0.75 倍，材质颜色贴图 1024。
 //   full      电脑：原始大小。
 // 贴图大小是加载时定的，改画质以后要重新进入才换（memory-notice.js 会提示）。
 export const MEMORY_PROFILES = Object.freeze({
-  compact: Object.freeze({ name: 'compact', label: '省内存', texScale: 0.35, pbrSize: 256, pbrColorSize: 256, pbrMaps: 'color', modelTex: 256, propShift: 2, floors: 2, decor: false, lite: true }),
+  compact: Object.freeze({ name: 'compact', label: '省内存', texScale: 0.35, pbrSize: 256, pbrColorSize: 256, pbrMaps: 'color', modelTex: 256, propShift: 2, floors: 2, decor: false, lite: true, packPositions: true }),
   standard: Object.freeze({ name: 'standard', label: '标准', texScale: 0.5, pbrSize: 512, pbrColorSize: 512, pbrMaps: 'all', modelTex: 512, propShift: 1, floors: 4, decor: true, lite: true }),
   rich: Object.freeze({ name: 'rich', label: '高清贴图', texScale: 0.75, pbrSize: 512, pbrColorSize: 1024, pbrMaps: 'all', modelTex: 512, propShift: 1, floors: 4, decor: true, lite: true }),
   full: Object.freeze({ name: 'full', label: '原始大小', texScale: 1, pbrSize: Infinity, pbrColorSize: Infinity, pbrMaps: 'all', modelTex: Infinity, propShift: 0, floors: 6, decor: true, lite: false }),

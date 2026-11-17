@@ -7,7 +7,7 @@ import { MEMORY_PROFILES, memoryProfileFor, configureMemory, compareMemory, MEM,
 import * as device from '../src/render/device.js';
 import { memoryNotice } from '../src/render/memory-notice.js';
 import { savedTier } from '../src/runtime.js';
-import { BatchSet, FOLIAGE_THIN } from '../src/render/batch.js';
+import { BatchSet, FOLIAGE_THIN, packPositions, PACK_STEP } from '../src/render/batch.js';
 import { pbrOptions } from '../src/render/pbr.js';
 import { QUALITY_STORAGE_KEY } from '../src/render/quality.js';
 
@@ -75,4 +75,29 @@ test('进入模式时读这个模式存下来的画质：漫游读我们的设�
   // 进入模式之前就定档（建场景、加载贴图之前）
   const src = readFileSync(new URL('../src/runtime.js', import.meta.url), 'utf8');
   assert.ok(src.indexOf('configureMemory(tier)') > 0 && src.indexOf('configureMemory(tier)') < src.indexOf('await createApp('));
+});
+
+test('省内存档：顶点坐标压成 16 位，画出来的位置不变（误差不超过半格）；范围太大的批次不压', (t) => {
+  t.after(() => configureMemory('auto'));
+  const mats = { matte: new THREE.MeshStandardMaterial() };
+  const build = () => { const B = new BatchSet(mats), g = new THREE.Group(); B.get('matte').box(-120, 3, 40, 2, 6, 0.3, '#999'); B.get('matte').box(95.25, 0.5, -130.4, 0.05, 1, 4, '#888', 0.7); B.flush(g); return g.children[0]; };
+  configureMemory('high', { mobile: false, lost: 0 });
+  const plain = build();
+  configureMemory('low', { mobile: true, lost: 0 });
+  const packed = build();
+  assert.ok(plain.geometry.attributes.position.array instanceof Float32Array);
+  const a = packed.geometry.attributes.position;
+  assert.ok(a.array instanceof Int16Array && a.normalized, '坐标是归一化的 16 位整数');
+  assert.equal(a.array.byteLength * 2, plain.geometry.attributes.position.array.byteLength, '坐标占的内存减半');
+  packed.updateMatrixWorld(true);
+  const p = new THREE.Vector3(), q = new THREE.Vector3();
+  let worst = 0;
+  for (let i = 0; i < a.count; i++) { p.fromBufferAttribute(a, i).applyMatrix4(packed.matrixWorld); q.fromBufferAttribute(plain.geometry.attributes.position, i); worst = Math.max(worst, p.distanceTo(q)); }
+  assert.ok(worst < PACK_STEP, `最大偏差 ${(worst * 1000).toFixed(2)} 毫米`);
+  // 包围球跟着换算：视锥剔除照常
+  const sphere = packed.geometry.boundingSphere.clone().applyMatrix4(packed.matrixWorld);
+  assert.ok(sphere.containsPoint(new THREE.Vector3(-120, 3, 40)));
+  // 范围上千米的一批：每格会超过 5 毫米，不压
+  assert.equal(packPositions(new Float32Array([0, 0, 0, 900, 10, 900])), null);
+  assert.ok(packPositions(new Float32Array([0, 0, 0, 300, 10, 300])));
 });
