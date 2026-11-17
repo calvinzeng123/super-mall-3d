@@ -149,7 +149,8 @@ export class MaterialLib {
     Object.assign(this.base, createFacadeMaterials(surfaces, fn => this.onNight(fn)));
     for (const [key, id, strength, roughness = 0.86, metalness = 0] of [
       ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22, 0.48],
-      ['concrete', 'concrete_pavement_02', 0.3], ['brick', 'brick_wall_09', 0.55],
+      // 混凝土墙、梯段、挡墙：清水混凝土（以前借用地面铺装的贴图，墙上是一格格发棕的地砖）
+      ['concrete', 'formed_concrete', 0.45, 0.88], ['brick', 'brick_wall_09', 0.55],
       // 室内墙面：抹灰、木格栅、洞石墙板、拉丝铜饰面（CC0 扫描贴图只有颜色和法线，粗糙度是这里的数）
       ['plaster', 'painted_plaster', 0.35, 0.86], ['slat', 'timber_slats', 0.7, 0.7],
       ['travertine', 'travertine_cladding', 0.5, 0.62], ['bronze', 'brushed_metal', 0.3, 0.38, 0.7],

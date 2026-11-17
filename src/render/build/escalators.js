@@ -7,6 +7,14 @@ const LANDING = 2.4;
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 
+/** 扶梯桁架最多沉到下口楼面以下这么多（m）：留在楼板厚度（0.45）以内，下一层的天花上看不到。 */
+export const TRUSS_SINK = 0.4;
+/** 斜段桁架从下口往上多远开始（沿斜面量）：那里 1 米厚的桁架底面刚好在楼面下 TRUSS_SINK。短扶梯最多让到一半。 */
+export function trussStart(slope) {
+  const cos = Math.cos(PITCH), sin = Math.sin(PITCH);
+  return Math.min(slope / 2, (0.55 / cos + 0.5 * cos - TRUSS_SINK) / sin);
+}
+
 /** 按基向量放置盒子（X 沿长度、Y 向上、Z 横向） */
 function orientedBox(B, key, c, len, h, w, X, Y, Z, color) {
   _m.makeBasis(X, Y, Z);
@@ -65,7 +73,17 @@ export function drawEscalator(B, e, trussCol, trussKey = 'metal') {
   const midY = (y0 + y1) / 2;
 
   // 桁架：斜段 + 上下水平段（外包装饰板）
-  orientedBox(B, trussKey, at(run / 2, 0, midY - 0.55 / cos), slope + 0.4, 1.0, e.width, Xs, Ys, Zs, trussCol);
+  // 斜段桁架 1 米厚，以前从下口一直斜插到楼面以下 1.2 米：下一层的天花上就吊着半截扶梯（车库、B1M 都看得到）。
+  // 现在斜段从 s0 开始（那里桁架底面刚好到楼面下 TRUSS_SINK，还在楼板厚度以内），下口到 s0 之间用几块平的垫块补上。
+  const s0 = trussStart(slope);
+  const f0 = s0 / slope, fc = (s0 + slope + 0.2) / 2 / slope;
+  orientedBox(B, trussKey, at(run * fc, 0, y0 + (y1 - y0) * fc - 0.55 / cos), slope + 0.2 - s0, 1.0, e.width, Xs, Ys, Zs, trussCol);
+  const fill = [[-0.3 / run, 0, -0.02]];
+  for (let k = 0; k < 3; k++) fill.push([f0 * k / 3, f0 * (k + 1) / 3, (y1 - y0) * f0 * k / 3 - 0.2]);
+  for (const [fa, fb, top] of fill) {
+    if (top + TRUSS_SINK < 0.05) continue;
+    orientedBox(B, trussKey, at(run * (fa + fb) / 2, 0, y0 + (top - TRUSS_SINK) / 2), run * (fb - fa), top + TRUSS_SINK, e.width, Xh, Yh, Zs, trussCol);
+  }
   orientedBox(B, trussKey, at(run + LANDING / 2 - 0.2, 0, y1 - 0.45), LANDING + 0.4, 0.9, e.width, Xh, Yh, Zs, trussCol);
   // 底部机坑盖板 / 顶部梳齿板
   orientedBox(B, 'metal', at(-LANDING / 2, 0, y0 + 0.012), LANDING, 0.02, e.width, Xh, Yh, Zs, '#9aa0a6');
@@ -99,7 +117,9 @@ export function escalatorTrim(B, { e, ux, uz, px, pz, run, y0, y1 }) {
   const cos = Math.cos(PITCH), sin = Math.sin(PITCH), slope = Math.hypot(run, y1 - y0), midY = (y0 + y1) / 2;
   const Xs = new THREE.Vector3(ux * cos, sin, uz * cos), Ys = new THREE.Vector3(-ux * sin, cos, -uz * sin), Zs = new THREE.Vector3(px, 0, pz);
   const at = (s, t, y) => new THREE.Vector3(e.bottom.x + ux * s + px * t, y, e.bottom.z + uz * s + pz * t);
-  for (const side of [-1, 1]) orientedBox(B, 'facadeBronze', at(run / 2, side * (e.width / 2 + 0.01), midY - 0.55 / cos).addScaledVector(Ys, -0.25), slope + 0.3, 0.05, 0.02, Xs, Ys, Zs, '#c8a25a');
+  // 跟着桁架走：从 trussStart 开始，不伸到下口楼面以下
+  const s0 = trussStart(slope), fc = (s0 + slope + 0.15) / 2 / slope;
+  for (const side of [-1, 1]) orientedBox(B, 'facadeBronze', at(run * fc, side * (e.width / 2 + 0.01), y0 + (y1 - y0) * fc - 0.55 / cos).addScaledVector(Ys, -0.25), slope + 0.15 - s0, 0.05, 0.02, Xs, Ys, Zs, '#c8a25a');
 }
 
 /** 扶梯灯带：沿斜段的裙板内侧顶边、桁架底面两侧边各一条暖光（glow 材质，夜里更亮） */
@@ -109,7 +129,9 @@ export function escalatorLights(B, { e, ux, uz, px, pz, run, y0, y1 }) {
   const at = (s, t, y) => new THREE.Vector3(e.bottom.x + ux * s + px * t, y, e.bottom.z + uz * s + pz * t);
   for (const side of [-1, 1]) {
     orientedBox(B, 'glow', at(run / 2, side * (e.width / 2 - 0.16), midY + 0.12 / cos).addScaledVector(Ys, 0.13), slope - 0.2, 0.025, 0.02, Xs, Ys, Zs, '#ffe2b0');
-    orientedBox(B, 'glow', at(run / 2, side * (e.width / 2 - 0.04), midY - 0.55 / cos).addScaledVector(Ys, -0.505), slope + 0.3, 0.02, 0.05, Xs, Ys, Zs, '#ffd39a');
+    // 桁架底面的灯带跟着桁架走：从 s0 开始，不伸到楼面以下
+    const s0 = trussStart(slope), fc = (s0 + slope + 0.15) / 2 / slope;
+    orientedBox(B, 'glow', at(run * fc, side * (e.width / 2 - 0.04), y0 + (y1 - y0) * fc - 0.55 / cos).addScaledVector(Ys, -0.505), slope + 0.15 - s0, 0.02, 0.05, Xs, Ys, Zs, '#ffd39a');
   }
 }
 

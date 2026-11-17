@@ -65,6 +65,41 @@ export function parkingPaintCuts(lv, poly) {
     });
 }
 
+/**
+ * 这一层所有车道的世界多边形和走向（单位向量；不是矩形的车道没有走向）。画标线、天花梁时用它判断
+ * 「这一点是不是落在别的车道里」。
+ */
+export function aisleLanes(lv) {
+  return lv.walk.filter((w) => w.kind === 'aisle' && w.poly?.length >= 3).map((w, index) => {
+    let axis = null;
+    if (w.rect) {
+      const r = w.rect, alongU = r.x1 - r.x0 > r.z1 - r.z0, F = w.frame || IDENTITY;
+      const a = toW(F, r.x0, r.z0), b = alongU ? toW(F, r.x1, r.z0) : toW(F, r.x0, r.z1), n = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      axis = [(b[0] - a[0]) / n, (b[1] - a[1]) / n];
+    }
+    return { w, index, poly: w.poly, bb: polyBounds(w.poly), axis };
+  });
+}
+
+/**
+ * 车道 lane 上的点 p（世界坐标）要不要让给别的车道：落在一条交叉的车道里（路口）就让；
+ * 落在一条同向的车道里（两条叠在一起）时，排在后面的让。clear：离别的车道不到这么远也算（箭头不要顶着路口画）。
+ */
+export function laneClash(lanes, lane, p, clear = 0) {
+  if (!lane) return false;
+  for (const o of lanes) {
+    if (o === lane) continue;
+    const b = o.bb;
+    if (p[0] < b.x0 - clear || p[0] > b.x1 + clear || p[1] < b.z0 - clear || p[1] > b.z1 + clear) continue;
+    const parallel = !!(o.axis && lane.axis && Math.abs(o.axis[0] * lane.axis[0] + o.axis[1] * lane.axis[1]) > 0.94);
+    const inside = pointInPolyLocal(p, o.poly);
+    if (parallel) { if (inside && o.index < lane.index) return true; continue; }
+    if (inside) return true;
+    if (clear > 0 && [[clear, 0], [-clear, 0], [0, clear], [0, -clear]].some(([dx, dz]) => pointInPolyLocal([p[0] + dx, p[1] + dz], o.poly))) return true;
+  }
+  return false;
+}
+
 export function buildParking(ctx) {
   const carGeo = carGeometry();
   const carMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.45 });
@@ -82,7 +117,8 @@ export function buildParking(ctx) {
     const aisleCol = lv.theme.key === 'park-blue' ? '#79838f' : lv.theme.key === 'park-green' ? '#7b8880' : '#857f74';
 
     // 车道与步行脊漆面
-    const aisleMat = new THREE.MeshStandardMaterial({ color: aisleCol, roughness: 0.85 });
+    // 粗糙度和 base.floorPaint 一样：矩形车道走合批（floorPaint），带洞的车道走这张材质，两种叠在一起不能一块深一块浅
+    const aisleMat = new THREE.MeshStandardMaterial({ color: aisleCol, roughness: 0.62 });
     ctx.mats.onNight((t) => aisleMat.emissive.setRGB(t * 0.1, t * 0.1, t * 0.11));
     detailFor(aisleMat, ctx.mats.surfaces, 'floorPaint');
     const paint = ctx.mats.base.floorPaint ? 'floorPaint' : 'satin';
@@ -109,7 +145,7 @@ export function buildParking(ctx) {
       }
     }
     for (const [pieces, material] of [[painted, aisleMat], [spinePainted,
-      detailFor(new THREE.MeshStandardMaterial({ color: '#c9c3b6', roughness: .85 }), ctx.mats.surfaces, 'floorPaint')]]) {
+      detailFor(new THREE.MeshStandardMaterial({ color: '#c9c3b6', roughness: .62 }), ctx.mats.surfaces, 'floorPaint')]]) {
       if (!pieces.length) { if (material !== aisleMat) material.dispose(); continue; }
       const merged = mergeGeometries(pieces, false);
       pieces.forEach(g => g.dispose());
@@ -200,8 +236,10 @@ export function buildParking(ctx) {
     const arrow = (x, z, dx, dz) => {
       const ry = Math.atan2(dx, dz);
       B.get('matte').box(x - dx * 0.5, y0 + 0.015, z - dz * 0.5, 0.25, 0.01, 1.6, white, ry);
-      for (const sgn of [-1, 1]) B.get('matte').box(x + dx * 0.35 + sgn * dz * 0.25, y0 + 0.015, z + dz * 0.35 - sgn * dx * 0.25, 0.22, 0.01, 0.9, white, ry + sgn * 0.65);
+      // 箭头的两撇从两侧向前收到尖上（以前转反了，两撇向前张开，画出来是个「Y」）
+      for (const sgn of [-1, 1]) B.get('matte').box(x + dx * 0.39 + sgn * dz * 0.27, y0 + 0.015, z + dz * 0.39 - sgn * dx * 0.27, 0.22, 0.01, 0.9, white, ry - sgn * 0.65);
     };
+    const lanes = aisleLanes(lv);
     for (const w of lv.walk) {
       if (w.kind !== 'aisle' || !w.rect || w.id.endsWith('throat') || w.id.endsWith('endzone')) continue;
       const r = w.rect;
@@ -209,8 +247,11 @@ export function buildParking(ctx) {
       const len = alongU ? r.x1 - r.x0 : r.z1 - r.z0;
       const dir = w.dir || (w.id.endsWith('aisle1') ? [-1, 0] : w.id.endsWith('aisle2') ? [1, 0] : [0, -1]);
       const cuts = parkingPaintCuts(lv, w.poly);
-      const markFits = (x, z) => !cuts.some(poly =>
-        convexOverlap(lrectPoly(w.frame, rect(x - 1.5, z - 1.5, x + 1.5, z + 1.5)), poly));
+      const lane = lanes.find((l) => l.w === w);
+      // 标线要让开楼板洞口，也要让开路口：两条车道交叉的地方不画中线和箭头；两条车道叠在一起（同向）时只有先来的那条画
+      const markFits = (x, z, clear = 0) => !cuts.some(poly =>
+        convexOverlap(lrectPoly(w.frame, rect(x - 1.5, z - 1.5, x + 1.5, z + 1.5)), poly))
+        && !laneClash(lanes, lane, toW(w.frame, x, z), clear);
       B.frame(w.frame, () => {
         const n = Math.floor((len - 4) / 3);
         for (let i = 0; i < n; i++) {
@@ -219,8 +260,8 @@ export function buildParking(ctx) {
           else if (!alongU && markFits((r.x0 + r.x1) / 2, r.z0 + t)) B.get('matte').flat((r.x0 + r.x1) / 2, y0 + 0.019, r.z0 + t, 0.1, 1.4, '#e7b416');
         }
         for (let t = 10; t < len - 6; t += 16) {
-          if (alongU && markFits(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5)) arrow(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5, dir[0], dir[1]);
-          else if (!alongU && markFits((r.x0 + r.x1) / 2 + 1.5, r.z0 + t)) arrow((r.x0 + r.x1) / 2 + 1.5, r.z0 + t, dir[0], dir[1]);
+          if (alongU && markFits(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5, 2.5)) arrow(r.x0 + t, (r.z0 + r.z1) / 2 + 1.5, dir[0], dir[1]);
+          else if (!alongU && markFits((r.x0 + r.x1) / 2 + 1.5, r.z0 + t, 2.5)) arrow((r.x0 + r.x1) / 2 + 1.5, r.z0 + t, dir[0], dir[1]);
         }
       });
     }
@@ -284,13 +325,16 @@ function slopedSlab(B, key, len, ya, yb, w, t, color) {
 function rampMarks(B, len, ya, yb, w, steps) {
   const sl = Math.hypot(len, yb - ya);
   const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(yb - ya, len));
-  const mark = (u, length, width) => B.get('matte').shape('box',
-    new THREE.Vector3(u, ya + (yb - ya) * u / len + .03, 0), q,
-    new THREE.Vector3(length, .02, width), '#ffffff');
+  // 行车方向的箭头（坡道局部 u 是行车方向）：一根杆加两撇，两撇从两侧向前收到尖上。以前是一根杆顶一道横杠，像个「T」
+  const yAt = (u) => ya + (yb - ya) * u / len + .03, HEAD = 0.65, _y = new THREE.Vector3(0, 1, 0);
   for (let i = 1; i < steps; i++) {
     const u = len * i / steps;
-    mark(u, 1.5, .25);
-    mark(u + .75, .45, .9);
+    B.get('matte').shape('box', new THREE.Vector3(u, yAt(u), 0), q, new THREE.Vector3(1.5, .02, .25), '#ffffff');
+    for (const side of [-1, 1]) {
+      const cu = u + 1.15 - 0.45 * Math.cos(HEAD), cv = side * 0.45 * Math.sin(HEAD);
+      B.get('matte').shape('box', new THREE.Vector3(cu, yAt(cu), cv),
+        q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(_y, side * HEAD)), new THREE.Vector3(0.9, .02, .22), '#ffffff');
+    }
   }
   for (const v of [-w / 2 + 0.25, w / 2 - 0.25]) B.get('matte').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + 0.03, v), q, new THREE.Vector3(sl, 0.02, 0.15), '#e7b416');
 }
@@ -302,8 +346,8 @@ function rampGuards(B, len, ya, yb, width) {
   const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(rise, len));
   for (const side of [-1, 1]) {
     const z = side * (width / 2 + .12);
-    B.get('concrete').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + .45, z),
-      q, new THREE.Vector3(sl, .9, .24), '#aeb9b4');
+    B.get('matte').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + .45, z),
+      q, new THREE.Vector3(sl, .9, .24), '#b9bfba');
     B.get('metal').shape('box', new THREE.Vector3(len / 2, (ya + yb) / 2 + .95, z),
       q, new THREE.Vector3(sl, .08, .12), '#536861');
     for (let u = 2; u < len - 1; u += 4) {
@@ -354,6 +398,8 @@ function streetRamps(ctx) {
  * portal, tunnel walls and cover slab between the trench and the deck. */
 function rampHeads(ctx) {
   const S = ctx.site.batch;
+  // 洞口头墙、暗埋段侧墙和盖板：清水混凝土（以前借用铺装混凝土的贴图，颜色发暗发棕，还一格一格的）
+  const wall = ctx.mats.base.facadeBoardConcrete ? 'facadeBoardConcrete' : 'concrete';
   for (const r of ctx.layout.ramps.filter((x) => x.type.startsWith('street'))) {
     const street = r.from.level === 'street' ? r.from : r.to, low = street === r.from ? r.to : r.from;
     const len = Math.hypot(low.x - street.x, low.z - street.z);
@@ -372,11 +418,11 @@ function rampHeads(ctx) {
       if (!r.cover) return;
       const uc = Math.min(len, (len * 4.5) / -low.y);
       // Portal head wall at grade and the cover slab the plaza sits on.
-      S.get('concrete').box(open + 0.2, 0.05, 0, 0.4, 1.0, w + 0.9, '#b9bfba');
-      S.get('concrete').box((open + uc) / 2, -0.42, 0, uc - open, 0.3, w + 0.9, '#a4aca8');
+      S.get(wall).box(open + 0.2, 0.05, 0, 0.4, 1.0, w + 0.9, '#b9bfba');
+      S.get(wall).box((open + uc) / 2, -0.42, 0, uc - open, 0.3, w + 0.9, '#a4aca8');
       for (let u = open; u < uc - 0.01; u += 2) {
         const b = Math.min(uc, u + 2), bottom = yAt(b) - 0.4;
-        for (const v of [-half - 0.3, half + 0.3]) S.get('concrete').box((u + b) / 2, (bottom - 0.27) / 2, v, b - u, -0.27 - bottom, 0.3, '#a9b1ad');
+        for (const v of [-half - 0.3, half + 0.3]) S.get(wall).box((u + b) / 2, (bottom - 0.27) / 2, v, b - u, -0.27 - bottom, 0.3, '#a9b1ad');
       }
       S.get('glow').box((open + uc) / 2, -0.6, 0, uc - open - 0.6, 0.04, 0.16, '#eef6ff');
     });
@@ -385,7 +431,8 @@ function rampHeads(ctx) {
 
 /** 层间坡道（属于下层，聚焦任一层都可见） */
 function innerRamps(ctx) {
-  for (const r of ctx.layout.ramps.filter((x) => x.type === 'down' || x.type === 'up')) {
+  const inner = ctx.layout.ramps.filter((x) => x.type === 'down' || x.type === 'up');
+  for (const r of inner) {
     const low = r.from.y < r.to.y ? r.from.level : r.to.level;
     const B = ctx.levels[low].batch;
     const { F, len } = rampFrame(r);
@@ -394,5 +441,62 @@ function innerRamps(ctx) {
       rampGuards(B, len, r.from.y, r.to.y, r.width);
       rampMarks(B, len, r.from.y, r.to.y, r.width, 6);
     });
+  }
+  rampOpeningParapets(ctx, inner);
+}
+
+/** 坡道洞口的护墙：高、厚（m），和取样步长。 */
+export const RAMP_PARAPET = Object.freeze({ height: 1.1, thick: 0.2, step: 0.5, min: 0.8 });
+
+/**
+ * 坡道洞口四周哪几段要砌护墙。poly 是洞口（世界多边形），mouths 是坡道在这一层的上口 [{ x, z, half }]
+ * （车从那里开上楼面，要留空）。返回每条边上要砌的段 [{ a: [x, z], b: [x, z] }]。
+ */
+export function parapetRuns(poly, mouths, step = RAMP_PARAPET.step, min = RAMP_PARAPET.min) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length], len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    if (len < min) continue;
+    const n = Math.max(1, Math.round(len / step)), at = (t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    let start = null;
+    for (let k = 0; k <= n; k++) {
+      const c = at(Math.min(1, (k + 0.5) / n));
+      const open = k === n || mouths.some((m) => Math.hypot(c[0] - m.x, c[1] - m.z) < m.half);
+      if (!open && start == null) start = k / n;
+      if (open && start != null) { if ((k / n - start) * len >= min) out.push({ a: at(start), b: at(k / n) }); start = null; }
+    }
+  }
+  return out;
+}
+
+/**
+ * 层间坡道在上层楼板上开的洞：以前洞口四周什么都没有，站在上层往洞里看，直接看到下一层的地面，像地板没有底。
+ * 现在沿洞口砌一圈混凝土护墙（带一道黄黑警示带和钢扶手），只在坡道开上来的那一头留口。属于上层。
+ */
+function rampOpeningParapets(ctx, ramps) {
+  const P = RAMP_PARAPET, done = new Set();
+  for (const r of ramps) {
+    const hi = r.from.y > r.to.y ? r.from : r.to, upper = ctx.layout.levels.find((l) => l.id === hi.level), L = ctx.levels[hi.level];
+    if (!upper || !L) continue;
+    const mid = [(r.from.x + r.to.x) / 2, (r.from.z + r.to.z) / 2];
+    const hole = upper.voids.find((v) => v.kind === 'ramp' && v.poly && pointInPolyLocal(mid, v.poly));
+    if (!hole || done.has(hole)) continue;
+    done.add(hole);
+    // 这个洞里所有坡道的上口（中央坡道一个洞里有上、下两条）
+    const mouths = ramps.filter((o) => pointInPolyLocal([(o.from.x + o.to.x) / 2, (o.from.z + o.to.z) / 2], hole.poly))
+      .map((o) => { const h = o.from.y > o.to.y ? o.from : o.to; return { x: h.x, z: h.z, half: o.width / 2 + 0.45 }; });
+    const B = L.batch, y0 = upper.elev;
+    const cx = hole.poly.reduce((t, q) => t + q[0], 0) / hole.poly.length, cz = hole.poly.reduce((t, q) => t + q[1], 0) / hole.poly.length;
+    for (const { a, b } of parapetRuns(hole.poly, mouths)) {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ry = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      // 墙立在洞口外侧的楼板上（往洞外挪半个墙厚）
+      let nx = (b[1] - a[1]) / len, nz = -(b[0] - a[0]) / len;
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      if ((mx + nx - cx) ** 2 + (mz + nz - cz) ** 2 < (mx - cx) ** 2 + (mz - cz) ** 2) { nx = -nx; nz = -nz; }
+      const x = mx + nx * P.thick / 2, z = mz + nz * P.thick / 2;
+      B.get('matte').box(x, y0 + P.height / 2, z, P.thick, P.height, len + P.thick, '#b9bfba', ry);
+      B.get('matte').box(x, y0 + 0.16, z, P.thick + 0.02, 0.16, len + P.thick, '#e7b416', ry);
+      B.get('metal').box(x, y0 + P.height + 0.06, z, 0.08, 0.06, len + P.thick, '#59605d', ry);
+    }
   }
 }

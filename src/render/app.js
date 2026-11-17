@@ -148,7 +148,9 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
   usePropLibrary(props);
 
   // depthCues：贴地假阴影、天花分格这些增加立体感的细节。完整园区和小游戏有；FPS 没有，画面保持原样。
-  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality, props, depthCues: !fps };
+  const ctx = { layout, mats, scene, root, renderer, camera, levels: {}, buildings: {}, atlas: {}, dynamic: [], afterRender: [], site: null, quality: initialQuality, props, depthCues: !fps,
+    // 头顶的梁和管线（车库）：只在第一人称里显示，俯视看平面时关掉。ceiling.js 往 groups 里登记
+    overhead: { groups: [], visible: !!fps } };
   const detailQueue = createSerialTaskQueue();
   const assetAnisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   let residentialProgress = '';
@@ -601,7 +603,15 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
     renderer.shadowMap.needsUpdate = true;
   }
 
+  function applyOverhead() {
+    const on = !!fps || !!state.explore, o = ctx.overhead;
+    o.visible = on;
+    o.groups = o.groups.filter((g) => g.parent); // 按需加载的楼层释放后，它的那一组就不在场景里了
+    for (const g of o.groups) g.visible = on;
+  }
+
   function applyVisibility() {
+    applyOverhead();
     if (floorCache) {
       // A non-movement refresh (labels/quality/etc.) should not rewind the
       // approach check to the last 24m sector's old position.

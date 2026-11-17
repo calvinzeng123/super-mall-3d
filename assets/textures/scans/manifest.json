@@ -4,7 +4,7 @@
   "license": "CC0-1.0",
   "licenseLegalCode": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
   "credit": "Textures from Poly Haven and ambientCG (CC0). Downloaded once by scripts/textures/fetch-scans.py and self-hosted; no runtime API requests.",
-  "totalImageBytes": 6292315,
+  "totalImageBytes": 6295855,
   "assets": [
     {
       "id": "carpet_loop",
@@ -405,17 +405,17 @@
         2000,
         2000
       ],
-      "processing": "colour mean normalised to rgb(134, 123, 111), contrast ×0.45; resized and JPEG-recompressed; no generative synthesis",
+      "processing": "colour mean normalised to rgb(128, 128, 126), contrast ×0.45, desaturated 0.6; resized and JPEG-recompressed; no generative synthesis",
       "meanColor": [
-        134,
-        123,
-        111
+        128,
+        128,
+        126
       ],
       "maps": {
         "color": {
           "path": "assets/textures/scans/garage_concrete/color.jpg",
-          "bytes": 249966,
-          "sha256": "2365c3db967bc809b6eb8e19fd5073223ace0e2414792eaa7a5c0b512014f8c1",
+          "bytes": 253506,
+          "sha256": "8725384f7c6c36806e8281c32ea2e52415f7c28447731ec519c5dc0a133bcb9e",
           "purpose": "color",
           "colorSpace": "srgb",
           "width": 1024,

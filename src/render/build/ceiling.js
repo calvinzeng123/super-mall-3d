@@ -6,6 +6,7 @@ import { pointInPoly, toW } from '../../layout/geom.js';
 import { SLAB_T, ceilingBays, shapeFromPoly, flatShapeGeometry } from './shell.js';
 import { MEM } from '../device.js';
 import { detailFor } from '../pbr.js';
+import { BatchSet } from '../batch.js';
 
 /** 梁的截面和取样步长（m）。 */
 export const RIB = Object.freeze({ width: 0.2, depth: 0.3, step: 0.25, min: 0.75 });
@@ -111,9 +112,9 @@ export const GARAGE_BEAM = Object.freeze({ width: 0.4, depth: 0.45, bay: 8.1, re
  *   1. 板底：上一层楼板底下贴一张灰色混凝土面，只有从下面看得见（背面材质），俯视看这一层时不挡视线；
  *   2. 梁：沿每条车道两侧各一道纵梁，每隔 8.1 米一道横梁（跨过车道、伸到两侧车位上方）；
  *   3. 管线：车道一侧一根红色消防主管、一条灰色风管。
- * 梁和管线只画在头顶真有楼板的地方（坡道口、扶梯洞、中庭上方不画）。
+ * 梁和管线只画在头顶真有楼板的地方（坡道口、扶梯洞、中庭上方不画），单独成一组、只在第一人称里显示。
  */
-export function garageCeiling(ctx, b, lv) {
+export function garageCeiling(ctx, b, lv, { batch = null } = {}) {
   if (!ctx.depthCues || lv.kind !== 'parking' || b.kind === 'tower') return;
   const order = b.levels || [], above = ctx.lvById?.[order[order.indexOf(lv.id) + 1]];
   if (!above?.slab) return;
@@ -140,16 +141,22 @@ export function garageCeiling(ctx, b, lv) {
   // ---------- 梁和管线（省内存档只留板底） ----------
   if (!MEM.decor) return;
   const G = GARAGE_BEAM, tone = '#a9adae', y = top - G.depth / 2;
-  for (const w of lv.walk) {
-    if (w.kind !== 'aisle' || !w.rect) continue;
+  // 梁和管线单独成一组：只在走进去（第一人称）时显示。俯视看这一层的平面时它们压在车位和车道上面，一团乱。
+  const C = batch || new BatchSet(ctx.mats.base); // batch：单元测试传一个记账用的批次进来
+  // 各条车道的梁各管各的一片：长车道先做，后做的车道（斜着接进来的翼楼车道、叠在上面的共享车道）
+  // 的梁和管线不伸进别人已经做过的那一片，不然不同朝向的梁在头顶交叉成一团。
+  const aisles = lv.walk.filter((w) => w.kind === 'aisle' && w.rect && Math.max(w.rect.x1 - w.rect.x0, w.rect.z1 - w.rect.z0) >= 6)
+    .sort((p, q) => (q.rect.x1 - q.rect.x0) * (q.rect.z1 - q.rect.z0) - (p.rect.x1 - p.rect.x0) * (p.rect.z1 - p.rect.z0));
+  const claimed = [];
+  const free = (x, z) => !claimed.some((q) => x >= q.bb[0] && x <= q.bb[2] && z >= q.bb[1] && z <= q.bb[3] && pointInPoly([x, z], q.poly));
+  for (const w of aisles) {
     const r = w.rect, alongU = r.x1 - r.x0 > r.z1 - r.z0, F = w.frame;
     const len = alongU ? r.x1 - r.x0 : r.z1 - r.z0, a0 = alongU ? r.x0 : r.z0, c0 = alongU ? r.z0 : r.x0, c1 = alongU ? r.z1 : r.x1;
-    if (len < 6) continue;
     // 局部坐标：a 沿车道、c 横过车道
     const P = (a, c) => (alongU ? toW(F, a, c) : toW(F, c, a));
-    const ok = (a, c) => { const [x, z] = P(a, c); return covered(x, z); };
-    const put = (key, a, c, la, h, lc, color, yy) => (alongU ? B.get(key).box(a, yy, c, la, h, lc, color) : B.get(key).box(c, yy, a, lc, h, la, color));
-    B.frame(F, () => {
+    const ok = (a, c) => { const [x, z] = P(a, c); return covered(x, z) && free(x, z); };
+    const put = (key, a, c, la, h, lc, color, yy) => (alongU ? C.get(key).box(a, yy, c, la, h, lc, color) : C.get(key).box(c, yy, a, lc, h, la, color));
+    C.frame(F, () => {
       // 纵梁：车道两侧
       for (const c of [c0, c1]) for (const [t0, t1] of runs(len, G.step, (t) => ok(a0 + t * len, c))) {
         if ((t1 - t0) * len >= G.min) put('matte', a0 + (t0 + t1) / 2 * len, c, (t1 - t0) * len, G.depth, G.width, tone, y);
@@ -170,5 +177,16 @@ export function garageCeiling(ctx, b, lv) {
         }
       }
     });
+    // 这条车道管的一片：车道本身加两侧横梁伸到的地方（多留半个梁宽，别人的梁不贴着它）
+    const m = G.reach + G.width, poly = [P(a0 - m / 2, c0 - m), P(a0 + len + m / 2, c0 - m), P(a0 + len + m / 2, c1 + m), P(a0 - m / 2, c1 + m)];
+    claimed.push({ poly, bb: bounds(poly) });
   }
+  if (batch) return;
+  const overhead = new THREE.Group();
+  overhead.name = `${lv.id}-garage-overhead`;
+  overhead.userData.overhead = true;
+  C.flush(overhead);
+  L.base.add(overhead);
+  // app.js 按是不是第一人称来开关（ctx.overhead 是各层共用的一份记录；单元测试里没有，就一直显示）
+  if (ctx.overhead) { ctx.overhead.groups.push(overhead); overhead.visible = ctx.overhead.visible; }
 }

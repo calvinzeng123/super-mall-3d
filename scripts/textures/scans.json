@@ -18,7 +18,7 @@
     { "id": "cobble_fan", "label": "扇形小方石", "use": "三期街巷的石块路面", "source": "ambientcg", "asset": "PavingStones150",
       "meters": [1.8, 1.8], "mean": [134, 123, 111], "contrast": 0.9, "maps": { "color": 1024, "normal": 1024 } },
     { "id": "garage_concrete", "label": "车库混凝土地坪", "use": "地下停车场地面（蓝区、绿区）", "source": "polyhaven", "asset": "concrete_floor_02",
-      "meters": [2.0, 2.0], "mean": [134, 123, 111], "contrast": 0.45, "maps": { "color": 1024, "normal": 512 } },
+      "meters": [2.0, 2.0], "mean": [128, 128, 126], "contrast": 0.45, "desaturate": 0.6, "maps": { "color": 1024, "normal": 512 } },
     { "id": "granite_speckle", "label": "芝麻灰花岗岩", "use": "地铁站台地面", "source": "ambientcg", "asset": "Granite002A",
       "meters": [2.4, 2.4], "mean": [205, 205, 203], "contrast": 0.8, "panels": { "cols": 4, "rows": 4, "joint": 2, "shade": 0.03, "depth": 0.6 }, "maps": { "color": 1024 } },
     { "id": "rubber_track", "label": "塑胶跑道面层", "use": "屋顶跑道", "source": "polyhaven", "asset": "rubberized_track",

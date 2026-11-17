@@ -312,7 +312,7 @@ test('车库天花：板底只从下面看得见，梁和管线只挂在头顶�
   const boxes = [], added = [];
   const B = { frame: (f, fn) => fn(), get: (key) => ({ box: (x, y, z, sx, sy, sz, color) => boxes.push({ key, x, y, z, sx, sy, sz, color }) }) };
   const ctx = { depthCues: true, mats: { onNight() {} }, lvById: { 'G-B1': lv, 'G-1F': above }, levels: { 'G-B1': { batch: B, base: { add: (m) => added.push(m) } } } };
-  garageCeiling(ctx, { id: 'G', kind: 'mall', levels: ['G-B1', 'G-1F'] }, lv);
+  garageCeiling(ctx, { id: 'G', kind: 'mall', levels: ['G-B1', 'G-1F'] }, lv, { batch: B });
   const soffit = 0 - 0.03 - 0.45; // 上一层楼板体的底面
   assert.equal(added.length, 1);
   assert.equal(added[0].material.side, THREE.BackSide, '板底只从下面看得见（俯视这一层时不挡视线）');
@@ -329,7 +329,29 @@ test('车库天花：板底只从下面看得见，梁和管线只挂在头顶�
   assert.ok(boxes.some((b) => b.color === '#b5382e'), '有消防主管');
   // 塔楼（酒店、公寓）的车库自己有吊顶；FPS 模式不画
   for (const [c, kind] of [[ctx, 'tower'], [{ ...ctx, depthCues: false }, 'mall']]) {
-    const n = boxes.length; garageCeiling(c, { id: 'G', kind, levels: ['G-B1', 'G-1F'] }, lv);
+    const n = boxes.length; garageCeiling(c, { id: 'G', kind, levels: ['G-B1', 'G-1F'] }, lv, { batch: B });
     assert.equal(boxes.length, n); assert.equal(added.length, 1);
+  }
+});
+
+test('车库天花：两条交叉的车道，后做的那条的梁和管线不伸进先做的那一片（头顶不交叉成一团）', () => {
+  const F = frame(0, 0, 0, 'G'), X = frame(30, 13, 35, 'X'); // X：斜着穿过主车道的一条短车道
+  const main = { id: 'main', kind: 'aisle', frame: F, rect: rect(0, 10, 60, 16) };
+  const skew = { id: 'skew', kind: 'aisle', frame: X, rect: rect(-18, -3, 18, 3) };
+  const lv = { id: 'G-B1', kind: 'parking', elev: -4.5, height: 4.5, walk: [skew, main] };
+  const above = { id: 'G-1F', kind: 'retail', elev: 0, slab: { pieces: [{ outer: square(-40, -40, 100, 60), holes: [] }] } };
+  const boxes = []; let cur = F;
+  const B = { frame: (f, fn) => { const prev = cur; cur = f; fn(); cur = prev; }, get: (key) => ({ box: (x, y, z, sx, sy, sz, color) => boxes.push({ key, f: cur, x, z, sx, sz }) }) };
+  const ctx = { depthCues: true, mats: { onNight() {} }, lvById: { 'G-B1': lv, 'G-1F': above }, levels: { 'G-B1': { batch: B, base: { add() {} } } } };
+  garageCeiling(ctx, { id: 'G', kind: 'mall', levels: ['G-B1', 'G-1F'] }, lv, { batch: B });
+  assert.ok(boxes.some((b) => b.f === F) && boxes.some((b) => b.f === X), '两条车道都有梁');
+  // 主车道管的一片：车道两侧各加横梁伸出去的长度
+  const m = GARAGE_BEAM.reach, zone = square(0, 10 - m, 60, 16 + m);
+  for (const b of boxes.filter((q) => q.f === X)) {
+    const along = b.sx > b.sz, half = (along ? b.sx : b.sz) / 2 - GARAGE_BEAM.step;
+    for (const t of [-half, 0, half]) {
+      const p = toW(X, b.x + (along ? t : 0), b.z + (along ? 0 : t));
+      assert.ok(!pointInPoly(p, zone), `斜车道的梁伸进了主车道那一片：${p.map((v) => v.toFixed(1))}`);
+    }
   }
 });
