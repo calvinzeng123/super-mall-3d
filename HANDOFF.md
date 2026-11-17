@@ -15,6 +15,7 @@
 - **下载 / 处理**：`python3 -I scripts/textures/fetch-scans.py`（清单 `scripts/textures/scans.json`；要 Pillow + numpy；原图缓存在系统临时目录，不进仓库）。处理只有：缩放和 JPEG 重压、个别转 90°（木格栅、条形挂板）、`repeat`（水磨石平铺 2×2 让石子变小）、`panels`（把连续石材切成板、画板缝、法线压出凹槽：洞石、水磨石、花岗岩、吊顶）、`mean` / `contrast` / `desaturate`（**颜色贴图的平均色统一调成浅中性色**——色调由顶点色和 `tint` 给，所以换贴图没有带偏场景颜色，也不用逐处重调）。原图不是正方形的（PaintedPlaster017 是 2:1）沿短边平铺，不拉伸。
 - **构建**：`build.mjs` 读 `assets/textures/manifest.json` + `assets/textures/scans/manifest.json`（`SURFACE_ASSETS` 多了 `mean`，细纹理用它归一）；`build-netlify.mjs` 的署名页加了 ambientCG。单文件版 83.5 → 87.0 MB。
 - **内存**：手机标准档每套贴图上限 512²，26 套合计约 76 MB（以前 19 套约 80 MB：新贴图大多少了粗糙度贴图，5 套只有颜色）；电脑原始大小约多 70 MB。省内存档只留 256² 颜色贴图，没有细纹理。
+- **实测**（同 11-17 内存那一节的口径，Chromium、iPhone UA）：导览省内存档 总览 几何 213 MB / 贴图 111 MB、漫游 238 / 105 MB（换贴图前 213 / 110、238 / 103，没变）；零点突围标准档 开局后 几何 341 MB / 贴图 196 MB。两种模式都没有着色器或页面报错。
 - **测试**：`tests/scan-textures.test.js`（文件和清单一致、出处授权齐全、平均色中性、每套都有材质在用、总量 < 8 MB）；删了 `tests/procedural-textures.test.js`。
 - **看过的**（Chromium + SwiftShader，电脑档）：一期 2F 走道（地毯、天花分格）、1F 中庭（洞石柱）、B1 车库（顶板模板纹、车道地坪）、天台（大板石材）、地铁站厅 / 站台（水磨石）、一期外立面（洞石干挂板）、三期街巷（小方石、砖墙）、广场铺地。截图在对话 scratchpad 的 `tex/after1`、`tex/after2`。没有着色器报错。
 - **没做 / 可以接着做**：绿植、灯笼、汽车这些低模是几何问题，不是贴图；`satin` / `metal` 没叠细纹理；远处背景楼只是 `ext` 的混凝土细纹理，没有窗墙贴图（ambientCG 有 Facade 系列可用）；真机没测。
