@@ -33,7 +33,7 @@ function cabin(B, hw, hd) {
 /** The floor display in the car: a canvas screen drawn on change. */
 function screenOf(group, hd) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 96;
-  const texture = canvasTexture(c, { clamp: true });
+  const texture = canvasTexture(c, { clamp: true, live: true });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.32), new THREE.MeshBasicMaterial({ map: texture }));
   screen.position.set(0, 2.37, -hd + 0.045); group.add(screen);
   let last = '';

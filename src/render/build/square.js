@@ -122,7 +122,7 @@ function cinema(ctx, L, f, y0) {
   // 银幕画面（夜晚更亮）
   const c = makeCanvas(1024, 448);
   const g = c.getContext('2d');
-  const tex = canvasTexture(c, { clamp: true });
+  const tex = canvasTexture(c, { clamp: true, live: true });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(16.2, 7.2), ctx.mats.screen(tex, 0.7, 1.7));
   const [x, z] = toW(f.frame, sx - 0.05, cz);
   mesh.position.set(x, y0 + 4.9, z);

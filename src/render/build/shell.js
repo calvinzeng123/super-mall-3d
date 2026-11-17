@@ -724,7 +724,7 @@ function signage(ctx, b) {
     const L = ctx.levels[lv(cfg.led.level).id];
     const c = makeCanvas(1024, 384);
     const g = c.getContext('2d');
-    const tex = canvasTexture(c, { clamp: true });
+    const tex = canvasTexture(c, { clamp: true, live: true });
     const mat = ctx.mats.screen(tex, 0.8, 1.6);
     const W = 26, H = 4.4;
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);

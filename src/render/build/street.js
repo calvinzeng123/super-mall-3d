@@ -626,7 +626,7 @@ function stage(ctx, L, f, y) {
   // LED 背景屏（动态）
   const c = makeCanvas(1024, 512);
   const g = c.getContext('2d');
-  const tex = canvasTexture(c, { clamp: true });
+  const tex = canvasTexture(c, { clamp: true, live: true });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(f.w - 1.2, 4.6), ctx.mats.screen(tex, 0.85, 1.6));
   const [x, z] = toW(F, -f.d / 2 + 0.12, 0);
   mesh.position.set(x, y + 3.6, z);

@@ -1,6 +1,6 @@
 // Canvas 程序化贴图：地面材质、招牌图集、图标、标注、LED 屏、周边楼窗格。
 import * as THREE from 'three';
-import { TEX_SCALE } from './device.js';
+import { TEX_SCALE, MEM } from './device.js';
 
 export const FONT_CN = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Source Han Sans SC",sans-serif';
 export const FONT_EN = '"Barlow Semi Condensed","Avenir Next Condensed","Helvetica Neue",Arial,sans-serif';
@@ -36,6 +36,7 @@ export function scaled(c, k = TEX_SCALE) {
   // unreachable; resize it now, after drawImage has copied the pixels.
   c.width = 1;
   c.height = 1;
+  s.scaledDown = true;
   return s;
 }
 
@@ -48,7 +49,17 @@ export function releaseAfterUpload(t) {
   return t;
 }
 
-export function canvasTexture(c, { repeat = 1, srgb = true, clamp = false } = {}) {
+/**
+ * live：这张画布之后还会重画（大屏、电梯楼层显示），不能换成缩小的副本。
+ * 其余的静态画布（招牌、海报、导视牌、横幅……）在手机的内存档位下自动缩小：以前只有 4 处手工调了 scaled()，
+ * 另外三十多处一直按原始大小上传（1024×512 一张就是 2.7MB，几十张加起来上百 MB）。只缩大于 256 的，小图不动。
+ */
+export function canvasTexture(c, { repeat = 1, srgb = true, clamp = false, live = false } = {}) {
+  if (!live && TEX_SCALE < 1 && !c.scaledDown && Math.max(c.width, c.height) > 256) {
+    // 省内存档再狠一点会糊得看不清字：缩放不低于 0.5，且最长边不低于 256
+    const k = Math.max(TEX_SCALE, MEM.name === 'compact' ? 0.5 : TEX_SCALE, 256 / Math.max(c.width, c.height));
+    if (k < 1) c = scaled(c, k);
+  }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = clamp ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
