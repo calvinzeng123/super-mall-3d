@@ -375,6 +375,30 @@ function entrances(ctx) {
   }
 }
 
+/** 道闸离坡道下口多远（m）：下口平段上，过了坡脚再走这么远。 */
+export const DECK_GATE = Object.freeze({ offset: 2.2, arm: 1.05, lift: 1.25 });
+
+/**
+ * 坡道下口的道闸：立柱（取卡 / 缴费机）加横杆，在车库那一层、坡脚往里 2.2 米。道闸放在下面，
+ * 坡道本身（28–60 米）就是排队区：以前道闸在路边，杆前只有 5–8 米，第二辆车就排到马路上了。
+ */
+function deckGate(B, r, street, low, side, lv) {
+  const F = frame(low.x, low.z, Math.atan2(low.z - street.z, low.x - street.x) * DEG); // u 指向车库里
+  const y = low.y, u = DECK_GATE.offset, half = r.width / 2;
+  // 立柱靠墙的一侧：哪一侧往外 1 米还是可走的楼面（车道、过道），那一侧就是敞着的，立柱放另一侧，不挡拐弯的车
+  const open = (sgn) => { const p = toW(F, u, sgn * (half + 1)); return !!lv?.walk?.some((w) => w.poly && pointInPoly(p, w.poly)); };
+  if (open(side) && !open(-side)) side = -side;
+  B.frame(F, () => {
+    B.get('metal').box(u, y + 0.55, side * (half - 0.25), 0.4, 1.1, 0.4, '#d9dde0');
+    B.get('satin').box(u, y + 1.25, side * (half - 0.25), 0.3, 0.3, 0.3, '#2f6fd6');
+    // 横杆是抬起来的（和西侧地面停车场一样，不拦漫游的人和动画里的车）：从立柱顶斜着指向车道上方
+    const A = DECK_GATE.lift, L = Math.min(r.width - 1.2, 2.2), pv = side * (half - 0.25), dy = Math.sin(A), dv = -side * Math.cos(A);
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), side * A);
+    B.get('satin').shape('box', new THREE.Vector3(u, y + DECK_GATE.arm + dy * L / 2, pv + dv * L / 2), q, new THREE.Vector3(0.1, 0.1, L), '#e8352b');
+    for (let k = 1; k < 4; k++) B.get('matte').shape('box', new THREE.Vector3(u, y + DECK_GATE.arm + dy * L * k / 4, pv + dv * L * k / 4), q, new THREE.Vector3(0.11, 0.11, 0.35), '#f4f4f0');
+  });
+}
+
 /** 车库出入口：限高架、道闸、岗亭、P 灯箱（在坡道地面端，沿坡道方向的局部坐标系）；坡道敞开段护栏 */
 function garageGates(ctx, S, B) {
   const y = -0.14;
@@ -386,13 +410,19 @@ function garageGates(ctx, S, B) {
     const inbound = r.type === 'street-in';
     // Paired lanes keep the post, booth and sign on their outer side.
     const side = r.gate?.side ?? 1, signSide = r.gate?.sign ?? -1;
+    const deck = ctx.levels?.[other.level]?.batch || null;
+    if (deck) deckGate(deck, r, street, other, side, ctx.layout.levels.find((l) => l.id === other.level));
     B.frame(F, () => {
       const g = 4;
       for (const dv of [-r.width / 2 - 0.4, r.width / 2 + 0.4]) B.get('extMetal').cyl(g, y, dv, 0.14, 3.0, '#e7b416', 8);
       B.get('extMetal').box(g, y + 2.9, 0, 0.3, 0.35, r.width + 1.2, '#e7b416');
       for (let i = 0; i < 6; i++) B.get('ext').box(g + 0.16, y + 2.9, -r.width / 2 + 0.4 + i * ((r.width - 0.8) / 5), 0.02, 0.36, 0.5, i % 2 ? '#1d2023' : '#e7b416');
-      B.get('extMetal').box(1.5, y + 0.55, side * (r.width / 2 + 0.6), 0.45, 1.1, 0.45, '#d9dde0');
-      B.get('ext').box(1.5, y + 1.05, 0, 0.12, 0.12, r.width, '#e8352b');
+      // 道闸不在路边：放在坡道下口（见下面 deckGate），整条坡道当排队区，等杆的车不会排到马路上。
+      // 路边只留限高架、岗亭和 P 灯箱。
+      if (!deck) {
+        B.get('extMetal').box(1.5, y + 0.55, side * (r.width / 2 + 0.6), 0.45, 1.1, 0.45, '#d9dde0');
+        B.get('ext').box(1.5, y + 1.05, 0, 0.12, 0.12, r.width, '#e8352b');
+      }
       if (r.gate?.booth !== false) {
         B.get('ext').box(1.6, y + 1.4, side * (r.width / 2 + 2.4), 2.2, 2.8, 2.2, '#e9ecef');
         B.get('glass').box(1.6, y + 1.7, side * (r.width / 2 + 1.29), 1.8, 1.2, 0.04, 0xffffff);

@@ -3,7 +3,7 @@
 // the west surface lot gains gates on its north and south streets. A ramp is
 // open only until its surface is 3.05 m below grade; beyond that the plaza
 // continues over a covered tunnel, as at the surveyed hotel and apartment gates.
-import { IDENTITY, frame, rect, rectPoly, lrectPoly, toW, polyBounds, convexOverlap } from './geom.js';
+import { IDENTITY, frame, rect, rectPoly, lrectPoly, toW, polyBounds, convexOverlap, pointInPoly } from './geom.js';
 import { subtractRect } from './urban.js';
 
 const DECK = 'P1-B1', DECK_Y = -8.4, OPEN_DEPTH = 3.05, SLAB_DEPTH = 4.1;
@@ -11,20 +11,28 @@ const DECK = 'P1-B1', DECK_Y = -8.4, OPEN_DEPTH = 3.05, SLAB_DEPTH = 4.1;
 /** street: ground-level end; deck: arrival on P1-B1. gate.side puts the
  * ticket post and booth on the outer side of a paired lane. */
 export const P1_GARAGE_RAMPS = [
-  { id: 'P1-N-IN', quadrant: '方庭北口', street: [-166, -252.75], deck: [-226, -252.75], width: 5.5, gate: { side: -1, booth: false, sign: -1 } },
+  // 北口：北外环贴着地块的车道往东开。入口坡道口朝西（东行的车右转一把就下坡），在出口的上游；
+  // 出口从方庭下面往东上来，右转并入东行车道。以前两条坡道口都朝东，进库要先右转再掉头 180°。
+  { id: 'P1-N-IN', quadrant: '方庭北口', street: [-186, -252.75], deck: [-126, -252.75], width: 5.5, gate: { side: -1, booth: false, sign: -1 } },
   { id: 'P1-N-OUT', quadrant: '方庭北口', out: true, street: [-166, -246.75], deck: [-226, -246.75], width: 5.5, gate: { side: 1, booth: false, sign: 1 } },
-  { id: 'P1-E-IN', quadrant: '星湾东口', street: [-19, -90.5], deck: [-19, -34.5], width: 5, gate: { side: 1, booth: false, sign: 1 } },
-  { id: 'P1-E-OUT', quadrant: '星湾东口', out: true, street: [-24.5, -90.5], deck: [-24.5, -34.5], width: 5, gate: { side: -1, booth: true, sign: -1 } },
+  // 东口：两条坡道贴着星湾路西侧并排往南下。入口在西（x −24.5）、出口在东（x −19）：进车沿硬地往西开到头左转下坡，
+  // 出车上来右转就到路边，两条轨迹不交叉（以前入口在东，进车左转时横穿出车的路线）。
+  { id: 'P1-E-IN', quadrant: '星湾东口', street: [-24.5, -90.5], deck: [-24.5, -34.5], width: 5, gate: { side: -1, booth: true, sign: -1 } },
+  { id: 'P1-E-OUT', quadrant: '星湾东口', out: true, street: [-19, -90.5], deck: [-19, -34.5], width: 5, gate: { side: 1, booth: false, sign: 1 } },
 ];
 // Right-in/right-out aprons from the street edge to both lane heads.
 export const P1_GARAGE_APRONS = [
-  { id: 'P1-N-apron', street: '北外环', rect: rect(-167, -256, -155, -244) },
+  { id: 'P1-N-in-apron', street: '北外环', rect: rect(-192, -256, -186, -250) },
+  // 出口的硬地是个「L」：入口坡道的敞开段到 x −164.2 才盖上，硬地在那以东才伸到路边
+  { id: 'P1-N-apron', street: '北外环', rect: rect(-167, -250, -155, -244) },
+  { id: 'P1-N-apron-street', street: '北外环', rect: rect(-164, -256, -155, -250) },
   { id: 'P1-E-apron', street: '星湾路', rect: rect(-27.3, -97.5, -10, -90.5) },
 ];
 // Deck lanes joining each ramp foot to the existing aisle grid. The east foot
 // turns west along the deck edge and meets the z=-39 aisle short of the SE stair core.
 export const P1_GARAGE_ARRIVALS = [
   { id: 'P1-N-arrival', rect: rect(-240, -255.5, -226, -242.5) },
+  { id: 'P1-N-in-arrival', rect: rect(-126, -255.5, -116, -250) },
   { id: 'P1-E-arrival', rect: rect(-27.3, -34.5, -16, -29) },
   { id: 'P1-E-arrival-west', rect: rect(-56, -36, -27.3, -29) },
 ];
@@ -95,8 +103,42 @@ function addWestLotGates(layout) {
   }
 }
 
+/**
+ * 并排的进出坡道里左右放反的几组（顺着进库方向看，入口应该在右手边）：住宅 R1、酒店、西侧公共车库北口。
+ * 园区靠右行驶，放反的话进库右转的车和出库右转的车在路口交叉。坡道本身不动，只把入口 / 出口对调。
+ */
+export const KEEP_RIGHT_SWAPS = ['R1', 'H', 'WPG'];
+
+/** 把 key-IN / key-OUT 两条坡道的角色对调（位置、宽度、岗亭侧向都跟着坡道本身，不跟着名字）。 */
+function swapPair(layout, key) {
+  const a = layout.ramps.find(r => r.id === `${key}-IN`), b = layout.ramps.find(r => r.id === `${key}-OUT`);
+  if (!a || !b) return;
+  for (const [r, out] of [[a, true], [b, false]]) {
+    const street = r.from.level === 'street' ? r.from : r.to, low = street === r.from ? r.to : r.from;
+    r.id = `${key}-${out ? 'OUT' : 'IN'}`;
+    r.type = out ? 'street-out' : 'street-in';
+    r.from = out ? low : street; r.to = out ? street : low;
+    r.name = (r.name || '').replace(out ? '入口' : '出口', out ? '出口' : '入口');
+  }
+}
+
+/**
+ * 靠右行驶的出入口：对调放反的几组；公寓出口的硬地改成往东接星湾路（出坡道直行，右转并入南行车道——
+ * 在北外环路口的驶离一侧），不再只接北外环、把出库的车送到路口停车线前。只在完整游览布局里做，紧凑 FPS 布局不动。
+ */
+function keepRightEntrances(layout) {
+  for (const key of KEEP_RIGHT_SWAPS) swapPair(layout, key);
+  const out = layout.ramps.find(r => r.id === 'A-OUT');
+  if (out) {
+    const s = out.from.level === 'street' ? out.from : out.to, half = out.width / 2;
+    const old = layout.site.driveways.findIndex(d => pointInPoly([s.x + 2.5, s.z], d) && polyBounds(d).x1 < -10.5);
+    if (old >= 0) layout.site.driveways[old] = rectPoly(rect(s.x, s.z - half, -10, s.z + half));
+  }
+}
+
 export function applyP1VehicleAccess(layout) {
   addGarageRamps(layout);
   addWestLotGates(layout);
+  keepRightEntrances(layout);
   return layout;
 }

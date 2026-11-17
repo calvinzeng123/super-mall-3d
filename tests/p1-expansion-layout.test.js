@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildLayout } from '../src/layout/layout.js';
 import { buildNav, clear, step } from '../src/layout/nav.js';
 import { polyArea, polyBounds, pointInPoly, lrectPoly, toW, rect, rectPoly, segProbes } from '../src/layout/geom.js';
+import { KEEP_RIGHT_SWAPS } from '../src/layout/p1-access.js';
 import { COMPACT_IDENTICAL } from './campus-deltas/index.js';
 
 const L=buildLayout(), old=buildLayout({expansion:false}), nav=buildNav(L);
@@ -62,7 +63,13 @@ test('tour adds six-storey main mall and eight stepped annexes while compact FPS
     }
     assert.deepEqual(levels,old.levels.filter(l=>l.building===bid),`${bid} levels changed`);
   }
-  assert.deepEqual(L.ramps.filter(r=>!r.expansion),old.ramps,'shared garage ramp topology changed');
+  // 游览布局里住宅 R1、酒店 H、西侧公共车库北口三组坡道的入口 / 出口对调了（靠右行驶，layout/p1-access.js 的
+  // KEEP_RIGHT_SWAPS）：坡道的位置、宽度、坡度都不变，只换 id、type、from/to 和名字。换回去以后和紧凑布局逐条相同。
+  const swapped=new RegExp(`^(${KEEP_RIGHT_SWAPS.join('|')})-(IN|OUT)$`);
+  const unswap=r=>{const m=swapped.exec(r.id);if(!m)return r;const out=m[2]==='IN';
+    return {...r,id:`${m[1]}-${out?'OUT':'IN'}`,type:out?'street-out':'street-in',from:r.to,to:r.from,name:r.name.replace(out?'入口':'出口',out?'出口':'入口')};};
+  assert.equal(L.ramps.filter(r=>swapped.test(r.id)).length,6);
+  assert.deepEqual(L.ramps.filter(r=>!r.expansion).map(unswap),old.ramps,'shared garage ramp topology changed');
   assert.deepEqual(L.ramps.filter(r=>r.expansion).map(r=>r.id),['P1-N-IN','P1-N-OUT','P1-E-IN','P1-E-OUT'],'tour-only phase-one gates');
   assert.deepEqual(L.site.forecourt.items.filter(i=>['family','market'].includes(i.zone)),old.site.forecourt.items.filter(i=>['family','market'].includes(i.zone)));
 });

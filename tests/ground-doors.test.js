@@ -43,13 +43,15 @@ test('酒店与住宅景观的花池、树、长椅和护柱不挡任何街道�
   for (const m of meshes) m.geometry.dispose();
 });
 
-test('酒店车库入口的道闸立柱放在两条车道之间，不挡 ST2 共享楼梯亭出口', () => {
-  const r = L.ramps.find(r => r.id === 'H-IN'), out = L.ramps.find(r => r.id === 'H-OUT');
+test('酒店车库北侧那条车道（出口，z −45）的岗亭和立柱放在两条车道之间，不挡 ST2 共享楼梯亭出口', () => {
+  // 靠右行驶：入口在南（z −37）、出口在北（z −45）；挨着楼梯亭出口（z −50.5）的是北边这条
+  const r = L.ramps.find(r => r.id === 'H-OUT'), out = L.ramps.find(r => r.id === 'H-IN');
+  assert.equal((r.from.level === 'street' ? r.from : r.to).z, -45);
   const street = r.from.level === 'street' ? r.from : r.to, other = r.from.level === 'street' ? r.to : r.from;
   const F = frame(street.x, street.z, Math.atan2(street.z - other.z, street.x - other.x) * 180 / Math.PI);
   const [, pz] = toW(F, 1.5, (r.gate?.side ?? 1) * (r.width / 2 + .6));
   const zIn = street.z, zOut = (out.from.level === 'street' ? out.from : out.to).z;
-  assert.ok(pz > Math.min(zIn, zOut) && pz < Math.max(zIn, zOut), `H-IN 道闸立柱在 z=${pz.toFixed(2)}，不在两车道之间`);
+  assert.ok(pz > Math.min(zIn, zOut) && pz < Math.max(zIn, zOut), `北侧车道的立柱在 z=${pz.toFixed(2)}，不在两车道之间`);
   assert.equal(r.gate?.booth, false);
 });
 
