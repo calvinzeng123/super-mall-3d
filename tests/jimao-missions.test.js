@@ -353,3 +353,23 @@ test('电梯：零点突围地图上的电梯每层门口都在导航空地上�
   // 出门朝外：yaw 对应的视线方向 (−sin yaw, −cos yaw) 就是门的外法线
   const y = faceYaw(s); assert.ok(Math.abs(-Math.sin(y) - s.face[0]) < 1e-9 && Math.abs(-Math.cos(y) - s.face[1]) < 1e-9);
 });
+
+test('封面：五种任务都列出来、和任务表一一对应；文案里没有开发工具的名字；话术跟着任务走', async () => {
+  const { coverHtml, COVER_OPS, COVER_COPY, SCREEN_COPY, ABOUT_COPY, LIFT_HELP, COVER_CSS } = await import('../src/jimao/cover.js');
+  assert.deepEqual(COVER_OPS.map((o) => o.type), [...MISSION_TYPES]);
+  const html = coverHtml();
+  for (const t of MISSION_TYPES) assert.match(html, new RegExp(`data-op="${t}"`));
+  assert.match(html, /data-zh="actions"/); assert.match(html, /零点突围/);
+  const all = [html, ...SCREEN_COPY.flat(), ...ABOUT_COPY, LIFT_HELP, JSON.stringify(COVER_COPY)].join('\n');
+  assert.doesNotMatch(all, /Fable|几猫/);
+  assert.match(LIFT_HELP, /<kbd>Z<\/kbd>.*<kbd>X<\/kbd>/);
+  // 园区漫游的 .panel 会盖掉原游戏面板的深色底：封面样式里要压回去
+  assert.match(COVER_CSS, /\.menu \.panel \{ background: rgba\(11, 13, 15, \.95\) !important/);
+  // 原游戏打包里也不留开发工具的名字（scripts/jimao/rebrand.mjs 换掉）
+  assert.doesNotMatch(readFileSync(new URL('../src/jimao/vendor/game.js', import.meta.url), 'utf8'), /Fable/);
+  // 无线电：每种任务都有开场白，撤离点写进去
+  for (const t of MISSION_TYPES) {
+    const r = missionRadio(rollMission(seq(11), sites, { type: t, exit: 'heli' }));
+    assert.ok(r.intro.length > 20 && r.intro.includes('直升机'), `${t} 开场白`);
+  }
+});

@@ -12,6 +12,7 @@ import { createTouchStick, inStickZone, stickOrigin, TOUCH_STICK_CSS } from './t
 import { createKeybinds, KEYS_CSS } from './keybinds.js';
 import { createDiag, DIAG_CSS } from './diag.js';
 import { createLiftControl, LIFT_CSS } from './lift.js';
+import { applyCover, locCard, COVER_CSS } from './cover.js';
 import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { addSoldiers } from './soldier.js';
@@ -34,6 +35,8 @@ const TITLE_CSS = `
 /* 开始界面上下的电影黑边去掉：在手机、折叠屏上看起来像是没全屏 */
 .m-bars { display: none !important; }
 `;
+/** 封面背景镜头的起点（一期 1F 大中庭）、朝向和仰看的高度 */
+export const TITLE_SHOT = Object.freeze({ x: -135, y: 0, z: -98, yaw: 2.3, rise: 5.5 });
 /** 原游戏的画质名 → 我们的画质档位 */
 const VENDOR_TIER = Object.freeze({ low: 'low', medium: 'balanced', high: 'high', ultra: 'ultra' });
 /** 玩家在原游戏设置里选过的画质（auto 或没选过返回 null） */
@@ -68,7 +71,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -163,11 +166,14 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding });
   // 坐电梯（lift.js）：走到电梯门口，按住 Z / X（手机上 ▲ ▼）上下楼；坐载具时不显示
   const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post });
-  G.level.onReset = () => { director.roll(); ammo.reset(); guide.reset(); lift.reset(); };
+  G.level.onReset = () => { director.roll(); ammo.reset(); guide.reset(); lift.reset(); locCard(document, director.state.mission); };
   G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
   director.roll();
   G.missions = director; G.ammo = ammo; G.guide = guide; G.lift = lift;
   G.game = J.createGame(G);
+  // 新封面和各菜单页的话术（cover.js）：原游戏的菜单建好以后改版面、改文字，按钮照旧
+  const cover = applyCover(document);
+  locCard(document, director.state.mission);
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
   const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui, geometry: () => G.stickGeo?.() });
   async function guarded(name, make) {
@@ -232,6 +238,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
         if (view) render.post.fade = view.fade ?? 0;
       } catch (e) { fail('missions', e, 'missions.update 出错'); }
       run('audio', dt); run('hud', dt);
+      try { cover.tick(); } catch (e) { fail('cover', e, '封面出错'); }
       lightPool.update(dt);
       syncVisibility();
       G.input.endFrame?.();
@@ -365,10 +372,11 @@ function buildLevel(ctx, nav) {
     cover: FPS_MISSION.cover.map((c) => ({ ...c, y: elev(c.floor) })) };
   const anchors = [...RELAY_SITES, ...Object.values(EXTRACTIONS)].map((p) => ({ ...p, y: elev(p.floor) }));
   const { enemySpawns, coverPoints, patrolLines } = buildSpawns(mission, nav, anchors, ctx.layout);
-  const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), eye = 1.7;
-  const cinematicPath = [0, 6, 12, 18].map((d, i) => ({
-    pos: [s.x + fx * d + (i % 2 ? 0.6 : -0.6), s.y + eye + 0.4, s.z + fz * d],
-    look: [s.x + fx * (d + 10), s.y + eye, s.z + fz * (d + 10)],
+  // 封面背景的镜头：在一期大中庭里低机位慢慢往前推，仰看一圈圈退台和天窗（以前对着开局点前面的一堵墙）
+  const T = TITLE_SHOT, fx = -Math.sin(T.yaw), fz = -Math.cos(T.yaw);
+  const cinematicPath = [0, 5, 10, 15].map((d, i) => ({
+    pos: [T.x + fx * d + (i % 2 ? 0.5 : -0.5), T.y + 1.9 + d * 0.05, T.z + fz * d],
+    look: [T.x + fx * (d + 14), T.y + 1.9 + T.rise, T.z + fz * (d + 14)],
   }));
   return {
     stub: false, playerStart: { pos: v(s), yaw: s.yaw }, objectives: [],

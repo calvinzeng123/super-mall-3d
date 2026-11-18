@@ -199,23 +199,23 @@ export function missionText(m, c, kills = 0, ride = null, hold = null) {
 
 /** 这一局的无线电台词（原游戏的台词表 RADIO 每局按任务改写） */
 export function missionRadio(m) {
-  const x = m.extraction, done = `${x.label}在${x.where}，快撤！`;
+  const x = m.extraction, done = `${x.label}在${x.where}待命，立刻撤离！`;
   const intro = {
-    relay: '特勤组，云澜汇的通信被劫持了。切断商场西翼、酒店二楼、地下大厅三处上行中继。',
-    eliminate: `特勤组，武装劫持者占领了云澜汇。歼灭 ${m.kills} 名武装分子，夺回控制权。`,
-    rooms: `特勤组，劫持者把赃物藏在了${m.objectives.map((o) => o.label.split(' · ')[1]).join('和')}。取回来。`,
-    hotel: `特勤组，酒店里有两箱被劫走的情报：${m.objectives.map((o) => o.label.split(' · ')[1]).join('、')}。取回来。`,
-    hold: `特勤组，拿下${m.hold?.where}的控制点，守住 ${m.hold?.need} 秒，等技术组接管系统。站在圈里才算数。`,
+    relay: '特勤组，这里是指挥中心。他们靠三台上行中继往外发信号：商场西翼、酒店二楼、地下大厅。全部拔掉。',
+    eliminate: `特勤组，这里是指挥中心。楼里至少还有 ${m.kills} 名武装分子，HUD 上的红点就是他们。一个不留。`,
+    rooms: `特勤组，这里是指挥中心。赃物藏在${m.objectives.map((o) => o.label.split(' · ')[1]).join('和')}，地上的蓝色箭头会带你过去。`,
+    hotel: `特勤组，这里是指挥中心。酒店里有两箱被劫走的情报：${m.objectives.map((o) => o.label.split(' · ')[1]).join('、')}。拿回来。`,
+    hold: `特勤组，这里是指挥中心。拿下${m.hold?.where}的控制点，在光圈里守住 ${m.hold?.need} 秒，技术组要接管系统。`,
   }[m.type];
-  const step = m.type === 'relay' ? ['第一处中继已断开。敌人察觉了，正在赶来。', '第二处中继已断开。敌人全力围攻，小心应对。']
-    : m.type === 'eliminate' || m.type === 'hold' ? ['干得好，继续清剿。', '敌人还在增援，坚持住。'] : ['第一件已到手。敌人察觉了，正在赶来。', '第二件到手。'];
+  const step = m.type === 'relay' ? ['第一台中继断了。他们发现了，正往你这边压。', '第二台也断了。最后一台，他们会拼命守。']
+    : m.type === 'eliminate' || m.type === 'hold' ? ['打得好，别停。', '增援还在往里涌，顶住。'] : ['第一件到手。他们察觉了，正在赶来。', '第二件到手。'];
   return {
-    intro: `${intro}完成后乘${x.label}撤离。`,
-    contact: '你已被发现！武装劫持者正在包围你。',
+    intro: `${intro}完事后乘${x.label}撤离。`,
+    contact: '被发现了！他们正从几个方向围过来。',
     cut: step,
-    all: `${m.type === 'relay' ? '三处中继全部断开！' : m.type === 'eliminate' ? '目标区域已肃清！' : m.type === 'hold' ? '技术组已接管系统！' : '物品全部到手！'}${done}`,
-    low: '伤势严重！找掩体躲避，稍作恢复。',
-    done: '特勤组已安全撤离，云澜汇恢复控制。干得漂亮！',
+    all: `${m.type === 'relay' ? '中继全部断开，信号切断了！' : m.type === 'eliminate' ? '目标区域肃清！' : m.type === 'hold' ? '技术组已接管系统！' : '东西全部到手！'}${done}`,
+    low: '你中弹了。找掩体，缓一口气。',
+    done: '指挥中心收到。云澜汇已收复，特勤组安全撤离——干得漂亮。',
   };
 }
 
