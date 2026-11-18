@@ -3,7 +3,10 @@
 //   切断中继   商场西翼、酒店二楼、地下大厅三处上行中继，按住交互切断；
 //   歼灭       歼灭一定数量的武装劫持者（敌人会持续增援）；
 //   取物·住户  去公寓住户家里和商场商铺里各取回一件物品；
-//   取物·酒店  去酒店两间客房取回情报箱。
+//   取物·酒店  去酒店两间客房取回情报箱；
+//   坚守       守住一处控制点 75 秒（站在圈里才计时），敌人一波波冲过来。
+// 歼灭和坚守的敌人会主动找你（每隔几秒把你的位置告诉他们），HUD 上每个敌人一个红点、带距离，
+// 地上的蓝色箭头指向最近的敌人；增援在你附近 20–50 米、同一层优先的地方刷出来（以前在整张地图上随机刷，很难找）。
 // 撤离：一期商场屋顶的直升机，或公寓地下车库的装甲接应车。
 // 原游戏的任务流程（按住交互、波次增援、撤离判定、结算）不变；这里给它提供关卡数据（目标、文字、撤离点）、
 // 装置和载具模型，并负责歼灭任务的计数和增援。原游戏那边的接口见 scripts/jimao/patches.mjs 里「随机任务」几条。
@@ -15,8 +18,21 @@ import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, 
 import { createDoorGun } from './door-gun.js';
 import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
 
-export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel']);
-export const ELIMINATE_TARGET = 14;
+export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel', 'hold']);
+export const ELIMINATE_TARGET = 12;
+/** 坚守：圈的半径（米）、要守的秒数、同时在场的敌人上限、刷兵间隔 */
+export const HOLD = Object.freeze({ radius: 6, need: 75, alive: 7, every: 2.2 });
+/** 歼灭 / 坚守的增援：同时在场上限、间隔、离玩家多远刷（米）、多久把玩家位置告诉一次敌人（秒） */
+export const HUNT = Object.freeze({ alive: 6, every: 2.2, near: 20, far: 50, tell: 3 });
+
+/** 坚守的控制点：导航上能站、四周 6 米基本是空地，同一层 20–50 米内有 20 个以上的刷兵点（实测；车库那一层没有刷兵点，不用） */
+export const HOLD_SITES = Object.freeze([
+  { floor: 'P1-1F', x: -169, z: -90, where: '商场西翼' },
+  { floor: 'H-1F', x: -245, z: -81, where: '酒店大堂' },
+  { floor: 'P1-2F', x: -100, z: -140, where: '商场二楼走道' },
+  { floor: 'P1-B1M', x: -151, z: -94, where: '地下大厅' },
+  { floor: 'P1-RF', x: -160, z: -120, where: '屋顶花园' },
+]);
 const HOTEL_Z = -81.1533717;
 
 /** 三处中继（旧 FPS 任务的终端、酒店情报点和地下大厅；在园区地图上都实测可达） */
@@ -117,6 +133,23 @@ export function itemModel() {
   return g;
 }
 
+/** 坚守的控制点：地上一圈琥珀色光环（站进去变绿）、中间一根光柱，远处也看得见 */
+export function holdModel(radius = HOLD.radius) {
+  const M = mats(), g = new THREE.Group();
+  const ringMat = new THREE.MeshBasicMaterial({ color: '#ffb13b', transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(radius - 0.25, radius, 64).rotateX(-Math.PI / 2), ringMat); ring.position.y = 0.04; g.add(ring);
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(radius - 0.25, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffb13b', transparent: true, opacity: 0.08, depthWrite: false })); fill.position.y = 0.03; g.add(fill);
+  const beam = add(g, new THREE.CylinderGeometry(0.18, 0.45, 6, 12, 1, true), M.beam.clone(), 0, 3, 0);
+  let t = 0, state = 'out';
+  g.userData.setState = (s) => {
+    state = s;
+    const c = s === 'in' ? '#4cf08f' : s === 'cut' ? '#8b969c' : '#ffb13b';
+    ringMat.color.set(c); fill.material.color.set(c); beam.visible = s !== 'cut';
+  };
+  g.userData.update = (dt) => { t += dt; ringMat.opacity = state === 'in' ? 0.75 : 0.4 + 0.2 * Math.sin(t * 4); beam.material.opacity = 0.12 + 0.06 * Math.sin(t * 3); };
+  return g;
+}
+
 /**
  * 抽一局任务。rng 返回 [0, 1)。返回 { type, title, objectives: [{ id, label, verb, kind, site }], extraction, kills }
  */
@@ -139,6 +172,9 @@ export function rollMission(rng, sites, { type, exit } = {}) {
     title = '酒店情报回收';
     const a = pick(sites.hotel), rest = sites.hotel.filter((h) => h.floor !== a.floor), b = pick(rest.length ? rest : sites.hotel);
     objectives = [a, b].map((h, i) => ({ id: `intel_${'ab'[i]}`, label: `情报箱 · 酒店 ${h.level} ${h.name} 房`, verb: '取回', kind: 'item', site: h }));
+  } else if (type === 'hold') {
+    title = '坚守控制点';
+    return { type, title, objectives, extraction, kills: 0, hold: { ...pick(HOLD_SITES), radius: HOLD.radius, need: HOLD.need } };
   } else {
     title = '歼灭武装劫持者';
   }
@@ -146,12 +182,16 @@ export function rollMission(rng, sites, { type, exit } = {}) {
 }
 
 /** 这一局的目标文字（任务栏）。c 是原游戏的进度对象 { cut, allCut, relays } */
-export function missionText(m, c, kills = 0, ride = null) {
+export function missionText(m, c, kills = 0, ride = null, hold = null) {
   const x = m.extraction;
   if (ride?.kind === 'helicopter') return `清扫楼顶 · 击倒 ${ride.kills}`;
   if (ride?.kind === 'car') return `突围 · 剩 ${Math.max(0, Math.round(ride.left))} 米 · 击倒 ${ride.kills}`;
   if (c.allCut) return `撤离 · ${x.where}${x.label}`;
   if (m.type === 'eliminate') return `歼灭武装劫持者 ${Math.min(kills, m.kills)}/${m.kills}`;
+  if (m.type === 'hold') {
+    const t = Math.min(m.hold.need, Math.floor(hold?.t || 0));
+    return hold?.inside ? `坚守${m.hold.where} ${t}/${m.hold.need} 秒` : `${t ? '回到' : '前往'}${m.hold.where}控制点 · ${t}/${m.hold.need} 秒`;
+  }
   const left = c.relays.length - c.cut;
   if (m.type === 'relay') return c.cut === 0 ? '切断三处上行中继' : left === 1 ? '切断最后一处中继' : `切断剩余 ${left} 处中继`;
   return c.cut === 0 ? `取回 ${c.relays.length} 件目标物品` : `还剩 ${left} 件物品`;
@@ -165,14 +205,15 @@ export function missionRadio(m) {
     eliminate: `特勤组，武装劫持者占领了云澜汇。歼灭 ${m.kills} 名武装分子，夺回控制权。`,
     rooms: `特勤组，劫持者把赃物藏在了${m.objectives.map((o) => o.label.split(' · ')[1]).join('和')}。取回来。`,
     hotel: `特勤组，酒店里有两箱被劫走的情报：${m.objectives.map((o) => o.label.split(' · ')[1]).join('、')}。取回来。`,
+    hold: `特勤组，拿下${m.hold?.where}的控制点，守住 ${m.hold?.need} 秒，等技术组接管系统。站在圈里才算数。`,
   }[m.type];
   const step = m.type === 'relay' ? ['第一处中继已断开。敌人察觉了，正在赶来。', '第二处中继已断开。敌人全力围攻，小心应对。']
-    : m.type === 'eliminate' ? ['干得好，继续清剿。', '敌人还在增援，坚持住。'] : ['第一件已到手。敌人察觉了，正在赶来。', '第二件到手。'];
+    : m.type === 'eliminate' || m.type === 'hold' ? ['干得好，继续清剿。', '敌人还在增援，坚持住。'] : ['第一件已到手。敌人察觉了，正在赶来。', '第二件到手。'];
   return {
     intro: `${intro}完成后乘${x.label}撤离。`,
     contact: '你已被发现！武装劫持者正在包围你。',
     cut: step,
-    all: `${m.type === 'relay' ? '三处中继全部断开！' : m.type === 'eliminate' ? '目标区域已肃清！' : '物品全部到手！'}${done}`,
+    all: `${m.type === 'relay' ? '三处中继全部断开！' : m.type === 'eliminate' ? '目标区域已肃清！' : m.type === 'hold' ? '技术组已接管系统！' : '物品全部到手！'}${done}`,
     low: '伤势严重！找掩体躲避，稍作恢复。',
     done: '特勤组已安全撤离，云澜汇恢复控制。干得漂亮！',
   };
@@ -211,7 +252,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;
   const FRESH = () => ({ phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false,
     vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false, markT: 0, markSig: '' });
-  const state = { mission: null, kills: 0, reinforce: 0, ...FRESH() };
+  const state = { mission: null, kills: 0, reinforce: 0, tell: 0, holdT: 0, inside: false, holdTextT: 0, ...FRESH() };
   const vhud = makeDurabilityHud();
   const from = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
   let models = [], roofSpots = null;
@@ -225,7 +266,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function roll() {
     for (const m of models) m.removeFromParent();
     const mission = rollMission(rng, sites, force);
-    Object.assign(state, { mission, kills: 0, reinforce: 0, ...FRESH() });
+    Object.assign(state, { mission, kills: 0, reinforce: 0, tell: 0, holdT: 0, inside: false, holdTextT: 0, ...FRESH() });
     vhud.show(false); deadTitle(null, null);
     if (G.player) G.player.mounted = false;
     doorGun.reset(); roofGun.reset();
@@ -237,12 +278,19 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       o.object = g; o.pos = v({ ...o.site, y }); o.zone = o.site.floor;
       return g;
     });
+    if (mission.hold) {
+      const h = mission.hold, g = holdModel(h.radius), y = elev(h.floor);
+      g.position.set(h.x, y, h.z); root.add(g); models.push(g);
+      h.object = g; h.pos = v({ ...h, y });
+    }
     for (const vv of Object.values(vehicles)) vv.reset();
     const x = mission.extraction;
     Object.assign(G.level, {
       objectives: mission.objectives,
       extraction: { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked },
-      missionText: (c) => missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null),
+      missionText: (c) => missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null, { t: state.holdT, inside: state.inside }),
+      // 地上的路线箭头指向哪里（guide.js）：歼灭任务指向最近的敌人，坚守任务指向控制点（人在圈里时不画）
+      guideTarget: () => guideTarget(),
       onExtract: () => board(),
       outroDelay: 1.6, keepLock: true,
     });
@@ -414,6 +462,13 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const roofEnemies = () => alive().filter((e) => Math.abs(e.pos.y - roofY) < 4 && Math.hypot(e.pos.x - HELI_ORBIT.center.x, e.pos.z - HELI_ORBIT.center.z) < 100);
   /** HUD 标记：坐直升机时楼顶上每个敌人一个红点（位置直接引用敌人坐标，跟着走） */
   function markers() {
+    const m = state.mission;
+    if (state.phase === 'none' && m && !G.game?.run?.allCut && (m.type === 'eliminate' || m.type === 'hold')) {
+      // 歼灭 / 坚守：每个敌人一个红点，带距离；坚守再加控制点
+      const list = alive().map((e) => ({ id: `hunt-${G.enemies.list.indexOf(e)}`, short: '', label: '敌人', pos: e.pos, kind: 'hunt' }));
+      if (m.hold) list.push({ id: 'hold', short: '守', label: `${m.hold.where}控制点`, pos: m.hold.pos.clone().setY(m.hold.pos.y + 1), kind: 'relay' });
+      return list;
+    }
     if (state.phase !== 'ride') return [];
     return (veh()?.kind === 'helicopter' ? roofEnemies() : alive()).map((e) => ({ id: `tgt-${G.enemies.list.indexOf(e)}`, short: '', label: '敌人', pos: e.pos, kind: 'enemy' }));
   }
@@ -444,21 +499,74 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     }
   }
 
-  /** 歼灭任务：场上的敌人少于 5 个时，从远处（离玩家 28 米以上、看不见的地方优先）补一个，直到计数够了 */
+  /** 敌人刷在哪：离 at 有 near–far 米、同一层（高差 < 1.5 米）优先，其次高差 6 米以内，再不行就 25–90 米内任何一处 */
+  function nearSpawn(at, near = HUNT.near, far = HUNT.far) {
+    const all = (G.level.enemySpawns || []).filter((s) => s.type === 'ground');
+    const ring = (lo, hi, dy) => all.filter((s) => { const d = Math.hypot(s.pos.x - at.x, s.pos.z - at.z); return d > lo && d < hi && Math.abs(s.pos.y - at.y) < dy; });
+    for (const list of [ring(near, far, 1.5), ring(near, far + 15, 6), ring(25, 90, 14)]) if (list.length) return list[Math.floor(rng() * list.length)].pos.clone();
+    return null;
+  }
+
+  /** 歼灭 / 坚守：增援就近刷，并且每隔几秒把玩家的位置告诉没在交火的敌人，让他们自己找过来 */
   function reinforce(dt) {
     const m = state.mission;
-    if (m?.type !== 'eliminate' || G.game?.state !== 'playing' || G.game.run?.allCut) return;
+    if (!m || (m.type !== 'eliminate' && m.type !== 'hold') || G.game?.state !== 'playing' || G.game.run?.allCut || state.phase !== 'none') return;
+    const cap = m.type === 'hold' ? HOLD.alive : HUNT.alive, every = m.type === 'hold' ? HOLD.every : HUNT.every;
+    // 坚守：没走到控制点之前不刷（先让人走过去），到过以后一直刷
+    if (m.type === 'hold' && state.holdT <= 0 && !state.inside) return;
     state.reinforce -= dt;
-    if (state.reinforce > 0) return;
-    state.reinforce = 2.5;
-    if (alive().length >= 5) return;
-    const p = G.player.pos, spots = (G.level.enemySpawns || []).filter((s) => s.type === 'ground' && Math.hypot(s.pos.x - p.x, s.pos.z - p.z) > 28 && Math.abs(s.pos.y - p.y) < 14);
-    if (!spots.length) return;
-    spawnAt(spots[Math.floor(rng() * spots.length)].pos.clone());
+    if (state.reinforce <= 0) {
+      state.reinforce = every;
+      if (alive().length < cap) { const p = nearSpawn(m.hold ? m.hold.pos : G.player.pos); if (p) spawnAt(p); }
+    }
+    if ((state.tell -= dt) <= 0) {
+      state.tell = HUNT.tell;
+      for (const e of alive()) if (e.mode !== 'engage' && e.lastKnown) { e.lastKnown.copy(G.player.pos); if (e.mode === 'patrol' || e.mode === 'search') e.mode = 'investigate'; e.modeT = Math.max(e.modeT || 0, 10); }
+    }
+  }
+
+  /** 坚守：站在圈里计时；守够了就算完成 */
+  function holdTick(dt) {
+    const m = state.mission;
+    if (m?.type !== 'hold' || G.game?.state !== 'playing' || G.game.run?.allCut || state.phase !== 'none') return;
+    const h = m.hold, p = G.player.pos;
+    const inside = G.player.alive !== false && Math.hypot(p.x - h.pos.x, p.z - h.pos.z) <= h.radius && Math.abs(p.y - h.pos.y) < 2;
+    if (inside !== state.inside) {
+      state.inside = inside; h.object?.userData.setState?.(inside ? 'in' : 'out');
+      if (!inside && state.holdT > 0) G.hud?.warn?.('离开了控制点，计时暂停', 2);
+      G.game?.refreshObjective?.();
+    }
+    if (inside) {
+      const before = Math.floor(state.holdT);
+      state.holdT += dt;
+      if (before === 0 && state.holdT >= 0.05 && state.holdT - dt < 0.05) G.hud?.radio?.('控制点已占领，守住！敌人马上就到。', 3.5);
+      if (Math.floor(state.holdT) !== before) G.game?.refreshObjective?.();
+      if (state.holdT >= h.need) { h.object?.userData.setState?.('cut'); G.game.completeAll?.(); G.game?.refreshObjective?.(); }
+    }
+  }
+
+  /** 地上箭头的目标（guide.js 用）：返回 undefined 时照原来的规则（物品、中继、撤离点） */
+  function guideTarget() {
+    const m = state.mission;
+    if (!m || G.game?.run?.allCut || state.phase !== 'none') return undefined;
+    if (m.type === 'hold') {
+      if (state.inside) return null;
+      return { key: 'hold', floor: m.hold.floor, x: m.hold.pos.x, y: m.hold.pos.y, z: m.hold.pos.z, door: null };
+    }
+    if (m.type !== 'eliminate') return undefined;
+    const p = G.player.pos;
+    let best = null, bd = Infinity;
+    for (const e of alive()) { const d = Math.hypot(e.pos.x - p.x, e.pos.z - p.z) + Math.abs(e.pos.y - p.y) * 4; if (d < bd) { bd = d; best = e; } }
+    if (!best) return null;
+    const st = G.physics?.stateOf?.(best.pos) || landAt(nav, best.pos.x, best.pos.z, best.pos.y + 0.6);
+    if (!st) return null;
+    // 敌人在动：key 里带上他所在的 8 米格子，走远了路线会重算
+    return { key: `hunt-${G.enemies.list.indexOf(best)}-${Math.round(best.pos.x / 8)}-${Math.round(best.pos.z / 8)}-${st.floor}`, floor: st.floor, x: best.pos.x, y: best.pos.y, z: best.pos.z, door: null };
   }
 
   function update(dt) {
     for (const m of models) m.userData.update?.(dt);
+    holdTick(dt);
     reinforce(dt);
     const vv = veh();
     if (!vv) return null;
@@ -479,7 +587,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       targets: carGun ? alive().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)) : null });
     if ((state.markT -= dt) <= 0) {
       state.markT = 0.3;
-      const sig = heliGun ? roofEnemies().map((e) => G.enemies.list.indexOf(e)).join(',') : carGun ? alive().map((e) => G.enemies.list.indexOf(e)).join(',') : '';
+      const hunt = state.phase === 'none' && !G.game?.run?.allCut && (state.mission?.type === 'eliminate' || state.mission?.type === 'hold');
+      const sig = heliGun ? roofEnemies().map((e) => G.enemies.list.indexOf(e)).join(',') : carGun || hunt ? alive().map((e) => G.enemies.list.indexOf(e)).join(',') : '';
       if (sig !== state.markSig) { state.markSig = sig; G.game?.refreshObjective?.(); }
     }
     if (state.phase === 'board') {

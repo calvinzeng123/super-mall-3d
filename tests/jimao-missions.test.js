@@ -11,7 +11,8 @@ import { buildNav, clear, landAt } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
 import { walkNav } from './helpers.js';
 import { pointInPoly, distToPolyEdge } from '../src/layout/geom.js';
-import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, CAR_ROUTE_LENGTH, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
+import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, CAR_ROUTE_LENGTH, HOLD, HOLD_SITES, HUNT, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
+import { liftAt, floorLabel, faceYaw, LIFT } from '../src/jimao/lift.js';
 import { createRideVehicle, rideFootprint, RIDE_SPECS } from '../src/jimao/ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from '../src/jimao/ride-paths.js';
 import { buildDoorGun, DOOR_GUN } from '../src/jimao/door-gun.js';
@@ -39,13 +40,14 @@ test('房间点：公寓、商铺、客房都有，每个都站在本层导航�
   }
 });
 
-test('随机任务：四种都抽得到，两种撤离都抽得到，目标齐全', () => {
+test('随机任务：五种都抽得到，两种撤离都抽得到，目标齐全', () => {
   const rng = seq(7), types = new Set(), exits = new Set();
   for (let i = 0; i < 80; i++) {
     const m = rollMission(rng, sites);
     types.add(m.type); exits.add(m.extraction.id);
     if (m.type === 'relay') assert.equal(m.objectives.length, 3);
     else if (m.type === 'eliminate') { assert.equal(m.objectives.length, 0); assert.ok(m.kills >= 10); }
+    else if (m.type === 'hold') { assert.equal(m.objectives.length, 0); assert.ok(HOLD_SITES.some((h) => h.where === m.hold.where) && m.hold.need === HOLD.need); }
     else {
       assert.equal(m.objectives.length, 2);
       assert.ok(m.objectives.every((o) => o.kind === 'item' && o.verb === '取回'));
@@ -314,4 +316,40 @@ test('接应车：舱盖翻平不挡后方视线；车顶机枪架在环上、�
   const src = readFileSync(new URL('../src/jimao/missions.js', import.meta.url), 'utf8');
   assert.match(src, /state\.phase === 'crash' \|\| state\.phase === 'ride'; \}/);
   assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.24, drop: 0\.24, flash: 0\.7 \}\)/);
+});
+
+test('坚守：控制点从开局点走得到，圈里基本是空地；任务文字随进出圈变化', () => {
+  for (const h of HOLD_SITES) {
+    assert.ok(findPath(nav, START, at(h)), `${h.where} 走不到`);
+    let open = 0, n = 0;
+    for (const r of [2, 4, HOLD.radius - 0.5]) for (let k = 0; k < 16; k++) {
+      n++; const q = landAt(nav, h.x + Math.cos(k / 16 * Math.PI * 2) * r, h.z + Math.sin(k / 16 * Math.PI * 2) * r, elev(h.floor) + 0.6);
+      if (q && q.floor === h.floor && clear(nav, q)) open++;
+    }
+    assert.ok(open / n > 0.6, `${h.where} 圈里只有 ${open}/${n} 是空地`);
+  }
+  const m = rollMission(seq(4), sites, { type: 'hold', exit: 'car' });
+  assert.equal(missionText(m, { cut: 0, allCut: false, relays: [] }, 0, null, { t: 0, inside: false }), `前往${m.hold.where}控制点 · 0/${HOLD.need} 秒`);
+  assert.equal(missionText(m, { cut: 0, allCut: false, relays: [] }, 0, null, { t: 30.6, inside: true }), `坚守${m.hold.where} 30/${HOLD.need} 秒`);
+  assert.equal(missionText(m, { cut: 0, allCut: false, relays: [] }, 0, null, { t: 30.6, inside: false }), `回到${m.hold.where}控制点 · 30/${HOLD.need} 秒`);
+  assert.match(missionRadio(m).intro, new RegExp(`${m.hold.where}.*${HOLD.need} 秒`));
+  // 增援刷在附近（不是整张地图），同时在场的人数有上限
+  assert.ok(HUNT.near >= 15 && HUNT.far <= 60 && HUNT.alive >= 5 && HOLD.alive >= HUNT.alive);
+});
+
+test('电梯：零点突围地图上的电梯每层门口都在导航空地上；门口 2.4 米内认得出是哪部、哪一层；楼层名、出门朝向', () => {
+  const lifts = nav.links.filter((l) => l.kind === 'lift' && l.stops.length > 1);
+  assert.ok(lifts.length >= 30, `只有 ${lifts.length} 部电梯`);
+  for (const id of ['P1-SE-L1', 'H-L1', 'A-L1', 'P1-C-GW']) assert.ok(lifts.some((l) => l.id === id), `${id} 不在`);
+  for (const link of lifts) for (const [i, s] of link.stops.entries()) {
+    assert.ok(clear(nav, { floor: s.floor, x: s.x, z: s.z, y: nav.floors.get(s.floor).y, slope: null }), `${link.id} ${s.floor} 门口被挡`);
+    const near = liftAt(lifts, s.floor, s.x + 1, s.z);
+    assert.ok(near && near.link.stops[near.i].floor === s.floor, `${link.id} ${s.floor} 门口认不出来`);
+    assert.ok(Math.hypot(...s.face) > 0.99 && faceYaw(s) != null);
+  }
+  const h = lifts.find((l) => l.id === 'H-L1'), s = h.stops[5];
+  assert.equal(liftAt(lifts, s.floor, s.x + LIFT.reach + 0.5, s.z + LIFT.reach), null, '离门口太远不算');
+  assert.equal(floorLabel(L, 'H-12F'), '12F'); assert.equal(floorLabel(L, 'P1-B1M'), 'B1M');
+  // 出门朝外：yaw 对应的视线方向 (−sin yaw, −cos yaw) 就是门的外法线
+  const y = faceYaw(s); assert.ok(Math.abs(-Math.sin(y) - s.face[0]) < 1e-9 && Math.abs(-Math.cos(y) - s.face[1]) < 1e-9);
 });

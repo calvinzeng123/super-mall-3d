@@ -1,5 +1,6 @@
 // 零点突围：地面上若隐若现的路线指引。
-// 从玩家脚下沿导航网格（楼梯、扶梯都算）到最近一个还没完成的目标（中继、证物箱、情报箱）；目标都完成了就指向撤离点。
+// 从玩家脚下沿导航网格（楼梯、扶梯都算）到最近一个还没完成的目标（中继、证物箱、情报箱；歼灭任务是最近的敌人，坚守任务是控制点）；
+// 目标都完成了就指向撤离点。
 // 物品在住户、客房、商铺里时，先寻路到门外，再从门口直线进房间。
 // 画法：路线上每 1.4 米一个贴地的淡蓝色小箭头（加色、半透明），一道流光沿路往目标方向推；只画眼前 45 米左右。
 // 每 1.5 秒最多重算一次路线，只在目标换了、或玩家离开路线 5 米以上时才重算。坐载具时不画。
@@ -58,6 +59,9 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false }
   function target() {
     const run = G.game?.run, p = G.player?.pos;
     if (!run || !p) return null;
+    // 任务自己指定的目标（missions.js：歼灭指向最近的敌人、坚守指向控制点）；undefined 时照下面的规则
+    const custom = G.level?.guideTarget?.();
+    if (custom !== undefined) return custom;
     if (!run.allCut) {
       const open = (run.relays || []).filter((r) => !r.cut && r.o?.pos);
       if (!open.length) return null;

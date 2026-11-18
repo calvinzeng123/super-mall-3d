@@ -11,6 +11,7 @@ import { createGrade } from './grade.js';
 import { createTouchStick, inStickZone, stickOrigin, TOUCH_STICK_CSS } from './touch-stick.js';
 import { createKeybinds, KEYS_CSS } from './keybinds.js';
 import { createDiag, DIAG_CSS } from './diag.js';
+import { createLiftControl, LIFT_CSS } from './lift.js';
 import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { addSoldiers } from './soldier.js';
@@ -48,6 +49,9 @@ const SUPPLY_CSS = `
 .h-cm.enemy, .h-wm.enemy { color: #ff5a4a; }
 .h-cm.enemy i, .h-wm.enemy i { background: #ff5a4a; }
 .h-wm.enemy span, .h-wm.enemy b { display: none; }
+.h-cm.hunt, .h-wm.hunt { color: #ff5a4a; }
+.h-cm.hunt i, .h-wm.hunt i { background: #ff5a4a; }
+.h-wm.hunt b { display: none; }
 `;
 /** 枪画在单独的一层，用自己的相机（视角固定 54°）在世界之后再画一遍，永远不会插进墙里。 */
 const VIEW_LAYER = 3;
@@ -64,7 +68,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -157,10 +161,12 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const ammo = createAmmoSupply(G, { scene, layout: ctx.layout, nav, isRiding: () => director.riding, rideKind: () => director.rideKind });
   // 地面路线指引（guide.js）：脚下一串淡蓝色小箭头指向最近的目标 / 撤离点，坐载具时不画
   const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding });
-  G.level.onReset = () => { director.roll(); ammo.reset(); guide.reset(); };
+  // 坐电梯（lift.js）：走到电梯门口，按住 Z / X（手机上 ▲ ▼）上下楼；坐载具时不显示
+  const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post });
+  G.level.onReset = () => { director.roll(); ammo.reset(); guide.reset(); lift.reset(); };
   G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
   director.roll();
-  G.missions = director; G.ammo = ammo; G.guide = guide;
+  G.missions = director; G.ammo = ammo; G.guide = guide; G.lift = lift;
   G.game = J.createGame(G);
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
   const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui, geometry: () => G.stickGeo?.() });
@@ -210,6 +216,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       try { active = G.game.update(dt) !== false && G.game.state !== 'title' && G.game.state !== 'paused'; } catch (e) { fail('game', e, 'game.update 出错'); }
       // 坐在载具上：玩家更新之前先把载具和玩家摆到这一帧的位置；用舱门机枪时步枪不更新（不开火、不显示）
       if (active) { try { director.prePlayer(dt); } catch (e) { fail('ride', e, '载具出错'); } }
+      if (active) { try { lift.update(dt); } catch (e) { fail('lift', e, '电梯出错'); } }
       if (active) { stepPlayer(dt, gap); if (!director.gunActive) run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
       if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { fail('guide', e, '路线指引出错'); } }

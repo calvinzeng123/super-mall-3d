@@ -58,6 +58,8 @@ export function createMapPhysics(nav) {
     build() {},
     /** 导航状态（只读），给画面同步楼层可见性用 */
     stateOf(pos) { return tracked.get(pos) || null; },
+    /** 传送以后（坐电梯换层：水平几乎不动、竖直只差一层）忘掉旧状态，下一次按新位置重新找脚下的楼面 */
+    forget(pos) { tracked.delete(pos); },
 
     raycast(origin, dir, maxDist = 500) {
       ray.o.copy(origin); ray.d.copy(dir).normalize();
