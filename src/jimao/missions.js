@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
-import { createRideVehicle, rideLocalToWorld, RIDE_SPECS, BOARD_TIME } from './ride-vehicles.js';
+import { createRideVehicle, rideLocalToWorld, rideFootprint, RIDE_SPECS, BOARD_TIME } from './ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from './ride-paths.js';
 import { createDoorGun } from './door-gun.js';
 import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
@@ -153,6 +153,27 @@ export function holdModel(radius = HOLD.radius) {
 /**
  * 抽一局任务。rng 返回 [0, 1)。返回 { type, title, objectives: [{ id, label, verb, kind, site }], extraction, kills }
  */
+/** 载具被击落 / 撤离途中阵亡后重来的出生点：载具复位，在门口外找一块本层空地——先朝门外正前方，
+ *  不行就往两侧转（公寓车库的车门正对车库西墙，墙外是一期 B1，只能站到车头 / 车尾那边），
+ *  离登机点至少 BOARD_GAP 米（不然一落地就自动上车），不压在机身上；面朝车门。都不行才退到门外 1.2 米。
+ *  原游戏的 yaw：朝 (dx, dz) 看时 yaw = atan2(−dx, −dz)。 */
+export const BOARD_GAP = 3;
+export function boardingSpot(nav, vv, x, y) {
+  vv.reset(); vv.root.updateMatrixWorld(true);
+  const D = vv.toWorld(vv.spec.doorOut), c = vv.root.position, r = rideFootprint(x.vehicle);
+  let ox = D.x - c.x, oz = D.z - c.z; const n = Math.hypot(ox, oz) || 1; ox /= n; oz /= n;
+  const face = (px, pz) => ({ pos: new THREE.Vector3(px, y, pz), yaw: Math.atan2(-(D.x - px), -(D.z - pz)) });
+  for (const k of [4.5, 3.5]) for (const deg of [0, 30, -30, 60, -60, 90, -90, 120, -120]) {
+    const a = deg * Math.PI / 180, dx = ox * Math.cos(a) - oz * Math.sin(a), dz = ox * Math.sin(a) + oz * Math.cos(a);
+    const px = D.x + dx * k, pz = D.z + dz * k;
+    if (Math.hypot(px - x.x, pz - x.z) < BOARD_GAP) continue;
+    if (px > r.x0 - 0.6 && px < r.x1 + 0.6 && pz > r.z0 - 0.6 && pz < r.z1 + 0.6) continue;
+    const st = landAt(nav, px, pz, y + 0.6);
+    if (st && st.floor === x.floor && Math.abs(st.y - y) < 0.5 && clear(nav, st)) return face(px, pz);
+  }
+  return face(D.x + ox * 1.2, D.z + oz * 1.2);
+}
+
 export function rollMission(rng, sites, { type, exit } = {}) {
   const pick = (list) => list[Math.floor(rng() * list.length)];
   type ||= pick(MISSION_TYPES);
@@ -263,11 +284,23 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const baseDamage = G.player?.damage?.bind(G.player);
   if (baseDamage) G.player.damage = (amount, ...rest) => baseDamage(riding() ? amount * (veh()?.kind === 'helicopter' ? 0.35 : 0.5) : amount, ...rest);
 
+  const home = G.level?.playerStart; // 开局点（坐载具失败后从登机点重来时换掉，重新开局再换回来）
+
+  /**
+   * 登机点前的重生位置：载具门口往外 4.5 米（站在空地上就用它，不然就站在门口），面朝车门 / 舱门。
+   * 离门口还差几步，不会一重生就自动登机，有时间先看一眼周围、捡点弹药。
+   */
+  function checkpointStart(x) { return boardingSpot(nav, vehicles[x.id], x, elev(x.floor)); }
+
   function roll() {
     for (const m of models) m.removeFromParent();
-    const mission = rollMission(rng, sites, force);
-    Object.assign(state, { mission, kills: 0, reinforce: 0, tell: 0, holdT: 0, inside: false, holdTextT: 0, ...FRESH() });
-    vhud.show(false); deadTitle(null, null);
+    // 坐直升机 / 接应车失败（坠毁或在车上阵亡）以后点「回到登机点重来」：同一局任务、目标都算完成，人站到登机点前
+    const keep = state.checkpoint && state.mission ? state.checkpoint : null;
+    const mission = keep ? state.mission : rollMission(rng, sites, force);
+    Object.assign(state, { mission, kills: keep ? state.kills : 0, reinforce: 0, tell: 0, holdT: keep ? state.holdT : 0, inside: false, holdTextT: 0, ...FRESH(),
+      checkpoint: null, restore: !!keep });
+    if (G.level) G.level.playerStart = keep ? checkpointStart(mission.extraction) : home;
+    vhud.show(false); deadTitle(null, null); deadActions(false);
     if (G.player) G.player.mounted = false;
     doorGun.reset(); roofGun.reset();
     models = mission.objectives.map((o) => {
@@ -297,6 +330,14 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     Object.assign(J.RADIO, missionRadio(mission));
     return mission;
   }
+
+  // 坐在载具上被打死（不是坠毁）也一样：可以回到登机点重来
+  G.events.on('player:dead', () => {
+    if ((state.phase === 'ride' || state.phase === 'board') && state.mission && !state.checkpoint) {
+      state.checkpoint = { kind: veh()?.kind };
+      deadTitle('撤离途中阵亡', '撤离失败'); deadActions(true);
+    }
+  });
 
   G.events.on('enemy:killed', () => {
     if (G.game?.state !== 'playing') return;
@@ -384,15 +425,38 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.vhp <= 0) crash(vv);
   });
 
-  /** 阵亡页的两行标题（原文「突击队员倒下 / 信号中断」）：载具坠毁时改成「…被击落 / 撤离失败」，下一局恢复 */
+  /** 阵亡页的两行标题（「特勤队员倒下 / 通讯中断」，cover.js 写的）：载具坠毁时改成「…被击落 / 撤离失败」，下一局恢复。
+   * 原文只在第一次改写时记下（这时封面的话术已经换好了），恢复时没记过就不动。 */
   function deadTitle(kicker, head) {
     const sec = typeof document !== 'undefined' && document.querySelector('[data-s="dead"]');
     if (!sec) return;
     for (const [el, text] of [[sec.querySelector('.m-k'), kicker], [sec.querySelector('.m-h'), head]]) {
       if (!el) continue;
-      if (el.dataset.orig == null) el.dataset.orig = el.textContent;
-      el.textContent = text ?? el.dataset.orig;
+      if (text != null) { if (el.dataset.orig == null) el.dataset.orig = el.textContent; el.textContent = text; }
+      else if (el.dataset.orig != null) el.textContent = el.dataset.orig;
     }
+  }
+
+  /**
+   * 阵亡页的按钮：坐载具失败时，「重新出击」改成「回到登机点重来」（原游戏的 retry：整局重置，我们在 roll 里接住，
+   * 保留这一局任务、直接站到登机点前），旁边多一个「换一项任务重来」（原游戏的 redeploy，点它先把存档点清掉）。
+   */
+  function deadActions(on) {
+    const sec = typeof document !== 'undefined' && document.querySelector('[data-s="dead"]');
+    const retry = sec?.querySelector('[data-act="retry"]');
+    if (!retry) return;
+    if (retry.dataset.orig == null) retry.dataset.orig = retry.textContent;
+    retry.textContent = on ? '回到登机点重来' : retry.dataset.orig;
+    let fresh = sec.querySelector('[data-zh="fresh"]');
+    if (!fresh && on) {
+      fresh = document.createElement('button');
+      fresh.className = 'btn'; fresh.dataset.act = 'redeploy'; fresh.dataset.zh = 'fresh'; fresh.textContent = '换一项任务重来';
+      fresh.addEventListener('click', () => { state.checkpoint = null; }); // 先于菜单根节点上的委托处理
+      retry.after(fresh);
+    }
+    if (fresh) fresh.hidden = !on;
+    const line = sec.querySelector('[data-zh="ckpt"]') || (on ? sec.querySelector('.m-stats')?.insertAdjacentElement('afterend', Object.assign(document.createElement('p'), { className: 'm-line' })) : null);
+    if (line) { line.dataset.zh = 'ckpt'; line.textContent = on ? '任务目标已经完成，重来时直接回到登机点前，不用再打一遍。' : ''; line.hidden = !on; }
   }
 
   function boom(vv, size) {
@@ -564,7 +628,21 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return { key: `hunt-${G.enemies.list.indexOf(best)}-${Math.round(best.pos.x / 8)}-${Math.round(best.pos.z / 8)}-${st.floor}`, floor: st.floor, x: best.pos.x, y: best.pos.y, z: best.pos.z, door: null };
   }
 
+  /** 从登机点重来：原游戏重置完（目标全部变回没完成）以后，把目标标成完成、进入撤离阶段 */
+  function restoreCheckpoint() {
+    const run = G.game?.run, st = G.game?.state;
+    if (!state.restore || !run || (st !== 'intro' && st !== 'playing')) return;
+    state.restore = false;
+    for (const r of run.relays || []) { r.cut = true; r.cutting = false; r.t = 1; r.o?.object?.userData?.setState?.('cut'); }
+    run.cut = (run.relays || []).length;
+    state.mission.hold?.object?.userData?.setState?.('cut');
+    G.game.completeAll?.();
+    G.hud?.radio?.(`回到登机点了。${state.mission.extraction.label}已经重新就位，这次稳住。`, 4);
+    G.game.refreshObjective?.();
+  }
+
   function update(dt) {
+    restoreCheckpoint();
     for (const m of models) m.userData.update?.(dt);
     holdTick(dt);
     reinforce(dt);
@@ -614,7 +692,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       if (state.crashT > dur && !state.dead) {
         // 黑场后阵亡：原游戏的阵亡页（重新出击会重抽任务）
         state.dead = true;
+        state.checkpoint = { kind: vv.kind };
         deadTitle(vv.kind === 'helicopter' ? '直升机被击落' : '接应车被击毁', '撤离失败');
+        deadActions(true);
         G.player.invulnerable = false;
         G.player.damage?.(9999, null);
       }
@@ -635,7 +715,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return null;
   }
 
-  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun,
+  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun, checkpointStart,
     /** 步枪停用：登车、乘坐（直升机舱门机枪 / 装甲车车顶机枪）、结算、坠毁 */
     get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || state.phase === 'ride'; },
     get riding() { return riding(); },

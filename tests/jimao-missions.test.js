@@ -11,7 +11,7 @@ import { buildNav, clear, landAt } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
 import { walkNav } from './helpers.js';
 import { pointInPoly, distToPolyEdge } from '../src/layout/geom.js';
-import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, CAR_ROUTE_LENGTH, HOLD, HOLD_SITES, HUNT, roomSites, rollMission, missionText, missionRadio } from '../src/jimao/missions.js';
+import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, CAR_ROUTE_LENGTH, HOLD, HOLD_SITES, HUNT, roomSites, rollMission, missionText, missionRadio, boardingSpot, BOARD_GAP } from '../src/jimao/missions.js';
 import { liftAt, floorLabel, faceYaw, LIFT } from '../src/jimao/lift.js';
 import { createRideVehicle, rideFootprint, RIDE_SPECS } from '../src/jimao/ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from '../src/jimao/ride-paths.js';
@@ -139,6 +139,24 @@ test('撤离载具能坐进去：门口在空地上、机身占地不压墙，�
     const look = new THREE.Vector3(0, 0, -1).applyQuaternion(veh.seatPose(0, 0).quaternion), yaw = x.vehicle.yaw + (RIDE_SPECS[k].seatYaw || 0);
     assert.ok(look.dot(new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))) > 0.95, `${name}座位朝向不对`);
     veh.reset(); assert.ok(veh.seatPose(0, 0).position.distanceTo(seat) < 1e-6, `${name}重开后没回到原位`);
+    veh.dispose();
+  }
+});
+
+test('载具被击落后重来：出生点在载具门口外的本层空地上、不在机身里、走得到门口，面朝载具', () => {
+  for (const x of Object.values(EXTRACTIONS)) {
+    const y = elev(x.floor), name = x.label, r = rideFootprint(x.vehicle);
+    const veh = createRideVehicle({ ...x, y });
+    const { pos, yaw } = boardingSpot(nav, veh, x, y);
+    const st = landAt(nav, pos.x, pos.z, y + 0.6);
+    assert.ok(st && st.floor === x.floor && Math.abs(st.y - y) < 0.5 && clear(nav, st), `${name}重来出生点 (${pos.x.toFixed(1)}, ${pos.z.toFixed(1)}) 不在 ${x.floor} 空地上`);
+    assert.ok(pos.x < r.x0 || pos.x > r.x1 || pos.z < r.z0 || pos.z > r.z1, `${name}重来出生点在机身里`);
+    const d = Math.hypot(pos.x - x.x, pos.z - x.z);
+    assert.ok(d >= BOARD_GAP && d > x.radius + 1 && d < 7, `${name}重来出生点离登机点 ${d.toFixed(1)} 米（太近一落地就自动上车）`);
+    assert.ok(findPath(nav, st, at(x)), `${name}重来出生点走不到登机点`);
+    // 原游戏朝 (dx, dz) 看时 yaw = atan2(−dx, −dz)：看的方向要指向车门
+    const c = veh.toWorld(veh.spec.doorOut), look = [-Math.sin(yaw), -Math.cos(yaw)], to = [c.x - pos.x, c.z - pos.z], n = Math.hypot(...to);
+    assert.ok((look[0] * to[0] + look[1] * to[1]) / n > 0.7, `${name}重来时没面朝车门`);
     veh.dispose();
   }
 });
