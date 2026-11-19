@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { findPath } from '../fps/pathfinding.js';
 import { landAt, clear } from '../layout/nav.js';
+import { routeHint } from './minimap.js';
 
 export const GUIDE = Object.freeze({ spacing: 1.4, ahead: 45, count: 34, recompute: 1.5, stray: 5, speed: 7, color: '#9fe8ff' });
 
@@ -53,7 +54,7 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
   for (let i = 0; i < GUIDE.count; i++) mesh.setColorAt(i, base);
   scene.add(mesh);
 
-  let route = [], key = '', wait = 0, t = 0, job = null, hint = null, last = null;
+  let route = [], key = '', wait = 0, t = 0, job = null, hint = null, last = null, nextStep = null, planAt = null, planFloor = null, nearS = 0;
 
   /** 现在该去哪：没完成的目标里离玩家最近的；都完成了去撤离点 */
   function target() {
@@ -66,24 +67,27 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
       const open = (run.relays || []).filter((r) => !r.cut && r.o?.pos);
       if (!open.length) return null;
       const r = open.sort((a, b) => a.o.pos.distanceTo(p) - b.o.pos.distanceTo(p))[0], site = r.o.site || { floor: r.o.zone, x: r.o.pos.x, z: r.o.pos.z };
-      return { key: r.id, floor: site.floor, x: r.o.pos.x, y: r.o.pos.y, z: r.o.pos.z, door: doorOutside(layout, site) };
+      return { key: r.id, name: String(r.o.label || r.label || '目标').split(' · ')[0], floor: site.floor, x: r.o.pos.x, y: r.o.pos.y, z: r.o.pos.z, door: doorOutside(layout, site) };
     }
     const x = G.level?.extraction;
     if (!x?.pos) return null;
     const st = landAt(nav, x.pos.x, x.pos.z, x.pos.y + 0.6);
-    return st ? { key: 'extract', floor: st.floor, x: x.pos.x, y: x.pos.y, z: x.pos.z, door: null } : null;
+    return st ? { key: 'extract', name: x.label || '撤离点', floor: st.floor, x: x.pos.x, y: x.pos.y, z: x.pos.z, door: null } : null;
   }
 
   /** 排一条路（分帧寻路，pathfinder.js；把电梯也算进去）。算出来以前旧路线照画 */
   function plan(tg) {
     const from = G.physics?.stateOf?.(G.player.pos);
+    if (from) { planAt = { x: from.x, z: from.z }; if (!from.slope) planFloor = from.floor; }
     const goal = tg.door || { floor: tg.floor, x: tg.x, z: tg.z, y: tg.y, slope: null };
     job?.cancel(); job = null;
     if (!from || from.slope || !clear(nav, goal)) { if (!from || !clear(nav, goal)) { route = []; hint = null; } return; }
     const done = (pts) => {
       job = null;
-      if (!pts || !pts.length) { route = []; hint = null; return; }
+      if (!pts || !pts.length) { route = []; hint = null; nextStep = null; return; }
       // 路线里有电梯：箭头只画到电梯门口，后面的等坐上去、到了那一层再重新算
+      // 下一步怎么走（小地图下面那行字）：第一次换楼层的地方、怎么换、还有多远
+      nextStep = routeHint(nav, layout, pts, tg.name || '目标');
       const cut = pts.findIndex((p) => p.via === 'lift'), list = (cut >= 0 ? pts.slice(0, cut) : pts).map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
       hint = cut >= 0 ? { kind: 'lift', name: pts[cut].lift, from: pts[cut].from, to: pts[cut].to, x: pts[cut - 1].x, y: pts[cut - 1].y ?? 0, z: pts[cut - 1].z } : null;
       if (cut < 0 && tg.door) list.push({ x: tg.x, y: tg.y, z: tg.z });
@@ -100,12 +104,15 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
     const playing = G.game?.state === 'playing' && G.player?.alive !== false && !hidden();
     const tg = playing ? target() : null;
     last = tg;
-    if (!tg) { mesh.count = 0; route = []; hint = null; key = ''; job?.cancel(); job = null; return; }
+    if (!tg) { mesh.count = 0; route = []; hint = null; nextStep = null; key = ''; job?.cancel(); job = null; return; }
     const p = G.player.pos;
     // 离路线最近的点（只在前面一段里找）
     let near = 0, nd = Infinity;
     for (let i = 0; i < route.length; i++) { const d = Math.hypot(route[i].x - p.x, route[i].z - p.z) + Math.abs(route[i].y - p.y) * 2; if (d < nd) { nd = d; near = i; } }
-    if (wait <= 0 && !job && (tg.key !== key || nd > GUIDE.stray || !route.length)) {
+    nearS = route[near]?.s ?? 0;
+    // 换了一层（上完扶梯、出了电梯）：路线的第一段已经走完，重新算（下一步的提示也跟着换）
+    const cur = G.physics?.stateOf?.(p), floorChanged = !!cur && !cur.slope && planFloor != null && cur.floor !== planFloor;
+    if (wait <= 0 && !job && (tg.key !== key || nd > GUIDE.stray || !route.length || floorChanged)) {
       wait = GUIDE.recompute;
       key = tg.key; plan(tg);
     }
@@ -130,6 +137,13 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
   return { mesh, update, get route() { return route; }, get target() { return last; },
     /** 路线要坐电梯时：{ kind: 'lift', name, from, to, x, y, z }（电梯门口），否则 null */
     get hint() { return hint; },
-    reset() { job?.cancel(); job = null; route = []; hint = null; key = ''; wait = 0; mesh.count = 0; },
+    /** 下一步：{ kind: 'goal' | 'slope' | 'lift', dist, text, x, y, z }，距离随人往前走实时扣掉 */
+    get next() {
+      if (!nextStep || !planAt || !G.player) return nextStep;
+      // 已经沿路线走了多远：离人最近的那个路线点的里程（路线画不出来时退回直线距离）
+      const moved = route.length ? nearS : Math.hypot(G.player.pos.x - planAt.x, G.player.pos.z - planAt.z), left = Math.max(0, nextStep.dist - moved);
+      return { ...nextStep, dist: left, text: nextStep.text.replace(/· \d+ 米$/, `· ${Math.max(1, Math.round(left))} 米`) };
+    },
+    reset() { job?.cancel(); job = null; route = []; hint = null; nextStep = null; key = ''; wait = 0; mesh.count = 0; },
     dispose() { mesh.removeFromParent(); geo.dispose(); mat.dispose(); } };
 }

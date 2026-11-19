@@ -616,7 +616,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (!m || G.game?.run?.allCut || state.phase !== 'none') return undefined;
     if (m.type === 'hold') {
       if (state.inside) return null;
-      return { key: 'hold', floor: m.hold.floor, x: m.hold.pos.x, y: m.hold.pos.y, z: m.hold.pos.z, door: null };
+      return { key: 'hold', name: '控制点', floor: m.hold.floor, x: m.hold.pos.x, y: m.hold.pos.y, z: m.hold.pos.z, door: null };
     }
     if (m.type !== 'eliminate') return undefined;
     const p = G.player.pos;
@@ -626,7 +626,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const st = G.physics?.stateOf?.(best.pos) || landAt(nav, best.pos.x, best.pos.z, best.pos.y + 0.6);
     if (!st) return null;
     // 敌人在动：key 里带上他所在的 8 米格子，走远了路线会重算
-    return { key: `hunt-${G.enemies.list.indexOf(best)}-${Math.round(best.pos.x / 8)}-${Math.round(best.pos.z / 8)}-${st.floor}`, floor: st.floor, x: best.pos.x, y: best.pos.y, z: best.pos.z, door: null };
+    return { key: `hunt-${G.enemies.list.indexOf(best)}-${Math.round(best.pos.x / 8)}-${Math.round(best.pos.z / 8)}-${st.floor}`, name: '最近的敌人', floor: st.floor, x: best.pos.x, y: best.pos.y, z: best.pos.z, door: null };
   }
 
   /** 从登机点重来：原游戏重置完（目标全部变回没完成）以后，把目标标成完成、进入撤离阶段 */

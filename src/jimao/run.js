@@ -26,6 +26,7 @@ import { createRouteGuide } from './guide.js';
 import { createPathfinder, PATH } from './pathfinder.js';
 import { createTuning, TUNING_CSS } from './tuning.js';
 import { createActions, ACTIONS_CSS } from './actions.js';
+import { createMinimap, MINIMAP_CSS } from './minimap.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
@@ -78,7 +79,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -182,7 +183,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 滑铲、手雷、手机上的蹲 / 近战 / 手雷键、辅助瞄准、自动开火（actions.js）；坐载具、坐电梯时不管
   const actions = createActions(G, { scene, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding });
   G.actions = actions;
-  G.level.onReset = () => { pathfinder.reset(); director.roll(); ammo.reset(); guide.reset(); lift.reset(); actions.reset(); locCard(document, director.state.mission); };
+  // 小地图 + 下一步提示（minimap.js）：左上角；坐载具时不显示
+  const minimap = createMinimap(G, { nav, layout: ctx.layout, ui, guide, hidden: () => director.riding });
+  G.minimap = minimap;
+  G.level.onReset = () => { pathfinder.reset(); director.roll(); ammo.reset(); guide.reset(); lift.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
   G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
   director.roll();
   G.missions = director; G.ammo = ammo; G.guide = guide; G.lift = lift;
@@ -264,6 +268,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (G.game.state !== 'paused') { try { actions.update(dt); } catch (e) { fail('actions', e, '手雷出错'); } }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
       if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { fail('guide', e, '路线指引出错'); } }
+      try { minimap.update(dt); } catch (e) { fail('minimap', e, '小地图出错'); }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
       // 任务物件动画、歼灭任务增援；撤离时镜头登机、坐进直升机 / 接应车里（missions.js 给出位置、朝向和压暗）
       try {
@@ -363,7 +368,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

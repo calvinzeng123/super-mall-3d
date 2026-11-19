@@ -75,3 +75,26 @@ test('取消的请求不回调；走不到的地方回调 null；重置清空队
   assert.equal(fresh.pending, 0); fresh.update(5); assert.equal(c, 'none');
   assert.ok(PATH.budget > 0 && PATH.budget <= 5, '每帧的寻路预算应该只有几毫秒');
 });
+
+test('下一步怎么走：同层直接报目标和距离；跨层报第一部梯（扶梯 / 楼梯、上还是下、到哪层、还有多远）；坐电梯报电梯', async () => {
+  const { routeHint, toMap, wallsAround, verticalsOn, MINIMAP } = await import('../src/jimao/minimap.js');
+  const same = routeHint(nav, L, pf.findNow(START, GOALS[0][1]), '甲号中继');
+  assert.equal(same.kind, 'goal'); assert.match(same.text, /^甲号中继 · \d+ 米$/); assert.ok(Math.abs(same.dist - 36) < 6);
+  const down = routeHint(nav, L, pf.findNow(START, GOALS[2][1]));
+  assert.equal(down.kind, 'slope'); assert.equal(down.up, false); assert.match(down.text, /^(扶梯|楼梯|坡道)下 .+ · \d+ 米$/, down.text);
+  const up = routeHint(nav, L, pf.findNow(START, GOALS[3][1]));
+  assert.equal(up.kind, 'slope'); assert.equal(up.up, true); assert.match(up.text, /^(扶梯|楼梯)上 2F · \d+ 米$/, up.text);
+  assert.ok(up.dist > 3 && up.dist < 80, `到第一部梯 ${up.dist.toFixed(0)} 米`);
+  const ride = routeHint(nav, L, pf.findNow(START, GOALS[3][1], { lifts: true }));
+  assert.equal(ride.kind, 'lift'); assert.match(ride.text, /上到 RF · \d+ 米$/, ride.text);
+  assert.equal(routeHint(nav, L, null), null);
+  // 小地图坐标：人朝 −z（yaw 0）时，前方在上、+x 在右；朝 −x（yaw π/2）时 −x 在上
+  assert.deepEqual(toMap(0, -5, 0).map((v) => Math.round(v) + 0), [0, 5]); assert.deepEqual(toMap(3, 0, 0).map((v) => Math.round(v) + 0), [3, 0]);
+  assert.deepEqual(toMap(-5, 0, Math.PI / 2).map((v) => Math.round(v) + 0), [0, 5]);
+  // 墙线、上下楼设施
+  const F = nav.floors.get('P1-1F'), near = wallsAround(F, START.x, START.z, MINIMAP.range);
+  assert.ok(near.length > 40 && near.length < F.walls.length && new Set(near).size === near.length, `出生点周围 ${near.length} 段墙`);
+  const v = verticalsOn(nav, 'P1-1F');
+  assert.ok(v.filter((q) => q.kind === 'lift').length >= 3 && v.filter((q) => q.kind === 'slope' && q.up).length >= 4, '一期 1F 有电梯和上楼的扶梯');
+  assert.ok(v.every((q) => Number.isFinite(q.x) && Number.isFinite(q.z)));
+});
