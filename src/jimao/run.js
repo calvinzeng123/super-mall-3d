@@ -17,12 +17,15 @@ import { playIntro } from './intro.js';
 import { createLayoutEditor, LAYOUT_CSS } from './layout-editor.js';
 import { addSoldiers } from './soldier.js';
 import { buildNav, landAt, clear } from '../layout/nav.js';
-import { distToPolyEdge } from '../layout/geom.js';
+import { distToPolyEdge, toW } from '../layout/geom.js';
 import { FPS_MISSION } from '../fps/mission-layout.js';
 import { createMissionDirector, RELAY_SITES, EXTRACTIONS } from './missions.js';
 import { rideFootprint } from './ride-vehicles.js';
 import { createAmmoSupply } from './ammo.js';
 import { createRouteGuide } from './guide.js';
+import { createPathfinder, PATH } from './pathfinder.js';
+import { createTuning, TUNING_CSS } from './tuning.js';
+import { createActions, ACTIONS_CSS } from './actions.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
@@ -42,6 +45,7 @@ const VENDOR_TIER = Object.freeze({ low: 'low', medium: 'balanced', high: 'high'
 /** 玩家在原游戏设置里选过的画质（auto 或没选过返回 null） */
 /** 手机上枪和材质的贴图最多 1024：2048 那套要多占约 80MB 显存，iOS 容易回收（手机屏幕上看不出差别） */
 const capTex = (q) => (MOBILE && q && q.tex > 1024 ? { ...q, tex: 1024 } : q);
+function safeStorage() { try { return window.localStorage; } catch { return null; } }
 function savedVendorQuality() {
   try { const q = JSON.parse(localStorage.getItem('saltline.settings.v1') || '{}').quality; return VENDOR_TIER[q] ? q : null; } catch { return null; }
 }
@@ -70,8 +74,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   Object.assign(J.LEVEL_BOUNDS, { groundY: -1e4, seaY: -1e4, quayX: 1e9 });
   J.LEVEL_BOUNDS.min.set(-1e5, -1e4, -1e5); J.LEVEL_BOUNDS.max.set(1e5, 1e4, 1e5);
 
+  // 进这个模式之前场景里已有的东西（商场本身）：后面加进来的都是游戏的（预热着色器时用来区分）
+  const mallChildren = new Set(scene.children);
+
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -115,6 +122,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       G.quality = capTex({ ...preset });
       const tier = VENDOR_TIER[preset?.name];
       if (tier) app.setQuality(tier, { persist: false });
+      // 换了一档画面质量：性能微调回到这一档的默认值
+      G.tuning?.resetToTier();
     },
   };
   const G = {
@@ -134,6 +143,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   addCover(ctx);
   const nav = buildNav(ctx.layout);
   G.physics = createMapPhysics(nav);
+  // 分帧寻路（pathfinder.js）：敌人、路线指引的寻路都排队，每帧只算几毫秒；跨层连接表在加载画面里先建好
+  const pathfinder = createPathfinder(nav);
+  pathfinder.prepare();
+  G.physics.pathfinder = pathfinder; G.pathfinder = pathfinder;
   G.input = J.createInput(G);
   G.level = buildLevel(ctx, nav);
   G.backdrop = J.stubs.backdrop();
@@ -163,16 +176,20 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 弹药补给（ammo.js）：备弹打完不会自动补，只能捡敌人掉的弹匣、开弹药箱、完成目标；坐车时击倒敌人补车里的弹药
   const ammo = createAmmoSupply(G, { scene, layout: ctx.layout, nav, isRiding: () => director.riding, rideKind: () => director.rideKind });
   // 地面路线指引（guide.js）：脚下一串淡蓝色小箭头指向最近的目标 / 撤离点，坐载具时不画
-  const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding });
+  const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding, pathfinder });
   // 坐电梯（lift.js）：走到电梯门口，按住 Z / X（手机上 ▲ ▼）上下楼；坐载具时不显示
   const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post });
-  G.level.onReset = () => { director.roll(); ammo.reset(); guide.reset(); lift.reset(); locCard(document, director.state.mission); };
+  // 滑铲、手雷、手机上的蹲 / 近战 / 手雷键、辅助瞄准、自动开火（actions.js）；坐载具、坐电梯时不管
+  const actions = createActions(G, { scene, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding });
+  G.actions = actions;
+  G.level.onReset = () => { pathfinder.reset(); director.roll(); ammo.reset(); guide.reset(); lift.reset(); actions.reset(); locCard(document, director.state.mission); };
   G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
   director.roll();
   G.missions = director; G.ammo = ammo; G.guide = guide; G.lift = lift;
   G.game = J.createGame(G);
   // 新封面和各菜单页的话术（cover.js）：原游戏的菜单建好以后改版面、改文字，按钮照旧
   const cover = applyCover(document);
+  actions.buildUi();
   locCard(document, director.state.mission);
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
   const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui, geometry: () => G.stickGeo?.() });
@@ -181,17 +198,34 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   }
 
   // ---- 每帧 ----
-  let visibilityKey = '';
+  let visibilityKey = '', prefer = null, preferAt = null, preferFrom = null;
+  const levelOf = (id) => { const F = nav.floors.get(id); return F?.parentFloor || F?.level?.id || null; };
+  /** 人在楼梯、扶梯上，或离梯口不到 16 米：梯子另一头是哪一层（楼层内装先搭那一层）。离开 22 米才放手，免得两部梯子之间来回换 */
+  function preferFloor(s) {
+    if (s.slope) { const sl = nav.slopeById.get(s.slope.id); if (sl) { prefer = levelOf(sl.low === s.floor ? sl.high : sl.low); preferAt = { x: s.x, z: s.z }; preferFrom = s.floor; return prefer; } }
+    if (preferFrom !== s.floor) { prefer = null; preferFrom = s.floor; } // 换了一层：上一层选的不算数
+    let best = prefer && preferAt ? Math.hypot(s.x - preferAt.x, s.z - preferAt.z) - 6 : Infinity, pick = null, at = null;
+    if (best > 16) { best = 16; prefer = null; }
+    for (const sl of nav.floors.get(s.floor)?.slopes || []) {
+      const low = sl.low === s.floor, [x, z] = toW(sl.F, low ? 0 : sl.len, 0), d = Math.hypot(x - s.x, z - s.z);
+      if (d < best) { best = d; pick = levelOf(low ? sl.high : sl.low); at = { x, z }; }
+    }
+    if (pick) { prefer = pick; preferAt = at; }
+    return prefer;
+  }
   function syncVisibility() {
     const s = G.physics.stateOf(G.player.pos);
     if (!s) return;
     const F = nav.floors.get(s.floor), level = F?.parentFloor || F?.level?.id || null, building = F?.building || null;
     let near = null;
     if (!building) { let best = 24; for (const b of ctx.layout.buildings) { const d = distToPolyEdge([s.x, s.z], b.outline); if (d < best) { best = d; near = b.id; } } }
-    const key = `${building}/${level}/${near}/${s.y < -0.5}/${Math.floor(s.x / 24)}/${Math.floor(s.z / 24)}`;
+    const want = preferFloor(s);
+    const key = `${building}/${level}/${near}/${s.y < -0.5}/${Math.floor(s.x / 24)}/${Math.floor(s.z / 24)}/${want}`;
     if (key === visibilityKey) return;
     visibilityKey = key;
-    app.state.explore = { building, level, near, metro: false, under: s.y < -0.5, position: { x: s.x, z: s.z } };
+    // 开打以后楼层内装分帧搭（每帧几毫秒）；标题画面、开局前照旧一次搭完
+    if (app.floorBuild) app.floorBuild.incremental = G.game?.state === 'playing';
+    app.state.explore = { building, level, near, metro: false, under: s.y < -0.5, position: { x: s.x, z: s.z }, prefer: want && want !== level ? want : null };
     app.refresh();
   }
   // 每个模块各自兜住报错（只打一次控制台）；报错的名字和第一条消息留在 run.err / run.msg，诊断面板里能看到
@@ -223,7 +257,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       // 坐在载具上：玩家更新之前先把载具和玩家摆到这一帧的位置；用舱门机枪时步枪不更新（不开火、不显示）
       if (active) { try { director.prePlayer(dt); } catch (e) { fail('ride', e, '载具出错'); } }
       if (active) { try { lift.update(dt); } catch (e) { fail('lift', e, '电梯出错'); } }
+      // 寻路每帧最多算 PATH.budget 毫秒（帧率很低时减半，别再雪上加霜）
+      if (active) { try { pathfinder.update(rawDt > 0.05 ? PATH.budget / 2 : PATH.budget); } catch (e) { fail('path', e, '寻路出错'); } }
+      if (active) { try { actions.pre(dt); } catch (e) { fail('actions', e, '操作补强出错'); } }
       if (active) { stepPlayer(dt, gap); if (!director.gunActive) run('weapon', dt); run('enemies', dt); }
+      if (G.game.state !== 'paused') { try { actions.update(dt); } catch (e) { fail('actions', e, '手雷出错'); } }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
       if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { fail('guide', e, '路线指引出错'); } }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
@@ -260,8 +298,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const env = app.env, baseRender = env.render;
   env.render = function () { grade.begin(); return baseRender.call(this); };
   // 诊断面板（diag.js）：设置里「诊断信息 · 显示」或 ?diag=1
+  // 性能微调（tuning.js）：设置面板「画面质量」下面加帧率上限、分辨率、阴影、抗锯齿、光影特效、路人、敌人数，标题旁显示当前帧率
+  const tuning = createTuning({ app, ui, grade, flow: J.GAME_FLOW, mobile: MOBILE, storage: safeStorage(), baseSamples: MOBILE ? 2 : 4 });
+  G.tuning = tuning; tuning.apply();
   const diag = createDiag({ app, G, renderer, grade, stick, run, params });
-  const finish = () => diag.end(grade.end(G.time.t));
+  const finish = () => { diag.end(grade.end(G.time.t)); tuning.tick(); };
   G.touchStick = stick; G.diag = diag;
   ctx.afterRender.push(drawView, finish);
   // 键位布局：设置面板里加一行「键位布局 · 拖动调整」（摇杆、触屏按键、HUD 的位置和大小，摇杆跟随拇指 / 固定位置）
@@ -292,6 +333,26 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     row.after(dRow);
   }
 
+  // 预热：敌人、特效、任务物件、载具开局时都藏着，第一次出现才编译着色器、上传贴图——每种材质卡一下（第一个敌人露头、第一次开枪时最明显）。
+  // 这里趁加载画面把后来加进场景的东西（mallChildren 之外的）临时显示出来编译一遍，再藏回去。
+  onProgress('正在预热着色器', 0.95);
+  try {
+    const shown = [], textures = new Set();
+    for (const root of scene.children) {
+      if (mallChildren.has(root)) continue;
+      root.traverse((o) => {
+        if (!o.visible) { o.visible = true; shown.push(o); }
+        for (const m of [].concat(o.material || [])) for (const v of Object.values(m)) if (v?.isTexture && v.image) textures.add(v);
+      });
+    }
+    camera.traverse((o) => { if (!o.visible) { o.visible = true; shown.push(o); } });
+    renderer.compile(scene, camera);
+    renderer.compile(scene, viewCamera);
+    for (const tex of textures) { try { renderer.initTexture(tex); } catch { /* 还没准备好的贴图等用到时再传 */ } }
+    for (const o of shown) o.visible = false;
+    G.warm = { objects: shown.length, textures: textures.size, programs: renderer.info.programs?.length || 0 };
+  } catch (e) { console.error('[零点突围] 预热着色器出错', e); }
+
   if (params.autostart || params.shot) G.game.start({ skipIntro: true });
   // 入场动画：盖在标题菜单上面放一次（自动开局、截图时不放）
   else if (!params.nointro) playIntro({ volume: 0.5 });
@@ -301,8 +362,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     dispose() {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
-      env.render = baseRender; grade.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); director.dispose(); ammo.dispose(); guide.dispose();
+      env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

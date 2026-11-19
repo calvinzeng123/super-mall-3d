@@ -5,6 +5,10 @@
 import { escapeLikeEsbuild } from './rebrand.mjs';
 
 export const PATCHES = [
+  // ---- 输入 ----
+  ['输入模块露出「按下 / 松开一个动作」的入口（actions.js 加的手机按键：近战；来源记在 touch 上，和原来的按键同一套）',
+    'update: ee, endFrame: B, requestLock: A, exitLock: _, setGameplay(P) {',
+    'update: ee, endFrame: B, requestLock: A, exitLock: _, act(P, V, Y) { d(P, V, Y); }, setGameplay(P) {'],
   // ---- 声音 ----
   ['真人敌人的枪声和脚步声：用原游戏自己的步枪、脚步合成器，放到有方位的「世界」声道上',
     'hound_step: { gen: T8, n: 3, sr: Xn, peak: 0.7, bus: "world", max: 4, pri: 3, ref: 5, roll: 0.8 },',

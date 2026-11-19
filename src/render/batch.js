@@ -255,8 +255,15 @@ export class Batcher {
     if (this.withUv) g.setAttribute('uv', new THREE.BufferAttribute(take('uv', this.n * 2), 2));
     g.setAttribute('color', new THREE.BufferAttribute(take('col', this.n * 3), 3, true));
     if (consume) { this.n = 0; this.cap = 0; }
-    g.computeBoundingSphere();
-    g.computeBoundingBox();
+    if (packed) {
+      // 压缩过的坐标已经按包围盒归一化到 [-1, 1]：包围盒就是这个立方体，包围球取它的外接球（比逐点算的略大一点，只影响视锥剔除的松紧）。
+      // three 逐点算要对每个 16 位整数做一次反归一化，一层楼的批次要几十毫秒，分帧搭楼层时这一下最卡
+      g.boundingBox = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1));
+      g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), Math.sqrt(3));
+    } else {
+      g.computeBoundingSphere();
+      g.computeBoundingBox();
+    }
     const mesh = new THREE.Mesh(g, material);
     mesh.castShadow = shadow;
     mesh.receiveShadow = receive;
@@ -279,12 +286,19 @@ export const PACK_STEP = 0.005;
 export function packPositions(pos, maxStep = PACK_STEP) {
   const n = pos.length / 3;
   if (!n) return null;
-  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
-  for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) { const v = pos[i + k]; if (v < lo[k]) lo[k] = v; if (v > hi[k]) hi[k] = v; }
+  // 三个分量摊开写（结果和按分量循环的写法一样，快三四倍：一层楼的批次有上百万个数）
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+  }
+  const lo = [x0, y0, z0], hi = [x1, y1, z1];
   const center = lo.map((v, k) => (v + hi[k]) / 2), half = lo.map((v, k) => Math.max(1e-3, (hi[k] - v) / 2));
   if (!half.every((h) => Number.isFinite(h) && h / 32767 <= maxStep)) return null;
-  const array = new Int16Array(pos.length);
-  for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) array[i + k] = Math.round(((pos[i + k] - center[k]) / half[k]) * 32767);
+  const array = new Int16Array(pos.length), cx = center[0], cy = center[1], cz = center[2], hx = half[0], hy = half[1], hz = half[2];
+  for (let i = 0; i < pos.length; i += 3) {
+    array[i] = Math.round(((pos[i] - cx) / hx) * 32767); array[i + 1] = Math.round(((pos[i + 1] - cy) / hy) * 32767); array[i + 2] = Math.round(((pos[i + 2] - cz) / hz) * 32767);
+  }
   return { array, center, half };
 }
 
@@ -478,7 +492,11 @@ export class BatchSet {
   }
   /** 把所有批次合成网格加入 group */
   flush(group, opts = {}) {
-    if (this.placed?.length) { propLibrary?.instantiate(group, this.placed); this.placed = null; }
+    for (const _ of this.flushSteps(group, opts)); // eslint-disable-line no-unused-vars
+  }
+  /** 同 flush，每合成一种材质的网格让出一次（分帧搭建楼层时用） */
+  *flushSteps(group, opts = {}) {
+    if (this.placed?.length) { propLibrary?.instantiate(group, this.placed); this.placed = null; yield; }
     for (const [key, b] of Object.entries(this.sets)) {
       const mat = this.materials[key];
       if (!mat) throw new Error('missing material ' + key);
@@ -490,6 +508,7 @@ export class BatchSet {
         if (decal) m.renderOrder = 1; // 在不透明物之后、玻璃之前画
         group.add(m);
       }
+      yield;
     }
     this.sets = {};
   }

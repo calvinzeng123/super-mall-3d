@@ -163,7 +163,7 @@ function localPath(nav, a, b, { cellSize = .7, maxNodes = 18000 } = {}) {
   return result;
 }
 
-function connectorsFor(nav) {
+export function connectorsFor(nav) {
   if (!caches.has(nav)) caches.set(nav, { grids: new Map(), connectors: null });
   const cache = caches.get(nav);
   if (cache.connectors) return cache.connectors;

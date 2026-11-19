@@ -213,7 +213,7 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
         m.mode = opts.state === 'alert' ? 'investigate' : 'patrol'; m.modeSeen = m.mode; m.modeT = 10;
         m.lastKnown.copy(opts.target || (G.player ? G.player.pos : at));
         m.los = false; m.seeT = m.noSeeT = 0; m.exposure = 0; m.senseT = rng() * 0.2; m.hasToken = false;
-        m.es = 'move'; m.cool = 0.5 + rng(); m.path = null; m.hasGoal = false; m.waitT = rng() * 1.5; m.planT = 0;
+        m.es = 'move'; m.cool = 0.5 + rng(); m.path = null; m.pathJob?.cancel(); m.pathJob = null; m.hasGoal = false; m.waitT = rng() * 1.5; m.planT = 0;
         m.crouch = m.crouchWant = 0; m.lowReady = m.mode === 'patrol' ? 1 : 0.3; m.pitch = 0; m.twist = 0;
         m.recoil = m.recoilV = m.flinchP = m.flinchPV = m.flinchR = m.flinchRV = 0;
         m.dieT = 0; m.fall = m.fallV = 0; m.crumple = false; m.phase = rng() * 6.28; m.gait = rng() * 6.28;
@@ -258,10 +258,17 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       if (planFrame.n === G.time.frame) { m.planT = 0.03 + rng() * 0.05; return; }
       planFrame.n = G.time.frame;
       m.planT = 3.5 + rng() * 1.5; m.planGoal.copy(m.goal);
-      let path = null;
-      try { path = G.physics.nav.findPath(m.pos, m.goal); } catch { path = null; }
-      m.path = path && path.length ? path : null; m.wp = 0;
-      if (m.path && m.path.length > 1 && Math.hypot(m.path[0].x - m.pos.x, m.path[0].z - m.pos.z) < 0.6) m.wp = 1;
+      // 分帧寻路：排队等结果，算出来之前照旧路线（或直线）走。以前是当场算完，一条路上百毫秒，几个人一起算画面就卡
+      m.pathJob?.cancel();
+      const gx = m.goal.x, gy = m.goal.y, gz = m.goal.z;
+      m.pathJob = G.physics.nav.requestPath(m.pos, m.goal, (path) => {
+        m.pathJob = null;
+        if (!m.active || !m.alive || !m.hasGoal || Math.hypot(m.goal.x - gx, m.goal.z - gz) + Math.abs(m.goal.y - gy) > 1.5) return; // 目标已经换了，这条路作废
+        m.path = path && path.length ? path : null; m.wp = 0;
+        // 排队的这一会儿人已经往前走了：从离自己最近的那个拐点接着走
+        if (m.path) { let best = Infinity; for (let i = 0; i < Math.min(m.path.length, 6); i++) { const d = Math.hypot(m.path[i].x - m.pos.x, m.path[i].z - m.pos.z) + Math.abs(m.path[i].y - m.pos.y) * 2; if (d < best) { best = d; m.wp = i; } } }
+        if (m.path && m.wp < m.path.length - 1 && Math.hypot(m.path[m.wp].x - m.pos.x, m.path[m.wp].z - m.pos.z) < 0.6) m.wp++;
+      });
     }
     /** 朝目标走；到了返回 true。want 写进期望的水平速度 */
     function follow(dt, speed, want) {

@@ -6625,7 +6625,7 @@ function v_(i) {
       return n.has(P) && (r || g_[P] === 1);
     }, pressed(P) {
       return s.has(P) && (r || g_[P] === 1);
-    }, update: ee, endFrame: B, requestLock: A, exitLock: _, setGameplay(P) {
+    }, update: ee, endFrame: B, requestLock: A, exitLock: _, act(P, V, Y) { d(P, V, Y); }, setGameplay(P) {
       P = !!P, P !== r && (r = P, P || v(), M && M.root.classList.toggle("on", P && f.touch));
     }, setPrompt(P) {
       M && M.btn.interact.classList.toggle("on", !!P);

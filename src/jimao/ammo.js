@@ -148,7 +148,7 @@ export function createAmmoSupply(G, { scene, layout, nav, rng = Math.random, isR
     for (const c of crates) {
       if (c.opened) { c.open = Math.min(1, c.open + dt * 3); c.model.userData.lid.rotation.x = -1.9 * c.open; continue; }
       if (playing && p && !isRiding() && Math.hypot(c.pos.x - p.x, c.pos.z - p.z) < AMMO.crateR && Math.abs(c.pos.y - p.y) < 1.8) {
-        c.opened = true; c.model.userData.ring.visible = false; give(AMMO.crate, '打开弹药箱'); G.game?.refreshObjective?.();
+        c.opened = true; c.model.userData.ring.visible = false; give(AMMO.crate, G.actions?.give?.(1) ? '打开弹药箱 · 手雷 +1' : '打开弹药箱'); G.game?.refreshObjective?.();
       }
     }
     if (!playing) return;

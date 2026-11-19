@@ -575,7 +575,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function reinforce(dt) {
     const m = state.mission;
     if (!m || (m.type !== 'eliminate' && m.type !== 'hold') || G.game?.state !== 'playing' || G.game.run?.allCut || state.phase !== 'none') return;
-    const cap = m.type === 'hold' ? HOLD.alive : HUNT.alive, every = m.type === 'hold' ? HOLD.every : HUNT.every;
+    // 增援上限跟着「性能微调 · 同时在场的敌人」缩（少 = 8/14）
+    const cap = Math.max(3, Math.round((m.type === 'hold' ? HOLD.alive : HUNT.alive) * (G.tuning?.enemyScale?.() ?? 1))), every = m.type === 'hold' ? HOLD.every : HUNT.every;
     // 坚守：没走到控制点之前不刷（先让人走过去），到过以后一直刷
     if (m.type === 'hold' && state.holdT <= 0 && !state.inside) return;
     state.reinforce -= dt;

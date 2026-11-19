@@ -50,14 +50,21 @@ export function faceAngle(F, face) {
 }
 
 export function buildInteriors(ctx) {
+  for (const _ of buildInteriorsSteps(ctx)); // eslint-disable-line no-unused-vars
+}
+
+/** 同 buildInteriors，每布置完一间铺位让出一次（按需加载的楼层分帧搭建时用，见 floor-detail-scene.js） */
+export function* buildInteriorsSteps(ctx) {
   for (const lv of ctx.layout.levels) {
     if (lv.kind === 'roof' || lv.kind === 'parking') continue;
     const L = ctx.levels[lv.id];
-    lv.units.forEach((u, i) => {
-      if (u.residence) return; // 塔楼房间由单层惰性内饰构建器负责。
-      if (storeStyle(lv, u) === 'bar' || u.brand.cat === 'rink') return;
+    for (let i = 0; i < lv.units.length; i++) {
+      const u = lv.units[i];
+      if (u.residence) continue; // 塔楼房间由单层惰性内饰构建器负责。
+      if (storeStyle(lv, u) === 'bar' || u.brand.cat === 'rink') continue;
       L.batch.frame(u.frame, () => L.signs.frame(u.frame, () => furnish(L, ctx.atlas[lv.id], lv, u, rng(1000 + i * 31 + Math.round(lv.elev * 7) + lv.id.length * 13))));
-    });
+      yield `${u.id} ${u.brand.cat}`;
+    }
   }
 }
 

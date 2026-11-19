@@ -40,7 +40,7 @@ export function normalizeQuality(value) {
   const input = value?.overrides || {}, overrides = {};
   for (const key of QUALITY_SWITCHES) if (typeof input[key] === 'boolean') overrides[key] = input[key];
   for (const [key, allowed] of Object.entries(QUALITY_CHOICES)) if (allowed.includes(input[key])) overrides[key] = input[key];
-  if (Number.isFinite(input.resolution)) overrides.resolution = clamp(input.resolution, 0.65, 2);
+  if (Number.isFinite(input.resolution)) overrides.resolution = clamp(input.resolution, 0.5, 2);
   if (Number.isFinite(input.crowdDensity)) overrides.crowdDensity = clamp(input.crowdDensity, 0, 1);
   return { preset, overrides };
 }
@@ -84,9 +84,10 @@ export function createQualityManager({ mobile = false, pixelRatio = 1, storage }
       autoTier = mobile ? 'low' : 'high';
       return change(persist);
     },
-    customize(patch) {
+    /** persist: false 只改这一次（零点突围的「性能微调」自己存，不改漫游存的画质） */
+    customize(patch, { persist = true } = {}) {
       pref = normalizeQuality({ ...pref, overrides: { ...pref.overrides, ...patch } });
-      return change(true);
+      return change(persist);
     },
     degrade() {
       // Explicit choices stay explicit. Only automatic mode can reduce itself.

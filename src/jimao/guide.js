@@ -41,7 +41,7 @@ export function resample(points, spacing = GUIDE.spacing) {
   return out;
 }
 
-export function createRouteGuide(G, { scene, layout, nav, hidden = () => false }) {
+export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, pathfinder = null }) {
   // 贴地小箭头：朝 +z，双面
   const shape = new THREE.Shape();
   shape.moveTo(0, 0.2); shape.lineTo(0.17, -0.04); shape.lineTo(0.09, -0.04); shape.lineTo(0, 0.08); shape.lineTo(-0.09, -0.04); shape.lineTo(-0.17, -0.04); shape.closePath();
@@ -53,7 +53,7 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false }
   for (let i = 0; i < GUIDE.count; i++) mesh.setColorAt(i, base);
   scene.add(mesh);
 
-  let route = [], key = '', wait = 0, t = 0;
+  let route = [], key = '', wait = 0, t = 0, job = null, hint = null, last = null;
 
   /** 现在该去哪：没完成的目标里离玩家最近的；都完成了去撤离点 */
   function target() {
@@ -74,30 +74,40 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false }
     return st ? { key: 'extract', floor: st.floor, x: x.pos.x, y: x.pos.y, z: x.pos.z, door: null } : null;
   }
 
+  /** 排一条路（分帧寻路，pathfinder.js；把电梯也算进去）。算出来以前旧路线照画 */
   function plan(tg) {
     const from = G.physics?.stateOf?.(G.player.pos);
-    if (!from) return [];
     const goal = tg.door || { floor: tg.floor, x: tg.x, z: tg.z, y: tg.y, slope: null };
-    if (!clear(nav, goal)) return [];
-    const pts = findPath(nav, from, goal) || [];
-    if (!pts.length) return [];
-    const list = pts.map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
-    if (tg.door) list.push({ x: tg.x, y: tg.y, z: tg.z });
-    return resample(list);
+    job?.cancel(); job = null;
+    if (!from || from.slope || !clear(nav, goal)) { if (!from || !clear(nav, goal)) { route = []; hint = null; } return; }
+    const done = (pts) => {
+      job = null;
+      if (!pts || !pts.length) { route = []; hint = null; return; }
+      // 路线里有电梯：箭头只画到电梯门口，后面的等坐上去、到了那一层再重新算
+      const cut = pts.findIndex((p) => p.via === 'lift'), list = (cut >= 0 ? pts.slice(0, cut) : pts).map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
+      hint = cut >= 0 ? { kind: 'lift', name: pts[cut].lift, from: pts[cut].from, to: pts[cut].to, x: pts[cut - 1].x, y: pts[cut - 1].y ?? 0, z: pts[cut - 1].z } : null;
+      if (cut < 0 && tg.door) list.push({ x: tg.x, y: tg.y, z: tg.z });
+      // 起点离电梯门口不到一步远时路线只有一个点：补一个点，照样画得出来
+      if (list.length === 1) list.unshift({ x: from.x, y: from.y ?? list[0].y, z: from.z });
+      route = resample(list);
+    };
+    if (pathfinder) job = pathfinder.request(from, goal, done, { lifts: true, urgent: true });
+    else done(findPath(nav, from, goal));
   }
 
   function update(dt) {
     t += dt; wait -= dt;
     const playing = G.game?.state === 'playing' && G.player?.alive !== false && !hidden();
     const tg = playing ? target() : null;
-    if (!tg) { mesh.count = 0; route = []; key = ''; return; }
+    last = tg;
+    if (!tg) { mesh.count = 0; route = []; hint = null; key = ''; job?.cancel(); job = null; return; }
     const p = G.player.pos;
     // 离路线最近的点（只在前面一段里找）
     let near = 0, nd = Infinity;
     for (let i = 0; i < route.length; i++) { const d = Math.hypot(route[i].x - p.x, route[i].z - p.z) + Math.abs(route[i].y - p.y) * 2; if (d < nd) { nd = d; near = i; } }
-    if (wait <= 0 && (tg.key !== key || nd > GUIDE.stray || !route.length)) {
+    if (wait <= 0 && !job && (tg.key !== key || nd > GUIDE.stray || !route.length)) {
       wait = GUIDE.recompute;
-      key = tg.key; route = plan(tg); near = 0;
+      key = tg.key; plan(tg);
     }
     // 从脚下往前画一段；流光往目标方向推，两头渐隐
     let n = 0;
@@ -117,6 +127,9 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false }
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
 
-  return { mesh, update, get route() { return route; }, reset() { route = []; key = ''; wait = 0; mesh.count = 0; },
+  return { mesh, update, get route() { return route; }, get target() { return last; },
+    /** 路线要坐电梯时：{ kind: 'lift', name, from, to, x, y, z }（电梯门口），否则 null */
+    get hint() { return hint; },
+    reset() { job?.cancel(); job = null; route = []; hint = null; key = ''; wait = 0; mesh.count = 0; },
     dispose() { mesh.removeFromParent(); geo.dispose(); mat.dispose(); } };
 }

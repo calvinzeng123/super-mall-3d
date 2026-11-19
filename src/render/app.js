@@ -13,7 +13,7 @@ import { buildShell, clearHeight } from './build/shell.js';
 import { buildSite } from './build/site.js';
 import { buildWalls } from './build/walls.js';
 import { buildStorefronts } from './build/storefronts.js';
-import { buildInteriors } from './build/interiors.js';
+import { buildInteriors, buildInteriorsSteps } from './build/interiors.js';
 import { buildRooms } from './build/rooms.js';
 import { buildEscalators } from './build/escalators.js';
 import { buildElevators } from './build/elevators.js';
@@ -54,7 +54,7 @@ import { buildBusStops } from './build/bus-stops.js';
 import { buildArcadeMassing } from './build/arcade-massing.js';
 import { createDeferredResource, createSerialTaskQueue, detailAssetKind, activeDetailFloor } from './deferred-resource.js';
 import { createFloorDetailSelector, createFloorDetailCache } from './floor-detail-streaming.js';
-import { buildOwnedFloorDetail, sceneResources, geometryStats } from './floor-detail-scene.js';
+import { buildOwnedFloorDetail, startOwnedFloorDetail, sceneResources, geometryStats } from './floor-detail-scene.js';
 import { buildP1ExpansionExterior, buildP1ExpansionLevel, usesExpansionFacade } from './build/p1-expansion.js';
 import { buildP1Fidelity } from './build/p1-fidelity.js';
 import { buildAccessGates, gatePickInfo } from './build/access-gates.js';
@@ -376,17 +376,30 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
   const state = { building: null, focus: null, exploded: false, flows: false, labels: !MOBILE, night: false, selected: null, touring: false, explore: null };
   const persistentResources = sceneResources([root]);
   const persistentGeometry = geometryStats(persistentResources.geometries);
+  const floorDetailOptions = id => ({
+    protectedResources: persistentResources, release: releaseGeometryAfterUpload,
+    atlas: lazyAtlasLevels.has(id) ? materials => makeFloorAtlas(ctx.lvById[id], materials) : null,
+    build(local, lv) {
+      buildWalls(local); buildStorefronts(local); buildInteriors(local);
+      buildPublic(local, { art: false }); buildP1ExpansionLevel(local, lv);
+    },
+    // 分帧搭建用：每个阶段之间、每布置完一间铺位让出一次
+    *steps(local, lv) {
+      buildWalls(local); yield 'walls'; buildStorefronts(local); yield 'storefronts';
+      for (const unit of buildInteriorsSteps(local)) yield `interior ${unit}`;
+      buildPublic(local, { art: false }); yield 'public'; buildP1ExpansionLevel(local, lv); yield 'expansion';
+    },
+  });
   const floorCache = floorSelector ? createFloorDetailCache({ limit: MEM.floors, hardLimit: LITE ? MEM.floors : 8,
-    build: id => buildOwnedFloorDetail(ctx, ctx.levels[id], {
-      protectedResources: persistentResources, release: releaseGeometryAfterUpload,
-      atlas: lazyAtlasLevels.has(id) ? materials => makeFloorAtlas(ctx.lvById[id], materials) : null,
-      build(local, lv) {
-        buildWalls(local); buildStorefronts(local); buildInteriors(local);
-        buildPublic(local, { art: false }); buildP1ExpansionLevel(local, lv);
-      },
-    }),
+    build: id => buildOwnedFloorDetail(ctx, ctx.levels[id], floorDetailOptions(id)),
+    start: id => startOwnedFloorDetail(ctx, ctx.levels[id], floorDetailOptions(id)),
     onError: (error, id) => console.error(`Floor interior construction failed: ${id}`, error),
   }) : null;
+  /** 楼层内装的搭法：incremental 分帧搭（零点突围打开），budget 每帧最多几毫秒 */
+  const floorBuild = { budget: 8, get incremental() { return !!floorCache?.incremental; }, set incremental(on) { if (floorCache) floorCache.incremental = !!on; } };
+  if (floorCache) ctx.dynamic.push({ name: 'floor-detail-pump', update() {
+    if (floorCache.building && floorCache.pump(floorBuild.budget) && state.explore) applyExploreVisibility();
+  } });
   let detailPosition = null;
   if (floorCache) ctx.dynamic.push({ name: 'nearby-floor-detail', update() {
     const ex = state.explore;
@@ -735,10 +748,10 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
   const flyView = ([position, target, radius], duration = 1.4) => flyTo(position, target, duration, radius);
 
   const app = {
-    ctx, state, renderer, scene, camera, controls, env, emit,
+    ctx, state, renderer, scene, camera, controls, env, emit, floorBuild,
     get quality() { return qualityManager.current; },
     setQuality(preset, opts) { return qualityManager.select(preset, opts); },
-    customizeQuality(patch) { return qualityManager.customize(patch); },
+    customizeQuality(patch, opts) { return qualityManager.customize(patch, opts); },
     onQuality(fn) { return qualityManager.subscribe(fn); },
     ensureTowerFloor,
     get residenceCache() { return [...residenceCache.keys()]; },

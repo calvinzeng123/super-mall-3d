@@ -204,3 +204,59 @@ test('超级商业中心：站在大中庭边上，一期 1F–6F 的室内细�
   const far = sel.select({ explore: { level: 'P1-1F', position: { x: -270, z: -130 } } });
   assert.ok(!far.has('P1-4F'), '西里附楼那头离中庭远，不该把 4F 也加载');
 });
+
+test('分帧搭建：sync 只排队，pump 一小段一小段做，搭完才算进缓存；不再需要的中途中止；关掉分帧时把排着的当场搭完', () => {
+  const log = [];
+  const record = (id) => ({ id, dispose() { log.push(`dispose ${id}`); }, setVisible(v) { log.push(`${id} ${v ? 'show' : 'hide'}`); } });
+  const start = (id) => { let n = 0; return { stage: '', next() { n++; log.push(`${id} step ${n}`); return n >= 4 ? record(id) : null; }, abort() { log.push(`abort ${id}`); } }; };
+  let clock = 0;
+  const cache = createFloorDetailCache({ limit: 2, build: (id) => { log.push(`build ${id}`); return record(id); }, start, now: () => clock });
+  // 默认不分帧：和以前一样当场搭
+  cache.sync(new Set(['A']));
+  assert.deepEqual(log.splice(0), ['build A', 'A show']);
+  cache.incremental = true;
+  cache.sync(new Set(['A', 'B']));
+  assert.equal(cache.has('B'), false, '刚排上队，还没搭完');
+  assert.deepEqual(cache.stats.pending, ['B']);
+  assert.equal(cache.building, 1);
+  // 预算 0：一帧只做一段
+  assert.equal(cache.pump(0), false); assert.equal(cache.pump(0), false); assert.equal(cache.pump(0), false);
+  assert.equal(cache.has('B'), false);
+  assert.equal(cache.pump(0), true, '第四段做完，这一帧返回 true 让调用方刷新显示');
+  assert.equal(cache.has('B'), true); assert.equal(cache.active('B'), true); assert.equal(cache.building, 0);
+  assert.ok(log.includes('B show'));
+  log.length = 0;
+  // 预算够大：一帧里做完
+  cache.sync(new Set(['B', 'C']));
+  assert.deepEqual(log.filter((l) => l.startsWith('dispose')), ['dispose A'], '要搭 C 之前先把不需要的 A 换出');
+  assert.equal(cache.pump(1000), true); assert.equal(cache.has('C'), true);
+  log.length = 0;
+  // 排着队的不再需要：中止
+  cache.sync(new Set(['C', 'D'])); cache.pump(0);
+  cache.sync(new Set(['C', 'B']));
+  assert.ok(log.includes('abort D')); assert.equal(cache.stats.aborted, 1); assert.equal(cache.has('D'), false);
+  // 关掉分帧：排着的当场搭完
+  cache.pump(0); assert.equal(cache.has('B'), false);
+  cache.incremental = false;
+  cache.sync(new Set(['C', 'B']));
+  assert.equal(cache.has('B'), true); assert.equal(cache.building, 0);
+  assert.ok(cache.stats.slices >= 8);
+});
+
+test('分帧搭建出错：这一层记成失败（不反复重试），其他层照常', () => {
+  const start = (id) => ({ next() { if (id === 'X') throw new Error('boom'); return { id, dispose() {}, setVisible() {} }; }, abort() {} });
+  const errors = [];
+  const cache = createFloorDetailCache({ limit: 3, build: () => { throw new Error('unused'); }, start, onError: (e, id) => errors.push(id), now: () => 0 });
+  cache.incremental = true;
+  cache.sync(new Set(['X', 'Y']));
+  cache.pump(1000);
+  assert.deepEqual(errors, ['X']); assert.equal(cache.has('Y'), true); assert.deepEqual(cache.stats.errors, ['X']);
+  cache.sync(new Set(['X', 'Y'])); assert.equal(cache.building, 0, '失败的那层不再排队');
+});
+
+test('零点突围：人在梯口附近时先要梯子另一头那一层（prefer），只算同一栋楼的', () => {
+  const selector = createFloorDetailSelector(campus(), { limit: 2 });
+  assert.deepEqual([...selector.select({ explore: { building: 'P1', level: 'P1-2F' } })], ['P1-2F', 'P1-1F']);
+  assert.deepEqual([...selector.select({ explore: { building: 'P1', level: 'P1-2F', prefer: 'P1-3F' } })], ['P1-2F', 'P1-3F']);
+  assert.deepEqual([...selector.select({ explore: { building: 'P1', level: 'P1-2F', prefer: 'P1C-2F' } })], ['P1-2F', 'P1-1F'], '别的楼的不算');
+});

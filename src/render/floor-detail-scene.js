@@ -42,7 +42,17 @@ function sharedLibraryResources(ctx, protectedResources) {
 /** The public builders allocate some private LED maps and skater geometry.
  * Track their night hooks and callbacks along with the owned group, but never
  * dispose floor materials, façade atlases or shared PBR textures. */
-export function buildOwnedFloorDetail(ctx, level, { build, atlas, protectedResources, release }) {
+export function buildOwnedFloorDetail(ctx, level, options) {
+  const job = startOwnedFloorDetail(ctx, level, options);
+  for (;;) { const record = job.next(); if (record) return record; }
+}
+
+/**
+ * 分帧搭建：返回 { next(), abort() }。next() 做一小段，全部做完时返回这一层的记录（和 buildOwnedFloorDetail 的返回值一样），
+ * 没做完返回 null；出错时清理干净再抛出。steps(local, lv) 是生成器版的 build（每个阶段、每间铺位让出一次），
+ * 没给就整段调 build。做完之前这一层的组不挂进场景，中途 abort() 等于没搭过。
+ */
+export function startOwnedFloorDetail(ctx, level, { build, steps, atlas, protectedResources, release }) {
   const base = new THREE.Group(), people = new THREE.Group(), dynamic = [], hooks = [];
   base.name = `${level.lv.id}-streamed-interior`; people.name = `${level.lv.id}-streamed-people`;
   base.userData.floorDetail = people.userData.floorDetail = level.lv.id;
@@ -95,11 +105,12 @@ export function buildOwnedFloorDetail(ctx, level, { build, atlas, protectedResou
     // Builders are intentionally transient; only meshes survive in the cache.
     L.batch.sets = {}; L.signs = null;
   };
-  try {
-    if (atlas) local.atlas[level.lv.id] = atlas(mats);
-    build(local, level.lv);
-    L.batch.flush(base);
+  function* run() {
+    if (atlas) { local.atlas[level.lv.id] = atlas(mats); yield 'atlas'; }
+    if (steps) yield* steps(local, level.lv); else build(local, level.lv);
+    for (const _ of L.batch.flushSteps(base)) yield 'flush'; // eslint-disable-line no-unused-vars
     L.signs.flush(base, local.atlas[level.lv.id].material);
+    yield 'signs';
     // Even an empty floor can own a lazily generated atlas.
     resources = sceneResources([base, people]);
     if (atlas) {
@@ -112,14 +123,27 @@ export function buildOwnedFloorDetail(ctx, level, { build, atlas, protectedResou
     L.signs = null;
     return { id: level.lv.id, groups: [base, people], stats: geometryStats(resources.geometries), dispose,
       setVisible(visible) { base.visible = people.visible = visible; } };
-  } catch (error) {
+  }
+  const fail = () => {
     // Include an atlas allocated before a failed builder, which may not yet be
     // referenced by any mesh. Failed visits must remain retryable and bounded.
     resources = sceneResources([base, people]);
-    if (atlas && local.atlas[level.lv.id] !== ctx.atlas[level.lv.id]) {
+    if (atlas && local.atlas[level.lv.id] && local.atlas[level.lv.id] !== ctx.atlas[level.lv.id]) {
       resources.materials.add(local.atlas[level.lv.id].material);
       resources.textures.add(local.atlas[level.lv.id].texture);
     }
-    dispose(); throw error;
-  }
+    dispose();
+  };
+  const gen = run();
+  let finished = false;
+  const job = {
+    /** 刚做完的是哪一段（诊断用） */
+    stage: '',
+    next() {
+      try { const r = gen.next(); if (r.done) finished = true; job.stage = r.done ? 'attach' : (r.value || ''); return r.done ? r.value : null; }
+      catch (error) { fail(); throw error; }
+    },
+    abort() { if (!finished) fail(); },
+  };
+  return job;
 }

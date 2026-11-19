@@ -4,7 +4,7 @@
 //   走路：水平方向交给 layout/nav.js 的 step()（墙、栏杆、楼梯、扶梯都在里面）；竖直方向（跳、落地、天花）在这里按原游戏的规则算。
 //   射线：墙线和障碍物按竖直的面算，楼板按水平面算（中庭、扶梯洞这些洞口不挡）。
 import * as THREE from 'three';
-import { step, landAt, supported, NAV } from '../layout/nav.js';
+import { step, landAt, supported, floorsByHeight, NAV } from '../layout/nav.js';
 import { findPath } from '../fps/pathfinding.js';
 
 /** 原游戏的台阶高度：站在地上时，脚下这么高以内的落差直接贴地（下楼梯不会腾空）。 */
@@ -49,8 +49,49 @@ export function createMapPhysics(nav) {
     out.dist = t; out.normal.set(nx, 0, nz); out.surface = 'concrete';
   }
 
+  // 射线只查它经过的那几格里的墙（导航网格里墙按 8 米一格登记过）。以前每条射线把这一层所有的墙过一遍
+  // （一期 1F 有 1369 段），子弹、敌人看不看得见玩家、找射击位置都要打射线，人一多就拖帧。结果和全部过一遍相同。
+  const stamps = new WeakMap();
+  let stamp = 0;
+  function wallsAlongRay(F, h, maxDist, out) {
+    const { o, d } = ray, c = NAV.cell;
+    let seen = stamps.get(F);
+    if (!seen || seen.length !== F.walls.length) stamps.set(F, seen = new Uint32Array(F.walls.length));
+    if (++stamp > 4e9) { stamp = 1; seen.fill(0); }
+    let gx = Math.floor(o.x / c), gz = Math.floor(o.z / c);
+    const sx = d.x > 0 ? 1 : -1, sz = d.z > 0 ? 1 : -1;
+    let tx = Math.abs(d.x) > 1e-12 ? ((gx + (sx > 0 ? 1 : 0)) * c - o.x) / d.x : Infinity, tz = Math.abs(d.z) > 1e-12 ? ((gz + (sz > 0 ? 1 : 0)) * c - o.z) / d.z : Infinity;
+    const dx = Math.abs(d.x) > 1e-12 ? c / Math.abs(d.x) : Infinity, dz = Math.abs(d.z) > 1e-12 ? c / Math.abs(d.z) : Infinity;
+    for (let n = 0; n < 2000; n++) {
+      const list = F.grid.get(`${gx},${gz}`);
+      if (list) for (let q = 0; q < list.length; q++) {
+        const i = list[q];
+        if (seen[i] === stamp) continue;
+        seen[i] = stamp;
+        const w = F.walls[i]; hitSegment(w.x0, w.z0, w.x1, w.z1, F.y, h, maxDist, out);
+      }
+      // 下一格的入口已经比最近的命中点（或射程）还远：后面的格子不用看了
+      if (Math.min(tx, tz) > Math.min(maxDist, out.dist)) break;
+      if (tx < tz) { gx += sx; tx += dx; } else { gz += sz; tz += dz; }
+    }
+  }
+  /** 射线（水平投影）在 limit 距离内碰不到这个包围盒 */
+  function missesBox(b, limit) {
+    const { o, d } = ray;
+    let t0 = 0, t1 = limit;
+    for (const [p, v, lo, hi] of [[o.x, d.x, b.x0 - 1e-6, b.x1 + 1e-6], [o.z, d.z, b.z0 - 1e-6, b.z1 + 1e-6]]) {
+      if (Math.abs(v) < 1e-12) { if (p < lo || p > hi) return true; continue; }
+      let a = (lo - p) / v, c = (hi - p) / v; if (a > c) { const k = a; a = c; c = k; }
+      if (a > t0) t0 = a; if (c < t1) t1 = c;
+      if (t0 > t1) return true;
+    }
+    return false;
+  }
+
   const physics = {
     nav,
+    /** 测试用：true 时射线照旧把整层的墙、障碍物全过一遍（拿来和加速后的结果对照） */
+    bruteRays: false,
     boxes: [],
     bounds: { min: new THREE.Vector3(-1e5, -1e5, -1e5), max: new THREE.Vector3(1e5, 1e5, 1e5) },
     addBox(min, max, opts = {}) { const b = { min: min.clone(), max: max.clone(), surface: opts.surface || 'concrete', tag: opts.tag || '', bulletOnly: !!opts.bulletOnly }; physics.boxes.push(b); return b; },
@@ -67,17 +108,32 @@ export function createMapPhysics(nav) {
       const F = floorAt(origin.x, origin.y, origin.z);
       if (F) {
         const h = floorHeight(F);
-        for (const w of F.walls) hitSegment(w.x0, w.z0, w.x1, w.z1, F.y, h, maxDist, out);
+        if (physics.bruteRays) for (const w of F.walls) hitSegment(w.x0, w.z0, w.x1, w.z1, F.y, h, maxDist, out);
+        else wallsAlongRay(F, h, maxDist, out);
         for (const o of F.obstacles) {
           const b = o.bb;
           // 包围盒都够不着就跳过（射线离得远的家具）
           const p = o.outer;
           if (!p || !b) continue;
+          if (!physics.bruteRays && missesBox(b, Math.min(maxDist, out.dist))) continue;
           for (let i = 0; i < p.length; i++) { const a = p[i], c = p[(i + 1) % p.length]; hitSegment(a[0], a[1], c[0], c[1], F.y, OBSTACLE_HEIGHT, maxDist, out); }
         }
       }
       // 楼板：射线穿过某个楼面高度处，那里若是楼板实体就挡住
-      if (Math.abs(ray.d.y) > 1e-6) for (const G of nav.floors.values()) {
+      const byY = physics.bruteRays ? null : floorsByHeight(nav);
+      if (Math.abs(ray.d.y) > 1e-6 && byY) {
+        // 只看射线这一段高度范围里的楼面（按高度排好了），交点落在楼面包围盒外的直接跳过
+        const yEnd = ray.o.y + ray.d.y * Math.min(maxDist, out.dist), hi = Math.max(ray.o.y, yEnd), lo = Math.min(ray.o.y, yEnd);
+        for (let i = byY.first(hi); i < byY.floors.length; i++) {
+          const e = byY.floors[i], G = e.F;
+          if (G.y < lo - 1e-6) break;
+          const t = (G.y - ray.o.y) / ray.d.y;
+          if (t <= 1e-4 || t >= out.dist || t > maxDist) continue;
+          const x = ray.o.x + ray.d.x * t, z = ray.o.z + ray.d.z * t;
+          if (x < e.x0 || x > e.x1 || z < e.z0 || z > e.z1 || !supported(G, x, z)) continue;
+          out.dist = t; out.normal.set(0, ray.d.y < 0 ? 1 : -1, 0); out.surface = 'concrete';
+        }
+      } else if (Math.abs(ray.d.y) > 1e-6) for (const G of nav.floors.values()) {
         const t = (G.y - ray.o.y) / ray.d.y;
         if (t <= 1e-4 || t >= out.dist || t > maxDist) continue;
         const x = ray.o.x + ray.d.x * t, z = ray.o.z + ray.d.z * t;
@@ -145,6 +201,14 @@ export function createMapPhysics(nav) {
       if (!a || !b) return null;
       const path = findPath(nav, a, b, { maxNodes: 12000, cellSize: 0.8 }); // 一期地下大厅到一楼这种跨楼层的长路，2400 个格子不够
       return path ? path.map((p) => new THREE.Vector3(p.x, p.y ?? 0, p.z)) : null;
+    },
+    /** 分帧寻路（pathfinder.js）：排队，算完回调 cb(路线 | null)。返回 { cancel() }。没接寻路服务时当场算 */
+    requestPath(from, to, cb, opts) {
+      const a = locate(from.x, from.y ?? 0, from.z), b = locate(to.x, to.y ?? 0, to.z);
+      const done = (path) => cb(path ? path.map((p) => { const v = new THREE.Vector3(p.x, p.y ?? 0, p.z); if (p.via) v.via = p; return v; }) : null);
+      if (!a || !b) { cb(null); return { cancel() {} }; }
+      if (!physics.pathfinder) { done(findPath(nav, a, b, { maxNodes: 12000, cellSize: 0.8 })); return { cancel() {} }; }
+      return physics.pathfinder.request(a, b, done, opts);
     },
     randomPoint(c, r) {
       for (let i = 0; i < 24; i++) {

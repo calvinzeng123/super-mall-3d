@@ -12,6 +12,10 @@ export const LAYOUT_ITEMS = Object.freeze([
   { key: 'reload', sel: '.t-reload', label: '换弹', touch: true },
   { key: 'jump', sel: '.t-jump', label: '跳跃', touch: true },
   { key: 'interact', sel: '.t-interact', label: '交互', touch: true },
+  // 下面三个是 actions.js 加的按键（样式在 ACTIONS_CSS 里，不在原游戏的样式表里）
+  { key: 'crouch', sel: '.t-crouch', label: '蹲 / 滑铲', touch: true, ours: true },
+  { key: 'melee', sel: '.t-melee', label: '近战', touch: true, ours: true },
+  { key: 'nade', sel: '.t-nade', label: '手雷', touch: true, ours: true },
   { key: 'pause', sel: '.t-pause', label: '暂停', touch: true },
   { key: 'ammo', sel: '.h-ammo', label: '弹药' },
   { key: 'health', sel: '.h-health', label: '生命' },

@@ -79,6 +79,8 @@ export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8
     const near = ex?.near && layout.levels.find(l => l.building === ex.near && l.short === '1F')?.id;
     const primary = levels.get(ex ? ex.level : state.focus)?.id || route?.level || ex?.elevator?.from || near;
     add(primary);
+    // 零点突围：人正在楼梯、扶梯上，或者就在梯口附近时，先要梯子另一头那一层（ex.prefer），到了那层内装已经在了
+    if (ex?.prefer && levels.get(ex.prefer)?.building === levels.get(primary)?.building) add(ex.prefer);
     for (const id of adjacent.get(primary) || []) add(id);
     // Preserve the current glass-elevator view and both immediate landings.
     // Only its explicit destination is required, not every served floor or
@@ -121,20 +123,36 @@ export function createFloorDetailSelector(layout, { limit = 6, explodedLimit = 8
   return { eligible, select };
 }
 
-export function createFloorDetailCache({ build, limit = 4, hardLimit = Infinity, onError = () => {} }) {
-  const resident = new Map(), errors = new Map();
+/**
+ * 楼层细节的缓存。build(id) 当场搭完；给了 start(id)（返回 { next(), abort() }，见 floor-detail-scene.js）而且
+ * cache.incremental 为真时改成分帧搭：sync() 只把缺的楼层排上队，pump(budgetMs) 每帧做几毫秒，搭完才算进 resident。
+ * 换出的规则不变（要搭新的之前先把不再需要的换出，显存峰值不翻倍）。
+ */
+export function createFloorDetailCache({ build, start = null, limit = 4, hardLimit = Infinity, onError = () => {}, now = () => performance.now() }) {
+  const resident = new Map(), errors = new Map(), pending = new Map();
   let wanted = new Set();
-  let requests = 0, builds = 0, hits = 0, evictions = 0, disposed = 0;
+  let requests = 0, builds = 0, hits = 0, evictions = 0, disposed = 0, slices = 0, worstSlice = 0, worstStage = '', aborted = 0;
+  const slow = []; // 超过 12 毫秒的片段（最多记 24 条，诊断用）
   const remove = (id, eviction = true) => {
     const item = resident.get(id);
     if (!item) return;
     item.dispose(); resident.delete(id); disposed++;
     if (eviction) evictions++;
   };
+  const finish = (id) => {
+    const job = pending.get(id);
+    pending.delete(id);
+    try { for (;;) { const record = job.next(); if (record) { resident.set(id, record); builds++; return; } } }
+    catch (error) { errors.set(id, error); onError(error, id); }
+  };
   const cache = {
+    /** 分帧搭建（零点突围里打开）：默认关，行为和以前一样 */
+    incremental: false,
     sync(ids) {
       const next = new Set([...ids].slice(0, hardLimit));
       const capacity = Math.min(hardLimit, Math.max(limit, next.size));
+      // 排着队但已经不需要的：中止，等于没搭过
+      for (const [id, job] of pending) if (!next.has(id)) { job.abort(); pending.delete(id); aborted++; }
       // Free old GPU buffers before allocating the next large floor, so moving
       // between buildings does not briefly double the memory high-water mark.
       const missing = [...next].filter(id => !resident.has(id) && !errors.has(id)).length;
@@ -142,13 +160,18 @@ export function createFloorDetailCache({ build, limit = 4, hardLimit = Infinity,
         if (resident.size + missing <= capacity) break;
         if (!next.has(id)) remove(id);
       }
+      const sliced = cache.incremental && !!start;
       for (const id of next) {
         if (!wanted.has(id)) { requests++; if (resident.has(id)) hits++; }
         if (resident.has(id)) {
           const item = resident.get(id); resident.delete(id); resident.set(id, item);
         } else if (!errors.has(id)) {
-          try { resident.set(id, build(id)); builds++; }
-          catch (error) { errors.set(id, error); onError(error, id); }
+          if (sliced) { if (!pending.has(id)) { try { pending.set(id, start(id)); } catch (error) { errors.set(id, error); onError(error, id); } } }
+          else if (pending.has(id)) finish(id);
+          else {
+            try { resident.set(id, build(id)); builds++; }
+            catch (error) { errors.set(id, error); onError(error, id); }
+          }
         }
       }
       wanted = next;
@@ -160,14 +183,35 @@ export function createFloorDetailCache({ build, limit = 4, hardLimit = Infinity,
       }
       return wanted;
     },
+    /** 每帧调：最多做 budgetMs 毫秒排队中的搭建。有楼层搭完时返回 true（调用方要刷新一次显示） */
+    pump(budgetMs = 8) {
+      if (!pending.size) return false;
+      const t0 = now(), end = t0 + budgetMs;
+      let done = false, last = t0;
+      do {
+        const [id, job] = pending.entries().next().value;
+        try {
+          const record = job.next();
+          if (record) { pending.delete(id); resident.set(id, record); builds++; record.setVisible?.(wanted.has(id)); done = true; }
+        } catch (error) { pending.delete(id); errors.set(id, error); onError(error, id); }
+        const t = now(); slices++; if (t - last > worstSlice) { worstSlice = t - last; worstStage = `${id} ${job.stage || ''}`; }
+        if (t - last > 12 && slow.length < 24) slow.push({ ms: Math.round(t - last), id, stage: job.stage || '' });
+        last = t;
+      } while (pending.size && last < end);
+      return done;
+    },
     retry(id) { errors.delete(id); },
-    clear() { for (const id of [...resident.keys()]) remove(id, false); wanted.clear(); errors.clear(); },
+    clear() {
+      for (const job of pending.values()) job.abort(); pending.clear();
+      for (const id of [...resident.keys()]) remove(id, false); wanted.clear(); errors.clear();
+    },
     has: id => resident.has(id),
     active: id => wanted.has(id) && resident.has(id),
+    get building() { return pending.size; },
     get records() { return [...resident.values()]; },
     get stats() {
       return { limit, hardLimit, required: [...wanted], resident: [...resident.keys()], errors: [...errors.keys()],
-        requests, builds, hits, evictions, disposed };
+        requests, builds, hits, evictions, disposed, pending: [...pending.keys()], slices, worstSlice, worstStage, slow: [...slow], aborted };
     },
   };
   return cache;

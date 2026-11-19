@@ -485,6 +485,8 @@ export function buildNav(layout, options = {}) {
     const d = Math.hypot(fx - x, fz - z) || 1;
     nav.links.push({ id: g.id, kind: 'gate', gate: g, name: g.record.name, stops: [{ floor: r.floor || g.floors[0], x, z, face: [(fx - x) / d, (fz - z) / d] }] });
   }
+  // 楼面的支承面（pieces、zones）到这里不再变了：supported() 可以按格子缓存结果
+  for (const F of floors.values()) sealed.add(F);
   return nav;
 }
 
@@ -532,7 +534,8 @@ function indexWalls(F) {
 
 // An open gate leaf is not a wall. Only gated floors pay for the filter.
 const live = (w) => !w.gate || !w.gate.open;
-function wallsNear(F, x0, z0, x1, z1) {
+/** 原来的查法：8 米一格，返回这一格（或几格）登记过的所有墙。跨格的查询、和测试对照时还用它 */
+function wallsNearCoarse(F, x0, z0, x1, z1) {
   const c = NAV.cell, pad = NAV.r + 0.05;
   const gx0 = Math.floor((Math.min(x0, x1) - pad) / c), gx1 = Math.floor((Math.max(x0, x1) + pad) / c);
   const gz0 = Math.floor((Math.min(z0, z1) - pad) / c), gz1 = Math.floor((Math.max(z0, z1) + pad) / c);
@@ -546,10 +549,130 @@ function wallsNear(F, x0, z0, x1, z1) {
   return F.gated ? out.filter(live) : out;
 }
 
+// 细格索引（2 米一格）：8 米的格子里常有二三十段墙，人每走一步要查四五次、每次都把它们全过一遍。
+// 细格只返回查询范围附近的墙——真正会碰到的墙（离点不到半径、或和这一步的线段相交）一定在里面，
+// 而且按墙的编号从小到大排（和粗格单格查询的顺序一样），所以扫掠、滑动、站不站得住的结果和原来完全相同。
+// 只有查询范围落在同一个粗格里时才用细格；跨粗格的（很少）照旧走原来的查法，顺序也照旧。
+const FINE = 2, FINE_OFF = 32768, FINE_SPAN = 65536, fineIndex = new WeakMap(), EMPTY = Object.freeze([]);
+function buildFineIndex(F) {
+  const cells = new Map(), pad = NAV.r + 0.05;
+  F.walls.forEach((w, i) => {
+    const x0 = Math.floor((Math.min(w.x0, w.x1) - pad) / FINE), x1 = Math.floor((Math.max(w.x0, w.x1) + pad) / FINE);
+    const z0 = Math.floor((Math.min(w.z0, w.z1) - pad) / FINE), z1 = Math.floor((Math.max(w.z0, w.z1) + pad) / FINE);
+    for (let gx = x0; gx <= x1; gx++) for (let gz = z0; gz <= z1; gz++) {
+      const k = (gx + FINE_OFF) * FINE_SPAN + (gz + FINE_OFF);
+      let c = cells.get(k); if (!c) cells.set(k, c = { idx: [], walls: [] });
+      c.idx.push(i); c.walls.push(w);
+    }
+  });
+  return { cells, count: F.walls.length };
+}
+function wallsNear(F, x0, z0, x1, z1) {
+  const c = NAV.cell, pad = NAV.r + 0.05;
+  const ax = Math.min(x0, x1) - pad, bx = Math.max(x0, x1) + pad, az = Math.min(z0, z1) - pad, bz = Math.max(z0, z1) + pad;
+  if (!sealed.has(F) || Math.floor(ax / c) !== Math.floor(bx / c) || Math.floor(az / c) !== Math.floor(bz / c)) return wallsNearCoarse(F, x0, z0, x1, z1);
+  let fine = fineIndex.get(F);
+  if (!fine || fine.count !== F.walls.length) fineIndex.set(F, fine = buildFineIndex(F));
+  const fx0 = Math.floor(ax / FINE), fx1 = Math.floor(bx / FINE), fz0 = Math.floor(az / FINE), fz1 = Math.floor(bz / FINE);
+  let out;
+  if (fx0 === fx1 && fz0 === fz1) out = fine.cells.get((fx0 + FINE_OFF) * FINE_SPAN + (fz0 + FINE_OFF))?.walls || EMPTY;
+  else {
+    let idx = null, many = false;
+    for (let gx = fx0; gx <= fx1; gx++) for (let gz = fz0; gz <= fz1; gz++) {
+      const cell = fine.cells.get((gx + FINE_OFF) * FINE_SPAN + (gz + FINE_OFF));
+      if (!cell) continue;
+      if (!idx) idx = cell.idx; else { if (!many) { idx = idx.slice(); many = true; } for (const i of cell.idx) idx.push(i); }
+    }
+    if (!idx) out = EMPTY;
+    else {
+      if (many) { idx.sort((p, q) => p - q); let n = 0; for (let i = 0; i < idx.length; i++) if (i === 0 || idx[i] !== idx[i - 1]) idx[n++] = idx[i]; idx.length = n; }
+      out = new Array(idx.length); for (let i = 0; i < idx.length; i++) out[i] = F.walls[idx[i]];
+    }
+  }
+  return F.gated ? out.filter(live) : out;
+}
+/** 测试用：粗格、细格两种查法 */
+export const __wallQueries = { fine: wallsNear, coarse: wallsNearCoarse };
+
 // ---------------------------------------------------------------------------
 // 判定
 
+// supported() 的格子缓存：人、敌人每走一步都要问九次「这个点下面有没有楼板」，每次都是对整层的楼板多边形做点在多边形内的判断
+// （一期 1F 一次约 5 微秒 × 9）。把楼面按 0.5 米分格：没有任何多边形边经过的格子，整格的答案一样，算一次记下来；
+// 有边经过的格子（连同周围一圈）照旧逐点精确算。结果和不缓存完全一样。
+const sealed = new WeakSet(), supportIndex = new WeakMap();
+const SUP = 0.5, SUP_OFF = 32768, SUP_SPAN = 65536;
+function buildSupportIndex(F) {
+  const mixed = new Set();
+  const mark = (poly) => {
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / (SUP / 2)));
+      for (let k = 0; k <= n; k++) {
+        const ci = Math.floor((a[0] + (b[0] - a[0]) * k / n) / SUP), cj = Math.floor((a[1] + (b[1] - a[1]) * k / n) / SUP);
+        for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) mixed.add((ci + di + SUP_OFF) * SUP_SPAN + (cj + dj + SUP_OFF));
+      }
+    }
+  };
+  for (const zp of F.zones) mark(zp);
+  for (const p of F.pieces) { mark(p.outer); for (const h of p.holes) mark(h.poly); }
+  return { mixed, flat: new Map() };
+}
+
 export function supported(F, x, z) {
+  if (!sealed.has(F)) return supportedExact(F, x, z);
+  let idx = supportIndex.get(F);
+  if (!idx) supportIndex.set(F, idx = buildSupportIndex(F));
+  const k = (Math.floor(x / SUP) + SUP_OFF) * SUP_SPAN + (Math.floor(z / SUP) + SUP_OFF);
+  if (idx.mixed.has(k)) return supportedBinned(F, x, z);
+  let v = idx.flat.get(k);
+  if (v === undefined) { v = supportedBinned(F, x, z); idx.flat.set(k, v); }
+  return v;
+}
+
+// 楼板边上的格子还得逐点算。楼板轮廓、中庭洞口常有上百个顶点，射线法每次要过一遍所有的边；
+// 这里按 z 把每个多边形的边分到 1 米一档的桶里，只看和这个点同一档的边——判断式和 geom.js 的 pointInPoly 一字不差，
+// 没被看的边本来就不会让结果翻转（它们不跨过这个 z），所以结果相同。
+const polyBins = new WeakMap(), BIN = 1;
+function inPoly(poly, x, z) {
+  let ix = polyBins.get(poly);
+  if (!ix || ix.n !== poly.length) {
+    let z0 = Infinity, z1 = -Infinity, x0 = Infinity, x1 = -Infinity;
+    for (const q of poly) { if (q[1] < z0) z0 = q[1]; if (q[1] > z1) z1 = q[1]; if (q[0] > x1) x1 = q[0]; if (q[0] < x0) x0 = q[0]; }
+    const count = Math.max(1, Math.ceil((z1 - z0) / BIN) + 1), bins = Array.from({ length: count }, () => []);
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = Math.min(poly[i][1], poly[j][1]), b = Math.max(poly[i][1], poly[j][1]);
+      for (let q = Math.max(0, Math.floor((a - z0) / BIN)), e = Math.min(count - 1, Math.floor((b - z0) / BIN)); q <= e; q++) bins[q].push(i, j);
+    }
+    polyBins.set(poly, ix = { n: poly.length, z0, z1, x0, x1, bins });
+  }
+  if (z < ix.z0 || z > ix.z1 || x >= ix.x1 || x < ix.x0) return false; // 包围盒外一定在外面（左边：跨过这个 z 的边成对出现；右边：一条都不算）
+  const list = ix.bins[Math.min(ix.bins.length - 1, Math.floor((z - ix.z0) / BIN))];
+  let inside = false;
+  for (let q = 0; q < list.length; q += 2) {
+    const pi = poly[list[q]], pj = poly[list[q + 1]], xi = pi[0], zi = pi[1], xj = pj[0], zj = pj[1];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function supportedBinned(F, x, z) {
+  for (const zp of F.zones) if (inPoly(zp, x, z)) return true;
+  for (const p of F.pieces) {
+    const b = p.bb;
+    if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) continue;
+    if (!inPoly(p.outer, x, z)) continue;
+    let hole = false;
+    for (const h of p.holes) {
+      const hb = h.bb;
+      if (x < hb.x0 || x > hb.x1 || z < hb.z0 || z > hb.z1) continue;
+      if (inPoly(h.poly, x, z)) { hole = true; break; }
+    }
+    if (!hole) return true;
+  }
+  return false;
+}
+
+/** 不走缓存的精确判断（测试拿它和 supported 对照） */
+export function supportedExact(F, x, z) {
   for (const zp of F.zones) if (pointInPoly([x, z], zp)) return true;
   for (const p of F.pieces) {
     const b = p.bb;
@@ -715,6 +838,71 @@ function stepSlope(nav, s, dx, dz, dt) {
 
 /** 飞行落地：正下方（y ≤ yMax）最高的可站立楼面 */
 export function landAt(nav, x, z, yMax) {
+  const ix = landOrder(nav);
+  let best = null;
+  if (ix) {
+    // 楼面按高度从高到低排好了：从上往下第一个站得住的就是最高的（同高的保持原来的先后）。包围盒外的楼面直接跳过
+    for (let i = ix.first(yMax); i < ix.floors.length; i++) {
+      const e = ix.floors[i];
+      if (x < e.x0 || x > e.x1 || z < e.z0 || z > e.z1) continue;
+      if (clearAt(nav, e.F, x, z)) { best = e.F; break; }
+    }
+  } else {
+    for (const F of nav.floors.values()) {
+      if (F.y > yMax + 1e-6 || (best && F.y <= best.y)) continue;
+      if (clearAt(nav, F, x, z)) best = F;
+    }
+  }
+  let result = best ? { floor: best.id, x, z, y: best.y, slope: null } : null;
+  if (ix) {
+    for (const e of ix.stairs) {
+      if (x < e.x0 || x > e.x1 || z < e.z0 || z > e.z1) continue;
+      const sl = e.sl, [u, v] = toL(sl.F, x, z);
+      if (u < 0 || u > sl.len || Math.abs(v) > sl.hw - NAV.r) continue;
+      const y = sl.y0 + (sl.y1 - sl.y0) * u / sl.len;
+      if (y <= yMax + 1e-6 && (!result || y > result.y)) result = atSlope({ floor: sl.low }, sl, u, v);
+    }
+    return result;
+  }
+  for (const sl of nav.slopes) {
+    if (!STAIR_KINDS.includes(sl.kind)) continue;
+    const [u, v] = toL(sl.F, x, z);
+    if (u < 0 || u > sl.len || Math.abs(v) > sl.hw - NAV.r) continue;
+    const y = sl.y0 + (sl.y1 - sl.y0) * u / sl.len;
+    if (y <= yMax + 1e-6 && (!result || y > result.y)) result = atSlope({ floor: sl.low }, sl, u, v);
+  }
+  return result;
+}
+const STAIR_KINDS = ['interior-stair', 'exterior-stair', 'protected-stair'];
+// landAt 的索引：楼面按高度从高到低排（稳定排序，同高的先后不变），每层带一个包围盒；楼梯单独列出来。
+// 以前每次都把所有楼面过一遍、每层做一次「站不站得住」——子弹、敌人落点、掉落物每帧要问很多次。
+const landIndex = new WeakMap();
+function landOrder(nav) {
+  let ix = landIndex.get(nav);
+  if (ix && ix.n === nav.floors.size && ix.slopes === nav.slopes.length) return ix;
+  const list = [...nav.floors.values()];
+  if (!list.length || !list.every((F) => sealed.has(F))) return null;
+  const floors = list.map((F, order) => {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const p of F.pieces) { if (p.bb.x0 < x0) x0 = p.bb.x0; if (p.bb.x1 > x1) x1 = p.bb.x1; if (p.bb.z0 < z0) z0 = p.bb.z0; if (p.bb.z1 > z1) z1 = p.bb.z1; }
+    for (const zp of F.zones) for (const q of zp) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < z0) z0 = q[1]; if (q[1] > z1) z1 = q[1]; }
+    return { F, order, x0, x1, z0, z1 };
+  }).sort((a, b) => b.F.y - a.F.y || a.order - b.order);
+  const ys = floors.map((e) => e.F.y);
+  ix = { n: nav.floors.size, slopes: nav.slopes.length, floors, stairs: nav.slopes.filter((sl) => STAIR_KINDS.includes(sl.kind)).map((sl) => {
+      // 梯段矩形（u ∈ [0, len]，v ∈ [−hw, hw]）的包围盒
+      const c = [toW(sl.F, 0, -sl.hw), toW(sl.F, 0, sl.hw), toW(sl.F, sl.len, -sl.hw), toW(sl.F, sl.len, sl.hw)];
+      return { sl, x0: Math.min(...c.map((q) => q[0])) - 1e-6, x1: Math.max(...c.map((q) => q[0])) + 1e-6, z0: Math.min(...c.map((q) => q[1])) - 1e-6, z1: Math.max(...c.map((q) => q[1])) + 1e-6 };
+    }),
+    /** 高度不超过 yMax 的第一层在第几个（二分） */
+    first(yMax) { let lo = 0, hi = ys.length; const lim = yMax + 1e-6; while (lo < hi) { const m = (lo + hi) >> 1; if (ys[m] > lim) lo = m + 1; else hi = m; } return lo; } };
+  landIndex.set(nav, ix);
+  return ix;
+}
+/** 楼面按高度从高到低排好的表（{ floors: [{ F, x0, x1, z0, z1 }], first(yMax) }），没建好返回 null。射线找楼板时用 */
+export function floorsByHeight(nav) { return landOrder(nav); }
+/** 测试用：不走索引的 landAt（原来的写法） */
+export function landAtExact(nav, x, z, yMax) {
   let best = null;
   for (const F of nav.floors.values()) {
     if (F.y > yMax + 1e-6 || (best && F.y <= best.y)) continue;
@@ -722,7 +910,7 @@ export function landAt(nav, x, z, yMax) {
   }
   let result = best ? { floor: best.id, x, z, y: best.y, slope: null } : null;
   for (const sl of nav.slopes) {
-    if (!['interior-stair', 'exterior-stair', 'protected-stair'].includes(sl.kind)) continue;
+    if (!STAIR_KINDS.includes(sl.kind)) continue;
     const [u, v] = toL(sl.F, x, z);
     if (u < 0 || u > sl.len || Math.abs(v) > sl.hw - NAV.r) continue;
     const y = sl.y0 + (sl.y1 - sl.y0) * u / sl.len;

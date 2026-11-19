@@ -51,6 +51,9 @@ export function createGrade(renderer, post, { samples = 4, vignette = 0.12 } = {
   let misses = 0;
   return {
     target,
+    /** 改多重采样数（性能微调里的「抗锯齿」）：0 关掉。离屏图下一帧按新的采样数重建 */
+    setSamples(n) { n = Math.max(0, n | 0); if (target.samples !== n) { target.samples = n; target.dispose(); } },
+    get samples() { return target.samples; },
     /** 这一帧往离屏图里画 */
     begin() {
       renderer.getDrawingBufferSize(size);
