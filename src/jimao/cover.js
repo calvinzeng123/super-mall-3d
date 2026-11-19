@@ -12,19 +12,21 @@ export const COVER_OPS = Object.freeze([
   { type: 'rooms', name: '取回赃物', line: '公寓住户和商铺里各一箱' },
   { type: 'hotel', name: '酒店情报', line: '两间客房，两只情报箱' },
   { type: 'hold', name: '坚守控制点', line: '光圈里守满 75 秒' },
+  { type: 'bomb', name: '拆除炸弹', line: '三颗定时炸弹，五分半' },
+  { type: 'hvt', name: '猎杀头目', line: '找到头目，击毙' },
 ]);
 
 export const COVER_COPY = Object.freeze({
   live: '指挥中心 · 加密频道',
-  status: '云澜汇 · 商场 / 酒店 / 公寓 · 全部失联',
+  status: '云澜汇 · 商场 / 酒店 / 公寓 / 地铁 · 全部失联',
   tag: '紧急',
   eyebrow: '云澜汇反劫持行动',
   code: '行动代号 · 零点',
-  premise: '00:00，云澜汇全面断电。一伙武装分子封锁了商场、酒店和公寓，切断了对外通信。外围部队进不来——楼里只剩你一名特勤队员。',
+  premise: '00:00，云澜汇全面断电。一伙武装分子封锁了商场、酒店、公寓和地铁站，切断了对外通信。外围部队进不来——楼里只剩你一名特勤队员。',
   opsTitle: '今夜的任务 · 每局随机一项',
   exits: '撤离：屋顶直升机 · 地库装甲车',
   deploy: '出击',
-  note: '单人行动 · 18 名武装分子 · 走到电梯口可乘电梯（Z / X）',
+  note: '单人行动 · 步枪手、突击手、重装兵、狙击手 · 走到电梯口可乘电梯（Z / X）· G 键扔手雷',
 });
 
 /** 其他菜单页的标题（[选择器, 文字]）：暂停、阵亡、完成 */
@@ -150,7 +152,7 @@ export const COVER_CSS = `
 .zh-ops { margin-top: clamp(12px, 2.4vh, 22px); }
 .zh-ops-h { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font: 600 12px/1.3 var(--f-label); letter-spacing: .18em; color: var(--steel); margin-bottom: 8px; }
 .zh-ops-h em { font-style: normal; color: var(--signal); letter-spacing: .12em; }
-.zh-ops ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.zh-ops ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .zh-ops li { padding: 8px 10px 9px; background: rgba(11, 13, 15, .58); border: 1px solid rgba(232, 228, 218, .16); border-top: 2px solid rgba(255, 179, 71, .7); min-width: 0; }
 .zh-ops li b { display: block; font: 700 11px/1 var(--f-mono); color: var(--signal); letter-spacing: .1em; }
 .zh-ops li span { display: block; margin-top: 6px; font: 700 14px/1.2 var(--f-label); color: var(--bone); letter-spacing: .06em; white-space: nowrap; }
@@ -158,12 +160,15 @@ export const COVER_CSS = `
 .zh-cover .m-actions .btn.primary { display: inline-flex; align-items: center; gap: 14px; }
 .zh-cover .m-actions .btn.primary i { font-style: normal; font-size: 13px; letter-spacing: 0; }
 .zh-cover .m-note { color: rgba(232, 228, 218, .55); }
+/* 七张任务卡排成 4 + 3 两行：屏幕不够高（笔记本）时只留名字，省出一行的高度 */
+@media (max-height: 820px) { .zh-ops li small { display: none; } .zh-ops li { padding: 5px 9px 6px; } .zh-ops li span { margin-top: 3px; } }
 /* 横屏手机（高度不够）：任务只留名字，一行排开；顶条只留频道和钟 */
 @media (max-height: 500px) {
   .zh-top { margin-bottom: 6px; font-size: 10px; } .zh-status { display: none; }
   .zh-cover .m-premise { font-size: 13px !important; padding-top: 8px !important; max-width: 46em; }
   .zh-ops { margin-top: 8px; } .zh-ops-h { margin-bottom: 4px; font-size: 10px; }
-  .zh-ops li { padding: 5px 7px 6px; } .zh-ops li small { display: none; } .zh-ops li span { font-size: 12px; margin-top: 3px; }
+  .zh-ops ol { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .zh-ops li { padding: 5px 2px 6px; text-align: center; } .zh-ops li b { display: none; } .zh-ops li small { display: none; } .zh-ops li span { font-size: 11px; margin-top: 0; letter-spacing: 0; }
   .zh-cover .m-note { display: none; }
 }
 /* 竖屏手机：任务两列，说明缩短 */

@@ -174,3 +174,32 @@ test('手机按键：蹲、近战、手雷三个键能在「键位布局」里�
     assert.ok(ACTIONS_CSS.includes(`${it.sel} {`), `${it.sel} 没有样式`);
   }
 });
+
+test('得分和连杀：击倒 100 分，爆头、重装兵、连击另加；3 / 5 / 7 连杀给无人机、补给、急救，之后每 4 个轮一遍；阵亡清零连杀', async () => {
+  const { createScore, killPoints, streakReward, SCORE, STREAKS } = await import('../src/jimao/score.js');
+  assert.deepEqual(killPoints({}), [{ text: '击倒', points: 100 }]);
+  assert.deepEqual(killPoints({ part: 'weak', role: 'heavy', multi: 3 }).map((p) => p.points), [150, 50, 100]);
+  assert.equal(killPoints({ role: 'boss' })[0].points, SCORE.kill + 500);
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 11, 15, 19, 23].map((n) => streakReward(n)?.id || '-'), ['-', '-', 'uav', '-', 'supply', '-', 'medic', '-', 'uav', 'supply', 'medic', 'uav']);
+  assert.equal(STREAKS.length, 3);
+  const handlers = {}, G = { game: { state: 'playing' }, events: { on: (n, f) => { (handlers[n] ||= []).push(f); }, emit() {} }, player: { health: 30, maxHealth: 100 },
+    weapon: { reserve: 0, addAmmo(n) { this.reserve += n; } }, actions: { got: 0, give(n) { this.got += n; return n; } }, audio: { play() {} } };
+  const score = createScore(G);
+  const kill = (part, role) => handlers['enemy:killed'].forEach((f) => f({ part, enemy: { role } }));
+  kill('body', 'regular'); kill('weak', 'regular');
+  assert.equal(score.state.total, 100 + 100 + 50 + 50, '第二个在 3 秒内：连击加 50，爆头加 50');
+  assert.equal(score.uav, 0);
+  kill('body', 'regular');
+  assert.ok(score.uav > 20, '三连杀：无人机侦察上线');
+  score.update(30); assert.equal(score.uav, 0, '25 秒后无人机下线');
+  kill('body', 'regular'); kill('body', 'regular');
+  assert.equal(G.weapon.reserve, 60); assert.equal(G.actions.got, 1);
+  kill('body', 'regular'); assert.equal(G.player.health, 30);
+  kill('body', 'heavy'); assert.equal(G.player.health, 100, '七连杀：生命回满');
+  assert.equal(score.state.best, 7);
+  handlers['player:dead'].forEach((f) => f());
+  assert.equal(score.state.streak, 0); assert.equal(score.state.best, 7);
+  const before = score.state.total;
+  handlers['objective:done'].forEach((f) => f()); assert.equal(score.state.total, before + SCORE.objective);
+  score.reset(); assert.equal(score.state.total, 0); assert.equal(score.state.best, 0);
+});

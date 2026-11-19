@@ -19,7 +19,7 @@ import { addSoldiers } from './soldier.js';
 import { buildNav, landAt, clear } from '../layout/nav.js';
 import { distToPolyEdge, toW } from '../layout/geom.js';
 import { FPS_MISSION } from '../fps/mission-layout.js';
-import { createMissionDirector, RELAY_SITES, EXTRACTIONS } from './missions.js';
+import { createMissionDirector, OPS_SITES, EXTRACTIONS } from './missions.js';
 import { rideFootprint } from './ride-vehicles.js';
 import { createAmmoSupply } from './ammo.js';
 import { createRouteGuide } from './guide.js';
@@ -27,6 +27,8 @@ import { createPathfinder, PATH } from './pathfinder.js';
 import { createTuning, TUNING_CSS } from './tuning.js';
 import { createActions, ACTIONS_CSS } from './actions.js';
 import { createMinimap, MINIMAP_CSS } from './minimap.js';
+import { createScore, SCORE_CSS } from './score.js';
+import { registerDressing, buildDressing } from './dressing.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
@@ -60,6 +62,10 @@ const SUPPLY_CSS = `
 .h-cm.hunt, .h-wm.hunt { color: #ff5a4a; }
 .h-cm.hunt i, .h-wm.hunt i { background: #ff5a4a; }
 .h-wm.hunt b { display: none; }
+/* 拆弹任务的计时牌 */
+.jm-bomb-clock { position: absolute; left: 50%; top: calc(78px + var(--sat, 0px)); transform: translateX(-50%); z-index: 3; padding: 5px 14px 6px; background: rgba(40, 8, 6, .72); border: 1px solid rgba(255, 90, 74, .7); color: #ff7a6c; font: 700 20px/1 var(--f-mono, monospace); letter-spacing: .12em; pointer-events: none; }
+.jm-bomb-clock.hurry { color: #fff; background: rgba(170, 24, 16, .85); font-size: 24px; animation: jm-bomb-blink .5s steps(2) infinite; }
+@keyframes jm-bomb-blink { 50% { opacity: .55; } }
 `;
 /** 枪画在单独的一层，用自己的相机（视角固定 54°）在世界之后再画一遍，永远不会插进墙里。 */
 const VIEW_LAYER = 3;
@@ -79,7 +85,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -142,6 +148,9 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
 
   onProgress('正在接入地图碰撞', 0.25);
   addCover(ctx);
+  // 战术布置（dressing.js）：任务地点周围的沙袋墙和隔离墩，导航里是实心障碍
+  registerDressing(ctx.layout);
+  const dressing = buildDressing(scene, ctx.layout);
   const nav = buildNav(ctx.layout);
   G.physics = createMapPhysics(nav);
   // 分帧寻路（pathfinder.js）：敌人、路线指引的寻路都排队，每帧只算几毫秒；跨层连接表在加载画面里先建好
@@ -194,6 +203,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 新封面和各菜单页的话术（cover.js）：原游戏的菜单建好以后改版面、改文字，按钮照旧
   const cover = applyCover(document);
   actions.buildUi();
+  // 得分和连杀奖励（score.js）：菜单建好以后搭（结算页要加一行）
+  const score = createScore(G, { ui });
+  G.score = score;
+  { const reset0 = G.level.onReset; G.level.onReset = () => { reset0(); score.reset(); }; }
   locCard(document, director.state.mission);
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
   const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui, geometry: () => G.stickGeo?.() });
@@ -269,6 +282,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
       if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { fail('guide', e, '路线指引出错'); } }
       try { minimap.update(dt); } catch (e) { fail('minimap', e, '小地图出错'); }
+      try { G.score?.update(dt); } catch (e) { fail('score', e, '得分出错'); }
       if (G.game.state !== 'paused') { run('fx', dt); run('mats', dt); }
       // 任务物件动画、歼灭任务增援；撤离时镜头登机、坐进直升机 / 接应车里（missions.js 给出位置、朝向和压暗）
       try {
@@ -368,7 +382,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); G.score?.dispose(); dressing.dispose(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }
@@ -436,7 +450,7 @@ function buildLevel(ctx, nav) {
   });
   const mission = { enemies: FPS_MISSION.enemies.map((e) => ({ ...e, y: elev(e.floor), patrol: e.patrol.map((p) => ({ ...p, y: elev(p.floor) })) })),
     cover: FPS_MISSION.cover.map((c) => ({ ...c, y: elev(c.floor) })) };
-  const anchors = [...RELAY_SITES, ...Object.values(EXTRACTIONS)].map((p) => ({ ...p, y: elev(p.floor) }));
+  const anchors = [...OPS_SITES, ...Object.values(EXTRACTIONS)].map((p) => ({ ...p, y: elev(p.floor) }));
   const { enemySpawns, coverPoints, patrolLines } = buildSpawns(mission, nav, anchors, ctx.layout);
   // 封面背景的镜头：在一期大中庭里低机位慢慢往前推，仰看一圈圈退台和天窗（以前对着开局点前面的一堵墙）
   const T = TITLE_SHOT, fx = -Math.sin(T.yaw), fz = -Math.cos(T.yaw);
@@ -451,7 +465,9 @@ function buildLevel(ctx, nav) {
   };
 }
 
-const GAME_FLOORS = new Set(['P1-B1M', 'P1-1F', 'P1-2F', 'P1-3F', 'P1-RF', 'H-1F', 'H-2F', 'H-3F', 'H-4F', 'H-5F', 'H-6F', 'A-B1', 'A-1F', 'A-2F', 'A-3F', 'A-4F']);
+const GAME_FLOORS = new Set(['P1-B1M', 'P1-1F', 'P1-2F', 'P1-3F', 'P1-RF', 'H-1F', 'H-2F', 'H-3F', 'H-4F', 'H-5F', 'H-6F', 'A-B1', 'A-1F', 'A-2F', 'A-3F', 'A-4F',
+  // 任务地点铺到全图以后加的：商场地库和 4–6F、艺文馆、酒店和公寓的高层、地铁三层
+  'P1-B1', 'P1-4F', 'P1-5F', 'P1-6F', 'P1C-1F', 'H-7F', 'H-8F', 'H-12F', 'A-5F', 'A-6F', 'M-B1', 'M-B2', 'M-B3']);
 
 /**
  * 敌人出生点：原 FPS 任务里的七个守卫位置和它们的巡逻点、三个中继周围、掩体旁边。

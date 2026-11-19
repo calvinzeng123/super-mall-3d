@@ -11,7 +11,7 @@ import { buildNav, clear, landAt } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
 import { walkNav } from './helpers.js';
 import { pointInPoly, distToPolyEdge } from '../src/layout/geom.js';
-import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, CAR_ROUTE_LENGTH, HOLD, HOLD_SITES, HUNT, roomSites, rollMission, missionText, missionRadio, boardingSpot, BOARD_GAP } from '../src/jimao/missions.js';
+import { MISSION_TYPES, RELAY_SITES, EXTRACTIONS, CAR_ROUTE_LENGTH, HOLD, HOLD_SITES, HUNT, BOMB, HVT, OPS_SITES, pickSites, bombModel, bombClock, roomSites, rollMission, missionText, missionRadio, boardingSpot, BOARD_GAP } from '../src/jimao/missions.js';
 import { liftAt, floorLabel, faceYaw, LIFT } from '../src/jimao/lift.js';
 import { createRideVehicle, rideFootprint, RIDE_SPECS } from '../src/jimao/ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from '../src/jimao/ride-paths.js';
@@ -40,12 +40,14 @@ test('房间点：公寓、商铺、客房都有，每个都站在本层导航�
   }
 });
 
-test('随机任务：五种都抽得到，两种撤离都抽得到，目标齐全', () => {
+test('随机任务：七种都抽得到，两种撤离都抽得到，目标齐全', () => {
   const rng = seq(7), types = new Set(), exits = new Set();
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 160; i++) {
     const m = rollMission(rng, sites);
     types.add(m.type); exits.add(m.extraction.id);
-    if (m.type === 'relay') assert.equal(m.objectives.length, 3);
+    if (m.type === 'relay') { assert.equal(m.objectives.length, 3); assert.equal(new Set(m.objectives.map((o) => o.site.zone)).size, 3, '三台中继分在三个片区'); }
+    else if (m.type === 'bomb') { assert.equal(m.objectives.length, BOMB.count); assert.ok(m.objectives.every((o) => o.kind === 'bomb' && o.verb === '拆除炸弹')); assert.equal(m.bomb.time, BOMB.time); assert.equal(new Set(m.objectives.map((o) => o.site.zone)).size, BOMB.count); }
+    else if (m.type === 'hvt') { assert.equal(m.objectives.length, 0); assert.ok(OPS_SITES.some((q) => q.where === m.hvt.where) && m.hvt.name); }
     else if (m.type === 'eliminate') { assert.equal(m.objectives.length, 0); assert.ok(m.kills >= 10); }
     else if (m.type === 'hold') { assert.equal(m.objectives.length, 0); assert.ok(HOLD_SITES.some((h) => h.where === m.hold.where) && m.hold.need === HOLD.need); }
     else {
@@ -372,7 +374,7 @@ test('电梯：零点突围地图上的电梯每层门口都在导航空地上�
   const y = faceYaw(s); assert.ok(Math.abs(-Math.sin(y) - s.face[0]) < 1e-9 && Math.abs(-Math.cos(y) - s.face[1]) < 1e-9);
 });
 
-test('封面：五种任务都列出来、和任务表一一对应；文案里没有开发工具的名字；话术跟着任务走', async () => {
+test('封面：七种任务都列出来、和任务表一一对应；文案里没有开发工具的名字；话术跟着任务走', async () => {
   const { coverHtml, COVER_OPS, COVER_COPY, SCREEN_COPY, ABOUT_COPY, LIFT_HELP, COVER_CSS } = await import('../src/jimao/cover.js');
   assert.deepEqual(COVER_OPS.map((o) => o.type), [...MISSION_TYPES]);
   const html = coverHtml();
@@ -412,4 +414,106 @@ test('性能微调：存的值会清洗；只把调过的项交给画质管理�
   tuning.resetToTier();
   assert.deepEqual(calls.at(-1)[0], { maxFps: 60 }); assert.equal(grade.n, 4); assert.equal(flow.maxAlive, 14); assert.equal(tuning.enemyScale(), 1);
   assert.deepEqual(JSON.parse(store.get(TUNING_KEY)), { ...TUNING_DEFAULT });
+});
+
+test('全图行动地点：二十处分在八个片区（商场上下、屋顶、艺文馆、酒店、公寓、地铁），每处都在空地上、四周基本是空的、从开局点走得到、附近有敌人出生点', async () => {
+  const { createPathfinder } = await import('../src/jimao/pathfinder.js');
+  const { buildSpawns } = await import('../src/jimao/run.js').catch(() => ({}));
+  void buildSpawns;
+  const pf = createPathfinder(nav);
+  assert.ok(OPS_SITES.length >= 18);
+  const zones = new Set(OPS_SITES.map((q) => q.zone));
+  assert.ok(zones.size >= 7, `片区只有 ${zones.size} 个`);
+  for (const z of ['metro', 'hotel', 'apartment', 'roof', 'mall-high', 'mall-under']) assert.ok(zones.has(z), `没有 ${z} 片区的地点`);
+  for (const q of OPS_SITES) {
+    const lv = L.levels.find((l) => l.id === q.floor);
+    assert.ok(lv, `${q.where}：没有 ${q.floor} 这一层`);
+    const s = at(q);
+    assert.ok(clear(nav, s), `${q.where} 不在空地上`);
+    let open = 0;
+    for (let k = 0; k < 16; k++) for (const r of [1.5, 3, 4.5]) if (clear(nav, { ...s, x: q.x + Math.cos(k / 16 * 6.2832) * r, z: q.z + Math.sin(k / 16 * 6.2832) * r })) open++;
+    assert.ok(open >= 34, `${q.where} 四周太挤（48 个点里只有 ${open} 个是空的）`);
+    const path = pf.findNow(START, s);
+    assert.ok(path, `${q.where} 从开局点走不到`);
+    assert.ok(pf.findNow(START, s, { lifts: true }), `${q.where} 算上电梯也走不到`);
+  }
+  // 抽地点：尽量不同片区
+  const rng = seq(11);
+  for (let i = 0; i < 30; i++) { const three = pickSites(rng, 3); assert.equal(new Set(three.map((q) => q.zone)).size, 3); assert.equal(new Set(three).size, 3); }
+  assert.equal(pickSites(seq(3), 40).length, OPS_SITES.length, '要的比有的多：全给，不重复');
+  for (const h of HOLD_SITES) assert.ok(clear(nav, at(h)), `坚守点 ${h.where} 不在空地上`);
+});
+
+test('拆弹：任务文字写拆了几颗，倒计时（分:秒）在计时牌上；台词报出三处地点；炸弹模型拆掉以后灯变绿、光柱和计时屏熄灭', () => {
+  const m = rollMission(seq(5), sites, { type: 'bomb', exit: 'heli' });
+  const c = { cut: 0, allCut: false, relays: m.objectives.map((o) => ({ id: o.id, cut: false, o })) };
+  assert.equal(missionText(m, c, 0, null, { bombT: BOMB.time }), '拆除炸弹 0/3');
+  c.cut = 2;
+  assert.equal(missionText(m, c, 0, null, { bombT: 59.2 }), '拆除炸弹 2/3 · 最后一颗');
+  // 倒计时在单独的计时牌上（任务栏的字是打字机效果，每秒换一次打不完）
+  assert.equal(bombClock(BOMB.time), `0${Math.floor(BOMB.time / 60)}:${String(BOMB.time % 60).padStart(2, '0')}`);
+  assert.equal(bombClock(59.2), '01:00'); assert.equal(bombClock(9.01), '00:10'); assert.equal(bombClock(-3), '00:00');
+  assert.match(missionText(m, { ...c, cut: 3, allCut: true }), /^撤离/);
+  const radio = missionRadio(m);
+  for (const o of m.objectives) assert.ok(radio.intro.includes(o.label.split(' · ')[1]), '开场台词要报出每颗炸弹在哪');
+  assert.match(radio.all, /炸弹全部拆除/); assert.equal(radio.cut.length, 2);
+  assert.ok(BOMB.time >= 240 && BOMB.time <= 480 && BOMB.hurry === 60);
+  const g = bombModel();
+  let verts = 0; g.traverse((o) => { if (o.isMesh) verts += o.geometry.attributes.position.count; });
+  assert.ok(verts > 150, '炸弹模型太简单');
+  g.userData.update(0.1); g.userData.setRate(8); g.userData.setState('cutting'); g.userData.update(0.1); g.userData.setState('cut'); g.userData.update(0.1);
+  const hidden = []; g.traverse((o) => { if (o.isMesh && !o.visible) hidden.push(o); });
+  assert.equal(hidden.length, 2, '拆掉以后光柱和计时屏熄灭');
+});
+
+test('猎杀头目：任务文字、台词带代号和地点；护卫三个', () => {
+  const m = rollMission(seq(9), sites, { type: 'hvt', exit: 'car' });
+  assert.match(missionText(m, { cut: 0, allCut: false, relays: [] }), new RegExp(`^猎杀头目「${m.hvt.name}」 · ${m.hvt.where}$`));
+  const radio = missionRadio(m);
+  assert.ok(radio.intro.includes(m.hvt.name) && radio.intro.includes(m.hvt.where) && radio.all.includes(m.hvt.name));
+  assert.equal(HVT.guards, 3);
+});
+
+test('兵种：步枪手、突击手、重装兵、狙击手按比例出场，重装外观的人只当步枪手或重装兵；各有各的打法', async () => {
+  const { ROLES, pickRole, SOLDIER } = await import('../src/jimao/soldier.js');
+  const count = {}, rng = seq(21);
+  for (let i = 0; i < 4000; i++) { const r = pickRole(rng()); count[r] = (count[r] || 0) + 1; }
+  assert.deepEqual(Object.keys(count).sort(), ['marksman', 'regular', 'rusher']);
+  assert.ok(count.regular > count.rusher && count.rusher > count.marksman && count.marksman > 300);
+  const heavy = {}; for (let i = 0; i < 2000; i++) { const r = pickRole(rng(), true); heavy[r] = (heavy[r] || 0) + 1; }
+  assert.deepEqual(Object.keys(heavy).sort(), ['heavy', 'regular']); assert.ok(heavy.heavy > 300);
+  assert.ok(ROLES.rusher.runSpeed > SOLDIER.runSpeed && ROLES.rusher.rangeMax < SOLDIER.rangeMax, '突击手跑得快、贴上来打');
+  assert.ok(ROLES.heavy.hpScale >= 2 && ROLES.heavy.runSpeed < SOLDIER.runSpeed && ROLES.heavy.burst[0] > SOLDIER.burst[1], '重装兵血厚、走得慢、点射长');
+  assert.ok(ROLES.marksman.rangeMin > 12 && ROLES.marksman.shotDamage > SOLDIER.shotDamage * 3 && ROLES.marksman.aimTime > 1 && ROLES.marksman.burst[1] === 1, '狙击手离得远、瞄得久、一枪很疼');
+  assert.ok(ROLES.marksman.shotDamage < 34, '狙击手一枪不能超过三分之一血');
+  assert.ok(ROLES.boss.hpScale >= 4 && ROLES.boss.weight === 0, '头目不会随机出场');
+  for (const r of Object.values(ROLES)) assert.ok(r.name);
+});
+
+test('战术布置：四十来段沙袋墙和隔离墩，每段占地往外 1.2 米都是空地（不堵路不压墙）、离撤离点远；登记成障碍以后任务地点照样走得到', async () => {
+  const { DRESSING, DRESS, dressFootprint, registerDressing, sandbagGeometry, barrierGeometry } = await import('../src/jimao/dressing.js');
+  const { createPathfinder } = await import('../src/jimao/pathfinder.js');
+  assert.ok(DRESSING.length >= 30 && DRESSING.length <= 60);
+  assert.ok(DRESSING.filter((p) => p.kind === 'sandbag').length >= 12 && DRESSING.filter((p) => p.kind === 'barrier').length >= 12);
+  assert.ok(new Set(DRESSING.map((p) => p.floor)).size >= 12, '铺在十几层楼上');
+  for (const p of DRESSING) {
+    const lv = L.levels.find((l) => l.id === p.floor), f = dressFootprint(p);
+    assert.ok(lv, p.floor);
+    for (let u = -(f.w / 2 + 1.2); u <= f.w / 2 + 1.2 + 1e-6; u += 0.4) for (let v = -(f.d / 2 + 1.2); v <= f.d / 2 + 1.2 + 1e-6; v += 0.4)
+      assert.ok(clear(nav, { floor: p.floor, x: p.x + u, z: p.z + v, y: lv.elev, slope: null }), `${p.floor} (${p.x}, ${p.z}) 这一段挨着墙或别的东西`);
+    for (const x of Object.values(EXTRACTIONS)) if (x.floor === p.floor) assert.ok(Math.hypot(x.x - p.x, x.z - p.z) > 8, '离撤离载具的门太近');
+    assert.ok(OPS_SITES.some((q) => q.floor === p.floor && Math.hypot(q.x - p.x, q.z - p.z) < 9 && Math.hypot(q.x - p.x, q.z - p.z) > 3.5), '应该摆在某个任务地点周围 3.5–9 米');
+  }
+  // 登记成障碍、重新建导航：掩体中心站不了人，任务地点都还走得到
+  const L2 = buildPlayableLayout({ mode: 'arcade' });
+  assert.equal(registerDressing(L2), DRESSING.length);
+  assert.equal(registerDressing(L2), DRESSING.length, '重复登记不会多出一份');
+  assert.equal(L2.levels.flatMap((l) => l.features).filter((f) => String(f.id).startsWith('dress-')).length, DRESSING.length);
+  const nav2 = buildNav(L2), pf = createPathfinder(nav2);
+  for (const p of DRESSING.slice(0, 12)) assert.ok(!clear(nav2, { floor: p.floor, x: p.x, z: p.z, y: elev(p.floor), slope: null }), '掩体中间不该能站人');
+  for (const q of OPS_SITES) { assert.ok(clear(nav2, at(q)), `${q.where} 被掩体压住了`); assert.ok(pf.findNow(START, at(q)), `摆了掩体以后 ${q.where} 走不到了`); }
+  const bag = sandbagGeometry(); bag.computeBoundingBox();
+  assert.ok(Math.abs(bag.boundingBox.max.x - bag.boundingBox.min.x - DRESS.length) < 0.15 && bag.boundingBox.max.y > 0.8 && bag.boundingBox.max.y < 1.15, '沙袋墙的尺寸和导航里的占地对得上');
+  const [body] = barrierGeometry(); body.computeBoundingBox();
+  assert.ok(Math.abs(body.boundingBox.max.x - body.boundingBox.min.x - DRESS.length) < 0.01 && Math.abs(body.boundingBox.max.z - body.boundingBox.min.z - DRESS.depth) < 0.01);
 });

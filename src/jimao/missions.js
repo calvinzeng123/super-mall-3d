@@ -18,7 +18,7 @@ import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, 
 import { createDoorGun } from './door-gun.js';
 import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
 
-export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel', 'hold']);
+export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel', 'hold', 'bomb', 'hvt']);
 export const ELIMINATE_TARGET = 12;
 /** 坚守：圈的半径（米）、要守的秒数、同时在场的敌人上限、刷兵间隔 */
 export const HOLD = Object.freeze({ radius: 6, need: 75, alive: 7, every: 2.2 });
@@ -32,8 +32,56 @@ export const HOLD_SITES = Object.freeze([
   { floor: 'P1-2F', x: -100, z: -140, where: '商场二楼走道' },
   { floor: 'P1-B1M', x: -151, z: -94, where: '地下大厅' },
   { floor: 'P1-RF', x: -160, z: -120, where: '屋顶花园' },
+  // 下面几处是后来加的（把地铁、地库、商场高层、公寓也用上）
+  { floor: 'M-B1', x: -36, z: -12, where: '地铁站厅' },
+  { floor: 'M-B3', x: -18, z: -6, where: '地铁换乘厅' },
+  { floor: 'P1-B1', x: -126, z: -132, where: '商场地库' },
+  { floor: 'P1-5F', x: -150, z: -126, where: '商场五楼' },
+  { floor: 'A-1F', x: -36, z: -216, where: '公寓大堂' },
 ]);
 const HOTEL_Z = -81.1533717;
+/** 拆弹：几颗、总共多少秒（三颗分在三栋楼 / 三个区，坐电梯赶路）、最后多少秒开始催 */
+export const BOMB = Object.freeze({ count: 3, time: 330, hurry: 60 });
+/** 猎杀头目：身边几个护卫、护卫离头目多远 */
+export const HVT = Object.freeze({ guards: 3, ring: 5 });
+const BOSS_NAMES = ['灰狼', '铁砧', '渡鸦', '黑桃', '蝰蛇'];
+
+/**
+ * 全图的行动地点（中继、炸弹、头目、坚守都从这里抽）：每处都在导航空地上、四周 6 米基本是空的、从开局点走得到
+ * （tests/jimao-missions.test.js 逐个验）。zone 是所在的片区——一局里的几个地点尽量分在不同片区，把整张图都跑到。
+ */
+export const OPS_SITES = Object.freeze([
+  { floor: 'P1-1F', x: -169, z: -90, where: '商场西翼', zone: 'mall-low' },
+  { floor: 'P1-2F', x: -100, z: -140, where: '商场二楼走道', zone: 'mall-low' },
+  { floor: 'P1-B1M', x: -151, z: -94, where: '地下大厅', zone: 'mall-under' },
+  { floor: 'P1-B1M', x: -138, z: -138, where: '美食广场', zone: 'mall-under' },
+  { floor: 'P1-B1', x: -126, z: -132, where: '商场地库', zone: 'mall-under' },
+  { floor: 'P1-4F', x: -102, z: -132, where: '商场四楼', zone: 'mall-high' },
+  { floor: 'P1-5F', x: -150, z: -126, where: '商场五楼', zone: 'mall-high' },
+  { floor: 'P1-6F', x: -96, z: -132, where: '商场六楼', zone: 'mall-high' },
+  { floor: 'P1-RF', x: -160, z: -120, where: '屋顶花园', zone: 'roof' },
+  { floor: 'P1-RF', x: -96, z: -138, where: '屋顶东侧', zone: 'roof' },
+  { floor: 'P1C-1F', x: -132, z: -216, where: '艺文馆', zone: 'north' },
+  { floor: 'H-1F', x: -245, z: -81, where: '酒店大堂', zone: 'hotel' },
+  { floor: 'H-2F', x: -245, z: HOTEL_Z, where: '酒店二楼', zone: 'hotel' },
+  { floor: 'H-8F', x: -216, z: -84, where: '酒店八楼', zone: 'hotel' },
+  { floor: 'H-12F', x: -216, z: -84, where: '酒店十二楼', zone: 'hotel' },
+  { floor: 'A-1F', x: -36, z: -216, where: '公寓大堂', zone: 'apartment' },
+  { floor: 'A-6F', x: -36, z: -186, where: '公寓六楼', zone: 'apartment' },
+  { floor: 'M-B1', x: -36, z: -12, where: '地铁站厅', zone: 'metro' },
+  { floor: 'M-B2', x: -6, z: 0, where: '地铁站台', zone: 'metro' },
+  { floor: 'M-B3', x: -18, z: -6, where: '地铁换乘厅', zone: 'metro' },
+]);
+/** 从全图地点里抽 n 处，尽量每处在不同的片区；rng 返回 [0, 1) */
+export function pickSites(rng, n, pool = OPS_SITES) {
+  const left = [...pool], out = [];
+  while (out.length < n && left.length) {
+    const fresh = left.filter((s) => !out.some((o) => o.zone === s.zone)), from = fresh.length ? fresh : left;
+    const s = from[Math.floor(rng() * from.length)];
+    out.push(s); left.splice(left.indexOf(s), 1);
+  }
+  return out;
+}
 
 /** 三处中继（旧 FPS 任务的终端、酒店情报点和地下大厅；在园区地图上都实测可达） */
 export const RELAY_SITES = Object.freeze([
@@ -133,6 +181,23 @@ export function itemModel() {
   return g;
 }
 
+/** 定时炸弹：地上一只黑色工具箱，上面绑着几管炸药和一块红色的计时屏；没拆时红灯越闪越急、头顶一道淡红色光柱，拆掉以后绿灯常亮 */
+export function bombModel() {
+  const M = mats(), g = new THREE.Group();
+  add(g, new THREE.BoxGeometry(0.7, 0.26, 0.46), M.case, 0, 0.13, 0);
+  for (const x of [-0.2, 0, 0.2]) { const t = add(g, new THREE.CylinderGeometry(0.055, 0.055, 0.42, 10), new THREE.MeshStandardMaterial({ color: '#8a2f24', roughness: 0.7 }), x, 0.32, 0); t.rotation.x = Math.PI / 2; }
+  add(g, new THREE.BoxGeometry(0.62, 0.03, 0.05), M.dark, 0, 0.385, 0.12); add(g, new THREE.BoxGeometry(0.62, 0.03, 0.05), M.dark, 0, 0.385, -0.12);
+  const screen = add(g, new THREE.BoxGeometry(0.3, 0.12, 0.02), new THREE.MeshBasicMaterial({ color: '#ff3b2f' }), 0, 0.45, 0.2); screen.rotation.x = -0.5;
+  const lamp = add(g, new THREE.SphereGeometry(0.06, 10, 8), M.red, 0.27, 0.44, 0);
+  const beam = add(g, new THREE.CylinderGeometry(0.12, 0.35, 3.2, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#ff5a4a', transparent: true, opacity: 0.16, depthWrite: false }), 0, 2, 0);
+  let t = 0, state = 'live', rate = 3;
+  g.userData.setState = (s) => { state = s; lamp.material = s === 'cut' ? M.green : s === 'cutting' ? M.amber : M.red; beam.visible = s !== 'cut'; screen.visible = s !== 'cut'; lamp.visible = true; };
+  /** 闪得多急（每秒几下）：director 按剩余时间调 */
+  g.userData.setRate = (r) => { rate = r; };
+  g.userData.update = (dt) => { t += dt; if (state === 'cut') return; const on = Math.sin(t * rate * Math.PI * 2) > 0; lamp.visible = on || state === 'cutting'; screen.material.color.set(on ? '#ff3b2f' : '#7a1a14'); beam.material.opacity = 0.1 + (on ? 0.1 : 0); };
+  return g;
+}
+
 /** 坚守的控制点：地上一圈琥珀色光环（站进去变绿）、中间一根光柱，远处也看得见 */
 export function holdModel(radius = HOLD.radius) {
   const M = mats(), g = new THREE.Group();
@@ -181,7 +246,16 @@ export function rollMission(rng, sites, { type, exit } = {}) {
   let objectives = [], title;
   if (type === 'relay') {
     title = '切断上行中继';
-    objectives = RELAY_SITES.map((s, i) => ({ id: `relay_${'abc'[i]}`, label: `${'甲乙丙'[i]}号中继 · ${s.where}`, verb: '切断中继', kind: 'relay', site: s }));
+    // 三台中继每局换地方，分在三个片区
+    objectives = pickSites(rng, 3).map((s, i) => ({ id: `relay_${'abc'[i]}`, label: `${'甲乙丙'[i]}号中继 · ${s.where}`, verb: '切断中继', kind: 'relay', site: s }));
+  } else if (type === 'bomb') {
+    title = '拆除定时炸弹';
+    objectives = pickSites(rng, BOMB.count).map((s, i) => ({ id: `bomb_${'abc'[i]}`, label: `${'一二三'[i]}号炸弹 · ${s.where}`, verb: '拆除炸弹', kind: 'bomb', site: s }));
+    return { type, title, objectives, extraction, kills: 0, bomb: { time: BOMB.time } };
+  } else if (type === 'hvt') {
+    title = '猎杀头目';
+    const site = pickSites(rng, 1)[0];
+    return { type, title, objectives, extraction, kills: 0, hvt: { ...site, name: pick(BOSS_NAMES) } };
   } else if (type === 'rooms') {
     title = '取回失窃物品';
     const a = pick(sites.apartment), s = pick(sites.shop);
@@ -202,6 +276,9 @@ export function rollMission(rng, sites, { type, exit } = {}) {
   return { type, title, objectives, extraction, kills: type === 'eliminate' ? ELIMINATE_TARGET : 0 };
 }
 
+/** 倒计时牌上的字：「05:28」 */
+export function bombClock(seconds) { const t = Math.max(0, Math.ceil(seconds)); return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; }
+
 /** 这一局的目标文字（任务栏）。c 是原游戏的进度对象 { cut, allCut, relays } */
 export function missionText(m, c, kills = 0, ride = null, hold = null) {
   const x = m.extraction;
@@ -209,6 +286,12 @@ export function missionText(m, c, kills = 0, ride = null, hold = null) {
   if (ride?.kind === 'car') return `突围 · 剩 ${Math.max(0, Math.round(ride.left))} 米 · 击倒 ${ride.kills}`;
   if (c.allCut) return `撤离 · ${x.where}${x.label}`;
   if (m.type === 'eliminate') return `歼灭武装劫持者 ${Math.min(kills, m.kills)}/${m.kills}`;
+  if (m.type === 'hvt') return `猎杀头目「${m.hvt.name}」 · ${m.hvt.where}`;
+  if (m.type === 'bomb') {
+    // 倒计时不写在任务栏里（任务栏的字是一个个打出来的，每秒换一次永远打不完）：另有一块大的计时牌（bombClock）
+    const left = c.relays.length - c.cut;
+    return `拆除炸弹 ${c.cut}/${c.relays.length}${left === 1 ? ' · 最后一颗' : ''}`;
+  }
   if (m.type === 'hold') {
     const t = Math.min(m.hold.need, Math.floor(hold?.t || 0));
     return hold?.inside ? `坚守${m.hold.where} ${t}/${m.hold.need} 秒` : `${t ? '回到' : '前往'}${m.hold.where}控制点 · ${t}/${m.hold.need} 秒`;
@@ -227,14 +310,17 @@ export function missionRadio(m) {
     rooms: `特勤组，这里是指挥中心。赃物藏在${m.objectives.map((o) => o.label.split(' · ')[1]).join('和')}，地上的蓝色箭头会带你过去。`,
     hotel: `特勤组，这里是指挥中心。酒店里有两箱被劫走的情报：${m.objectives.map((o) => o.label.split(' · ')[1]).join('、')}。拿回来。`,
     hold: `特勤组，这里是指挥中心。拿下${m.hold?.where}的控制点，在光圈里守住 ${m.hold?.need} 秒，技术组要接管系统。`,
+    bomb: `特勤组，这里是指挥中心。他们在${m.objectives.map((o) => o.label.split(' · ')[1]).join('、')}各放了一颗定时炸弹，${Math.round((m.bomb?.time || 0) / 60 * 10) / 10} 分钟后一起引爆。三处离得远，坐电梯赶路。`,
+    hvt: `特勤组，这里是指挥中心。这伙人的头目代号「${m.hvt?.name}」，人在${m.hvt?.where}，身边有护卫。他比别人能扛得多——找到他，击毙。`,
   }[m.type];
   const step = m.type === 'relay' ? ['第一台中继断了。他们发现了，正往你这边压。', '第二台也断了。最后一台，他们会拼命守。']
-    : m.type === 'eliminate' || m.type === 'hold' ? ['打得好，别停。', '增援还在往里涌，顶住。'] : ['第一件到手。他们察觉了，正在赶来。', '第二件到手。'];
+    : m.type === 'bomb' ? ['第一颗拆掉了。抓紧，另外两颗还在走。', '第二颗也拆了。最后一颗，快！']
+    : m.type === 'eliminate' || m.type === 'hold' || m.type === 'hvt' ? ['打得好，别停。', '增援还在往里涌，顶住。'] : ['第一件到手。他们察觉了，正在赶来。', '第二件到手。'];
   return {
     intro: `${intro}完事后乘${x.label}撤离。`,
     contact: '被发现了！他们正从几个方向围过来。',
     cut: step,
-    all: `${m.type === 'relay' ? '中继全部断开，信号切断了！' : m.type === 'eliminate' ? '目标区域肃清！' : m.type === 'hold' ? '技术组已接管系统！' : '东西全部到手！'}${done}`,
+    all: `${m.type === 'relay' ? '中继全部断开，信号切断了！' : m.type === 'eliminate' ? '目标区域肃清！' : m.type === 'hold' ? '技术组已接管系统！' : m.type === 'bomb' ? '炸弹全部拆除！' : m.type === 'hvt' ? `「${m.hvt?.name}」已击毙！` : '东西全部到手！'}${done}`,
     low: '你中弹了。找掩体，缓一口气。',
     done: '指挥中心收到。云澜汇已收复，特勤组安全撤离——干得漂亮。',
   };
@@ -273,7 +359,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;
   const FRESH = () => ({ phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false,
     vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false, markT: 0, markSig: '' });
-  const state = { mission: null, kills: 0, reinforce: 0, tell: 0, holdT: 0, inside: false, holdTextT: 0, ...FRESH() };
+  const state = { mission: null, kills: 0, reinforce: 0, tell: 0, holdT: 0, inside: false, holdTextT: 0, bombT: 0, bombDone: false, boss: null, bossT: 0, ...FRESH() };
   const vhud = makeDurabilityHud();
   const from = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
   let models = [], roofSpots = null;
@@ -298,13 +384,14 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const keep = state.checkpoint && state.mission ? state.checkpoint : null;
     const mission = keep ? state.mission : rollMission(rng, sites, force);
     Object.assign(state, { mission, kills: keep ? state.kills : 0, reinforce: 0, tell: 0, holdT: keep ? state.holdT : 0, inside: false, holdTextT: 0, ...FRESH(),
+      bombT: keep ? state.bombT : (mission.bomb?.time || 0), bombDone: false, boss: keep ? state.boss : null, bossT: 0,
       checkpoint: null, restore: !!keep });
     if (G.level) G.level.playerStart = keep ? checkpointStart(mission.extraction) : home;
     vhud.show(false); deadTitle(null, null); deadActions(false);
     if (G.player) G.player.mounted = false;
     doorGun.reset(); roofGun.reset();
     models = mission.objectives.map((o) => {
-      const g = o.kind === 'relay' ? relayModel() : itemModel();
+      const g = o.kind === 'relay' ? relayModel() : o.kind === 'bomb' ? bombModel() : itemModel();
       const y = o.site.y ?? elev(o.site.floor);
       g.position.set(o.site.x, y, o.site.z);
       root.add(g);
@@ -316,12 +403,13 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       g.position.set(h.x, y, h.z); root.add(g); models.push(g);
       h.object = g; h.pos = v({ ...h, y });
     }
+    if (mission.hvt) mission.hvt.pos = v({ ...mission.hvt, y: elev(mission.hvt.floor) });
     for (const vv of Object.values(vehicles)) vv.reset();
     const x = mission.extraction;
     Object.assign(G.level, {
       objectives: mission.objectives,
       extraction: { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked },
-      missionText: (c) => missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null, { t: state.holdT, inside: state.inside }),
+      missionText: (c) => missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null, { t: state.holdT, inside: state.inside, bombT: state.bombT }),
       // 地上的路线箭头指向哪里（guide.js）：歼灭任务指向最近的敌人，坚守任务指向控制点（人在圈里时不画）
       guideTarget: () => guideTarget(),
       onExtract: () => board(),
@@ -339,11 +427,13 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     }
   });
 
-  G.events.on('enemy:killed', () => {
+  G.events.on('enemy:killed', (ev) => {
     if (G.game?.state !== 'playing') return;
     // 坐车时每击倒一人，下一个敌人推迟 2.2 秒才冲出来：清得快就真的能喘口气
     if (state.phase === 'ride') { state.rideKills++; if (veh()?.kind === 'car') state.spawnT = Math.max(state.spawnT, 2.2); G.game.refreshObjective?.(); return; }
     const m = state.mission;
+    // 猎杀头目：倒下的是头目本人才算
+    if (m?.type === 'hvt') { if (ev?.enemy && ev.enemy === state.boss && !G.game.run?.allCut) { G.hud?.message?.(`头目「${m.hvt.name}」已击毙`, 3); G.game.completeAll?.(); G.game.refreshObjective?.(); } return; }
     if (!m || m.type !== 'eliminate') return;
     state.kills++;
     if (state.kills >= m.kills) G.game.completeAll?.();
@@ -533,6 +623,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       if (m.hold) list.push({ id: 'hold', short: '守', label: `${m.hold.where}控制点`, pos: m.hold.pos.clone().setY(m.hold.pos.y + 1), kind: 'relay' });
       return list;
     }
+    // 猎杀头目：头目头顶一个红点（带距离）
+    if (state.phase === 'none' && m?.type === 'hvt' && !G.game?.run?.allCut && state.boss?.alive) return [{ id: 'boss', short: '首', label: `头目「${m.hvt.name}」`, pos: state.boss.pos.clone().setY(state.boss.pos.y + 2.1), kind: 'hunt' }];
     if (state.phase !== 'ride') return [];
     return (veh()?.kind === 'helicopter' ? roofEnemies() : alive()).map((e) => ({ id: `tgt-${G.enemies.list.indexOf(e)}`, short: '', label: '敌人', pos: e.pos, kind: 'enemy' }));
   }
@@ -574,7 +666,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   /** 歼灭 / 坚守：增援就近刷，并且每隔几秒把玩家的位置告诉没在交火的敌人，让他们自己找过来 */
   function reinforce(dt) {
     const m = state.mission;
-    if (!m || (m.type !== 'eliminate' && m.type !== 'hold') || G.game?.state !== 'playing' || G.game.run?.allCut || state.phase !== 'none') return;
+    if (!m || (m.type !== 'eliminate' && m.type !== 'hold' && m.type !== 'hvt') || G.game?.state !== 'playing' || G.game.run?.allCut || state.phase !== 'none') return;
+    // 猎杀头目：靠近到 45 米以内才开始来增援
+    if (m.type === 'hvt' && !(state.boss?.alive && state.boss.pos.distanceTo(G.player.pos) < 45)) return;
     // 增援上限跟着「性能微调 · 同时在场的敌人」缩（少 = 8/14）
     const cap = Math.max(3, Math.round((m.type === 'hold' ? HOLD.alive : HUNT.alive) * (G.tuning?.enemyScale?.() ?? 1))), every = m.type === 'hold' ? HOLD.every : HUNT.every;
     // 坚守：没走到控制点之前不刷（先让人走过去），到过以后一直刷
@@ -610,6 +704,56 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     }
   }
 
+  // 拆弹的计时牌：指南针下面一块红色的「炸弹 05:28」，最后一分钟变大、闪
+  let clockEl = null;
+  function paintClock(show) {
+    if (typeof document === 'undefined') return;
+    if (!clockEl) { const hud = document.querySelector('#ui .hud') || document.getElementById('ui'); if (!hud) return; clockEl = document.createElement('div'); clockEl.className = 'jm-bomb-clock'; clockEl.hidden = true; hud.appendChild(clockEl); }
+    clockEl.hidden = !show;
+    if (show) { clockEl.textContent = `炸弹 ${bombClock(state.bombT)}`; clockEl.classList.toggle('hurry', state.bombT <= BOMB.hurry); }
+  }
+  /** 拆弹：倒计时；到点没拆完，剩下的炸弹一起炸，行动失败 */
+  function bombTick(dt) {
+    const m = state.mission, run = G.game?.run;
+    if (m?.type !== 'bomb' || G.game?.state !== 'playing' || !run || run.allCut || state.phase !== 'none' || state.bombDone) { if (clockEl && !clockEl.hidden) paintClock(false); return; }
+    if (clockEl?.hidden !== false) paintClock(true);
+    const before = Math.ceil(state.bombT);
+    state.bombT -= dt;
+    const now = Math.ceil(state.bombT);
+    if (now !== before) {
+      paintClock(true);
+      if (now === BOMB.hurry) G.hud?.radio?.('还剩一分钟！没拆完的那颗，跑过去！', 3.5);
+      if (now === 20) G.hud?.radio?.('二十秒！', 2);
+      if (now <= 10 && now > 0) G.audio?.play?.('ui_click', { gain: 1, pitch: 1.6 });
+      // 越到后面闪得越急
+      const rate = now > BOMB.hurry ? 2 : now > 20 ? 4 : 8;
+      for (const o of m.objectives) o.object?.userData.setRate?.(rate);
+    }
+    if (state.bombT > 0) return;
+    state.bombDone = true;
+    for (const r of run.relays || []) if (!r.cut && r.o?.pos) { G.fx?.explosion?.(r.o.pos, 3); G.audio?.play?.('explosion', { pos: r.o.pos, gain: 1 }); r.o.object && (r.o.object.visible = false); }
+    G.player.addShake?.(1.2);
+    deadTitle('炸弹爆炸', '行动失败');
+    if (!G.player.invulnerable) G.player.damage(9999);
+  }
+
+  /** 猎杀头目：开打以后把头目和护卫摆到地点上（敌人池满了就过一会儿再试） */
+  function bossTick(dt) {
+    const m = state.mission;
+    if (m?.type !== 'hvt' || state.boss || G.game?.state !== 'playing' || G.game.run?.allCut || state.phase !== 'none') return;
+    if ((state.bossT -= dt) > 0) return;
+    state.bossT = 1;
+    const at = m.hvt.pos;
+    let boss = null;
+    try { boss = G.enemies.spawn('soldier', at.clone(), { role: 'boss', state: 'patrol' }); } catch { boss = null; }
+    if (!boss) return;
+    state.boss = boss;
+    for (let i = 0; i < HVT.guards; i++) {
+      const a = (i / HVT.guards) * Math.PI * 2 + 0.5, x = at.x + Math.cos(a) * HVT.ring, z = at.z + Math.sin(a) * HVT.ring, st = landAt(nav, x, z, at.y + 0.6);
+      if (st && Math.abs(st.y - at.y) < 0.6 && clear(nav, st)) { try { G.enemies.spawn('soldier', new THREE.Vector3(st.x, st.y, st.z), { role: i ? 'regular' : 'heavy', state: 'patrol' }); } catch { /* 池子满了就少一个护卫 */ } }
+    }
+  }
+
   /** 地上箭头的目标（guide.js 用）：返回 undefined 时照原来的规则（物品、中继、撤离点） */
   function guideTarget() {
     const m = state.mission;
@@ -617,6 +761,10 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (m.type === 'hold') {
       if (state.inside) return null;
       return { key: 'hold', name: '控制点', floor: m.hold.floor, x: m.hold.pos.x, y: m.hold.pos.y, z: m.hold.pos.z, door: null };
+    }
+    if (m.type === 'hvt') {
+      const at = state.boss?.alive ? state.boss.pos : m.hvt.pos, st = (state.boss?.alive && G.physics?.stateOf?.(state.boss.pos)) || landAt(nav, at.x, at.z, at.y + 0.6);
+      return st ? { key: `boss-${Math.round(at.x / 8)}-${Math.round(at.z / 8)}-${st.floor}`, name: `头目「${m.hvt.name}」`, floor: st.floor, x: at.x, y: at.y, z: at.z, door: null } : null;
     }
     if (m.type !== 'eliminate') return undefined;
     const p = G.player.pos;
@@ -646,6 +794,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     restoreCheckpoint();
     for (const m of models) m.userData.update?.(dt);
     holdTick(dt);
+    bombTick(dt);
+    bossTick(dt);
     reinforce(dt);
     const vv = veh();
     if (!vv) return null;

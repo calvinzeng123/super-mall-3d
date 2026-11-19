@@ -16,6 +16,31 @@ export const SOLDIER = {
   patrolRadius: 8, corpseSeconds: 10, pool: 12,
 };
 
+/**
+ * 兵种（每次出场定一个）：在 SOLDIER 的基础上改几项。
+ *   regular 步枪手：原来的样子；
+ *   rusher 突击手：跑得快、贴上来打（3–10 米），点射短促频繁，血薄一点；
+ *   heavy 重装：走得慢、血是两倍多，一梭子 7–10 发压着你打；
+ *   marksman 狙击手：躲在 16–45 米外，瞄一秒多（红色激光先照到你身上）打一枪，一枪很疼，打完要缓两三秒；
+ *   boss 头目（「猎杀头目」任务的目标）：血量五倍，长点射，个头大一圈。
+ */
+export const ROLES = Object.freeze({
+  regular: Object.freeze({ name: '步枪手', weight: 0.5 }),
+  rusher: Object.freeze({ name: '突击手', weight: 0.22, runSpeed: 5.4, stalkSpeed: 3.4, rangeMin: 3, rangeMax: 10, burst: [4, 6], aimTime: 0.24, cooldown: [0.7, 1.2], spreadFar: 0.14, spreadNear: 0.06, hpScale: 0.8, scale: 0.97 }),
+  heavy: Object.freeze({ name: '重装兵', weight: 0.15, runSpeed: 3.1, stalkSpeed: 2, walkSpeed: 1.3, burst: [7, 10], burstGap: 0.085, cooldown: [1.8, 2.6], hpScale: 2.2, scale: 1.08 }),
+  marksman: Object.freeze({ name: '狙击手', weight: 0.13, rangeMin: 16, rangeMax: 45, burst: [1, 1], shotDamage: 24, aimTime: 1.15, cooldown: [2.2, 3.2], spreadFar: 0.022, spreadNear: 0.008, hpScale: 0.8 }),
+  boss: Object.freeze({ name: '头目', weight: 0, runSpeed: 3.6, burst: [5, 8], shotDamage: 6, cooldown: [1.1, 1.8], hpScale: 5, scale: 1.14 }),
+});
+/** 按比例抽一个兵种。r ∈ [0, 1)；heavyLook：这个人穿的是重装护甲（只当步枪手或重装兵） */
+export function pickRole(r, heavyLook = false) {
+  const names = heavyLook ? ['regular', 'heavy'] : ['regular', 'rusher', 'marksman', 'heavy'].filter((n) => n !== 'heavy' || !heavyLook);
+  const pool = heavyLook ? names : names.filter((n) => n !== 'heavy');
+  const total = pool.reduce((t, n) => t + ROLES[n].weight, 0);
+  let x = r * total;
+  for (const n of pool) { x -= ROLES[n].weight; if (x < 0) return n; }
+  return 'regular';
+}
+
 // ---- 外观 ----
 // 两套装备：突击手（橄榄色作战服、狼棕背心）和重装（深灰作战服、黑色重型护甲、血厚）。
 // 脸上是面罩，只露一条眼缝，戴深色护目镜（镜片有一点反光，交火时泛红，方便远处看出谁在打你）。
@@ -178,6 +203,8 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
     const vel = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), aimDir = new THREE.Vector3();
     const headPos = new THREE.Vector3(), chest = new THREE.Vector3(), pelvisPos = new THREE.Vector3(), kneeL = new THREE.Vector3(), kneeR = new THREE.Vector3(), footL = new THREE.Vector3(), footR = new THREE.Vector3();
     const maxHp = look.heavy ? SOLDIER.heavyHp : SOLDIER.hp;
+    // 这个人这一次出场用的参数（兵种不同：速度、交战距离、点射长短、伤害都不一样；见 ROLES）
+    let CFG = SOLDIER;
 
     const m = {
       id: 0, type: 'soldier', heavy: look.heavy, pos: root.position, alive: false, active: false, hp: maxHp, rig: { group: root },
@@ -205,7 +232,12 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
         return false;
       },
       _activate(at, opts = {}) {
-        m.active = true; m.alive = true; m.hp = maxHp; m.passive = !!opts.passive; m.sink = 0;
+        // 兵种：没指定就按比例随机（重装外观的人不会当突击手 / 狙击手，免得看着不像）
+        const role = ROLES[opts.role] ? opts.role : pickRole(rng(), look.heavy);
+        CFG = role === 'regular' ? SOLDIER : { ...SOLDIER, ...ROLES[role] };
+        m.role = role; m.name = ROLES[role].name; m.maxHp = Math.round(maxHp * (ROLES[role].hpScale || 1));
+        root.scale.setScalar(ROLES[role].scale || 1);
+        m.active = true; m.alive = true; m.hp = m.maxHp; m.passive = !!opts.passive; m.sink = 0;
         m.pos.copy(at);
         const g = G.physics.groundHeight(at.x, at.z, at.y + 1);
         if (g > -40 && Math.abs(g - at.y) < 1.2) m.pos.y = g;
@@ -293,7 +325,7 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       let best = Infinity;
       const tryPoint = (q, bonus) => {
         const r = Math.hypot(q.x - pl.pos.x, q.z - pl.pos.z);
-        if (r < SOLDIER.rangeMin || r > SOLDIER.rangeMax) return;
+        if (r < CFG.rangeMin || r > CFG.rangeMax) return;
         if (Math.abs(q.y - pl.pos.y) > 6) return;
         let score = Math.hypot(q.x - m.pos.x, q.z - m.pos.z) * 0.9 + bonus + rng() * 3;
         for (const o of ctx.list) {
@@ -308,10 +340,10 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       };
       const cover = G.level && G.level.coverPoints;
       if (cover) for (const c of cover) tryPoint(c, -3);
-      for (let k = 0; k < 6; k++) { const q = G.physics.nav.randomPoint(pl.pos, SOLDIER.rangeMax); if (q) tryPoint(q, 0); }
+      for (let k = 0; k < 6; k++) { const q = G.physics.nav.randomPoint(pl.pos, CFG.rangeMax); if (q) tryPoint(q, 0); }
       const bearing = Math.atan2(m.pos.z - pl.pos.z, m.pos.x - pl.pos.x);
       for (let k = 0; k < 5; k++) {
-        const a = bearing + (rng() - 0.5) * 2.6, r = SOLDIER.rangeMin + 1 + rng() * (SOLDIER.rangeMax - SOLDIER.rangeMin - 2);
+        const a = bearing + (rng() - 0.5) * 2.6, r = CFG.rangeMin + 1 + rng() * (CFG.rangeMax - CFG.rangeMin - 2);
         tmp.set(pl.pos.x + Math.cos(a) * r, 0, pl.pos.z + Math.sin(a) * r);
         tmp.y = G.physics.groundHeight(tmp.x, tmp.z, pl.pos.y + 1);
         if (Math.abs(tmp.y - pl.pos.y) < 0.8) tryPoint(tmp, 1);
@@ -329,7 +361,7 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       const pl = G.player;
       m.fwd.set(Math.sin(m.yaw), 0, Math.cos(m.yaw));
       m.sensor.copy(headPos);
-      ctx.think(m, dt, SOLDIER.react);
+      ctx.think(m, dt, CFG.react);
       if (m.mode !== m.modeSeen) {
         m.modeSeen = m.mode; m.hasGoal = false; m.path = null; m.waitT = 0;
         if (m.mode === 'engage') pickFirePos();
@@ -337,25 +369,25 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       }
       m.cool -= dt;
       want.set(0, 0, 0);
-      let faceYaw = null, aimAt = null, raise = 0.3, crouch = 0, laserOn = false, maxSpeed = SOLDIER.runSpeed;
+      let faceYaw = null, aimAt = null, raise = 0.3, crouch = 0, laserOn = false, maxSpeed = CFG.runSpeed;
       const toPl = pl ? Math.hypot(pl.pos.x - m.pos.x, pl.pos.z - m.pos.z) : 1e9;
 
       if (m.mode === 'patrol') {
-        raise = 1; maxSpeed = SOLDIER.walkSpeed;
-        if (m.hasGoal) { if (follow(dt, SOLDIER.walkSpeed, want)) m.waitT = 1.5 + rng() * 3; }
+        raise = 1; maxSpeed = CFG.walkSpeed;
+        if (m.hasGoal) { if (follow(dt, CFG.walkSpeed, want)) m.waitT = 1.5 + rng() * 3; }
         else {
           m.waitT -= dt; m.scan += dt;
           faceYaw = m.yaw + Math.sin(m.scan * 0.7 + m.phase) * 0.02;
           if (m.waitT <= 0) {
             if (m.patrolLine) { m.patrolI = (m.patrolI + 1) % m.patrolLine.length; const p = m.patrolLine[m.patrolI]; setGoal(tmp.set(p.x, p.y ?? m.pos.y, p.z), true); }
-            else { const q = G.physics.nav.randomPoint(m.home, SOLDIER.patrolRadius); if (q && Math.abs(q.y - m.pos.y) < 0.6) setGoal(q, true); else m.waitT = 1; }
+            else { const q = G.physics.nav.randomPoint(m.home, CFG.patrolRadius); if (q && Math.abs(q.y - m.pos.y) < 0.6) setGoal(q, true); else m.waitT = 1; }
           }
         }
       } else if (m.mode === 'investigate' || m.mode === 'search') {
         raise = 0.15;
         const d = Math.hypot(m.lastKnown.x - m.pos.x, m.lastKnown.z - m.pos.z);
         if (d > 2.2) {
-          setGoal(m.lastKnown); follow(dt, d < 8 ? SOLDIER.stalkSpeed : SOLDIER.runSpeed, want);
+          setGoal(m.lastKnown); follow(dt, d < 8 ? CFG.stalkSpeed : CFG.runSpeed, want);
           // 我们的地图大、楼层多，原游戏 10 秒左右的「搜索」不够跑完一段楼梯；还在往那边赶的时候就不放弃
           if (m.speed > 1 && m.path) m.modeT = Math.max(m.modeT, 2);
         }
@@ -366,7 +398,7 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
         switch (m.es) {
           case 'move': {
             m.moveT += dt;
-            const arrived = follow(dt, SOLDIER.runSpeed, want), inRange = toPl > SOLDIER.rangeMin - 1 && toPl < SOLDIER.rangeMax + 2;
+            const arrived = follow(dt, CFG.runSpeed, want), inRange = toPl > CFG.rangeMin - 1 && toPl < CFG.rangeMax + 2;
             if (arrived || (m.moveT > 1.2 && m.los && inRange && rng() < dt * 0.8) || m.moveT > 7) { m.es = 'aim'; m.esT = 0; m.hasGoal = false; }
             else if (pl.pos.distanceToSquared(m.firePlayer) > 49) pickFirePos();
             // 边跑边看着玩家（看得见的时候），跑的方向和身体朝向分开
@@ -376,21 +408,21 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
           case 'aim': {
             faceYaw = toYaw; m.esT += dt; crouch = m.crouchWant;
             if (m.los) {
-              if (toPl < SOLDIER.rangeMin - 3 && m.esT > 0.8) pickFirePos();
-              else if (m.cool <= 0 && pl.alive !== false && Math.abs(wrapAngle(toYaw - m.yaw)) < 0.25 && ctx.requestToken(m)) { m.es = 'tele'; m.esT = SOLDIER.aimTime; }
+              if (toPl < CFG.rangeMin - 3 && m.esT > 0.8) pickFirePos();
+              else if (m.cool <= 0 && pl.alive !== false && Math.abs(wrapAngle(toYaw - m.yaw)) < 0.25 && ctx.requestToken(m)) { m.es = 'tele'; m.esT = CFG.aimTime; }
             } else if (m.noSeeT > 1.2 || m.esT > 3.5) pickFirePos();
             break;
           }
           case 'tele': { // 举枪瞄准：激光指示（给玩家的提示，和原游戏机器敌人开火前的预警是一个意思）
             faceYaw = toYaw; crouch = m.crouchWant; laserOn = true; m.esT -= dt;
-            if (m.esT <= 0) { m.es = 'burst'; m.shots = SOLDIER.burst[0] + Math.floor(rng() * (SOLDIER.burst[1] - SOLDIER.burst[0] + 1)); m.esT = 0; }
+            if (m.esT <= 0) { m.es = 'burst'; m.shots = CFG.burst[0] + Math.floor(rng() * (CFG.burst[1] - CFG.burst[0] + 1)); m.esT = 0; }
             break;
           }
           case 'burst': {
             faceYaw = toYaw; crouch = m.crouchWant; m.esT -= dt;
-            if (m.esT <= 0) { m.esT = SOLDIER.burstGap * (0.85 + rng() * 0.3); m.shots--; fire(pl); }
+            if (m.esT <= 0) { m.esT = CFG.burstGap * (0.85 + rng() * 0.3); m.shots--; fire(pl); }
             if (m.shots <= 0) {
-              ctx.releaseToken(m); m.cool = SOLDIER.cooldown[0] + rng() * (SOLDIER.cooldown[1] - SOLDIER.cooldown[0]); m.bursts++;
+              ctx.releaseToken(m); m.cool = CFG.cooldown[0] + rng() * (CFG.cooldown[1] - CFG.cooldown[0]); m.bursts++;
               if (m.bursts >= 1 + (rng() < 0.5 ? 1 : 0)) pickFirePos(); else { m.es = 'aim'; m.esT = 0; }
             }
             break;
@@ -408,11 +440,11 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       if (crouch > 0.5) want.multiplyScalar(0.2);
 
       // 速度、朝向
-      const k = ease(SOLDIER.accel, dt);
+      const k = ease(CFG.accel, dt);
       vel.x += (want.x - vel.x) * k; vel.z += (want.z - vel.z) * k; vel.y = 0;
       const sp = Math.hypot(vel.x, vel.z);
       if (faceYaw === null && sp > 0.2) faceYaw = Math.atan2(vel.x, vel.z);
-      if (faceYaw !== null) { const d = wrapAngle(faceYaw - m.yaw); m.yaw += clamp(d, -SOLDIER.turnRate * dt, SOLDIER.turnRate * dt) + d * ease(6, dt) * 0.3; m.yaw = wrapAngle(m.yaw); }
+      if (faceYaw !== null) { const d = wrapAngle(faceYaw - m.yaw); m.yaw += clamp(d, -CFG.turnRate * dt, CFG.turnRate * dt) + d * ease(6, dt) * 0.3; m.yaw = wrapAngle(m.yaw); }
       // 走（在我们的导航网格上，和玩家同一套碰撞：墙、栏杆、楼梯、扶梯）
       const res = G.physics.moveCapsule(m.pos, vel, dt, 0.3, 1.8);
       m.speed = Math.hypot(vel.x, vel.z);
@@ -441,10 +473,10 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
     function fire(pl) {
       tmp.set(pl.pos.x, pl.pos.y + (pl.crouching ? 0.8 : 1.15), pl.pos.z);
       aimDir.copy(tmp).sub(m.muzzle).normalize();
-      const spread = (SOLDIER.spreadFar + (SOLDIER.spreadNear - SOLDIER.spreadFar) * m.exposure) * (1 + ctx.playerSpeed * 0.3) * (m.crouch > 0.5 ? 0.75 : 1);
+      const spread = (CFG.spreadFar + (CFG.spreadNear - CFG.spreadFar) * m.exposure) * (1 + ctx.playerSpeed * 0.3) * (m.crouch > 0.5 ? 0.75 : 1);
       aimDir.x += (rng() - 0.5) * 2 * spread; aimDir.y += (rng() - 0.5) * 2 * spread; aimDir.z += (rng() - 0.5) * 2 * spread; aimDir.normalize();
       const wall = G.physics.raycast(m.muzzle, aimDir, 150);
-      const hit = G.combat.enemyShot(m.muzzle, aimDir, { damage: SOLDIER.shotDamage, range: 150 });
+      const hit = G.combat.enemyShot(m.muzzle, aimDir, { damage: CFG.shotDamage, range: 150 });
       const len = hit ? m.muzzle.distanceTo(tmp) : wall ? wall.dist : 90;
       tmp2.copy(m.muzzle).addScaledVector(aimDir, len);
       G.fx.tracer(m.muzzle, tmp2, { color: 0xffc880, speed: 280, width: 0.03 });
@@ -485,7 +517,7 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       vel.multiplyScalar(Math.exp(-5 * dt));
       if (t < 1) { m.pos.x += vel.x * dt; m.pos.z += vel.z * dt; }
       pose(dt);
-      if (t > SOLDIER.corpseSeconds) m.sink = 1e-3;
+      if (t > CFG.corpseSeconds) m.sink = 1e-3;
     }
 
     // ---- 摆姿势：步态、蹲、举枪、后坐、中弹 ----
@@ -498,7 +530,7 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       m.recoilV += (-m.recoil * 220 - m.recoilV * 22) * dt; m.recoil += m.recoilV * dt;
       m.flinchPV += (-m.flinchP * 120 - m.flinchPV * 14) * dt; m.flinchP += m.flinchPV * dt;
       m.flinchRV += (-m.flinchR * 120 - m.flinchRV * 14) * dt; m.flinchR += m.flinchRV * dt;
-      const c = m.crouch, run = Math.min(1, sp / SOLDIER.runSpeed);
+      const c = m.crouch, run = Math.min(1, sp / CFG.runSpeed);
       root.rotation.y = m.yaw;
       hips.position.y = HIP_Y - 0.4 * c - Math.abs(Math.cos(m.gait)) * 0.035 * Math.min(1, sp / 2);
       spine.rotation.set(0.14 * run + 0.18 * c + m.flinchP * 0.06 - m.pitch * 0.15, m.twist * 0.7, m.flinchR * 0.06);

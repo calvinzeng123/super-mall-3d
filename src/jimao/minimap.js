@@ -132,6 +132,17 @@ export function createMinimap(G, { nav, layout, ui = null, guide = null, hidden 
       const [x, y] = P(b.x, b.z); ctx.globalAlpha = Math.min(1, b.t / 0.8); ctx.fillStyle = '#ff4a3d'; ctx.beginPath(); ctx.arc(x, y, 3.2 * px, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    // 无人机侦察（三连杀奖励）：这一层附近所有敌人都显示，外加一圈往外扩的扫描线
+    if ((G.score?.uav || 0) > 0) {
+      ctx.fillStyle = '#ff6a5c';
+      for (const e of G.enemies?.list || []) {
+        if (!e.alive || !e.active || Math.abs(e.pos.y - p.pos.y) > 4) continue;
+        const [x, y] = P(e.pos.x, e.pos.z); if (Math.hypot(x - half, y - half) > half) continue;
+        ctx.beginPath(); ctx.arc(x, y, 3 * px, 0, Math.PI * 2); ctx.fill();
+      }
+      const sweep = ((G.time?.t || 0) % 1.6) / 1.6;
+      ctx.strokeStyle = `rgba(255, 179, 71, ${0.55 * (1 - sweep)})`; ctx.lineWidth = 1.5 * px; ctx.beginPath(); ctx.arc(half, half, sweep * half, 0, Math.PI * 2); ctx.stroke();
+    }
     ctx.restore();
     // 目标：在范围里画菱形，出了范围贴在圆边上；在别的楼层带 ▲▼
     const tg = guide?.target;
