@@ -37,6 +37,7 @@ import { createCutscenes, CUT, CUTSCENE_CSS } from './cutscene.js';
 import { createStairControl, STAIRS_CSS } from './stairs.js';
 import { addZombies } from './zombie.js';
 import { createSiege, SIEGE_CSS } from './siege.js';
+import { createBlackout } from './blackout.js';
 import { HELI_ORBIT } from './ride-paths.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
@@ -327,6 +328,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (G.game.state !== 'paused') { try { actions.update(dt); } catch (e) { fail('actions', e, '手雷出错'); } }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
       if (siege && G.game.state !== 'paused') { try { siege.update(dt); } catch (e) { fail('siege', e, '丧尸围城出错'); } }
+      blackout.enabled = !!siege?.enabled; blackout.open = director.riding ? 1 : 0; blackout.update(dt);
       if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { fail('guide', e, '路线指引出错'); } }
       try { minimap.update(dt); } catch (e) { fail('minimap', e, '小地图出错'); }
       try { G.score?.update(dt); } catch (e) { fail('score', e, '得分出错'); }
@@ -357,19 +359,24 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   };
   ctx.dynamic.push(dynamic);
   // 世界画完以后画枪：清掉深度，用枪自己的相机画枪那一层。环境反射调亮一点（原游戏也这样，暗色金属才看得出质感）
+  // 丧尸围城的停电场景（blackout.js）：天黑、室内只留应急亮度、手电、薄雾；零点突围不开
+  const blackout = createBlackout({ app, scene, camera, viewLayer: VIEW_LAYER });
+  G.blackout = blackout;
   const drawView = () => {
     viewCamera.position.copy(camera.position); viewCamera.quaternion.copy(camera.quaternion);
     if (Math.abs(viewCamera.aspect - camera.aspect) > 1e-4) { viewCamera.aspect = camera.aspect; viewCamera.updateProjectionMatrix(); }
+    const undo = blackout.begin(); // 停电时枪也跟着暗（靠手电和枪口火光照亮），不然黑屋子里飘着一把亮枪
     const auto = renderer.autoClear, envI = scene.environmentIntensity, fog = scene.fog;
     renderer.autoClear = false; renderer.clearDepth();
-    scene.environmentIntensity = Math.max(1.1, envI * 2.4); scene.fog = null;
+    scene.environmentIntensity = undo ? Math.max(0.42, scene.environmentIntensity * 2.4) : Math.max(1.1, envI * 2.4); scene.fog = null;
     renderer.render(scene, viewCamera);
     scene.environmentIntensity = envI; scene.fog = fog; renderer.autoClear = auto;
+    undo?.();
   };
   // 画面反馈：世界和枪先画进离屏图（包一层 env.render），枪画完以后贴回屏幕
   const grade = createGrade(renderer, render.post, { samples: MOBILE ? 2 : 4 });
   const env = app.env, baseRender = env.render;
-  env.render = function () { grade.begin(); return baseRender.call(this); };
+  env.render = function () { grade.begin(); const undo = blackout.begin(); try { return baseRender.call(this); } finally { undo?.(); } };
   // 诊断面板（diag.js）：设置里「诊断信息 · 显示」或 ?diag=1
   // 性能微调（tuning.js）：设置面板「画面质量」下面加帧率上限、分辨率、阴影、抗锯齿、光影特效、路人、敌人数，标题旁显示当前帧率
   const tuning = createTuning({ app, ui, grade, flow: J.GAME_FLOW, mobile: MOBILE, storage: safeStorage(), baseSamples: MOBILE ? 2 : 4 });
@@ -436,7 +443,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

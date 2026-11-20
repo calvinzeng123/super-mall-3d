@@ -77,6 +77,7 @@ export class MaterialLib {
   constructor(surfaces = {}, { depthCues = false } = {}) {
     this.surfaces = surfaces;
     this.night = 0;
+    this.power = 1; // 供电：见 setPower()
     this.nightHooks = [];
     // HDR 光影：finishes 记下哪些材质有「亮面」做法；outdoorMats 是室外材质，开着时反射真实天空
     this.hdr = false; this.sky = null; this.skyIntensity = 1;
@@ -128,7 +129,7 @@ export class MaterialLib {
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       m.name = 'lightPool'; m.userData.decal = true;
       this.base.lightPool = m;
-      this.onNight((t) => { m.opacity = (this.hdr ? 0.32 : 0.2) + t * 0.1; }); // 白天也明显一些：效果图里店门口、走道上一片片暖光
+      this.onNight((t) => { m.opacity = ((this.hdr ? 0.32 : 0.2) + t * 0.1) * this.power; }); // 白天也明显一些：效果图里店门口、走道上一片片暖光
     }
     if (shadows) {
       // 天花上的一团光（灯周围、灯槽洗亮的一条）：和 lightPool 同一张贴图，正反两面都画（从下往上看）。商场白天也开着灯，白天淡、夜里亮
@@ -136,7 +137,7 @@ export class MaterialLib {
         side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       m.name = 'ceilPool'; m.userData.decal = true;
       this.base.ceilPool = m;
-      this.onNight((t) => { m.opacity = (this.hdr ? 0.24 : 0.18) + t * (this.hdr ? 0.26 : 0.24); });
+      this.onNight((t) => { m.opacity = ((this.hdr ? 0.24 : 0.18) + t * (this.hdr ? 0.26 : 0.24)) * this.power; });
     }
     if (shadows) {
       // 窗边的天光：只在白天有，入夜淡出
@@ -167,9 +168,9 @@ export class MaterialLib {
     for (const [key, material] of Object.entries(this.base)) if (/^(facade|roofTile)/.test(key)) this.outdoor(material, SKY_GAIN[key]);
     // 灯具类：白天灰白，夜晚明亮（配合泛光）。HDR 光影下白天也是亮着的（亮度超过 1，高光柔光会让它溢出一点光）
     const glow = this.base.glow;
-    this.onNight((t) => glow.color.setScalar(this.hdr ? 1.55 + t * 0.35 : 0.85 + t * 0.9));
+    this.onNight((t) => glow.color.setScalar((this.hdr ? 1.55 + t * 0.35 : 0.85 + t * 0.9) * (0.06 + 0.94 * this.power)));
     const soft = this.base.glowSoft;
-    this.onNight((t) => soft.color.setScalar(0.88 - t * 0.18));
+    this.onNight((t) => soft.color.setScalar((0.88 - t * 0.18) * (0.2 + 0.8 * this.power)));
     const glass = this.base.glass;
     this.onNight((t) => { glass.opacity = 0.24 + t * 0.1; });
     this.floors = {};
@@ -233,6 +234,15 @@ export class MaterialLib {
     for (const fn of this.nightHooks) fn(t);
   }
 
+  /**
+   * 供电（0–1）：1 = 正常；0 = 全楼断电——灯具、灯下的光斑、招牌、LED 屏都灭掉（留一点点，看得出那里有盏灯）。
+   * 和昼夜是两回事：昼夜管天色和「开着灯的室内有多亮」，供电管灯开没开。零点突围的丧尸围城用。
+   */
+  setPower(p) {
+    this.power = Math.max(0, Math.min(1, +p));
+    this.setNight(this.night);
+  }
+
   /** 楼层地面材质（夜间按贴图自发光） */
   floor(kind, roughness = 0.5) {
     if (this.floors[kind]) return this.floors[kind];
@@ -268,14 +278,14 @@ export class MaterialLib {
   /** 招牌材质：白天轻微自发光，夜晚明亮 */
   sign(texture) {
     const m = new THREE.MeshStandardMaterial({ map: texture, emissiveMap: texture, emissive: 0xffffff, roughness: 0.45, metalness: 0 });
-    this.onNight((t) => { m.emissiveIntensity = 0.18 + t * 1.05; });
+    this.onNight((t) => { m.emissiveIntensity = (0.18 + t * 1.05) * (0.1 + 0.9 * this.power); });
     return m;
   }
 
   /** 自发光贴图材质（LED 屏、灯箱） */
   screen(texture, day = 0.75, night = 1.5) {
     const m = new THREE.MeshBasicMaterial({ map: texture, toneMapped: true });
-    this.onNight((t) => m.color.setScalar(day + (night - day) * t));
+    this.onNight((t) => m.color.setScalar((day + (night - day) * t) * (0.03 + 0.97 * this.power)));
     return m;
   }
 
