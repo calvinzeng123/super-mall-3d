@@ -158,6 +158,7 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
     reset() { inv.medkit = 0; inv.pills = 0; busy = null; want = false; clearDrops(); paint(); },
     update(dt) {
       tellT -= dt;
+      if (!btn && G.input?.touch) api.buildUi(); // 手机上的按键层是第一次触屏以后才有的：那时再把治疗键补上
       if (!enabled) return;
       const p = player(), playing = G.game?.state === 'playing' && p?.alive;
       if (want) { want = false; if (playing) heal(); }
