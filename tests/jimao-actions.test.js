@@ -410,6 +410,28 @@ test('手枪换上真模型：缩到握得住的大小、枪口朝前、照门�
   arsenal.dispose();
 });
 
+test('手枪握得住：腰射时手臂前伸、枪口朝准星收、枪身朝里倾（不是往外歪）；开火枪口猛抬五六度、整枪后顶近两厘米，四分之一秒内压回原位、几乎不回弹；开镜时枪身摆正', async () => {
+  const { A, G, arsenal, run, pressed } = await arsenalWorld();
+  const H = A.HOLD, root = arsenal.roots.pistol, e = new THREE.Euler();
+  const rot = () => e.setFromQuaternion(root.quaternion, 'XYZ');
+  arsenal.select('pistol', { plain: true }); run(1.5);
+  // 姿势：比原来（右 0.078、下 0.034、前 0.41）更靠前、更高
+  assert.ok(root.position.z < -0.45 && root.position.y > -0.03 && root.position.x > 0.06 && root.position.x < 0.11, `腰射位置 ${root.position.toArray().map((v) => v.toFixed(3))}`);
+  assert.ok(rot().y > 0.04 && rot().y < 0.1, `枪口朝中间收 ${rot().y.toFixed(3)}`); assert.ok(rot().z > 0.06 && rot().z < 0.16, `枪身朝里倾 ${rot().z.toFixed(3)}`);
+  assert.ok(Math.abs(rot().x) < 0.01, '平时枪口是平的');
+  // 右手绕握把轴转过去了（虎口顶住握把后背）
+  assert.ok(H.wrap < -0.2 && H.wrap > -0.4);
+  // 后坐：峰值和恢复
+  const z0 = root.position.z; let pitch = 0, back = 0, tPeak = 0, t = 0, after = 0;
+  pressed.add('fire'); G.input.fire = true; run(1 / 60); G.input.fire = false;
+  run(0.6, () => { t += 1 / 60; const x = rot().x; if (x > pitch) { pitch = x; tPeak = t; } back = Math.max(back, root.position.z - z0); if (t > 0.25) after = Math.max(after, Math.abs(x)); });
+  assert.ok(pitch > 0.07 && pitch < 0.14, `枪口上抬 ${(pitch * 57.3).toFixed(1)}°`); assert.ok(tPeak < 0.1, `${tPeak.toFixed(3)} 秒到顶`);
+  assert.ok(back > 0.012 && back < 0.03, `后顶 ${(back * 100).toFixed(1)} 厘米`); assert.ok(after < 0.012, `0.25 秒后还剩 ${(after * 57.3).toFixed(2)}°`);
+  // 开镜：摆正、对到屏幕正中
+  G.input.ads = true; run(0.8, () => { G.input.ads = true; });
+  assert.ok(Math.abs(root.position.x) < 0.004 && Math.abs(rot().z) < 0.02 && Math.abs(rot().y) < 0.02, '开镜时枪身摆正');
+});
+
 test('切枪：1 步枪 / 2 手枪 / 3 刀，先放下再举起（中间不能开火）；HUD 读到的名字和弹药跟着当前武器；没拿在手里的步枪不更新', async () => {
   const { A, arsenal, rifle, run, pressed, G } = await arsenalWorld();
   assert.equal(arsenal.current, 'rifle'); assert.equal(arsenal.name, '九式突击步枪'); assert.equal(arsenal.ammo, 30);

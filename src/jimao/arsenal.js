@@ -52,6 +52,13 @@ const cyl = (r0, r1, len, x, y, z, seg = 14, axis = 'z') => {
 const merged = (parts) => { const g = mergeGeometries(parts.map((q) => (q.index ? q.toNonIndexed() : q))); g.computeVertexNormals(); return metricUV(g); };
 
 /**
+ * 单手握枪的姿势和后坐幅度。hip：腰射时握把参考点在镜头前的位置（右、下、前，米）；yaw 正 = 枪口朝屏幕中间收，cant 正 = 枪身顶部朝里侧（左）倾；
+ * flip / rise / back：一发的枪口上抬（弧度 / 单位冲量）、整枪上抬和后顶（米）。
+ */
+export const HOLD = Object.freeze({ hip: Object.freeze([0.09, -0.02, -0.475]), yaw: 0.065, cant: 0.1, flip: 1, rise: 0.07, back: 0.42,
+  wrap: -16 * Math.PI / 180, wrapTilt: 0.2 }); // wrap：右手绕握把轴转多少（负 = 从上往下看顺时针，手掌往握把后背挪）；wrapTilt：握把轴往后仰的角度
+
+/**
  * 手枪换上真模型（仓库里旧射击模式那把带金属 / 法线 / 粗糙度贴图的手枪，ELIZION，CC BY 4.0，出处见 assets/models/fps/）：
  * 模型自己的坐标是厘米、枪口朝 +z、握把中心在 grip。scale 把它缩到握得住的大小；names 是开火时往后走的部件（枪管、准星不动）和弹匣。
  * 手搭的方块枪留着：模型没加载出来（或测试环境里）就还用它。
@@ -256,6 +263,15 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   for (const r of [0.6, -0.6]) { const q = mesh(new THREE.PlaneGeometry(0.05, 0.11), M.flash, flash); q.rotation.set(Math.PI / 2, r, 0); q.position.z = -0.03; }
   flash.visible = false;
   const pRight = cloneHand(0, pistolRoot), pLeft = cloneHand(1, pistolRoot);
+  // 右手是从步枪握把上搬来的：手掌贴在握把右侧、小臂往右后下方斜出去——单手举手枪时握把后背整个露着，像用手指捏着枪。
+  // 绕握把的轴把整只手（连小臂）转过去一点：虎口顶到握把后背，小臂顺着枪身往后，枪像是「坐」在拳头上。
+  if (pRight) {
+    pRight.updateMatrix();
+    const axis = new THREE.Vector3(0, Math.cos(HOLD.wrapTilt), -Math.sin(HOLD.wrapTilt));
+    const m = new THREE.Matrix4().makeTranslation(...GRIP).multiply(new THREE.Matrix4().makeRotationAxis(axis, HOLD.wrap))
+      .multiply(new THREE.Matrix4().makeTranslation(-GRIP[0], -GRIP[1], -GRIP[2])).multiply(pRight.matrix);
+    m.decompose(pRight.position, pRight.quaternion, pRight.scale);
+  }
   // 左手从护木挪到握把左前方托住右手。步枪上左手是掌心朝上托着护木（手指绕着枪管方向弯）；
   // 托手枪要掌心朝右贴住握把、手指绕着握把弯、小臂从左下后方伸过来——整体转一下：x → −z，y → +x，z → −y，再跟着握把的倾角斜过去。
   const leftBase = new THREE.Vector3();
@@ -283,7 +299,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   for (const root of [pistolRoot, knifeRoot]) { root.visible = false; camera.add(root); root.traverse((o) => { if (layer) o.layers.set(layer); }); }
 
   // ---- 状态 ----
-  const P = { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, spread: PISTOL.spreadHip, lastShot: -9, bob: 0, swayX: 0, swayY: 0, sprint: 0, finger: 0, left: 0 };
+  const P = { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, twist: 0, twistV: 0, lean: 0, flashT: 0, spread: PISTOL.spreadHip, lastShot: -9, bob: 0, swayX: 0, swayY: 0, sprint: 0, finger: 0, left: 0 };
   const K = { t: -1, cool: 0, hit: false, bob: 0, swayX: 0, swayY: 0, sprint: 0 };
   const S = { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, shown: true, quick: null, plain: false, pose: null, racked: false, time: 0 };
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q1 = new THREE.Quaternion(), e1 = new THREE.Euler();
@@ -314,7 +330,8 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const k = 1 - 0.45 * P.ads;
     G.player?.addRecoil?.(PISTOL.recoil * k * (0.85 + rand() * 0.3), (rand() - 0.5) * 0.006 * k);
     G.player?.addShake?.(0.07 * k);
-    P.kickV += 2.2 * k; P.flipV += 4.6 * k; P.flashT = 0.045; P.finger = 1; // 单手持枪：枪口上跳比双手握的时候大
+    // 后坐要看得见、收得快：枪口猛地一抬（腰射六度上下）、整把枪往后顶一下，再被手腕压回来；每发往外侧带一点随机的拧动
+    P.kickV += 2.2 * k; P.flipV += 4.6 * k; P.twistV += (0.9 + rand() * 1.4) * k; P.flashT = 0.045; P.finger = 1;
     M.flash.opacity = 0.95; flash.visible = true; flash.rotation.z = rand() * Math.PI;
     P.spread = Math.min(0.06, P.spread + 0.012 * k);
   }
@@ -453,8 +470,13 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     }
     P.finger = Math.max(0, P.finger - dt * 9); pTrigger.position.z = 0.004 * P.finger;
     // 后坐弹簧
-    P.kickV += (-P.kick * 260 - P.kickV * 22) * dt; P.kick += P.kickV * dt;
-    P.flipV += (-P.flip * 210 - P.flipV * 19) * dt; P.flip += P.flipV * dt;
+    // 弹簧调硬、阻尼调大：一下到位、几乎不回弹（原来又软又小——枪口只抬半度，看着像没握住）
+    // 小步长积分：弹簧这么硬，按整帧（手机上 30 帧）一步算会把后坐吃掉大半，帧率不同手感也不同
+    for (let n = Math.max(1, Math.ceil(dt * 240)), h = dt / n, i = 0; i < n; i++) {
+      P.kickV += (-P.kick * 420 - P.kickV * 34) * h; P.kick += P.kickV * h;
+      P.flipV += (-P.flip * 380 - P.flipV * 30) * h; P.flip += P.flipV * h;
+      P.twistV += (-P.twist * 300 - P.twistV * 26) * h; P.twist += P.twistV * h;
+    }
     const moving = p ? Math.hypot(p.vel.x, p.vel.z) : 0;
     const target = bi(PISTOL.spreadHip, PISTOL.spreadAds, P.ads) * (1 + Math.min(1, moving / 6) * 1.2) * (p?.onGround === false ? 1.8 : 1);
     P.spread = damp(P.spread, target, 7, dt);
@@ -462,10 +484,18 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const tilt = (pose?.tilt || 0) + 0.45 * (dr?.cant || 0), hand = Math.max(pose?.hand || 0, dr?.hand || 0);
     // 腰射在右下、开镜到正中（照门准星对到屏幕中心）
     // 单手持枪（用户要求）：腰射时手臂往右前方伸、枪身朝里斜一点；开镜还是把照门准星对到屏幕中心
-    const hip = v1.set(0.078, -0.034, -0.41), ads = v2.set(0, -(GRIP[1] + fit.sightY), -0.38), oneHand = (1 - P.ads) * (1 - Math.min(1, tilt * 2));
+    // 握得住的样子（用户「拿着像肌无力，特别是手枪」）：手臂往前伸出去、枪举高一点，枪口朝准星收、枪身朝里侧倾（原来是往外歪、又低又近，像手腕塌着）；
+    // 平时跟着呼吸微微起伏，横移时枪身顺势偏一点，都是小幅度——稳，但不是钉死在屏幕上
+    const hip = v1.set(HOLD.hip[0], HOLD.hip[1], HOLD.hip[2]), ads = v2.set(0, -(GRIP[1] + fit.sightY), -0.38), oneHand = (1 - P.ads) * (1 - Math.min(1, tilt * 2));
+    const calm = (1 - 0.7 * P.ads) * (1 - P.sprint), bt = S.time, mx = (G.input?.move?.x || 0) * (1 - P.ads);
+    P.lean = damp(P.lean, mx, 8, dt);
     pistolRoot.position.lerpVectors(hip, ads, P.ads);
-    pistolRoot.position.x += bobX + P.swayX * 0.5; pistolRoot.position.y += bobY - P.swayY * 0.4 - 0.05 * P.sprint - 0.045 * tilt; pistolRoot.position.z += 0.012 * P.kick + 0.04 * P.sprint;
-    e1.set(0.05 * P.flip + 0.5 * P.sprint + 0.26 * tilt - P.swayY * 0.6, P.swayX * 0.9 + 0.25 * P.sprint + (1 - P.ads) * 0.03, -0.62 * tilt + P.swayX * 0.4 - 0.16 * oneHand);
+    pistolRoot.position.x += bobX + P.swayX * 0.5 - P.lean * 0.004 + Math.sin(bt * 0.85 + 1) * 0.0011 * calm;
+    pistolRoot.position.y += bobY - P.swayY * 0.4 - 0.05 * P.sprint - 0.045 * tilt + HOLD.rise * P.flip + Math.sin(bt * 1.7) * 0.0015 * calm;
+    pistolRoot.position.z += HOLD.back * P.kick + 0.04 * P.sprint;
+    e1.set(HOLD.flip * P.flip + 0.5 * P.sprint + 0.26 * tilt - P.swayY * 0.6 + Math.sin(bt * 1.7 + 0.8) * 0.0032 * calm,
+      P.swayX * 0.9 + 0.25 * P.sprint + HOLD.yaw * oneHand - 0.12 * P.twist + Math.sin(bt * 0.6) * 0.002 * calm,
+      -0.62 * tilt + P.swayX * 0.4 + HOLD.cant * oneHand - 0.3 * P.twist - P.lean * 0.03);
     pistolRoot.quaternion.setFromEuler(e1);
     pMag.position.y = -0.17 * (pose?.magDrop || 0); pMag.visible = !skin && !(pose && pose.magDrop > 0.97);
     if (skin) {
@@ -558,7 +588,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     },
     reset() {
       rifle?.reset?.();
-      Object.assign(P, { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, lastShot: -9, sprint: 0, left: 0 });
+      Object.assign(P, { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, twist: 0, twistV: 0, lean: 0, flashT: 0, lastShot: -9, sprint: 0, left: 0 });
       Object.assign(K, { t: -1, cool: 0, hit: false });
       Object.assign(S, { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, quick: null, plain: false, pose: null, racked: false });
       pistolRoot.visible = knifeRoot.visible = false; flash.visible = false;
