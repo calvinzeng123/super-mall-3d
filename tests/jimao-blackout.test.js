@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { BLACKOUT, torchAt, createBlackout } from '../src/jimao/blackout.js';
 
+// 材质库建贴图要画布：给一个什么都不画的替身
+const paint = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'measureText' ? () => ({ width: 10 }) : String(k).startsWith('create') ? () => ({ addColorStop() {} }) : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => paint }) };
+
 function world() {
   const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x8899aa, 900, 3000); scene.environmentIntensity = 0.45;
   const camera = new THREE.PerspectiveCamera();
