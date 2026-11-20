@@ -113,7 +113,7 @@ test('原游戏补丁：任务文字、交互提示、撤离点名字、外部�
     assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
   }
   assert.ok(src.includes('s && s.keepLock || r.exitLock()'), 'vendor/game.js 缺补丁：乘坐时不松开鼠标');
-  for (const needle of ['s.onExtract ? s.onExtract() : ee()', 'finish() {', 'C.mounted ?', 's.extraMarkers()']) assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
+  for (const needle of ['s.onExtract ? s.onExtract() : ee()', 'finish() {', 'C.mounted ?', 's.extraMarkers()', 'i.introFull = !V', '(u >= h || i.cutSkip)']) assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
   // 触屏摇杆：「没有手指」只认 -1（iOS 的 Touch.identifier 可能是负数）
   for (const needle of ['w === -1 ?', 'w !== -1 && (V += H', ': q === -1 && (q = V.identifier', 't.identifier === w) && ie()']) assert.ok(src.includes(needle), `vendor/game.js 缺补丁：${needle}`);
   assert.ok(!src.includes('w < 0 ?') && !src.includes('w >= 0 && (V += H'), 'vendor/game.js 还在拿 id < 0 当没手指');
@@ -334,7 +334,7 @@ test('接应车：舱盖翻平不挡后方视线；车顶机枪架在环上、�
   g.dispose();
   // 乘坐时步枪停用（两种载具都用车载机枪）
   const src = readFileSync(new URL('../src/jimao/missions.js', import.meta.url), 'utf8');
-  assert.match(src, /state\.phase === 'crash' \|\| state\.phase === 'ride'; \}/);
+  assert.match(src, /state\.phase === 'crash' \|\| state\.phase === 'ride' \|\| state\.phase === 'outro'; \}/);
   assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.24, drop: 0\.24, flash: 0\.7 \}\)/);
 });
 

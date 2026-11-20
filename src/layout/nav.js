@@ -259,7 +259,11 @@ export function buildNav(layout, options = {}) {
         const n = Math.max(2, Math.round((f.z1 - f.z0) / (f.pitch || 0.95)));
         for (let i = 0; i <= n; i++) { const z = f.z0 + ((f.z1 - f.z0) * i) / n; wall(F, f.x - 0.85, z, f.x + 0.85, z); }
       } else if (f.type === 'market-stall') {
+        const before = F.walls.length;
         obstacle(F, frame(0, 0, 0), rect(f.x - f.w / 2, f.z - f.d / 2, f.x + f.w / 2, f.z + f.d / 2));
+        // 矮掩体（零点突围的沙袋墙、隔离墩）：围它的四段墙记上顶高。走路照样挡；射线（子弹、视线）只挡到这个高度，
+        // 站着能从上面打过去、蹲下就被挡住，也凭这个认出它是能翻越的矮东西
+        if (f.tactical && f.height > 0 && f.height <= 1.3) for (let i = before; i < F.walls.length; i++) F.walls[i].top = f.height;
       } else if (f.type === 'fence') wall(F, f.x0, f.z, f.x1, f.z);
       else if (f.type === 'psd') wall(F, f.x0, f.z, f.x1, f.z);
       else if (f.type === 'tvm') {

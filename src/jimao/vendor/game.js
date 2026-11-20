@@ -6407,8 +6407,8 @@ function u_(i, e, t) {
         }
       });
     };
-    ln("weapon:fire", () => {
-      I = I + 1 & 3, ze("rifle_shot", { variant: I, gain: 1, jitter: 0.012 });
+    ln("weapon:fire", (wf) => {
+      I = I + 1 & 3, ze("rifle_shot", wf && wf.kind === "pistol" ? { variant: I, gain: 0.8, pitch: 1.4, jitter: 0.02 } : { variant: I, gain: 1, jitter: 0.012 });
       let te = e.currentTime;
       le = te, te - R > 0.28 && fo(1), J = Math.min(J, 0.55), Y > 0.3 && (Y = Math.min(1, Y + 0.015));
     }), ln("weapon:dry", () => ze("rifle_dry", { gain: 0.9 })), ln("weapon:reload", (te) => {
@@ -9641,7 +9641,7 @@ function mM(i) {
         e.fade = 0, T();
         return;
       }
-      h = V ? Yi.retryIntroSeconds : Yi.introSeconds, f = V, p = V, n.enabled = false, r.setGameplay && r.setGameplay(false), o.show(false), e.fade = 1, a(i.audio, "setIntensity", 0.15), M("intro");
+      h = V ? Yi.retryIntroSeconds : Yi.introSeconds, i.introFull = !V, i.cutSkip = false, f = V, p = V, n.enabled = false, r.setGameplay && r.setGameplay(false), o.show(false), e.fade = 1, a(i.audio, "setIntensity", 0.15), M("intro");
     }
     function T() {
       n.enabled = true, o.show(true), r.setGameplay && r.setGameplay(true), o.setObjective(D()), M("playing"), C(true);
@@ -9819,7 +9819,7 @@ function mM(i) {
         case "title":
           return z(P), false;
         case "intro":
-          return e.fade = 1 - sl(0.25, Math.min(h, 2.6), u), !f && u > 0.5 && (f = true, l.locationCard(true)), !p && u > 1.3 && (p = true, o.radio && o.radio(_l.intro, 4.2)), u > h - 0.6 && !o.root?.classList.contains("on") && (o.show(true), o.setObjective(D())), u >= h && (l.locationCard(false), e.fade = 0, T()), true;
+          return e.fade = 1 - sl(0.25, Math.min(h, 2.6), u), !f && u > 0.5 && (f = true, l.locationCard(true)), !p && u > 1.3 && (p = true, o.radio && o.radio(_l.intro, 4.2)), u > h - 0.6 && !o.root?.classList.contains("on") && (o.show(true), o.setObjective(D())), (u >= h || i.cutSkip) && (i.cutSkip = false, l.locationCard(false), e.fade = 0, T()), true;
         case "playing": {
           if (c.time += P, e.fade = kn(e.fade || 0, 0, 6, P), d > 0 && (d -= P), r.pressed("pause")) return G(), false;
           if (ue(P), _.state !== "playing") return true;

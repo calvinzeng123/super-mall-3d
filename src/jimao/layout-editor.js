@@ -16,6 +16,7 @@ export const LAYOUT_ITEMS = Object.freeze([
   { key: 'crouch', sel: '.t-crouch', label: '蹲 / 滑铲', touch: true, ours: true },
   { key: 'melee', sel: '.t-melee', label: '近战', touch: true, ours: true },
   { key: 'nade', sel: '.t-nade', label: '手雷', touch: true, ours: true },
+  { key: 'swap', sel: '.t-swap', label: '切枪', touch: true, ours: true },
   { key: 'pause', sel: '.t-pause', label: '暂停', touch: true },
   { key: 'ammo', sel: '.h-ammo', label: '弹药' },
   { key: 'health', sel: '.h-health', label: '生命' },

@@ -137,7 +137,8 @@ function instancedCars(ctx, { building, hw, hd, lifts }) {
   };
   const sync = (app) => {
     let changed = false, any = false;
-    const riding = app?.explore?.active ? app.explore.state?.riding : null;
+    // 漫游里是正在坐的那部；零点突围（jimao/lift.js）把正在坐的电梯记在 state.explore.elevator 上
+    const riding = app?.explore?.active ? app.explore.state?.riding : app?.state?.explore?.elevator?.id || null;
     for (const car of cars) {
       const shown = car.group.visible !== false;
       any ||= shown;

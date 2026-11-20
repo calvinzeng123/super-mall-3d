@@ -5,6 +5,20 @@
 import { escapeLikeEsbuild } from './rebrand.mjs';
 
 export const PATCHES = [
+  // ---- 开局过场（cutscene.js） ----
+  ['记下这次开局是完整开场还是重新出击的短开场',
+    'h = V ? Yi.retryIntroSeconds : Yi.introSeconds, f = V, p = V, n.enabled = false,',
+    'h = V ? Yi.retryIntroSeconds : Yi.introSeconds, i.introFull = !V, i.cutSkip = false, f = V, p = V, n.enabled = false,'],
+  ['开局过场可以跳过（G.cutSkip）',
+    'u >= h && (l.locationCard(false), e.fade = 0, T()), true;',
+    '(u >= h || i.cutSkip) && (i.cutSkip = false, l.locationCard(false), e.fade = 0, T()), true;'],
+  // ---- 手枪的枪声 ----
+  ['开火事件带上是哪把枪（arsenal.js 的手枪发 kind: "pistol"）',
+    'ln("weapon:fire", () => {',
+    'ln("weapon:fire", (wf) => {'],
+  ['手枪：同一个枪声合成器，音调高、声音小一点',
+    'I = I + 1 & 3, ze("rifle_shot", { variant: I, gain: 1, jitter: 0.012 });',
+    'I = I + 1 & 3, ze("rifle_shot", wf && wf.kind === "pistol" ? { variant: I, gain: 0.8, pitch: 1.4, jitter: 0.02 } : { variant: I, gain: 1, jitter: 0.012 });'],
   // ---- 输入 ----
   ['输入模块露出「按下 / 松开一个动作」的入口（actions.js 加的手机按键：近战；来源记在 touch 上，和原来的按键同一套）',
     'update: ee, endFrame: B, requestLock: A, exitLock: _, setGameplay(P) {',

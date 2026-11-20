@@ -15,6 +15,7 @@ import { landAt, clear } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
 import { createRideVehicle, rideLocalToWorld, rideFootprint, RIDE_SPECS, BOARD_TIME } from './ride-vehicles.js';
 import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, heliDuration } from './ride-paths.js';
+import { CUT, carOutroPose, outroCamera, outroFade } from './cutscene.js';
 import { createDoorGun } from './door-gun.js';
 import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
 
@@ -332,7 +333,7 @@ export function missionRadio(m) {
  *   roll 每局开始时抽任务、摆模型；prePlayer 在玩家更新之前把载具和玩家摆到这一帧的位置；
  *   update 推进模型、歼灭计数、增援、登机镜头、坐车 / 坐直升机时的刷兵和舱门机枪。
  */
-export function createMissionDirector(G, { scene, layout, nav, J, camera = null, rng = Math.random, force = {} }) {
+export function createMissionDirector(G, { scene, layout, nav, J, camera = null, rng = Math.random, force = {}, letterbox = null }) {
   const sites = roomSites(layout, nav);
   const root = new THREE.Group(); root.name = '零点突围任务物件'; scene.add(root);
   const v = (s, dy = 0) => new THREE.Vector3(s.x, (s.y ?? 0) + dy, s.z);
@@ -358,13 +359,13 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const carSamples = sampleRoute(CAR_ROUTE), carLength = carSamples.at(-1).s;
   const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;
   const FRESH = () => ({ phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false,
-    vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false, markT: 0, markSig: '' });
+    vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, outT: 0, outCam: null, outLook: null, pose0: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false, markT: 0, markSig: '' });
   const state = { mission: null, kills: 0, reinforce: 0, tell: 0, holdT: 0, inside: false, holdTextT: 0, bombT: 0, bombDone: false, boss: null, bossT: 0, ...FRESH() };
   const vhud = makeDurabilityHud();
   const from = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
   let models = [], roofSpots = null;
   const veh = () => state.mission && vehicles[state.mission.extraction.id];
-  const riding = () => state.phase === 'board' || state.phase === 'ride' || state.phase === 'end' || state.phase === 'crash';
+  const riding = () => state.phase === 'board' || state.phase === 'ride' || state.phase === 'outro' || state.phase === 'end' || state.phase === 'crash';
 
   // 坐在载具里挨打少一些（直升机舱壁 + 距离，接应车有装甲挡板）
   const baseDamage = G.player?.damage?.bind(G.player);
@@ -381,6 +382,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function roll() {
     for (const m of models) m.removeFromParent();
     // 坐直升机 / 接应车失败（坠毁或在车上阵亡）以后点「回到登机点重来」：同一局任务、目标都算完成，人站到登机点前
+    if (state.phase === 'outro' && G.player) G.player.invulnerable = !!state.wasInv;
+    letterbox?.(false);
     const keep = state.checkpoint && state.mission ? state.checkpoint : null;
     const mission = keep ? state.mission : rollMission(rng, sites, force);
     Object.assign(state, { mission, kills: keep ? state.kills : 0, reinforce: 0, tell: 0, holdT: keep ? state.holdT : 0, inside: false, holdTextT: 0, ...FRESH(),
@@ -478,13 +481,24 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       if (vv.kind === 'helicopter') {
         state.rideT += dt;
         vv.setPose(state.pose = heliPoseAt(state.rideT, roofY), Math.sin(state.rideT * 7) * 0.025);
-        if (state.rideT >= heliDuration()) finishRide();
+        if (state.rideT >= heliDuration() - CUT.heliLead) startOutro(vv);
       } else {
         state.speed = state.carS >= carLength - 0.05 ? 0 : carSpeedAt(carSamples, state.carS);
         state.carS = Math.min(carLength, state.carS + state.speed * dt);
         vv.setPose(state.pose = carPoseAt(carSamples, state.carS), Math.sin(state.carS * 2.1) * 0.012 * Math.min(1, state.speed / 6));
-        if (state.carS >= carLength - 0.05 && (state.stopT += dt) > 1.2) finishRide();
+        if (state.carS >= carLength - 0.05 && (state.stopT += dt) > CUT.carStop) startOutro(vv);
       }
+    } else if (state.phase === 'outro') {
+      // 车外 / 机外镜头：载具自己开走（直升机接着飞「离开」那一段，接应车从停下的地方加速开走）
+      state.outT += dt;
+      if (vv.kind === 'helicopter') {
+        state.rideT += dt;
+        vv.setPose(state.pose = heliPoseAt(state.rideT, roofY), Math.sin(state.rideT * 7) * 0.025);
+      } else {
+        const o = carOutroPose(state.pose0, state.outT);
+        state.speed = o.speed; vv.setPose(state.pose = o.pose, Math.sin(state.outT * 9) * 0.008);
+      }
+      if (state.outT >= CUT.outro[vv.kind]) finishRide();
     } else if (state.phase === 'crash') {
       state.crashT += dt;
       const C = HELI_ORBIT.center, s0 = state.crashStart;
@@ -593,8 +607,23 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     }
   }
 
-  function finishRide() {
+  /** 最后一段打完：镜头切到机外 / 车外，看着载具离开（cutscene.js），放完再结算 */
+  function startOutro(vv) {
     if (state.phase !== 'ride') return;
+    state.phase = 'outro'; state.outT = 0;
+    doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
+    state.pose0 = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0, dir: { x: 0, z: -1 } }) };
+    const t0 = state.rideT;
+    state.outCam = outroCamera(vv.kind, state.pose0, { poseAt: (d) => heliPoseAt(t0 + d, roofY), away: HELI_ORBIT.center });
+    state.outLook = vv.toWorld(VEHICLE_HP.center[vv.kind]);
+    state.wasInv = !!G.player.invulnerable; G.player.invulnerable = true;
+    G.hud?.clearRadio?.(); G.hud?.show?.(false);
+    letterbox?.(true, `<b>撤离成功</b>${vv.kind === 'helicopter' ? '直升机已离开云澜汇上空' : '接应车已驶离云澜汇'}`);
+  }
+
+  function finishRide() {
+    if (state.phase !== 'ride' && state.phase !== 'outro') return;
+    if (state.phase === 'outro') { G.player.invulnerable = !!state.wasInv; letterbox?.(false); }
     state.phase = 'end'; state.endT = 0;
     doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
     G.game?.finish?.();
@@ -854,13 +883,18 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.phase === 'ride') {
       if (G.game?.state === 'playing') rideSpawns(dt, vv);
       if (vv.kind === 'car' && (state.textT -= dt) <= 0) { state.textT = 0.5; G.game?.refreshObjective?.(); }
-      // 最后一秒多压暗
-      const left = vv.kind === 'helicopter' ? heliDuration() - state.rideT : (carLength - state.carS) / Math.max(1, state.speed) + (1.2 - state.stopT);
-      return left < 1.3 ? { fade: Math.min(0.85, smooth(1 - left / 1.3)) } : null;
+      return null;
+    }
+    if (state.phase === 'outro') {
+      // 机位不动，转头跟着载具（跟得稍微慢半拍，像真有人在摇镜头）
+      const target = vv.toWorld(VEHICLE_HP.center[vv.kind]);
+      state.outLook.lerp(target, 1 - Math.exp(-dt * 7));
+      return { position: state.outCam.clone(), lookAt: state.outLook.clone(), fade: outroFade(vv.kind, state.outT) };
     }
     if (state.phase === 'end') {
       state.endT += dt;
       if (state.endT > 1 && !state.released) { state.released = true; if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock?.(); }
+      if (state.outCam) return { position: state.outCam.clone(), lookAt: state.outLook.clone(), fade: 0.9 }; // 机外镜头留在原地，别跳回座位
       return { ...vv.seatPose(0, 0), position: camera ? camera.position.clone() : vv.seatPose(0, 0).position, quaternion: camera ? camera.quaternion.clone() : vv.seatPose(0, 0).quaternion, fade: 0.85 };
     }
     return null;
@@ -868,7 +902,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
 
   return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun, checkpointStart,
     /** 步枪停用：登车、乘坐（直升机舱门机枪 / 装甲车车顶机枪）、结算、坠毁 */
-    get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || state.phase === 'ride'; },
+    get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || state.phase === 'ride' || state.phase === 'outro'; },
     get riding() { return riding(); },
     get rideKind() { return riding() ? veh()?.kind === 'helicopter' ? 'helicopter' : 'car' : null; },
     dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); roofGun.dispose(); vhud.remove(); } };

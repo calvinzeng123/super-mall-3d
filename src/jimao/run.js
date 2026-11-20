@@ -29,6 +29,9 @@ import { createActions, ACTIONS_CSS } from './actions.js';
 import { createMinimap, MINIMAP_CSS } from './minimap.js';
 import { createScore, SCORE_CSS } from './score.js';
 import { registerDressing, buildDressing } from './dressing.js';
+import { createArsenal, ARSENAL_CSS } from './arsenal.js';
+import { createCutscenes, CUT, CUTSCENE_CSS } from './cutscene.js';
+import { HELI_ORBIT } from './ride-paths.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
@@ -85,7 +88,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -173,6 +176,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.weapon.setWetness?.(0);
   // 枪（相机下面的所有东西）挪到自己那一层
   camera.traverse((o) => { if (o !== camera) o.layers.set(VIEW_LAYER); });
+  // 第二把枪和刀（arsenal.js）：G.weapon 换成「当前武器」，原来的步枪留在 G.rifle；G.arms 给翻越用（把枪放低）
+  G.rifle = G.weapon;
+  G.weapon = createArsenal(G, { camera, layer: VIEW_LAYER, ui });
+  G.arms = G.weapon;
   // 敌人：原游戏的机械飞鸥、机械猎犬，加上真人敌人「武装劫持者」（soldier.js，登记进同一个敌人模块）
   onProgress('正在部署敌人', 0.85);
   G.enemies = await guarded('enemies', () => J.createEnemies(G));
@@ -181,16 +188,19 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   tuneFlow();
   G.hud = J.createHud(G);
   // 随机任务：每局开始（含重开）抽一种任务和撤离方式，摆装置、物品和载具（missions.js）。网址参数 mission= / exit= 可以指定
-  const director = createMissionDirector(G, { scene, layout: ctx.layout, nav, J, camera,
+  // 过场镜头（cutscene.js）：开局从空中推向商场、切进室内起身举枪；撤离时切到机外 / 车外看载具离开。上下遮幅和字幕也在这里
+  const roofElev = ctx.layout.levels.find((l) => l.id === EXTRACTIONS.heli.floor)?.elev ?? 30;
+  const cuts = createCutscenes(G, { ui, start: G.level.playerStart, eye: J.PLAYER?.eye ?? 1.62, center: HELI_ORBIT.center, roofY: roofElev, post: render.post });
+  const director = createMissionDirector(G, { scene, layout: ctx.layout, nav, J, camera, letterbox: cuts.letterbox,
     force: { type: params.mission, exit: params.exit } });
   // 弹药补给（ammo.js）：备弹打完不会自动补，只能捡敌人掉的弹匣、开弹药箱、完成目标；坐车时击倒敌人补车里的弹药
   const ammo = createAmmoSupply(G, { scene, layout: ctx.layout, nav, isRiding: () => director.riding, rideKind: () => director.rideKind });
   // 地面路线指引（guide.js）：脚下一串淡蓝色小箭头指向最近的目标 / 撤离点，坐载具时不画
   const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding, pathfinder });
-  // 坐电梯（lift.js）：走到电梯门口，按住 Z / X（手机上 ▲ ▼）上下楼；坐载具时不显示
-  const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post });
+  // 坐电梯（lift.js）：走到电梯门口，按 Z / X（手机上 ▲ ▼）选楼层，停手就出发，真的走进轿厢坐过去；坐载具时不显示
+  const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post, cars: ctx.elevatorCars, guide });
   // 滑铲、手雷、手机上的蹲 / 近战 / 手雷键、辅助瞄准、自动开火（actions.js）；坐载具、坐电梯时不管
-  const actions = createActions(G, { scene, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding });
+  const actions = createActions(G, { scene, nav, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding });
   G.actions = actions;
   // 小地图 + 下一步提示（minimap.js）：左上角；坐载具时不显示
   const minimap = createMinimap(G, { nav, layout: ctx.layout, ui, guide, hidden: () => director.riding });
@@ -231,18 +241,24 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     return prefer;
   }
   function syncVisibility() {
+    // 开局的空中镜头不另选楼层：一开场（还黑着）就按人在的那一层搭好，漫游状态下屋顶、外立面本来都画着，切进室内时不用再搭
     const s = G.physics.stateOf(G.player.pos);
     if (!s) return;
     const F = nav.floors.get(s.floor), level = F?.parentFloor || F?.level?.id || null, building = F?.building || null;
     let near = null;
     if (!building) { let best = 24; for (const b of ctx.layout.buildings) { const d = distToPolyEdge([s.x, s.z], b.outline); if (d < best) { best = d; near = b.id; } } }
     const want = preferFloor(s);
-    const key = `${building}/${level}/${near}/${s.y < -0.5}/${Math.floor(s.x / 24)}/${Math.floor(s.z / 24)}/${want}`;
+    // 正在坐电梯（真轿厢）：显示轿厢正经过的那一层，两头的楼层都留着（漫游模式坐电梯也是这么选的）
+    const r = lift.rideInfo, rideLv = r?.car ? levelOf(r.pass) : null;
+    const key = r?.car ? `lift/${r.id}/${r.to}/${rideLv}` : `${building}/${level}/${near}/${s.y < -0.5}/${Math.floor(s.x / 24)}/${Math.floor(s.z / 24)}/${want}`;
     if (key === visibilityKey) return;
     visibilityKey = key;
     // 开打以后楼层内装分帧搭（每帧几毫秒）；标题画面、开局前照旧一次搭完
     if (app.floorBuild) app.floorBuild.incremental = G.game?.state === 'playing';
-    app.state.explore = { building, level, near, metro: false, under: s.y < -0.5, position: { x: s.x, z: s.z }, prefer: want && want !== level ? want : null };
+    if (r?.car) {
+      const y = nav.floors.get(r.pass)?.y ?? s.y;
+      app.state.explore = { building, level: rideLv || level, near, metro: false, under: y < -0.5, position: { x: s.x, z: s.z }, prefer: levelOf(r.to), elevator: { id: r.id, from: levelOf(r.from), to: levelOf(r.to) } };
+    } else app.state.explore = { building, level, near, metro: false, under: s.y < -0.5, position: { x: s.x, z: s.z }, prefer: want && want !== level ? want : null };
     app.refresh();
   }
   // 每个模块各自兜住报错（只打一次控制台）；报错的名字和第一条消息留在 run.err / run.msg，诊断面板里能看到
@@ -294,6 +310,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
         }
         if (view) render.post.fade = view.fade ?? 0;
       } catch (e) { fail('missions', e, 'missions.update 出错'); }
+      // 开局过场：镜头、枪放多低、切镜头时的压黑
+      try {
+        const cv = cuts.intro.view(dt);
+        if (cv) { camera.position.copy(cv.position); camera.quaternion.copy(cv.quaternion); render.post.fade = cv.fade; }
+      } catch (e) { fail('cutscene', e, '过场镜头出错'); }
       run('audio', dt); run('hud', dt);
       try { cover.tick(); } catch (e) { fail('cover', e, '封面出错'); }
       lightPool.update(dt);
@@ -382,7 +403,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); G.score?.dispose(); dressing.dispose(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }
@@ -399,6 +420,7 @@ function tuneFlow() {
     waves: [{ gull: 0, hound: 0, soldier: 5 }, { gull: 0, hound: 0, soldier: 6 }, { gull: 0, hound: 0, soldier: 7 }],
     maxAlive: 14, spawnMax: 60,
     pursuitMix: () => 'soldier',
+    introSeconds: CUT.intro, // 开局过场（cutscene.js）；重新出击还是原来的 1.3 秒
   });
 }
 

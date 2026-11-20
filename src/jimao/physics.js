@@ -68,7 +68,7 @@ export function createMapPhysics(nav) {
         const i = list[q];
         if (seen[i] === stamp) continue;
         seen[i] = stamp;
-        const w = F.walls[i]; hitSegment(w.x0, w.z0, w.x1, w.z1, F.y, h, maxDist, out);
+        const w = F.walls[i]; hitSegment(w.x0, w.z0, w.x1, w.z1, F.y, w.top ?? h, maxDist, out); // 矮掩体的墙只挡到它的顶高
       }
       // 下一格的入口已经比最近的命中点（或射程）还远：后面的格子不用看了
       if (Math.min(tx, tz) > Math.min(maxDist, out.dist)) break;
@@ -108,7 +108,7 @@ export function createMapPhysics(nav) {
       const F = floorAt(origin.x, origin.y, origin.z);
       if (F) {
         const h = floorHeight(F);
-        if (physics.bruteRays) for (const w of F.walls) hitSegment(w.x0, w.z0, w.x1, w.z1, F.y, h, maxDist, out);
+        if (physics.bruteRays) for (const w of F.walls) hitSegment(w.x0, w.z0, w.x1, w.z1, F.y, w.top ?? h, maxDist, out);
         else wallsAlongRay(F, h, maxDist, out);
         for (const o of F.obstacles) {
           const b = o.bb;

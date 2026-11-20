@@ -2,7 +2,7 @@
 // 以前找路只靠脚下一串蓝箭头：箭头在身后、被柜台挡住、目标在别的楼层时，就不知道该往哪走。
 // 左上角加一块圆形小地图（人朝上，随视角转）：这一层的墙线、蓝色的路线、琥珀色的目标（不在范围内时贴在圆边上、
 // 在别的楼层时带 ▲▼）、楼梯扶梯（小三角）和电梯（小方块）的位置、刚开过枪的敌人（红点，2.5 秒后淡掉）。
-// 小地图下面一行字写下一步：「扶梯上 2F · 24 米」「电梯到 RF · 18 米（门口按住 Z）」「目标 · 36 米」。
+// 小地图下面一行字写下一步：「扶梯上 2F · 24 米」「电梯到 RF · 18 米」（到门口变成「按 Z / X 选楼层」）「目标 · 36 米」。
 // 画在 2D 画布上，每秒画 12 次（不跟着帧率画），墙线只在人换了格子（8 米）或换层时重新取。
 import { NAV } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
@@ -161,7 +161,7 @@ export function createMinimap(G, { nav, layout, ui = null, guide = null, hidden 
     ctx.fillStyle = 'rgba(232, 228, 218, 0.9)'; ctx.font = `600 ${9 * px}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('北', half + nu * (half - 9 * px), half - nv * (half - 9 * px));
     // 下一步
-    const h = guide?.next, text = h ? (h.kind === 'lift' && h.dist < 4 ? `${h.text.split(' · ')[0]} · 按住 ${G.input?.touch ? '▲▼' : 'Z / X'}` : h.text) : '';
+    const h = guide?.next, text = h ? (h.kind === 'lift' && h.dist < 4 ? `${h.text.split(' · ')[0]} · ${G.input?.touch ? '点 ▲▼' : '按 Z / X'} 选楼层` : h.text) : '';
     if (text !== lastHint) { lastHint = text; hintEl.textContent = text; hintEl.dataset.kind = h?.kind || ''; }
   }
   function floorName(id) {

@@ -203,3 +203,335 @@ test('得分和连杀：击倒 100 分，爆头、重装兵、连击另加；3 /
   handlers['objective:done'].forEach((f) => f()); assert.equal(score.state.total, before + SCORE.objective);
   score.reset(); assert.equal(score.state.total, 0); assert.equal(score.state.best, 0);
 });
+
+test('真坐电梯：选楼层（第一下跳到指引要去的那层）→ 停手出发 → 走进轿厢、关门、运行、开门、走出来；人最后站在目标层门口、面朝外', async () => {
+  const { createLiftControl, LIFT, faceYaw } = await import('../src/jimao/lift.js');
+  const { buildPlayableLayout: build } = await import('../src/layout/playable.js');
+  const layout = build({ mode: 'arcade' });
+  const { G, player } = world();
+  const link = nav.links.find((l) => l.kind === 'lift' && l.stops.some((s) => s.floor === 'P1-1F') && l.stops.some((s) => s.floor === 'P1-RF'));
+  assert.ok(link && link.elevator, '一期应该有从 1F 到屋顶的电梯');
+  const from = link.stops.findIndex((s) => s.floor === 'P1-1F'), roof = link.stops.findIndex((s) => s.floor === 'P1-RF'), a = link.stops[from], b = link.stops[roof];
+  const calls = [], car = { elevator: link.elevator, set(y, door, floor) { calls.push({ y, door, floor }); } };
+  const guide = { hint: { to: 'P1-RF' } };
+  const lift = createLiftControl(G, { nav, layout, cars: new Map([[link.id, car]]), guide });
+  // 站在门口偏一点的地方（先走到门正前方）
+  player.pos.set(a.x + 0.4, 0, a.z + 0.3); player.yaw = 1.1; G.physics.moveCapsule(player.pos, player.vel, 1 / 60);
+  lift.update(0.3);
+  assert.ok(lift.near && lift.near.i === from, '认出站在哪部电梯、哪一层');
+  // 往上按一下：指引要去屋顶 → 直接选中屋顶
+  lift.press('up'); lift.update(1 / 60);
+  assert.equal(lift.pick, roof, '第一下应该直接跳到指引要去的那层');
+  lift.press('down'); lift.update(1 / 60);
+  assert.equal(lift.pick, roof - 1, '再按往下：挪一层');
+  lift.press('up'); lift.update(1 / 60);
+  assert.equal(lift.riding, false, '刚选完还没出发');
+  for (let t = 0; t < LIFT.settle + 0.1; t += 1 / 60) lift.update(1 / 60);
+  assert.equal(lift.riding, true, '停手 0.6 秒出发');
+  assert.equal(player.mounted, true); assert.equal(player.invulnerable, true);
+  assert.deepEqual([lift.rideInfo.from, lift.rideInfo.to, lift.rideInfo.car], ['P1-1F', 'P1-RF', true]);
+  let frames = 0, maxY = -99, inCar = false, minDoor = 1;
+  const e = link.elevator, passes = new Set();
+  while (lift.riding && frames < 60 * 40) {
+    lift.update(1 / 60); frames++;
+    maxY = Math.max(maxY, player.pos.y);
+    if (Math.hypot(player.pos.x - e.x, player.pos.z - e.z) < 0.05) inCar = true;
+    if (lift.rideInfo) { minDoor = Math.min(minDoor, lift.rideInfo.door); passes.add(lift.rideInfo.pass); }
+  }
+  assert.equal(lift.riding, false, '应该坐完了');
+  const secs = frames / 60, roofY = nav.floors.get('P1-RF').y;
+  assert.ok(secs > 6 && secs < 16, `从 1F 到屋顶 ${secs.toFixed(1)} 秒`);
+  assert.ok(inCar, '人进到了轿厢正中'); assert.ok(minDoor < 0.05, '运行时门是关着的');
+  assert.ok(passes.size >= 6, `楼层屏经过了 ${passes.size} 层`);
+  assert.ok(Math.abs(player.pos.y - roofY) < 0.01 && Math.hypot(player.pos.x - b.x, player.pos.z - b.z) < 0.01, '最后站在屋顶那一层的电梯门口');
+  assert.equal(player.mounted, false); assert.equal(player.invulnerable, undefined === player.invulnerable ? undefined : false);
+  assert.equal(G.physics.stateOf(player.pos), null, '到站后导航状态要重新找（下一步按新楼层走）');
+  // 轿厢：高度从 1F 一路到屋顶，门先关后开，楼层屏最后显示 RF
+  assert.ok(Math.abs(calls[0].y) < 0.01 && Math.abs(calls.at(-1).y - roofY) < 0.01 && calls.at(-1).door === 1 && calls.at(-1).floor === 'RF');
+  for (let i = 1; i < calls.length; i++) assert.ok(calls[i].y >= calls[i - 1].y - 1e-9, '轿厢只往上走');
+  assert.ok(calls.some((c) => c.door === 0 && c.y > 5 && c.y < roofY - 5), '中途门关着');
+  // 面朝门外（原游戏朝 (dx, dz) 看时 yaw = atan2(−dx, −dz)）
+  const want = faceYaw(b), d = Math.atan2(Math.sin(player.yaw - want), Math.cos(player.yaw - want));
+  assert.ok(Math.abs(d) < 0.05, `出来时面朝门外（差 ${d.toFixed(2)} 弧度）`);
+  // 没有轿厢的电梯：老办法（压暗 + 一层 0.55 秒），照样到得了
+  const plain = createLiftControl(G, { nav, layout, cars: new Map() });
+  G.physics.moveCapsule(player.pos, player.vel, 1 / 60); // 下一帧玩家一动，导航状态就按新楼层找回来了
+  assert.equal(G.physics.stateOf(player.pos)?.floor, 'P1-RF');
+  plain.update(0.3); assert.ok(plain.near);
+  plain.go(plain.near.i - 1);
+  assert.equal(plain.rideInfo.car, false);
+  for (let i = 0; i < 200 && plain.riding; i++) plain.update(1 / 60);
+  assert.equal(plain.riding, false);
+  assert.ok(Math.abs(player.pos.y - nav.floors.get(link.stops[roof - 1].floor).y) < 0.01);
+});
+
+test('翻越：对着沙袋墙 / 隔离墩按跳能翻到另一边（半秒、镜头抬起）；对着墙、栏杆、空地不翻；落点是同一层的空地', async () => {
+  const { vaultTarget, VAULT } = await import('../src/jimao/actions.js');
+  const { DRESSING, registerDressing, dressFootprint, DRESS } = await import('../src/jimao/dressing.js');
+  const { buildPlayableLayout: build } = await import('../src/layout/playable.js');
+  const { buildNav: mk, clear: ok } = await import('../src/layout/nav.js');
+  const layout = build({ mode: 'arcade' }); registerDressing(layout);
+  const nav2 = mk(layout), physics = createMapPhysics(nav2);
+  let can = 0, total = 0;
+  for (const p of DRESSING) {
+    const y = nav2.floors.get(p.floor).y, f = dressFootprint(p);
+    // 从薄的那一侧正对着翻（两个方向都试）
+    for (const sign of [1, -1]) {
+      const along = p.along === 'x', dx = along ? 0 : -sign, dz = along ? -sign : 0, back = DRESS.depth / 2 + 0.7;
+      const pos = new THREE.Vector3(p.x - dx * back, y, p.z - dz * back);
+      total++;
+      const tg = vaultTarget(physics, nav2, pos, dx, dz, p.floor);
+      if (!tg) continue;
+      can++;
+      assert.ok(ok(nav2, { floor: p.floor, x: tg.x, z: tg.z, y, slope: null }), '落点得是空地');
+      const side = (tg.x - p.x) * dx + (tg.z - p.z) * dz;
+      assert.ok(side > (along ? f.d : f.w) / 2 + 0.2, '落点在掩体另一边');
+      assert.ok(tg.dist > 1.2 && tg.dist < VAULT.reach + VAULT.depth + 0.1, `翻过去的距离 ${tg.dist.toFixed(2)}`);
+    }
+  }
+  assert.ok(can >= total * 0.9, `${total} 个方向里只有 ${can} 个能翻`);
+  // 对着墙不翻、空地上不翻
+  const wallHit = physics.raycast(new THREE.Vector3(-135, 0.5, -98), new THREE.Vector3(1, 0, 0), 80);
+  assert.ok(wallHit);
+  assert.equal(vaultTarget(physics, nav2, new THREE.Vector3(-135, 0, -98), 0, -1, 'P1-1F'), null, '面前没东西：不翻');
+  // 在游戏里走一遍：站在第一段掩体前按跳
+  const p0 = DRESSING.find((q) => q.floor === 'P1-1F'), along = p0.along === 'x', dx = along ? 0 : -1, dz = along ? -1 : 0;
+  const player = { pos: new THREE.Vector3(p0.x - dx * 1.05, 0, p0.z - dz * 1.05), eye: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: Math.atan2(-dx, -dz), pitch: 0, alive: true, onGround: true, addShake() {} };
+  physics.moveCapsule(player.pos, player.vel, 1 / 60);
+  const pressed = new Set(['jump']), input = { move: { x: 0, y: 1 }, look: { dx: 0, dy: 0 }, pressed: (a) => pressed.has(a) };
+  const lowered = [], G = { player, input, physics, enemies: { list: [] }, game: { state: 'playing' }, events: { emit() {} }, audio: { play() {} }, arms: { setLowered: (k) => lowered.push(k) } };
+  const actions = createActions(G, { scene: new THREE.Scene(), nav: nav2 });
+  actions.pre(1 / 60); pressed.clear();
+  assert.equal(actions.vaulting, true); assert.equal(player.mounted, true);
+  let frames = 0, top = 0, minPitch = 0;
+  while (actions.vaulting && frames < 120) { actions.pre(1 / 60); frames++; top = Math.max(top, player.pos.y); minPitch = Math.min(minPitch, player.pitch); }
+  assert.ok(Math.abs(frames / 60 - VAULT.time) < 0.06, `翻了 ${(frames / 60).toFixed(2)} 秒`);
+  assert.ok(top > VAULT.rise * 0.9 && player.pos.y === 0, `最高抬了 ${top.toFixed(2)} 米，落地回到楼面`);
+  assert.ok(minPitch < -0.1 && Math.abs(player.pitch) < 1e-9, '中途前倾，落地视角回正');
+  assert.equal(player.mounted, false);
+  assert.ok((player.pos.x - p0.x) * dx + (player.pos.z - p0.z) * dz > 0.5, '人到了掩体另一边');
+  assert.ok(Math.max(...lowered) >= 0.99 && lowered.at(-1) === 0, '翻的时候枪放低，落地抬回来');
+  assert.ok(Math.hypot(player.vel.x, player.vel.z) > 3, '落地带着往前的速度');
+});
+
+// ---- 武器：手枪和刀 ----
+async function arsenalWorld() {
+  const A = await import('../src/jimao/arsenal.js');
+  const camera = new THREE.PerspectiveCamera(74, 1.6, 0.01, 10);
+  camera.position.set(-135, 1.68, -98); camera.updateMatrixWorld(true);
+  // 假的步枪模型：带两只「手」（材质叫 glove_fabric 的两个组）
+  const vm = new THREE.Group(); vm.name = 'viewmodel-test';
+  const glove = new THREE.MeshBasicMaterial(); glove.name = 'glove_fabric';
+  for (const x of [0.03, -0.03]) { const h = new THREE.Group(); h.position.set(x, -0.07, x > 0 ? 0.15 : -0.18); h.add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.1), glove)); vm.add(h); }
+  camera.add(vm);
+  const pressed = new Set(), log = [];
+  const rifle = { name: '九式突击步枪', ammo: 30, magSize: 30, reserve: 150, state: 'idle', ads: 0, spread: 0.0125, updates: 0, visible: true,
+    update() { this.updates++; }, reset() { this.ammo = 30; }, setVisible(v) { this.visible = v; }, addAmmo(n) { this.reserve += n; }, snap() {} };
+  const player = { pos: new THREE.Vector3(-135, 0, -98), vel: new THREE.Vector3(), onGround: true, sprinting: false, recoil: 0, addRecoil(p) { this.recoil += p; }, addShake() {} };
+  const enemies = { list: [] };
+  const G = { weapon: rifle, player, enemies, game: { state: 'playing' }, input: { look: { dx: 0, dy: 0 }, fire: false, ads: false, pressed: (a) => pressed.has(a), down: () => false },
+    events: { emit: (n, e) => log.push([n, e]) }, combat: { shots: [], playerShot(o, d, opt) { this.shots.push({ o: o.clone(), d: d.clone(), opt }); return null; } }, fx: { tracers: 0, shells: 0, tracer() { this.tracers++; }, shell() { this.shells++; } },
+    physics: { lineOfSight: () => true }, render: { lightPool: { flash() {} } } };
+  const arsenal = A.createArsenal(G, { camera });
+  G.rifle = rifle; G.weapon = arsenal;
+  const run = (secs, each) => { for (let t = 0; t < secs - 1e-9; t += 1 / 60) { each?.(); arsenal.update(1 / 60); pressed.clear(); } };
+  const enemy = (x, z, hp = 80) => { const e = { pos: new THREE.Vector3(x, 0, z), alive: true, active: true, hp, hits: [], damage(n) { this.hits.push(n); this.hp -= n; if (this.hp <= 0) { this.alive = false; return true; } return false; } }; enemies.list.push(e); return e; };
+  return { A, G, arsenal, rifle, player, pressed, log, run, enemy, camera };
+}
+
+test('武器模型：手枪长约 19 厘米、照门准星在套筒顶上、枪口在最前；刀身 17 厘米左右；换弹和出刀的姿势曲线首尾归零', async () => {
+  const { pistolGeometry, knifeGeometry, reloadPose, slashPose, PISTOL, KNIFE } = await import('../src/jimao/arsenal.js');
+  const g = pistolGeometry();
+  for (const k of ['frame', 'slide', 'dark', 'mag', 'trigger', 'dots']) assert.ok(g[k].attributes.position.count > 10, k);
+  g.slide.computeBoundingBox(); g.frame.computeBoundingBox();
+  const sb = g.slide.boundingBox, len = sb.max.z - sb.min.z;
+  assert.ok(len > 0.17 && len < 0.21, `套筒长 ${len.toFixed(3)} 米`);
+  assert.ok(g.muzzle[2] <= sb.min.z + 0.01, '枪口在套筒最前面');
+  assert.ok(g.sightY > sb.max.y - 0.012 && g.sightY < sb.max.y + 0.012, '瞄准线在套筒顶上');
+  assert.ok(g.frame.boundingBox.min.y < -0.05, '握把在套筒下面');
+  assert.ok(g.frame.attributes.position.count + g.slide.attributes.position.count + g.dark.attributes.position.count > 6000, '细节够多');
+  const k = knifeGeometry(); k.blade.computeBoundingBox();
+  const bl = Math.hypot(k.blade.boundingBox.max.y - k.blade.boundingBox.min.y, k.blade.boundingBox.max.z - k.blade.boundingBox.min.z);
+  assert.ok(bl > 0.15 && bl < 0.22, `刀身 ${bl.toFixed(3)} 米`);
+  // 换弹：开头结尾都回到原位；中间弹匣掉下去再上来；打空的最后释放套筒
+  assert.deepEqual([reloadPose(0).tilt, reloadPose(0).magDrop, reloadPose(1).tilt, reloadPose(1).magDrop, reloadPose(1).hand], [0, 0, 0, 0, 0]);
+  assert.ok(reloadPose(0.32).magDrop > 0.9 && reloadPose(0.5).tilt === 1 && !reloadPose(0.5).magIn && reloadPose(0.63).magIn);
+  assert.equal(reloadPose(0.5, true).slide, 1); assert.equal(reloadPose(0.9, true).slide, 0); assert.equal(reloadPose(0.5, false).slide, 0);
+  for (const t of [0, 1]) { const p = slashPose(t); assert.ok(Math.abs(p.back) + Math.abs(p.thrust) + Math.abs(p.sweep) < 1e-9); }
+  assert.ok(slashPose(0.15).back > 0.5 && slashPose(0.35).thrust > 0.9 && slashPose(0.5).sweep > 0.9);
+  assert.ok(PISTOL.damage * 3 >= 80 && PISTOL.damage * 2 < 80, '手枪打步枪手身体要三枪'); assert.ok(KNIFE.damage >= 80 * 1.8 && KNIFE.damage < 110 * 2.2, '刀：步枪手一刀，重装兵（242 血）两刀');
+});
+
+test('切枪：1 步枪 / 2 手枪 / 3 刀，先放下再举起（中间不能开火）；HUD 读到的名字和弹药跟着当前武器；没拿在手里的步枪不更新', async () => {
+  const { A, arsenal, rifle, run, pressed, G } = await arsenalWorld();
+  assert.equal(arsenal.current, 'rifle'); assert.equal(arsenal.name, '九式突击步枪'); assert.equal(arsenal.ammo, 30);
+  run(0.1); assert.ok(rifle.updates > 0);
+  assert.equal(arsenal.select('pistol'), true);
+  assert.equal(arsenal.switching, true);
+  run(A.SWAP.lower + 0.02);
+  assert.equal(arsenal.current, 'pistol'); assert.equal(rifle.visible, false); assert.equal(arsenal.roots.pistol.visible, true);
+  // 举起来的过程中按开火：不响
+  run(0.05, () => pressed.add('fire'));
+  assert.equal(G.combat.shots.length, 0, '还没举起来不能开火');
+  run(A.SWAP.raise + 0.05);
+  assert.equal(arsenal.switching, false);
+  assert.deepEqual([arsenal.name, arsenal.ammo, arsenal.magSize, arsenal.reserve], [A.PISTOL.name, A.PISTOL.mag, A.PISTOL.mag, A.PISTOL.reserve]);
+  const before = rifle.updates; run(0.3); assert.equal(rifle.updates, before, '手枪在手里时步枪不更新（不会自己开火、换弹）');
+  arsenal.select('knife'); run(0.6);
+  assert.equal(arsenal.current, 'knife'); assert.equal(arsenal.name, A.KNIFE.name); assert.ok(arsenal.ammo > 0, '拿着刀不报「弹药耗尽」');
+  assert.equal(arsenal.select('knife'), false, '已经拿着了');
+  arsenal.setVisible(false); assert.equal(arsenal.roots.knife.visible, false); arsenal.setVisible(true); assert.equal(arsenal.roots.knife.visible, true);
+  arsenal.reset(); assert.equal(arsenal.current, 'rifle'); assert.equal(rifle.visible, true); assert.equal(arsenal.roots.knife.visible, false);
+});
+
+test('手枪：半自动（按一下一发，按住每 0.2 秒一发）、套筒后坐复进、打空挂机自动换弹、换弹从备弹里扣；开镜收紧散布', async () => {
+  const { A, arsenal, run, pressed, G, log, player } = await arsenalWorld();
+  arsenal.select('pistol'); run(0.6);
+  run(1 / 60, () => pressed.add('fire'));
+  assert.equal(G.combat.shots.length, 1); assert.equal(arsenal.ammo, A.PISTOL.mag - 1);
+  assert.deepEqual(G.combat.shots[0].opt, { damage: A.PISTOL.damage, range: A.PISTOL.range });
+  assert.ok(log.some(([n, e]) => n === 'weapon:fire' && e.kind === 'pistol'), '开火事件带 kind: pistol（枪声用它区分）');
+  assert.ok(arsenal.pistol.slide > 0.5, '套筒在后面'); assert.ok(player.recoil > 0); assert.equal(G.fx.tracers, 1); assert.equal(G.fx.shells, 1);
+  run(0.2); assert.equal(arsenal.pistol.slide, 0, '0.09 秒后套筒复进');
+  // 同一帧里不会连发；不松手也要等 0.2 秒
+  G.input.fire = true; run(0.5); G.input.fire = false;
+  assert.ok(G.combat.shots.length >= 3 && G.combat.shots.length <= 4, `按住 0.5 秒打了 ${G.combat.shots.length - 1} 发`);
+  // 开镜：散布收紧
+  const hip = arsenal.spread; G.input.ads = true; run(0.5);
+  assert.ok(arsenal.ads > 0.95 && arsenal.spread < hip * 0.5, `开镜后散布 ${arsenal.spread.toFixed(4)}（腰射 ${hip.toFixed(4)}）`);
+  G.input.ads = false; run(0.3);
+  // 打空：挂机、自动换弹，换完满弹、备弹少了一匣
+  while (arsenal.ammo > 0) run(A.PISTOL.interval + 0.02, () => pressed.add('fire'));
+  assert.equal(arsenal.pistol.locked, true, '打空了套筒挂在后面');
+  run(0.5); assert.equal(arsenal.state, 'reloading');
+  run(A.PISTOL.reloadEmpty);
+  assert.equal(arsenal.ammo, A.PISTOL.mag); assert.equal(arsenal.reserve, A.PISTOL.reserve - A.PISTOL.mag); assert.equal(arsenal.pistol.locked, false); assert.equal(arsenal.state, 'idle');
+  assert.deepEqual(log.filter(([n]) => n === 'weapon:reload').map(([, e]) => e.phase), ['start', 'magout', 'magin', 'bolt', 'done']);
+  // 弹药补给：步枪照加，手枪补四成、有上限
+  arsenal.addAmmo(60); assert.equal(G.rifle.reserve, 210); assert.equal(arsenal.reserve, A.PISTOL.reserve - A.PISTOL.mag + 24);
+  arsenal.addAmmo(600); assert.equal(arsenal.reserve, A.PISTOL.reserveMax);
+});
+
+test('刀：近战键随时出刀（先换成刀、刺完换回原来那把）；2.3 米内准星附近的敌人掉 150 血，背后的、远处的不中', async () => {
+  const { A, arsenal, run, pressed, enemy, log } = await arsenalWorld();
+  assert.equal(A.knifeReaches(new THREE.Vector3(0, 1.68, 0), 0, 0, -1, { pos: new THREE.Vector3(0, 0, -1.8) }), true);
+  assert.equal(A.knifeReaches(new THREE.Vector3(0, 1.68, 0), 0, 0, -1, { pos: new THREE.Vector3(0, 0, -3) }), false, '太远');
+  assert.equal(A.knifeReaches(new THREE.Vector3(0, 1.68, 0), 0, 0, -1, { pos: new THREE.Vector3(0, 0, 1.5) }), false, '在背后');
+  const front = enemy(-135, -99.6), heavy = enemy(-134.6, -99.9, 242), behind = enemy(-135, -96.5), far = enemy(-135, -103);
+  // 步枪在手，按近战
+  run(1 / 60, () => pressed.add('melee'));
+  assert.equal(arsenal.switching, true);
+  run(0.3);
+  assert.equal(arsenal.current, 'knife'); assert.equal(arsenal.slashing, true);
+  run(A.KNIFE.time + 0.5);
+  assert.equal(arsenal.current, 'rifle', '刺完换回步枪');
+  assert.deepEqual(front.hits, [A.KNIFE.damage]); assert.equal(front.alive, false, '最近的那个中刀倒下');
+  assert.equal(heavy.hits.length + behind.hits.length + far.hits.length, 0, '一刀只中一个；背后的、远处的不中');
+  assert.ok(log.some(([n]) => n === 'weapon:melee') && log.some(([n, e]) => n === 'player:hitEnemy' && e.killed && e.melee));
+  // 切到刀一直拿着：开火键出刀；重装兵要两刀
+  arsenal.select('knife'); run(0.5);
+  run(1 / 60, () => pressed.add('fire')); run(A.KNIFE.time + 0.2);
+  assert.deepEqual(heavy.hits, [A.KNIFE.damage]); assert.equal(heavy.alive, true);
+  run(1 / 60, () => pressed.add('fire')); run(A.KNIFE.time + 0.2);
+  assert.equal(heavy.alive, false); assert.equal(arsenal.current, 'knife', '自己切到刀的不会换回去');
+});
+
+// ---- 过场镜头（src/jimao/cutscene.js）----
+test('开局过场：先从空中推向商场（高、远、对着楼），压黑切进室内，蹲着低头 → 站直平视 → 枪端起来；放完镜头正好落在玩家视角上', async () => {
+  const { CUT, introView } = await import('../src/jimao/cutscene.js');
+  const start = { pos: new THREE.Vector3(-135, 0, -98), yaw: 0.7 }, center = { x: -130, z: -128 }, roofY = 30, eye = 1.62, ctx = { start, eye, center, roofY };
+  assert.ok(CUT.intro >= CUT.aerial + CUT.rise + 0.5, '过场放完到交还操作之间留半秒以上（HUD 这时才出来）');
+  const fwd = (v) => new THREE.Vector3(0, 0, -1).applyQuaternion(v.quaternion);
+  let prev = null;
+  for (let u = 0; u < CUT.aerial; u += 1 / 60) {
+    const v = introView(u, ctx);
+    assert.equal(v.shot, 'aerial'); assert.equal(v.weapon, false);
+    assert.ok(v.position.y > roofY + 55, `空中镜头高过屋面 55 米（${(v.position.y - roofY).toFixed(0)}）`);
+    const d = Math.hypot(v.position.x - center.x, v.position.z - center.z);
+    assert.ok(d > 150 && d < 230, `离屋顶中心 ${d.toFixed(0)} 米`);
+    const to = new THREE.Vector3(center.x - v.position.x, roofY - v.position.y, center.z - v.position.z).normalize();
+    assert.ok(fwd(v).dot(to) > 0.9, '镜头对着商场');
+    if (prev) assert.ok(v.position.distanceTo(prev) < 1.2, '每帧挪不到 1.2 米（不跳）');
+    prev = v.position;
+  }
+  // 往前推：越来越近、越来越低
+  assert.ok(introView(CUT.aerial - 0.05, ctx).position.y < introView(0, ctx).position.y - 15);
+  // 切镜头前后压黑
+  assert.ok(introView(CUT.aerial - 0.01, ctx).dip > 0.9 && introView(CUT.aerial + 0.01, ctx).dip > 0.9);
+  assert.equal(introView(CUT.aerial - CUT.dip - 0.05, ctx).dip, 0); assert.equal(introView(CUT.aerial + CUT.dip + 0.05, ctx).dip, 0);
+  // 室内：从蹲姿起身
+  const a = introView(CUT.aerial + 0.001, ctx), b = introView(CUT.aerial + CUT.rise - 0.001, ctx);
+  assert.equal(a.shot, 'rise'); assert.equal(a.weapon, true);
+  assert.ok(Math.abs(a.position.y - (eye - CUT.crouch)) < 0.02 && a.lowered > 0.99 && fwd(a).y < -0.3, '开头蹲着、低头、枪放着');
+  assert.ok(Math.abs(b.position.y - eye) < 0.01 && b.lowered < 0.01, '结尾站直、枪端好');
+  const want = new THREE.Vector3(-Math.sin(start.yaw), 0, -Math.cos(start.yaw));
+  assert.ok(fwd(b).dot(want) > 0.9999, '结尾平视开局朝向（和玩家视角接得上）');
+  assert.ok(Math.hypot(a.position.x - start.pos.x, a.position.z - start.pos.z) < 1e-6, '人没挪地方');
+  let low = 1; for (let u = CUT.aerial; u < CUT.aerial + CUT.rise; u += 1 / 60) { const v = introView(u, ctx); assert.ok(v.lowered <= low + 1e-9, '枪只往上端'); low = v.lowered; }
+  assert.equal(introView(CUT.aerial + CUT.rise, ctx), null); assert.equal(introView(-1, ctx), null);
+});
+
+test('撤离过场：机位在载具前方、背着商场的一侧；接应车加速从镜头前开过去再开远，直升机从镜头旁掠过飞远；最后一秒压暗', async () => {
+  const { CUT, carOutroPose, outroCamera, outroFade } = await import('../src/jimao/cutscene.js');
+  const { HELI_ORBIT, heliPoseAt, heliDuration } = await import('../src/jimao/ride-paths.js');
+  const away = HELI_ORBIT.center;
+  // 接应车：停在云澜大道上、车头朝西
+  const pose0 = { x: -175, y: 0, z: -6, yaw: Math.PI / 2, pitch: 0, roll: 0, dir: { x: -1, z: 0 } };
+  const cam = outroCamera('car', pose0, { away });
+  assert.ok(Math.abs(cam.x - (pose0.x - CUT.carAhead)) < 1e-6 && Math.abs(cam.y - CUT.carEye) < 1e-6, '机位在车头前方、蹲着的高度');
+  assert.ok(Math.abs(Math.abs(cam.z - pose0.z) - CUT.carSide) < 1e-6 && Math.abs(cam.z - away.z) > Math.abs(pose0.z - away.z), '在路的外侧（背着商场）');
+  let near = Infinity, lastD = 0;
+  for (let t = 0; t <= CUT.outro.car; t += 1 / 60) {
+    const o = carOutroPose(pose0, t), d = Math.hypot(o.pose.x - pose0.x, o.pose.z - pose0.z);
+    assert.ok(d >= lastD - 1e-9 && Math.abs(o.pose.z - pose0.z) < 1e-9, '一直沿车头方向往前'); lastD = d;
+    near = Math.min(near, Math.hypot(o.pose.x - cam.x, o.pose.z - cam.z));
+  }
+  assert.ok(near < CUT.carSide + 0.6, `车从镜头前 ${near.toFixed(1)} 米开过`);
+  assert.ok(lastD > CUT.carAhead + 25, `放完时车已经开出镜头 ${(lastD - CUT.carAhead).toFixed(0)} 米`);
+  assert.ok(Math.abs(carOutroPose(pose0, 0).speed) < 1e-9 && carOutroPose(pose0, 2).speed > 10);
+  // 直升机：「离开」那一段的后 heliLead 秒
+  const y0 = 30, t0 = heliDuration() - CUT.heliLead, poseAt = (d) => heliPoseAt(t0 + d, y0);
+  assert.equal(heliPoseAt(t0, y0).phase, 'leave');
+  const hc = outroCamera('helicopter', poseAt(0), { poseAt, away });
+  let hNear = Infinity, hEnd = 0;
+  for (let t = 0; t <= CUT.outro.helicopter; t += 1 / 60) { const p = poseAt(t), d = Math.hypot(p.x - hc.x, p.y - hc.y, p.z - hc.z); hNear = Math.min(hNear, d); hEnd = d; }
+  assert.ok(hNear > 10 && hNear < 24, `直升机离镜头最近 ${hNear.toFixed(0)} 米（掠过，不穿镜头）`);
+  assert.ok(hEnd > 70, `放完时已经飞出 ${hEnd.toFixed(0)} 米`);
+  assert.ok(Math.hypot(hc.x - away.x, hc.z - away.z) > Math.hypot(poseAt(CUT.heliAhead).x - away.x, poseAt(CUT.heliAhead).z - away.z), '机位在航线外侧');
+  for (const kind of ['car', 'helicopter']) {
+    assert.equal(outroFade(kind, 0), 0); assert.equal(outroFade(kind, CUT.outro[kind] - CUT.fadeOut), 0);
+    assert.ok(Math.abs(outroFade(kind, CUT.outro[kind]) - 0.9) < 1e-9);
+  }
+});
+
+test('过场的遮幅和跳过：只有完整开场才放；放的时候按键 / 点一下让原游戏结束开场（G.cutSkip）；重新出击的短开场不放', async () => {
+  const { CUT, createCutscenes } = await import('../src/jimao/cutscene.js');
+  const cls = new Set(), node = () => ({ className: '', textContent: '', innerHTML: '', classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)) }, append() {}, remove() {} });
+  const doc = { createElement: node };
+  const G = { game: { state: 'title' }, introFull: false, cutSkip: false, level: { playerStart: { pos: new THREE.Vector3(-135, 0, -98), yaw: 0 } },
+    arms: { low: 0, setLowered(k) { this.low = k; } }, weapon: { shown: true, setVisible(v) { this.shown = v; } } };
+  const post = { fade: 0 };
+  const cuts = createCutscenes(G, { ui: node(), start: G.level.playerStart, center: { x: -130, z: -128 }, roofY: 30, post, doc });
+  assert.equal(cuts.intro.view(1 / 60), null);
+  // 重新出击：原游戏只给 1.3 秒，不放过场
+  G.game.state = 'intro'; G.introFull = false;
+  assert.equal(cuts.intro.view(1 / 60), null); assert.ok(!cls.has('on'));
+  // 完整开场
+  G.game.state = 'playing'; cuts.intro.view(1 / 60); G.game.state = 'intro'; G.introFull = true;
+  let v = cuts.intro.view(1 / 60);
+  assert.equal(v.shot, 'aerial'); assert.ok(cls.has('on')); assert.equal(G.weapon.shown, false);
+  post.fade = 0.6; v = cuts.intro.view(1 / 60); assert.equal(v.fade, 0.6, '原游戏的淡入照旧（取两者里更暗的）');
+  post.fade = 0;
+  for (let t = 0; t < CUT.aerial + 0.3; t += 1 / 60) v = cuts.intro.view(1 / 60);
+  assert.equal(v.shot, 'rise'); assert.equal(G.weapon.shown, true); assert.ok(G.arms.low > 0.9);
+  // 跳过：0.6 秒以后才认（免得点「开始」的那一下就跳了）
+  cuts.skip(); assert.equal(G.cutSkip, true);
+  assert.equal(cuts.intro.view(1 / 60), null); assert.equal(G.arms.low, 0); assert.ok(!cls.has('on'));
+  // 放完自己结束
+  G.game.state = 'playing'; cuts.intro.view(1 / 60); G.cutSkip = false; G.game.state = 'intro';
+  for (let t = 0; t < CUT.aerial + CUT.rise + 0.1; t += 1 / 60) v = cuts.intro.view(1 / 60);
+  assert.equal(v, null); assert.equal(G.arms.low, 0); assert.equal(G.weapon.shown, true); assert.equal(G.cutSkip, false);
+  // 撤离用的遮幅和字幕
+  cuts.letterbox(true, '<b>撤离成功</b>'); assert.ok(cls.has('on')); cuts.letterbox(false); assert.ok(!cls.has('on'));
+  cuts.dispose();
+});

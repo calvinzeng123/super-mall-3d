@@ -1,16 +1,44 @@
 // 零点突围：操作手感补强。原游戏有走、跑、蹲、跳、开镜、近战，但手机上没有蹲和近战的按键，瞄人全靠手搓。这里加：
 //   滑铲：跑动中按蹲，贴地滑出去一段（先快后慢，能边滑边打），滑完是蹲着的；
+//   翻越：对着沙袋墙、隔离墩、柜台这类矮掩体按跳（或者顶着它往前推一下）就翻过去——镜头抬起前倾、枪放低，半秒落到另一边；
+//         墙、栏杆、太厚的东西、另一边没地方站的翻不了；
 //   手雷：G 键 / 手机上的手雷键，抛物线扔出去、会弹，2 秒后炸，炸到的敌人掉血（自己站太近也会受伤）；每局 2 颗，开弹药箱补 1 颗；
 //   手机按键：蹲（点一下蹲、再点一下站，跑动中点就是滑铲）、近战、手雷，位置和大小在「键位布局」里一样能拖；
 //   辅助瞄准（触屏、手柄）：准星贴近敌人时转动变慢（不容易划过头），开火 / 开镜时视角往敌人身上带一点，开镜那一下吸到最近的敌人；
 //   自动开火（触屏）：准星压在敌人身上超过一瞬就自己开火，松开自然停。
 // 辅助瞄准、自动开火在设置里各有一个开关（存在 zerohour.controls.v1），键鼠默认都不启用。
 import * as THREE from 'three';
+import { landAt, clear } from '../layout/nav.js';
 
 export const SLIDE = Object.freeze({ time: 0.8, v0: 9, v1: 4.5, cooldown: 0.45, minSpeed: 2.5 });
 export const GRENADE = Object.freeze({ count: 2, max: 3, fuse: 2, speed: 16, lift: 4.5, gravity: 16, bounce: 0.38, friction: 0.72, radius: 6.5, damage: 170, selfRadius: 4.5, selfDamage: 55, cooldown: 0.8 });
 export const ASSIST = Object.freeze({ cone: 0.16, sticky: 0.062, slow: 0.55, pullFire: 2.2, pullAds: 1.2, snap: 0.7, snapCone: 0.19, range: 60, fireCone: 0.03, fireDelay: 0.12, fireHold: 0.18 });
+/** 翻越：前面多近算顶到掩体、掩体最厚多少、翻过去用多久、镜头抬多高、自动翻越要顶住多久 */
+export const VAULT = Object.freeze({ reach: 1.15, depth: 2.2, time: 0.55, rise: 0.5, lean: 0.16, clearance: 1.35, auto: 0.18 });
 export const CONTROLS_KEY = 'zerohour.controls.v1';
+
+/**
+ * 面前能不能翻过去。人在 pos（脚下）、朝 (dx, dz)（单位向量）。规则：
+ *   ① 膝盖高度往前 reach 米内顶到东西；② 胸口以上（clearance）往前一路是空的——说明顶到的是矮掩体（沙袋、隔离墩、柜台），不是墙、栏杆；
+ *   ③ 掩体后面 depth 米内有同一层、站得住的落脚点。
+ * 能翻返回 { x, y, z, dist }（落脚点和水平距离），不能翻返回 null。
+ */
+export function vaultTarget(physics, nav, pos, dx, dz, floor) {
+  const o = new THREE.Vector3(pos.x, pos.y + 0.5, pos.z), d = new THREE.Vector3(dx, 0, dz);
+  const low = physics.raycast(o, d, VAULT.reach);
+  if (!low || Math.abs(low.normal.y) > 0.5) return null;
+  o.y = pos.y + VAULT.clearance;
+  if (physics.raycast(o, d, low.dist + VAULT.depth + 0.6)) return null;
+  for (let L = low.dist + 0.75; L <= low.dist + VAULT.depth + 1e-6; L += 0.15) {
+    const x = pos.x + dx * L, z = pos.z + dz * L, st = landAt(nav, x, z, pos.y + 0.6);
+    if (!st || st.slope || Math.abs(st.y - pos.y) > 0.25 || (floor && st.floor !== floor) || !clear(nav, st)) continue;
+    // 落脚点再往前半步也得站得住（不然翻过去正好卡在另一件家具的缝里）
+    const st2 = landAt(nav, x + dx * 0.3, z + dz * 0.3, pos.y + 0.6);
+    if (!st2 || Math.abs(st2.y - pos.y) > 0.25 || !clear(nav, st2)) continue;
+    return { x, y: st.y, z, dist: L };
+  }
+  return null;
+}
 
 /** 滑铲这一刻的速度（米/秒）：t 是已经滑了多久 */
 export const slideSpeed = (t) => SLIDE.v0 + (SLIDE.v1 - SLIDE.v0) * Math.min(1, Math.max(0, t / SLIDE.time));
@@ -27,7 +55,7 @@ export function normalizeControls(v) {
   return o;
 }
 
-export function createActions(G, { scene, ui = null, storage = null, hidden = () => false }) {
+export function createActions(G, { scene, nav = null, ui = null, storage = null, hidden = () => false }) {
   let prefs;
   try { prefs = normalizeControls(JSON.parse(storage?.getItem(CONTROLS_KEY) || 'null')); } catch { prefs = normalizeControls(null); }
   const save = () => { try { storage?.setItem(CONTROLS_KEY, JSON.stringify(prefs)); } catch { /* 存不了就算了 */ } };
@@ -38,6 +66,39 @@ export function createActions(G, { scene, ui = null, storage = null, hidden = ()
   // ---- 滑铲 / 蹲 ----
   const slide = { t: -1, dx: 0, dz: 0, cool: 0 };
   let crouchLatch = false; // 手机上的蹲键是点一下切换
+
+  // ---- 翻越 ----
+  const vault = { t: -1, from: new THREE.Vector3(), to: new THREE.Vector3(), leaned: 0, push: 0, cool: 0, dx: 0, dz: 0 };
+  function tryVault() {
+    const p = G.player;
+    if (!nav || vault.t >= 0 || vault.cool > 0 || !p?.onGround || slide.t >= 0) return false;
+    const st = G.physics.stateOf?.(p.pos);
+    if (!st || st.slope) return false;
+    const dx = -Math.sin(p.yaw), dz = -Math.cos(p.yaw), tg = vaultTarget(G.physics, nav, p.pos, dx, dz, st.floor);
+    if (!tg) return false;
+    vault.t = 0; vault.from.copy(p.pos); vault.to.set(tg.x, tg.y, tg.z); vault.leaned = 0; vault.dx = dx; vault.dz = dz;
+    p.mounted = true;
+    G.audio?.play?.('jump', { gain: 0.9, pitch: 0.9 });
+    G.events?.emit?.('player:vault', { from: vault.from.clone(), to: vault.to.clone() });
+    return true;
+  }
+  function stepVault(dt) {
+    const p = G.player, inp = G.input;
+    vault.t += dt;
+    const k = Math.min(1, vault.t / VAULT.time), e = k * k * (3 - 2 * k), arc = Math.sin(Math.PI * k);
+    p.pos.lerpVectors(vault.from, vault.to, e); p.pos.y += arc * VAULT.rise;
+    // 身子前倾：视角先往下压再抬回来（只加增量，玩家还能转头）
+    const lean = -VAULT.lean * arc; p.pitch += lean - vault.leaned; vault.leaned = lean;
+    G.arms?.setLowered?.(Math.min(1, arc * 1.6));
+    inp.fire = false; inp.ads = false; if (inp.move) { inp.move.x = 0; inp.move.y = 0; }
+    if (k >= 1) {
+      vault.t = -1; vault.cool = 0.35; vault.push = 0;
+      p.pos.copy(vault.to); p.mounted = false; G.physics.forget?.(p.pos);
+      p.vel.set(vault.dx * 3.4, 0, vault.dz * 3.4);
+      G.arms?.setLowered?.(0);
+      G.audio?.play?.('land', { gain: 0.7 }); p.addShake?.(0.14);
+    }
+  }
 
   // ---- 手雷 ----
   const nades = [];
@@ -152,7 +213,8 @@ export function createActions(G, { scene, ui = null, storage = null, hidden = ()
     }
     // 自动开火：准星压在敌人身上超过 fireDelay 就开火，离开后再多打 fireHold（免得抖一下就断）
     if (autoFireOn() && inp.touch) {
-      const on = !!target && target.angle < ASSIST.fireCone && (G.weapon?.ammo ?? 1) > 0 && G.weapon?.state !== 'reloading';
+      // 拿着刀：人到了两米多以内才自己出刀
+      const on = !!target && target.angle < ASSIST.fireCone && (G.weapon?.ammo ?? 1) > 0 && G.weapon?.state !== 'reloading' && (G.weapon?.current !== 'knife' || target.dist < 2.4);
       onTargetT = on ? onTargetT + dt : 0;
       if (on && onTargetT >= ASSIST.fireDelay) fireHold = ASSIST.fireHold; else fireHold -= dt;
       if (fireHold > 0) inp.fire = true;
@@ -218,15 +280,21 @@ export function createActions(G, { scene, ui = null, storage = null, hidden = ()
   }
 
   return {
-    get slide() { return slide.t >= 0; }, get grenades() { return stock; }, get target() { return target; }, get prefs() { return { ...prefs }; },
+    get slide() { return slide.t >= 0; }, get vaulting() { return vault.t >= 0; }, tryVault, get grenades() { return stock; }, get target() { return target; }, get prefs() { return { ...prefs }; },
     assistOn, autoFireOn, throwNade, startSlide,
     /** 玩家更新之前调（输入已经读完）：滑铲、蹲键、辅助瞄准、自动开火、扔手雷 */
     pre(dt) {
       const p = G.player, inp = G.input;
       if (!touchSeen && inp?.touch) { touchSeen = true; buildUi(); paintRows(); }
       const playing = G.game?.state === 'playing' && p?.alive !== false && !hidden();
-      throwCool -= dt; slide.cool -= dt;
-      if (!playing) { slide.t = -1; wantThrow = false; return; }
+      throwCool -= dt; slide.cool -= dt; vault.cool -= dt;
+      if (!playing) { slide.t = -1; wantThrow = false; if (vault.t >= 0) { vault.t = -1; p.mounted = false; G.arms?.setLowered?.(0); } return; }
+      // 翻越：对着矮掩体按跳；或者顶着它往前推 / 冲刺撞上去 0.18 秒自动翻
+      if (vault.t >= 0) { stepVault(dt); return; }
+      if (inp.pressed?.('jump') && (inp.move?.y ?? 0) > -0.2 && tryVault()) return;
+      const pushing = (inp.move?.y ?? 0) > 0.6 && Math.hypot(p.vel.x, p.vel.z) < 1.2 && p.onGround;
+      vault.push = pushing ? vault.push + dt : 0;
+      if (vault.push >= VAULT.auto && tryVault()) return;
       // 滑铲：跑动中按下蹲
       if (slide.t < 0 && p.sprinting && inp.pressed?.('crouch')) startSlide();
       if (slide.t >= 0) {
@@ -244,7 +312,7 @@ export function createActions(G, { scene, ui = null, storage = null, hidden = ()
     update(dt) { for (const n of nades) if (n.live) stepNade(n, Math.min(dt, 0.05)); },
     /** 捡到补给：加一颗手雷（最多 max 颗） */
     give(n = 1) { const before = stock; stock = Math.min(GRENADE.max, stock + n); paintHud(); return stock - before; },
-    reset() { stock = GRENADE.count; throwCool = 0; wantThrow = false; slide.t = -1; slide.cool = 0; crouchLatch = false; btns?.crouch?.classList.remove('latched'); target = null; onTargetT = 0; fireHold = 0;
+    reset() { stock = GRENADE.count; throwCool = 0; wantThrow = false; slide.t = -1; slide.cool = 0; if (vault.t >= 0 && G.player) G.player.mounted = false; vault.t = -1; vault.cool = 0; vault.push = 0; crouchLatch = false; btns?.crouch?.classList.remove('latched'); target = null; onTargetT = 0; fireHold = 0;
       for (const n of nades) { n.live = false; n.mesh.visible = false; } paintHud(); },
     buildUi,
     dispose() { if (typeof removeEventListener === 'function') removeEventListener('keydown', onKey); for (const n of nades) n.mesh.removeFromParent(); nadeGeo.dispose(); nadeMat.dispose(); pinGeo.dispose(); pinMat.dispose(); hud?.remove(); rows?.remove(); for (const b of Object.values(btns || {})) b.remove(); },
