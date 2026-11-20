@@ -29,7 +29,7 @@ export function healChoice(hp, max, inv, S = SUPPLY) {
 }
 
 export const MEDIC_CSS = `
-.jm-heal { position: absolute; left: calc(22px + var(--sal, 0px)); bottom: calc(86px + var(--sab, 0px)); z-index: 3; pointer-events: none; font: 600 12px/1.5 var(--f-label, sans-serif); letter-spacing: .12em; color: var(--bone, #e8e4da); text-shadow: 0 1px 4px rgba(0, 0, 0, .7); }
+.jm-heal { position: absolute; left: calc(22px + var(--sal, 0px)); bottom: calc(128px + var(--sab, 0px)); z-index: 3; pointer-events: none; font: 600 12px/1.5 var(--f-label, sans-serif); letter-spacing: .12em; color: var(--bone, #e8e4da); text-shadow: 0 1px 4px rgba(0, 0, 0, .7); }
 .jm-heal.off { display: none; }
 .jm-heal b { color: #ff8a7a; font-weight: 700; }
 .jm-heal i { font-style: normal; opacity: .65; }
@@ -38,7 +38,7 @@ export const MEDIC_CSS = `
 .jm-heal .bar u { display: block; height: 100%; width: 0; background: #ff8a7a; }
 .is-touch .jm-heal { left: 50%; bottom: calc(132px + var(--sab, 0px)); transform: translateX(-50%); text-align: center; }
 .is-touch .jm-heal i { display: none; }
-.t-heal { width: 50px; height: 50px; right: calc(246px + var(--sar)); bottom: calc(176px + var(--sab)); border-color: #ff8a7a; color: #ffc2b8; }
+.t-heal { width: 50px; height: 50px; right: calc(248px + var(--sar)); bottom: calc(186px + var(--sab)); border-color: #ff8a7a; color: #ffc2b8; }
 .t-heal.off { display: none; }
 .t-heal.empty { opacity: .4; }
 `;
@@ -176,7 +176,7 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
           if (d.kind === 'smg') say('捡到冲锋枪 · 动静小，按 4 换', 3); else if (d.kind !== 'ammo') say(`捡到${P[d.kind].name}`, 1.8);
           G.audio?.play?.('reload', { gain: 0.4, pitch: 1.3 });
           G.events?.emit?.('supply:pickup', { kind: d.kind });
-        } else if (d.fullT <= 0) { d.fullT = 4; say(`${P[d.kind].name}带满了`, 1.5); }
+        } else if (d.fullT <= 0) { d.fullT = 4; if (d.kind !== 'smg') say(`${P[d.kind].name}带满了`, 1.5); } // 冲锋枪捡不起来只会是模型还没加载好：不吭声，等一下就能捡
       }
     },
     buildUi() {

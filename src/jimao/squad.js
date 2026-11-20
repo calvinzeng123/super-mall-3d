@@ -60,7 +60,7 @@ export function slotOf(player, yaw, member) {
 }
 
 export const SQUAD_CSS = `
-.jm-squad { position: absolute; left: calc(22px + var(--sal, 0px)); bottom: calc(124px + var(--sab, 0px)); z-index: 3; pointer-events: none; display: grid; gap: 5px; font: 600 11px/1 var(--f-label, sans-serif); letter-spacing: .1em; color: var(--bone, #e8e4da); text-shadow: 0 1px 4px rgba(0, 0, 0, .7); }
+.jm-squad { position: absolute; left: calc(22px + var(--sal, 0px)); bottom: calc(166px + var(--sab, 0px)); z-index: 3; pointer-events: none; display: grid; gap: 5px; font: 600 11px/1 var(--f-label, sans-serif); letter-spacing: .1em; color: var(--bone, #e8e4da); text-shadow: 0 1px 4px rgba(0, 0, 0, .7); }
 .jm-squad.off { display: none; }
 .jm-squad .m { display: grid; grid-template-columns: 54px 84px auto; align-items: center; gap: 7px; }
 .jm-squad .m i { display: block; height: 4px; background: rgba(255, 255, 255, .16); border-radius: 2px; overflow: hidden; }

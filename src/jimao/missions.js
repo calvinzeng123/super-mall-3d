@@ -391,7 +391,10 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     // 坐直升机 / 接应车失败（坠毁或在车上阵亡）以后点「回到登机点重来」：同一局任务、目标都算完成，人站到登机点前
     if (state.phase === 'outro' && G.player) G.player.invulnerable = !!state.wasInv;
     letterbox?.(false);
-    const keep = state.checkpoint && state.mission ? state.checkpoint : null;
+    // 只有在阵亡页上点了「回到……重来」才回存档点；暂停里重新开始、打完再来一局、封面上换模式都是全新的一局
+    // （围城的安全点在整局里一直记着，不能见到存档点就回去）
+    const keep = state.retryArmed && state.checkpoint && state.mission ? state.checkpoint : null;
+    state.retryArmed = false;
     const mission = keep ? state.mission : G.siege?.enabled ? G.siege.mission(rng) : rollMission(rng, sites, force);
     Object.assign(state, { mission, kills: keep ? state.kills : 0, reinforce: 0, tell: 0, holdT: keep ? state.holdT : 0, inside: false, holdTextT: 0, ...FRESH(),
       bombT: keep ? state.bombT : (mission.bomb?.time || 0), bombDone: false, boss: keep ? state.boss : null, bossT: 0,
@@ -562,6 +565,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const retry = sec?.querySelector('[data-act="retry"]');
     if (!retry) return;
     if (retry.dataset.orig == null) retry.dataset.orig = retry.textContent;
+    if (!retry.dataset.zhArm) { retry.dataset.zhArm = '1'; retry.addEventListener('click', () => { state.retryArmed = true; }); } // 先于菜单根节点上的委托处理
     retry.textContent = on ? label : retry.dataset.orig;
     let fresh = sec.querySelector('[data-zh="fresh"]');
     if (!fresh && on) {
