@@ -64,7 +64,9 @@ export const HOLD = Object.freeze({ hip: Object.freeze([0.09, -0.02, -0.475]), y
  * 手搭的方块枪留着：模型没加载出来（或测试环境里）就还用它。
  */
 export const PISTOL_SKIN = Object.freeze({
-  scale: 0.0088, grip: Object.freeze([0, 16.54, -10.85]), offset: Object.freeze([0, 0.004, 0.004]),
+  // offset：枪相对手再挪多少。往上抬了 1.7 厘米——手是步枪握把上搬来的，拇指和虎口那块手套比手枪的套筒座高，
+  // 按解剖位置对齐的话从后面看手背把套筒后部挡掉一截（用户「大拇指的肉比枪还高，挡住了」）；抬上来以后整条套筒都在手背上方
+  scale: 0.0088, grip: Object.freeze([0, 16.54, -10.85]), offset: Object.freeze([0, 0.017, 0.004]),
   muzzle: Object.freeze([0, 23.3, 10.84]), eject: Object.freeze([-1.3, 24.6, -4.5]), sight: 26.02, trigger: Object.freeze([0, 19.6, -5.7]),
   slideTravel: 3.4, magDrop: 15,
   slides: /^(Slide_low|Safety_low|BoltMain_low|BoltAdd_low|RearSight_low|BoltButton_low|BoltBack_low)$/,

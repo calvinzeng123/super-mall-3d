@@ -377,7 +377,9 @@ test('手枪换上真模型：缩到握得住的大小、枪口朝前、照门�
   const K = A.PISTOL_SKIN, f = A.pistolSkinFit();
   // 尺寸和位置：全长 27.7 厘米的模型缩到 24 厘米上下；握把中心落在手里（原点附近）
   const len = (10.84 + 16.84) * K.scale; assert.ok(len > 0.22 && len < 0.26, `全长 ${len.toFixed(3)} 米`);
-  assert.ok(f.muzzle[2] < -0.16 && Math.abs(f.muzzle[0]) < 1e-6, '枪口在正前方'); assert.ok(f.sightY > 0.07 && f.sightY < 0.1 && f.sightY > f.muzzle[1], '照门在枪管上面');
+  assert.ok(f.muzzle[2] < -0.16 && Math.abs(f.muzzle[0]) < 1e-6, '枪口在正前方'); assert.ok(f.sightY > 0.08 && f.sightY < 0.115 && f.sightY > f.muzzle[1], '照门在枪管上面');
+  // 枪比手高：套筒底（模型里 y ≈ 21.1 厘米）要高出握把参考点 5 厘米以上，从后面看手背挡不到套筒
+  assert.ok(A.skinPoint([0, 21.14, 0])[1] > 0.05, `套筒底高出握把中心 ${(A.skinPoint([0, 21.14, 0])[1] * 100).toFixed(1)} 厘米`);
   assert.ok(f.eject[0] > 0 && f.eject[2] < 0 && f.eject[2] > f.muzzle[2], '抛壳口在右侧、枪口后面'); assert.ok(f.slideTravel > 0.02 && f.slideTravel < 0.04);
   assert.deepEqual(A.skinPoint(K.grip).map((v, i) => +(v - K.offset[i]).toFixed(9)), [0, 0, 0], '握把中心 → 原点');
   // 没换之前：方块枪
