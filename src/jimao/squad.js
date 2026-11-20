@@ -94,6 +94,17 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
   const lampGeo = new THREE.SphereGeometry(0.022, 8, 6);
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), dir = new THREE.Vector3();
   let enabled = false, hud = null, sayT = 0, wanted = true;
+  // 你最近是朝哪边走的（不是朝哪边看）：站位按这个方向排在你身后。原地转头不会让他们跟着绕圈
+  const trail = { x: 0, z: 0, yaw: 0, ready: false };
+  function track() {
+    const p = G.player; if (!p?.pos) return;
+    if (!trail.ready) { trail.x = p.pos.x; trail.z = p.pos.z; trail.yaw = p.yaw || 0; trail.ready = true; return; }
+    const dx = p.pos.x - trail.x, dz = p.pos.z - trail.z, d = Math.hypot(dx, dz);
+    if (d > 12) { trail.x = p.pos.x; trail.z = p.pos.z; trail.yaw = p.yaw || 0; return; } // 换层 / 传送：按现在朝向重排
+    if (d < 1.2) return;
+    const want = Math.atan2(-dx, -dz); trail.yaw = wrap(trail.yaw + clamp(wrap(want - trail.yaw), -1.2, 1.2)); trail.x = p.pos.x; trail.z = p.pos.z;
+  }
+  const statRows = [];
   const say = (who, text, secs = 3) => { if (sayT > 0) return false; sayT = 2.4; G.hud?.radio?.(`${who.name}：${text}`, secs); return true; };
 
   function make(member, index) {
@@ -118,7 +129,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     const m = {
       member, id: member.id, name: member.name, pos: root.position, root, yaw: 0, speed: 0, hp: member.hp, maxHp: member.hp, alive: true, down: false, active: false,
       target: null, senseT: rng() * 0.3, cool: 0.6, burst: 0, shots: 0, kills: 0, path: null, wp: 0, planT: 0, pathJob: null, awayT: 0, gait: 0, pitch: 0, recoil: 0, lowReady: 1,
-      reviveT: 0, healT: 12 + rng() * 8, healing: 0, fallK: 0, muzzle: new THREE.Vector3(), chest: new THREE.Vector3(), parts, hurtT: 0, stuckT: 0, biteSay: 0,
+      reviveT: 0, dodgeT: 0, dodgeSide: 1, holdT: 0, healT: 12 + rng() * 8, healing: 0, fallK: 0, muzzle: new THREE.Vector3(), chest: new THREE.Vector3(), parts, hurtT: 0, stuckT: 0, biteSay: 0,
     };
 
     function place(at, yaw = 0) {
@@ -188,7 +199,8 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       want.set(0, 0, 0);
       let faceYaw = null;
       // 落下太远 / 你换了层：直接跟过来（坐电梯、走楼梯、翻栏杆他们都这样跟）
-      if (dist > P.follow.warp || Math.abs(dy) > 2.2) { m.awayT += dt; if ((dist > P.follow.warp * 1.6 || m.awayT > P.follow.warpSeconds) && p.onGround !== false) { warp(); if (m.down) getUp(P.down.hp, true); } } else m.awayT = 0;
+      // 倒在地上的不跟：留在原地等人扶，到下一个安全点才缓过来（rally）
+      if (!m.down && (dist > P.follow.warp || Math.abs(dy) > 2.2)) { m.awayT += dt; if ((dist > P.follow.warp * 1.6 || m.awayT > P.follow.warpSeconds) && p.onGround !== false) warp(); } else m.awayT = 0;
       // 丧尸贴身：掉血
       const zs = zombies?.alive?.() || [];
       let biting = 0;
@@ -230,7 +242,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       else if (fallen) { goal = fallen.pos; stopAt = P.down.reach * 0.7; }
       else {
         // 站位：你身后偏一侧；那一点站不住（墙里、栏杆外）就直接朝你靠
-        const s = slotOf(p.pos, p.yaw || 0, member), st = landAt(nav, s.x, s.z, p.pos.y + 0.6);
+        const s = slotOf(p.pos, trail.ready ? trail.yaw : (p.yaw || 0), member), st = landAt(nav, s.x, s.z, p.pos.y + 0.6);
         if (st && Math.abs(st.y - p.pos.y) < 0.5 && clear(nav, st)) { goal = new THREE.Vector3(s.x, st.y, s.z); stopAt = 0.7; } else { goal = p.pos; stopAt = P.follow.near; }
       }
       const gd = Math.hypot(goal.x - m.pos.x, goal.z - m.pos.z);
@@ -238,6 +250,15 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       // 在位置上（离你不远、离站位不远）就不动；有目标时也不追着站位小碎步挪
       const settle = !needHeal && !fallen && dist < P.follow.far + 0.6 && (gd < 1.6 || !!t || goal === p.pos);
       if (gd > stopAt && !settle) steer(dt, goal, hurry ? P.follow.sprint : P.follow.walk, gd < 7 && Math.abs(goal.y - m.pos.y) < 0.8 && (!G.physics?.lineOfSight || G.physics.lineOfSight(tmp.set(m.pos.x, m.pos.y + 0.9, m.pos.z), new THREE.Vector3(goal.x, goal.y + 0.9, goal.z))));
+      // 别挡枪口：站在你正前方四米内就往旁边让（包扎、扶人的时候除外）
+      m.dodgeT -= dt; m.holdT -= dt;
+      if (!needHeal && !fallen && dist < 3.6 && dist > 0.2) {
+        const yaw = p.yaw || 0, fx = -Math.sin(yaw), fz = -Math.cos(yaw), ax = -dx / dist, az = -dz / dist; // 你 → 他
+        if (m.dodgeT <= 0 && fx * ax + fz * az > 0.965) { m.dodgeT = 0.7; m.dodgeSide = fx * az - fz * ax >= 0 ? 1 : -1; }
+        // 往旁边横着让开一步；让开以后先站着别动（你走远了再跟），免得又走回枪口前
+        if (m.dodgeT > 0) { want.set(-fz * m.dodgeSide * P.follow.walk * 1.2, 0, fx * m.dodgeSide * P.follow.walk * 1.2); m.path = null; m.holdT = 6; }
+      }
+      if (m.holdT > 0 && m.dodgeT <= 0 && dist < P.follow.far + 1.5) want.set(0, 0, 0);
       // 包扎
       if (needHeal && dist < H.reach) {
         m.healing += dt; faceYaw = Math.atan2(dx, dz);
@@ -268,7 +289,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       vel.x += (want.x - vel.x) * k; vel.z += (want.z - vel.z) * k; vel.y = 0;
       const sp = Math.hypot(vel.x, vel.z);
       if (faceYaw === null && sp > 0.3) faceYaw = Math.atan2(vel.x, vel.z);
-      if (faceYaw === null && sp < 0.3 && dist < P.follow.far + 1) faceYaw = (p.yaw || 0) + Math.PI + member.side * 0.5; // 站定：和你朝同一个方向、稍微往外看
+      if (faceYaw === null && sp < 0.3 && dist < P.follow.far + 1) faceYaw = trail.yaw + Math.PI + member.side * 0.5; // 站定：朝着行进的方向、稍微往外看
       if (faceYaw !== null) { const d = wrap(faceYaw - m.yaw); m.yaw = wrap(m.yaw + clamp(d, -7 * dt, 7 * dt)); }
       const res = G.physics?.moveCapsule?.(m.pos, vel, dt, 0.28, 1.7) || null;
       if (!res) { m.pos.x += vel.x * dt; m.pos.z += vel.z * dt; }
@@ -301,6 +322,8 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
   const show = (v) => { for (const m of mates) { m.root.visible = v; m.active = v; } hud?.classList.toggle('off', !v); };
 
   function paint() {
+    // 结算 / 阵亡页上多一行：队友各打倒了几只
+    for (const row of statRows) { row.hidden = !enabled; row.querySelector('dd').textContent = mates.map((m) => `${m.name} ${m.kills}`).join(' · '); }
     if (!hud) return;
     mates.forEach((m, i) => {
       const row = hud.children[i]; if (!row) return;
@@ -319,11 +342,11 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     reset() {
       enabled = wanted && !!siege?.enabled; sayT = 0;
       for (const m of mates) { m.hp = m.maxHp; m.down = false; m.fallK = 0; m.target = null; m.reviveT = 0; m.kills = 0; m.shots = 0; m.cool = 1; m.healT = 12; m.healing = 0; m.pathJob?.cancel?.(); m.pathJob = null; m.path = null; }
-      show(false); api.spawned = false;
+      show(false); api.spawned = false; trail.ready = false;
       paint();
     },
     /** 到了安全点：倒地的缓过来，都回一截血 */
-    rally() { if (!enabled) return; for (const m of mates) { if (m.down) m.getUp(P.down.hp, true); m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.4); } paint(); },
+    rally() { if (!enabled) return; for (const m of mates) { if (m.down) { m.getUp(P.down.hp, true); if (api.spawned) m.warp(); } m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.4); } paint(); },
     /** 尸潮规模的倍数：有站着的队友才加 */
     get hordeScale() { return enabled && api.spawned && mates.some((m) => !m.down) ? P.horde : 1; },
     update(dt) {
@@ -332,6 +355,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       const playing = G.game?.state === 'playing' && G.player?.alive !== false, riding = !!director?.riding;
       if (!playing || riding) { if (api.spawned && riding) show(false); if (riding) api.spawned = false; return; }
       if (!api.spawned) { api.spawned = true; show(true); for (const m of mates) { m.warp(); m.pose(0.016); } }
+      track();
       for (const m of mates) { try { m.update(Math.min(dt, 0.05), mates); } catch (e) { console.error('[零点突围] 队友出错', e); } }
       paint();
     },
@@ -340,9 +364,10 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       hud = document.createElement('div'); hud.className = 'jm-squad off';
       hud.innerHTML = mates.map((m) => `<div class="m"><em style="font-style:normal">${m.name}</em><i><b></b></i><span></span></div>`).join('');
       (ui.querySelector('.hud') || ui).appendChild(hud);
+      for (const dl of ui.querySelectorAll('.m-stats')) { const row = document.createElement('div'); row.hidden = true; row.innerHTML = '<dt>队友击倒</dt><dd></dd>'; dl.appendChild(row); statRows.push(row); }
     },
     dispose() {
-      group.removeFromParent(); mat.dispose(); lampMat.dispose(); lampGeo.dispose(); hud?.remove();
+      group.removeFromParent(); mat.dispose(); lampMat.dispose(); lampGeo.dispose(); hud?.remove(); for (const row of statRows) row.remove();
       for (const m of mates) { m.pathJob?.cancel?.(); for (const g of Object.values(m.parts)) g.dispose?.(); m.root.traverse((o) => { if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } }); }
     },
   };

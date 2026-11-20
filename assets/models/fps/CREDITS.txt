@@ -10,6 +10,7 @@ Adapted first-person and pistol poses by Operation Steel Tide, AetherRadar.
 See UPSTREAM-SMG-LICENSE.md for inherited modification notices.
 Yunlan adaptation: mobile texture resizing and JPEG recompression; viewmodel placement,
 recoil, swap animation and pistol reload presentation. Source geometry retained.
+Also used unchanged (same file) as the suppressed SMG in the 丧尸围城 mode of 零点突围 (src/jimao/smg.js).
 
 “Desert Eagle” by ELIZION
 https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95

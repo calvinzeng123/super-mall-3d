@@ -158,7 +158,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         const look = Math.floor(rng() * LOOKS.length) % LOOKS.length, set = (kind === 'bloater' ? sets.fat : kind === 'screamer' ? sets.scream : sets.normal)[look];
         torso.geometry = set.body; for (const a of arms) a.geometry = set.arm; for (const l of legs) l.geometry = set.leg;
         arms[0].position.x = 0.21 * (K.girth || 1); arms[1].position.x = -0.21 * (K.girth || 1);
-        root.scale.setScalar(scale);
+        root.scale.setScalar(scale); m.scale = scale;
         lookI = Math.floor(rng() * 97); walk = rng();
         if (skin) { skin.setLook(lookI, lookOf(kind)); skin.group.scale.set(K.girth || 1, 1, K.girth || 1); }
         m.special = SPECIALS.includes(kind); m.pounceT = K.pounce ? 0.25 + rng() * 0.45 : 0; m.spitT = K.spit ? K.spit.first + rng() : 0; m.pinT = 0; m.leap = null;

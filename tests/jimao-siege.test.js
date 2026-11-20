@@ -716,6 +716,12 @@ test('队友跟着走：开局站到你身后；你走远了跟上来，换了�
   const f3 = FPS_MISSION.spawn, y3 = elev('P1-3F'); player.pos.set(f3.x, y3, f3.z);
   const ok3 = landAt(nav, f3.x, f3.z, y3 + 0.6);
   if (ok3 && Math.abs(ok3.y - y3) < 0.3) { run(SQUAD.follow.warpSeconds + 0.6); for (const m of squad.mates) assert.ok(Math.abs(m.pos.y - y3) < 0.4 && Math.hypot(m.pos.x - player.pos.x, m.pos.z - player.pos.z) < 6, `${m.name} 跟到了 3F`); }
+  // 原地转身：他们不跟着绕圈；站在你正前方的那个往旁边让开
+  { run(3); const before = squad.mates.map((m) => m.pos.clone()); player.yaw += Math.PI; run(2);
+    for (const [i, m] of squad.mates.entries()) {
+      const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw), dx = m.pos.x - player.pos.x, dz = m.pos.z - player.pos.z, d = Math.hypot(dx, dz) || 1;
+      assert.ok(d > 4.2 || (fx * dx + fz * dz) / d < 0.9, `${m.name} 没挡在枪口前`); assert.ok(m.pos.distanceTo(before[i]) < 4.5, `${m.name} 没有跟着转圈跑（挪了 ${m.pos.distanceTo(before[i]).toFixed(1)} 米）`);
+    } player.yaw -= Math.PI; }
   director.riding = true; run(0.1); assert.ok(squad.mates.every((m) => !m.root.visible)); assert.equal(squad.hordeScale, 1);
   director.riding = false; run(0.1); assert.ok(squad.mates.every((m) => m.root.visible), '下来了又跟上');
   siege.enabled = false; squad.reset(); run(0.2); assert.equal(squad.enabled, false); assert.ok(squad.mates.every((m) => !m.root.visible));
