@@ -3,7 +3,7 @@
 // 只有该塔被选中、进入或正在乘坐时可见（app.js towerVisibility 设 car.group.visible，这里每帧同步到实例矩阵）。
 // 轿厢尺寸取自记录：e.car = { w, d }（北苑 K4 的 1.1 × 2.1 m 担架梯，居中放在 1.9 m 井道里），缺省按井道内净尺寸。
 import * as THREE from 'three';
-import { BatchSet } from '../batch.js';
+import { BatchSet, instanceMatrix } from '../batch.js';
 import { canvasTexture, FONT_CN } from '../textures.js';
 
 /** Closed tower shafts draw their cars instanced (tower lifts that are neither glass nor exterior). */
@@ -105,13 +105,13 @@ function instancedCars(ctx, { building, hw, hd, lifts }) {
   const bodies = template.children.map((m) => {
     const im = new THREE.InstancedMesh(m.geometry, m.material, n);
     im.name = `${building}-cars-${m.name}`; im.castShadow = false; im.receiveShadow = true; im.renderOrder = m.renderOrder;
-    im.frustumCulled = false; im.userData.towerCars = true; im.matrixAutoUpdate = false;
+    im.frustumCulled = false; im.userData.towerCars = true; im.sourceMesh = m; im.matrixAutoUpdate = false;
     root.add(im); return im;
   });
   const leaves = new THREE.InstancedMesh(new THREE.BoxGeometry(hw * 0.92, 2.55, 0.045), ctx.mats.base.glass, n * 2);
   leaves.name = `${building}-car-doors`; leaves.castShadow = false; leaves.frustumCulled = false; leaves.userData.towerCars = true; leaves.matrixAutoUpdate = false;
   root.add(leaves);
-  const all = [...bodies, leaves], m = new THREE.Matrix4(), d = new THREE.Matrix4();
+  const all = [...bodies, leaves], m = new THREE.Matrix4(), d = new THREE.Matrix4(), body = new THREE.Matrix4();
   const cars = lifts.map((e, i) => {
     const group = new THREE.Group();
     group.name = `轿厢 ${e.id}`; group.position.set(e.x, 0, e.z); group.rotation.y = Math.atan2(e.nx, e.nz);
@@ -128,7 +128,7 @@ function instancedCars(ctx, { building, hw, hd, lifts }) {
   const place = (car) => {
     const shown = car.group.visible !== false;
     car.group.updateMatrix();
-    for (const im of bodies) im.setMatrixAt(car.index, shown ? car.group.matrix : ZERO);
+    for (const im of bodies) im.setMatrixAt(car.index, shown ? instanceMatrix(im.sourceMesh, body.copy(car.group.matrix)) : ZERO);
     for (const [k, sign] of [[0, -1], [1, 1]]) {
       d.makeTranslation(sign * hw * (0.48 + 0.48 * car.open), 1.4, hd);
       leaves.setMatrixAt(2 * car.index + k, shown ? m.multiplyMatrices(car.group.matrix, d) : ZERO);

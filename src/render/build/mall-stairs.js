@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BatchSet } from '../batch.js';
+import { BatchSet, instanceMatrix } from '../batch.js';
 import { mallStairPlan } from '../../layout/mall-stairs.js';
 import { NORMAL } from '../../layout/geom.js';
 import { LITE } from '../device.js';
@@ -53,7 +53,8 @@ export function buildMallStairLevel(B,level,stairs,access,{flights=false,finish=
         let seed=Math.abs(Math.round(x*131+z*71+y*17))+1;const rnd=()=>((seed=(seed*16807)%2147483647)/2147483647);
         for(let q=0;q<Math.round(pw*ph*(LITE?.35:.8));q++) {
           const u=(rnd()-.5)*(pw-.3),yy=py+(rnd()-.5)*(ph-.3),rr=.27+rnd()*.22,col=rnd()<.12?['#e58fb5','#f2b6c8','#a77bd1','#f6e7a1'][q%4]:rnd()<.5?'#4f7f3c':'#5f9a48';
-          B.get('foliage').sphere(ox+ux*u+nx*(.12+rnd()*.06),yy,oz+uz*u+nz*(.12+rnd()*.06),rr,col,rr*.9,rr*.55,'ico0');
+          // 叶团朝墙里那个方向压扁（墙只有 15 厘米厚，圆的会从楼梯间里面冒出来）
+          B.get('foliage').sphere(ox+ux*u+nx*(.12+rnd()*.06),yy,oz+uz*u+nz*(.12+rnd()*.06),along?rr:rr*.3,col,rr*.9,along?rr*.3:rr,'ico0');
         }
         for(const yy of [py-ph/2-.05,py+ph/2+.05])B.get('facadeBronze').box(ox+nx*.04,yy,oz+nz*.04,along?pw+.2:.25,.1,along?.25:pw+.2,'#c8a25a');
         for(const s2 of [-1,1])B.get('facadeBronze').box(ox+ux*s2*(pw/2+.05)+nx*.04,py,oz+uz*s2*(pw/2+.05)+nz*.04,along?.1:.25,ph+.2,along?.25:.1,'#c8a25a');
@@ -133,7 +134,7 @@ export function buildMallStairs(ctx) {
         mesh.name=`${level.id}-continuous-stair-${template.name}`;mesh.castShadow=true;mesh.receiveShadow=true;
         for(const [i,f] of flights.entries()) {
           const m=new THREE.Matrix4().makeRotationY(Math.atan2(f.top.x-f.bottom.x,f.top.z-f.bottom.z));
-          m.setPosition(f.bottom.x,f.bottom.y,f.bottom.z);mesh.setMatrixAt(i,m);
+          m.setPosition(f.bottom.x,f.bottom.y,f.bottom.z);mesh.setMatrixAt(i,instanceMatrix(template,m));
         }
         mesh.computeBoundingSphere();L.base.add(mesh);
       }

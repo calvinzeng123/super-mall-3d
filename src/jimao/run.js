@@ -31,6 +31,7 @@ import { createScore, SCORE_CSS } from './score.js';
 import { registerDressing, buildDressing } from './dressing.js';
 import { createArsenal, ARSENAL_CSS } from './arsenal.js';
 import { createCutscenes, CUT, CUTSCENE_CSS } from './cutscene.js';
+import { createStairControl, STAIRS_CSS } from './stairs.js';
 import { HELI_ORBIT } from './ride-paths.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
@@ -88,7 +89,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -200,12 +201,15 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 坐电梯（lift.js）：走到电梯门口，按 Z / X（手机上 ▲ ▼）选楼层，停手就出发，真的走进轿厢坐过去；坐载具时不显示
   const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post, cars: ctx.elevatorCars, guide });
   // 滑铲、手雷、手机上的蹲 / 近战 / 手雷键、辅助瞄准、自动开火（actions.js）；坐载具、坐电梯时不管
-  const actions = createActions(G, { scene, nav, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding });
+  // 消防楼梯（stairs.js）：每层楼梯口挂楼层牌；站在楼梯口按 Z / X（手机 ▲ ▼）快速上 / 下一层，不用自己绕折返梯（用户反馈绕得头晕）
+  const stairs = createStairControl(G, { nav, scene, root: ui, hidden: () => director.riding, post: render.post, lift });
+  G.stairs = stairs;
+  const actions = createActions(G, { scene, nav, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding || stairs.riding });
   G.actions = actions;
   // 小地图 + 下一步提示（minimap.js）：左上角；坐载具时不显示
   const minimap = createMinimap(G, { nav, layout: ctx.layout, ui, guide, hidden: () => director.riding });
   G.minimap = minimap;
-  G.level.onReset = () => { pathfinder.reset(); director.roll(); ammo.reset(); guide.reset(); lift.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
+  G.level.onReset = () => { pathfinder.reset(); director.roll(); ammo.reset(); guide.reset(); lift.reset(); stairs.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
   G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
   director.roll();
   G.missions = director; G.ammo = ammo; G.guide = guide; G.lift = lift;
@@ -290,6 +294,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       // 坐在载具上：玩家更新之前先把载具和玩家摆到这一帧的位置；用舱门机枪时步枪不更新（不开火、不显示）
       if (active) { try { director.prePlayer(dt); } catch (e) { fail('ride', e, '载具出错'); } }
       if (active) { try { lift.update(dt); } catch (e) { fail('lift', e, '电梯出错'); } }
+      if (active) { try { stairs.update(dt); } catch (e) { fail('stairs', e, '楼梯出错'); } }
       // 寻路每帧最多算 PATH.budget 毫秒（帧率很低时减半，别再雪上加霜）
       if (active) { try { pathfinder.update(rawDt > 0.05 ? PATH.budget / 2 : PATH.budget); } catch (e) { fail('path', e, '寻路出错'); } }
       if (active) { try { actions.pre(dt); } catch (e) { fail('actions', e, '操作补强出错'); } }
@@ -403,7 +408,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

@@ -1,6 +1,6 @@
 import { towerStairPlan } from '../../layout/tower-stairs.js';
 import * as THREE from 'three';
-import { BatchSet, frameMatrix } from '../batch.js';
+import { BatchSet, frameMatrix, instanceMatrix } from '../batch.js';
 
 const WALL = '#dce1d8', STEP = '#c8cec3', METAL = '#607967';
 const box = (B, key, r, y, height, color) => B.get(key).box((r.x0+r.x1)/2,y+height/2,(r.z0+r.z1)/2,r.x1-r.x0,height,r.z1-r.z0,color);
@@ -122,7 +122,7 @@ export function buildTowerStairInstances(ctx, building, levels, stairs, material
       const mesh=new THREE.InstancedMesh(source.geometry,source.material,members.length);
       mesh.name=`${building.id}-protected-stairs-${lv.height}-${source.name}`;
       mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;
-      mesh.userData.towerStairs=true;mesh.count=0;mesh.visible=false;
+      mesh.userData.towerStairs=true;mesh.sourceMesh=source;mesh.count=0;mesh.visible=false;
       exterior.add(mesh);meshes.push(mesh);
     }
     template.clear();record.meshes=meshes;
@@ -143,7 +143,7 @@ export function buildTowerStairInstances(ctx, building, levels, stairs, material
       for(const mesh of record.meshes||[]) {
         for(const [i,lv] of selected.entries()) {
           const matrix=frameMatrix(building.frame);matrix.elements[13]=lv.elev;
-          mesh.setMatrixAt(i,matrix);
+          mesh.setMatrixAt(i,instanceMatrix(mesh.sourceMesh,matrix));
         }
         mesh.count=selected.length;mesh.visible=selected.length>0;
         mesh.instanceMatrix.needsUpdate=true;

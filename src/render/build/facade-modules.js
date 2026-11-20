@@ -13,7 +13,7 @@
 // 用 vertexColors = false 的克隆并设 color（每实例着色用 setColorAt）。克隆保留该塔自己的剪切平面，楼层剖切照样
 // 切到实例。测试：每个材质开着 vertexColors 的 InstancedMesh 都必须有 geometry.attributes.color。
 import * as THREE from 'three';
-import { BatchSet, frameMatrix } from '../batch.js';
+import { BatchSet, frameMatrix, instanceMatrix } from '../batch.js';
 
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
@@ -54,7 +54,7 @@ export function moduleSet(ctx, b, materials, { local = false, name = `${b.id}-mo
       for (const src of g.children) {
         const im = new THREE.InstancedMesh(src.geometry, src.material, levels.length), m = new THREE.Matrix4();
         levels.forEach((lv, i) => {
-          const matrix = m.clone().makeTranslation(0, elev(lv), 0).premultiply(F);
+          const matrix = instanceMatrix(src, m.clone().makeTranslation(0, elev(lv), 0).premultiply(F));
           im.setMatrixAt(i, matrix);
           (slots.get(lv.id) || slots.set(lv.id, []).get(lv.id)).push({ mesh: im, index: i, matrix });
         });

@@ -6,6 +6,20 @@
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
+### 手机上消防楼梯「虚空」的修复 + 楼梯防头晕（2026-11-20，用户「消防那边的楼梯模型没显示出来像虚空一样；消防梯太循环了看着头晕」）
+**没部署**（等用户说「部署」）。测试：`tests/packed-instancing.test.js`（2 条）、`tests/jimao-stairs.test.js`（4 条）。实拍脚本在 scratchpad 的 `zb/`（`probe.cjs m|d` 手机 / 电脑配置下的楼梯口、楼层牌、快速上下楼）。
+
+- **虚空的原因（只在手机 / 省内存档出现）**：省内存档下 `BatchSet.flush()` 把顶点坐标压成 16 位整数、归一化到 [-1, 1]，还原用的平移和缩放放在那个网格自己的矩阵里（`mesh.position / scale`）。
+  公寓、酒店、塔楼的消防梯段是「拿模板的几何体做实例化」（`tower-stairs.js` 的 `buildTowerStairInstances`），只拿走几何体、丢了这层还原，梯段缩成原点处一小团——楼梯间里只剩墙、门洞和悬空的扶手，往上往下看是一口空井。
+  同样写法的还有三处：塔楼电梯轿厢（`tower-elevators.js`）、立面模块（`facade-modules.js`）、商场连续梯段（`mall-stairs.js`）。
+  **修法**：`batch.js` 加 `instanceMatrix(source, matrix)`，压缩过的几何体在实例矩阵里先乘上模板网格的矩阵；四处都过一遍。测试里有一张清单盯着：以后再有「flush 出模板 → InstancedMesh」的写法没过这一遍就报错。
+- **怎么复现**：电脑配置下一切正常，必须用手机的 UA（`device.js` 的 `MOBILE` 认 UA）。无头浏览器里不走主循环手动步进时，记得把相机近裁剪面设成 0.15（主循环里 `updateNear` 做的）——不设的话贴墙会看穿墙，我一开始把这个当成了 bug。
+  另外 `physics.stateOf(pos)` 只认它一直跟着的那个向量（玩家的 `pos`），传别的向量进去是 null；传送以后要 `physics.forget(pos)`。
+- **防头晕**（新文件 `stairs.js`，商场、公寓、酒店、北区塔楼通用，全靠导航里 `protected-stair` 的坡道串出来）：
+  - **楼层牌**：每层楼梯口挂一块绿底白字的牌子（「3F」），牌面朝着梯段；按楼梯间分组，只画人 26 米内的。
+  - **快速上下楼**：站在楼梯口按 Z / X（手机 ▲ ▼），压黑 1.3 秒，人到上一层 / 下一层的楼梯口、面朝楼面。想自己走照样能走。9 米内同层有敌人时不让用；`blocked(run, dir)` 回调留给丧尸围城（被堵的楼梯）。电梯口优先（两边都用 Z / X）。
+  - 商场楼梯间外墙的绿墙叶团朝墙里压扁了（以前会从楼梯间里面冒出来几片绿叶）。
+
 ### 零点突围 · 动作与武器：翻越掩体、真坐电梯、开局 / 撤离过场、手枪和刀（2026-11-20，用户「翻越掩体和真实坐电梯和出场过场完成等动画，看看能不能做到真实；第二把枪或者手枪刀具尽量做到真实」）
 **已发布（2026-11-20，用户说「部署」）**：提交 `9711734`，`npm run build:netlify`（108 文件、64.81 MiB）后用 Netlify CLI 发布，部署 `6affbcf50d8f3f1b97607122` live；首页 200，入口 `main.BBOYFBML.js`，线上 27 个 js 的 SHA-256 和本地 `dist/netlify` 全部一致。测试在 `tests/jimao-actions.test.js`（17 条：翻越、真坐电梯、武器模型、切枪、掏枪动画、手枪、刀、三条过场）。浏览器实拍脚本在 scratchpad 的 `act/`（`lift.cjs` 电梯、`guns.cjs` / `knife.cjs` / `draw.cjs` 武器和掏枪动画、`intro.cjs` 开局过场、`outro.cjs heli|car` 撤离过场、`phone.cjs` 手机布局）。
 

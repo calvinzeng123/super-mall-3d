@@ -283,6 +283,16 @@ export const PACK_STEP = 0.005;
  * 只压范围不太大的批次：每一格不超过 5 毫米（一层楼的批次约 4 毫米；全园区一批的场地几何范围上千米，不压）。
  * 返回 { array, center, half }，不压返回 null。
  */
+/**
+ * 把 flush() 出来的网格拿去做实例化（new InstancedMesh(source.geometry, …)）时，每个实例的矩阵要过这里一遍：
+ * 省内存档（手机）下顶点坐标压成了 16 位整数、归一化到 [-1, 1]，还原用的平移和缩放放在那个网格自己的矩阵里（mesh.position / mesh.scale）；
+ * 实例化只拿走几何体，这层还原就丢了——整件东西缩成原点处两米见方的一小团（手机上公寓 / 酒店 / 塔楼的消防梯段、电梯轿厢都「不见了」就是这个）。
+ * 没压缩的几何体原样返回。matrix 会被就地改掉并返回。
+ */
+export function instanceMatrix(source, matrix) {
+  return source.geometry?.userData?.packedPositions ? matrix.multiply(source.matrix) : matrix;
+}
+
 export function packPositions(pos, maxStep = PACK_STEP) {
   const n = pos.length / 3;
   if (!n) return null;
