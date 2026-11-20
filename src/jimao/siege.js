@@ -421,7 +421,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if ((sw.tick -= dt) <= 0 && sw.made.ground < want) {
       sw.tick = 0.35;
       const s = sw.ground[sw.made.ground % sw.ground.length];
-      const z = spawn(new THREE.Vector3(s.x, s.y, s.z), { hunt: true, kind: sw.made.ground % 6 === 2 ? 'screamer' : sw.made.ground % 3 === 0 ? 'runner' : undefined });
+      // 尖叫者一共三只（屋顶一只、楼下两只），别的不会随机抽到它
+      const z = spawn(new THREE.Vector3(s.x, s.y, s.z), { hunt: true, kind: sw.made.ground === 2 || sw.made.ground === 9 ? 'screamer' : sw.made.ground % 3 === 0 ? 'runner' : undefined, mix: { walker: 0.7, runner: 0.2, bloater: 0.1, screamer: 0 } });
       if (z) { z.sweep = 'ground'; sw.list.push(z); }
       sw.made.ground++;
     }

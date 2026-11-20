@@ -178,6 +178,8 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
   const stand = s.pos.clone(); run(8); player.pos.y -= 44; const shot = events.find(([n, e]) => n === 'enemy:fire' && e.scream);
   assert.ok(s.pos.distanceTo(stand) < 1.5, '站住叫，不乱跑');
   assert.ok(shot && shot[1].hits === KINDS.screamer.scream.heli && shot[1].type === 'screamer' && shot[1].dir.y > 0.5, '朝天上的直升机叫');
+  // 一只尖叫者 8 秒叫一声、一声掉 3 × 0.8：三只都不管，100 秒的清扫掉 90 来点耐久——不打会坠机，但来得及先找它们
+  assert.ok(KINDS.screamer.scream.heli * 0.8 * 3 * (100 / KINDS.screamer.scream.heliEvery) < 100);
   s._deactivate(); G.missions = null;
   // 钉在原地的
   const fx = enemies.spawn('zombie', ahead(5), { kind: 'walker', fixed: true, yaw: 1 }), at = fx.pos.clone();
@@ -292,6 +294,7 @@ test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天�
   let t = 0; const tick = (secs) => { for (let k = 0; k < secs * 30; k++) { t += 1 / 30; m.extraction.ride.spawns(1 / 30, t); } };
   tick(20); const half = sw.list.filter((z) => z.sweep === 'ground').length; assert.ok(half >= 5 && half <= SIEGE.sweep.ground / 2 + 1, `前半程楼下出来 ${half} 只`);
   t = m.extraction.flight.times.ground; tick(8); assert.equal(sw.made.ground, SIEGE.sweep.ground);
+  assert.equal(sw.list.filter((z) => z.kind === 'screamer').length, SIEGE.sweep.screamers, '尖叫者一共三只');
   assert.equal(m.extraction.ride.targets().length, sw.list.filter((z) => z.alive).length);
   assert.match(m.text({ allCut: true }, { kills: 0 }), /清扫 · 屋顶 0\/8 · 阳台 0\/6 · 楼下 0\/14/);
   // 打一只阳台上的：玻璃先碎

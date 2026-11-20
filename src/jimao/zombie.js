@@ -38,7 +38,7 @@ export const KINDS = Object.freeze({
   walker: Object.freeze({ name: '行尸', weight: 0.68 }),
   runner: Object.freeze({ name: '奔尸', weight: 0.16, speed: 4.7, hp: 36, bite: 10, windup: 0.26, cooldown: 0.7, scale: 0.96, lean: 0.4 }),
   bloater: Object.freeze({ name: '胖尸', weight: 0.09, speed: 0.95, hp: 190, bite: 22, windup: 0.6, scale: 1.2, girth: 1.45, burst: Object.freeze({ radius: 3.6, damage: 34 }) }),
-  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 6 }), scale: 1.02 }),
+  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 3, heliEvery: 8, heliFirst: 5 }), scale: 1.02 }),
 });
 /** 按比例抽一种。r ∈ [0, 1)；mix 可以改比例（{ runner: 0.3 } 这样） */
 export function pickKind(r, mix = null) {
@@ -150,7 +150,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         m.home.copy(m.pos); m.yaw = opts.yaw ?? rng() * Math.PI * 2; m.speed = 0; vel.set(0, 0, 0);
         m.zs = 'idle'; m.zsT = 0; m.mode = 'patrol'; m.modeSeen = 'patrol'; m.los = false; m.cool = 0.3 + rng() * 0.5; m.senseT = rng() * 0.3; m.loseT = 0;
         m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.hasGoal = false; m.planT = 0; m.stuckT = 0; m.wanderT = 1 + rng() * 5;
-        m.screamT = K.scream ? K.scream.first + rng() : 0;
+        m.screamT = K.scream ? (G.missions?.rideKind === 'helicopter' ? K.scream.heliFirst : K.scream.first) + rng() : 0; // 对着飞机叫的第一声晚一点，给人找到它的时间
         m.gait = rng() * 6.28; m.phase = rng() * 6.28; m.swing = 0; m.lunge = 0; m.stagger = 0; m.dieT = 0; m.fall = 0; m.fallV = 0; m.skip = index % 2;
         body.rotation.set(0, 0, 0); body.position.set(0, 0, 0);
         root.visible = true;
@@ -240,7 +240,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       if (heliAt && Math.hypot(heliAt.x - m.pos.x, heliAt.y - m.pos.y, heliAt.z - m.pos.z) < 120) {
         m.mode = 'engage'; faceYaw = Math.atan2(heliAt.x - m.pos.x, heliAt.z - m.pos.z);
         if (m.zs === 'scream') { if ((m.zsT += dt) > 1.1) m.zs = 'chase'; }
-        else if ((m.screamT -= dt) <= 0) { m.screamT = C.scream.every * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0; scream(heliAt); }
+        else if ((m.screamT -= dt) <= 0) { m.screamT = C.scream.heliEvery * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0; scream(heliAt); }
       } else if (m.zs === 'idle') {
         m.mode = 'patrol';
         // 游荡：隔一阵挪两步

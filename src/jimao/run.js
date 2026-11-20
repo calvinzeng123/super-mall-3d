@@ -286,7 +286,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   run.err = {}; run.msg = {};
   // 帧率掉到 20 以下时，每帧的步长封顶 0.05 秒会让人走得比实际时间慢（10fps 只剩一半速度）：
   // 只有玩家按真实间隔（最多 0.15 秒）分几小步走完，敌人、特效照旧一步（不再加重这一帧）。转头只算一次。坐车 / 用机枪时不拆。
-  let lastNow = 0;
+  let lastNow = 0, ridingUi = false;
   function stepPlayer(dt, gap) {
     const span = gap > 0.5 ? dt : Math.min(Math.max(gap, dt), 0.15), steps = Math.max(1, Math.ceil(span / 0.05 - 1e-6));
     if (steps === 1 || director.riding || director.gunActive) { run('player', dt); return; }
@@ -336,6 +336,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
         const cv = cuts.intro.view(dt);
         if (cv) { camera.position.copy(cv.position); camera.quaternion.copy(cv.quaternion); render.post.fade = cv.fade; }
       } catch (e) { fail('cutscene', e, '过场镜头出错'); }
+      // 坐在载具上（含登机、返航的过场）：界面换成只有开火键和机枪状态条
+      { const riding = !!director.riding; if (riding !== ridingUi) { ridingUi = riding; ui.classList.toggle('jm-riding', riding); } }
       run('audio', dt); run('hud', dt);
       try { cover.tick(); } catch (e) { fail('cover', e, '封面出错'); }
       lightPool.update(dt);

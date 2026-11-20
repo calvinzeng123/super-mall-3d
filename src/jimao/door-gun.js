@@ -250,6 +250,9 @@ function makeHud(label = 'M134 舱门机枪') {
 }
 
 export const DOOR_GUN_CSS = `
+/* 坐在载具上用的是车载机枪：手雷、切枪、换弹、跳、蹲、近战、瞄准、交互这些键用不着，还会压住机枪的状态条（用户截图）；步枪的子弹数也不该显示 */
+.jm-riding .t-reload, .jm-riding .t-jump, .jm-riding .t-ads, .jm-riding .t-crouch, .jm-riding .t-melee, .jm-riding .t-nade, .jm-riding .t-swap, .jm-riding .t-interact { display: none !important; }
+.jm-riding .h-ammo { display: none !important; }
 .jm-doorgun { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px;
   padding: 7px 14px; border-radius: 10px; background: rgba(10, 14, 12, .55); color: #e8efe2; font: 600 13px/1 system-ui, sans-serif; letter-spacing: .04em; pointer-events: none; }
 .jm-doorgun .inf { color: #9fe3a8; }
