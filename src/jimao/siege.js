@@ -12,6 +12,8 @@
 // 这里的规则（抽关卡、航线、封锁判定）都是纯函数，createSiege 把它们接到游戏上。任务系统那边的接口见 missions.js（mission.extraction.flight / ride / closed）。
 import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
+import { findPath } from '../fps/pathfinding.js';
+import { doorOutside } from './guide.js';
 import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
 
@@ -61,17 +63,41 @@ const floorOf = (n, tower = TOWERS.A) => `${tower.id}-${n}F`;
 const shuffle = (list, rng) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 /** 公寓某一层的住户房间（屋子中间那一点，站得住人）：[{ floor, x, y, z, name }] */
+/** 门牌上的写法：复式写「17–18E」，平层写「10W」，公寓写「0401」（和 residence-interiors.js 的 homePlate 一致，玩家能对着门牌找） */
+export function plateOf(code) {
+  const id = String(code).replace(/-[LU]$/, '').split('-').at(-1), m = /^(\d{2})(\d{2})([A-Z])$/.exec(id);
+  return m ? `${m[1]}–${m[2]}${m[3]}` : id;
+}
+/**
+ * 这一层能放工具的住户房间：只要这一层有入户门的户。
+ * 复式的上层在这一层没有门（门在下一层，上层只能从户内楼梯上来）——以前也算进来了，工具放进去玩家在走廊里怎么都找不到入口（用户在北区 17F / 15F 卡关）。
+ * 落点在户里挑一个站得住的地方（正中被家具占了就往旁边找）。走不走得进去另外用 siteReachable 验（要寻路，慢，只对抽中的那一户验）。
+ */
 export function unitSites(layout, nav, floor) {
   const lv = layout.levels.find((l) => l.id === floor), out = [];
   for (const u of lv?.units || []) {
-    const r = u.rects?.[0]; if (!r) continue;
-    const [x, z] = toW(u.frame, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), st = landAt(nav, x, z, lv.elev + 0.6);
-    if (!st || st.floor !== floor || !clear(nav, st)) continue;
-    const n = +(u.id.split('-').at(-1).replace(/\D/g, '') || 1);
-    out.push({ floor, x: st.x, y: lv.elev, z: st.z, unit: u.id, name: `${lv.short.replace(/\D/g, '')}${String(n).padStart(2, '0')} 室` }); // unit：路线指引要靠它找到这户的门
+    const r = u.rects?.[0]; if (!r || !u.wfronts?.length || u.residence?.level === 'upper') continue;
+    // 候选落点：先是户里靠中间的几处（要走进去找），最后是进门两三米的玄关（里面的门太窄、家具挡路时的保底）
+    const spots = [], at = u.residence?.entryDoor?.at, lf = u.fronts?.[0];
+    const local = [[0.5, 0.5], [0.5, 0.36], [0.36, 0.5], [0.64, 0.5], [0.5, 0.64], [0.32, 0.32], [0.68, 0.32], [0.32, 0.68], [0.68, 0.68]].map(([fx, fz]) => [r.x0 + (r.x1 - r.x0) * fx, r.z0 + (r.z1 - r.z0) * fz]);
+    if (typeof at === 'number' && lf?.side === 'N') for (const d of [2.8, 2.1, 1.5]) local.push([at, r.z0 + d]);
+    for (const [lx, lz] of local) {
+      const [x, z] = toW(u.frame, lx, lz), st = landAt(nav, x, z, lv.elev + 0.6);
+      if (st && st.floor === floor && clear(nav, st)) spots.push({ x: st.x, z: st.z });
+    }
+    if (!spots.length) continue;
+    out.push({ floor, x: spots[0].x, y: lv.elev, z: spots[0].z, unit: u.id, name: `${plateOf(u.code || u.id)} 室`, spots }); // unit：路线指引要靠它找到这户的门
   }
   return out;
 }
+/** 这一户里第一个「从门外走廊走得到」的落点（门开着、没被家具堵死）；一个都走不到返回 null。要寻路，只对抽中的那一户算 */
+export function reachSpot(layout, nav, site) {
+  const door = doorOutside(layout, site, nav);
+  if (!door) return null;
+  for (const q of site.spots || [site]) if (findPath(nav, door, { floor: site.floor, x: q.x, z: q.z, y: site.y, slope: null })) return { floor: site.floor, x: q.x, y: site.y, z: q.z, unit: site.unit, name: site.name };
+  return null;
+}
+export const siteReachable = (layout, nav, site) => !!reachSpot(layout, nav, site);
 /** 电梯厅里站人的位置：这一层电梯门正前方 dist 米 */
 export function lobbySpot(nav, link, floor, dist = 2.2) {
   const stop = link?.stops?.find((s) => s.floor === floor); if (!stop) return null;
@@ -100,11 +126,14 @@ export function siegePlan(rng, layout, nav, runs, tower = TOWERS.A) {
     // 这一段里有住户房间可找工具的楼层才抽（北区塔楼有几层没有能进的户）
     const ok = []; for (let n = lo; n <= hi; n++) if (unitSites(layout, nav, floorOf(n, tower)).length && runs.some((r) => r.from === floorOf(n, tower) && r.id.startsWith(tower.stair))) ok.push(n);
     const n = ok[Math.floor(rng() * ok.length)], floor = floorOf(n, tower), type = types[i], T = GATES[type];
-    const rooms = unitSites(layout, nav, floor), room = rooms[Math.floor(rng() * rooms.length)];
+    // 抽一户：先随机排个序，取第一户从门外走得进去的（都不行就退回第一户，总比没有强）
+    let room = null; const rooms = shuffle(unitSites(layout, nav, floor), rng);
+    for (const q of rooms) if ((room = reachSpot(layout, nav, q))) break;
+    room ||= rooms[0];
     const up = runs.filter((r) => r.from === floor && r.id.startsWith(tower.stair));
     const core = up[Math.floor(rng() * up.length)];
     const at = T.at === 'lobby' ? (lobbySpot(nav, lift, floor) || core.a) : core.a;
-    stages.push({ id: `tool${i}`, kind: 'tool', gate: i, tool: T.tool, floor, site: room, label: `${T.tool} · ${n}F ${room.name}`, verb: `拿${T.tool}`, text: `${n}F：${T.name}。到 ${room.name}${T.find}`, noise: 0 });
+    stages.push({ id: `tool${i}`, kind: 'tool', gate: i, tool: T.tool, floor, site: room, label: `${T.tool} · ${n}F ${room.name}`, verb: `拿${T.tool}`, text: `${n}F：${T.name}。到 ${room.name}${T.find}`, hud: `${n}F · 到 ${room.name}${T.find}`, noise: 0 });
     stages.push({ id: `gate${i}`, kind: 'gate', gate: i, type, floor, site: { floor, x: at.x, y: yOf(floor), z: at.z }, label: `${T.name} · ${n}F`, verb: T.verb, text: `带着${T.tool}回${T.at === 'lobby' ? '电梯厅' : '楼梯口'}：${T.verb}`, noise: SIEGE.noise[T.noise] });
     gates.push({ type, floor, n, runs: up.map((r) => r.id), core: core.id, stage: stages.length - 1, model: { x: core.ea.x + core.da.x * 0.7, y: yOf(floor), z: core.ea.z + core.da.z * 0.7, yaw: Math.atan2(core.da.x, core.da.z) } });
   });
@@ -332,7 +361,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if (ride?.over) return '清扫完毕 · 返航';
     if (ride && S.sweep) { const w = S.sweep; return `清扫 · 屋顶 ${w.kill.roof}/${w.total.roof} · 阳台 ${w.kill.window}/${w.total.window} · 楼下 ${w.kill.ground}/${w.total.ground}`; }
     if (c.allCut) return S.landed ? `登机 · ${tower().roofName}直升机` : S.hold >= 0 ? '守住屋顶，等直升机' : '等直升机';
-    return S.plan.stages[Math.min(S.stage, S.plan.stages.length - 1)].text;
+    // 屏幕上的目标用短句（长句在平板上折成两行，压住罗盘和响动条）；完整的那句无线电里会说
+    const st = S.plan.stages[Math.min(S.stage, S.plan.stages.length - 1)]; return st.hud || st.text;
   }
 
   /** 机外镜头架在楼顶边上、离直升机最近的那一点：看着它从楼下绕上来、飞远。贴着女儿墙内侧、比人高一截——退进来站在人眼高度的话，屋面上的花箱、女儿墙会挡掉小半个画面 */

@@ -8,7 +8,8 @@ import { findPath } from '../src/fps/pathfinding.js';
 import { pointInPoly } from '../src/layout/geom.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
-import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel } from '../src/jimao/siege.js';
+import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf } from '../src/jimao/siege.js';
+import { doorOutside } from '../src/jimao/guide.js';
 import { ZOMBIE, KINDS, pickKind, zombieParts, addZombies } from '../src/jimao/zombie.js';
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
 import { createPathfinder } from '../src/jimao/pathfinder.js';
@@ -392,4 +393,39 @@ test('回收再用的丧尸在活动列表里只有一份：尖叫者照样按�
   assert.ok(shots.length >= 2, `30 秒里叫了 ${shots.length} 声`);
   assert.ok(shots.length <= Math.ceil((30 - K.heliFirst) / (K.heliEvery * 0.85)) + 1, `30 秒里叫了 ${shots.length} 声，太密`);
   G.missions = null;
+});
+
+test('找工具的房间一定进得去：只选这一层有入户门的户（复式上层的门在下一层，不算），门外走廊从电梯厅走得到，进门走得到工具；房号用门牌上的写法', () => {
+  assert.equal(plateOf('T1-1718E-L'), '17–18E'); assert.equal(plateOf('T1-1617W-U'), '16–17W'); assert.equal(plateOf('T1-09E'), '09E'); assert.equal(plateOf('A-0401'), '0401');
+  // 用户卡关的两处：北区 17F 的「1701 室」其实是 16–17W 复式的上层，15F 的「1501 室」是 14–15W 的上层，这两层都没有它们的门
+  for (const [floor, upper] of [['T1-17F', 'T1-1617W-U'], ['T1-15F', 'T1-1415W-U']]) {
+    const lv = L.levels.find((l) => l.id === floor), u = lv.units.find((q) => q.code === upper);
+    assert.ok(u && u.residence.level === 'upper' && !u.wfronts.length, `${upper} 在 ${floor} 没有入户门`);
+    assert.ok(!unitSites(L, nav, floor).some((q) => q.unit === u.id), `${upper} 不能放工具`);
+  }
+  assert.deepEqual(unitSites(L, nav, 'T1-17F').map((q) => q.name), ['17–18E 室']);
+  // 两栋楼所有可能抽到的楼层、每一户：有门、门外站得住、电梯厅走得到门外、门外走得到工具
+  for (const T of Object.values(TOWERS)) {
+    const link = nav.links.find((l) => l.id === T.lift), lo = Math.min(...T.gates.flat()), hi = Math.max(...T.gates.flat());
+    for (let n = lo; n <= hi; n++) {
+      const floor = `${T.id}-${n}F`, lob = lobbySpot(nav, link, floor), sites = unitSites(L, nav, floor);
+      assert.ok(lob && sites.length, `${floor} 有电梯厅、有能进的户`);
+      for (const q of T.id === 'A' ? sites.slice(0, 3) : sites) {
+        const door = doorOutside(L, q, nav); assert.ok(door, `${floor} ${q.name} 门外站得住`);
+        assert.ok(findPath(nav, { ...lob, slope: null }, door), `${floor} ${q.name}：电梯厅走得到门口`);
+        const sp = reachSpot(L, nav, q); assert.ok(sp, `${floor} ${q.name}：进门走得到工具`);
+        assert.ok(Math.hypot(sp.x - door.x, sp.z - door.z) > 2, '工具在户里，不在门口');
+      }
+    }
+  }
+  // 整局：随机抽二十局，每道关的工具点都是「这一层有门、进得去」的户
+  for (const id of ['A', 'T1']) for (let k = 1; k <= 10; k++) {
+    const plan = siegePlan(seq(k * 7 + 3), L, nav, runs, TOWERS[id]);
+    for (const st of plan.stages.filter((q) => q.kind === 'tool')) {
+      const u = L.levels.find((l) => l.id === st.floor).units.find((q) => q.id === st.site.unit);
+      assert.ok(u.wfronts.length && u.residence?.level !== 'upper', `${st.label} 这一层有门`);
+      assert.ok(findPath(nav, doorOutside(L, st.site, nav), { floor: st.floor, x: st.site.x, z: st.site.z, slope: null }), `${st.label} 进得去`);
+      assert.match(st.text, new RegExp(st.site.name.replace(/[–]/g, '.')));
+    }
+  }
 });

@@ -11,15 +11,27 @@ import { routeHint } from './minimap.js';
 
 export const GUIDE = Object.freeze({ spacing: 1.4, ahead: 45, count: 34, recompute: 1.5, stray: 5, speed: 7, color: '#9fe8ff' });
 
-/** 物品在房间里：返回门外一点（门脸中点沿外法线 1.5 米），否则 null */
-export function doorOutside(layout, site) {
+/**
+ * 物品在房间里：返回这一户入户门外的一点（走廊里、正对着门），没有入户门（复式上层）返回 null。
+ * 门的位置用户型数据里的 entryDoor.at（沿门脸的位置）——以前取门脸中点，北区塔楼的门脸中点正对着电梯井，那一点根本站不了人，
+ * 路线指引就指不到门口。给了 nav 就挑一个真站得住的距离；没有门的数据才退回门脸中点。
+ */
+export function doorOutside(layout, site, nav = null) {
   if (!site?.unit) return null;
   const lv = layout.levels.find((l) => l.id === site.floor), u = lv?.units?.find((q) => q.id === site.unit), f = u?.wfronts?.[0];
   if (!f) return null;
-  const mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2;
-  for (const g of [1, -1]) {
-    const x = mx + f.nx * 1.5 * g, z = mz + f.nz * 1.5 * g;
-    if (Math.hypot(x - site.x, z - site.z) > Math.hypot(mx - site.x, mz - site.z)) return { floor: site.floor, x, z, y: lv.elev, slope: null };
+  const at = u.residence?.entryDoor?.at, L = Math.hypot(f.x1 - f.x0, f.z1 - f.z0) || 1;
+  // 门脸在世界里是 (x0,z0) → (x1,z1)，对应户内坐标沿门脸从 fronts[0].x0 到 x1
+  const lf = u.fronts?.[0], k = typeof at === 'number' && lf ? (at - lf.x0) / ((lf.x1 - lf.x0) || 1) : 0.5;
+  const mx = f.x0 + (f.x1 - f.x0) * k, mz = f.z0 + (f.z1 - f.z0) * k;
+  void L;
+  // 外法线：离落点更远的那一侧
+  const out = Math.hypot(mx + f.nx - site.x, mz + f.nz - site.z) > Math.hypot(mx - f.nx - site.x, mz - f.nz - site.z) ? 1 : -1;
+  for (const d of [1.3, 1.0, 0.8, 1.7]) {
+    const x = mx + f.nx * d * out, z = mz + f.nz * d * out;
+    if (!nav) return { floor: site.floor, x, z, y: lv.elev, slope: null };
+    const st = landAt(nav, x, z, lv.elev + 0.6);
+    if (st && st.floor === site.floor && clear(nav, st)) return { floor: site.floor, x: st.x, z: st.z, y: lv.elev, slope: null };
   }
   return null;
 }
@@ -67,7 +79,7 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
       const open = (run.relays || []).filter((r) => !r.cut && r.o?.pos && !r.o.locked); // locked：还没放出来的目标（丧尸围城一步一步来）
       if (!open.length) return null;
       const r = open.sort((a, b) => a.o.pos.distanceTo(p) - b.o.pos.distanceTo(p))[0], site = r.o.site || { floor: r.o.zone, x: r.o.pos.x, z: r.o.pos.z };
-      return { key: r.id, name: String(r.o.label || r.label || '目标').split(' · ')[0], floor: site.floor, x: r.o.pos.x, y: r.o.pos.y, z: r.o.pos.z, door: doorOutside(layout, site) };
+      return { key: r.id, name: String(r.o.label || r.label || '目标').split(' · ')[0], floor: site.floor, x: r.o.pos.x, y: r.o.pos.y, z: r.o.pos.z, door: doorOutside(layout, site, nav) };
     }
     const x = G.level?.extraction;
     if (!x?.pos) return null;
