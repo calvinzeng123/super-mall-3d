@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { L } from './helpers.js';
 import { frame, rect, rectPoly, lrectPoly, toW, toL, pointInPoly, distToSeg, polyBounds } from '../src/layout/geom.js';
-import { BatchSet, SignBatch } from '../src/render/batch.js';
+import { BatchSet, SignBatch, usePropLibrary } from '../src/render/batch.js';
+import { isSharedProp } from '../src/render/props/library.js';
 import { buildCommunityTower, coreCells, facadeCoverage, lobbySignSpot, COMMUNITY_FAR_LOD } from '../src/render/build/community.js';
 import { buildPublicGarageShells, connections, setHospitalityCut } from '../src/render/build/hospitality.js';
 import { buildCommunitySite } from '../src/render/build/community-site.js';
@@ -340,4 +341,27 @@ test('社区电梯层门随楼层剖切：门扇材质与塔楼外立面共用�
     setHospitalityCut(ctx, id);
     assert.ok(rec.landing.stops.every(kept), `${id} 取消聚焦后层门仍被切掉`);
   }
+});
+
+test('换出一户时不放掉模型库共用的家具几何体（放掉后别处再画同款家具会读到空数组）', () => {
+  // 假模型库：每批摆放都变成一个实例化网格，几何体是「全园区共用」的那一个
+  const shared = new THREE.BoxGeometry(1, 1, 1), meshes = [];
+  let geometryDisposed = 0; shared.addEventListener('dispose', () => geometryDisposed++);
+  usePropLibrary({ has: () => true, resources: () => ({ geometries: new Set([shared]), materials: new Set(), textures: new Set() }),
+    instantiate(group, placed) {
+      const mesh = new THREE.InstancedMesh(shared, new THREE.MeshBasicMaterial(), placed.length);
+      mesh.userData.prop = placed[0].id; mesh.addEventListener('dispose', () => { mesh.userData.released = true; });
+      meshes.push(mesh); group.add(mesh);
+    } });
+  try {
+    const lv = L.levels.find((l) => l.id === 'T1-10F');
+    const floor = buildResidenceFloor({ layout: L, mats: { base } }, { lv });
+    assert.ok(meshes.length > 0, '这一层的家具走了模型库');
+    assert.ok(meshes.every(isSharedProp));
+    floor.dispose();
+    assert.equal(geometryDisposed, 0, '共用几何体不能被 dispose');
+    assert.ok(meshes.every((m) => m.userData.released), '每个实例化网格都通知了模型库');
+  } finally { usePropLibrary(null); }
+  assert.equal(isSharedProp({ userData: { sharedProp: true } }), true);
+  assert.equal(isSharedProp(new THREE.Mesh()), false);
 });

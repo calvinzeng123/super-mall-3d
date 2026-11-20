@@ -38,7 +38,7 @@ export const KINDS = Object.freeze({
   walker: Object.freeze({ name: '行尸', weight: 0.68 }),
   runner: Object.freeze({ name: '奔尸', weight: 0.16, speed: 4.7, hp: 36, bite: 10, windup: 0.26, cooldown: 0.7, scale: 0.96, lean: 0.4 }),
   bloater: Object.freeze({ name: '胖尸', weight: 0.09, speed: 0.95, hp: 190, bite: 22, windup: 0.6, scale: 1.2, girth: 1.45, burst: Object.freeze({ radius: 3.6, damage: 34 }) }),
-  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 3, heliEvery: 8, heliFirst: 5 }), scale: 1.02 }),
+  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 2, heliEvery: 9, heliFirst: 6 }), scale: 1.02 }),
 });
 /** 按比例抽一种。r ∈ [0, 1)；mix 可以改比例（{ runner: 0.3 } 这样） */
 export function pickKind(r, mix = null) {

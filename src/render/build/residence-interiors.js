@@ -7,6 +7,7 @@ import { interiorDetail } from './interior-detail.js';
 import { buildSuiteModels } from './suite-models.js';
 import { buildResidentialModels } from './residential-models.js';
 import { windowCurtain, COMMUNITY_PALETTES } from './community.js';
+import { isSharedProp } from '../props/library.js';
 
 const roomCenter = (r) => [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2];
 const WARM = '#eee6d6';
@@ -212,10 +213,11 @@ export function buildResidenceFloor(ctx, L) {
       suite?.dispose();
       residential?.dispose();
       group.removeFromParent();
-      // 贴图模型（userData.sharedProp）的几何和材质是全园区共用的：只通知模型库把这一块摘掉，不放掉几何
+      // 贴图模型的几何和材质是全园区共用的（单件 userData.sharedProp、实例化的 userData.prop）：只通知模型库把这一块摘掉，不放掉几何。
+      // 放掉的话显卡里的缓冲就没了，而顶点数组上传后已经释放，别处再画同一款家具会直接报错（进过一户再去另一户就中招）。
       group.traverse((o) => {
         if (!o.isMesh) return;
-        if (o.userData.sharedProp) o.dispose?.();
+        if (isSharedProp(o)) o.dispose?.();
         else if (!o.geometry.userData.sharedSuite && !o.geometry.userData.sharedResidential) o.geometry.dispose();
       });
       group.clear();

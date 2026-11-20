@@ -57,6 +57,13 @@ function prepareTexture(texture, anisotropy) {
   return texture;
 }
 
+/**
+ * 这个网格用的是不是模型库的共用几何体：实例化摆放的带 userData.prop，单件 spawn() 的带 userData.sharedProp。
+ * 换出场景时对这种网格只调 mesh.dispose()（通知模型库摘掉这一块），绝不能 geometry.dispose()：
+ * 几何体全园区共用，顶点数组上传显卡后已经释放，缓冲一删别处再画就读到空数组报错。
+ */
+export const isSharedProp = (object) => !!(object?.userData?.sharedProp || object?.userData?.prop);
+
 /** 把摆放记录按「模型 | 室内外 | 格子」分组；格子取实例位置（矩阵的平移分量）。纯函数，测试里直接用。 */
 export function chunkPlacements(placements, cell = PROP_CELL) {
   const lots = new Map();
