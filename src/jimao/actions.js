@@ -12,6 +12,18 @@ import { landAt, clear } from '../layout/nav.js';
 
 export const SLIDE = Object.freeze({ time: 0.8, v0: 9, v1: 4.5, cooldown: 0.45, minSpeed: 2.5 });
 export const GRENADE = Object.freeze({ count: 2, max: 3, fuse: 2, speed: 16, lift: 4.5, gravity: 16, bounce: 0.38, friction: 0.72, radius: 6.5, damage: 170, selfRadius: 4.5, selfDamage: 55, cooldown: 0.8 });
+/**
+ * 另外两种投掷物（丧尸围城里捡得到；零点突围里没有）：
+ *   燃烧瓶 fire：砸到东西就碎，烧出一片火（radius 米、seconds 秒），里面的敌人每秒掉 dps，自己站进去也烧（selfDps）；
+ *   诱饵弹 lure：落地后响 time 秒，把附近 range 米的丧尸都引过去，响完像手雷一样炸。
+ */
+export const THROWABLES = Object.freeze({
+  frag: Object.freeze({ name: '手雷', max: 3 }),
+  fire: Object.freeze({ name: '燃烧瓶', max: 2, radius: 3.3, seconds: 8, dps: 46, selfDps: 13, tick: 0.4 }),
+  lure: Object.freeze({ name: '诱饵弹', max: 2, time: 6.5, range: 32, every: 0.6 }),
+});
+const FIRE_LIGHT = 60; // 火光的亮度（坎德拉）
+export const THROW_ORDER = Object.freeze(['frag', 'fire', 'lure']);
 export const ASSIST = Object.freeze({ cone: 0.16, sticky: 0.062, slow: 0.55, pullFire: 2.2, pullAds: 1.2, snap: 0.7, snapCone: 0.19, range: 60, fireCone: 0.03, fireDelay: 0.12, fireHold: 0.18 });
 /** 翻越：前面多近算顶到掩体、掩体最厚多少、翻过去用多久、镜头抬多高、自动翻越要顶住多久 */
 export const VAULT = Object.freeze({ reach: 1.15, depth: 2.2, time: 0.55, rise: 0.5, lean: 0.16, clearance: 1.35, auto: 0.18 });
@@ -103,27 +115,73 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
   // ---- 手雷 ----
   const nades = [];
   let stock = GRENADE.count, throwCool = 0, wantThrow = false;
+  // 燃烧瓶、诱饵弹的数量和当前选的是哪一种（T 键 / 长按手雷键换）
+  const extra = { fire: 0, lure: 0 }, fires = [];
+  let kind = 'frag';
+  const countOf = (k) => (k === 'frag' ? stock : extra[k] || 0);
+  const pickKind = () => { if (countOf(kind) > 0) return kind; const k = THROW_ORDER.find((q) => countOf(q) > 0); if (k) kind = k; return kind; };
+  function cycleKind() { const have = THROW_ORDER.filter((q) => countOf(q) > 0); if (have.length < 2) { pickKind(); paintHud(); return kind; } kind = have[(have.indexOf(kind) + 1) % have.length]; paintHud(); return kind; }
+  const fireMat = new THREE.MeshBasicMaterial({ color: 0xff8a24, transparent: true, opacity: 0.62, fog: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const fireDisc = new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2), flameGeo = new THREE.ConeGeometry(0.42, 1.7, 6, 1, true).translate(0, 0.85, 0);
+  const bottleMat = new THREE.MeshStandardMaterial({ color: '#7a4a1c', roughness: 0.3, metalness: 0.1, emissive: '#ff6a10', emissiveIntensity: 0.5 }), lureMat = new THREE.MeshStandardMaterial({ color: '#2a2d33', roughness: 0.5, metalness: 0.6, emissive: '#ff2a1a', emissiveIntensity: 0 });
   const nadeGeo = new THREE.SphereGeometry(0.065, 10, 8), nadeMat = new THREE.MeshStandardMaterial({ color: '#3d4a2c', roughness: 0.6, metalness: 0.3 });
   const pinMat = new THREE.MeshStandardMaterial({ color: '#9aa0a4', roughness: 0.4, metalness: 0.8 }), pinGeo = new THREE.CylinderGeometry(0.02, 0.025, 0.05, 8);
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
   function makeNade() {
     const g = new THREE.Group(); g.add(new THREE.Mesh(nadeGeo, nadeMat)); const pin = new THREE.Mesh(pinGeo, pinMat); pin.position.y = 0.08; g.add(pin);
     g.visible = false; scene.add(g);
-    return { mesh: g, vel: new THREE.Vector3(), fuse: 0, live: false, rest: false };
+    return { mesh: g, vel: new THREE.Vector3(), fuse: 0, live: false, rest: false, kind: 'frag', beep: 0 };
   }
   for (let i = 0; i < 3; i++) nades.push(makeNade());
   function throwNade() {
     const p = G.player, n = nades.find((q) => !q.live);
-    if (!n || stock <= 0 || throwCool > 0 || !p?.alive) return false;
-    stock--; throwCool = GRENADE.cooldown;
+    const k = pickKind();
+    if (!n || countOf(k) <= 0 || throwCool > 0 || !p?.alive) return false;
+    if (k === 'frag') stock--; else extra[k]--;
+    throwCool = GRENADE.cooldown; n.kind = k; n.beep = 0;
+    n.mesh.children[0].material = k === 'fire' ? bottleMat : k === 'lure' ? lureMat : nadeMat; n.mesh.children[1].visible = k === 'frag';
     const cy = Math.cos(p.pitch), dir = v1.set(-Math.sin(p.yaw) * cy, Math.sin(p.pitch), -Math.cos(p.yaw) * cy);
     n.mesh.position.copy(p.eye || p.pos).addScaledVector(dir, 0.45); n.mesh.position.y -= 0.12;
     n.vel.copy(dir).multiplyScalar(GRENADE.speed); n.vel.y += GRENADE.lift; n.vel.x += p.vel.x * 0.6; n.vel.z += p.vel.z * 0.6;
-    n.fuse = GRENADE.fuse; n.live = true; n.rest = false; n.mesh.visible = true;
+    n.fuse = k === 'fire' ? 9 : k === 'lure' ? THROWABLES.lure.time : GRENADE.fuse; n.live = true; n.rest = false; n.mesh.visible = true;
     G.audio?.play?.('reload_magout', { gain: 0.7, pitch: 1.4 });
-    G.events?.emit?.('grenade:throw', { pos: n.mesh.position.clone() });
-    paintHud();
+    G.events?.emit?.('grenade:throw', { pos: n.mesh.position.clone(), kind: k });
+    pickKind(); paintHud();
     return true;
+  }
+  /** 燃烧瓶碎了：在 at 烧出一片火 */
+  function ignite(at) {
+    // 砸在墙上的：火落到墙根的地面上
+    at = at.clone(); const gy = G.physics?.groundHeight?.(at.x, at.z, at.y + 0.3); if (gy > -40 && at.y - gy < 6) at.y = gy;
+    const F = THROWABLES.fire, g = new THREE.Group(); g.position.copy(at); g.position.y += 0.05;
+    const disc = new THREE.Mesh(fireDisc, fireMat); disc.scale.setScalar(F.radius); g.add(disc);
+    const flames = []; for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2 + i, r = (0.12 + (i % 4) * 0.24) * F.radius; const f = new THREE.Mesh(flameGeo, fireMat); f.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); g.add(f); flames.push(f); }
+    scene.add(g);
+    // 火光：占一盏常亮的灯（池里没空的就算了，火照样烧）
+    const glow = G.render?.lightPool?.acquire?.() || null;
+    if (glow) { glow.light.position.set(at.x, at.y + 1.1, at.z); glow.light.color.set(0xff8a30); glow.light.distance = 14; }
+    fires.push({ at, g, flames, t: 0, tick: 0, glow });
+    G.audio?.play?.('explosion', { pos: at, gain: 0.5, pitch: 1.7 });
+    G.events?.emit?.('grenade:fire', { pos: at.clone(), radius: F.radius, seconds: F.seconds });
+  }
+  function stepFires(dt) {
+    const F = THROWABLES.fire, p = G.player;
+    for (let i = fires.length - 1; i >= 0; i--) {
+      const f = fires[i]; f.t += dt;
+      const fade = Math.min(1, (F.seconds - f.t) / 1.5), grow = Math.min(1, f.t / 0.3);
+      if (f.t >= F.seconds) { f.g.removeFromParent(); f.glow?.release?.(); fires.splice(i, 1); continue; }
+      f.g.scale.setScalar(grow); f.g.visible = true;
+      f.flames.forEach((m, k) => { const s = (0.7 + 0.45 * Math.sin(f.t * (9 + k) + k * 1.7)) * fade; m.scale.set(s, s * (0.9 + 0.3 * Math.sin(f.t * 13 + k)), s); });
+      if (f.glow?.light) f.glow.light.intensity = FIRE_LIGHT * fade * grow * (0.8 + 0.2 * Math.sin(f.t * 17));
+      if ((f.tick -= dt) > 0) continue;
+      f.tick = F.tick;
+      G.fx?.smoke?.(v3.set(f.at.x + (Math.random() - 0.5) * F.radius, f.at.y + 0.8, f.at.z + (Math.random() - 0.5) * F.radius), { size: 0.5, life: 0.9, color: 0x2a2018, rise: 1.4 });
+      for (const e of G.enemies?.list || []) {
+        if (!e.alive || !e.active || Math.abs(e.pos.y - f.at.y) > 1.6 || Math.hypot(e.pos.x - f.at.x, e.pos.z - f.at.z) > F.radius) continue;
+        try { e.damage(F.dps * F.tick, v2.set(e.pos.x, e.pos.y + 1, e.pos.z).clone(), null, 'body'); } catch (err) { console.error('[零点突围] 燃烧伤害出错', err); }
+      }
+      if (p?.alive && !p.invulnerable && Math.abs(p.pos.y - f.at.y) < 1.6 && Math.hypot(p.pos.x - f.at.x, p.pos.z - f.at.z) < F.radius * 0.9) p.damage(F.selfDps * F.tick, { pos: f.at.clone(), type: 'fire' });
+    }
   }
   function explode(n) {
     n.live = false; n.mesh.visible = false;
@@ -149,7 +207,12 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
   }
   function stepNade(n, dt) {
     n.fuse -= dt;
-    if (n.fuse <= 0) { explode(n); return; }
+    if (n.fuse <= 0) { if (n.kind === 'fire') { n.live = false; n.mesh.visible = false; ignite(n.mesh.position); } else explode(n); return; }
+    if (n.kind === 'lure') {
+      // 诱饵弹：落地以后每隔一会儿响一声、闪一下红灯，把丧尸往这儿引
+      if ((n.beep -= dt) <= 0) { n.beep = THROWABLES.lure.every * Math.max(0.35, n.fuse / THROWABLES.lure.time); G.audio?.play?.('shell_bounce', { pos: n.mesh.position, gain: 1.3, pitch: 2.4 }); G.events?.emit?.('grenade:lure', { pos: n.mesh.position.clone(), left: n.fuse, range: THROWABLES.lure.range }); lureMat.emissiveIntensity = 3; }
+      else lureMat.emissiveIntensity = Math.max(0, lureMat.emissiveIntensity - dt * 9);
+    }
     if (n.rest) return;
     n.vel.y -= GRENADE.gravity * dt;
     const p = n.mesh.position, len = n.vel.length() * dt;
@@ -157,6 +220,7 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       const dir = v1.copy(n.vel).normalize(), hit = G.physics.raycast(p, dir, len + 0.07);
       if (hit && hit.dist <= len + 0.07) {
         p.addScaledVector(dir, Math.max(0, hit.dist - 0.07));
+        if (n.kind === 'fire') { n.live = false; n.mesh.visible = false; ignite(p); return; } // 燃烧瓶：一碰就碎
         const vn = n.vel.dot(hit.normal);
         n.vel.addScaledVector(hit.normal, -(1 + GRENADE.bounce) * vn);
         const floorHit = Math.abs(hit.normal.y) > 0.5;
@@ -222,11 +286,13 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
   }
 
   // ---- 界面：手机按键、手雷数量、设置里的两个开关 ----
-  let hud = null, btns = null, rows = null;
+  let hud = null, btns = null, rows = null, nadeHeld = null, nadeDown = 0;
   function paintHud() {
-    if (hud) { hud.textContent = `手雷 ${'●'.repeat(stock)}${'○'.repeat(Math.max(0, GRENADE.count - stock))}`; hud.classList.toggle('empty', stock <= 0); }
-    // 手机上数量直接写在手雷键上（右上角是弹药、左上角是任务，没地方再放一行字）
-    if (btns?.nade) { btns.nade.querySelector('span').textContent = `手雷 ${stock}`; btns.nade.classList.toggle('empty', stock <= 0); }
+    const k = countOf(kind) > 0 ? kind : THROW_ORDER.find((q) => countOf(q) > 0) || 'frag', n = countOf(k), others = THROW_ORDER.filter((q) => q !== k && countOf(q) > 0);
+    const more = others.length ? `　${others.map((q) => `${THROWABLES[q].name} ${countOf(q)}`).join(' · ')}（T 换）` : '';
+    if (hud) { hud.textContent = k === 'frag' && !others.length ? `手雷 ${'●'.repeat(stock)}${'○'.repeat(Math.max(0, GRENADE.count - stock))}` : `${THROWABLES[k].name} ${'●'.repeat(n)}${more}`; hud.classList.toggle('empty', n <= 0); }
+    // 手机上数量直接写在手雷键上（右上角是弹药、左上角是任务，没地方再放一行字）；有别的投掷物时长按换
+    if (btns?.nade) { btns.nade.querySelector('span').textContent = `${THROWABLES[k].name} ${n}`; btns.nade.classList.toggle('empty', n <= 0); btns.nade.classList.toggle('multi', others.length > 0); }
   }
   function buildUi() {
     if (!ui || typeof document === 'undefined') return;
@@ -240,9 +306,12 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
           e.preventDefault(); e.stopPropagation(); b.classList.add('active');
           if (key === 'crouch') { if (G.player?.sprinting) startSlide(); else crouchLatch = !crouchLatch; b.classList.toggle('latched', crouchLatch); }
           else if (key === 'melee') G.input.act?.('touch', 'melee', true);
-          else wantThrow = true;
+          else { nadeDown = performance.now(); nadeHeld = setTimeout(() => { nadeHeld = null; nadeDown = 0; cycleKind(); }, 380); }
         };
-        const up = (e) => { e.preventDefault?.(); b.classList.remove('active'); if (key === 'melee') G.input.act?.('touch', 'melee', false); };
+        const up = (e) => {
+          e.preventDefault?.(); b.classList.remove('active'); if (key === 'melee') G.input.act?.('touch', 'melee', false);
+          if (key === 'nade' && nadeHeld) { clearTimeout(nadeHeld); nadeHeld = null; if (nadeDown) wantThrow = true; nadeDown = 0; } // 短按：松手时扔；长按 0.38 秒：换一种
+        };
         b.addEventListener('touchstart', down, { passive: false }); b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
         touch.appendChild(b); btns[key] = b;
       }
@@ -264,7 +333,7 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
     if (!rows) return;
     for (const b of rows.querySelectorAll('[data-ctl]')) { const on = b.dataset.ctl === 'assist' ? assistOn() : autoFireOn(); b.setAttribute('aria-pressed', String(on)); b.querySelector('span').textContent = on ? '开启' : '关闭'; }
   }
-  const onKey = (e) => { if (e.code === (G.input?.keyMap?.__grenade || 'KeyG') && !e.repeat && G.game?.state === 'playing') wantThrow = true; };
+  const onKey = (e) => { if (e.repeat || G.game?.state !== 'playing') return; if (e.code === (G.input?.keyMap?.__grenade || 'KeyG')) wantThrow = true; else if (e.code === 'KeyT') cycleKind(); };
   if (typeof addEventListener === 'function') addEventListener('keydown', onKey);
   let touchSeen = false;
 
@@ -309,13 +378,18 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       if (wantThrow) { wantThrow = false; throwNade(); }
     },
     /** 每帧调：推进飞着的手雷 */
-    update(dt) { for (const n of nades) if (n.live) stepNade(n, Math.min(dt, 0.05)); },
-    /** 捡到补给：加一颗手雷（最多 max 颗） */
-    give(n = 1) { const before = stock; stock = Math.min(GRENADE.max, stock + n); paintHud(); return stock - before; },
+    update(dt) { for (const n of nades) if (n.live) stepNade(n, Math.min(dt, 0.05)); if (fires.length) stepFires(Math.min(dt, 0.05)); },
+    /** 捡到补给：加一颗（kind：frag 手雷 / fire 燃烧瓶 / lure 诱饵弹；各有上限）。返回实际加了几颗 */
+    give(n = 1, k = 'frag') {
+      const before = countOf(k), max = THROWABLES[k]?.max ?? 0;
+      if (k === 'frag') stock = Math.min(GRENADE.max, stock + n); else if (k in extra) extra[k] = Math.min(max, extra[k] + n);
+      pickKind(); paintHud(); return countOf(k) - before;
+    },
+    countOf, cycleKind, get kind() { return pickKind(); }, get fires() { return fires; },
     reset() { stock = GRENADE.count; throwCool = 0; wantThrow = false; slide.t = -1; slide.cool = 0; if (vault.t >= 0 && G.player) G.player.mounted = false; vault.t = -1; vault.cool = 0; vault.push = 0; crouchLatch = false; btns?.crouch?.classList.remove('latched'); target = null; onTargetT = 0; fireHold = 0;
-      for (const n of nades) { n.live = false; n.mesh.visible = false; } paintHud(); },
+      for (const n of nades) { n.live = false; n.mesh.visible = false; } for (const f of fires.splice(0)) { f.g.removeFromParent(); f.glow?.release?.(); } extra.fire = 0; extra.lure = 0; kind = 'frag'; paintHud(); },
     buildUi,
-    dispose() { if (typeof removeEventListener === 'function') removeEventListener('keydown', onKey); for (const n of nades) n.mesh.removeFromParent(); nadeGeo.dispose(); nadeMat.dispose(); pinGeo.dispose(); pinMat.dispose(); hud?.remove(); rows?.remove(); for (const b of Object.values(btns || {})) b.remove(); },
+    dispose() { if (typeof removeEventListener === 'function') removeEventListener('keydown', onKey); for (const n of nades) n.mesh.removeFromParent(); for (const f of fires.splice(0)) { f.g.removeFromParent(); f.glow?.release?.(); } for (const x of [fireMat, fireDisc, flameGeo, bottleMat, lureMat]) x.dispose(); if (nadeHeld) clearTimeout(nadeHeld); nadeGeo.dispose(); nadeMat.dispose(); pinGeo.dispose(); pinMat.dispose(); hud?.remove(); rows?.remove(); for (const b of Object.values(btns || {})) b.remove(); },
   };
 }
 
@@ -329,5 +403,6 @@ export const ACTIONS_CSS = `
 .jm-nade-hud.empty { opacity: .45; }
 .is-touch .jm-nade-hud { display: none; }
 .t-nade.empty { opacity: .4; }
+.t-nade.multi::after { content: '长按换'; position: absolute; left: 0; right: 0; bottom: -15px; font-size: 9px; letter-spacing: .1em; opacity: .7; }
 .jm-ctl .toggle { justify-self: start; }
 `;

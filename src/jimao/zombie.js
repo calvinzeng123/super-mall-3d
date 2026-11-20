@@ -135,14 +135,14 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
 
     const m = {
       id: 0, type: 'soldier', zombie: true, kind: 'walker', name: '行尸', pos: root.position, alive: false, active: false, hp: ZOMBIE.hp, maxHp: ZOMBIE.hp, rig: { group: root },
-      yaw: 0, speed: 0, home: new THREE.Vector3(), lastKnown: new THREE.Vector3(), goal: new THREE.Vector3(), sensor: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), muzzle: new THREE.Vector3(), headPos,
+      yaw: 0, speed: 0, home: new THREE.Vector3(), lastKnown: new THREE.Vector3(), lure: new THREE.Vector3(), goal: new THREE.Vector3(), sensor: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), muzzle: new THREE.Vector3(), headPos,
       mode: 'patrol', modeSeen: 'patrol', los: false, passive: false, hasToken: false, exposure: 0,
       zs: 'idle', zsT: 0, hunt: false, cool: 0, senseT: 0, loseT: 0, path: null, wp: 0, planT: 0, stuckT: 0, wanderT: 0, hasGoal: false, screamT: 0, target: null,
       gait: 0, phase: 0, swing: 0, lunge: 0, stagger: 0, dieT: 0, fall: 0, fallV: 0, fallSign: 1, sink: 0, skip: 0,
 
-      damage(amount, point, dir, part) {
+      damage(amount, point, dir, part, by = null) {
         if (!m.alive) return false;
-        m.hp -= amount;
+        m.hp -= amount; m.by = by; // by：谁打的（'squad' = 队友；不记玩家的得分和连杀）
         G.events.emit('enemy:hit', { enemy: m, point, part: part || 'body' });
         if (point) G.fx?.smoke?.(point, { size: 0.18, life: 0.4, color: 0x3a0b0b, rise: 0.15 });
         if (!C.sturdy) m.stagger = Math.min(0.5, m.stagger + (part === 'weak' ? 0.4 : amount / 90));
@@ -163,6 +163,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         if (skin) { skin.setLook(lookI, lookOf(kind)); skin.group.scale.set(K.girth || 1, 1, K.girth || 1); }
         m.special = SPECIALS.includes(kind); m.pounceT = K.pounce ? 0.25 + rng() * 0.45 : 0; m.spitT = K.spit ? K.spit.first + rng() : 0; m.pinT = 0; m.leap = null;
         m.active = true; m.alive = true; m.passive = !!opts.passive; m.sink = 0; m.hunt = !!opts.hunt; m.target = opts.targetPos || null;
+        m.lureT = 0; m.pushT = 0;
         m.fixed = !!opts.fixed; m.sweep = null; m.bit = false; // fixed：钉在原地（阳台玻璃后面拍玻璃的那几只），不走、不追
         m.pos.copy(at);
         const g = G.physics.groundHeight?.(at.x, at.z, at.y + 1);
@@ -259,7 +260,15 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       const speed = C.speed * (m.stagger > 0 ? 0.35 : 1);
       // 直升机在飞：尖叫者不管人在哪一层，站住冲着飞机叫（120 米内），每叫一声掉机体耐久
       const heliAt = C.scream && G.missions?.rideKind === 'helicopter' ? G.missions.vehicleCenter?.() : null;
-      if (heliAt && Math.hypot(heliAt.x - m.pos.x, heliAt.y - m.pos.y, heliAt.z - m.pos.z) < 120) {
+      if (m.lureT > 0 && (m.lureT -= dt) <= 0 && m.zs === 'idle') { m.home.copy(m.pos); m.hasGoal = false; }
+      if (m.lureT > 0 && (m.zs === 'idle' || m.zs === 'chase')) {
+        // 被诱饵弹引着：凑过去围着它抓挠，不看人
+        m.mode = 'engage';
+        const lx = m.lure.x - m.pos.x, lz = m.lure.z - m.pos.z, ld = Math.hypot(lx, lz);
+        if (ld > 1.2) steer(dt, m.lure, speed, ld < ZOMBIE.direct && Math.abs(m.lure.y - m.pos.y) < 1.2);
+        else { faceYaw = Math.atan2(lx, lz); m.lunge = Math.max(0, Math.sin(m.phase * 3.2)) * 0.6; }
+        m.lastKnown.copy(m.lure); m.loseT = 0;
+      } else if (heliAt && Math.hypot(heliAt.x - m.pos.x, heliAt.y - m.pos.y, heliAt.z - m.pos.z) < 120) {
         m.mode = 'engage'; faceYaw = Math.atan2(heliAt.x - m.pos.x, heliAt.z - m.pos.z);
         if (m.zs === 'scream') { if ((m.zsT += dt) > 1.1) m.zs = 'chase'; }
         else if ((m.screamT -= dt) <= 0) { m.screamT = C.scream.heliEvery * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0; scream(heliAt); }
@@ -358,6 +367,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       const k = ease(ZOMBIE.accel, dt);
       if (m.leaping) m.leaping = false; // 飞扑：速度是直接给的，不走加速
       else { vel.x += (want.x - vel.x) * k; vel.z += (want.z - vel.z) * k; }
+      if (m.pushT > 0) { m.pushT -= dt; vel.x = m.pushX; vel.z = m.pushZ; faceYaw ??= m.yaw; } // 被推开的那一下：直接往后退，脸还朝着人
       vel.y = 0;
       const sp = Math.hypot(vel.x, vel.z);
       if (faceYaw === null && sp > 0.15) faceYaw = Math.atan2(vel.x, vel.z);
@@ -384,7 +394,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       m.alive = false; m.dieT = 0; m.fall = 0; m.fallV = 0; m.pathJob?.cancel?.(); m.pathJob = null;
       const f = dir ? dir.x * Math.sin(m.yaw) + dir.z * Math.cos(m.yaw) : -1;
       m.fallSign = f > 0 ? 1 : -1;
-      G.events.emit('enemy:killed', { enemy: m, pos: m.pos, type: 'soldier', part, zombie: true, kind: m.kind });
+      G.events.emit('enemy:killed', { enemy: m, pos: m.pos, type: 'soldier', part, zombie: true, kind: m.kind, by: m.by || null });
       if (C.burst) burst();
     }
     /** 胖尸炸开：范围内的人和别的丧尸都掉血（离得越近越多） */
@@ -433,6 +443,20 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       m.muzzle.copy(headPos);
     }
     /** 换上贴图外形（kit.create() 的返回值）；null = 换回方块人 */
+    /** 被推了一把（近战键）：往 (dx, dz) 方向退一步、趔趄不到一秒，正要咬 / 正按着人的被打断；巨尸推不动，只顿一下 */
+    m.shove = (dx, dz, power = 7) => {
+      if (!m.alive || !m.active || m.fixed) return false;
+      if (C.sturdy) { m.stagger = Math.max(m.stagger, 0.25); return false; }
+      if (m.zs === 'pin') { m.pinned = false; m.pounceT = C.pounce.every; G.events.emit('zombie:unpin', { enemy: m }); }
+      if (m.zs === 'attack' || m.zs === 'crouch' || m.zs === 'leap' || m.zs === 'pin') { m.zs = 'chase'; m.bit = false; m.lunge = 0; m.leaping = false; }
+      m.stagger = Math.max(m.stagger, 0.9); m.cool = Math.max(m.cool, 0.9); m.pushT = 0.22; m.pushX = dx * power; m.pushZ = dz * power;
+      return true;
+    };
+    /** 被响动引过去（诱饵弹）：seconds 秒内不管人，朝 at 凑；巨尸不吃这一套 */
+    m.distract = (at, seconds = 1.2) => {
+      if (!m.alive || !m.active || m.fixed || C.sturdy) return false;
+      m.lure.copy(at); m.lureT = Math.max(m.lureT, seconds); return true;
+    };
     m._skin = (sk) => {
       if (skin) skin.group.removeFromParent();
       skin = sk || null; hips.visible = !skin;

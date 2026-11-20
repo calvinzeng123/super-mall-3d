@@ -75,7 +75,9 @@ const v = (x, y, z) => new THREE.Vector3(x, y, z);
 const merge = (list) => { const g = mergeGeometries(list.flat().map((q) => (q.index ? q.toNonIndexed() : q))); g.computeBoundingSphere(); return g; };
 
 /** 搭模型、算命中用的小工具（zombie.js 也用） */
-export { rbox, ball, limb, capsule, merge, hitSphere, hitCapsule };
+export { rbox, ball, limb, capsule, merge, hitSphere, hitCapsule, buildParts };
+/** 人形骨架的几个尺寸（队友 squad.js 也用这副骨架） */
+export const RIG = Object.freeze({ HIP_Y: 0.98, THIGH: 0.44, SHIN: 0.42 });
 
 // 尺寸：髋关节离地 0.98 m，头盔顶约 1.84 m；面朝 +Z，右手在 -X 一侧。
 const HIP_Y = 0.98, THIGH = 0.44, SHIN = 0.42;

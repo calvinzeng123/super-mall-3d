@@ -61,7 +61,7 @@ export function createScore(G, { ui = null, onSupply = null } = {}) {
     G.events?.emit?.('streak:reward', { id: r.id, streak: state.streak });
   }
   const onKill = (e) => {
-    if (G.game?.state !== 'playing') return;
+    if (G.game?.state !== 'playing' || e?.by === 'squad') return; // 队友打倒的不算你的分和连杀
     state.kills++; state.streak++; state.best = Math.max(state.best, state.streak);
     state.multi = state.multiT > 0 ? state.multi + 1 : 1; state.multiT = SCORE.multiWindow;
     if (e?.part === 'weak') state.headshots++;

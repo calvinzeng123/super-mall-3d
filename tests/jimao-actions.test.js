@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { buildNav } from '../src/layout/nav.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
-import { createActions, SLIDE, GRENADE, ASSIST, slideSpeed, blastDamage, aimAngles, wrapAngle, normalizeControls, CONTROLS_KEY, ACTIONS_CSS } from '../src/jimao/actions.js';
+import { createActions, SLIDE, GRENADE, ASSIST, THROWABLES, slideSpeed, blastDamage, aimAngles, wrapAngle, normalizeControls, CONTROLS_KEY, ACTIONS_CSS } from '../src/jimao/actions.js';
 import { LAYOUT_ITEMS } from '../src/jimao/layout-editor.js';
 
 const nav = buildNav(buildPlayableLayout({ mode: 'arcade' }));
@@ -102,6 +102,41 @@ test('手雷：每局 2 颗、扔完为止；抛物线飞出去落地会弹、�
   assert.equal(actions.throwNade(), false, '扔完了');
   assert.equal(actions.give(1), 1); assert.equal(actions.give(5), GRENADE.max - 1); assert.equal(actions.grenades, GRENADE.max);
   actions.reset(); assert.equal(actions.grenades, GRENADE.count);
+});
+
+test('燃烧瓶和诱饵弹：捡到才有、各有上限，T / 长按换着用；燃烧瓶一碰就碎、烧 8 秒，火里的敌人一直掉血、自己站进去也烧；诱饵弹响 6.5 秒（一路发信号）再炸', () => {
+  const { G, actions, player, enemy } = world();
+  const step = (secs) => { for (let t = 0; t < secs - 1e-9; t += 1 / 60) { actions.pre(1 / 60); actions.update(1 / 60); } };
+  assert.equal(actions.countOf('fire'), 0); assert.equal(actions.kind, 'frag');
+  assert.equal(actions.give(3, 'fire'), THROWABLES.fire.max); assert.equal(actions.give(1, 'lure'), 1); assert.equal(actions.give(1, 'nope'), 0);
+  assert.equal(actions.kind, 'frag', '捡到别的不自动换'); assert.equal(actions.cycleKind(), 'fire');
+  player.yaw = 0; player.pitch = 0.05;
+  assert.equal(actions.throwNade(), true);
+  assert.equal(actions.countOf('fire'), THROWABLES.fire.max - 1); assert.equal(actions.grenades, GRENADE.count, '手雷没少');
+  let t = 0; while (t < 3 && !G.events.log.some((e) => e[0] === 'grenade:fire')) { step(1 / 60); t += 1 / 60; }
+  const lit = G.events.log.find((e) => e[0] === 'grenade:fire');
+  assert.ok(lit && t < GRENADE.fuse, `落地就着（${t.toFixed(2)} 秒），不等引信`);
+  assert.ok(!G.events.log.some((e) => e[0] === 'grenade:explode')); assert.equal(actions.fires.length, 1);
+  const at = lit[1].pos; assert.ok(at.y > -0.2 && at.y < 0.4, `火在地面上 ${at.y.toFixed(2)}`);
+  const inside = enemy(at.x + 1, at.z, at.y), outside = enemy(at.x + THROWABLES.fire.radius + 2, at.z, at.y); inside.hp = 1e4;
+  step(2);
+  const burnt = inside.hits.reduce((a, b) => a + b, 0);
+  assert.ok(inside.hits.length >= 4 && Math.abs(burnt - THROWABLES.fire.dps * 2) < THROWABLES.fire.dps * 0.5, `2 秒烧掉 ${burnt.toFixed(0)}`);
+  assert.equal(outside.hits.length, 0); assert.equal(player.health, 100, '站在外面不烧');
+  const back = player.pos.clone(); player.pos.set(at.x, at.y, at.z); step(1);
+  assert.ok(player.health < 100 && player.health > 100 - THROWABLES.fire.selfDps * 1.5, `自己站进去 1 秒掉到 ${player.health.toFixed(0)}`);
+  player.pos.copy(back); step(THROWABLES.fire.seconds - 3 + 0.2);
+  assert.equal(actions.fires.length, 0, '烧完了'); const n = inside.hits.length; step(1); assert.equal(inside.hits.length, n);
+  // 诱饵弹
+  assert.equal(actions.cycleKind(), 'lure'); G.events.log.length = 0; inside.hits.length = 0;
+  assert.equal(actions.throwNade(), true); assert.equal(actions.countOf('lure'), 0);
+  t = 0; while (t < 9 && !G.events.log.some((e) => e[0] === 'grenade:explode')) { step(1 / 60); t += 1 / 60; }
+  const beeps = G.events.log.filter((e) => e[0] === 'grenade:lure');
+  assert.ok(Math.abs(t - THROWABLES.lure.time) < 0.1, `响了 ${t.toFixed(1)} 秒才炸`);
+  assert.ok(beeps.length >= 10 && beeps.every((e) => e[1].range === THROWABLES.lure.range), `响了 ${beeps.length} 声`);
+  assert.ok(beeps[beeps.length - 1][1].pos.distanceTo(G.events.log.find((e) => e[0] === 'grenade:explode')[1].pos) < 0.5);
+  assert.equal(actions.kind, 'frag', '扔完的那种自动换回还有的（先手雷）');
+  actions.reset(); assert.equal(actions.countOf('fire'), 0); assert.equal(actions.kind, 'frag'); assert.equal(actions.grenades, GRENADE.count);
 });
 
 test('手雷炸到自己：站在 4.5 米内掉血，越近越多', () => {
@@ -454,6 +489,39 @@ test('切枪：1 步枪 / 2 手枪 / 3 刀，先放下再举起（中间不能�
   assert.equal(arsenal.select('knife'), false, '已经拿着了');
   arsenal.setVisible(false); assert.equal(arsenal.roots.knife.visible, false); arsenal.setVisible(true); assert.equal(arsenal.roots.knife.visible, true);
   arsenal.reset(); assert.equal(arsenal.current, 'rifle'); assert.equal(rifle.visible, true); assert.equal(arsenal.roots.knife.visible, false);
+});
+
+test('冲锋枪：模型没加载、没捡到之前换不过去；捡到就换上（数字键 4，顺序排在步枪后面）；按住连发、每分钟八百多发，25 发打空自动换弹；动静比手枪还小；再捡一把算两个弹匣；重开一局收回去', async () => {
+  const { A, G, arsenal, run, log } = await arsenalWorld();
+  const { SMG } = await import('../src/jimao/smg.js'), { SIEGE } = await import('../src/jimao/siege.js');
+  assert.ok(SIEGE.noise.smg < SIEGE.noise.pistol && SIEGE.noise.pistol < SIEGE.noise.rifle, '微声：一发的响动最小');
+  assert.ok(SMG.damage < 30 && 60 / SMG.interval > 780 && 60 / SMG.interval < 900);
+  assert.deepEqual([...arsenal.slots], [...A.SLOTS]); assert.equal(arsenal.select('smg'), false); assert.equal(arsenal.grant('smg'), false, '模型还没来');
+  // 假模型：一个组，带一段两秒的「换弹」动画
+  const scene = new THREE.Group(), part = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.4), new THREE.MeshStandardMaterial()); part.name = 'body'; scene.add(part);
+  const clip = new THREE.AnimationClip('Reload', 2, [new THREE.VectorKeyframeTrack('body.position', [0, 1, 2], [0, 0, 0, 0, -0.2, 0, 0, 0, 0])]);
+  assert.equal(arsenal.skinSmg({ scene, animations: [clip] }), true); assert.equal(arsenal.skinSmg({ scene }), false);
+  assert.equal(arsenal.owns.smg, false); assert.equal(arsenal.select('smg'), false, '还没捡到');
+  assert.equal(arsenal.grant('smg'), true); assert.deepEqual([...arsenal.slots], [...A.SLOTS_SMG]);
+  run(1); assert.equal(arsenal.current, 'smg'); assert.equal(arsenal.name, SMG.name); assert.equal(arsenal.ammo, SMG.mag); assert.equal(arsenal.reserve, SMG.reserve);
+  assert.ok(arsenal.roots.smg.visible && !arsenal.roots.pistol.visible);
+  const root = arsenal.roots.smg; assert.ok(root.position.x > 0.1 && root.position.z < -0.3, '腰射在右下');
+  // 连发
+  G.input.fire = true; log.length = 0; G.combat.shots.length = 0;
+  run(1); const n = G.combat.shots.length;
+  assert.ok(n >= 13 && n <= 15, `一秒打了 ${n} 发`); assert.equal(arsenal.ammo, SMG.mag - n);
+  assert.ok(log.filter((e) => e[0] === 'weapon:fire').every((e) => e[1].kind === 'smg')); assert.equal(G.combat.shots[0].opt.damage, SMG.damage);
+  assert.equal(arsenal.state, 'firing'); assert.ok(arsenal.spread > SMG.spreadHip, '连发散布变大');
+  run(1.2); assert.equal(arsenal.state, 'reloading', '打空自动换弹'); assert.ok(Math.abs(part.position.y) > 0.01, '换弹动画在放');
+  G.input.fire = false; run(SMG.reload); assert.equal(arsenal.ammo, SMG.mag); assert.equal(arsenal.reserve, SMG.reserve - SMG.mag); assert.ok(Math.abs(part.position.y) < 1e-6, '停在握好的那一帧');
+  // 开镜：枪到正中、散布收紧
+  G.input.ads = true; run(0.6); assert.ok(Math.abs(root.position.x) < 0.01 && arsenal.ads > 0.95 && arsenal.spread < SMG.spreadHip * 0.6); G.input.ads = false;
+  // 再捡一把：加两个弹匣；补给也给它补
+  const r0 = arsenal.reserve; arsenal.grant('smg'); assert.equal(arsenal.reserve, Math.min(SMG.reserveMax, r0 + SMG.mag * 2));
+  arsenal.select('rifle'); run(1); assert.equal(arsenal.current, 'rifle'); assert.ok(!root.visible);
+  arsenal.smg.state.reserve = 0; arsenal.addAmmo(60); assert.equal(arsenal.smg.state.reserve, 42);
+  arsenal.reset(); assert.equal(arsenal.owns.smg, false); assert.equal(arsenal.select('smg'), false); assert.deepEqual([...arsenal.slots], [...A.SLOTS]);
+  arsenal.dispose();
 });
 
 test('手枪是单手持枪：平时左手不在枪上（看不见）；换弹时左手上来送弹匣、换完放下；掏枪拉套筒那一下左手也上来', async () => {

@@ -172,6 +172,9 @@ export const PATCHES = [
   ['尖叫者冲直升机叫：不是枪声，是一声又尖又长的预警音',
     'ze(he === "soldier" ? "soldier_fire" : he === "hound" ? "hound_fire" : "gull_fire", { pos: pe, gain: he === "soldier" ? 0.8 : 1, jitter: 0.04 })',
     '(he === "screamer" ? ze("telegraph", { pos: pe, variant: 0, pitch: 2.1, gain: 1.3, jitter: 0.05 }) : ze(he === "soldier" ? "soldier_fire" : he === "hound" ? "hound_fire" : "gull_fire", { pos: pe, gain: he === "soldier" ? 0.8 : 1, jitter: 0.04 }))'],
+  ['丧尸围城里不自动回血（G.noRegen）：血只能靠急救包、止痛药补',
+    'E += F, E > Mt.regenDelay && C.health < C.maxHealth &&',
+    'E += F, !i.noRegen && E > Mt.regenDelay && C.health < C.maxHealth &&'],
 ];
 
 /** 打补丁；返回 { code, applied }。有一条没命中或命中不止一次就抛错。 */

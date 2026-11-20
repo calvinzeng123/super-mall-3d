@@ -6923,7 +6923,7 @@ function x_(i) {
       let ae = C.onGround ? Fo(C.speed / Mt.walk) * (C.sprinting ? Mt.bobSprint : 1) * bi(1, Mt.bobAds, C.ads) * (C.crouching ? 0.7 : 1) : 0;
       f = kn(f, ae, 9, F), d = -Math.cos(h * Math.PI * 2) * Mt.bobY * f, p = Math.sin(h * Math.PI) * Mt.bobX * f;
       let k = C.vel.x * Y - C.vel.z * V;
-      v = kn(v, -k / Mt.sprint * Mt.rollStrafe * bi(1, 0.4, C.ads), 8, F), E += F, E > Mt.regenDelay && C.health < C.maxHealth && (C.health = Math.min(C.maxHealth, C.health + Mt.regenRate * F)), K(F), ie(F);
+      v = kn(v, -k / Mt.sprint * Mt.rollStrafe * bi(1, 0.4, C.ads), 8, F), E += F, !i.noRegen && E > Mt.regenDelay && C.health < C.maxHealth && (C.health = Math.min(C.maxHealth, C.health + Mt.regenRate * F)), K(F), ie(F);
     }
     function Q(F) {
       C.vel.x = kn(C.vel.x, 0, 5, F), C.vel.z = kn(C.vel.z, 0, 5, F), C.vel.y -= Mt.gravity * F;

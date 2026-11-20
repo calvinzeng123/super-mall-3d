@@ -395,8 +395,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const mission = keep ? state.mission : G.siege?.enabled ? G.siege.mission(rng) : rollMission(rng, sites, force);
     Object.assign(state, { mission, kills: keep ? state.kills : 0, reinforce: 0, tell: 0, holdT: keep ? state.holdT : 0, inside: false, holdTextT: 0, ...FRESH(),
       bombT: keep ? state.bombT : (mission.bomb?.time || 0), bombDone: false, boss: keep ? state.boss : null, bossT: 0,
-      checkpoint: null, restore: !!keep });
-    if (G.level) G.level.playerStart = keep ? checkpointStart(mission.extraction) : home;
+      checkpoint: null, restore: keep ? (keep.kind === 'safe' ? keep : true) : false });
+    // 存档点两种：坐载具失败回登机点（目标全算完成）；丧尸围城的安全屋（kind: 'safe'，只算到存档那一步，人回到安全屋）
+    if (G.level) G.level.playerStart = keep ? (keep.kind === 'safe' ? keep.start : checkpointStart(mission.extraction)) : home;
     vhud.show(false); deadTitle(null, null); deadActions(false);
     if (G.player) G.player.mounted = false;
     doorGun.reset(); roofGun.reset();
@@ -434,7 +435,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
 
   // 坐在载具上被打死（不是坠毁）也一样：可以回到登机点重来
   G.events.on('player:dead', () => {
-    if ((state.phase === 'ride' || state.phase === 'board') && state.mission && !state.checkpoint) {
+    if ((state.phase === 'ride' || state.phase === 'board') && state.mission && (!state.checkpoint || state.checkpoint.kind === 'safe')) {
       state.checkpoint = { kind: veh()?.kind };
       deadTitle('撤离途中阵亡', '撤离失败'); deadActions(true);
     }
@@ -556,12 +557,12 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
    * 阵亡页的按钮：坐载具失败时，「重新出击」改成「回到登机点重来」（原游戏的 retry：整局重置，我们在 roll 里接住，
    * 保留这一局任务、直接站到登机点前），旁边多一个「换一项任务重来」（原游戏的 redeploy，点它先把存档点清掉）。
    */
-  function deadActions(on) {
+  function deadActions(on, label = '回到登机点重来', note = '任务目标已经完成，重来时直接回到登机点前，不用再打一遍。', freshLabel = '换一项任务重来') {
     const sec = typeof document !== 'undefined' && document.querySelector('[data-s="dead"]');
     const retry = sec?.querySelector('[data-act="retry"]');
     if (!retry) return;
     if (retry.dataset.orig == null) retry.dataset.orig = retry.textContent;
-    retry.textContent = on ? '回到登机点重来' : retry.dataset.orig;
+    retry.textContent = on ? label : retry.dataset.orig;
     let fresh = sec.querySelector('[data-zh="fresh"]');
     if (!fresh && on) {
       fresh = document.createElement('button');
@@ -569,9 +570,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       fresh.addEventListener('click', () => { state.checkpoint = null; }); // 先于菜单根节点上的委托处理
       retry.after(fresh);
     }
-    if (fresh) fresh.hidden = !on;
+    if (fresh) { fresh.hidden = !on; if (on) fresh.textContent = freshLabel; }
     const line = sec.querySelector('[data-zh="ckpt"]') || (on ? sec.querySelector('.m-stats')?.insertAdjacentElement('afterend', Object.assign(document.createElement('p'), { className: 'm-line' })) : null);
-    if (line) { line.dataset.zh = 'ckpt'; line.textContent = on ? '任务目标已经完成，重来时直接回到登机点前，不用再打一遍。' : ''; line.hidden = !on; }
+    if (line) { line.dataset.zh = 'ckpt'; line.textContent = on ? note : ''; line.hidden = !on; }
   }
 
   function boom(vv, size) {
@@ -824,6 +825,16 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function restoreCheckpoint() {
     const run = G.game?.run, st = G.game?.state;
     if (!state.restore || !run || (st !== 'intro' && st !== 'playing')) return;
+    if (state.restore.kind === 'safe') {
+      // 从安全屋重来：存档那一步之前的目标算完成，后面的照常
+      const keep = state.restore, relays = run.relays || []; state.restore = false;
+      for (const r of relays.slice(0, keep.stage)) { r.cut = true; r.cutting = false; r.t = 1; r.o?.object?.userData?.setState?.('cut'); }
+      run.cut = Math.min(relays.length, keep.stage);
+      state.checkpoint = keep; // 再倒下还是回这里
+      G.hud?.radio?.(`回到${keep.label || '安全屋'}了。补给都在，喘口气再出发。`, 4);
+      G.game.refreshObjective?.();
+      return;
+    }
     state.restore = false;
     for (const r of run.relays || []) { r.cut = true; r.cutting = false; r.t = 1; r.o?.object?.userData?.setState?.('cut'); }
     run.cut = (run.relays || []).length;
@@ -914,7 +925,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return null;
   }
 
-  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun, checkpointStart,
+  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun, checkpointStart, deadActions, deadTitle,
     /** 步枪停用：登车、乘坐（直升机舱门机枪 / 装甲车车顶机枪）、结算、坠毁 */
     get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || state.phase === 'ride' || state.phase === 'outro'; },
     get riding() { return riding(); },

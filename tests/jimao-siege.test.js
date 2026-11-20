@@ -8,7 +8,9 @@ import { findPath } from '../src/fps/pathfinding.js';
 import { pointInPoly } from '../src/layout/geom.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
-import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf } from '../src/jimao/siege.js';
+import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots } from '../src/jimao/siege.js';
+import { createSupplies, SUPPLY, healChoice, MEDIC_CSS } from '../src/jimao/supplies.js';
+import { createSquad, SQUAD, pickTarget, shotHits, slotOf, SQUAD_CSS } from '../src/jimao/squad.js';
 import { doorOutside } from '../src/jimao/guide.js';
 import { PACING, createPacing } from '../src/jimao/pacing.js';
 import { SPECIALS } from '../src/jimao/zombie.js';
@@ -200,15 +202,18 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
 function sworld({ enabled = true, tower = 'A' } = {}) {
   const z = zworld({ count: ZOMBIE.pool }), { G } = z, msgs = [], store = new Map([['jimao-siege', enabled ? '1' : '0']]);
   const heli = { root: new THREE.Group(), poses: [], setPose(p) { this.poses.push(p); }, reset() { this.parked = true; }, moveTo() {} };
-  const director = { state: { mission: null, restore: false }, vehicles: { heli }, riding: false, opened: 0, openExtraction() { this.opened++; } };
+  const director = { state: { mission: null, restore: false, checkpoint: null }, vehicles: { heli }, riding: false, opened: 0, openExtraction() { this.opened++; }, dead: [], deadActions(...a) { this.dead.push(a); } };
   const flow = { patrol: { soldier: 8 }, waves: [{ soldier: 5 }, { soldier: 6 }], pursuitExtra: 5 };
   Object.assign(G, { game: { state: 'playing', run: { relays: [] }, refreshObjective() {} }, hud: { message: (t) => msgs.push(t), radio: (t) => msgs.push('R:' + t) }, rifle: { ammo: 30, reserve: 150 }, weapon: { picked: null, select(s) { this.picked = s; } } });
   G.physics.stateOf = (p) => landAt(nav, p.x, p.z, p.y + 0.6); G.physics.forget = () => {};
-  const siege = createSiege(G, { layout: L, nav, scene: G.scene, zombies: z.zombies, director, runs, flow, rng: seq(7), tower, storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
+  const thrown = { frag: 2, fire: 0, lure: 0 };
+  const actions = { countOf: (k) => thrown[k] || 0, give(n, k = 'frag') { const b = thrown[k]; thrown[k] = Math.min(k === 'frag' ? 3 : 2, b + n); return thrown[k] - b; } };
+  const supplies = createSupplies(G, { scene: G.scene, actions, ammo: { give: (n) => { G.rifle.reserve += n; return n; } }, rng: seq(3) });
+  const siege = createSiege(G, { layout: L, nav, scene: G.scene, zombies: z.zombies, director, runs, flow, rng: seq(7), tower, supplies, storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
   const begin = () => { const m = siege.mission(seq(7)); director.state.mission = m; m.objectives.forEach((o) => { o.object = o.model(); o.pos = new THREE.Vector3(o.site.x, o.site.y, o.site.z); }); G.game.run.relays = m.objectives.map((o) => ({ o, cut: false })); siege.reset(); return m; };
   const cut = (n) => { for (let i = 0; i < n; i++) G.game.run.relays.find((r) => !r.cut).cut = true; };
   const run = (secs, each) => { for (let t = 0; t < secs - 1e-9; t += 1 / 30) { G.time.frame++; each?.(); siege.update(1 / 30); for (const q of [...z.ctx.list]) q._update(1 / 30); } };
-  return { ...z, siege, director, flow, msgs, store, heli, begin, cut, run };
+  return { ...z, siege, director, flow, msgs, store, heli, begin, cut, run, supplies, thrown };
 }
 
 test('任务的样子：九个目标一个一个放（后面的锁着）；撤离点先关着、直升机停在公寓楼顶；开局步枪没子弹、换成手枪；原游戏自己的巡逻和增援停掉，关掉模式再还原', () => {
@@ -558,4 +563,209 @@ test('围城里的特殊感染者：按节奏的名额放（不连着来同一�
   cut(6); run(0.1);
   assert.ok(S.bruteT > 0, `bruteT ${S.bruteT}`); run(8);
   assert.equal(zombies.alive().filter((z) => z.kind === 'brute').length, 1); assert.ok(msgs.some((t) => /巨尸/.test(t)));
+});
+
+// ---- 生存要素：不回血、医疗包 / 止痛药、地上的补给、安全点 ----
+test('治疗：轻伤先吃药、重伤用医疗包；医疗包包扎 2.6 秒回 80，开枪 / 被扑倒会打断（东西不扣）；各有携带上限；地上的补给走到跟前自动捡，带满了留在原地', () => {
+  assert.equal(healChoice(100, 100, { medkit: 1, pills: 2 }), null);
+  assert.equal(healChoice(75, 100, { medkit: 1, pills: 2 }), 'pills'); assert.equal(healChoice(30, 100, { medkit: 1, pills: 2 }), 'medkit');
+  assert.equal(healChoice(30, 100, { medkit: 0, pills: 1 }), 'pills'); assert.equal(healChoice(75, 100, { medkit: 1, pills: 0 }), 'medkit'); assert.equal(healChoice(30, 100, { medkit: 0, pills: 0 }), null);
+  const { G, player, supplies, thrown } = sworld();
+  const step = (secs) => { for (let t = 0; t < secs - 1e-9; t += 1 / 30) supplies.update(1 / 30); };
+  supplies.enabled = true; player.maxHealth = 100;
+  assert.equal(supplies.give('medkit', 3), SUPPLY.medkit.max); assert.equal(supplies.give('pills', 5), SUPPLY.pills.max); assert.equal(supplies.give('medkit'), 0);
+  assert.equal(supplies.heal(), null, '满血不用');
+  player.health = 15; assert.equal(supplies.heal(), 'medkit'); assert.equal(supplies.heal(), null, '正在包扎');
+  step(1); assert.equal(player.health, 15); G.events.emit('weapon:fire', { kind: 'pistol' });
+  assert.equal(supplies.busy, null); step(3); assert.equal(player.health, 15); assert.equal(supplies.inv.medkit, 1, '被打断：东西还在');
+  supplies.heal(); step(SUPPLY.medkit.time - 0.2); assert.equal(player.health, 15); step(0.3);
+  assert.equal(player.health, 15 + SUPPLY.medkit.heal); assert.equal(supplies.inv.medkit, 0);
+  assert.equal(supplies.heal(), 'pills'); G.events.emit('weapon:fire', {}); step(SUPPLY.pills.time + 0.1);
+  assert.equal(player.health, 100, '吃药不怕开枪；回血不超过上限'); assert.equal(supplies.inv.pills, 1);
+  // 地上的
+  const p = player.pos, kit = supplies.place('medkit', { x: p.x + 6, y: p.y, z: p.z }), pill = supplies.place('pills', { x: p.x + 0.5, y: p.y, z: p.z }), fire = supplies.place('fire', { x: p.x - 0.5, y: p.y, z: p.z });
+  const up = supplies.place('lure', { x: p.x, y: p.y + 4, z: p.z });
+  step(0.1); assert.equal(supplies.inv.pills, 2); assert.equal(thrown.fire, 1); assert.equal(supplies.drops.length, 2, '远处的、楼上的没捡');
+  assert.ok(supplies.drops.includes(kit) && supplies.drops.includes(up) && !supplies.drops.includes(pill) && !supplies.drops.includes(fire));
+  supplies.place('pills', { x: p.x + 0.4, y: p.y, z: p.z }); step(0.2); assert.equal(supplies.drops.length, 3, '带满了：留在原地');
+  const snap = supplies.snapshot(); assert.deepEqual({ ...snap }, { medkit: 0, pills: 2, frag: 2, fire: 1, lure: 0, hp: 100, smg: false });
+  supplies.reset(); assert.equal(supplies.drops.length, 0); assert.equal(supplies.inv.pills, 0);
+  thrown.fire = 0; player.health = 20; supplies.restore(snap); assert.equal(supplies.inv.pills, 2); assert.equal(thrown.fire, 1); assert.equal(player.health, 100);
+  player.health = 20; supplies.restore({ ...snap, hp: 12 }); assert.equal(player.health, SUPPLY.restoreHp, '重来时血量至少 60');
+  supplies.enabled = false; player.health = 50; supplies.give('pills'); assert.equal(supplies.heal(), null, '零点突围里不开');
+  assert.match(MEDIC_CSS, /\.t-heal/);
+});
+
+test('围城里的补给和安全点：不回血；武器柜、工具间、楼顶各有补给，合闸 / 清关以后那儿出医疗包并记成安全点；倒下后从安全点重来——前面的关不用再打、不再招一遍尸潮，身上的东西还回来', () => {
+  const { G, siege, director, begin, cut, run, supplies, thrown, player } = sworld();
+  begin(); siege.reset();
+  assert.equal(G.noRegen, true); assert.equal(supplies.enabled, true);
+  const plan = siege.plan, kinds = () => supplies.drops.map((d) => d.kind).sort().join(',');
+  // 开局：武器柜 1 样 + 三间工具间各 2 样 + 楼顶 2 样；合闸、清关的补给还没出来
+  assert.equal(supplies.drops.length, LOOT.locker.length + 6 + LOOT.flare.length);
+  assert.ok(!supplies.drops.some((d) => d.kind === 'medkit' && Math.abs(d.pos.y - plan.stages[1].site.y) < 0.5 && Math.hypot(d.pos.x - plan.stages[1].site.x, d.pos.z - plan.stages[1].site.z) < 3));
+  for (let i = 0; i < plan.stages.length; i++) {
+    const list = lootOf(plan, i), st = plan.stages[i]; assert.ok(list.length >= 1 && list.length <= 3, st.id);
+    const spots = lootSpots(nav, st.site, list.length); assert.equal(spots.length, list.length);
+    for (const q of spots) { const d = Math.hypot(q.x - st.site.x, q.z - st.site.z); assert.ok(d > 0.4 && d < 2, `${st.id} 的补给离目标 ${d.toFixed(1)} 米`); assert.ok(Math.abs(q.y - st.site.y) < 0.4); }
+  }
+  for (const i of plan.gates.map((g) => g.stage)) assert.ok(lootOf(plan, i).includes('medkit'), '每个安全点都有医疗包');
+  // 拿枪、合闸：出补给、记安全点
+  const before = supplies.drops.length;
+  cut(1); run(0.1); assert.equal(director.state.checkpoint, null, '拿枪不算安全点');
+  player.pos.set(plan.stages[1].site.x, plan.stages[1].site.y, plan.stages[1].site.z); player.yaw = 1.2;
+  supplies.give('pills', 1); thrown.lure = 1; player.health = 64;
+  cut(1); run(0.1);
+  const c = director.state.checkpoint;
+  assert.ok(c && c.kind === 'safe' && c.stage === 2 && c.label === '配电室' && c.start.yaw === 1.2 && c.start.pos.distanceTo(player.pos) < 1e-6);
+  assert.deepEqual({ ...c.kit }, { medkit: 0, pills: 1, frag: 2, fire: 0, lure: 1, hp: 64, smg: false });
+  assert.ok(supplies.drops.length >= before + LOOT.switch.length - 2, kinds());
+  // 倒下：阵亡页换成「回到配电室重来」
+  G.events.emit('player:dead', {}); assert.equal(director.dead.length, 1); assert.match(director.dead[0][1], /配电室/);
+  // 重来：任务系统把存档点交回来（restore），目标稍后才补上
+  const noise0 = siege.state.noise;
+  director.state.restore = c; director.state.checkpoint = null; G.game.run.relays.forEach((r) => { r.cut = false; });
+  supplies.give('medkit'); thrown.lure = 0; thrown.fire = 2; player.health = 100; G.rifle.ammo = 30; G.rifle.reserve = 150; // 原游戏重置：满弹
+  siege.reset();
+  assert.equal(siege.state.stage, 2); assert.equal(siege.state.noise, 0); assert.ok(noise0 >= 0);
+  assert.equal(supplies.inv.medkit, 0, '重来先清空');
+  assert.ok(supplies.drops.some((d) => d.kind === 'medkit'), '安全点的医疗包重新摆出来'); assert.ok(!supplies.drops.some((d) => Math.hypot(d.pos.x - plan.stages[0].site.x, d.pos.z - plan.stages[0].site.z) < 2 && Math.abs(d.pos.y - plan.stages[0].site.y) < 1), '武器柜旁的不再摆');
+  const zs0 = siege.state.bruteT; thrown.fire = 0;
+  run(0.1); assert.equal(siege.state.stage, 2, '目标还没补上：不倒退');
+  cut(2); director.state.restore = false; run(0.2);
+  assert.equal(siege.state.stage, 2); assert.equal(siege.state.noise, 0, '不再触发合闸那一下的响动和尸潮'); assert.equal(siege.state.bruteT, zs0);
+  assert.equal(director.state.checkpoint, null, '没有重复记（任务系统自己把存档点续上）');
+  assert.equal(supplies.inv.pills, 1); assert.equal(thrown.lure, 1); assert.equal(player.health, 64, '身上的东西照存档时的来');
+  assert.deepEqual([G.rifle.ammo, G.rifle.reserve], [SIEGE.ammo.rifle, Math.max(60, c.rifle[1])], '步枪弹药不白送');
+  // 第一道关：再记一个新的安全点
+  cut(2); run(0.1);
+  const c2 = director.state.checkpoint; assert.ok(c2 && c2.stage === 4 && /F 安全点/.test(c2.label));
+  // 关掉模式：恢复回血、补给收起来
+  siege.enabled = false; siege.reset(); assert.equal(G.noRegen, false); assert.equal(supplies.enabled, false); assert.equal(supplies.drops.length, 0);
+});
+
+test('诱饵弹把丧尸引开：听得到的那几只丢下人朝响的地方凑，响完再回头找人；巨尸不理', () => {
+  const { enemies, player, run, ahead, hurt } = zworld();
+  const w = enemies.spawn('zombie', ahead(9), { kind: 'runner', hunt: true }), b = enemies.spawn('zombie', ahead(12, 1), { kind: 'brute', hunt: true });
+  const lure = ahead(13, 2);
+  run(0.3); assert.equal(w.zs, 'chase');
+  assert.equal(b.distract(lure, 3), false); assert.equal(w.distract(lure, 3), true);
+  const d0 = w.pos.distanceTo(lure), p0 = w.pos.distanceTo(player.pos);
+  run(5, () => w.distract(lure, 1.3));
+  assert.ok(w.pos.distanceTo(lure) < 3, `朝诱饵去了：${d0.toFixed(1)} → ${w.pos.distanceTo(lure).toFixed(1)}`);
+  assert.ok(w.pos.distanceTo(player.pos) > p0 - 3, '没有冲着人来');
+  const bitten = hurt.filter((h) => h[0] < 20).length; assert.equal(bitten, 0, '被引开的不咬人');
+  run(6); assert.ok(w.pos.distanceTo(player.pos) < 4 || hurt.some((h) => h[0] < 20), '响完又回头找人');
+});
+
+test('推搡：近战那一下把贴身的丧尸推开一步多、趔趄近一秒（这段时间不咬人），正按着人的扑袭者被推开；巨尸推不动', async () => {
+  const { enemies, player, run, ahead, hurt, events } = zworld();
+  const { SHOVE } = await import('../src/jimao/arsenal.js');
+  const at = ahead(1.3), dir = at.clone().sub(player.pos).setY(0).normalize();
+  const w = enemies.spawn('zombie', at, { kind: 'runner', hunt: true }), b = enemies.spawn('zombie', ahead(1.6, 1), { kind: 'brute', hunt: true });
+  run(0.2); const d0 = w.pos.distanceTo(player.pos); hurt.length = 0;
+  assert.equal(w.shove(dir.x, dir.z, SHOVE.power), true); assert.equal(b.shove(dir.x, dir.z, SHOVE.power), false);
+  run(0.3); const d1 = w.pos.distanceTo(player.pos);
+  assert.ok(d1 > d0 + 1, `推开了 ${(d1 - d0).toFixed(1)} 米`); assert.ok(w.stagger > 0.4);
+  run(0.4); assert.equal(hurt.filter((h) => h[0] < 20).length, 0, '趔趄着：没咬到');
+  run(4); assert.ok(hurt.some((h) => h[0] < 20), '缓过来又上来咬');
+  // 扑袭者按着人：一推就松开
+  w._deactivate(); b._deactivate(); events.length = 0;
+  const l = enemies.spawn('zombie', ahead(7), { kind: 'lunger', hunt: true });
+  run(6, () => { if (l.zs === 'pin' && !events.some(([n]) => n === 'zombie:unpin')) l.shove(dir.x, dir.z, SHOVE.power); });
+  assert.ok(events.some(([n]) => n === 'zombie:pin'), '扑倒过'); assert.ok(events.some(([n]) => n === 'zombie:unpin')); assert.notEqual(l.zs, 'pin');
+});
+
+// ---- 队友 ----
+function qworld() {
+  const z = zworld({ count: 14 }), { G, player } = z, msgs = [];
+  Object.assign(G, { game: { state: 'playing' }, hud: { message: (t) => msgs.push(t), radio: (t) => msgs.push('R:' + t) }, weapon: { state: 'idle' } });
+  player.yaw = 0; player.maxHealth = 100; player.onGround = true;
+  const siege = { enabled: true, state: { pin: null } }, director = { riding: false };
+  const squad = createSquad(G, { scene: G.scene, nav, zombies: z.zombies, siege, director, rng: seq(5) });
+  const run = (secs, each) => { for (let t = 0; t < secs - 1e-9; t += 1 / 30) { G.time.frame++; each?.(); squad.update(1 / 30); for (const q of [...z.ctx.list]) q._update(1 / 30); } };
+  return { ...z, squad, siege, director, msgs, run };
+}
+
+test('队友打谁、打不打得中、站哪儿：按着你的最优先，其次特殊感染者，再是离你近的；隔层、太远的不打；越远越难中；站位在你身后两侧', () => {
+  const at = (x, z, o = {}) => ({ pos: { x, y: 0, z }, alive: true, active: true, zs: 'chase', ...o });
+  const me = { x: 0, y: 0, z: 0 }, mate = { x: 2, y: 0, z: 2 };
+  const near = at(3, 0), far = at(15, 0), sp = at(12, 0, { special: true }), pin = at(18, 0), up = at(1, 0, { pos: { x: 1, y: 4, z: 0 } }), out = at(60, 0), idle = at(2.5, 0, { zs: 'idle' });
+  assert.equal(pickTarget(mate, me, [far, near]), near); assert.equal(pickTarget(mate, me, [near, far, sp]), sp, '特殊感染者优先');
+  assert.equal(pickTarget(mate, me, [near, sp, pin], { pin }), pin, '按着人的最优先');
+  assert.equal(pickTarget(mate, me, [up, out]), null); assert.equal(pickTarget(mate, me, [idle, near]), near, '没发现人的先不惹');
+  assert.equal(pickTarget(mate, me, [near, far], { sees: (q) => q !== near }), far, '看不见的不打');
+  const gun = SQUAD.members[0].gun; assert.ok(shotHits(gun, 2, 0.5) && !shotHits(gun, 2, 0.95)); assert.ok(shotHits(gun, 2, 0.7) && !shotHits(gun, 20, 0.7), '远了打不中');
+  // 你朝 −z 看（yaw 0）：身后是 +z；阿哲在左后、林医生在右后更远
+  const a = slotOf(me, 0, SQUAD.members[0]), b = slotOf(me, 0, SQUAD.members[1]);
+  assert.ok(a.z > 2 && b.z > a.z && Math.sign(a.x) === -Math.sign(b.x), JSON.stringify([a, b]));
+  assert.equal(SQUAD.members.length, 2); assert.ok(SQUAD.members[1].heal && SQUAD.members[0].hp > SQUAD.members[1].hp);
+  assert.match(SQUAD_CSS, /\.jm-squad/);
+});
+
+test('队友跟着走：开局站到你身后；你走远了跟上来，换了层（坐电梯 / 走楼梯）直接跟到身边；坐上直升机就收起来；关掉模式不出场', () => {
+  const { G, squad, player, run, ahead, siege, director } = qworld();
+  squad.reset(); assert.equal(squad.enabled, true); assert.equal(squad.hordeScale, 1, '还没出场');
+  run(0.2);
+  for (const m of squad.mates) { const d = Math.hypot(m.pos.x - player.pos.x, m.pos.z - player.pos.z); assert.ok(m.root.visible && d < 6 && Math.abs(m.pos.y - player.pos.y) < 0.3, `${m.name} 离你 ${d.toFixed(1)} 米`); }
+  assert.equal(squad.hordeScale, SQUAD.horde);
+  // 你往前走 13 米
+  const to = ahead(13); player.pos.copy(to); run(5);
+  for (const m of squad.mates) { const d = Math.hypot(m.pos.x - player.pos.x, m.pos.z - player.pos.z); assert.ok(d < 7, `${m.name} 跟上来了（${d.toFixed(1)} 米）`); assert.ok(landAt(nav, m.pos.x, m.pos.z, m.pos.y + 0.6), '站在楼面上'); }
+  // 换层：直接到 3F
+  const f3 = FPS_MISSION.spawn, y3 = elev('P1-3F'); player.pos.set(f3.x, y3, f3.z);
+  const ok3 = landAt(nav, f3.x, f3.z, y3 + 0.6);
+  if (ok3 && Math.abs(ok3.y - y3) < 0.3) { run(SQUAD.follow.warpSeconds + 0.6); for (const m of squad.mates) assert.ok(Math.abs(m.pos.y - y3) < 0.4 && Math.hypot(m.pos.x - player.pos.x, m.pos.z - player.pos.z) < 6, `${m.name} 跟到了 3F`); }
+  director.riding = true; run(0.1); assert.ok(squad.mates.every((m) => !m.root.visible)); assert.equal(squad.hordeScale, 1);
+  director.riding = false; run(0.1); assert.ok(squad.mates.every((m) => m.root.visible), '下来了又跟上');
+  siege.enabled = false; squad.reset(); run(0.2); assert.equal(squad.enabled, false); assert.ok(squad.mates.every((m) => !m.root.visible));
+  siege.enabled = true; squad.wanted = false; squad.reset(); assert.equal(squad.enabled, false, '设置里关掉了');
+  void G;
+});
+
+test('队友打丧尸：看得见就点射，打倒的记在队友名下（不算你的连杀）；丧尸贴上去咬他们会掉血、倒地，你走到跟前三秒扶起来（半血）；到安全点都缓过来', () => {
+  const { G, squad, player, run, ahead, enemies, events, msgs } = qworld();
+  squad.reset(); run(0.3);
+  const zs = [0, 1, 2].map((k) => enemies.spawn('zombie', ahead(9 + k, k), { kind: 'walker', hunt: true }));
+  run(7);
+  const dead = zs.filter((q) => !q.alive).length, kills = events.filter(([n, e]) => n === 'enemy:killed' && e.by === 'squad').length;
+  assert.ok(dead >= 2, `7 秒打倒 ${dead} 只`); assert.equal(kills, dead); assert.equal(squad.mates.reduce((a, m) => a + m.kills, 0), dead);
+  assert.ok(squad.mates.every((m) => m.shots > 0), '两个人都开了火'); assert.ok(events.some(([n]) => n === 'squad:fire'));
+  for (const q of zs) q._deactivate();
+  // 咬队友：五只贴着阿哲（不让他还手：把看得见关掉）
+  const zhe = squad.mates[0]; G.physics.lineOfSight = () => false;
+  // 丧尸摆在他背后那一侧（离他比离你近）：贴上去就转过去咬他
+  const away = Math.atan2(zhe.pos.z - player.pos.z, zhe.pos.x - player.pos.x);
+  const pack = [-0.8, -0.4, 0, 0.4, 0.8].map((k) => enemies.spawn('zombie', new THREE.Vector3(zhe.pos.x + Math.cos(away + k) * 0.9, zhe.pos.y, zhe.pos.z + Math.sin(away + k) * 0.9), { kind: 'walker', hunt: true }));
+  const hp0 = zhe.hp; run(1.5);
+  assert.ok(zhe.hp < hp0 - 8, `一秒半掉了 ${(hp0 - zhe.hp).toFixed(0)}`);
+  run(12);
+  assert.equal(zhe.down, true, `阿哲还剩 ${zhe.hp.toFixed(0)}，丧尸离他 ${pack.map((q) => (q.alive ? Math.hypot(q.pos.x - zhe.pos.x, q.pos.z - zhe.pos.z).toFixed(1) + q.zs : 'x')).join(' ')}`); assert.ok(events.some(([n, e]) => n === 'squad:down' && e.mate === zhe)); assert.ok(msgs.some((t) => /阿哲倒下了/.test(t)));
+  for (const q of pack) q._deactivate();
+  player.pos.x += 30; // 你先走开
+  // 扶起来：站到跟前
+  squad.mates[1].down = true; // 林医生也倒着：没人替你扶
+  run(SQUAD.down.revive - 0.5, () => { player.pos.set(zhe.pos.x + 1, zhe.pos.y, zhe.pos.z); }); assert.equal(zhe.down, true, '还差半秒');
+  run(0.8, () => { player.pos.set(zhe.pos.x + 1, zhe.pos.y, zhe.pos.z); }); assert.equal(zhe.down, false); assert.equal(zhe.hp, SQUAD.down.hp);
+  assert.equal(squad.mates[1].down, true); squad.rally(); assert.equal(squad.mates[1].down, false); assert.ok(zhe.hp > SQUAD.down.hp, '安全点：缓过来、回一截血');
+});
+
+test('林医生：你血量见底时跑过来包扎（+35，之后要等一分钟）；阿哲倒了她去扶；阿哲看见特殊感染者先喊出来', () => {
+  const { G, squad, player, run, ahead, enemies, msgs, events } = qworld();
+  squad.reset(); run(0.3);
+  const lin = squad.mates[1], zhe = squad.mates[0], H = SQUAD.members[1].heal;
+  lin.healT = 0; player.health = 30;
+  run(6);
+  assert.equal(player.health, 30 + H.amount); assert.ok(events.some(([n]) => n === 'squad:heal')); assert.ok(msgs.some((t) => /林医生：别动/.test(t)));
+  player.health = 20; run(6); assert.equal(player.health, 20, '刚包过：要等');
+  assert.ok(lin.healT > H.cooldown - 15);
+  // 阿哲倒了：你离得远，林医生去扶
+  zhe.goDown(); const far = ahead(9);
+  run(SQUAD.down.medic + 6, () => { player.pos.copy(far); });
+  assert.equal(zhe.down, false, '林医生把人扶起来了');
+  // 喊话
+  msgs.length = 0; const b = enemies.spawn('zombie', ahead(12, 1), { kind: 'spitter', passive: true, fixed: true });
+  const s0 = FPS_MISSION.spawn; player.pos.set(s0.x, elev(s0.floor), s0.z);
+  run(3, () => { zhe.pos.set(s0.x, elev(s0.floor), s0.z); }); assert.ok(msgs.some((t) => /阿哲：喷酸者/.test(t)), JSON.stringify(msgs)); assert.equal(b.called, true);
+  void G;
 });
