@@ -6457,7 +6457,7 @@ function u_(i, e, t) {
       ze("alert", { pos: Hn(pe.pos) || Hn(te.pos), variant: pe.type === "hound" ? 1 : 0, gain: 0.9 });
     }), ln("enemy:fire", (te) => {
       let he = te.type || te.enemy && te.enemy.type, pe = Hn(te.pos) || te.enemy && Hn(te.enemy.pos);
-      ze(he === "soldier" ? "soldier_fire" : he === "hound" ? "hound_fire" : "gull_fire", { pos: pe, gain: he === "soldier" ? 0.8 : 1, jitter: 0.04 }), Y = Math.min(1, Math.max(Y, 0.6) + 0.05);
+      (he === "screamer" ? ze("telegraph", { pos: pe, variant: 0, pitch: 2.1, gain: 1.3, jitter: 0.05 }) : ze(he === "soldier" ? "soldier_fire" : he === "hound" ? "hound_fire" : "gull_fire", { pos: pe, gain: he === "soldier" ? 0.8 : 1, jitter: 0.04 })), Y = Math.min(1, Math.max(Y, 0.6) + 0.05);
     }), ln("enemy:step", (te) => {
       if (te.crash) {
         ze("hound_step", { pos: Hn(te.pos), gain: 1, pitch: 0.72 }), ze("impact_metal", { pos: Hn(te.pos), gain: 0.8, pitch: 0.55 });
@@ -9122,7 +9122,7 @@ function hM(i) {
     addEventListener("resize", R), i.events.on("player:hitEnemy", (k) => {
       I.hitmarker(k && k.killed ? "kill" : k && (k.weak || k.part === "weak") ? "weak" : "hit"), k && k.killed && k.weak && fe && le === i.time.frame && !fe.weak && (fe.weak = true, fe.el.innerHTML += "<em>\u5F31\u70B9\u547D\u4E2D</em>");
     }), i.events.on("enemy:killed", (k) => {
-      let ce = { gull: "\u673A\u68B0\u98DE\u9E25", hound: "\u673A\u68B0\u730E\u72AC", soldier: "\u6B66\u88C5\u52AB\u6301\u8005" }[k && (k.type || k.enemy && k.enemy.type)] || "\u673A\u68B0\u5B88\u536B";
+      let ce = k && k.enemy && k.enemy.feedName || { gull: "\u673A\u68B0\u98DE\u9E25", hound: "\u673A\u68B0\u730E\u72AC", soldier: "\u6B66\u88C5\u52AB\u6301\u8005" }[k && (k.type || k.enemy && k.enemy.type)] || "\u673A\u68B0\u5B88\u536B";
       fe = I.feed(`<b>${ce}</b> ${k && (k.type || k.enemy && k.enemy.type) === "soldier" ? "\u5DF2\u51FB\u5012" : "\u5DF2\u6467\u6BC1"}`), le = i.time.frame;
     }), i.events.on("player:hit", (k) => {
       if (!k || !k.fromPos) return;
@@ -9633,7 +9633,7 @@ function mM(i) {
     }
     function q() {
       if (!o.setMarkers) return;
-      let P = c.relays.filter((V) => !V.cut).map((V) => ({ id: V.id, short: V.short, label: V.o.label || "\u4E2D\u7EE7 " + V.short, pos: V.o.pos, kind: V.o.kind || "relay" }));
+      let P = c.relays.filter((V) => !V.cut && !V.o.locked).map((V) => ({ id: V.id, short: V.short, label: V.o.label || "\u4E2D\u7EE7 " + V.short, pos: V.o.pos, kind: V.o.kind || "relay" }));
       c.allCut && s.extraction && P.push({ id: "extract", short: "\u64A4\u79BB", label: s.extraction.label || "\u63A5\u5E94\u8F66", pos: s.extraction.pos, kind: "extract" }), s && s.extraMarkers && P.push(...s.extraMarkers()), o.setMarkers(P);
     }
     function U({ skipIntro: P = false, quick: V = false, keepRetries: Y = false } = {}) {
@@ -9785,7 +9785,7 @@ function mM(i) {
     function $() {
       let P = null, V = Yi.interactRange;
       for (let Y of c.relays) {
-        if (Y.cut) continue;
+        if (Y.cut || Y.o.locked) continue;
         let L = Y.o.pos.x - n.pos.x, Z = Y.o.pos.z - n.pos.z, J = Math.hypot(L, Z);
         J > V || Math.abs((Y.o.pos.y || 0) - n.pos.y) > 2.5 || J > 0.9 && (L * n.forward.x + Z * n.forward.z) / (J * Math.max(0.2, Math.hypot(n.forward.x, n.forward.z))) < Yi.interactFacing || (P = Y, V = J);
       }

@@ -111,6 +111,9 @@ export function createLiftControl(G, { nav, layout, root = null, hidden = () => 
     const link = near.link, from = near.i, e = link.elevator, car = cars?.get?.(link.id) || null, p = G.player.pos;
     if (to === from) return;
     const a = link.stops[from], b = link.stops[to];
+    // 丧尸围城：停电、分区锁死的时候电梯去不了（G.liftAllow 返回一句原因）
+    const why = G.liftAllow?.(link, a.floor, b.floor);
+    if (why) { G.hud?.message?.(why, 2.8); return; }
     ride = { link, from, to, dir: Math.sign(to - from), t: 0, car, shown: from, wasInv: !!G.player.invulnerable };
     G.player.mounted = true; G.player.invulnerable = true;
     G.hud?.message?.('', 0);

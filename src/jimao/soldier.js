@@ -74,6 +74,9 @@ const capsule = (a, b, r0, r1, hex) => [limb(a, b, r0, r1, hex), ball(r0, a.x, a
 const v = (x, y, z) => new THREE.Vector3(x, y, z);
 const merge = (list) => { const g = mergeGeometries(list.flat().map((q) => (q.index ? q.toNonIndexed() : q))); g.computeBoundingSphere(); return g; };
 
+/** 搭模型、算命中用的小工具（zombie.js 也用） */
+export { rbox, ball, limb, capsule, merge, hitSphere, hitCapsule };
+
 // 尺寸：髋关节离地 0.98 m，头盔顶约 1.84 m；面朝 +Z，右手在 -X 一侧。
 const HIP_Y = 0.98, THIGH = 0.44, SHIN = 0.42;
 function buildParts(look) {

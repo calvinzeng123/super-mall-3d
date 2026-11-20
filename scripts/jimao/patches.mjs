@@ -5,6 +5,13 @@
 import { escapeLikeEsbuild } from './rebrand.mjs';
 
 export const PATCHES = [
+  // ---- 丧尸围城：目标一个一个放出来（o.locked 的先不能交互、不标在 HUD 上） ----
+  ['锁着的目标不能交互',
+    'for (let Y of c.relays) {\n        if (Y.cut) continue;\n        let L = Y.o.pos.x - n.pos.x',
+    'for (let Y of c.relays) {\n        if (Y.cut || Y.o.locked) continue;\n        let L = Y.o.pos.x - n.pos.x'],
+  ['锁着的目标不标在 HUD 上',
+    'let P = c.relays.filter((V) => !V.cut).map((V) => ({ id: V.id, short: V.short,',
+    'let P = c.relays.filter((V) => !V.cut && !V.o.locked).map((V) => ({ id: V.id, short: V.short,'],
   // ---- 开局过场（cutscene.js） ----
   ['记下这次开局是完整开场还是重新出击的短开场',
     'h = V ? Yi.retryIntroSeconds : Yi.introSeconds, f = V, p = V, n.enabled = false,',
@@ -158,6 +165,13 @@ export const PATCHES = [
   ['新手指按下时，丢掉已经不在屏幕上的摇杆 / 转视角手指（系统手势吞掉 touchend 时不会卡住）',
     'if (P.preventDefault(), !!r) for (let V of P.changedTouches) V.clientX',
     'if (P.preventDefault(), w !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === w) && ie(), q !== -1 && P.touches && !Array.prototype.some.call(P.touches, (t) => t.identifier === q) && (q = -1), !!r) for (let V of P.changedTouches) V.clientX'],
+  // ---- 丧尸围城（zombie.js）----
+  ['丧尸用自己的名字播报（行尸、奔尸、胖尸、尖叫者）',
+    'let ce = { gull: "机械飞鸥", hound: "机械猎犬", soldier: "武装劫持者" }[k && (k.type || k.enemy && k.enemy.type)] ||',
+    'let ce = k && k.enemy && k.enemy.feedName || { gull: "机械飞鸥", hound: "机械猎犬", soldier: "武装劫持者" }[k && (k.type || k.enemy && k.enemy.type)] ||'],
+  ['尖叫者冲直升机叫：不是枪声，是一声又尖又长的预警音',
+    'ze(he === "soldier" ? "soldier_fire" : he === "hound" ? "hound_fire" : "gull_fire", { pos: pe, gain: he === "soldier" ? 0.8 : 1, jitter: 0.04 })',
+    '(he === "screamer" ? ze("telegraph", { pos: pe, variant: 0, pitch: 2.1, gain: 1.3, jitter: 0.05 }) : ze(he === "soldier" ? "soldier_fire" : he === "hound" ? "hound_fire" : "gull_fire", { pos: pe, gain: he === "soldier" ? 0.8 : 1, jitter: 0.04 }))'],
 ];
 
 /** 打补丁；返回 { code, applied }。有一条没命中或命中不止一次就抛错。 */

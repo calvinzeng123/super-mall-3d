@@ -48,6 +48,8 @@ export function stairRuns(nav) {
     if (!main(cur.high)) continue;
     const da = dirOf(first), db = dirOf(cur), [ax, az] = toW(first.F, 0, 0), [bx, bz] = toW(cur.F, cur.len, 0);
     runs.push({ id: first.id, from: first.low, to: cur.high, y0: first.y0, y1: cur.y1, da, db,
+      // 这一段经过的梯段和休息平台（丧尸围城：堵住的楼梯靠它认出「人走进了被堵的那段」）
+      slopes: chain.map((c) => c.id), landings: chain.slice(0, -1).map((c) => c.high),
       ea: { x: ax, y: first.y0, z: az }, eb: { x: bx, y: cur.y1, z: bz },
       a: spot(first.low, ax, az, first.y0, -da.x, -da.z), b: spot(cur.high, bx, bz, cur.y1, db.x, db.z) });
   }

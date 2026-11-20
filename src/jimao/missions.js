@@ -357,7 +357,14 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const roofGun = createDoorGun(G, carMount, { label: 'M134 车顶机枪', post: 0.24, drop: 0.24, flash: 0.7 });
   const ringQ = new THREE.Quaternion(), ringD = new THREE.Vector3();
   const carSamples = sampleRoute(CAR_ROUTE), carLength = carSamples.at(-1).s;
-  const roofY = elev(EXTRACTIONS.heli.floor), eye = J.PLAYER?.eye ?? 1.62;
+  const eye = J.PLAYER?.eye ?? 1.62;
+  // 直升机这一局停在哪、绕着哪飞：平时是一期屋顶（EXTRACTIONS.heli / HELI_ORBIT）；丧尸围城的任务自己带（公寓楼顶）
+  const heliExit = () => (state.mission?.extraction.id === 'heli' ? state.mission.extraction : EXTRACTIONS.heli);
+  const roofY = () => elev(heliExit().floor);
+  const orbit = () => heliExit().orbit || HELI_ORBIT;
+  const heliPose = (t) => (heliExit().flight ? heliExit().flight.poseAt(t) : heliPoseAt(t, roofY()));
+  const heliEnd = () => (heliExit().flight ? heliExit().flight.duration() : heliDuration());
+  const rideHooks = () => state.mission?.extraction.ride || null;
   const FRESH = () => ({ phase: 'none', t: 0, rideT: 0, carS: 0, speed: 0, stopT: 0, endT: 0, rideKills: 0, spawnT: 0, textT: 0, released: false,
     vhp: 100, vhits: 0, warned: 0, smokeT: 0, pose: null, outT: 0, outCam: null, outLook: null, pose0: null, crashT: 0, crashStart: null, crashed: false, boom: false, dead: false, markT: 0, markSig: '' });
   const state = { mission: null, kills: 0, reinforce: 0, tell: 0, holdT: 0, inside: false, holdTextT: 0, bombT: 0, bombDone: false, boss: null, bossT: 0, ...FRESH() };
@@ -385,7 +392,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.phase === 'outro' && G.player) G.player.invulnerable = !!state.wasInv;
     letterbox?.(false);
     const keep = state.checkpoint && state.mission ? state.checkpoint : null;
-    const mission = keep ? state.mission : rollMission(rng, sites, force);
+    const mission = keep ? state.mission : G.siege?.enabled ? G.siege.mission(rng) : rollMission(rng, sites, force);
     Object.assign(state, { mission, kills: keep ? state.kills : 0, reinforce: 0, tell: 0, holdT: keep ? state.holdT : 0, inside: false, holdTextT: 0, ...FRESH(),
       bombT: keep ? state.bombT : (mission.bomb?.time || 0), bombDone: false, boss: keep ? state.boss : null, bossT: 0,
       checkpoint: null, restore: !!keep });
@@ -394,7 +401,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (G.player) G.player.mounted = false;
     doorGun.reset(); roofGun.reset();
     models = mission.objectives.map((o) => {
-      const g = o.kind === 'relay' ? relayModel() : o.kind === 'bomb' ? bombModel() : itemModel();
+      const g = o.model ? o.model() : o.kind === 'relay' ? relayModel() : o.kind === 'bomb' ? bombModel() : itemModel();
       const y = o.site.y ?? elev(o.site.floor);
       g.position.set(o.site.x, y, o.site.z);
       root.add(g);
@@ -407,18 +414,21 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       h.object = g; h.pos = v({ ...h, y });
     }
     if (mission.hvt) mission.hvt.pos = v({ ...mission.hvt, y: elev(mission.hvt.floor) });
+    // 直升机这一局停哪（丧尸围城停公寓楼顶，别的任务回一期屋顶）
+    { const hx = mission.extraction.id === 'heli' ? mission.extraction : EXTRACTIONS.heli; vehicles.heli.moveTo({ ...hx.vehicle, y: elev(hx.floor) }); }
     for (const vv of Object.values(vehicles)) vv.reset();
     const x = mission.extraction;
     Object.assign(G.level, {
       objectives: mission.objectives,
-      extraction: { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked },
-      missionText: (c) => missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null, { t: state.holdT, inside: state.inside, bombT: state.bombT }),
+      // closed：撤离点先不开（丧尸围城要等直升机到了才开，见 openExtraction）
+      extraction: x.closed ? null : { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked },
+      missionText: (c) => mission.text ? mission.text(c, state.phase === 'ride' ? { kills: state.rideKills } : null) : missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null, { t: state.holdT, inside: state.inside, bombT: state.bombT }),
       // 地上的路线箭头指向哪里（guide.js）：歼灭任务指向最近的敌人，坚守任务指向控制点（人在圈里时不画）
-      guideTarget: () => guideTarget(),
+      guideTarget: () => (mission.guide ? mission.guide() : guideTarget()),
       onExtract: () => board(),
       outroDelay: 1.6, keepLock: true,
     });
-    Object.assign(J.RADIO, missionRadio(mission));
+    Object.assign(J.RADIO, mission.radio || missionRadio(mission));
     return mission;
   }
 
@@ -452,7 +462,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     G.level.extraction = null; G.game?.refreshObjective?.();
     if (camera) { from.pos.copy(camera.position); from.quat.copy(camera.quaternion); }
     G.weapon?.setVisible?.(false);
-    G.hud?.radio?.(vv.kind === 'helicopter' ? '上机！左舷机枪交给你，绕楼顶一圈，把冲上来的敌人全部清掉。' : '上车！从车顶射击口压制沿路的敌人，我们冲出去！', 4.5);
+    G.hud?.radio?.(rideHooks()?.boardRadio || (vv.kind === 'helicopter' ? '上机！左舷机枪交给你，绕楼顶一圈，把冲上来的敌人全部清掉。' : '上车！从车顶射击口压制沿路的敌人，我们冲出去！'), 4.5);
+    rideHooks()?.onBoard?.();
   }
 
   const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
@@ -480,8 +491,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.phase === 'ride') {
       if (vv.kind === 'helicopter') {
         state.rideT += dt;
-        vv.setPose(state.pose = heliPoseAt(state.rideT, roofY), Math.sin(state.rideT * 7) * 0.025);
-        if (state.rideT >= heliDuration() - CUT.heliLead) startOutro(vv);
+        vv.setPose(state.pose = heliPose(state.rideT), Math.sin(state.rideT * 7) * 0.025);
+        if (state.rideT >= heliEnd() - CUT.heliLead) startOutro(vv);
       } else {
         state.speed = state.carS >= carLength - 0.05 ? 0 : carSpeedAt(carSamples, state.carS);
         state.carS = Math.min(carLength, state.carS + state.speed * dt);
@@ -493,7 +504,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       state.outT += dt;
       if (vv.kind === 'helicopter') {
         state.rideT += dt;
-        vv.setPose(state.pose = heliPoseAt(state.rideT, roofY), Math.sin(state.rideT * 7) * 0.025);
+        vv.setPose(state.pose = heliPose(state.rideT), Math.sin(state.rideT * 7) * 0.025);
       } else {
         const o = carOutroPose(state.pose0, state.outT);
         state.speed = o.speed; vv.setPose(state.pose = o.pose, Math.sin(state.outT * 9) * 0.008);
@@ -501,8 +512,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       if (state.outT >= CUT.outro[vv.kind]) finishRide();
     } else if (state.phase === 'crash') {
       state.crashT += dt;
-      const C = HELI_ORBIT.center, s0 = state.crashStart;
-      const ground = vv.kind === 'helicopter' ? (Math.hypot(s0.x - C.x, s0.z - C.z) < 80 ? roofY : 0) : s0.y;
+      const C = orbit().center, s0 = state.crashStart;
+      const ground = vv.kind === 'helicopter' ? (rideHooks()?.ground ? rideHooks().ground(s0) : Math.hypot(s0.x - C.x, s0.z - C.z) < 80 ? roofY() : 0) : s0.y;
       const p = crashPose(vv.kind, s0, state.crashT, ground);
       vv.setPose(p, 0);
       if (p.landed && !state.boom) boom(vv, 1);
@@ -517,7 +528,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const c = vv.toWorld(VEHICLE_HP.center[vv.kind]);
     if (rayMiss(e.pos, e.dir, c) > VEHICLE_HP.radius[vv.kind]) return;
     state.vhits++;
-    state.vhp = Math.max(0, state.vhp - VEHICLE_HP.damage[vv.kind]);
+    state.vhp = Math.max(0, state.vhp - VEHICLE_HP.damage[vv.kind] * (e.hits || 1)); // hits：尖叫者一声顶好几发
     vhud.hit();
     // 弹着点：朝射手那一侧的机身表面冒火花
     const back = new THREE.Vector3(e.pos.x - c.x, e.pos.y - c.y, e.pos.z - c.z).normalize();
@@ -599,10 +610,10 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   }
   /** 收掉和这段乘坐无关的敌人：直升机只留一期屋顶上的，接应车只留离车 110 米以内、没被甩在后面 45 米的 */
   function cull(vv, all = false) {
-    const C = HELI_ORBIT.center, car = vv.kind === 'car' ? carPoseAt(carSamples, state.carS) : null;
+    const C = orbit().center, car = vv.kind === 'car' ? carPoseAt(carSamples, state.carS) : null, hook = rideHooks()?.keep;
     for (const e of alive()) {
-      const keep = car ? Math.hypot(e.pos.x - car.x, e.pos.z - car.z) < 110 && (e.pos.x - car.x) * car.dir.x + (e.pos.z - car.z) * car.dir.z > -45 && !all
-        : Math.abs(e.pos.y - roofY) < 4 && Math.hypot(e.pos.x - C.x, e.pos.z - C.z) < 95;
+      const keep = hook ? hook(e) : car ? Math.hypot(e.pos.x - car.x, e.pos.z - car.z) < 110 && (e.pos.x - car.x) * car.dir.x + (e.pos.z - car.z) * car.dir.z > -45 && !all
+        : Math.abs(e.pos.y - roofY()) < 4 && Math.hypot(e.pos.x - C.x, e.pos.z - C.z) < 95;
       if (!keep) e._deactivate?.();
     }
   }
@@ -614,7 +625,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
     state.pose0 = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0, dir: { x: 0, z: -1 } }) };
     const t0 = state.rideT;
-    state.outCam = outroCamera(vv.kind, state.pose0, { poseAt: (d) => heliPoseAt(t0 + d, roofY), away: HELI_ORBIT.center });
+    state.outCam = outroCamera(vv.kind, state.pose0, { poseAt: (d) => heliPose(t0 + d), away: orbit().center });
     state.outLook = vv.toWorld(VEHICLE_HP.center[vv.kind]);
     state.wasInv = !!G.player.invulnerable; G.player.invulnerable = true;
     G.hud?.clearRadio?.(); G.hud?.show?.(false);
@@ -632,7 +643,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   /** 直升机：楼顶上能刷兵的点（离楼梯口近的优先，像是从楼下冲上来的） */
   function roofSpawns() {
     if (roofSpots) return roofSpots;
-    const C = HELI_ORBIT.center, R = Math.hypot(HELI_ORBIT.pad.x - C.x, HELI_ORBIT.pad.z - C.z) + 22;
+    const C = HELI_ORBIT.center, R = Math.hypot(HELI_ORBIT.pad.x - C.x, HELI_ORBIT.pad.z - C.z) + 22, roofY = elev(EXTRACTIONS.heli.floor);
     const rf = layout.levels.find((l) => l.id === EXTRACTIONS.heli.floor);
     const stairs = (rf?.rooms || []).filter((r) => r.type === 'stair').flatMap((r) => r.polys || []).map((P) => [P.reduce((a, p) => a + p[0], 0) / P.length, P.reduce((a, p) => a + p[1], 0) / P.length]);
     const all = (G.level.enemySpawns || []).filter((s) => s.type === 'ground' && Math.abs(s.pos.y - roofY) < 1.5 && Math.hypot(s.pos.x - C.x, s.pos.z - C.z) < R
@@ -642,7 +653,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return roofSpots;
   }
   const alive = () => G.enemies?.list?.filter((e) => e.alive) || [];
-  const roofEnemies = () => alive().filter((e) => Math.abs(e.pos.y - roofY) < 4 && Math.hypot(e.pos.x - HELI_ORBIT.center.x, e.pos.z - HELI_ORBIT.center.z) < 100);
+  const roofEnemies = () => (rideHooks()?.targets ? rideHooks().targets() : alive().filter((e) => Math.abs(e.pos.y - roofY()) < 4 && Math.hypot(e.pos.x - orbit().center.x, e.pos.z - orbit().center.z) < 100));
   /** HUD 标记：坐直升机时楼顶上每个敌人一个红点（位置直接引用敌人坐标，跟着走） */
   function markers() {
     const m = state.mission;
@@ -654,6 +665,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     }
     // 猎杀头目：头目头顶一个红点（带距离）
     if (state.phase === 'none' && m?.type === 'hvt' && !G.game?.run?.allCut && state.boss?.alive) return [{ id: 'boss', short: '首', label: `头目「${m.hvt.name}」`, pos: state.boss.pos.clone().setY(state.boss.pos.y + 2.1), kind: 'hunt' }];
+    if (state.phase === 'none' && m?.markers) return m.markers();
     if (state.phase !== 'ride') return [];
     return (veh()?.kind === 'helicopter' ? roofEnemies() : alive()).map((e) => ({ id: `tgt-${G.enemies.list.indexOf(e)}`, short: '', label: '敌人', pos: e.pos, kind: 'enemy' }));
   }
@@ -663,10 +675,11 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function rideSpawns(dt, vv) {
     state.spawnT -= dt;
     if (vv.kind === 'helicopter') {
+      if (rideHooks()?.spawns) { rideHooks().spawns(dt, state.rideT); return; }
       if (state.spawnT > 0) return;
       state.spawnT = 0.9;
       cull(vv);
-      const C = HELI_ORBIT.center, onRoof = alive().filter((e) => Math.abs(e.pos.y - roofY) < 3 && Math.hypot(e.pos.x - C.x, e.pos.z - C.z) < 90).length;
+      const C = HELI_ORBIT.center, onRoof = alive().filter((e) => Math.abs(e.pos.y - roofY()) < 3 && Math.hypot(e.pos.x - C.x, e.pos.z - C.z) < 90).length;
       if (onRoof >= 10) return;
       const { all, near } = roofSpawns(), list = near.length && rng() < 0.7 ? near : all;
       if (list.length) spawnAt(list[Math.floor(rng() * list.length)].pos.clone());
@@ -905,5 +918,10 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || state.phase === 'ride' || state.phase === 'outro'; },
     get riding() { return riding(); },
     get rideKind() { return riding() ? veh()?.kind === 'helicopter' ? 'helicopter' : 'car' : null; },
+    get phase() { return state.phase; }, get rideT() { return state.rideT; },
+    /** 载具中心（坐着的时候）：尖叫者冲它叫 */
+    vehicleCenter() { const vv = veh(); return vv && state.phase === 'ride' ? vv.toWorld(VEHICLE_HP.center[vv.kind]) : null; },
+    /** 开放撤离点（closed 的任务用）：从这一刻起走到登机门就能上 */
+    openExtraction() { const x = state.mission?.extraction; if (!x || G.level.extraction) return; G.level.extraction = { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked }; G.game?.refreshObjective?.(); },
     dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); roofGun.dispose(); vhud.remove(); } };
 }

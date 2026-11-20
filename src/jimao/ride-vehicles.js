@@ -221,7 +221,8 @@ export function createRideVehicle(exit) {
   const smooth = (x) => x * x * (3 - 2 * x);
   let spin = 0, blink = 0, roll = 0;
   const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(0, 0, 0, 'YXZ');
-  const park = () => { root.position.set(v.x, exit.y, v.z); root.rotation.set(0, v.yaw || 0, 0); body.position.set(0, 0, 0); body.rotation.set(0, 0, 0); };
+  const home = { x: v.x, y: exit.y, z: v.z, yaw: v.yaw || 0 };
+  const park = () => { root.position.set(home.x, home.y, home.z); root.rotation.set(0, home.yaw, 0); body.position.set(0, 0, 0); body.rotation.set(0, 0, 0); };
   return {
     root, body, kind: v.kind, spec,
     /** 撤离路线上的位姿（世界坐标；pitch 正是低头，roll 正是往右压） */
@@ -253,6 +254,8 @@ export function createRideVehicle(exit) {
       tmpE.set(lookPitch, Math.PI + (spec.seatYaw || 0) + lookYaw, 0);
       return { position, quaternion: tmpQ.clone().multiply(new THREE.Quaternion().setFromEuler(tmpE)) };
     },
+    /** 换一个停放位置（丧尸围城：直升机改停公寓楼顶）；p = { x, y, z, yaw } */
+    moveTo(p) { Object.assign(home, { x: p.x, y: p.y, z: p.z, yaw: p.yaw || 0 }); park(); },
     reset() { spin = 0; roll = 0; park(); doors.forEach((d) => { d.rotation.y = 0; }); wheels.forEach((w) => { w.rotation.x = 0; }); },
     dispose() { root.removeFromParent(); geos.forEach((g) => g.dispose()); Object.values(M).forEach((m) => m.dispose()); },
   };
