@@ -46,7 +46,7 @@ export function unitSites(layout, nav, floor) {
     const [x, z] = toW(u.frame, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), st = landAt(nav, x, z, lv.elev + 0.6);
     if (!st || st.floor !== floor || !clear(nav, st)) continue;
     const n = +(u.id.split('-').at(-1).replace(/\D/g, '') || 1);
-    out.push({ floor, x: st.x, y: lv.elev, z: st.z, name: `${lv.short.replace(/\D/g, '')}${String(n).padStart(2, '0')} 室` });
+    out.push({ floor, x: st.x, y: lv.elev, z: st.z, unit: u.id, name: `${lv.short.replace(/\D/g, '')}${String(n).padStart(2, '0')} 室` }); // unit：路线指引要靠它找到这户的门
   }
   return out;
 }
@@ -285,7 +285,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       extraction: { id: 'heli', label: '直升机', where: '公寓楼顶', floor: SIEGE.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
         ride: { boardRadio: '上机！机枪交给你：屋顶追上来的、阳台玻璃后面的、楼下冲出来的，全部清掉。先打尖叫的，它们会伤到飞机。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, ground: (s0) => (Math.hypot(s0.x - flight.center.x, s0.z - flight.center.z) < 22 ? padY() : 0) } },
-      text: (c, ride) => textNow(c, ride), guide: () => guideNow(), markers: () => [],
+      text: (c, ride) => textNow(c, ride), markers: () => [],
       radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你手上只有一把手枪——先去保安室拿步枪，再想办法上公寓楼顶，直升机到那儿接你。别乱开枪，它们听得见。',
         contact: '它们发现你了！', cut: plan.stages.slice(0, -1).map((st, i) => cutLine(plan, i)), all: `信号弹点着了！直升机 ${SIEGE.hold} 秒后到，守住屋顶！`, low: '你被咬伤了，拉开距离。', done: '指挥中心收到。幸存者已撤离云澜汇——干得漂亮。' } };
     S.plan = plan; S.mission = m; S.flight = flight;
@@ -297,7 +297,6 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if (c.allCut) return S.landed ? '登机 · 公寓楼顶直升机' : S.hold >= 0 ? '守住屋顶，等直升机' : '等直升机';
     return S.plan.stages[Math.min(S.stage, S.plan.stages.length - 1)].text;
   }
-  function guideNow() { const st = S.plan?.stages[S.stage]; if (!st) return null; return new THREE.Vector3(st.site.x, st.site.y, st.site.z); }
 
   /** 每局开始（任务系统 roll 完以后调） */
   function loadout() {

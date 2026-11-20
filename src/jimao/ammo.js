@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
 
-export const AMMO = Object.freeze({ drop: 30, crate: 90, objective: 30, cap: 300, low: 60, pickupR: 1.5, crateR: 1.9, dropLife: 45 });
+export const AMMO = Object.freeze({ drop: 30, crate: 90, objective: 30, siegeObjective: 10, cap: 300, low: 60, pickupR: 1.5, crateR: 1.9, dropLife: 45 });
 
 /** 弹药箱放在这些地方附近（找最近的一块空地）：一期各层中庭边、地下大厅、酒店、公寓、两个撤离点旁边 */
 export const CRATE_SEEDS = Object.freeze([
@@ -118,10 +118,11 @@ export function createAmmoSupply(G, { scene, layout, nav, rng = Math.random, isR
   G.events.on('enemy:killed', (e) => {
     if (G.game?.state !== 'playing') return;
     if (isRiding()) return; // 坐载具时用车载机枪（弹药不限），不掉弹匣也不补步枪弹药
-    const chance = total() < AMMO.low ? 0.9 : 0.55;
+    // 丧尸围城弹药紧：丧尸身上很少有弹匣（没子弹了才多掉一点），完成一步也只补 10 发
+    const siege = !!G.siege?.enabled, chance = siege ? (total() < AMMO.low ? 0.35 : 0.12) : total() < AMMO.low ? 0.9 : 0.55;
     if (e?.pos && rng() < chance) drop(e.pos);
   });
-  G.events.on('objective:done', () => give(AMMO.objective, '缴获备用弹匣'));
+  G.events.on('objective:done', () => give(G.siege?.enabled ? AMMO.siegeObjective : AMMO.objective, '缴获备用弹匣'));
 
   function reset() {
     for (const d of drops) d.model.removeFromParent();

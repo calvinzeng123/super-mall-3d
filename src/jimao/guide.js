@@ -64,7 +64,7 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
     const custom = G.level?.guideTarget?.();
     if (custom !== undefined) return custom;
     if (!run.allCut) {
-      const open = (run.relays || []).filter((r) => !r.cut && r.o?.pos);
+      const open = (run.relays || []).filter((r) => !r.cut && r.o?.pos && !r.o.locked); // locked：还没放出来的目标（丧尸围城一步一步来）
       if (!open.length) return null;
       const r = open.sort((a, b) => a.o.pos.distanceTo(p) - b.o.pos.distanceTo(p))[0], site = r.o.site || { floor: r.o.zone, x: r.o.pos.x, z: r.o.pos.z };
       return { key: r.id, name: String(r.o.label || r.label || '目标').split(' · ')[0], floor: site.floor, x: r.o.pos.x, y: r.o.pos.y, z: r.o.pos.z, door: doorOutside(layout, site) };

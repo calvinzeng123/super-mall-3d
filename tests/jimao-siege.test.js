@@ -13,12 +13,12 @@ import { ZOMBIE, KINDS, pickKind, zombieParts, addZombies } from '../src/jimao/z
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
 
 const L = buildPlayableLayout({ mode: 'arcade' }), nav = buildNav(L), runs = stairRuns(nav);
-const seq = (seed) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); };
+const seq = (seed) => { let s = seed; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647); for (let i = 0; i < 5; i++) r(); return r; };
 const elev = (id) => L.levels.find((l) => l.id === id).elev;
 
 test('抽一局：武器柜 → 合闸 → 三道关（各一件工具、一处关卡）→ 信号弹；三道关种类不同、楼层一道比一道高，每一步的位置都在那一层的空地上', () => {
   const seen = new Set();
-  for (const seed of [3, 7, 21, 99, 1234]) {
+  for (const seed of [3, 7, 21, 99, 1234, 4321, 777, 2024]) {
     const plan = siegePlan(seq(seed), L, nav, runs);
     assert.deepEqual(plan.stages.map((s) => s.kind), ['locker', 'switch', 'tool', 'gate', 'tool', 'gate', 'tool', 'gate', 'flare']);
     assert.equal(new Set(plan.gates.map((g) => g.type)).size, 3, '三道关种类不同');
@@ -104,7 +104,7 @@ test('清扫的目标位置：楼下的一半在街上（室外地面）、一�
 });
 
 // ---- 丧尸 ----
-function zworld() {
+function zworld({ count = 12 } = {}) {
   const physics = createMapPhysics(nav), scene = new THREE.Scene(), events = [], hurt = [];
   const handlers = {};
   const ctx = { rng: seq(11), list: [], retire(m) { m._deactivate(); const i = ctx.list.indexOf(m); if (i >= 0) ctx.list.splice(i, 1); }, releaseToken() {} };
@@ -112,9 +112,18 @@ function zworld() {
   const s = FPS_MISSION.spawn, y = elev(s.floor);
   const player = { pos: new THREE.Vector3(s.x, y, s.z), vel: new THREE.Vector3(), alive: true, health: 100, damage(n, from) { hurt.push([n, from?.clone?.()]); this.health -= n; }, addShake() {} };
   const G = { scene, physics, player, enemies, time: { frame: 0 }, events: { emit(n, e) { events.push([n, e]); for (const h of handlers[n] || []) h(e); }, on(n, h) { (handlers[n] ||= []).push(h); } }, fx: { smoke() {}, explosion() {} } };
-  const zombies = addZombies(G, enemies, { count: 12 });
+  const zombies = addZombies(G, enemies, { count });
   const run = (secs, each) => { for (let t = 0; t < secs - 1e-9; t += 1 / 30) { G.time.frame++; each?.(); for (const z of [...ctx.list]) z._update(1 / 30); } };
-  const ahead = (d, side = 0) => new THREE.Vector3(s.x + Math.cos(s.yaw + 1.57) * 0 + d * -Math.sin(s.yaw) + side * Math.cos(s.yaw), y, s.z + d * -Math.cos(s.yaw) - side * Math.sin(s.yaw));
+  // 离人 d 米、同一层、中间没东西挡着的一点（第 skip 个这样的方向）
+  const ahead = (d, skip = 0) => {
+    const eye = new THREE.Vector3(s.x, y + 1.5, s.z);
+    for (let k = 0, n = 0; k < 72; k++) {
+      const a = (k / 72) * Math.PI * 2, q = new THREE.Vector3(s.x + Math.cos(a) * d, y, s.z + Math.sin(a) * d), st = landAt(nav, q.x, q.z, y + 0.6);
+      if (!st || st.floor !== s.floor || Math.abs(st.y - y) > 0.1 || !clear(nav, st) || !physics.lineOfSight(eye, new THREE.Vector3(q.x, y + 1.5, q.z))) continue;
+      if (n++ === skip * 6) return q;
+    }
+    throw new Error(`开局点周围 ${d} 米找不到看得见的空地`);
+  };
   return { G, zombies, enemies, ctx, player, events, hurt, run, ahead };
 }
 
@@ -135,7 +144,7 @@ test('行尸：没发现人时待着；看见了扑过来，贴身抡一下再�
   run(1.2); assert.equal(w.zs, 'chase'); assert.equal(w.mode, 'engage');
   run(2); const d1 = w.pos.distanceTo(player.pos); assert.ok(d1 < d0 - 2 && d1 > 1, `走近了 ${(d0 - d1).toFixed(1)} 米`);
   const speed = (d0 - d1) / 2.6; assert.ok(speed < 1.6, '行尸慢');
-  run(8); assert.ok(hurt.length >= 1 && hurt[0][0] === KINDS.walker.bite ?? ZOMBIE.bite, `咬到了：${JSON.stringify(hurt.map((h) => h[0]))}`);
+  run(8); assert.ok(hurt.length >= 1, `咬到了：${JSON.stringify(hurt.map((h) => h[0]))}`);
   assert.equal(hurt[0][0], ZOMBIE.bite); assert.ok(events.some(([n, e]) => n === 'enemy:melee' && e.zombie));
   const n = hurt.length; run(0.5); assert.ok(hurt.length <= n + 1, '不是连着咬');
   // 奔尸
@@ -160,7 +169,7 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
   assert.ok(hurt.length === 1 && hurt[0][0] > 15 && hurt[0][0] <= KINDS.bloater.burst.damage, `炸到人 ${hurt[0]?.[0]}`);
   assert.ok(mate.hp < mate.maxHp || !mate.alive, '旁边的也挨炸'); assert.ok(events.some(([n]) => n === 'zombie:burst'));
   b._deactivate(); mate._deactivate(); hurt.length = 0; events.length = 0;
-  const s = enemies.spawn('zombie', ahead(16), { kind: 'screamer' });
+  const s = enemies.spawn('zombie', ahead(13), { kind: 'screamer' }); // 15 米内看得见才会发现人
   run(9); const d = s.pos.distanceTo(player.pos);
   assert.ok(events.some(([n]) => n === 'zombie:scream'), '叫了'); assert.ok(d > KINDS.screamer.keep - 3.5, `停在 ${d.toFixed(1)} 米`); assert.equal(hurt.length, 0, '尖叫者不咬人');
   // 直升机在飞：冲飞机叫，一声顶 6 发
@@ -179,7 +188,7 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
 
 // ---- 接到游戏上 ----
 function sworld({ enabled = true } = {}) {
-  const z = zworld(), { G } = z, msgs = [], store = new Map([['jimao-siege', enabled ? '1' : '0']]);
+  const z = zworld({ count: ZOMBIE.pool }), { G } = z, msgs = [], store = new Map([['jimao-siege', enabled ? '1' : '0']]);
   const heli = { root: new THREE.Group(), poses: [], setPose(p) { this.poses.push(p); }, reset() { this.parked = true; }, moveTo() {} };
   const director = { state: { mission: null, restore: false }, vehicles: { heli }, riding: false, opened: 0, openExtraction() { this.opened++; } };
   const flow = { patrol: { soldier: 8 }, waves: [{ soldier: 5 }, { soldier: 6 }], pursuitExtra: 5 };
@@ -205,7 +214,7 @@ test('任务的样子：九个目标一个一个放（后面的锁着）；撤�
   assert.equal(director.vehicles.heli.root.visible, false, '直升机还没来');
   assert.deepEqual(flow.patrol, { gull: 0, hound: 0, soldier: 0 }); assert.equal(flow.pursuitExtra, 0);
   assert.match(G.liftAllow({ id: 'A-ST1' }, 'A-1F', 'A-3F'), /停电/); assert.equal(typeof G.stairBlock, 'function');
-  assert.equal(m.text({ allCut: false }), m.plan.stages[0].text); assert.ok(m.guide().distanceTo(new THREE.Vector3(SIEGE.arms.x, 0, SIEGE.arms.z)) < 1);
+  assert.equal(m.text({ allCut: false }), m.plan.stages[0].text); assert.ok(m.plan.stages[2].site.unit, '住户房间带着户号（路线指引靠它找门）');
   assert.equal(m.radio.cut.length, 8);
   // 关掉
   siege.enabled = false; assert.equal(store.get('jimao-siege'), '0'); siege.reset();
@@ -254,7 +263,7 @@ test('响动：开枪攒响动（手枪比步枪小），攒满来一波尸群�
   const now = zombies.alive();
   assert.ok(now.length >= before + 4, `尸群来了 ${now.length - before} 只`); assert.ok(now.filter((q) => q.hunt).length >= 4); assert.ok(msgs.some((t) => /尸群/.test(t)));
   assert.ok(S.noise <= SIEGE.noise.after + 1); assert.ok(S.hordeCool > 10);
-  for (const q of now.filter((h) => h.hunt)) assert.ok(Math.hypot(q.pos.x - player.pos.x, q.pos.z - player.pos.z) >= 13.9, '不在脸上冒出来');
+  for (const q of now.filter((h) => h.hunt)) assert.ok(Math.hypot(q.pos.x - player.pos.x, q.pos.z - player.pos.z) >= 12, '不在脸上冒出来（14 米外出生，这 0.2 秒里奔尸已经跑了一米）');
   // 手雷更响
   S.noise = 0; G.events.emit('grenade:explode', { pos: player.pos }); assert.equal(S.noise, SIEGE.noise.grenade);
 });
@@ -262,6 +271,7 @@ test('响动：开枪攒响动（手枪比步枪小），攒满来一波尸群�
 test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天上降到停机位，落稳了才开放登机；登机后清扫——屋顶、阳台、楼下三处都出齐，全清掉就定下返航', () => {
   const { G, siege, zombies, director, heli, player, begin, cut, run } = sworld();
   const m = begin(); cut(9); run(0.1);
+  for (const z of zombies.alive()) z._deactivate(); // 前面几步招来的先清掉，只看屋顶上的
   const S = siege.state, roof = elev(SIEGE.roof); player.pos.set(SIEGE.pad.x + 8, roof, SIEGE.pad.z + 3);
   run(4); const wave = zombies.alive().filter((z) => z.hunt);
   assert.ok(wave.length >= SIEGE.waveSize[0], `第一波 ${wave.length} 只`); for (const z of wave) assert.ok(Math.abs(z.pos.y - roof) < 0.5, '在屋顶上');
