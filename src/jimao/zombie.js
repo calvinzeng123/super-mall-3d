@@ -38,7 +38,7 @@ export const KINDS = Object.freeze({
   walker: Object.freeze({ name: '行尸', weight: 0.68 }),
   runner: Object.freeze({ name: '奔尸', weight: 0.16, speed: 4.7, hp: 36, bite: 10, windup: 0.26, cooldown: 0.7, scale: 0.96, lean: 0.4 }),
   bloater: Object.freeze({ name: '胖尸', weight: 0.09, speed: 0.95, hp: 190, bite: 22, windup: 0.6, scale: 1.2, girth: 1.45, burst: Object.freeze({ radius: 3.6, damage: 34 }) }),
-  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 2, heliEvery: 9, heliFirst: 6 }), scale: 1.02 }),
+  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 3, heliEvery: 8, heliFirst: 5 }), scale: 1.02 }),
 });
 /** 按比例抽一种。r ∈ [0, 1)；mix 可以改比例（{ runner: 0.3 } 这样） */
 export function pickKind(r, mix = null) {
@@ -63,6 +63,9 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const ease = (k, dt) => 1 - Math.exp(-k * dt);
 
 /** 一套外观的几何体：{ body（髋为原点：骨盆、躯干、头）, arm（肩为原点，朝 +Z 平举）, leg（髋为原点，朝下） } */
+/** 从原游戏的活动敌人列表里把 m 摘干净（有几份摘几份） */
+export function unlist(list, m) { if (!list) return; for (let i = list.length - 1; i >= 0; i--) if (list[i] === m) list.splice(i, 1); }
+
 export function zombieParts(look, { girth = 1, screamer = false } = {}) {
   const L = look, g = girth;
   const body = merge([
@@ -157,7 +160,9 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         if (!m.fixed && (opts.state === 'alert' || m.hunt)) notice(opts.target || G.player?.pos, true);
         pose(0.016);
       },
-      _deactivate() { m.active = false; m.alive = false; root.visible = false; m.pathJob?.cancel?.(); m.pathJob = null; ctx.releaseToken?.(m); },
+      // 同时把自己从原游戏的活动列表里摘掉：原游戏只在 retire() 里摘，而 spawn() 每次都往列表里再放一遍——
+      // 直接 _deactivate()（走远了回收、登机时清场）不摘的话，这只下次再用就在列表里有两份，一帧被更新两遍（越回收越快：走得快、咬得快、尖叫者一秒一声）。
+      _deactivate() { m.active = false; m.alive = false; root.visible = false; m.pathJob?.cancel?.(); m.pathJob = null; ctx.releaseToken?.(m); unlist(ctx.list, m); },
       _raycast(o, d, maxDist, out) {
         let hit = false;
         if (hitSphere(o, d, headPos, 0.15 * scale, maxDist, out)) { out.part = 'weak'; out.enemy = m; hit = true; }

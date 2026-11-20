@@ -177,7 +177,8 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
   // 直升机在飞：冲飞机叫，一声顶 6 发
   G.missions = { rideKind: 'helicopter', vehicleCenter: () => new THREE.Vector3(player.pos.x + 20, player.pos.y + 45, player.pos.z) }; events.length = 0;
   player.pos.y += 44; // 人在飞机上：离地四十多米，不在同一层
-  const stand = s.pos.clone(); run(8); player.pos.y -= 44; const shot = events.find(([n, e]) => n === 'enemy:fire' && e.scream);
+  // 上一声对人叫完最多再等 7.5 秒 + 叫的那 1.1 秒，所以给 10 秒
+  const stand = s.pos.clone(); run(10); player.pos.y -= 44; const shot = events.find(([n, e]) => n === 'enemy:fire' && e.scream);
   assert.ok(s.pos.distanceTo(stand) < 1.5, '站住叫，不乱跑');
   assert.ok(shot && shot[1].hits === KINDS.screamer.scream.heli && shot[1].type === 'screamer' && shot[1].dir.y > 0.5, '朝天上的直升机叫');
   // 一只尖叫者 8 秒叫一声、一声掉 3 × 0.8：三只都不管，100 秒的清扫掉 90 来点耐久——不打会坠机，但来得及先找它们
@@ -307,7 +308,7 @@ test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天�
   tick(0.2); assert.equal(m.extraction.flight.leaving, true, '清完了：定下返航'); assert.ok(m.extraction.flight.duration() < t + 10);
   assert.equal(m.text({ allCut: true }, { kills: 0, over: true }), '清扫完毕 · 返航');
   const cam = m.extraction.ride.outroCam({ x: SIEGE.pad.x + 46, y: 50, z: SIEGE.pad.z }), A = L.buildings.find((b) => b.id === 'A');
-  assert.ok(pointInPoly([cam.x, cam.z], A.outline) && Math.abs(cam.y - roof - 1.7) < 1e-6, '机外镜头站在公寓楼顶边上');
+  assert.ok(pointInPoly([cam.x, cam.z], A.outline) && Math.abs(cam.y - roof - 2.5) < 1e-6, '机外镜头架在公寓楼顶边上、比女儿墙高');
   assert.ok(cam.x > SIEGE.pad.x + 10, '靠直升机那一侧');
   assert.equal(m.extraction.ride.keep(), true); assert.equal(m.extraction.ride.ground({ x: SIEGE.pad.x, z: SIEGE.pad.z }), roof); assert.equal(m.extraction.ride.ground({ x: SIEGE.pad.x + 60, z: SIEGE.pad.z }), 0);
   void G;
@@ -357,7 +358,7 @@ test('北区那一局接到游戏上：撤离点在北区 1 号楼楼顶，电�
   assert.equal(m.plan.tower, TOWERS.T1); assert.equal(m.extraction.floor, 'T1-RF'); assert.equal(m.extraction.where, '北区 1 号楼楼顶'); assert.equal(m.extraction.vehicle, TOWERS.T1.pad);
   assert.match(m.radio.intro, /北区 1 号楼楼顶/); assert.match(G.liftAllow({ id: 'T1-LE' }, 'P1-1F', 'T1-8F'), /停电/); assert.equal(G.liftAllow({ id: 'A-ST1' }, 'A-1F', 'A-8F'), null);
   const cam = m.extraction.ride.outroCam({ x: -200, y: 60, z: -232 }), B = L.buildings.find((b) => b.id === 'T1');
-  assert.ok(pointInPoly([cam.x, cam.z], B.outline) && Math.abs(cam.y - elev('T1-RF') - 1.7) < 1e-6);
+  assert.ok(pointInPoly([cam.x, cam.z], B.outline) && Math.abs(cam.y - elev('T1-RF') - 2.5) < 1e-6);
   assert.equal(m.extraction.ride.ground({ x: TOWERS.T1.pad.x, y: 120, z: TOWERS.T1.pad.z }), elev('T1-RF')); { const q = groundSpots(nav, L, 1, seq(9), TOWERS.T1)[0]; assert.equal(m.extraction.ride.ground({ x: q.x, y: 60, z: q.z }), elev('P1-RF'), '掉在商场屋面上'); }
   void siege;
 });
@@ -375,4 +376,20 @@ test('路线指引认得被锁的电梯：平时从公寓一层到十二层的�
   assert.ok(near && near.some((q) => q.via === 'lift'), '到第一道关那层还是坐电梯');
   pf.setBlocked(null);
   assert.ok(pf.findNow(S(a), S(b), { lifts: true }).some((q) => q.via === 'lift' && q.to === 'A-12F'), '取消以后恢复');
+});
+
+test('回收再用的丧尸在活动列表里只有一份：尖叫者照样按对飞机的节奏叫（不会越回收越快、一秒一声把飞机叫下来）', () => {
+  const { G, enemies, player, events, run, ahead } = zworld();
+  // 刚起飞：飞机在人头顶 3 米，尖叫者在 9 米外、同一层、看得见人
+  G.missions = { rideKind: 'helicopter', vehicleCenter: () => new THREE.Vector3(player.pos.x, player.pos.y + 3, player.pos.z) };
+  // 这一只之前被回收过好几回（走远了收回池子、登机时清场，都是直接 _deactivate）
+  for (let i = 0; i < 7; i++) enemies.spawn('zombie', ahead(9), { kind: 'walker' })._deactivate();
+  const s = enemies.spawn('zombie', ahead(9), { kind: 'screamer', hunt: true });
+  assert.equal(enemies.list.filter((z) => z === s).length, 1, '活动列表里只有一份');
+  events.length = 0; run(30);
+  const shots = events.filter(([n, e]) => n === 'enemy:fire' && e.scream && e.enemy === s);
+  const K = KINDS.screamer.scream;
+  assert.ok(shots.length >= 2, `30 秒里叫了 ${shots.length} 声`);
+  assert.ok(shots.length <= Math.ceil((30 - K.heliFirst) / (K.heliEvery * 0.85)) + 1, `30 秒里叫了 ${shots.length} 声，太密`);
+  G.missions = null;
 });

@@ -265,6 +265,8 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
       },
       _deactivate() {
         m.active = false; m.alive = false; root.visible = false; laser.visible = false; ctx.releaseToken(m);
+        // 从活动列表里摘掉（乘坐时清场是直接 _deactivate 的；不摘，这个兵下次再用会在列表里有两份、一帧更新两遍）
+        if (ctx.list) for (let i = ctx.list.length - 1; i >= 0; i--) if (ctx.list[i] === m) ctx.list.splice(i, 1);
       },
       _raycast(o, d, maxDist, out) {
         let hit = false;

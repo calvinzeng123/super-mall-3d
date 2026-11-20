@@ -335,10 +335,10 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     return S.plan.stages[Math.min(S.stage, S.plan.stages.length - 1)].text;
   }
 
-  /** 机外镜头站在公寓楼顶边上、离直升机最近的那一点（人眼高度）：看着它从楼下绕上来、飞远 */
+  /** 机外镜头架在楼顶边上、离直升机最近的那一点：看着它从楼下绕上来、飞远。贴着女儿墙内侧、比人高一截——退进来站在人眼高度的话，屋面上的花箱、女儿墙会挡掉小半个画面 */
   function roofEdge(pose) {
-    const { x0, x1, z0, z1 } = bounds(layout, tower()), c = (v, lo, hi) => Math.max(lo + 1.5, Math.min(hi - 1.5, v));
-    return new THREE.Vector3(c(pose.x, x0, x1), padY() + 1.7, c(pose.z, z0, z1));
+    const { x0, x1, z0, z1 } = bounds(layout, tower()), c = (v, lo, hi) => Math.max(lo + 0.35, Math.min(hi - 0.35, v));
+    return new THREE.Vector3(c(pose.x, x0, x1), padY() + 2.5, c(pose.z, z0, z1));
   }
   /** 结算页、暂停页上的字跟着模式换 */
   function copy() {
