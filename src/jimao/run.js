@@ -38,6 +38,7 @@ import { createStairControl, STAIRS_CSS } from './stairs.js';
 import { addZombies } from './zombie.js';
 import { createSiege, SIEGE_CSS } from './siege.js';
 import { createBlackout } from './blackout.js';
+import { loadZombieKit } from './zombie-skin.js';
 import { HELI_ORBIT } from './ride-paths.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
@@ -227,6 +228,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const siege = zombies ? createSiege(G, { layout: ctx.layout, nav, scene, ui, zombies, director, runs: stairs.runs, flow: J.GAME_FLOW, storage: safeStorage(), tower: params.tower || null }) : null;
   if (siege && params.siege !== undefined) siege.enabled = params.siege !== '0';
   G.siege = siege; G.zombies = zombies;
+  // 丧尸换上贴图外形（行人模型改的，后台加载；加载不出来就还是方块人）。网址带 ?boxzombie=1 不换
+  if (zombies && !params.boxzombie) loadZombieKit().then((kit) => { if (G.zombies === zombies) zombies.useSkin(kit); else kit.dispose(); }).catch((e) => console.warn('[零点突围] 丧尸模型没加载出来，用简化模型', e));
   G.level.onReset = () => { pathfinder.reset(); director.roll(); siege?.reset(); ammo.reset(); guide.reset(); lift.reset(); stairs.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
   G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
   director.roll(); siege?.reset();
@@ -329,6 +332,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
       if (siege && G.game.state !== 'paused') { try { siege.update(dt); } catch (e) { fail('siege', e, '丧尸围城出错'); } }
       blackout.enabled = !!siege?.enabled; blackout.open = director.riding ? 1 : 0; blackout.update(dt);
+      // 丧尸围城里商场没有逛街的路人了（那些人就是丧尸）；切回零点突围把人群按画质设置放回来
+      { const pq = app.ctx?.peopleQuality, want = siege?.enabled ? 0 : null;
+        if (pq && want === 0 && pq.stats.density !== 0) { crowdWas = pq.stats.density; pq.setDensity(0); }
+        else if (pq && want === null && crowdWas != null) { pq.setDensity(crowdWas); crowdWas = null; } }
       if (G.game.state !== 'paused') { try { guide.update(dt); } catch (e) { fail('guide', e, '路线指引出错'); } }
       try { minimap.update(dt); } catch (e) { fail('minimap', e, '小地图出错'); }
       try { G.score?.update(dt); } catch (e) { fail('score', e, '得分出错'); }
@@ -361,6 +368,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 世界画完以后画枪：清掉深度，用枪自己的相机画枪那一层。环境反射调亮一点（原游戏也这样，暗色金属才看得出质感）
   // 丧尸围城的停电场景（blackout.js）：天黑、室内只留应急亮度、手电、薄雾；零点突围不开
   const blackout = createBlackout({ app, scene, camera, viewLayer: VIEW_LAYER });
+  let crowdWas = null;
   G.blackout = blackout;
   const drawView = () => {
     viewCamera.position.copy(camera.position); viewCamera.quaternion.copy(camera.quaternion);

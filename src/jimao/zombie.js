@@ -57,7 +57,7 @@ const LOOKS = [
 ];
 const SKIN = 0x7d8a6f, SKIN_DARK = 0x5f6b55, BLOOD = 0x4a0f0d, MOUTH = 0x2a0606;
 const v = (x, y, z) => new THREE.Vector3(x, y, z);
-const HIP = 0.94, LEG = 0.9, SHOULDER = 1.42;
+const HIP = 0.94, LEG = 0.9, SHOULDER = 1.42, SKIN_CYCLES = 0.62; // SKIN_CYCLES：贴图外形每走一米，走路姿势转多少圈（和 zombie-skin.js 的 cyclesPerMetre 一致）
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const ease = (k, dt) => 1 - Math.exp(-k * dt);
@@ -117,7 +117,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
     const legs = [0.09, -0.09].map((x) => { const l = mk(sets.normal[0].leg); l.position.set(x, -0.04, 0); hips.add(l); return l; });
     const vel = new THREE.Vector3(), want = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
     const headPos = new THREE.Vector3(), chest = new THREE.Vector3(), pelvis = new THREE.Vector3(), feet = new THREE.Vector3();
-    let C = { ...ZOMBIE }, scale = 1;
+    let C = { ...ZOMBIE }, scale = 1, skin = null, lookI = index, walk = 0; // skin：贴图外形（zombie-skin.js），有了就不画方块人
 
     const m = {
       id: 0, type: 'soldier', zombie: true, kind: 'walker', name: '行尸', pos: root.position, alive: false, active: false, hp: ZOMBIE.hp, maxHp: ZOMBIE.hp, rig: { group: root },
@@ -145,6 +145,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         torso.geometry = set.body; for (const a of arms) a.geometry = set.arm; for (const l of legs) l.geometry = set.leg;
         arms[0].position.x = 0.21 * (K.girth || 1); arms[1].position.x = -0.21 * (K.girth || 1);
         root.scale.setScalar(scale);
+        lookI = Math.floor(rng() * 97); walk = rng();
+        if (skin) { skin.setLook(lookI, kind === 'screamer'); skin.group.scale.set(K.girth || 1, 1, K.girth || 1); }
         m.active = true; m.alive = true; m.passive = !!opts.passive; m.sink = 0; m.hunt = !!opts.hunt; m.target = opts.targetPos || null;
         m.fixed = !!opts.fixed; m.sweep = null; m.bit = false; // fixed：钉在原地（阳台玻璃后面拍玻璃的那几只），不走、不追
         m.pos.copy(at);
@@ -343,6 +345,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
 
     function pose(dt) {
       const sp = m.speed, run = Math.min(1, sp / 4), before = Math.sin(m.gait);
+      if (skin && m.alive) walk += sp * dt * SKIN_CYCLES;
       if (m.alive) { m.gait += dt * (1.6 + sp * 2.3); m.phase += dt; }
       if (m.alive && sp > 0.4 && Math.sign(Math.sin(m.gait)) !== Math.sign(before)) G.events.emit('enemy:step', { pos: m.pos, type: 'soldier', enemy: m, speed: sp });
       const sway = Math.sin(m.phase * 1.3) * 0.05, lean = (C.lean || 0.12) * (0.4 + run) + m.lunge * 0.35 - m.stagger * 0.6;
@@ -357,6 +360,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         const l = legs[i]; l.rotation.x = -Math.sin(m.gait + i * Math.PI) * Math.min(0.6, 0.18 + sp * 0.16) - lean * 0.7;
       }
       if (sc) hips.rotation.x = -0.25;
+      // 贴图外形：整个人前倾 / 摇晃 / 扑咬时往前探，走路姿势按走过的路程转
+      if (skin) skin.pose({ phase: walk, moving: m.alive ? Math.min(1, 0.25 + sp / 0.9) : 0.3, lean: sc ? -0.22 : lean * 0.8 + (m.zs === 'attack' ? 0.12 : 0), sway: sway * 1.4, lunge: m.lunge });
       // 命中用的几个点（不走矩阵，直接按朝向算）
       const fx = Math.sin(m.yaw), fz = Math.cos(m.yaw), h = m.alive ? 1 : Math.max(0.12, Math.cos(m.fall)), fwd = (lean * 0.5 + 0.13 + (m.alive ? 0 : Math.sin(m.fall) * m.fallSign * 1.4)) * scale;
       headPos.set(m.pos.x + fx * fwd, m.pos.y + 1.66 * scale * h, m.pos.z + fz * fwd);
@@ -365,11 +370,21 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       feet.set(m.pos.x, m.pos.y + 0.08, m.pos.z);
       m.muzzle.copy(headPos);
     }
+    /** 换上贴图外形（kit.create() 的返回值）；null = 换回方块人 */
+    m._skin = (sk) => {
+      if (skin) skin.group.removeFromParent();
+      skin = sk || null; hips.visible = !skin;
+      if (skin) { body.add(skin.group); skin.setLook(lookI, m.kind === 'screamer'); skin.group.scale.set(C.girth || 1, 1, C.girth || 1); pose(0); }
+    };
     return m;
   }
 
+  let kit = null;
   return {
     pool,
+    /** 贴图外形加载好了：池子里每只都换上（方块人藏起来） */
+    useSkin(k) { if (kit === k) return; kit = k; for (const z of pool) z._skin(k ? k.create() : null); },
+    get skinned() { return !!kit; },
     alive: () => pool.filter((z) => z.active && z.alive),
     /** at 这一点有动静（枪声、拉闸、尖叫）：radius 米内同一层上下的丧尸都扑过来；hunt 表示认定了人，不会跟丢 */
     alert(at, radius, hunt = false) {
@@ -377,6 +392,6 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       for (const z of pool) if (z.active && z.alive && Math.abs(z.pos.y - at.y) < 7 && Math.hypot(z.pos.x - at.x, z.pos.z - at.z) < radius) { z.alert(at, hunt); n++; }
       return n;
     },
-    dispose() { group.removeFromParent(); for (const set of Object.values(sets)) for (const p of set) { p.body.dispose(); p.arm.dispose(); p.leg.dispose(); } mat.dispose(); delete ctx.pools.zombie; },
+    dispose() { kit?.dispose?.(); kit = null; group.removeFromParent(); for (const set of Object.values(sets)) for (const p of set) { p.body.dispose(); p.arm.dispose(); p.leg.dispose(); } mat.dispose(); delete ctx.pools.zombie; },
   };
 }

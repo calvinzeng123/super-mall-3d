@@ -429,3 +429,30 @@ test('找工具的房间一定进得去：只选这一层有入户门的户（�
     }
   }
 });
+
+test('丧尸的贴图外形：贴图去色偏灰绿、走路姿势按圈数在相邻两帧之间过渡；换上外形后方块人藏起来、按种类换色调和体型，换回去照旧', async () => {
+  const { zombieTone, walkBlend, faceOf, ZOMBIE_SKIN } = await import('../src/jimao/zombie-skin.js');
+  // 一块肤色：处理后更灰、偏绿、更暗
+  const [r, g, b] = zombieTone(224, 172, 140, ZOMBIE_SKIN.tones[0]);
+  assert.ok(r < 224 * 0.75 && g > r * 0.95 && Math.abs(r - b) < 60, `肤色 → ${[r, g, b].map((v) => v.toFixed(0))}`);
+  assert.deepEqual(zombieTone(0, 0, 0, ZOMBIE_SKIN.pale), [0, 0, 0]);
+  assert.deepEqual(walkBlend(0, 8), { a: 0, b: 1, t: 0 }); assert.deepEqual(walkBlend(0.9375, 8), { a: 7, b: 0, t: 0.5 }); assert.equal(walkBlend(-0.125, 8).a, 7);
+  // 脸的位置按第 0 个走路姿势量
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 1.7, 0, 0.02, 1.6, 0.09, -0.02, 1.6, 0.07], 3));
+  geo.morphAttributes.position = [new THREE.Float32BufferAttribute([0, 0, 0, 0, 0.05, 0, 0, 0.05, 0.01, 0, 0.05, 0], 3)]; geo.morphTargetsRelative = true;
+  const face = faceOf(geo); assert.ok(Math.abs(face.top - 1.75) < 1e-6 && Math.abs(face.front - 0.1) < 1e-6 && Math.abs(face.x) < 1e-6, JSON.stringify(face));
+  // 假的外形套件：记下每只丧尸收到的调用
+  const { zombies, enemies, run, ahead } = zworld({ count: 4 });
+  const made = [], kit = { create() { const k = { group: new THREE.Group(), looks: [], poses: [], setLook(i, pale) { this.looks.push([i, pale]); }, pose(p) { this.poses.push(p); } }; made.push(k); return k; }, dispose() { kit.gone = true; } };
+  assert.equal(zombies.skinned, false);
+  zombies.useSkin(kit); assert.equal(zombies.skinned, true); assert.equal(made.length, 4);
+  const z = enemies.spawn('zombie', ahead(8), { kind: 'screamer' }), k = made[zombies.pool.indexOf(z)];
+  assert.equal(k.looks.at(-1)[1], true, '尖叫者用惨白那套'); assert.ok(k.group.parent, '外形挂在丧尸身上');
+  const fat = enemies.spawn('zombie', ahead(10, 1), { kind: 'bloater', passive: true }), kf = made[zombies.pool.indexOf(fat)];
+  assert.ok(Math.abs(kf.group.scale.x - KINDS.bloater.girth) < 1e-6 && kf.group.scale.y === 1, '胖尸横向撑开');
+  run(1); assert.ok(k.poses.length > 20 && k.poses.every((q) => Number.isFinite(q.phase) && q.moving >= 0 && q.moving <= 1), '每帧摆姿势');
+  let boxes = 0; z.rig.group.traverse((o) => { if (o.isMesh) { let vis = true; for (let q = o; q && q !== z.rig.group; q = q.parent) if (!q.visible) vis = false; if (vis) boxes++; } });
+  assert.equal(boxes, 0, '方块人藏起来了');
+  zombies.useSkin(null); assert.equal(zombies.skinned, false); assert.equal(k.group.parent, null);
+  boxes = 0; z.rig.group.traverse((o) => { if (o.isMesh) { let vis = true; for (let q = o; q && q !== z.rig.group; q = q.parent) if (!q.visible) vis = false; if (vis) boxes++; } }); assert.equal(boxes, 5, '换回方块人');
+});
