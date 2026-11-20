@@ -14,7 +14,9 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 export const PISTOL = Object.freeze({ name: 'P17 手枪', mag: 12, reserve: 48, reserveMax: 72, damage: 36, range: 90, interval: 0.115, holdInterval: 0.2,
   spreadHip: 0.022, spreadAds: 0.0035, reload: 1.45, reloadEmpty: 1.75, adsRate: 11, recoil: 0.011 });
 export const KNIFE = Object.freeze({ name: '战术刀', damage: 150, reach: 2.3, cone: 0.9, time: 0.5, hitAt: 0.14, cooldown: 0.08, lunge: 2.6 });
-export const SWAP = Object.freeze({ lower: 0.17, raise: 0.21 });
+export const SWAP = Object.freeze({ lower: 0.17 });
+// 掏出来的动画各多长（秒）；quick 是近战键那种「马上要用」的快掏，不带花样
+export const DRAW = Object.freeze({ rifle: 0.46, pistol: 0.64, knife: 0.58, quick: 0.13 });
 export const SLOTS = Object.freeze(['rifle', 'pistol', 'knife']);
 /** 步枪握把在枪模型里的位置（原游戏的 grip）：手枪、刀的握把都摆在这里，手才握得上 */
 const GRIP = Object.freeze([0, -0.1, 0.073]);
@@ -121,6 +123,22 @@ export function reloadPose(k, empty = false) {
   const out = ease(seg(0.14, 0.3)), back = ease(seg(0.34, 0.62));
   return { tilt, magDrop: out * (1 - back), hand: out * (1 - ease(seg(0.56, 0.74))), slide: empty ? 1 - ease(seg(0.72, 0.78)) : 0, magIn: k >= 0.62 };
 }
+/**
+ * 掏枪 / 掏刀进行到 k（0–1）时的姿势。都从「在下面」（drop = 1）开始，k = 1 时全部归零。
+ *   手枪：从枪套里抽上来，绕扳机护圈转一整圈（spin 是还剩多少弧度没转完），左手跟上来（hand 1 → 0）拉一下套筒（rack 0 → 1 → 0，枪往里侧一歪 cant）；
+ *   刀：  抽上来往上一抛（toss），刀在手里前后翻一整圈（spin）接住，手腕一抖（flick）摆好；
+ *   步枪：从右下斜着甩上来（cant：枪身侧倾 → 摆正），顶到肩上有个回弹（snap）。
+ * plain：不带花样，只是举起来（近战键的快掏、刺完换回原来那把）。
+ */
+export function drawPose(slot, k, plain = false) {
+  k = clamp01(k);
+  const seg = (a, b) => clamp01((k - a) / (b - a)), out = (x) => 1 - (1 - x) * (1 - x) * (1 - x), bump = (x) => Math.sin(clamp01(x) * Math.PI);
+  const zero = { drop: 0, spin: 0, toss: 0, rack: 0, hand: 0, cant: 0, snap: 0, flick: 0 };
+  if (plain) return { ...zero, drop: 1 - ease(k) };
+  if (slot === 'pistol') return { ...zero, drop: 1 - out(seg(0, 0.36)), spin: (1 - out(seg(0.03, 0.56))) * Math.PI * 2, hand: 1 - ease(seg(0.5, 0.66)), rack: bump(seg(0.64, 0.92)), cant: bump(seg(0.56, 1)) };
+  if (slot === 'knife') return { ...zero, drop: 1 - out(seg(0, 0.34)), spin: (1 - out(seg(0.04, 0.64))) * Math.PI * 2, toss: bump(seg(0.04, 0.64)), flick: bump(seg(0.64, 1)) };
+  return { ...zero, drop: 1 - out(seg(0, 0.55)), cant: 1 - ease(seg(0.12, 0.72)), snap: bump(seg(0.66, 1)) * (1 - seg(0.66, 1)) };
+}
 /** 出刀进行到 k（0–1）时刀的位置：{ back, thrust, sweep }。先往右后收一下，再往前往左刺出去，然后收回 */
 export function slashPose(k) {
   const wind = ease(clamp01(k / 0.2)) * (1 - ease(clamp01((k - 0.2) / 0.12)));
@@ -159,6 +177,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const pSlide = new THREE.Group(); pBody.add(pSlide);
   mesh(pg.slide, M.slide, pSlide); mesh(pg.dark, M.dark, pSlide); mesh(pg.dots, M.dot, pSlide);
   const pTrigger = mesh(pg.trigger, M.dark, pBody);
+  // 转枪的轴：扳机护圈正中（食指穿过去的地方）
+  pg.trigger.computeBoundingBox();
+  const pPivot = pg.trigger.boundingBox.getCenter(new THREE.Vector3()), pBase = new THREE.Vector3(...GRIP);
   const pMag = new THREE.Group(); pBody.add(pMag); mesh(pg.mag, M.frame, pMag);
   const flash = new THREE.Group(); flash.position.set(pg.muzzle[0], pg.muzzle[1], pg.muzzle[2] - 0.03); pBody.add(flash);
   // 枪口焰：一张中心亮、四周带几道火舌的贴图，正面一片、侧面两片交叉
@@ -204,8 +225,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   // ---- 状态 ----
   const P = { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, spread: PISTOL.spreadHip, lastShot: -9, bob: 0, swayX: 0, swayY: 0, sprint: 0, finger: 0 };
   const K = { t: -1, cool: 0, hit: false, bob: 0, swayX: 0, swayY: 0, sprint: 0 };
-  const S = { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, shown: true, quick: null, time: 0 };
+  const S = { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, shown: true, quick: null, plain: false, pose: null, racked: false, time: 0 };
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q1 = new THREE.Quaternion(), e1 = new THREE.Euler();
+  const X_AXIS = new THREE.Vector3(1, 0, 0);
   const rootOf = (slot) => (slot === 'pistol' ? pistolRoot : slot === 'knife' ? knifeRoot : rifleVm);
   const rand = () => (G.rng?.fork ? Math.random() : Math.random());
 
@@ -289,14 +311,16 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   }
 
   // ---- 切枪 ----
-  function select(slot, { quick = false } = {}) {
+  function select(slot, { quick = false, plain = false } = {}) {
     if (!SLOTS.includes(slot) || (slot === S.cur && !S.next) || S.next === slot) return false;
     if (S.cur === 'pistol' && P.reload) P.reload = null;
-    S.next = slot; S.phase = 'lower'; S.t = 0; S.quick = quick ? (S.quick || S.cur) : null;
+    // 正掏到一半又换：从现在放下去的位置接着放（不跳）
+    const from = S.phase === 'draw' ? clamp01(S.drop) : 0;
+    S.next = slot; S.phase = 'lower'; S.t = from * SWAP.lower; S.quick = quick ? (S.quick || S.cur) : null; S.plain = quick || plain; S.pose = null;
     return true;
   }
   function applySwitch() {
-    S.prev = S.cur; S.cur = S.next; S.next = null; S.phase = 'raise'; S.t = 0;
+    S.prev = S.cur; S.cur = S.next; S.next = null; S.phase = 'draw'; S.t = 0; S.racked = false;
     for (const s of SLOTS) { const r = rootOf(s); if (s === 'rifle') rifle?.setVisible?.(S.shown && S.cur === 'rifle'); else if (r) r.visible = S.shown && S.cur === s; }
     if (S.cur === 'rifle') rifle?.snap?.();
     ui?.classList?.toggle('jm-knife', S.cur === 'knife');
@@ -354,6 +378,13 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     // 套筒：开火后坐 0.09 秒复进；打空挂在后面
     P.slide = P.locked ? Math.max(P.slide, 1) : Math.max(0, P.slide - dt / 0.09);
     if (pose && pose.slide !== undefined && P.reload?.empty) P.slide = Math.max(P.slide * (P.locked ? 1 : 0), pose.slide);
+    // 掏枪：枪绕扳机护圈转、左手跟上来拉套筒
+    const dr = active ? S.pose : null;
+    if (dr && !P.locked) P.slide = Math.max(P.slide, dr.rack);
+    if (dr && dr.rack > 0.5 && !S.racked) { S.racked = true; G.events?.emit?.('weapon:reload', { phase: 'bolt', kind: 'pistol', draw: true }); }
+    const spin = dr ? -dr.spin : 0;
+    pBody.rotation.x = spin;
+    pBody.position.copy(pBase).add(pPivot).sub(v3.copy(pPivot).applyAxisAngle(X_AXIS, spin));
     pSlide.position.z = pg.slideTravel * Math.min(1, P.slide);
     P.finger = Math.max(0, P.finger - dt * 9); pTrigger.position.z = 0.004 * P.finger;
     // 后坐弹簧
@@ -363,7 +394,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const target = bi(PISTOL.spreadHip, PISTOL.spreadAds, P.ads) * (1 + Math.min(1, moving / 6) * 1.2) * (p?.onGround === false ? 1.8 : 1);
     P.spread = damp(P.spread, target, 7, dt);
     const amt = sway(P, dt, P.ads), bobX = Math.sin(P.bob) * 0.0042 * amt, bobY = -Math.abs(Math.cos(P.bob)) * 0.0038 * amt;
-    const tilt = pose?.tilt || 0, hand = pose?.hand || 0;
+    const tilt = (pose?.tilt || 0) + 0.45 * (dr?.cant || 0), hand = Math.max(pose?.hand || 0, dr?.hand || 0);
     // 腰射在右下、开镜到正中（照门准星对到屏幕中心）
     const hip = v1.set(0.062, -0.03, -0.38), ads = v2.set(0, -(GRIP[1] + pg.sightY), -0.36);
     pistolRoot.position.lerpVectors(hip, ads, P.ads);
@@ -382,7 +413,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       K.t += dt;
       if (!K.hit && K.t >= KNIFE.hitAt) { K.hit = true; knifeHit(); }
       pose = slashPose(K.t / KNIFE.time);
-      if (K.t >= KNIFE.time) { K.t = -1; K.cool = KNIFE.cooldown; if (S.quick && S.cur === 'knife') { const back = S.quick; S.quick = null; select(back); } }
+      if (K.t >= KNIFE.time) { K.t = -1; K.cool = KNIFE.cooldown; if (S.quick && S.cur === 'knife') { const back = S.quick; S.quick = null; select(back, { plain: true }); } }
     }
     const amt = sway(K, dt), bobX = Math.sin(K.bob) * 0.005 * amt, bobY = -Math.abs(Math.cos(K.bob)) * 0.0045 * amt;
     // 平时刀尖朝前上方斜着握在右下；出刀：先往右后收，再往前往左刺
@@ -391,6 +422,11 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     // 横着从右往左划（绕手肘转）：刀先往右后摆，再扫到左前方、略往下压
     e1.set(K_IDLE.x - 0.16 * pose.thrust + 0.3 * K.sprint, K_IDLE.y - 0.3 * pose.back + 0.5 * pose.sweep + K.swayX, K_IDLE.z + 0.3 * pose.sweep - 0.1 * pose.back);
     knifeRoot.quaternion.setFromEuler(e1);
+    // 掏刀：刀离手往上一抛、前后翻一整圈落回手里，接住以后手腕一抖
+    const dr = active ? S.pose : null;
+    kBody.rotation.x = dr ? -dr.spin : 0;
+    kBody.position.set(GRIP[0], GRIP[1] + 0.075 * (dr?.toss || 0), GRIP[2] - 0.03 * (dr?.toss || 0));
+    if (dr?.flick) { knifeRoot.rotateZ(-0.5 * dr.flick); knifeRoot.rotateX(0.22 * dr.flick); }
   }
   const bi = (a, b, k) => a + (b - a) * k;
 
@@ -405,7 +441,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     get ads() { return S.phase ? 0 : S.cur === 'pistol' ? P.ads : S.cur === 'knife' ? 0 : rifle?.ads; },
     get spread() { return S.cur === 'pistol' ? P.spread : S.cur === 'knife' ? 0.004 : rifle?.spread; },
     get current() { return S.cur; }, get switching() { return !!S.phase; }, get slashing() { return K.t >= 0; },
-    pistol: P, knife: K, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm },
+    pistol: P, knife: K, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm }, parts: { pistol: pBody, knife: kBody }, get draw() { return S.pose; },
     select, slash, startReload, buildUi,
     /** 近战键：手里不是刀就先换成刀刺一下、刺完换回来 */
     quickKnife() { if (S.cur === 'knife' && !S.next) return slash(); if (S.next === 'knife') return false; return select('knife', { quick: true }); },
@@ -418,21 +454,29 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       if (S.phase) {
         S.t += dt;
         if (S.phase === 'lower') { S.drop = clamp01(S.t / (S.quick ? SWAP.lower * 0.6 : SWAP.lower)); if (S.drop >= 1) applySwitch(); }
-        else { S.drop = 1 - clamp01(S.t / (S.quick || S.cur === 'knife' ? SWAP.raise * 0.6 : SWAP.raise)); if (S.drop <= 0) { S.phase = null; S.drop = 0; if (S.cur === 'knife' && S.quick) slash(); } }
+        if (S.phase === 'draw') {
+          const k = clamp01(S.t / (S.plain ? DRAW.quick : DRAW[S.cur]));
+          S.pose = drawPose(S.cur, k, S.plain); S.drop = S.pose.drop;
+          if (k >= 1) { S.phase = null; S.drop = 0; S.pose = null; S.plain = false; if (S.cur === 'knife' && S.quick) slash(); }
+        }
       }
       const busy = !!S.phase || S.lowered > 0.3;
       if (S.cur === 'rifle') { if (!S.phase || S.phase === 'raise') rifle?.update?.(dt); }
       updatePistol(dt, S.cur === 'pistol', busy);
       updateKnife(dt, S.cur === 'knife', busy);
       // 放下去的量（切枪、翻越）：加在当前这把的模型上
-      const d = ease(Math.max(S.drop, S.lowered)), root = rootOf(S.cur);
+      // 掏的时候 S.drop 已经是缓动过的（先快后慢地上来）；放下、翻越是线性的，这里再缓动
+      const d = Math.max(S.phase === 'draw' ? S.drop : ease(S.drop), ease(S.lowered)), root = rootOf(S.cur);
       if (root && d > 0) { root.position.y -= 0.24 * d; root.position.z += 0.05 * d; root.rotateX(-0.75 * d); }
+      // 步枪的花样：从右下斜着甩上来，枪身侧倾着摆正，顶到肩上回弹一下
+      const dr = S.cur === 'rifle' ? S.pose : null;
+      if (root && dr) { root.position.x += 0.07 * dr.cant; root.position.z += 0.03 * dr.snap; root.position.y -= 0.012 * dr.snap; root.rotateZ(-0.95 * dr.cant); root.rotateY(0.5 * dr.cant); root.rotateX(0.07 * dr.snap); }
     },
     reset() {
       rifle?.reset?.();
       Object.assign(P, { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, lastShot: -9, sprint: 0 });
       Object.assign(K, { t: -1, cool: 0, hit: false });
-      Object.assign(S, { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, quick: null });
+      Object.assign(S, { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, quick: null, plain: false, pose: null, racked: false });
       pistolRoot.visible = knifeRoot.visible = false; flash.visible = false;
       rifle?.setVisible?.(S.shown);
       ui?.classList?.remove('jm-knife'); paintBtn();

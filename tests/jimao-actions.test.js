@@ -373,11 +373,11 @@ test('切枪：1 步枪 / 2 手枪 / 3 刀，先放下再举起（中间不能�
   // 举起来的过程中按开火：不响
   run(0.05, () => pressed.add('fire'));
   assert.equal(G.combat.shots.length, 0, '还没举起来不能开火');
-  run(A.SWAP.raise + 0.05);
+  run(A.DRAW.pistol + 0.05);
   assert.equal(arsenal.switching, false);
   assert.deepEqual([arsenal.name, arsenal.ammo, arsenal.magSize, arsenal.reserve], [A.PISTOL.name, A.PISTOL.mag, A.PISTOL.mag, A.PISTOL.reserve]);
   const before = rifle.updates; run(0.3); assert.equal(rifle.updates, before, '手枪在手里时步枪不更新（不会自己开火、换弹）');
-  arsenal.select('knife'); run(0.6);
+  arsenal.select('knife'); run(A.SWAP.lower + A.DRAW.knife + 0.05);
   assert.equal(arsenal.current, 'knife'); assert.equal(arsenal.name, A.KNIFE.name); assert.ok(arsenal.ammo > 0, '拿着刀不报「弹药耗尽」');
   assert.equal(arsenal.select('knife'), false, '已经拿着了');
   arsenal.setVisible(false); assert.equal(arsenal.roots.knife.visible, false); arsenal.setVisible(true); assert.equal(arsenal.roots.knife.visible, true);
@@ -386,7 +386,7 @@ test('切枪：1 步枪 / 2 手枪 / 3 刀，先放下再举起（中间不能�
 
 test('手枪：半自动（按一下一发，按住每 0.2 秒一发）、套筒后坐复进、打空挂机自动换弹、换弹从备弹里扣；开镜收紧散布', async () => {
   const { A, arsenal, run, pressed, G, log, player } = await arsenalWorld();
-  arsenal.select('pistol'); run(0.6);
+  arsenal.select('pistol'); run(A.SWAP.lower + A.DRAW.pistol + 0.1);
   run(1 / 60, () => pressed.add('fire'));
   assert.equal(G.combat.shots.length, 1); assert.equal(arsenal.ammo, A.PISTOL.mag - 1);
   assert.deepEqual(G.combat.shots[0].opt, { damage: A.PISTOL.damage, range: A.PISTOL.range });
@@ -406,7 +406,7 @@ test('手枪：半自动（按一下一发，按住每 0.2 秒一发）、套筒
   run(0.5); assert.equal(arsenal.state, 'reloading');
   run(A.PISTOL.reloadEmpty);
   assert.equal(arsenal.ammo, A.PISTOL.mag); assert.equal(arsenal.reserve, A.PISTOL.reserve - A.PISTOL.mag); assert.equal(arsenal.pistol.locked, false); assert.equal(arsenal.state, 'idle');
-  assert.deepEqual(log.filter(([n]) => n === 'weapon:reload').map(([, e]) => e.phase), ['start', 'magout', 'magin', 'bolt', 'done']);
+  assert.deepEqual(log.filter(([n, e]) => n === 'weapon:reload' && !e.draw).map(([, e]) => e.phase), ['start', 'magout', 'magin', 'bolt', 'done']); // 掏枪时那一下拉套筒（draw: true）不算换弹
   // 弹药补给：步枪照加，手枪补四成、有上限
   arsenal.addAmmo(60); assert.equal(G.rifle.reserve, 210); assert.equal(arsenal.reserve, A.PISTOL.reserve - A.PISTOL.mag + 24);
   arsenal.addAmmo(600); assert.equal(arsenal.reserve, A.PISTOL.reserveMax);
@@ -429,7 +429,7 @@ test('刀：近战键随时出刀（先换成刀、刺完换回原来那把）�
   assert.equal(heavy.hits.length + behind.hits.length + far.hits.length, 0, '一刀只中一个；背后的、远处的不中');
   assert.ok(log.some(([n]) => n === 'weapon:melee') && log.some(([n, e]) => n === 'player:hitEnemy' && e.killed && e.melee));
   // 切到刀一直拿着：开火键出刀；重装兵要两刀
-  arsenal.select('knife'); run(0.5);
+  arsenal.select('knife'); run(A.SWAP.lower + A.DRAW.knife + 0.1);
   run(1 / 60, () => pressed.add('fire')); run(A.KNIFE.time + 0.2);
   assert.deepEqual(heavy.hits, [A.KNIFE.damage]); assert.equal(heavy.alive, true);
   run(1 / 60, () => pressed.add('fire')); run(A.KNIFE.time + 0.2);
@@ -534,4 +534,51 @@ test('过场的遮幅和跳过：只有完整开场才放；放的时候按键 /
   // 撤离用的遮幅和字幕
   cuts.letterbox(true, '<b>撤离成功</b>'); assert.ok(cls.has('on')); cuts.letterbox(false); assert.ok(!cls.has('on'));
   cuts.dispose();
+});
+
+test('掏枪动画：手枪绕扳机转一整圈再拉套筒（有一声上膛），刀抛起来翻一圈接住，步枪斜着甩上肩；首尾归零、转动不倒退；近战快掏和刺完换回不带花样', async () => {
+  const { A, arsenal, rifle, run, pressed, log, G, enemy } = await arsenalWorld();
+  // 姿势曲线：从下面开始，结束时全部归零
+  for (const slot of ['rifle', 'pistol', 'knife']) {
+    const a = A.drawPose(slot, 0), b = A.drawPose(slot, 1);
+    assert.ok(a.drop > 0.99, `${slot} 从下面开始`);
+    for (const key of Object.keys(b)) assert.ok(Math.abs(b[key]) < 1e-9, `${slot} 结束时 ${key} 归零`);
+    let drop = 1, spin = 7;
+    for (let k = 0; k <= 1.0001; k += 1 / 120) { const q = A.drawPose(slot, k); assert.ok(q.drop <= drop + 1e-9 && q.spin <= spin + 1e-9, `${slot} 只往上、只往一个方向转`); drop = q.drop; spin = q.spin; }
+  }
+  assert.ok(Math.abs(A.drawPose('pistol', 0).spin - Math.PI * 2) < 1e-9 && Math.abs(A.drawPose('knife', 0).spin - Math.PI * 2) < 1e-9, '手枪、刀各转一整圈');
+  assert.equal(A.drawPose('rifle', 0.3).spin, 0); assert.ok(A.drawPose('rifle', 0.2).cant > 0.8 && A.drawPose('rifle', 0.8).snap > 0.05, '步枪：先侧倾、最后顶肩回弹');
+  assert.ok(A.drawPose('pistol', 0.3).rack === 0 && A.drawPose('pistol', 0.78).rack > 0.9 && A.drawPose('pistol', 0.3).hand === 1 && A.drawPose('pistol', 0.78).hand === 0, '手枪：转完左手上来、拉套筒');
+  assert.ok(A.drawPose('knife', 0.34).toss > 0.9 && A.drawPose('knife', 0.82).flick > 0.9, '刀：中间离手、接住以后抖腕');
+  const plain = A.drawPose('pistol', 0.5, true); assert.ok(plain.spin === 0 && plain.rack === 0 && Math.abs(plain.drop - 0.5) < 1e-9);
+  // 真的切一次手枪：枪身绕扳机转（握把那个点回到原位）、套筒拉过、响一声上膛，掏完才能开火
+  const body = arsenal.parts.pistol, home = body.position.clone();
+  arsenal.select('pistol'); run(A.SWAP.lower + 0.02);
+  let turned = 0, slid = 0, far = 0;
+  run(A.DRAW.pistol - 0.04, () => { turned = Math.max(turned, Math.abs(body.rotation.x)); slid = Math.max(slid, arsenal.pistol.slide); far = Math.max(far, body.position.distanceTo(home)); pressed.add('fire'); });
+  assert.ok(turned > 5 && far > 0.02, `枪转了 ${turned.toFixed(1)} 弧度，握把离开原位 ${(far * 100).toFixed(1)} 厘米`);
+  assert.ok(slid > 0.9, '套筒拉到底');
+  assert.equal(log.filter(([n, e]) => n === 'weapon:reload' && e.phase === 'bolt' && e.draw).length, 1, '上膛声只响一次');
+  assert.equal(G.combat.shots.length, 0, '掏的过程中不能开火');
+  run(0.15);
+  assert.equal(arsenal.switching, false); assert.equal(arsenal.draw, null);
+  assert.ok(Math.abs(body.rotation.x) < 1e-9 && body.position.distanceTo(home) < 1e-9 && arsenal.pistol.slide < 0.05, '掏完枪回到握姿、套筒复位');
+  assert.equal(arsenal.pistol.ammo, A.PISTOL.mag, '拉套筒只是检查，不退子弹');
+  // 刀：翻一圈
+  const kb = arsenal.parts.knife, kHome = kb.position.clone();
+  arsenal.select('knife'); run(A.SWAP.lower + 0.02);
+  let kTurn = 0, kUp = 0; run(A.DRAW.knife - 0.04, () => { kTurn = Math.max(kTurn, Math.abs(kb.rotation.x)); kUp = Math.max(kUp, kb.position.y - kHome.y); });
+  assert.ok(kTurn > 5 && kUp > 0.05, `刀翻了 ${kTurn.toFixed(1)} 弧度、离手 ${(kUp * 100).toFixed(1)} 厘米`);
+  run(0.15); assert.ok(Math.abs(kb.rotation.x) < 1e-9 && kb.position.distanceTo(kHome) < 1e-9);
+  // 掏到一半换别的：接着放下去，不卡住
+  arsenal.select('pistol'); run(A.SWAP.lower + 0.2); assert.equal(arsenal.switching, true);
+  arsenal.select('rifle'); run(A.SWAP.lower + A.DRAW.rifle + 0.1);
+  assert.equal(arsenal.current, 'rifle'); assert.equal(arsenal.switching, false); assert.equal(rifle.visible, true);
+  // 近战键：快掏不翻刀（0.3 秒内刀已经刺出去），刺完换回步枪也不甩
+  const e = enemy(-135, -99.5); kTurn = 0;
+  pressed.add('melee'); arsenal.update(1 / 60); pressed.clear();
+  run(0.3, () => { kTurn = Math.max(kTurn, Math.abs(kb.rotation.x)); });
+  assert.equal(arsenal.current, 'knife'); assert.equal(kTurn, 0, '快掏不翻刀'); assert.ok(arsenal.slashing || e.hits.length > 0, '0.3 秒内已经出刀');
+  let cant = 0; run(1.2, () => { cant = Math.max(cant, arsenal.draw?.cant || 0); });
+  assert.equal(arsenal.current, 'rifle'); assert.equal(cant, 0, '刺完换回步枪不带花样'); assert.equal(e.hits.length, 1);
 });
