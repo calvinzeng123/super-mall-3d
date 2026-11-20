@@ -18,6 +18,9 @@ Creative Commons Attribution 4.0 International (CC BY 4.0)
 https://creativecommons.org/licenses/by/4.0/
 Yunlan adaptation: texture resizing and JPEG recompression; uniform presentation scale,
 authored component-based slide/magazine movement. Source geometry retained.
+零点突围 / 丧尸围城 (2026-11-20): the same file is reused for the “P17” sidearm at 0.88 scale; at load time the
+base colour is darkened to a blued finish and the factory lettering, serial and grip emblems are painted out
+of the colour, roughness and normal maps (src/jimao/arsenal.js, PISTOL_SKIN). The file itself is unchanged.
 
 The art above remains under CC BY 4.0, not the software repository's code license.
 Retrieved from a pinned Operation Steel Tide commit; exact URLs and hashes: sources.json.

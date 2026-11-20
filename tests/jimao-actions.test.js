@@ -362,6 +362,54 @@ test('武器模型：手枪长约 19 厘米、照门准星在套筒顶上、枪�
   assert.ok(PISTOL.damage * 3 >= 80 && PISTOL.damage * 2 < 80, '手枪打步枪手身体要三枪'); assert.ok(KNIFE.damage >= 80 * 1.8 && KNIFE.damage < 110 * 2.2, '刀：步枪手一刀，重装兵（242 血）两刀');
 });
 
+/** 假的手枪模型：节点名、层级照真模型（厘米、枪口朝 +z），几何随便放个盒子 */
+function fakePistolScene() {
+  const scene = new THREE.Group(), root = new THREE.Group(); root.name = 'RootNode'; scene.add(root);
+  const mats = Object.fromEntries(['Slide', 'MainBody', 'Magazine', 'Bullet'].map((n) => [n, Object.assign(new THREE.MeshStandardMaterial(), { name: n })]));
+  const part = (name, mat, rot = 0) => { const g = new THREE.Group(); g.name = name; g.rotation.x = rot; g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mats[mat])); root.add(g); return g; };
+  const nodes = { slide: part('Slide_low', 'Slide'), rear: part('RearSight_low', 'Slide'), barrel: part('Barrel_low', 'Slide'), front: part('FrontSight_low', 'Slide'),
+    frame: part('Frame_low', 'MainBody'), hammer: part('Hammer_low', 'MainBody'), mag: part('Magazine_low', 'Magazine', -0.26), base: part('MagazineBase_low', 'Magazine'), bullet: part('Bullet_low', 'Bullet') };
+  return { scene, nodes, mats };
+}
+
+test('手枪换上真模型：缩到握得住的大小、枪口朝前、照门在握把上方；方块枪藏起来；开火套筒往后走（枪管不动）、换弹弹匣顺着握把滑出去；深色表面；没加载就还是方块枪', async () => {
+  const { A, G, arsenal, run, pressed } = await arsenalWorld();
+  const K = A.PISTOL_SKIN, f = A.pistolSkinFit();
+  // 尺寸和位置：全长 27.7 厘米的模型缩到 24 厘米上下；握把中心落在手里（原点附近）
+  const len = (10.84 + 16.84) * K.scale; assert.ok(len > 0.22 && len < 0.26, `全长 ${len.toFixed(3)} 米`);
+  assert.ok(f.muzzle[2] < -0.16 && Math.abs(f.muzzle[0]) < 1e-6, '枪口在正前方'); assert.ok(f.sightY > 0.07 && f.sightY < 0.1 && f.sightY > f.muzzle[1], '照门在枪管上面');
+  assert.ok(f.eject[0] > 0 && f.eject[2] < 0 && f.eject[2] > f.muzzle[2], '抛壳口在右侧、枪口后面'); assert.ok(f.slideTravel > 0.02 && f.slideTravel < 0.04);
+  assert.deepEqual(A.skinPoint(K.grip).map((v, i) => +(v - K.offset[i]).toFixed(9)), [0, 0, 0], '握把中心 → 原点');
+  // 没换之前：方块枪
+  assert.equal(arsenal.skinned, false);
+  const body = arsenal.parts.pistol, boxes = body.children.filter((c) => c.isMesh || c.isGroup);
+  const { scene, nodes, mats } = fakePistolScene();
+  assert.equal(arsenal.skinPistol(scene), true); assert.equal(arsenal.skinned, true); assert.equal(arsenal.skinPistol(scene), false, '只换一次');
+  const holder = body.getObjectByName('p17-skin');
+  assert.ok(holder && Math.abs(holder.scale.x - K.scale) < 1e-9 && Math.abs(holder.rotation.y - Math.PI) < 1e-9);
+  const meshVisible = (o) => { for (let q = o; q && q !== body; q = q.parent) if (!q.visible) return false; return true; };
+  let shown = 0; body.traverse((o) => { if (o.isMesh && meshVisible(o) && !holder.getObjectById(o.id) && o.material.blending !== THREE.AdditiveBlending) shown++; });
+  assert.equal(shown, 0, '方块枪的网格都藏起来了'); assert.ok(boxes.length > 3);
+  assert.equal(nodes.bullet.visible, false, '模型里摆着的那颗子弹不显示');
+  assert.ok(Math.abs(mats.Slide.color.r - K.tint.Slide) < 1e-6 && Math.abs(mats.MainBody.color.r - K.tint.MainBody) < 1e-6, '深色表面'); assert.equal(mats.Slide.side, THREE.FrontSide);
+  // 枪口的世界坐标：在相机正前方（−z）
+  arsenal.select('pistol', { plain: true }); run(1.2);
+  // 开火：套筒那几件往后（模型里 −z），枪管、准星不动，击锤扳倒
+  pressed.add('fire'); G.input.fire = true; run(1 / 60); G.input.fire = false;
+  assert.ok(nodes.slide.position.z < -K.slideTravel * 0.5 && nodes.rear.position.z < -K.slideTravel * 0.5, `套筒后坐 ${nodes.slide.position.z.toFixed(2)}`);
+  assert.equal(nodes.barrel.position.z, 0); assert.equal(nodes.front.position.z, 0); assert.ok(nodes.hammer.rotation.x > 0.2);
+  run(0.5); assert.ok(Math.abs(nodes.slide.position.z) < 1e-6, '复进到位'); assert.ok(Math.abs(nodes.hammer.rotation.x) < 1e-6);
+  // 换弹：弹匣顺着自己的轴往下滑（握把是斜的，所以 z 也跟着变），滑到底先不显示，插回去回到原位
+  arsenal.pistol.ammo = 5; arsenal.startReload();
+  let low = 0, drift = 0, hid = false;
+  run(arsenal.pistol.reload.dur + 0.2, () => { low = Math.min(low, nodes.mag.position.y); drift = Math.max(drift, Math.abs(nodes.mag.position.z)); hid ||= !nodes.mag.visible; assert.ok(Math.abs(nodes.base.position.y - nodes.mag.position.y) < 1e-9, '弹匣底板跟着走'); });
+  assert.ok(low < -K.magDrop * 0.8, `弹匣抽出 ${(-low).toFixed(1)} 厘米`); assert.ok(drift > 1, '顺着握把的斜度走'); assert.ok(hid, '抽出去那一下不显示');
+  assert.ok(nodes.mag.visible && nodes.mag.position.length() < 1e-6, '插回原位'); assert.equal(arsenal.pistol.ammo, 12);
+  // 测试环境没有 document：抹铭文那一步什么都不做
+  assert.equal(A.scrubMarkings(mats.Slide, K.scrub.Slide, null), 0);
+  arsenal.dispose();
+});
+
 test('切枪：1 步枪 / 2 手枪 / 3 刀，先放下再举起（中间不能开火）；HUD 读到的名字和弹药跟着当前武器；没拿在手里的步枪不更新', async () => {
   const { A, arsenal, rifle, run, pressed, G } = await arsenalWorld();
   assert.equal(arsenal.current, 'rifle'); assert.equal(arsenal.name, '九式突击步枪'); assert.equal(arsenal.ammo, 30);

@@ -52,6 +52,62 @@ const cyl = (r0, r1, len, x, y, z, seg = 14, axis = 'z') => {
 const merged = (parts) => { const g = mergeGeometries(parts.map((q) => (q.index ? q.toNonIndexed() : q))); g.computeVertexNormals(); return metricUV(g); };
 
 /**
+ * 手枪换上真模型（仓库里旧射击模式那把带金属 / 法线 / 粗糙度贴图的手枪，ELIZION，CC BY 4.0，出处见 assets/models/fps/）：
+ * 模型自己的坐标是厘米、枪口朝 +z、握把中心在 grip。scale 把它缩到握得住的大小；names 是开火时往后走的部件（枪管、准星不动）和弹匣。
+ * 手搭的方块枪留着：模型没加载出来（或测试环境里）就还用它。
+ */
+export const PISTOL_SKIN = Object.freeze({
+  scale: 0.0088, grip: Object.freeze([0, 16.54, -10.85]), offset: Object.freeze([0, 0.004, 0.004]),
+  muzzle: Object.freeze([0, 23.3, 10.84]), eject: Object.freeze([-1.3, 24.6, -4.5]), sight: 26.02, trigger: Object.freeze([0, 19.6, -5.7]),
+  slideTravel: 3.4, magDrop: 15,
+  slides: /^(Slide_low|Safety_low|BoltMain_low|BoltAdd_low|RearSight_low|BoltButton_low|BoltBack_low)$/,
+  mags: /^(Magazine_low|MagazineBase_low|BaseInside_low)$/, hidden: /^(BulletCase_low|Bullet_low)$/, hammer: /^Hammer_low$/,
+  // 原模型是亮面不锈钢，在商场的平光下发白、像玩具；压成深色烤蓝（贴图上的拉丝、划痕、防滑纹都还在）
+  tint: Object.freeze({ Slide: 0.38, MainBody: 0.5, Magazine: 0.55 }),
+  // 贴图上原厂的铭文和握把徽标抹掉（园区里只用虚构品牌）：512 × 512 贴图上的像素框 [x, y, 宽, 高]，from 是旁边一块干净的拉丝面，拉过来盖住
+  scrub: Object.freeze({
+    Slide: Object.freeze({ rects: Object.freeze([{ at: [122, 134, 26, 104], from: [122, 84, 26, 48] }, { at: [148, 90, 25, 100], from: [148, 62, 25, 26] }]) }),
+    MainBody: Object.freeze({ rects: Object.freeze([{ at: [58, 100, 18, 56], from: [58, 50, 18, 44] }]), discs: Object.freeze([[398, 210, 15], [398, 343, 15]]), disc: '#6f5a2c' }),
+  }),
+});
+
+/**
+ * 把一种材质贴图上的铭文 / 徽标抹掉：颜色和粗糙度贴图用旁边干净的一块盖住，法线贴图填平。
+ * 贴图换成画布（glTF 贴图不翻转，画布坐标就是贴图文件的像素坐标）。没有 document（测试环境）就什么都不做。
+ */
+export function scrubMarkings(material, spec, doc = typeof document === 'undefined' ? null : document) {
+  if (!doc || !spec || !material) return 0;
+  let n = 0;
+  for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) {
+    const tex = material[key], img = tex?.image;
+    if (!img?.width || tex.userData?.scrubbed) continue;
+    const c = doc.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); if (!g) continue;
+    g.drawImage(img, 0, 0);
+    const k = img.width / 512, flat = key === 'normalMap';
+    for (const r of spec.rects || []) {
+      const [x, y, w, h] = r.at.map((v) => v * k);
+      if (flat) { g.fillStyle = 'rgb(128,128,255)'; g.fillRect(x, y, w, h); } else { const [sx, sy, sw, sh] = r.from.map((v) => v * k); g.drawImage(img, sx, sy, sw, sh, x, y, w, h); }
+    }
+    for (const [x, y, rad] of spec.discs || []) {
+      if (key !== 'map' && !flat) continue;
+      g.fillStyle = flat ? 'rgb(128,128,255)' : spec.disc; g.beginPath(); g.arc(x * k, y * k, (flat ? rad - 2 : rad) * k, 0, Math.PI * 2); g.fill();
+    }
+    img.close?.(); tex.image = c; tex.userData = { ...tex.userData, scrubbed: true }; tex.needsUpdate = true; n++;
+  }
+  return n;
+}
+
+/** 模型里的一点（厘米）换到手枪自己的坐标（原点在握把中心、−z 朝前、米）：绕 y 转半圈、缩放、平移 */
+export function skinPoint([x, y, z], K = PISTOL_SKIN) {
+  return [-(x - K.grip[0]) * K.scale + K.offset[0], (y - K.grip[1]) * K.scale + K.offset[1], -(z - K.grip[2]) * K.scale + K.offset[2]];
+}
+/** 换上真模型后的枪口、抛壳口、照门高度、套筒行程、转枪的轴（都在手枪自己的坐标里） */
+export function pistolSkinFit(K = PISTOL_SKIN) {
+  return { muzzle: skinPoint(K.muzzle, K), eject: skinPoint(K.eject, K), sightY: skinPoint([0, K.sight, 0], K)[1], slideTravel: K.slideTravel * K.scale, pivot: skinPoint(K.trigger, K) };
+}
+
+/**
  * 手枪的几何：坐标原点在握把中心（之后整体挪到步枪握把的位置），−z 朝前，y 朝上。
  * 返回 { frame, slide, dark, mag, trigger, dots, muzzle, eject, sightY }：frame 是聚合物套筒座，slide 是钢套筒（开火时往后走），
  * dark 是套筒上的防滑纹、抛壳窗、照门缺口这些深色细节（跟着套筒动），mag 是弹匣，dots 是三点白光瞄具。
@@ -172,6 +228,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
 
   // ---- 手枪 ----
   const pg = pistolGeometry();
+  // 枪口、抛壳口、照门高度、套筒行程：先按手搭的方块枪，换上真模型（skinPistol）后改成模型的
+  const fit = { muzzle: [...pg.muzzle], eject: [...pg.eject], sightY: pg.sightY, slideTravel: pg.slideTravel };
+  let skin = null;
   const pistolRoot = new THREE.Group(); pistolRoot.name = 'viewmodel-p17';
   const pBody = new THREE.Group(); pBody.position.set(...GRIP); pistolRoot.add(pBody);
   mesh(pg.frame, M.frame, pBody);
@@ -182,7 +241,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   pg.trigger.computeBoundingBox();
   const pPivot = pg.trigger.boundingBox.getCenter(new THREE.Vector3()), pBase = new THREE.Vector3(...GRIP);
   const pMag = new THREE.Group(); pBody.add(pMag); mesh(pg.mag, M.frame, pMag);
-  const flash = new THREE.Group(); flash.position.set(pg.muzzle[0], pg.muzzle[1], pg.muzzle[2] - 0.03); pBody.add(flash);
+  const flash = new THREE.Group(); flash.position.set(fit.muzzle[0], fit.muzzle[1], fit.muzzle[2] - 0.03); pBody.add(flash);
   // 枪口焰：一张中心亮、四周带几道火舌的贴图，正面一片、侧面两片交叉
   if (typeof document !== 'undefined') {
     const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -232,7 +291,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const rootOf = (slot) => (slot === 'pistol' ? pistolRoot : slot === 'knife' ? knifeRoot : rifleVm);
   const rand = () => (G.rng?.fork ? Math.random() : Math.random());
 
-  function muzzleWorld(out = new THREE.Vector3()) { pBody.updateWorldMatrix(true, false); return out.set(...pg.muzzle).applyMatrix4(pBody.matrixWorld); }
+  function muzzleWorld(out = new THREE.Vector3()) { pBody.updateWorldMatrix(true, false); return out.set(...fit.muzzle).applyMatrix4(pBody.matrixWorld); }
   function fireDir(spread) {
     camera.getWorldDirection(v1);
     if (spread > 0) { const a = rand() * Math.PI * 2, r = Math.sqrt(rand()) * spread; v2.set(Math.cos(a) * r, Math.sin(a) * r, 0).applyQuaternion(camera.getWorldQuaternion(q1)); v1.add(v2).normalize(); }
@@ -248,7 +307,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     G.fx?.tracer?.(muzzle, hit?.point || origin.clone().addScaledVector(dir, PISTOL.range));
     // 抛壳：往右上方甩
     pBody.updateWorldMatrix(true, false);
-    const ej = v2.set(...pg.eject).applyMatrix4(pBody.matrixWorld).clone(), vel = new THREE.Vector3(1.8 + rand(), 1.4 + rand() * 0.6, 0.3 - rand() * 0.5).applyQuaternion(camera.getWorldQuaternion(q1));
+    const ej = v2.set(...fit.eject).applyMatrix4(pBody.matrixWorld).clone(), vel = new THREE.Vector3(1.8 + rand(), 1.4 + rand() * 0.6, 0.3 - rand() * 0.5).applyQuaternion(camera.getWorldQuaternion(q1));
     if (G.player?.vel) vel.add(G.player.vel);
     G.fx?.shell?.(ej, vel);
     G.render?.lightPool?.flash?.(muzzle, 0xffc880, 20, 7, 0.05);
@@ -386,7 +445,12 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const spin = dr ? -dr.spin : 0;
     pBody.rotation.x = spin;
     pBody.position.copy(pBase).add(pPivot).sub(v3.copy(pPivot).applyAxisAngle(X_AXIS, spin));
-    pSlide.position.z = pg.slideTravel * Math.min(1, P.slide);
+    pSlide.position.z = fit.slideTravel * Math.min(1, P.slide);
+    if (skin) {
+      const back = PISTOL_SKIN.slideTravel * Math.min(1, P.slide);
+      for (const q of skin.slides) q.object.position.z = q.base.z - back; // 模型里枪口朝 +z：往后是 −z
+      if (skin.hammer) skin.hammer.object.rotation.x = skin.hammer.base + 0.5 * Math.min(1, P.slide);
+    }
     P.finger = Math.max(0, P.finger - dt * 9); pTrigger.position.z = 0.004 * P.finger;
     // 后坐弹簧
     P.kickV += (-P.kick * 260 - P.kickV * 22) * dt; P.kick += P.kickV * dt;
@@ -398,12 +462,17 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const tilt = (pose?.tilt || 0) + 0.45 * (dr?.cant || 0), hand = Math.max(pose?.hand || 0, dr?.hand || 0);
     // 腰射在右下、开镜到正中（照门准星对到屏幕中心）
     // 单手持枪（用户要求）：腰射时手臂往右前方伸、枪身朝里斜一点；开镜还是把照门准星对到屏幕中心
-    const hip = v1.set(0.078, -0.034, -0.41), ads = v2.set(0, -(GRIP[1] + pg.sightY), -0.38), oneHand = (1 - P.ads) * (1 - Math.min(1, tilt * 2));
+    const hip = v1.set(0.078, -0.034, -0.41), ads = v2.set(0, -(GRIP[1] + fit.sightY), -0.38), oneHand = (1 - P.ads) * (1 - Math.min(1, tilt * 2));
     pistolRoot.position.lerpVectors(hip, ads, P.ads);
     pistolRoot.position.x += bobX + P.swayX * 0.5; pistolRoot.position.y += bobY - P.swayY * 0.4 - 0.05 * P.sprint - 0.045 * tilt; pistolRoot.position.z += 0.012 * P.kick + 0.04 * P.sprint;
     e1.set(0.05 * P.flip + 0.5 * P.sprint + 0.26 * tilt - P.swayY * 0.6, P.swayX * 0.9 + 0.25 * P.sprint + (1 - P.ads) * 0.03, -0.62 * tilt + P.swayX * 0.4 - 0.16 * oneHand);
     pistolRoot.quaternion.setFromEuler(e1);
-    pMag.position.y = -0.17 * (pose?.magDrop || 0); pMag.visible = !(pose && pose.magDrop > 0.97);
+    pMag.position.y = -0.17 * (pose?.magDrop || 0); pMag.visible = !skin && !(pose && pose.magDrop > 0.97);
+    if (skin) {
+      // 弹匣顺着握把里的弹匣井滑出去（握把是斜的，直上直下会从握把背后穿出来）
+      const d = PISTOL_SKIN.magDrop * (pose?.magDrop || 0), shown = !(pose && pose.magDrop > 0.97);
+      for (const q of skin.mags) { q.object.position.copy(q.base).addScaledVector(skin.magAxis, -d); q.object.visible = shown; }
+    }
     // 左手平时不在枪上：换弹（送弹匣）和掏枪拉套筒的时候才从下面上来，做完又放下去
     P.left = damp(P.left, P.reload || (dr && dr.hand < 1) ? 1 : 0, 13, dt);
     if (pLeft) { pLeft.visible = P.left > 0.04; pLeft.position.copy(leftBase); pLeft.position.y -= 0.21 * hand + 0.32 * (1 - P.left); pLeft.position.z += 0.05 * hand + 0.07 * (1 - P.left); }
@@ -502,6 +571,48 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     muzzleWorld(out) { return S.cur === 'pistol' ? muzzleWorld(out) : rifle?.muzzleWorld?.(out); },
     reloadNow() { return S.cur === 'pistol' ? startReload() : rifle?.reloadNow?.(); },
     setWetness(v) { rifle?.setWetness?.(v); }, snap() { rifle?.snap?.(); },
+    /**
+     * 手枪换上真模型：scene 是加载好的 glTF 场景（run.js 在后台加载，加载不出来就一直用手搭的那把）。
+     * 套筒那几个部件、弹匣、击锤各自记下原位，之后跟着开火 / 换弹动；方块枪的网格藏起来。
+     */
+    skinPistol(scene, K = PISTOL_SKIN) {
+      if (skin || !scene) return false;
+      const holder = new THREE.Group(); holder.name = 'p17-skin';
+      holder.scale.setScalar(K.scale); holder.rotation.y = Math.PI; // 模型枪口朝 +z，我们朝 −z
+      holder.position.set(K.grip[0] * K.scale + K.offset[0], -K.grip[1] * K.scale + K.offset[1], K.grip[2] * K.scale + K.offset[2]);
+      holder.add(scene);
+      const slides = [], mags = [], res = { geometries: new Set(), materials: new Set(), textures: new Set() };
+      let hammer = null, magAxis = new THREE.Vector3(0, 1, 0);
+      scene.traverse((o) => {
+        if (K.slides.test(o.name)) slides.push({ object: o, base: o.position.clone() });
+        if (K.mags.test(o.name)) mags.push({ object: o, base: o.position.clone() });
+        if (K.hidden.test(o.name)) o.visible = false;
+        if (K.hammer.test(o.name)) hammer = { object: o, base: o.rotation.x };
+        if (o.name === 'Magazine_low') { magAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(o.quaternion); if (magAxis.y < 0) magAxis.negate(); }
+        if (layer) o.layers.set(layer);
+        if (!o.isMesh) return;
+        o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false;
+        res.geometries.add(o.geometry);
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+          if (res.materials.has(m)) continue;
+          res.materials.add(m); m.side = THREE.FrontSide; m.envMapIntensity = 1.15;
+          if (K.tint[m.name]) m.color.setScalar(K.tint[m.name]);
+          scrubMarkings(m, K.scrub[m.name]);
+          for (const v of Object.values(m)) if (v?.isTexture) { res.textures.add(v); v.anisotropy = 4; }
+        }
+      });
+      if (layer) holder.layers.set(layer);
+      pBody.add(holder);
+      for (const o of [...pBody.children]) if (o !== holder && o !== flash && o !== pSlide && o !== pMag) o.visible = false; // 套筒座、扳机
+      pSlide.visible = false; pMag.visible = false;
+      const f = pistolSkinFit(K);
+      Object.assign(fit, { muzzle: f.muzzle, eject: f.eject, sightY: f.sightY, slideTravel: f.slideTravel });
+      pPivot.set(...f.pivot);
+      flash.position.set(fit.muzzle[0], fit.muzzle[1], fit.muzzle[2] - 0.03);
+      skin = { holder, slides, mags, hammer, magAxis, res };
+      return true;
+    },
+    get skinned() { return !!skin; },
     /** 翻越时把枪放低（0–1） */
     setLowered(k) { S.lowered = clamp01(k); },
     dispose() {
@@ -509,6 +620,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       for (const r of [pistolRoot, knifeRoot]) r.removeFromParent();
       for (const g of [pg.frame, pg.slide, pg.dark, pg.mag, pg.trigger, pg.dots, kg.blade, kg.fuller, kg.handle, kg.guard]) g.dispose();
       M.flash.map?.dispose?.(); for (const m of Object.values(M)) m.dispose();
+      if (skin) { for (const g of skin.res.geometries) g.dispose(); for (const m of skin.res.materials) m.dispose(); for (const t of skin.res.textures) { t.dispose(); t.image?.close?.(); } skin = null; }
       btn?.remove();
     },
   };

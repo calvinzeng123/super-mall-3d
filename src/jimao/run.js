@@ -30,6 +30,9 @@ import { createMinimap, MINIMAP_CSS } from './minimap.js';
 import { createScore, SCORE_CSS } from './score.js';
 import { registerDressing, buildDressing } from './dressing.js';
 import { createArsenal, ARSENAL_CSS } from './arsenal.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FPS_MODEL_ASSETS } from '../fps/model-data.js';
+import { fetchBinary } from '../render/fetch-binary.js';
 import { createCutscenes, CUT, CUTSCENE_CSS } from './cutscene.js';
 import { createStairControl, STAIRS_CSS } from './stairs.js';
 import { addZombies } from './zombie.js';
@@ -185,6 +188,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.rifle = G.weapon;
   G.weapon = createArsenal(G, { camera, layer: VIEW_LAYER, ui });
   G.arms = G.weapon;
+  // 手枪换上带贴图的真模型（2 MB，后台加载；加载不出来就用 arsenal.js 里手搭的那把，不影响开打）
+  { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'pistol'), arsenal = G.weapon;
+    if (rec) fetchBinary(rec.url, { label: '手枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+      .then((gltf) => { if (G.weapon === arsenal) arsenal.skinPistol(gltf.scene); })
+      .catch((e) => console.warn('[零点突围] 手枪模型没加载出来，用简化模型', e)); }
   // 敌人：原游戏的机械飞鸥、机械猎犬，加上真人敌人「武装劫持者」（soldier.js，登记进同一个敌人模块）
   onProgress('正在部署敌人', 0.85);
   G.enemies = await guarded('enemies', () => J.createEnemies(G));
