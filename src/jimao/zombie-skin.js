@@ -10,13 +10,19 @@ import { fetchBinary } from '../render/fetch-binary.js';
 import { MEM } from '../render/device.js';
 
 /**
- * tones：几套色调 [去色后乘上的 R, G, B, 保留多少原来的颜色, 血污块数]；pale 给尖叫者（惨白）。
+ * tones：几套色调 [去色后乘上的 R, G, B, 保留多少原来的颜色, 血污块数]；special：特殊感染者的。
  * cyclesPerMetre：每走一米走路姿势转多少圈。
  */
 export const ZOMBIE_SKIN = Object.freeze({
   size: 512,
   tones: Object.freeze([[0.62, 0.7, 0.56, 0.34, 7], [0.56, 0.6, 0.62, 0.26, 5], [0.7, 0.62, 0.5, 0.4, 9]]),
-  pale: Object.freeze([0.84, 0.86, 0.8, 0.12, 4]),
+  // 特殊感染者各一套（body：用哪个模型，0 男 1 女；eye：眼睛的颜色）：尖叫者惨白，扑袭者又黑又脏、红眼，喷酸者发黄发绿，巨尸暗红
+  special: Object.freeze({
+    pale: Object.freeze({ tone: [0.84, 0.86, 0.8, 0.12, 4], eye: 0xffffff }),
+    lunger: Object.freeze({ tone: [0.36, 0.36, 0.4, 0.2, 10], body: 0, eye: 0xff4a3a }),
+    spitter: Object.freeze({ tone: [0.72, 0.84, 0.3, 0.3, 4], body: 1, eye: 0xb6ff5a }),
+    brute: Object.freeze({ tone: [0.46, 0.3, 0.28, 0.22, 22], body: 0, eye: 0xffa040 }),
+  }),
   eyes: Object.freeze({ below: 0.108, half: 0.031, inset: 0.01, radius: 0.0068, color: 0xffe9a8 }), // 眼睛：离头顶多少米、两眼间距的一半、比脸的最前面缩进多少、半径
   cyclesPerMetre: 0.62,
 });
@@ -94,18 +100,22 @@ export async function loadZombieKit({ seed = 20261120 } = {}) {
   for (const record of PEOPLE_ASSETS) {
     const source = await parsePerson(record), image = source.material.map.image;
     const face = faceOf(source.geometry);
-    const materials = [...ZOMBIE_SKIN.tones, ZOMBIE_SKIN.pale].map((tone) => {
+    const paint = (tone) => {
       const map = paintZombie(image, tone, rng, size);
       const m = new THREE.MeshStandardMaterial({ map, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, envMapIntensity: 0.15, name: 'zombie-skin' });
       shared.push(map, m);
       return m;
-    });
+    };
+    const materials = ZOMBIE_SKIN.tones.map(paint), special = {};
+    for (const [name, sp] of Object.entries(ZOMBIE_SKIN.special)) if (sp.body == null || sp.body === bodies.length) special[name] = paint(sp.tone);
     source.material.map?.dispose(); source.material.dispose(); image.close?.();
     shared.push(source.geometry);
-    bodies.push({ geometry: source.geometry, poses: record.poses, face, materials });
+    bodies.push({ geometry: source.geometry, poses: record.poses, face, materials, special });
   }
-  const E = ZOMBIE_SKIN.eyes, eyeGeo = new THREE.SphereGeometry(E.radius, 8, 6), eyeMat = new THREE.MeshBasicMaterial({ color: E.color, toneMapped: false, fog: false });
-  shared.push(eyeGeo, eyeMat);
+  const E = ZOMBIE_SKIN.eyes, eyeGeo = new THREE.SphereGeometry(E.radius, 8, 6);
+  const eyeOf = (color) => { const m = new THREE.MeshBasicMaterial({ color, toneMapped: false, fog: false }); shared.push(m); return m; };
+  const eyeMat = eyeOf(E.color), eyeSpecial = Object.fromEntries(Object.entries(ZOMBIE_SKIN.special).map(([k, sp]) => [k, eyeOf(sp.eye)]));
+  shared.push(eyeGeo);
 
   return {
     looks: bodies.length * ZOMBIE_SKIN.tones.length,
@@ -121,10 +131,13 @@ export async function loadZombieKit({ seed = 20261120 } = {}) {
       let cur = 0;
       return {
         group,
-        /** 换一套外观：index 决定男女和色调；pale = 惨白（尖叫者） */
-        setLook(index, pale = false) {
-          const n = bodies.length, i = ((index % n) + n) % n, t = pale ? ZOMBIE_SKIN.tones.length : Math.floor(index / n) % ZOMBIE_SKIN.tones.length;
-          cur = i; meshes.forEach((m, k) => { m.visible = k === i; }); meshes[i].material = bodies[i].materials[t];
+        /** 换一套外观：index 决定男女和色调；special = 特殊感染者的那一套（'pale' / 'lunger' / 'spitter' / 'brute'），有的固定用某一个模型 */
+        setLook(index, special = null) {
+          const n = bodies.length, sp = special ? ZOMBIE_SKIN.special[special] : null;
+          const i = sp && sp.body != null ? Math.min(n - 1, sp.body) : ((index % n) + n) % n;
+          cur = i; meshes.forEach((m, k) => { m.visible = k === i; });
+          meshes[i].material = (sp && bodies[i].special[special]) || bodies[i].materials[Math.floor(index / n) % ZOMBIE_SKIN.tones.length];
+          for (const eye of meshes[i].children) eye.material = (sp && eyeSpecial[special]) || eyeMat;
         },
         /** phase：走路姿势的圈数；moving 0–1：走得越慢越接近站姿；lean / sway：前倾、左右晃（弧度）；lunge 0–1：扑咬时往前探 */
         pose({ phase = 0, moving = 1, lean = 0, sway = 0, lunge = 0 } = {}) {

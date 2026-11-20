@@ -10,6 +10,8 @@ import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
 import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf } from '../src/jimao/siege.js';
 import { doorOutside } from '../src/jimao/guide.js';
+import { PACING, createPacing } from '../src/jimao/pacing.js';
+import { SPECIALS } from '../src/jimao/zombie.js';
 import { ZOMBIE, KINDS, pickKind, zombieParts, addZombies } from '../src/jimao/zombie.js';
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
 import { createPathfinder } from '../src/jimao/pathfinder.js';
@@ -267,9 +269,14 @@ test('响动：开枪攒响动（手枪比步枪小），攒满来一波尸群�
   G.events.emit('weapon:fire', {}); assert.equal(S.noise, SIEGE.noise.pistol + SIEGE.noise.rifle);
   run(SIEGE.noise.quiet + 1); assert.ok(S.noise < SIEGE.noise.pistol + SIEGE.noise.rifle - 3, '安静了就回落');
   S.hordeCool = 0; for (let i = 0; i < 16; i++) G.events.emit('weapon:fire', {});
-  const before = zombies.alive().length; run(0.2);
+  // 响动满了：先预警三秒（提示「尸潮要来了」），到点才冲出来
+  const before = zombies.alive().length; run(0.3);
+  assert.ok(msgs.some((t) => /尸潮要来了/.test(t)), '先预警'); assert.equal(siege.pacing.phase, 'build'); assert.ok(siege.pacing.warning > 2);
+  assert.ok(zombies.alive().filter((q) => q.hunt).length < 4, '预警的三秒里还没来');
+  run(PACING.warn - 0.1);
   const now = zombies.alive();
-  assert.ok(now.length >= before + 4, `尸群来了 ${now.length - before} 只`); assert.ok(now.filter((q) => q.hunt).length >= 4); assert.ok(msgs.some((t) => /尸群/.test(t)));
+  assert.equal(siege.pacing.phase, 'peak');
+  assert.ok(now.length >= before + 4, `尸潮来了 ${now.length - before} 只`); assert.ok(now.filter((q) => q.hunt).length >= 4); assert.ok(msgs.some((t) => /^尸潮！/.test(t)));
   assert.ok(S.noise <= SIEGE.noise.after + 1); assert.ok(S.hordeCool > 10);
   for (const q of now.filter((h) => h.hunt)) assert.ok(Math.hypot(q.pos.x - player.pos.x, q.pos.z - player.pos.z) >= 12, '不在脸上冒出来（14 米外出生，这 0.2 秒里奔尸已经跑了一米）');
   // 手雷更响
@@ -435,7 +442,7 @@ test('丧尸的贴图外形：贴图去色偏灰绿、走路姿势按圈数在�
   // 一块肤色：处理后更灰、偏绿、更暗
   const [r, g, b] = zombieTone(224, 172, 140, ZOMBIE_SKIN.tones[0]);
   assert.ok(r < 224 * 0.75 && g > r * 0.95 && Math.abs(r - b) < 60, `肤色 → ${[r, g, b].map((v) => v.toFixed(0))}`);
-  assert.deepEqual(zombieTone(0, 0, 0, ZOMBIE_SKIN.pale), [0, 0, 0]);
+  assert.deepEqual(zombieTone(0, 0, 0, ZOMBIE_SKIN.special.pale.tone), [0, 0, 0]);
   assert.deepEqual(walkBlend(0, 8), { a: 0, b: 1, t: 0 }); assert.deepEqual(walkBlend(0.9375, 8), { a: 7, b: 0, t: 0.5 }); assert.equal(walkBlend(-0.125, 8).a, 7);
   // 脸的位置按第 0 个走路姿势量
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 1.7, 0, 0.02, 1.6, 0.09, -0.02, 1.6, 0.07], 3));
@@ -447,7 +454,7 @@ test('丧尸的贴图外形：贴图去色偏灰绿、走路姿势按圈数在�
   assert.equal(zombies.skinned, false);
   zombies.useSkin(kit); assert.equal(zombies.skinned, true); assert.equal(made.length, 4);
   const z = enemies.spawn('zombie', ahead(8), { kind: 'screamer' }), k = made[zombies.pool.indexOf(z)];
-  assert.equal(k.looks.at(-1)[1], true, '尖叫者用惨白那套'); assert.ok(k.group.parent, '外形挂在丧尸身上');
+  assert.equal(k.looks.at(-1)[1], 'pale', '尖叫者用惨白那套'); assert.ok(k.group.parent, '外形挂在丧尸身上');
   const fat = enemies.spawn('zombie', ahead(10, 1), { kind: 'bloater', passive: true }), kf = made[zombies.pool.indexOf(fat)];
   assert.ok(Math.abs(kf.group.scale.x - KINDS.bloater.girth) < 1e-6 && kf.group.scale.y === 1, '胖尸横向撑开');
   run(1); assert.ok(k.poses.length > 20 && k.poses.every((q) => Number.isFinite(q.phase) && q.moving >= 0 && q.moving <= 1), '每帧摆姿势');
@@ -455,4 +462,100 @@ test('丧尸的贴图外形：贴图去色偏灰绿、走路姿势按圈数在�
   assert.equal(boxes, 0, '方块人藏起来了');
   zombies.useSkin(null); assert.equal(zombies.skinned, false); assert.equal(k.group.parent, null);
   boxes = 0; z.rig.group.traverse((o) => { if (o.isMesh) { let vis = true; for (let q = o; q && q !== z.rig.group; q = q.parent) if (!q.visible) vis = false; if (vis) boxes++; } }); assert.equal(boxes, 5, '换回方块人');
+});
+
+test('节奏：平静 → 升温 → 预警三秒 → 尸潮 → 喘息 → 平静；尸潮越往后越大；人已经够呛就跳过这一轮；响动满了立刻催来；各阶段游荡数量和特殊感染者名额不同', () => {
+  const P = createPacing(seq(5)), seen = [], log = [];
+  let warnAt = -1, hordeAt = -1, t = 0, hordes = [];
+  for (; t < 400; t += 0.1) {
+    const a = P.update(0.1, { stage: 2, near: 0 });
+    if (P.phase !== seen.at(-1)) seen.push(P.phase);
+    if (a.warn && warnAt < 0) warnAt = t; if (a.horde) { if (hordeAt < 0) hordeAt = t; hordes.push(a.horde); }
+    if (a.special) log.push(P.phase);
+  }
+  assert.deepEqual(seen.slice(0, 5), ['calm', 'build', 'peak', 'relax', 'calm']);
+  assert.ok(Math.abs(hordeAt - warnAt - PACING.warn) < 0.25, `预警 ${warnAt.toFixed(1)} → 尸潮 ${hordeAt.toFixed(1)}`);
+  assert.ok(hordes.length >= 3 && hordes.every((n) => n >= 7 && n <= 12), `每轮 ${hordes}`);
+  assert.ok(log.length > 3 && !log.includes('calm'), '平静时不出特殊感染者');
+  // 越往后越大，有上限
+  const big = createPacing(seq(5)); let n9 = 0; for (let k = 0; k < 900 && !n9; k++) n9 = big.update(0.1, { stage: 9 }).horde;
+  assert.ok(n9 > hordes[0] && n9 <= Math.ceil(PACING.horde.max * 1.1), `第 9 步 ${n9} 只`);
+  // 人已经够呛：升温走到预警点时紧张度很高 → 这一轮不来，直接喘息
+  const tired = createPacing(seq(7)); let got = 0;
+  for (let k = 0; k < 700 && tired.state.skipped === 0; k++) { if (tired.phase === 'build') for (let j = 0; j < 3; j++) tired.hit(14); got += tired.update(0.1, { stage: 3, near: 3 }).horde; }
+  assert.equal(tired.state.skipped, 1); assert.equal(got, 0); assert.equal(tired.phase, 'relax');
+  // 响动满了：平静里直接升温、三秒后尸潮
+  const loud = createPacing(seq(9)); let lt = 0, ln = 0, lw = false;
+  for (; lt < 20 && !ln; lt += 0.1) { const a = loud.update(0.1, { stage: 0, noiseFull: true }); lw ||= a.warn; ln = a.horde; }
+  assert.ok(lw && ln >= 6 && lt < PACING.warn + 0.5, `${lt.toFixed(1)} 秒后来了 ${ln} 只`);
+  // 死守：波次不归它管，只出特殊感染者
+  const hold = createPacing(seq(3)); let hs = 0, hh = 0; for (let k = 0; k < 600; k++) { const a = hold.update(0.1, { hold: true }); hs += a.special ? 1 : 0; hh += a.horde; }
+  assert.ok(hs >= 3 && hh === 0);
+  assert.ok(PACING.ambient.relax === 0 && PACING.ambient.build > PACING.ambient.calm && PACING.specials.calm === 0);
+  P.reset(); assert.equal(P.phase, 'calm'); assert.equal(P.stress, 0);
+});
+
+test('特殊感染者：扑袭者蹲下再扑、扑中把人按住撕咬（打死它才松）、扑空踉跄；喷酸者隔着十来米吐酸；巨尸血厚、不吃硬直、一巴掌把人拍飞；这三种不参加随机抽取', () => {
+  for (const k of ['lunger', 'spitter', 'brute']) { assert.equal(KINDS[k].weight, 0); assert.ok(SPECIALS.includes(k)); }
+  for (let i = 0; i < 200; i++) assert.ok(!['lunger', 'spitter', 'brute'].includes(pickKind(i / 200)));
+  { const { G, enemies, player, hurt, events, run, ahead } = zworld();
+    // 扑袭者：8 米外、看得见 → 蹲（有预兆）→ 扑 → 按住
+    const L = enemies.spawn('zombie', ahead(8), { kind: 'lunger', hunt: true });
+    assert.equal(L.special, true); assert.equal(L.feedName, '扑袭者');
+    let sawCrouch = false, sawLeap = false, maxSpeed = 0;
+    run(4, () => { sawCrouch ||= L.zs === 'crouch'; sawLeap ||= L.zs === 'leap'; maxSpeed = Math.max(maxSpeed, L.speed); });
+    assert.ok(sawCrouch && sawLeap, '先蹲后扑'); assert.ok(maxSpeed > 10, `飞扑速度 ${maxSpeed.toFixed(1)}`);
+    assert.ok(events.some(([n, e]) => n === 'enemy:telegraph' && e.pounce), '蹲下时有预兆');
+    assert.ok(events.some(([n]) => n === 'zombie:pin'), '按住了'); assert.equal(L.zs, 'pin');
+    assert.ok(hurt.length >= 2 && hurt[0][0] === KINDS.lunger.pounce.damage, `扑中 ${hurt[0]?.[0]}，之后接着咬`);
+    assert.ok(L.pos.distanceTo(player.pos) < 1.2, '贴在人身前');
+    const n0 = hurt.length; run(1.2); assert.ok(hurt.length > n0, '按住期间一直咬');
+    L.damage(999, null, null, 'body'); assert.ok(events.some(([n, e]) => n === 'zombie:unpin' && e.enemy === L), '打死它就松开');
+    // 扑空：人不在那条线上
+    events.length = 0; hurt.length = 0;
+    const M = enemies.spawn('zombie', ahead(8, 1), { kind: 'lunger', hunt: true });
+    let moved = false; run(4, () => { if (M.zs === 'leap' && !moved) { moved = true; player.pos.x += 6; player.pos.z += 6; } });
+    assert.ok(moved && !events.some(([n]) => n === 'zombie:pin'), '躲开了就按不住');
+    M._deactivate(); void G; }
+  { const { enemies, player, events, run, ahead } = zworld();
+    const sp = enemies.spawn('zombie', ahead(13), { kind: 'spitter', hunt: true });
+    run(6);
+    const spit = events.find(([n]) => n === 'zombie:spit');
+    assert.ok(spit, '吐了'); assert.ok(spit[1].to.distanceTo(player.pos) < 1 && spit[1].radius === KINDS.spitter.spit.radius && spit[1].dps > 0);
+    assert.ok(sp.pos.distanceTo(player.pos) > 6, `不近身（离人 ${sp.pos.distanceTo(player.pos).toFixed(1)} 米）`); }
+  { const { enemies, player, hurt, run, ahead } = zworld();
+    const B = enemies.spawn('zombie', ahead(5), { kind: 'brute', hunt: true });
+    assert.equal(B.maxHp, KINDS.brute.hp); B.damage(60, null, null, 'body'); assert.equal(B.stagger, 0, '不吃硬直'); assert.equal(B.alive, true);
+    player.vel.set(0, 0, 0); run(5);
+    assert.ok(hurt.some((h) => h[0] === KINDS.brute.bite), '一巴掌 32'); assert.ok(Math.hypot(player.vel.x, player.vel.z) > 5 || player.vel.y > 2, '人被拍飞'); }
+});
+
+test('围城里的特殊感染者：按节奏的名额放（不连着来同一种、不超名额）；被按住时人钉在原地；酸液落地成一滩、站在里面掉血、过一阵消失；第二道关清掉后来一只巨尸', () => {
+  const { G, siege, zombies, player, hurt, msgs, begin, cut, run } = sworld();
+  begin(); const S = siege.state; run(0.1);
+  // 名额：平静时 0
+  assert.equal(siege.spawnSpecial(), null, '平静时不放');
+  siege.pacing.state.phase = 'build';
+  const a = siege.spawnSpecial(), b = siege.spawnSpecial();
+  assert.ok(a && b && a.special && b.special && a.kind !== b.kind, `${a?.kind}、${b?.kind}`); assert.equal(siege.spawnSpecial(), null, '名额满了');
+  for (const z of [a, b]) assert.ok(Math.hypot(z.pos.x - player.pos.x, z.pos.z - player.pos.z) >= 13, '离人十几米外');
+  a._deactivate(); b._deactivate();
+  // 按住：人挪不动
+  const L = { alive: true, active: true, zs: 'pin' }; G.events.emit('zombie:pin', { enemy: L });
+  const at = player.pos.clone(); player.pos.x += 3; run(0.05);
+  assert.ok(Math.abs(player.pos.x - at.x) < 1e-6, '被按住走不了'); assert.ok(msgs.some((t) => /按住/.test(t)));
+  L.zs = 'chase'; run(0.05); player.pos.x += 3; run(0.05); assert.ok(Math.abs(player.pos.x - at.x - 3) < 1e-6, '松开了就能走');
+  // 酸液
+  hurt.length = 0;
+  G.events.emit('zombie:spit', { from: new THREE.Vector3(player.pos.x + 10, player.pos.y + 1.6, player.pos.z), to: player.pos.clone(), flight: 0.8, radius: 2.7, seconds: 6.5, dps: 9 });
+  const acid = () => hurt.filter((h) => Math.abs(h[0] - 4.5) < 1e-6).length; // 只数酸液的伤害（这期间游荡的丧尸也可能咬人）
+  run(0.6); assert.equal(acid(), 0, '还在飞'); run(1.6);
+  assert.ok(acid() >= 2, `站在酸里掉血 ${hurt.map((h) => h[0])}`);
+  const n = acid(); player.pos.x += 8; run(1.5); assert.equal(acid(), n, '走出来就不掉了');
+  player.pos.x -= 8; run(6); const m = acid(); run(2); assert.equal(acid(), m, '过一阵酸液消失');
+  // 巨尸：第二道关（第 5 步）清掉后几秒出现
+  for (const z of zombies.alive()) z._deactivate();
+  cut(6); run(0.1);
+  assert.ok(S.bruteT > 0, `bruteT ${S.bruteT}`); run(8);
+  assert.equal(zombies.alive().filter((z) => z.kind === 'brute').length, 1); assert.ok(msgs.some((t) => /巨尸/.test(t)));
 });

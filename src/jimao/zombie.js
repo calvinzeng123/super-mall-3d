@@ -39,7 +39,21 @@ export const KINDS = Object.freeze({
   runner: Object.freeze({ name: '奔尸', weight: 0.16, speed: 4.7, hp: 36, bite: 10, windup: 0.26, cooldown: 0.7, scale: 0.96, lean: 0.4 }),
   bloater: Object.freeze({ name: '胖尸', weight: 0.09, speed: 0.95, hp: 190, bite: 22, windup: 0.6, scale: 1.2, girth: 1.45, burst: Object.freeze({ radius: 3.6, damage: 34 }) }),
   screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 3, heliEvery: 8, heliFirst: 5 }), scale: 1.02 }),
+  // 下面三种不参加平时的随机抽取（weight 0），由节奏器（pacing.js）点名放：
+  // 扑袭者：远远蹲下、一个飞扑把人按住撕咬——被按住走不了，打死它或它咬够了才松开；飞扑能侧身躲开
+  lunger: Object.freeze({ name: '扑袭者', weight: 0, speed: 5, hp: 70, bite: 7, windup: 0.22, cooldown: 0.55, scale: 0.98, lean: 0.5, look: 'lunger',
+    pounce: Object.freeze({ min: 3.6, max: 11, crouch: 0.65, speed: 13.5, time: 0.85, hit: 1.25, damage: 16, pin: 5, every: 5.5 }) }),
+  // 喷酸者：不近身，隔着十来米往人脚下吐一口酸——落地成一滩，站在里面持续掉血，逼人挪窝
+  spitter: Object.freeze({ name: '喷酸者', weight: 0, speed: 2.3, hp: 60, bite: 8, keep: 12, scale: 1.04, look: 'spitter',
+    spit: Object.freeze({ every: 5.2, first: 2.2, range: 22, flight: 0.8, radius: 2.7, seconds: 6.5, dps: 9 }) }),
+  // 巨尸：又高又壮的头目，血极厚、打不出硬直，一巴掌把人拍飞；慢跑的速度比人走路快、比人冲刺慢
+  brute: Object.freeze({ name: '巨尸', weight: 0, speed: 4.3, hp: 1300, bite: 32, reach: 1.95, windup: 0.5, cooldown: 1.15, scale: 1.4, girth: 1.38, look: 'brute', knock: 9, sturdy: true }),
 });
+/** 特殊感染者（节奏器按名额放的那几种） */
+export const SPECIALS = Object.freeze(['bloater', 'screamer', 'lunger', 'spitter', 'brute']);
+/** 贴图外形用哪一套特殊色调（zombie-skin.js）：尖叫者惨白，扑袭者、喷酸者、巨尸各有一套；普通的是 null */
+const lookOf = (kind) => (kind === 'screamer' ? 'pale' : KINDS[kind]?.look || null);
+
 /** 按比例抽一种。r ∈ [0, 1)；mix 可以改比例（{ runner: 0.3 } 这样） */
 export function pickKind(r, mix = null) {
   const names = Object.keys(KINDS), w = names.map((n) => mix?.[n] ?? KINDS[n].weight), total = w.reduce((a, b) => a + b, 0);
@@ -131,7 +145,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         m.hp -= amount;
         G.events.emit('enemy:hit', { enemy: m, point, part: part || 'body' });
         if (point) G.fx?.smoke?.(point, { size: 0.18, life: 0.4, color: 0x3a0b0b, rise: 0.15 });
-        m.stagger = Math.min(0.5, m.stagger + (part === 'weak' ? 0.4 : amount / 90));
+        if (!C.sturdy) m.stagger = Math.min(0.5, m.stagger + (part === 'weak' ? 0.4 : amount / 90));
         if (m.zs === 'idle' && !m.fixed) notice(G.player?.pos, true);
         if (m.hp <= 0) { die(dir, part); return true; }
         return false;
@@ -146,7 +160,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         arms[0].position.x = 0.21 * (K.girth || 1); arms[1].position.x = -0.21 * (K.girth || 1);
         root.scale.setScalar(scale);
         lookI = Math.floor(rng() * 97); walk = rng();
-        if (skin) { skin.setLook(lookI, kind === 'screamer'); skin.group.scale.set(K.girth || 1, 1, K.girth || 1); }
+        if (skin) { skin.setLook(lookI, lookOf(kind)); skin.group.scale.set(K.girth || 1, 1, K.girth || 1); }
+        m.special = SPECIALS.includes(kind); m.pounceT = K.pounce ? 0.25 + rng() * 0.45 : 0; m.spitT = K.spit ? K.spit.first + rng() : 0; m.pinT = 0; m.leap = null;
         m.active = true; m.alive = true; m.passive = !!opts.passive; m.sink = 0; m.hunt = !!opts.hunt; m.target = opts.targetPos || null;
         m.fixed = !!opts.fixed; m.sweep = null; m.bit = false; // fixed：钉在原地（阳台玻璃后面拍玻璃的那几只），不走、不追
         m.pos.copy(at);
@@ -262,6 +277,20 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         const near = alivePl && Math.abs(dy) < 3.2 && dist < ZOMBIE.lose;
         if (near && (m.los || dist < ZOMBIE.senseBlind)) { m.lastKnown.copy(pl.pos); m.loseT = 0; } else if (m.hunt && alivePl) m.lastKnown.copy(pl.pos); else m.loseT += dt;
         if (!alivePl || (!m.hunt && m.loseT > ZOMBIE.loseSeconds)) { m.zs = 'idle'; m.home.copy(m.pos); m.hasGoal = false; m.path = null; }
+        else if (C.pounce && near && m.los && Math.abs(dy) < 1.4 && (m.pounceT -= dt) <= 0 && dist > C.pounce.min && dist < C.pounce.max) {
+          // 扑袭者：够得着的距离上先蹲一下（有一声低吼，给人反应的时间），再扑
+          m.zs = 'crouch'; m.zsT = 0; faceYaw = Math.atan2(dx, dz);
+          G.events.emit('enemy:telegraph', { enemy: m, pos: m.pos, type: 'soldier', scream: true, pounce: true });
+        } else if (C.spit && near && m.los) {
+          // 喷酸者：隔着十来米站住吐；太近了往后退
+          faceYaw = Math.atan2(dx, dz);
+          if (dist > C.keep + 3) steer(dt, m.lastKnown, speed, dist < ZOMBIE.direct);
+          else if (dist < C.keep - 4) want.set(-dx / (dist || 1) * speed, 0, -dz / (dist || 1) * speed);
+          if ((m.spitT -= dt) <= 0 && dist < C.spit.range) {
+            m.spitT = C.spit.every * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0.45; // 借尖叫的后仰姿势，短一点
+            G.events.emit('zombie:spit', { enemy: m, from: headPos.clone(), to: new THREE.Vector3(pl.pos.x + (pl.vel?.x || 0) * 0.35, pl.pos.y, pl.pos.z + (pl.vel?.z || 0) * 0.35), ...C.spit });
+          }
+        }
         else if (C.scream && near && m.los) {
           // 尖叫者：凑到八九米就站住叫；太近了往后退
           faceYaw = Math.atan2(dx, dz);
@@ -282,12 +311,40 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         if (k < 1 && dist > 0.75) want.set(dx / (dist || 1) * speed * 0.8, 0, dz / (dist || 1) * speed * 0.8);
         if (k >= 1 && m.zs === 'attack' && !m.bit) {
           m.bit = true;
-          if (alivePl && dist < C.reach * scale + 0.4 && Math.abs(dy) < 1.4) { pl.damage?.(C.bite, m.pos); G.events.emit('enemy:melee', { enemy: m, pos: m.pos, zombie: true }); }
+          if (alivePl && dist < C.reach * scale + 0.4 && Math.abs(dy) < 1.4) {
+            pl.damage?.(C.bite, m.pos); G.events.emit('enemy:melee', { enemy: m, pos: m.pos, zombie: true });
+            if (C.knock && pl.vel) { pl.vel.x += dx / (dist || 1) * C.knock; pl.vel.z += dz / (dist || 1) * C.knock; pl.vel.y = Math.max(pl.vel.y || 0, 3.2); pl.addShake?.(0.6); G.events.emit('zombie:knock', { enemy: m }); }
+          }
         }
         if (m.zsT >= C.windup + 0.25) { m.zs = 'chase'; m.cool = C.cooldown * (0.85 + rng() * 0.3); m.bit = false; m.lunge = 0; }
       } else if (m.zs === 'scream') {
         m.zsT += dt; faceYaw = Math.atan2(dx, dz);
         if (m.zsT > 1.1) m.zs = 'chase';
+      } else if (m.zs === 'crouch') {
+        // 蹲下蓄力：盯着人；到点朝人这一刻的位置（带一点提前量）扑出去
+        m.zsT += dt; faceYaw = Math.atan2(dx, dz); m.lunge = -0.5;
+        if (!alivePl) m.zs = 'chase';
+        else if (m.zsT >= C.pounce.crouch) {
+          const tx = pl.pos.x + (pl.vel?.x || 0) * 0.22 - m.pos.x, tz = pl.pos.z + (pl.vel?.z || 0) * 0.22 - m.pos.z, tl = Math.hypot(tx, tz) || 1;
+          m.leap = { x: tx / tl, z: tz / tl }; m.zs = 'leap'; m.zsT = 0; m.yaw = Math.atan2(tx, tz);
+        }
+      } else if (m.zs === 'leap') {
+        // 飞扑：直线冲出去，方向不再改（所以能躲）；碰到人就按住，扑空 / 撞墙就踉跄一下
+        m.zsT += dt; m.lunge = 1; faceYaw = Math.atan2(m.leap.x, m.leap.z);
+        vel.x = m.leap.x * C.pounce.speed; vel.z = m.leap.z * C.pounce.speed; want.set(vel.x, 0, vel.z); m.leaping = true;
+        if (alivePl && dist < C.pounce.hit && Math.abs(dy) < 1.5) {
+          m.zs = 'pin'; m.zsT = 0; m.pinT = 0; m.cool = 0.35; m.lunge = 0.6;
+          pl.damage?.(C.pounce.damage, m.pos); pl.addShake?.(0.7);
+          G.events.emit('zombie:pin', { enemy: m }); G.events.emit('enemy:melee', { enemy: m, pos: m.pos, zombie: true });
+        } else if (m.zsT > C.pounce.time) { m.zs = 'chase'; m.stagger = 0.5; m.pounceT = C.pounce.every; m.lunge = 0; }
+      } else if (m.zs === 'pin') {
+        // 按住人撕咬：贴在人身前不动；人被按住走不了（siege.js 管），打死它、或它咬够了才松开
+        m.pinT += dt; m.lunge = 0.6; faceYaw = Math.atan2(dx, dz);
+        if (!alivePl || m.pinT > C.pounce.pin) { m.zs = 'chase'; m.stagger = 0.5; m.pounceT = C.pounce.every; m.lunge = 0; G.events.emit('zombie:unpin', { enemy: m }); }
+        else {
+          const fy = pl.yaw ?? 0; m.pos.set(pl.pos.x - Math.sin(fy) * 0.95, pl.pos.y, pl.pos.z - Math.cos(fy) * 0.95); vel.set(0, 0, 0); want.set(0, 0, 0); m.pinned = true;
+          if (m.cool <= 0) { m.cool = C.cooldown; pl.damage?.(C.bite, m.pos); G.events.emit('enemy:melee', { enemy: m, pos: m.pos, zombie: true }); }
+        }
       }
 
       // 互相让开（挤成一团但不叠在一起），不顶到人身上
@@ -299,13 +356,17 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       if (pl && dist < 0.7 && dist > 1e-3) { want.x -= dx / dist * 2; want.z -= dz / dist * 2; }
 
       const k = ease(ZOMBIE.accel, dt);
-      vel.x += (want.x - vel.x) * k; vel.z += (want.z - vel.z) * k; vel.y = 0;
+      if (m.leaping) m.leaping = false; // 飞扑：速度是直接给的，不走加速
+      else { vel.x += (want.x - vel.x) * k; vel.z += (want.z - vel.z) * k; }
+      vel.y = 0;
       const sp = Math.hypot(vel.x, vel.z);
       if (faceYaw === null && sp > 0.15) faceYaw = Math.atan2(vel.x, vel.z);
       if (faceYaw !== null) { const d = wrap(faceYaw - m.yaw); m.yaw = wrap(m.yaw + clamp(d, -ZOMBIE.turnRate * dt, ZOMBIE.turnRate * dt)); }
+      if (m.pinned) { m.pinned = false; m.speed = 0; pose(dt); return; } // 按着人：位置已经贴到人身前了
       const res = G.physics.moveCapsule?.(m.pos, vel, dt, 0.28, 1.7) || null;
       if (!res) { m.pos.x += vel.x * dt; m.pos.z += vel.z * dt; }
       m.speed = Math.hypot(vel.x, vel.z);
+      if (m.zs === 'leap' && res?.hitWall) { m.zs = 'chase'; m.stagger = 0.6; m.pounceT = C.pounce.every; m.lunge = 0; } // 扑到墙上
       if (res?.hitWall && want.lengthSq() > 0.3) { m.stuckT += dt; if (m.stuckT > 0.7) { m.stuckT = 0; m.planT = 0; m.path = null; } } else m.stuckT = Math.max(0, m.stuckT - dt);
       pose(dt);
     }
@@ -319,6 +380,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
     }
 
     function die(dir, part) {
+      if (m.zs === 'pin') G.events.emit('zombie:unpin', { enemy: m });
       m.alive = false; m.dieT = 0; m.fall = 0; m.fallV = 0; m.pathJob?.cancel?.(); m.pathJob = null;
       const f = dir ? dir.x * Math.sin(m.yaw) + dir.z * Math.cos(m.yaw) : -1;
       m.fallSign = f > 0 ? 1 : -1;
@@ -374,7 +436,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
     m._skin = (sk) => {
       if (skin) skin.group.removeFromParent();
       skin = sk || null; hips.visible = !skin;
-      if (skin) { body.add(skin.group); skin.setLook(lookI, m.kind === 'screamer'); skin.group.scale.set(C.girth || 1, 1, C.girth || 1); pose(0); }
+      if (skin) { body.add(skin.group); skin.setLook(lookI, lookOf(m.kind)); skin.group.scale.set(C.girth || 1, 1, C.girth || 1); pose(0); }
     };
     return m;
   }

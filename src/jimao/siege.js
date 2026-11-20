@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
 import { findPath } from '../fps/pathfinding.js';
 import { doorOutside } from './guide.js';
+import { createPacing } from './pacing.js';
 import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
 
@@ -322,8 +323,10 @@ export const SIEGE_CSS = `
  */
 export function createSiege(G, { layout, nav, scene, ui = null, zombies, director, runs, flow = null, rng = Math.random, storage = null, tower: forceTower = null }) {
   const root = new THREE.Group(); root.name = '丧尸围城'; scene?.add(root);
-  const S = { plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, tellT: 0 };
-  const blocks = [], balconies = [];
+  const S = { plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, tellT: 0, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' };
+  const blocks = [], balconies = [], acids = [];
+  // 尸潮的节奏（pacing.js）：平静 → 升温 → 尸潮 → 喘息；特殊感染者按名额放
+  const pacing = createPacing(rng);
   let enabled = false, noiseEl = null, clockEl = null, savedFlow = null;
   try { enabled = storage?.getItem?.('jimao-siege') === '1'; } catch { enabled = false; }
   if (ui && typeof document !== 'undefined') {
@@ -387,7 +390,9 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function reset() {
     for (const b of blocks.splice(0)) b.removeFromParent();
     for (const b of balconies.splice(0)) b.g.removeFromParent();
-    Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, tellT: 0, loadout: false });
+    for (const a of acids.splice(0)) a.dispose();
+    pacing.reset();
+    Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, tellT: 0, loadout: false, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' });
     noiseEl?.classList.toggle('off', !enabled); clockEl?.classList.add('off'); copy();
     if (flow) {
       // 原游戏自己的巡逻、增援、追兵全停（丧尸由这里放）；换回零点突围时还原
@@ -434,7 +439,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if ((S.spawnT -= dt) > 0) return;
     S.spawnT = SIEGE.ambient.every;
     const p = G.player.pos, st = G.physics.stateOf?.(p), floor = st?.floor || '', A = SIEGE.ambient;
-    const target = floor === tower().roof ? (S.hold >= 0 ? 0 : A.roof) : floor.startsWith(`${tower().id}-`) ? A.tower + Math.min(3, S.stage >> 1) : A.mall + Math.min(4, S.stage);
+    const base = floor === tower().roof ? (S.hold >= 0 ? 0 : A.roof) : floor.startsWith(`${tower().id}-`) ? A.tower + Math.min(3, S.stage >> 1) : A.mall + Math.min(4, S.stage);
+    const target = Math.round(base * pacing.ambient); // 平静时少、升温时多、喘息时不补
     let near = 0;
     for (const z of zalive()) {
       const d = Math.hypot(z.pos.x - p.x, z.pos.z - p.z), dy = Math.abs(z.pos.y - p.y);
@@ -450,13 +456,73 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     }
   }
 
+  // ---- 特殊感染者 ----
+  const specialsAlive = () => zalive().filter((z) => z.special).length;
+  /** 在人周围找一个看不见的地方放一只（near–far 米）；都看得见就退而求其次 */
+  function hidden(nearD = 14, farD = 30) {
+    const p = G.player.pos, eye = new THREE.Vector3(p.x, p.y + 1.5, p.z); let fallback = null;
+    for (let k = 0; k < 10; k++) {
+      const q = G.physics.nav.randomPoint(p, farD); if (!q) continue;
+      const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < nearD || Math.abs(q.y - p.y) > 4) continue;
+      fallback ||= q;
+      if (!G.physics.lineOfSight?.(eye, new THREE.Vector3(q.x, q.y + 1.5, q.z))) return q;
+    }
+    return fallback;
+  }
+  function spawnSpecial() {
+    const cap = S.hold >= 0 ? 2 : pacing.specialCap;
+    if (specialsAlive() >= cap) return null;
+    // 商场里先见到胖尸、尖叫者、扑袭者；进了楼再加喷酸者。不连着来同一种
+    const kinds = (S.stage >= 2 ? ['bloater', 'screamer', 'lunger', 'lunger', 'spitter', 'spitter'] : ['bloater', 'screamer', 'lunger']).filter((k) => k !== S.lastSpecial);
+    const kind = kinds[Math.floor(rng() * kinds.length)], q = hidden();
+    if (!q) return null;
+    const z = spawn(q, { kind, hunt: true, state: 'alert' });
+    if (z) S.lastSpecial = kind;
+    return z;
+  }
+  function spawnBrute(at = null) {
+    const q = at || hidden(16, 30); if (!q) return null;
+    const z = spawn(q, { kind: 'brute', hunt: true, state: 'alert' });
+    if (z) { S.brutes++; G.hud?.radio?.('巨尸！别让它近身——打头，边退边打。', 4); say('巨尸来了', 2.6); G.player.addShake?.(0.3); G.events?.emit?.('enemy:telegraph', { enemy: z, pos: z.pos, type: 'soldier', scream: true }); }
+    return z;
+  }
+  /** 被扑袭者按住：人钉在原地（还能转头、开枪、出刀），它死了或咬够了才松 */
+  function pinTick() {
+    const pin = S.pin; if (!pin) return;
+    if (!pin.by.alive || !pin.by.active || pin.by.zs !== 'pin') { S.pin = null; return; }
+    const p = G.player.pos; p.x = pin.x; p.z = pin.z; G.player.vel?.set?.(0, G.player.vel.y < 0 ? G.player.vel.y : 0, 0);
+    if ((pin.tell -= 1 / 60) <= 0) { pin.tell = 1.2; say('被扑袭者按住了！近战键捅它，或者开枪', 1.3); }
+  }
+  /** 喷酸者的一口酸：先飞一段抛物线，落地成一滩，人站在里面每半秒掉一次血 */
+  const acidMat = new THREE.MeshBasicMaterial({ color: 0x4f9a1c, transparent: true, opacity: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const acidBall = new THREE.SphereGeometry(0.16, 8, 6), acidDisc = new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2);
+  function spit(e) {
+    const ball = new THREE.Mesh(acidBall, acidMat), pool = new THREE.Mesh(acidDisc, acidMat);
+    pool.visible = false; pool.position.set(e.to.x, e.to.y + 0.04, e.to.z); pool.scale.setScalar(0.01); root.add(ball, pool);
+    acids.push({ from: e.from.clone(), to: e.to.clone(), t: 0, flight: e.flight, radius: e.radius, seconds: e.seconds, dps: e.dps, ball, pool, tick: 0,
+      dispose() { ball.removeFromParent(); pool.removeFromParent(); } });
+  }
+  function acidTick(dt) {
+    const p = G.player.pos;
+    for (let i = acids.length - 1; i >= 0; i--) {
+      const a = acids[i]; a.t += dt;
+      if (a.t < a.flight) { const k = a.t / a.flight; a.ball.position.lerpVectors(a.from, a.to, k); a.ball.position.y += Math.sin(k * Math.PI) * 2.2; continue; }
+      if (!a.pool.visible) { a.ball.visible = false; a.pool.visible = true; G.fx?.smoke?.(a.to, { size: 0.9, life: 1.1, color: 0x6fae2a, rise: 0.5 }); addNoise(6, a.to); }
+      const age = a.t - a.flight, grow = Math.min(1, age / 0.35), fade = Math.min(1, (a.seconds - age) / 1.2);
+      a.pool.scale.setScalar(a.radius * grow * (0.94 + 0.06 * Math.sin(a.t * 7)));
+      if (age >= a.seconds) { a.dispose(); acids.splice(i, 1); continue; }
+      a.pool.visible = fade > 0.02;
+      if (Math.hypot(p.x - a.to.x, p.z - a.to.z) < a.radius && Math.abs(p.y - a.to.y) < 1.4 && (a.tick -= dt) <= 0) { a.tick = 0.5; G.player.damage?.(a.dps * 0.5, a.to); if (S.tellT <= 0) { S.tellT = 2.5; say('酸液！别站在里面', 1.6); } }
+    }
+  }
+
   // ---- 楼顶死守、直升机降落 ----
   const roofDoors = () => runs.filter((r) => r.to === tower().roof).map((r) => new THREE.Vector3(r.b.x, r.b.y, r.b.z));
   function holdTick(dt) {
     const heli = director.vehicles.heli;
     if (S.hold >= 0 && !S.landed && S.land < 0) {
       S.hold += dt;
-      while (S.waveI < SIEGE.waves.length && S.hold >= SIEGE.waves[S.waveI]) { S.waveI++; const n = SIEGE.waveSize[0] + Math.floor(rng() * (SIEGE.waveSize[1] - SIEGE.waveSize[0] + 1)); horde(n, { at: roofDoors() }); say(`第 ${S.waveI} 波！楼梯口`, 2.2); }
+      while (S.waveI < SIEGE.waves.length && S.hold >= SIEGE.waves[S.waveI]) { S.waveI++; const n = SIEGE.waveSize[0] + Math.floor(rng() * (SIEGE.waveSize[1] - SIEGE.waveSize[0] + 1)); horde(n, { at: roofDoors() }); say(`第 ${S.waveI} 波！楼梯口`, 2.2); if (S.waveI === 4) spawnBrute(roofDoors()[0]); }
       const left = Math.max(0, SIEGE.hold - S.hold);
       if (clockEl) { clockEl.classList.remove('off'); clockEl.textContent = `直升机 ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(Math.ceil(left % 60)).padStart(2, '0')}`; }
       if (S.hold >= SIEGE.hold) { S.land = 0; heli.root.visible = true; G.hud?.radio?.('直升机到了，正在降落！到登机门去！', 4); if (clockEl) clockEl.textContent = '直升机降落中'; }
@@ -529,6 +595,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const st = S.plan.stages[i];
     if (st.kind === 'locker') { try { G.rifle.ammo = SIEGE.ammo.rifle; G.rifle.reserve = SIEGE.ammo.reserve; } catch { /* 改不了就不改 */ } G.weapon?.select?.('rifle'); say('拿到步枪 · 30 / 90', 3); }
     if (st.kind === 'gate') S.plan.gates[st.gate].block?.userData.clear();
+    if (st.kind === 'gate' && st.gate === 1) S.bruteT = 7; // 第二道关一清：楼里有个大家伙被惊动了
     if (st.kind === 'flare') { S.hold = 0; S.waveI = 0; }
     if (st.noise) { addNoise(st.noise); if (st.kind === 'switch') horde(7); }
   }
@@ -546,11 +613,15 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   G.events?.on?.('grenade:explode', (e) => addNoise(SIEGE.noise.grenade, e?.pos));
   G.events?.on?.('zombie:scream', (e) => { if (!playing() || director.riding) return; addNoise(30, e?.pos); horde(3 + Math.floor(rng() * 3)); say('尖叫者！它在招同伴', 2.2); });
   G.events?.on?.('zombie:burst', (e) => addNoise(18, e?.pos));
+  G.events?.on?.('zombie:pin', (e) => { if (playing() && e?.enemy) { S.pin = { by: e.enemy, x: G.player.pos.x, z: G.player.pos.z, tell: 0 }; pacing.hit(20); } });
+  G.events?.on?.('zombie:unpin', (e) => { if (S.pin?.by === e?.enemy) S.pin = null; });
+  G.events?.on?.('zombie:spit', (e) => { if (playing() && !director.riding) spit(e); });
+  G.events?.on?.('player:hit', (e) => { if (playing()) pacing.hit(e?.amount); });
 
   const api = {
     get enabled() { return enabled; },
     set enabled(v) { enabled = !!v; try { storage?.setItem?.('jimao-siege', enabled ? '1' : '0'); } catch { /* 存不了就不存 */ } },
-    mission, reset, state: S, addNoise, horde,
+    mission, reset, state: S, addNoise, horde, pacing, spawnSpecial, spawnBrute,
     get plan() { return S.plan; },
     update(dt) {
       for (const b of blocks) b.userData.update?.(dt);
@@ -559,14 +630,22 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       S.tellT -= dt;
       syncStage();
       if (director.riding) { clockEl?.classList.add('off'); return; }
-      wall(); ambient(dt); holdTick(dt);
-      // 响动：安静一会儿才开始往下掉；攒满来一波
+      wall(); pinTick(); acidTick(dt); ambient(dt); holdTick(dt);
+      // 响动：安静一会儿才开始往下掉；攒满会把下一波尸潮催来
       S.hordeCool -= dt;
       if ((S.quietT += dt) > SIEGE.noise.quiet) S.noise = Math.max(0, S.noise - SIEGE.noise.decay * dt);
-      if (S.noise >= SIEGE.noise.horde && S.hordeCool <= 0 && S.hold < 0) { S.noise = SIEGE.noise.after; S.hordeCool = SIEGE.noise.cooldown; const n = horde(6 + Math.min(5, S.stage)); if (n) { say('动静太大——尸群过来了！', 2.6); G.player.addShake?.(0.2); } }
+      // 节奏：平静 → 升温 → 预警三秒 → 尸潮 → 喘息；特殊感染者隔一阵来一只
+      const p = G.player.pos; let near = 0;
+      for (const z of zalive()) if (z.zs !== 'idle' && Math.abs(z.pos.y - p.y) < 3 && Math.hypot(z.pos.x - p.x, z.pos.z - p.z) < 6) near++;
+      const loud = S.noise >= SIEGE.noise.horde && S.hordeCool <= 0 && S.hold < 0;
+      const act = pacing.update(dt, { stage: S.stage, near, noiseFull: loud, hold: S.hold >= 0 && !S.landed });
+      if (act.warn) { say(loud ? '动静太大——尸潮要来了！' : '远处一阵嚎叫——尸潮要来了！', 3); G.player.addShake?.(0.15); G.events?.emit?.('enemy:telegraph', { pos: p, type: 'soldier', scream: true }); }
+      if (act.horde) { S.noise = Math.min(S.noise, SIEGE.noise.after); S.hordeCool = SIEGE.noise.cooldown; if (horde(act.horde)) { say('尸潮！', 2.2); G.player.addShake?.(0.25); } }
+      if (act.special) spawnSpecial();
+      if (S.bruteT >= 0 && (S.bruteT -= dt) < 0) spawnBrute();
       if (noiseEl) { noiseEl.classList.remove('off'); noiseEl.classList.toggle('hot', S.noise > 70); noiseEl.querySelector('b').style.width = `${Math.min(100, S.noise)}%`; }
     },
-    dispose() { root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
+    dispose() { for (const a of acids.splice(0)) a.dispose(); acidMat.dispose(); acidBall.dispose(); acidDisc.dispose(); root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
   };
   return api;
 }
