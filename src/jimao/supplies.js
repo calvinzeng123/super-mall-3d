@@ -36,7 +36,10 @@ export const MEDIC_CSS = `
 .jm-heal .bar { display: block; width: 150px; height: 4px; margin-top: 5px; background: rgba(255, 255, 255, .16); border-radius: 2px; overflow: hidden; visibility: hidden; }
 .jm-heal.busy .bar { visibility: visible; }
 .jm-heal .bar u { display: block; height: 100%; width: 0; background: #ff8a7a; }
-.is-touch .jm-heal { left: 50%; bottom: calc(132px + var(--sab, 0px)); transform: translateX(-50%); text-align: center; }
+/* 手机上数量写在治疗键上，这一行只在包扎的时候出来（进度条），放在响动条下面——屏幕中下是字幕 */
+.is-touch .jm-heal { display: none; left: 50%; bottom: auto; top: calc(88px + var(--sat, 0px)); transform: translateX(-50%); text-align: center; }
+.is-touch .jm-heal.busy:not(.off) { display: block; }
+.is-touch .jm-heal .bar { margin-inline: auto; }
 .is-touch .jm-heal i { display: none; }
 .t-heal { width: 50px; height: 50px; right: calc(248px + var(--sar)); bottom: calc(186px + var(--sab)); border-color: #ff8a7a; color: #ffc2b8; }
 .t-heal.off { display: none; }
