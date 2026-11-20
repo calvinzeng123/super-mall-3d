@@ -19,13 +19,35 @@ export const SIEGE = Object.freeze({
   building: 'A', roof: 'A-RF', power: 'A-B1',
   pad: Object.freeze({ kind: 'helicopter', x: -35, z: -214, yaw: Math.PI }), // 公寓屋顶正中（屋面 38 × 74 米）
   arms: Object.freeze({ floor: 'P1-1F', x: -169, z: -90, where: '商场西翼保安室' }),
-  gates: Object.freeze([[4, 6], [9, 12], [15, 18]]), // 三道关各在哪几层里抽
+  gates: Object.freeze([[4, 6], [9, 12], [15, 18]]), // 三道关各在哪几层里抽（公寓；别的楼见 TOWERS）
   hold: 70, waves: Object.freeze([3, 16, 29, 42, 55]), waveSize: [5, 7], land: 6,
   noise: Object.freeze({ rifle: 7, pistol: 5, grenade: 45, switch: 70, pry: 40, panel: 25, spray: 20, card: 10, flare: 100, decay: 6, quiet: 1.5, horde: 100, after: 35, cooldown: 14, hear: 26 }),
   ambient: Object.freeze({ mall: 9, tower: 6, roof: 4, every: 0.9, near: 12, far: 30, drop: 58 }),
   sweep: Object.freeze({ roof: 8, window: 6, ground: 14, screamers: 3, cap: 150 }),
   ammo: Object.freeze({ rifle: 30, reserve: 90 }),
 });
+
+/**
+ * 能撤离的两栋楼。每局抽一栋（weight），网址参数 tower=A / T1 可以指定。
+ *   A  公寓：从商场一层走过去，地下一层合闸；屋顶 38 × 74 米，停机位在正中；
+ *   T1 北区 1 号楼：压在商场上面的住宅塔楼（7F 是空中大堂），电梯从商场地下一层的电梯厅上去；屋顶只有 36 × 16 米还有两个楼梯间，
+ *      停机位只能放在东头；旁边 2 号楼隔着 14 米，绕飞半径放到 58 米才绕得开。住宅楼的门禁在紧急状态下全部释放（run.js 用开着门的导航）。
+ *      北区 2 号楼的地下电梯厅从商场走不到，所以不做。
+ */
+export const TOWERS = Object.freeze({
+  A: Object.freeze({ id: 'A', name: '公寓', roof: 'A-RF', roofName: '公寓楼顶', power: 'A-B1', powerName: '公寓地下一层', lift: 'A-ST1', stair: 'A-ST', mall: false,
+    pad: SIEGE.pad, gates: SIEGE.gates, R: 46, weight: 0.65 }),
+  T1: Object.freeze({ id: 'T1', name: '北区 1 号楼', roof: 'T1-RF', roofName: '北区 1 号楼楼顶', power: 'P1-B1', powerName: '北区 1 号楼地下一层电梯厅', lift: 'T1-ST-A', stair: 'T1-ST', mall: true,
+    pad: Object.freeze({ kind: 'helicopter', x: -249.2, z: -232, yaw: Math.PI / 2 }), gates: Object.freeze([[9, 11], [14, 17], [20, 23]]), R: 58, weight: 0.35 }),
+});
+/** 抽一栋楼。r ∈ [0, 1)；force 是楼的 id */
+export function pickTower(r, force = null) {
+  if (TOWERS[force]) return TOWERS[force];
+  const list = Object.values(TOWERS), total = list.reduce((a, t) => a + t.weight, 0);
+  let x = r * total;
+  for (const t of list) { x -= t.weight; if (x < 0) return t; }
+  return TOWERS.A;
+}
 
 /** 四种关卡：卡住的原因、要找的工具、怎么解决 */
 export const GATES = Object.freeze({
@@ -35,7 +57,7 @@ export const GATES = Object.freeze({
   lock: Object.freeze({ name: '防火门反锁', tool: '门禁卡', at: 'stair', verb: '刷卡开门', find: '找门禁卡', why: '防火门从里面反锁了', lift: '门禁系统把上面几层锁了', noise: 'card' }),
 });
 
-const floorOf = (n) => `${SIEGE.building}-${n}F`;
+const floorOf = (n, tower = TOWERS.A) => `${tower.id}-${n}F`;
 const shuffle = (list, rng) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 /** 公寓某一层的住户房间（屋子中间那一点，站得住人）：[{ floor, x, y, z, name }] */
@@ -62,38 +84,46 @@ export function lobbySpot(nav, link, floor, dist = 2.2) {
 }
 
 /**
- * 抽一局。rng 返回 [0, 1)；runs 是 stairs.js 的 stairRuns(nav)。
- * 返回 { stages: [{ id, kind, floor, site: {floor, x, y, z}, label, verb, text, noise?, gate?, tool? }], gates: [{ type, floor, n, runs, stage（解决它的那一步的下标）}], pad, flare }
+ * 抽一局。rng 返回 [0, 1)；runs 是 stairs.js 的 stairRuns(nav)；tower 是 TOWERS 里的一栋（默认公寓）。
+ * 返回 { tower, stages: [{ id, kind, floor, site: {floor, x, y, z}, label, verb, text, noise?, gate?, tool? }], gates: [{ type, floor, n, runs, stage（解决它的那一步的下标）}], pad, flare }
  */
-export function siegePlan(rng, layout, nav, runs) {
-  const lift = nav.links.find((l) => l.id === `${SIEGE.building}-ST1`), yOf = (f) => nav.floors.get(f)?.y ?? 0;
+export function siegePlan(rng, layout, nav, runs, tower = TOWERS.A) {
+  const lift = nav.links.find((l) => l.id === tower.lift), yOf = (f) => nav.floors.get(f)?.y ?? 0;
   const stages = [], gates = [];
   const a = SIEGE.arms;
   stages.push({ id: 'arms', kind: 'locker', floor: a.floor, site: { floor: a.floor, x: a.x, y: yOf(a.floor), z: a.z }, label: `武器柜 · ${a.where}`, verb: '打开武器柜', text: `去${a.where}拿步枪`, noise: 0 });
-  const power = lobbySpot(nav, lift, SIEGE.power, 3) || { floor: SIEGE.power, x: lift.stops[1].x, y: yOf(SIEGE.power), z: lift.stops[1].z };
-  stages.push({ id: 'power', kind: 'switch', floor: SIEGE.power, site: power, label: '配电间 · 公寓地下一层', verb: '合上电闸', text: '公寓停电了：到地下一层合闸，电梯才能用', noise: SIEGE.noise.switch });
-  const types = shuffle(Object.keys(GATES), rng).slice(0, SIEGE.gates.length);
-  SIEGE.gates.forEach(([lo, hi], i) => {
-    const n = lo + Math.floor(rng() * (hi - lo + 1)), floor = floorOf(n), type = types[i], T = GATES[type];
+  const stop = lift.stops.find((q) => q.floor === tower.power) || lift.stops[0];
+  const power = lobbySpot(nav, lift, tower.power, 3) || { floor: tower.power, x: stop.x, y: yOf(tower.power), z: stop.z };
+  stages.push({ id: 'power', kind: 'switch', floor: tower.power, site: power, label: `配电柜 · ${tower.powerName}`, verb: '合上电闸', text: `${tower.name}停电了：到${tower.powerName}合闸，电梯才能用`, noise: SIEGE.noise.switch });
+  const types = shuffle(Object.keys(GATES), rng).slice(0, tower.gates.length);
+  tower.gates.forEach(([lo, hi], i) => {
+    // 这一段里有住户房间可找工具的楼层才抽（北区塔楼有几层没有能进的户）
+    const ok = []; for (let n = lo; n <= hi; n++) if (unitSites(layout, nav, floorOf(n, tower)).length && runs.some((r) => r.from === floorOf(n, tower) && r.id.startsWith(tower.stair))) ok.push(n);
+    const n = ok[Math.floor(rng() * ok.length)], floor = floorOf(n, tower), type = types[i], T = GATES[type];
     const rooms = unitSites(layout, nav, floor), room = rooms[Math.floor(rng() * rooms.length)];
-    const up = runs.filter((r) => r.from === floor && r.id.startsWith(`${SIEGE.building}-ST`));
+    const up = runs.filter((r) => r.from === floor && r.id.startsWith(tower.stair));
     const core = up[Math.floor(rng() * up.length)];
     const at = T.at === 'lobby' ? (lobbySpot(nav, lift, floor) || core.a) : core.a;
     stages.push({ id: `tool${i}`, kind: 'tool', gate: i, tool: T.tool, floor, site: room, label: `${T.tool} · ${n}F ${room.name}`, verb: `拿${T.tool}`, text: `${n}F：${T.name}。到 ${room.name}${T.find}`, noise: 0 });
     stages.push({ id: `gate${i}`, kind: 'gate', gate: i, type, floor, site: { floor, x: at.x, y: yOf(floor), z: at.z }, label: `${T.name} · ${n}F`, verb: T.verb, text: `带着${T.tool}回${T.at === 'lobby' ? '电梯厅' : '楼梯口'}：${T.verb}`, noise: SIEGE.noise[T.noise] });
     gates.push({ type, floor, n, runs: up.map((r) => r.id), core: core.id, stage: stages.length - 1, model: { x: core.ea.x + core.da.x * 0.7, y: yOf(floor), z: core.ea.z + core.da.z * 0.7, yaw: Math.atan2(core.da.x, core.da.z) } });
   });
-  const pad = SIEGE.pad, flare = { floor: SIEGE.roof, x: pad.x + 7.5, y: yOf(SIEGE.roof), z: pad.z + 3 };
-  stages.push({ id: 'flare', kind: 'flare', floor: SIEGE.roof, site: flare, label: '信号弹 · 公寓楼顶', verb: '点燃信号弹', text: '上到公寓楼顶，点信号弹叫直升机', noise: SIEGE.noise.flare });
-  return { stages, gates, pad, flare };
+  // 信号弹：停机位旁边 7 米多、屋面上站得住的一点（屋顶窄的楼只有一两个方向放得下）
+  const pad = tower.pad, ry = yOf(tower.roof);
+  let flare = null;
+  for (const [dx, dz] of [[7.5, 3], [-7.5, 3], [3, 7.5], [3, -7.5], [-7.5, -3], [7.5, -3], [-3, 7.5], [-3, -7.5]]) { const st = landAt(nav, pad.x + dx, pad.z + dz, ry + 0.6); if (st && st.floor === tower.roof && clear(nav, st)) { flare = { floor: tower.roof, x: pad.x + dx, y: ry, z: pad.z + dz }; break; } }
+  flare ||= { floor: tower.roof, x: pad.x, y: ry, z: pad.z + 6 };
+  stages.push({ id: 'flare', kind: 'flare', floor: tower.roof, site: flare, label: `信号弹 · ${tower.roofName}`, verb: '点燃信号弹', text: `上到${tower.roofName}，点信号弹叫直升机`, noise: SIEGE.noise.flare });
+  return { tower, stages, gates, pad, flare };
 }
 
 /** 现在走到第 stage 步（已经完成了 stage 步）时，哪一道关还拦着：没有了返回 null */
 export function activeGate(plan, stage) { return plan.gates.find((g) => stage <= g.stage) || null; }
-/** 电梯能不能从 from 层到 to 层（公寓的电梯才管）。返回一句原因或 null */
+/** 电梯能不能从 from 层到 to 层（只管这一局那栋楼的电梯）。返回一句原因或 null */
 export function liftRule(plan, stage, nav, linkId, from, to) {
-  if (!String(linkId).startsWith(`${SIEGE.building}-`)) return null;
-  if (stage <= 1) return '公寓停电了，电梯不动。先去地下一层合闸';
+  const tower = plan.tower || TOWERS.A;
+  if (!String(linkId).startsWith(`${tower.id}-`)) return null;
+  if (stage <= 1) return `${tower.name}停电了，电梯不动。先去${tower.powerName}合闸`;
   const g = activeGate(plan, stage), y = (f) => nav.floors.get(f)?.y ?? 0;
   if (g && Math.max(y(from), y(to)) > y(g.floor) + 0.1) return `电梯只能到 ${g.n}F：${GATES[g.type].lift}`;
   return null;
@@ -135,16 +165,17 @@ export function siegeFlight(pad, padY, { center = { x: pad.x, z: pad.z }, R = 46
     times: { roof: lift, windows: lift + turn * 0.75, ground: lift + turn * 0.75 + descend } };
 }
 
+const bounds = (layout, tower) => { const b = layout.buildings.find((x) => x.id === tower.id), xs = b.outline.map((p) => p[0]), zs = b.outline.map((p) => p[1]); return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) }; };
 /**
- * 楼下丧尸冲出来的位置：公寓东、南两面的街上（标高 0 的室外地面），和西边紧挨着的商场屋面（从楼与楼之间冲过来的）。
- * 都在离公寓外墙 lo–hi 米一圈里。返回 [{x, y, z, where: 'street' | 'mall'}]，两种大致各一半
+ * 楼下丧尸冲出来的位置，都在离这栋楼外墙 lo–hi 米一圈里。返回 [{x, y, z, where: 'street' | 'mall'}]：
+ *   公寓：一半在东、南两面的街上（标高 0 的室外地面），一半在西边紧挨着的商场屋面上（从楼与楼之间冲过来的）；
+ *   北区 1 号楼压在商场上面，四周全是商场屋面（tower.mall）。
  */
-export function groundSpots(nav, layout, count, rng, lo = 8, hi = 34) {
-  const b = layout.buildings.find((x) => x.id === SIEGE.building), xs = b.outline.map((p) => p[0]), zs = b.outline.map((p) => p[1]);
-  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs), out = [];
+export function groundSpots(nav, layout, count, rng, tower = TOWERS.A, lo = 8, hi = 34) {
+  const { x0, x1, z0, z1 } = bounds(layout, tower), out = [];
   const mallY = nav.floors.get('P1-RF')?.y ?? 34;
-  for (let k = 0; k < count * 60 && out.length < count; k++) {
-    const mall = out.length % 2 === 1;
+  for (let k = 0; k < count * 80 && out.length < count; k++) {
+    const mall = tower.mall || out.length % 2 === 1;
     const x = x0 - hi + rng() * (x1 - x0 + hi * 2), z = z0 - hi + rng() * (z1 - z0 + hi * 2);
     const dx = Math.max(x0 - x, 0, x - x1), dz = Math.max(z0 - z, 0, z - z1), d = Math.hypot(dx, dz);
     if (d < lo || d > hi) continue;
@@ -154,14 +185,15 @@ export function groundSpots(nav, layout, count, rng, lo = 8, hi = 34) {
   }
   return out;
 }
-/** 阳台（外挂在公寓东西两面墙外）：[{ x, y, z, nx, nz（朝外）}]，楼层从低到高错开 */
-export function balconySpots(layout, nav, count, rng) {
-  const b = layout.buildings.find((x) => x.id === SIEGE.building), xs = b.outline.map((p) => p[0]), zs = b.outline.map((p) => p[1]);
-  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs), out = [];
-  const floors = shuffle([5, 7, 8, 10, 11, 13, 14, 16, 17, 19], rng).slice(0, count);
+/** 阳台（外挂在这栋楼两面长墙外）：[{ x, y, z, nx, nz（朝外）, n（楼层）}]，楼层错开、两面交替 */
+export function balconySpots(layout, nav, count, rng, tower = TOWERS.A) {
+  const { x0, x1, z0, z1 } = bounds(layout, tower), alongZ = z1 - z0 >= x1 - x0, out = [];
+  const all = []; for (let n = 5; n < 40; n++) if (nav.floors.has(floorOf(n, tower)) && nav.floors.has(floorOf(n + 1, tower))) all.push(n);
+  const floors = shuffle(all.filter((n, i) => i % 3 !== 2), rng).slice(0, count);
   floors.forEach((n, i) => {
-    const east = i % 2 === 0, y = nav.floors.get(floorOf(n))?.y ?? n * 3.4;
-    out.push({ x: east ? x1 + 0.75 : x0 - 0.75, y, z: z0 + 8 + rng() * (z1 - z0 - 16), nx: east ? 1 : -1, nz: 0, n });
+    const far = i % 2 === 0, y = nav.floors.get(floorOf(n, tower)).y;
+    if (alongZ) out.push({ x: far ? x1 + 0.75 : x0 - 0.75, y, z: z0 + 8 + rng() * (z1 - z0 - 16), nx: far ? 1 : -1, nz: 0, n });
+    else out.push({ x: x0 + 6 + rng() * (x1 - x0 - 12), y, z: far ? z1 + 0.75 : z0 - 0.75, nx: 0, nz: far ? 1 : -1, n });
   });
   return out;
 }
@@ -259,7 +291,7 @@ export const SIEGE_CSS = `
  * 接到游戏上。G.siege.enabled 为真时任务系统改抽这里的任务（missions.js 的 roll）。
  * zombies：zombie.js 的 addZombies 返回值；director：任务系统；runs：stairs.js 的楼梯分段。
  */
-export function createSiege(G, { layout, nav, scene, ui = null, zombies, director, runs, flow = null, rng = Math.random, storage = null }) {
+export function createSiege(G, { layout, nav, scene, ui = null, zombies, director, runs, flow = null, rng = Math.random, storage = null, tower: forceTower = null }) {
   const root = new THREE.Group(); root.name = '丧尸围城'; scene?.add(root);
   const S = { plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, tellT: 0 };
   const blocks = [], balconies = [];
@@ -270,23 +302,27 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     clockEl = document.createElement('div'); clockEl.className = 'jm-siege-clock off'; ui.append(clockEl);
   }
   const playing = () => enabled && G.game?.state === 'playing' && !!S.plan;
-  const padY = () => nav.floors.get(SIEGE.roof)?.y ?? 74;
+  const tower = () => S.plan?.tower || TOWERS.A;
+  const padY = () => nav.floors.get(tower().roof)?.y ?? 74;
   const zalive = () => zombies.pool.filter((z) => z.active && z.alive);
   const spawn = (pos, opts = {}) => { try { return G.enemies.spawn('zombie', pos instanceof THREE.Vector3 ? pos : new THREE.Vector3(pos.x, pos.y, pos.z), opts); } catch { return null; } };
   const say = (t, s = 3) => G.hud?.message?.(t, s);
 
   /** 任务系统每局来要一次 */
   function mission(r = rng) {
-    const plan = siegePlan(r, layout, nav, runs), pad = plan.pad, flight = siegeFlight(pad, padY());
+    const T = pickTower(r(), forceTower), plan = siegePlan(r, layout, nav, runs, T), pad = plan.pad;
+    S.plan = plan;
+    const flight = siegeFlight(pad, padY(), { R: T.R });
     const door = rideLocalToWorld(pad, 0, RIDE_SPECS.helicopter.doorOut);
     const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: st.kind === 'tool' ? 'item' : 'relay', site: st.site, locked: i > 0,
       model: () => (st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel()) }));
     const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan,
-      extraction: { id: 'heli', label: '直升机', where: '公寓楼顶', floor: SIEGE.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
+      extraction: { id: 'heli', label: '直升机', where: T.roofName, floor: T.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
-        ride: { boardRadio: '上机！机枪交给你：屋顶追上来的、阳台玻璃后面的、楼下冲出来的，全部清掉。先打尖叫的，它们会伤到飞机。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, outroCam: (pose) => roofEdge(pose), ground: (s0) => (Math.hypot(s0.x - flight.center.x, s0.z - flight.center.z) < 22 ? padY() : 0) } },
+        ride: { boardRadio: '上机！机枪交给你：屋顶追上来的、阳台玻璃后面的、楼下冲出来的，全部清掉。先打尖叫的，它们会伤到飞机。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, outroCam: (pose) => roofEdge(pose),
+          ground: (s0) => landAt(nav, s0.x, s0.z, s0.y)?.y ?? 0 } }, // 坠机落在哪：正下方最高的那层楼面（楼顶 / 商场屋面 / 街上）
       text: (c, ride) => textNow(c, ride), markers: () => [],
-      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你手上只有一把手枪——先去保安室拿步枪，再想办法上公寓楼顶，直升机到那儿接你。别乱开枪，它们听得见。',
+      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你手上只有一把手枪——先去保安室拿步枪，再想办法上公寓楼顶，直升机到那儿接你。别乱开枪，它们听得见。'.replace('公寓楼顶', T.roofName),
         contact: '它们发现你了！', cut: plan.stages.slice(0, -1).map((st, i) => cutLine(plan, i)), all: `信号弹点着了！直升机 ${SIEGE.hold} 秒后到，守住屋顶！`, low: '你被咬伤了，拉开距离。', done: '指挥中心收到。幸存者已撤离云澜汇——干得漂亮。' } };
     S.plan = plan; S.mission = m; S.flight = flight;
     return m;
@@ -295,15 +331,14 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function textNow(c, ride) {
     if (ride?.over) return '清扫完毕 · 返航';
     if (ride && S.sweep) { const w = S.sweep; return `清扫 · 屋顶 ${w.kill.roof}/${w.total.roof} · 阳台 ${w.kill.window}/${w.total.window} · 楼下 ${w.kill.ground}/${w.total.ground}`; }
-    if (c.allCut) return S.landed ? '登机 · 公寓楼顶直升机' : S.hold >= 0 ? '守住屋顶，等直升机' : '等直升机';
+    if (c.allCut) return S.landed ? `登机 · ${tower().roofName}直升机` : S.hold >= 0 ? '守住屋顶，等直升机' : '等直升机';
     return S.plan.stages[Math.min(S.stage, S.plan.stages.length - 1)].text;
   }
 
   /** 机外镜头站在公寓楼顶边上、离直升机最近的那一点（人眼高度）：看着它从楼下绕上来、飞远 */
   function roofEdge(pose) {
-    const b = layout.buildings.find((x) => x.id === SIEGE.building), xs = b.outline.map((q) => q[0]), zs = b.outline.map((q) => q[1]);
-    const c = (v, lo, hi) => Math.max(lo + 1.5, Math.min(hi - 1.5, v));
-    return new THREE.Vector3(c(pose.x, Math.min(...xs), Math.max(...xs)), padY() + 1.7, c(pose.z, Math.min(...zs), Math.max(...zs)));
+    const { x0, x1, z0, z1 } = bounds(layout, tower()), c = (v, lo, hi) => Math.max(lo + 1.5, Math.min(hi - 1.5, v));
+    return new THREE.Vector3(c(pose.x, x0, x1), padY() + 1.7, c(pose.z, z0, z1));
   }
   /** 结算页、暂停页上的字跟着模式换 */
   function copy() {
@@ -331,6 +366,14 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     }
     G.liftAllow = enabled ? (link, from, to) => (S.plan ? liftRule(S.plan, S.stage, nav, link.id, from, to) : null) : null;
     G.stairBlock = enabled ? (run, dir) => (S.plan && dir === 'up' ? stairRule(S.plan, S.stage, run) : null) : null;
+    // 路线指引也得知道哪些电梯、楼梯现在走不了（不然会指你去坐一部到不了那层的电梯）
+    G.physics?.pathfinder?.setBlocked?.(enabled ? (c) => {
+      if (!S.plan) return false;
+      if (c.kind === 'lift') return !!liftRule(S.plan, S.stage, nav, c.link, c.from, c.to);
+      const g = activeGate(S.plan, S.stage); if (!g) return false;
+      const id = String(c.id).replace(/:reverse$/, '');
+      return (g.slopes ||= new Set(runs.filter((r) => g.runs.includes(r.id)).flatMap((r) => r.slopes))).has(id);
+    } : null);
     if (!enabled || !S.plan || director.state.mission !== S.mission) return;
     const heli = director.vehicles.heli; heli.root.visible = false;
     // 关卡的大件摆到楼梯口
@@ -361,7 +404,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if ((S.spawnT -= dt) > 0) return;
     S.spawnT = SIEGE.ambient.every;
     const p = G.player.pos, st = G.physics.stateOf?.(p), floor = st?.floor || '', A = SIEGE.ambient;
-    const target = floor === SIEGE.roof ? (S.hold >= 0 ? 0 : A.roof) : floor.startsWith(`${SIEGE.building}-`) ? A.tower + Math.min(3, S.stage >> 1) : A.mall + Math.min(4, S.stage);
+    const target = floor === tower().roof ? (S.hold >= 0 ? 0 : A.roof) : floor.startsWith(`${tower().id}-`) ? A.tower + Math.min(3, S.stage >> 1) : A.mall + Math.min(4, S.stage);
     let near = 0;
     for (const z of zalive()) {
       const d = Math.hypot(z.pos.x - p.x, z.pos.z - p.z), dy = Math.abs(z.pos.y - p.y);
@@ -378,7 +421,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   }
 
   // ---- 楼顶死守、直升机降落 ----
-  const roofDoors = () => runs.filter((r) => r.to === SIEGE.roof).map((r) => new THREE.Vector3(r.b.x, r.b.y, r.b.z));
+  const roofDoors = () => runs.filter((r) => r.to === tower().roof).map((r) => new THREE.Vector3(r.b.x, r.b.y, r.b.z));
   function holdTick(dt) {
     const heli = director.vehicles.heli;
     if (S.hold >= 0 && !S.landed && S.land < 0) {
@@ -404,12 +447,12 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const tag = (z, group) => { if (z) { z.sweep = group; sw.list.push(z); } return z; };
     const doors = roofDoors(), pad = S.plan.pad;
     for (let i = 0; i < W.roof; i++) { const d = doors[i % doors.length], a = (i / W.roof) * 6.28; tag(spawn(new THREE.Vector3(d.x + Math.cos(a) * (1 + i * 0.35), d.y, d.z + Math.sin(a) * (1 + i * 0.35)), { hunt: true, kind: i === 0 ? 'screamer' : i % 4 === 1 ? 'runner' : 'walker' }), 'roof'); }
-    for (const s of balconySpots(layout, nav, W.window, rng)) {
-      const g = balconyModel(); g.position.set(s.x, s.y, s.z); g.rotation.y = s.nx > 0 ? 0 : Math.PI; root.add(g);
+    for (const s of balconySpots(layout, nav, W.window, rng, tower())) {
+      const g = balconyModel(); g.position.set(s.x, s.y, s.z); g.rotation.y = Math.atan2(-s.nz, s.nx); root.add(g); // 阳台模型朝 +x 伸出去，转到朝外
       const z = tag(spawn(new THREE.Vector3(s.x, s.y, s.z), { kind: 'walker', fixed: true, yaw: Math.atan2(s.nx, s.nz), passive: true }), 'window');
       balconies.push({ g, z, broken: false });
     }
-    sw.ground = groundSpots(nav, layout, W.ground + 6, rng);
+    sw.ground = groundSpots(nav, layout, W.ground + 6, rng, tower());
     S.sweep = sw; S.noise = 0; noiseEl?.classList.add('off');
     void pad;
   }

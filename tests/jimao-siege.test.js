@@ -8,11 +8,13 @@ import { findPath } from '../src/fps/pathfinding.js';
 import { pointInPoly } from '../src/layout/geom.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
-import { SIEGE, GATES, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, createSiege, gateBlock, balconyModel } from '../src/jimao/siege.js';
+import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel } from '../src/jimao/siege.js';
 import { ZOMBIE, KINDS, pickKind, zombieParts, addZombies } from '../src/jimao/zombie.js';
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
+import { createPathfinder } from '../src/jimao/pathfinder.js';
 
-const L = buildPlayableLayout({ mode: 'arcade' }), nav = buildNav(L), runs = stairRuns(nav);
+// 游戏里用的是门禁全开的导航（run.js）：北区塔楼的楼梯间、电梯厅要过门禁
+const L = buildPlayableLayout({ mode: 'arcade' }), nav = buildNav(L, { gates: 'open' }), runs = stairRuns(nav);
 const seq = (seed) => { let s = seed; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647); for (let i = 0; i < 5; i++) r(); return r; };
 const elev = (id) => L.levels.find((l) => l.id === id).elev;
 
@@ -191,14 +193,14 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
 });
 
 // ---- 接到游戏上 ----
-function sworld({ enabled = true } = {}) {
+function sworld({ enabled = true, tower = 'A' } = {}) {
   const z = zworld({ count: ZOMBIE.pool }), { G } = z, msgs = [], store = new Map([['jimao-siege', enabled ? '1' : '0']]);
   const heli = { root: new THREE.Group(), poses: [], setPose(p) { this.poses.push(p); }, reset() { this.parked = true; }, moveTo() {} };
   const director = { state: { mission: null, restore: false }, vehicles: { heli }, riding: false, opened: 0, openExtraction() { this.opened++; } };
   const flow = { patrol: { soldier: 8 }, waves: [{ soldier: 5 }, { soldier: 6 }], pursuitExtra: 5 };
   Object.assign(G, { game: { state: 'playing', run: { relays: [] }, refreshObjective() {} }, hud: { message: (t) => msgs.push(t), radio: (t) => msgs.push('R:' + t) }, rifle: { ammo: 30, reserve: 150 }, weapon: { picked: null, select(s) { this.picked = s; } } });
   G.physics.stateOf = (p) => landAt(nav, p.x, p.z, p.y + 0.6); G.physics.forget = () => {};
-  const siege = createSiege(G, { layout: L, nav, scene: G.scene, zombies: z.zombies, director, runs, flow, rng: seq(7), storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
+  const siege = createSiege(G, { layout: L, nav, scene: G.scene, zombies: z.zombies, director, runs, flow, rng: seq(7), tower, storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
   const begin = () => { const m = siege.mission(seq(7)); director.state.mission = m; m.objectives.forEach((o) => { o.object = o.model(); o.pos = new THREE.Vector3(o.site.x, o.site.y, o.site.z); }); G.game.run.relays = m.objectives.map((o) => ({ o, cut: false })); siege.reset(); return m; };
   const cut = (n) => { for (let i = 0; i < n; i++) G.game.run.relays.find((r) => !r.cut).cut = true; };
   const run = (secs, each) => { for (let t = 0; t < secs - 1e-9; t += 1 / 30) { G.time.frame++; each?.(); siege.update(1 / 30); for (const q of [...z.ctx.list]) q._update(1 / 30); } };
@@ -309,4 +311,68 @@ test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天�
   assert.ok(cam.x > SIEGE.pad.x + 10, '靠直升机那一侧');
   assert.equal(m.extraction.ride.keep(), true); assert.equal(m.extraction.ride.ground({ x: SIEGE.pad.x, z: SIEGE.pad.z }), roof); assert.equal(m.extraction.ride.ground({ x: SIEGE.pad.x + 60, z: SIEGE.pad.z }), 0);
   void G;
+});
+
+// ---- 北区 1 号楼 ----
+test('抽楼：公寓多、北区 1 号楼少，可以指定；北区那一局九步都站得住，三道关都在有住户可进的楼层，电梯厅 → 住户门口 / 楼梯口 / 停机位同层走得通', () => {
+  const c = { A: 0, T1: 0 }; for (let i = 0; i < 1000; i++) c[pickTower(i / 1000).id]++;
+  assert.ok(c.A > 550 && c.T1 > 250, JSON.stringify(c)); assert.equal(pickTower(0.1, 'T1'), TOWERS.T1); assert.equal(pickTower(0.99, 'A'), TOWERS.A);
+  const T = TOWERS.T1, lift = nav.links.find((l) => l.id === T.lift), s = FPS_MISSION.spawn, start = { floor: s.floor, x: s.x, z: s.z, y: elev(s.floor), slope: null };
+  for (const seed of [5, 77, 4321]) {
+    const plan = siegePlan(seq(seed), L, nav, runs, T);
+    assert.equal(plan.tower, T); assert.deepEqual(plan.stages.map((q) => q.kind), ['locker', 'switch', 'tool', 'gate', 'tool', 'gate', 'tool', 'gate', 'flare']);
+    for (const st of plan.stages) { const q = landAt(nav, st.site.x, st.site.z, st.site.y + 0.6); assert.ok(q && q.floor === st.floor && clear(nav, q), `${st.id}（${st.label}）站得住`); }
+    assert.equal(plan.stages[1].floor, 'P1-B1'); assert.match(plan.stages[1].text, /北区 1 号楼停电/); assert.equal(plan.stages.at(-1).floor, 'T1-RF');
+    plan.gates.forEach((g, i) => { const [lo, hi] = T.gates[i]; assert.ok(g.n >= lo && g.n <= hi && g.floor === `T1-${g.n}F` && g.runs.length === 2, `第 ${i + 1} 道关在 ${g.n}F`); });
+    // 同一层里走得通
+    const at = (site) => ({ floor: site.floor, x: site.x, z: site.z, y: site.y, slope: null });
+    for (const g of plan.gates) {
+      const lob = lobbySpot(nav, lift, g.floor); assert.ok(lob, `${g.n}F 电梯厅`);
+      assert.ok(findPath(nav, { ...lob, slope: null }, at(plan.stages[g.stage].site)), `${g.n}F：电梯厅走得到关卡`);
+      // 上一层：楼梯口走得到电梯厅（解决以后走一层楼梯，再坐电梯）
+      const run = runs.find((r) => r.id === g.core), up = lobbySpot(nav, lift, run.to);
+      assert.ok(up && findPath(nav, { floor: run.to, x: run.b.x, z: run.b.z, y: run.b.y, slope: null }, { ...up, slope: null }), `${g.n + 1}F：楼梯口走得到电梯厅`);
+    }
+    const roofLob = lobbySpot(nav, lift, 'T1-RF'); assert.ok(roofLob && findPath(nav, { ...roofLob, slope: null }, at(plan.stages.at(-1).site)), '屋顶：出电梯走得到信号弹');
+    if (seed === 5) assert.ok(findPath(nav, start, at(plan.stages[1].site)), '从商场走得到北区 1 号楼的地下电梯厅');
+    assert.match(liftRule(plan, 1, nav, 'T1-LF', 'P1-B1', 'T1-9F'), /北区 1 号楼停电/); assert.equal(liftRule(plan, 1, nav, 'A-ST1', 'A-1F', 'A-3F'), null, '这一局不管公寓的电梯');
+    assert.equal(liftRule(plan, 2, nav, 'T1-ST-A', 'P1-B1', plan.gates[0].floor), null); assert.ok(liftRule(plan, 2, nav, 'T1-ST-A', 'P1-B1', `T1-${plan.gates[0].n + 1}F`));
+  }
+});
+
+test('北区 1 号楼的停机位和航线：屋顶东头 6.5 米内是空地、登机门在屋面上；绕飞不撞楼（旁边 2 号楼隔着 14 米）；阳台挂在南北两面长墙外，楼下的全在商场屋面上', () => {
+  const T = TOWERS.T1, y = elev(T.roof), pad = T.pad;
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2, q = landAt(nav, pad.x + Math.cos(a) * 6.5, pad.z + Math.sin(a) * 6.5, y + 0.6); assert.ok(q && q.floor === T.roof && clear(nav, q)); }
+  const f = siegeFlight(pad, y, { R: T.R });
+  const tops = L.buildings.filter((b) => b.outline?.length).map((b) => ({ id: b.id, outline: b.outline, top: Math.max(...L.levels.filter((l) => l.building === b.id).map((l) => l.elev + (l.kind === 'roof' ? 3 : l.height || 4))) }));
+  for (let t = 0; t < 150; t += 0.25) { const p = f.poseAt(t); if (p.phase !== 'lift') for (const b of tops) if (pointInPoly([p.x, p.z], b.outline)) assert.ok(p.y > b.top + 8, `t=${t} 在 ${b.id} 上空只高出 ${(p.y - b.top).toFixed(0)} 米`); }
+  const bal = balconySpots(L, nav, 6, seq(5), T), B = L.buildings.find((b) => b.id === 'T1'), z0 = Math.min(...B.outline.map((p) => p[1])), z1 = Math.max(...B.outline.map((p) => p[1]));
+  assert.equal(bal.length, 6); for (const q of bal) { assert.ok(q.z > z1 || q.z < z0, '在南北墙外'); assert.equal(q.nx, 0); assert.equal(Math.sign(q.nz), q.z > z1 ? 1 : -1); }
+  const g = groundSpots(nav, L, 20, seq(5), T); assert.equal(g.length, 20); assert.ok(g.every((q) => q.where === 'mall' && Math.abs(q.y - elev('P1-RF')) < 0.5), '四周全是商场屋面');
+});
+
+test('北区那一局接到游戏上：撤离点在北区 1 号楼楼顶，电梯规则只管北区的电梯，机外镜头站在这栋楼的楼顶边上', () => {
+  const { G, siege, begin } = sworld({ tower: 'T1' });
+  const m = begin();
+  assert.equal(m.plan.tower, TOWERS.T1); assert.equal(m.extraction.floor, 'T1-RF'); assert.equal(m.extraction.where, '北区 1 号楼楼顶'); assert.equal(m.extraction.vehicle, TOWERS.T1.pad);
+  assert.match(m.radio.intro, /北区 1 号楼楼顶/); assert.match(G.liftAllow({ id: 'T1-LE' }, 'P1-1F', 'T1-8F'), /停电/); assert.equal(G.liftAllow({ id: 'A-ST1' }, 'A-1F', 'A-8F'), null);
+  const cam = m.extraction.ride.outroCam({ x: -200, y: 60, z: -232 }), B = L.buildings.find((b) => b.id === 'T1');
+  assert.ok(pointInPoly([cam.x, cam.z], B.outline) && Math.abs(cam.y - elev('T1-RF') - 1.7) < 1e-6);
+  assert.equal(m.extraction.ride.ground({ x: TOWERS.T1.pad.x, y: 120, z: TOWERS.T1.pad.z }), elev('T1-RF')); { const q = groundSpots(nav, L, 1, seq(9), TOWERS.T1)[0]; assert.equal(m.extraction.ride.ground({ x: q.x, y: 60, z: q.z }), elev('P1-RF'), '掉在商场屋面上'); }
+  void siege;
+});
+
+test('路线指引认得被锁的电梯：平时从公寓一层到十二层的路线是坐电梯；停电 / 分区锁着的时候这条路不再走那部电梯', () => {
+  const pf = createPathfinder(nav), plan = siegePlan(seq(7), L, nav, runs), lift = nav.links.find((l) => l.id === 'A-ST1');
+  const a = lobbySpot(nav, lift, 'A-1F'), b = lobbySpot(nav, lift, 'A-12F'), S = (q) => ({ ...q, slope: null });
+  const free = pf.findNow(S(a), S(b), { lifts: true });
+  assert.ok(free && free.some((q) => q.via === 'lift'), '没锁的时候坐电梯');
+  // 第 2 步（已合闸）：电梯只能到第一道关那一层，12F 在它上面
+  pf.setBlocked((c) => c.kind === 'lift' && !!liftRule(plan, 2, nav, c.link, c.from, c.to));
+  const locked = pf.findNow(S(a), S(b), { lifts: true });
+  if (locked) for (const q of locked.filter((x) => x.via === 'lift')) assert.ok(elev(q.to) <= elev(plan.gates[0].floor) + 0.1 || !String(q.to).startsWith('A-'), `路线里的电梯只到 ${q.to}`);
+  const near = pf.findNow(S(a), S(lobbySpot(nav, lift, plan.gates[0].floor)), { lifts: true });
+  assert.ok(near && near.some((q) => q.via === 'lift'), '到第一道关那层还是坐电梯');
+  pf.setBlocked(null);
+  assert.ok(pf.findNow(S(a), S(b), { lifts: true }).some((q) => q.via === 'lift' && q.to === 'A-12F'), '取消以后恢复');
 });

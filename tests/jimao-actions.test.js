@@ -384,6 +384,20 @@ test('切枪：1 步枪 / 2 手枪 / 3 刀，先放下再举起（中间不能�
   arsenal.reset(); assert.equal(arsenal.current, 'rifle'); assert.equal(rifle.visible, true); assert.equal(arsenal.roots.knife.visible, false);
 });
 
+test('手枪是单手持枪：平时左手不在枪上（看不见）；换弹时左手上来送弹匣、换完放下；掏枪拉套筒那一下左手也上来', async () => {
+  const { A, arsenal, run, pressed } = await arsenalWorld();
+  const left = arsenal.parts.left; assert.ok(left, '有左手模型');
+  arsenal.select('pistol');
+  let seen = false; run(A.SWAP.lower + A.DRAW.pistol + 0.05, () => { seen ||= left.visible; });
+  assert.ok(seen, '掏枪拉套筒时左手上来过');
+  run(0.6); assert.equal(left.visible, false, '握稳以后只有右手'); const down = left.position.y;
+  run(1 / 60, () => pressed.add('fire')); run(0.4);
+  assert.equal(left.visible, false, '开火也是单手');
+  arsenal.startReload(); let up = -Infinity; run(A.PISTOL.reload * 0.6, () => { if (left.visible) up = Math.max(up, left.position.y); });
+  assert.ok(up > down + 0.2, `换弹时左手抬上来 ${(up - down).toFixed(2)} 米`);
+  run(A.PISTOL.reload * 0.4 + 0.6); assert.equal(left.visible, false, '换完放下');
+});
+
 test('手枪：半自动（按一下一发，按住每 0.2 秒一发）、套筒后坐复进、打空挂机自动换弹、换弹从备弹里扣；开镜收紧散布', async () => {
   const { A, arsenal, run, pressed, G, log, player } = await arsenalWorld();
   arsenal.select('pistol'); run(A.SWAP.lower + A.DRAW.pistol + 0.1);

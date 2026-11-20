@@ -106,6 +106,8 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
 
   // ---- 跨层：楼梯、扶梯、门洞（connectorsFor，和 fps/pathfinding.js 共用一份），可选加电梯 ----
   let connectors = null, liftConnectors = null;
+  // 给玩家排路线时（lifts: true）可以禁掉一些连接：丧尸围城里停电 / 被锁的电梯、被堵的楼梯（setBlocked）。敌人的寻路不受影响
+  let blocked = null;
   function allConnectors(lifts) {
     connectors ||= connectorsFor(nav).map((c) => ({ ...c }));
     if (!lifts) return connectors;
@@ -115,7 +117,7 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
         if (link.kind !== 'lift' || !(link.stops?.length > 1)) continue;
         const stops = link.stops.map((s, n) => ({ n, s: asState({ floor: s.floor, x: s.x, z: s.z }) })).filter((q) => clear(nav, q.s));
         for (const p of stops) for (const q of stops) if (p !== q) {
-          liftConnectors.push({ id: `${link.id}:${p.s.floor}>${q.s.floor}`, a: p.s, b: q.s, points: [p.s, { ...q.s, via: 'lift', lift: link.name || '电梯', from: p.s.floor, to: q.s.floor }], kind: 'lift',
+          liftConnectors.push({ id: `${link.id}:${p.s.floor}>${q.s.floor}`, a: p.s, b: q.s, points: [p.s, { ...q.s, via: 'lift', lift: link.name || '电梯', from: p.s.floor, to: q.s.floor }], kind: 'lift', link: link.id, from: p.s.floor, to: q.s.floor,
             cost: PATH.liftFixed + Math.abs(p.n - q.n) * PATH.liftPerFloor });
         }
       }
@@ -148,6 +150,7 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
       if (list) for (let q = 0; q < list.length; q++) {
         const index = list[q];
         if (banned.size && banned.has(`${cur.id}>${index}`)) continue;
+        if (lifts && blocked && blocked(all[index])) continue;
         const c = all[index], g = cur.g + dist(cur.p, c.a) + (c.cost ?? dist(c.a, c.b) + Math.abs(c.a.y - c.b.y) * 2);
         if (g >= (costs.get(index) ?? Infinity)) continue;
         costs.set(index, g); parents.set(index, cur.id);
@@ -186,6 +189,8 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
   const api = {
     stats, cell,
     get pending() { return queue.length; },
+    /** fn(connector) 返回 true 的连接，给玩家排路线时不走（connector: { id, kind, link?, from?, to? }）；传 null 取消 */
+    setBlocked(fn) { blocked = typeof fn === 'function' ? fn : null; },
     /** 排一条路：算完调 cb(path | null)。opts.lifts 把电梯算进去；opts.urgent 插到队首（正在算的那条之后）。返回 { cancel() } */
     request(from, to, cb, opts = {}) {
       const job = { gen: search(from, to, opts), cb, dead: false, cancel() { if (!job.dead) { job.dead = true; stats.cancelled++; } } };

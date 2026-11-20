@@ -157,7 +157,9 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 战术布置（dressing.js）：任务地点周围的沙袋墙和隔离墩，导航里是实心障碍
   registerDressing(ctx.layout);
   const dressing = buildDressing(scene, ctx.layout);
-  const nav = buildNav(ctx.layout);
+  // 住宅楼的门禁全部释放（紧急状态，和消防联动一个道理）：北区塔楼的楼梯间、电梯厅才走得进去；门扇也摆成开着的
+  const nav = buildNav(ctx.layout, { gates: 'open' });
+  for (const g of nav.gates?.values?.() || []) ctx.accessGates?.set?.(g.id, true);
   G.physics = createMapPhysics(nav);
   // 分帧寻路（pathfinder.js）：敌人、路线指引的寻路都排队，每帧只算几毫秒；跨层连接表在加载画面里先建好
   const pathfinder = createPathfinder(nav);
@@ -213,7 +215,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.minimap = minimap;
   // 丧尸围城（zombie.js、siege.js）：封面上切模式；丧尸另有一池（34 只），任务系统改抽「从商场突围到公寓楼顶」这一局
   const zombies = G.enemies.debug ? addZombies(G, G.enemies) : null;
-  const siege = zombies ? createSiege(G, { layout: ctx.layout, nav, scene, ui, zombies, director, runs: stairs.runs, flow: J.GAME_FLOW, storage: safeStorage() }) : null;
+  const siege = zombies ? createSiege(G, { layout: ctx.layout, nav, scene, ui, zombies, director, runs: stairs.runs, flow: J.GAME_FLOW, storage: safeStorage(), tower: params.tower || null }) : null;
   if (siege && params.siege !== undefined) siege.enabled = params.siege !== '0';
   G.siege = siege; G.zombies = zombies;
   G.level.onReset = () => { pathfinder.reset(); director.roll(); siege?.reset(); ammo.reset(); guide.reset(); lift.reset(); stairs.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };

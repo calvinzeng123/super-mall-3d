@@ -5,6 +5,7 @@
 //           2.3 米内、准星附近的敌人中刀掉 150 血（步枪手、突击手、狙击手一刀，重装兵两刀）。
 //   切枪：1 步枪 / 2 手枪 / 3 刀，Q 换回上一把，滚轮轮换；手机上多一个「切枪」键。切的时候先把手里的放下去、再把新的举起来。
 // 两个新模型都是照着原游戏步枪握把的位置搭的，手直接用步枪那双（克隆出来），所以握持对得上。
+// 手枪是单手持枪（用户要求）：平时只有右手，左手只在换弹和掏枪拉套筒时上来。
 // 对外：G.weapon 换成这里的「当前武器」代理（HUD、弹药补给、自动开火读的都是它），原来的步枪在 G.rifle。
 // G.arms.setLowered(k) 给翻越用（翻的时候枪放低）。
 import * as THREE from 'three';
@@ -223,7 +224,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   for (const root of [pistolRoot, knifeRoot]) { root.visible = false; camera.add(root); root.traverse((o) => { if (layer) o.layers.set(layer); }); }
 
   // ---- 状态 ----
-  const P = { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, spread: PISTOL.spreadHip, lastShot: -9, bob: 0, swayX: 0, swayY: 0, sprint: 0, finger: 0 };
+  const P = { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, spread: PISTOL.spreadHip, lastShot: -9, bob: 0, swayX: 0, swayY: 0, sprint: 0, finger: 0, left: 0 };
   const K = { t: -1, cool: 0, hit: false, bob: 0, swayX: 0, swayY: 0, sprint: 0 };
   const S = { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, shown: true, quick: null, plain: false, pose: null, racked: false, time: 0 };
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q1 = new THREE.Quaternion(), e1 = new THREE.Euler();
@@ -254,7 +255,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const k = 1 - 0.45 * P.ads;
     G.player?.addRecoil?.(PISTOL.recoil * k * (0.85 + rand() * 0.3), (rand() - 0.5) * 0.006 * k);
     G.player?.addShake?.(0.07 * k);
-    P.kickV += 2.2 * k; P.flipV += 3.4 * k; P.flashT = 0.045; P.finger = 1;
+    P.kickV += 2.2 * k; P.flipV += 4.6 * k; P.flashT = 0.045; P.finger = 1; // 单手持枪：枪口上跳比双手握的时候大
     M.flash.opacity = 0.95; flash.visible = true; flash.rotation.z = rand() * Math.PI;
     P.spread = Math.min(0.06, P.spread + 0.012 * k);
   }
@@ -396,13 +397,16 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const amt = sway(P, dt, P.ads), bobX = Math.sin(P.bob) * 0.0042 * amt, bobY = -Math.abs(Math.cos(P.bob)) * 0.0038 * amt;
     const tilt = (pose?.tilt || 0) + 0.45 * (dr?.cant || 0), hand = Math.max(pose?.hand || 0, dr?.hand || 0);
     // 腰射在右下、开镜到正中（照门准星对到屏幕中心）
-    const hip = v1.set(0.062, -0.03, -0.38), ads = v2.set(0, -(GRIP[1] + pg.sightY), -0.36);
+    // 单手持枪（用户要求）：腰射时手臂往右前方伸、枪身朝里斜一点；开镜还是把照门准星对到屏幕中心
+    const hip = v1.set(0.078, -0.034, -0.41), ads = v2.set(0, -(GRIP[1] + pg.sightY), -0.38), oneHand = (1 - P.ads) * (1 - Math.min(1, tilt * 2));
     pistolRoot.position.lerpVectors(hip, ads, P.ads);
     pistolRoot.position.x += bobX + P.swayX * 0.5; pistolRoot.position.y += bobY - P.swayY * 0.4 - 0.05 * P.sprint - 0.045 * tilt; pistolRoot.position.z += 0.012 * P.kick + 0.04 * P.sprint;
-    e1.set(0.05 * P.flip + 0.5 * P.sprint + 0.26 * tilt - P.swayY * 0.6, P.swayX * 0.9 + 0.25 * P.sprint + (1 - P.ads) * 0.03, -0.62 * tilt + P.swayX * 0.4);
+    e1.set(0.05 * P.flip + 0.5 * P.sprint + 0.26 * tilt - P.swayY * 0.6, P.swayX * 0.9 + 0.25 * P.sprint + (1 - P.ads) * 0.03, -0.62 * tilt + P.swayX * 0.4 - 0.16 * oneHand);
     pistolRoot.quaternion.setFromEuler(e1);
     pMag.position.y = -0.17 * (pose?.magDrop || 0); pMag.visible = !(pose && pose.magDrop > 0.97);
-    if (pLeft) { pLeft.position.copy(leftBase); pLeft.position.y -= 0.21 * hand; pLeft.position.z += 0.05 * hand; }
+    // 左手平时不在枪上：换弹（送弹匣）和掏枪拉套筒的时候才从下面上来，做完又放下去
+    P.left = damp(P.left, P.reload || (dr && dr.hand < 1) ? 1 : 0, 13, dt);
+    if (pLeft) { pLeft.visible = P.left > 0.04; pLeft.position.copy(leftBase); pLeft.position.y -= 0.21 * hand + 0.32 * (1 - P.left); pLeft.position.z += 0.05 * hand + 0.07 * (1 - P.left); }
   }
   function updateKnife(dt, active, busy) {
     const inp = G.input;
@@ -451,7 +455,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     get ads() { return S.phase ? 0 : S.cur === 'pistol' ? P.ads : S.cur === 'knife' ? 0 : rifle?.ads; },
     get spread() { return S.cur === 'pistol' ? P.spread : S.cur === 'knife' ? 0.004 : rifle?.spread; },
     get current() { return S.cur; }, get switching() { return !!S.phase; }, get slashing() { return K.t >= 0; },
-    pistol: P, knife: K, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm }, parts: { pistol: pBody, knife: kBody }, get draw() { return S.pose; },
+    pistol: P, knife: K, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm }, parts: { pistol: pBody, knife: kBody, left: pLeft }, get draw() { return S.pose; },
     select, slash, startReload, buildUi,
     /** 近战键：手里不是刀就先换成刀刺一下、刺完换回来 */
     quickKnife() { if (S.cur === 'knife' && !S.next) return slash(); if (S.next === 'knife') return false; return select('knife', { quick: true }); },
@@ -485,7 +489,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     },
     reset() {
       rifle?.reset?.();
-      Object.assign(P, { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, lastShot: -9, sprint: 0 });
+      Object.assign(P, { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, flashT: 0, lastShot: -9, sprint: 0, left: 0 });
       Object.assign(K, { t: -1, cool: 0, hit: false });
       Object.assign(S, { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, quick: null, plain: false, pose: null, racked: false });
       pistolRoot.visible = knifeRoot.visible = false; flash.visible = false;
