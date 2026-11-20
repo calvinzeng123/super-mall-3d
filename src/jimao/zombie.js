@@ -235,7 +235,13 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         if (m.zs === 'idle' && alivePl && !m.passive && Math.abs(dy) < 3.2 && (dist < ZOMBIE.senseBlind || (dist < ZOMBIE.sense && m.los))) notice(pl.pos, false);
       }
       const speed = C.speed * (m.stagger > 0 ? 0.35 : 1);
-      if (m.zs === 'idle') {
+      // 直升机在飞：尖叫者不管人在哪一层，站住冲着飞机叫（120 米内），每叫一声掉机体耐久
+      const heliAt = C.scream && G.missions?.rideKind === 'helicopter' ? G.missions.vehicleCenter?.() : null;
+      if (heliAt && Math.hypot(heliAt.x - m.pos.x, heliAt.y - m.pos.y, heliAt.z - m.pos.z) < 120) {
+        m.mode = 'engage'; faceYaw = Math.atan2(heliAt.x - m.pos.x, heliAt.z - m.pos.z);
+        if (m.zs === 'scream') { if ((m.zsT += dt) > 1.1) m.zs = 'chase'; }
+        else if ((m.screamT -= dt) <= 0) { m.screamT = C.scream.every * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0; scream(heliAt); }
+      } else if (m.zs === 'idle') {
         m.mode = 'patrol';
         // 游荡：隔一阵挪两步
         if ((m.wanderT -= dt) <= 0) {

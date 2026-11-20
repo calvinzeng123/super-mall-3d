@@ -422,7 +422,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       objectives: mission.objectives,
       // closed：撤离点先不开（丧尸围城要等直升机到了才开，见 openExtraction）
       extraction: x.closed ? null : { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked },
-      missionText: (c) => mission.text ? mission.text(c, state.phase === 'ride' ? { kills: state.rideKills } : null) : missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null, { t: state.holdT, inside: state.inside, bombT: state.bombT }),
+      missionText: (c) => mission.text ? mission.text(c, state.phase === 'ride' ? { kills: state.rideKills } : state.phase === 'outro' || state.phase === 'end' ? { kills: state.rideKills, over: true } : null) : missionText(mission, c, state.kills, state.phase === 'ride' ? { kind: veh().kind, kills: state.rideKills, left: carLength - state.carS } : null, { t: state.holdT, inside: state.inside, bombT: state.bombT }),
       // 地上的路线箭头指向哪里（guide.js）：歼灭任务指向最近的敌人，坚守任务指向控制点（人在圈里时不画）
       guideTarget: () => (mission.guide ? mission.guide() : guideTarget()),
       onExtract: () => board(),
@@ -625,7 +625,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
     state.pose0 = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0, dir: { x: 0, z: -1 } }) };
     const t0 = state.rideT;
-    state.outCam = outroCamera(vv.kind, state.pose0, { poseAt: (d) => heliPose(t0 + d), away: orbit().center });
+    // 机外镜头的机位：任务可以自己定（丧尸围城定在公寓楼顶边上——周围楼太密，按「航线外侧让开 17 米」会架到别的楼里去）
+    state.outCam = rideHooks()?.outroCam ? rideHooks().outroCam(state.pose0) : outroCamera(vv.kind, state.pose0, { poseAt: (d) => heliPose(t0 + d), away: orbit().center });
     state.outLook = vv.toWorld(VEHICLE_HP.center[vv.kind]);
     state.wasInv = !!G.player.invulnerable; G.player.invulnerable = true;
     G.hud?.clearRadio?.(); G.hud?.show?.(false);

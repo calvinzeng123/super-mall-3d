@@ -284,7 +284,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan,
       extraction: { id: 'heli', label: '直升机', where: '公寓楼顶', floor: SIEGE.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
-        ride: { boardRadio: '上机！机枪交给你：屋顶追上来的、阳台玻璃后面的、楼下冲出来的，全部清掉。先打尖叫的，它们会伤到飞机。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, ground: (s0) => (Math.hypot(s0.x - flight.center.x, s0.z - flight.center.z) < 22 ? padY() : 0) } },
+        ride: { boardRadio: '上机！机枪交给你：屋顶追上来的、阳台玻璃后面的、楼下冲出来的，全部清掉。先打尖叫的，它们会伤到飞机。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, outroCam: (pose) => roofEdge(pose), ground: (s0) => (Math.hypot(s0.x - flight.center.x, s0.z - flight.center.z) < 22 ? padY() : 0) } },
       text: (c, ride) => textNow(c, ride), markers: () => [],
       radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你手上只有一把手枪——先去保安室拿步枪，再想办法上公寓楼顶，直升机到那儿接你。别乱开枪，它们听得见。',
         contact: '它们发现你了！', cut: plan.stages.slice(0, -1).map((st, i) => cutLine(plan, i)), all: `信号弹点着了！直升机 ${SIEGE.hold} 秒后到，守住屋顶！`, low: '你被咬伤了，拉开距离。', done: '指挥中心收到。幸存者已撤离云澜汇——干得漂亮。' } };
@@ -293,11 +293,27 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   }
   const cutLine = (plan, i) => { const st = plan.stages[i], next = plan.stages[i + 1]; return `${st.kind === 'locker' ? '步枪到手。' : st.kind === 'switch' ? '电来了，电梯能用了——动静不小，它们过来了。' : st.kind === 'tool' ? `${st.tool}到手。` : `${GATES[st.type].name}解决了。`}${next ? next.text + '。' : ''}`; };
   function textNow(c, ride) {
+    if (ride?.over) return '清扫完毕 · 返航';
     if (ride && S.sweep) { const w = S.sweep; return `清扫 · 屋顶 ${w.kill.roof}/${w.total.roof} · 阳台 ${w.kill.window}/${w.total.window} · 楼下 ${w.kill.ground}/${w.total.ground}`; }
     if (c.allCut) return S.landed ? '登机 · 公寓楼顶直升机' : S.hold >= 0 ? '守住屋顶，等直升机' : '等直升机';
     return S.plan.stages[Math.min(S.stage, S.plan.stages.length - 1)].text;
   }
 
+  /** 机外镜头站在公寓楼顶边上、离直升机最近的那一点（人眼高度）：看着它从楼下绕上来、飞远 */
+  function roofEdge(pose) {
+    const b = layout.buildings.find((x) => x.id === SIEGE.building), xs = b.outline.map((q) => q[0]), zs = b.outline.map((q) => q[1]);
+    const c = (v, lo, hi) => Math.max(lo + 1.5, Math.min(hi - 1.5, v));
+    return new THREE.Vector3(c(pose.x, Math.min(...xs), Math.max(...xs)), padY() + 1.7, c(pose.z, Math.min(...zs), Math.max(...zs)));
+  }
+  /** 结算页、暂停页上的字跟着模式换 */
+  function copy() {
+    if (typeof document === 'undefined') return;
+    const set = (sel, t) => { const el = document.querySelector(sel); if (el) el.textContent = t; };
+    set('[data-s="complete"] .m-k', enabled ? '丧尸围城 · 行动简报' : '零点突围 · 行动简报');
+    set('[data-s="complete"] .m-h', enabled ? '幸存者已撤离' : '云澜汇已收复');
+    set('[data-s="dead"] .m-k', enabled ? '你被尸群淹没了' : '特勤队员倒下');
+    set('[data-s="paused"] [data-act="restart"]', enabled ? '重新开始（换一局关卡）' : '重新出击（换一项任务）');
+  }
   /** 每局开始（任务系统 roll 完以后调） */
   function loadout() {
     S.loadout = false;
@@ -307,7 +323,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     for (const b of blocks.splice(0)) b.removeFromParent();
     for (const b of balconies.splice(0)) b.g.removeFromParent();
     Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, tellT: 0, loadout: false });
-    noiseEl?.classList.toggle('off', !enabled); clockEl?.classList.add('off');
+    noiseEl?.classList.toggle('off', !enabled); clockEl?.classList.add('off'); copy();
     if (flow) {
       // 原游戏自己的巡逻、增援、追兵全停（丧尸由这里放）；换回零点突围时还原
       if (enabled && !savedFlow) { savedFlow = { patrol: flow.patrol, waves: flow.waves, pursuitExtra: flow.pursuitExtra }; Object.assign(flow, { patrol: { gull: 0, hound: 0, soldier: 0 }, waves: flow.waves.map(() => ({ gull: 0, hound: 0, soldier: 0 })), pursuitExtra: 0 }); }

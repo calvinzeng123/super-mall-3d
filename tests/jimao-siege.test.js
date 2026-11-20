@@ -173,8 +173,10 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
   run(9); const d = s.pos.distanceTo(player.pos);
   assert.ok(events.some(([n]) => n === 'zombie:scream'), '叫了'); assert.ok(d > KINDS.screamer.keep - 3.5, `停在 ${d.toFixed(1)} 米`); assert.equal(hurt.length, 0, '尖叫者不咬人');
   // 直升机在飞：冲飞机叫，一声顶 6 发
-  G.missions = { rideKind: 'helicopter', vehicleCenter: () => new THREE.Vector3(player.pos.x, player.pos.y + 30, player.pos.z) }; events.length = 0;
-  run(8); const shot = events.find(([n, e]) => n === 'enemy:fire' && e.scream);
+  G.missions = { rideKind: 'helicopter', vehicleCenter: () => new THREE.Vector3(player.pos.x + 20, player.pos.y + 45, player.pos.z) }; events.length = 0;
+  player.pos.y += 44; // 人在飞机上：离地四十多米，不在同一层
+  const stand = s.pos.clone(); run(8); player.pos.y -= 44; const shot = events.find(([n, e]) => n === 'enemy:fire' && e.scream);
+  assert.ok(s.pos.distanceTo(stand) < 1.5, '站住叫，不乱跑');
   assert.ok(shot && shot[1].hits === KINDS.screamer.scream.heli && shot[1].type === 'screamer' && shot[1].dir.y > 0.5, '朝天上的直升机叫');
   s._deactivate(); G.missions = null;
   // 钉在原地的
@@ -298,6 +300,10 @@ test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天�
   for (const z of sw.list) if (z.alive) z.damage(9999, null, null, 'body');
   assert.match(m.text({ allCut: true }, { kills: 0 }), /屋顶 8\/8 · 阳台 6\/6/);
   tick(0.2); assert.equal(m.extraction.flight.leaving, true, '清完了：定下返航'); assert.ok(m.extraction.flight.duration() < t + 10);
+  assert.equal(m.text({ allCut: true }, { kills: 0, over: true }), '清扫完毕 · 返航');
+  const cam = m.extraction.ride.outroCam({ x: SIEGE.pad.x + 46, y: 50, z: SIEGE.pad.z }), A = L.buildings.find((b) => b.id === 'A');
+  assert.ok(pointInPoly([cam.x, cam.z], A.outline) && Math.abs(cam.y - roof - 1.7) < 1e-6, '机外镜头站在公寓楼顶边上');
+  assert.ok(cam.x > SIEGE.pad.x + 10, '靠直升机那一侧');
   assert.equal(m.extraction.ride.keep(), true); assert.equal(m.extraction.ride.ground({ x: SIEGE.pad.x, z: SIEGE.pad.z }), roof); assert.equal(m.extraction.ride.ground({ x: SIEGE.pad.x + 60, z: SIEGE.pad.z }), 0);
   void G;
 });
