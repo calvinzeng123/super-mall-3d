@@ -128,6 +128,8 @@ export function locCard(root, mission, where = '云澜汇 · 一期中庭') {
 }
 
 export const COVER_CSS = `
+/* 出击时左下那张地点卡只是字：平时透明（opacity 0）但还占着位置，会把封面上「模式 · 点一下切换」那个按钮的点击吃掉（用户在 iPad 上点不动） */
+.loc-card, .loc-card * { pointer-events: none !important; }
 /* 设置 / 操作说明 / 关于 面板：园区漫游的 .panel（浅色毛玻璃卡片）同名，盖掉了原游戏的深色底，浅字压在浅底上看不清 */
 .menu .panel { background: rgba(11, 13, 15, .95) !important; border: 0 !important; border-left: 1px solid rgba(232, 228, 218, .18) !important;
   border-radius: 0 !important; box-shadow: -18px 0 40px rgba(0, 0, 0, .35) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }

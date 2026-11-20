@@ -6,6 +6,10 @@
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
+### 封面「模式 · 点一下切换」点不动（2026-11-20，用户 iPad 截图「切换不了啊」）
+- **原因**：原游戏出击时左下那张地点卡（`.loc-card`，「任务：… · 撤离：…」）平时 `opacity: 0` 透明，但还占着位置，正好盖在封面的模式按钮上，点击全被它吃掉。电脑上同样点不动，只是之前测试都用网址 `?siege=1` 进丧尸围城，没点过这个按钮。
+- **修法**：`cover.js` 的 `COVER_CSS` 给 `.loc-card` 和里面的字加 `pointer-events: none`。iPad 模拟（触屏点按）验证：点一下切到丧尸围城、再点切回，都正常。测试 `tests/jimao-missions.test.js` 封面那条。
+
 ### 发布（2026-11-20，用户确认「部署」）
 - 提交 `dac5f70`；`npm run build:netlify`（109 文件、64.87 MiB，入口 `main.PLIODN47.js`）后用 Netlify CLI 单独发布，部署 `6b0039ac49ac0fd315b1df19` live。核对：线上首页引用 `main.PLIODN47.js`，28 个 js 和 6 个 glb（含 `deagle.*.glb`）字节与本地一致；`credits.html` 只多了 Netlify 托管注入的脚本，新署名段在。
 

@@ -385,6 +385,8 @@ test('封面：七种任务都列出来、和任务表一一对应；文案里�
   assert.match(LIFT_HELP, /<kbd>Z<\/kbd>.*<kbd>X<\/kbd>/);
   // 园区漫游的 .panel 会盖掉原游戏面板的深色底：封面样式里要压回去
   assert.match(COVER_CSS, /\.menu \.panel \{ background: rgba\(11, 13, 15, \.95\) !important/);
+  // 地点卡透明时也占着位置：不让它吃掉封面按钮（模式切换）的点击
+  assert.match(COVER_CSS, /\.loc-card, \.loc-card \* \{ pointer-events: none !important; \}/);
   // 原游戏打包里也不留开发工具的名字（scripts/jimao/rebrand.mjs 换掉）
   assert.doesNotMatch(readFileSync(new URL('../src/jimao/vendor/game.js', import.meta.url), 'utf8'), /Fable/);
   // 无线电：每种任务都有开场白，撤离点写进去
