@@ -574,6 +574,17 @@ test('掏枪动画：手枪绕扳机转一整圈再拉套筒（有一声上膛�
   arsenal.select('pistol'); run(A.SWAP.lower + 0.2); assert.equal(arsenal.switching, true);
   arsenal.select('rifle'); run(A.SWAP.lower + A.DRAW.rifle + 0.1);
   assert.equal(arsenal.current, 'rifle'); assert.equal(arsenal.switching, false); assert.equal(rifle.visible, true);
+  // 切到步枪的途中：步枪照常更新（模型才摆得回握姿），但开火、开镜、换弹的输入被挡掉
+  arsenal.select('pistol'); run(A.SWAP.lower + A.DRAW.pistol + 0.1);
+  const seen = []; rifle.update = function () { this.updates++; seen.push([G.input.fire, G.input.pressed('fire'), G.input.pressed('reload'), G.input.pressed('jump')]); };
+  arsenal.select('rifle'); G.input.fire = true;
+  run(A.SWAP.lower + 0.02); const n0 = seen.length;
+  run(A.DRAW.rifle - 0.06, () => { pressed.add('fire'); pressed.add('reload'); pressed.add('jump'); });
+  assert.ok(seen.length - n0 > 15, '掏步枪的每一帧都更新了');
+  assert.ok(seen.slice(n0).every(([f, pf, pr, pj]) => f === false && pf === false && pr === false && pj === true), '途中开火 / 换弹被挡掉，别的输入照常');
+  assert.equal(G.input.fire, true, '挡完还回去');
+  run(0.2, () => pressed.add('fire')); G.input.fire = false;
+  assert.ok(seen.at(-1)[1] === true, '掏完以后步枪读得到开火');
   // 近战键：快掏不翻刀（0.3 秒内刀已经刺出去），刺完换回步枪也不甩
   const e = enemy(-135, -99.5); kTurn = 0;
   pressed.add('melee'); arsenal.update(1 / 60); pressed.clear();

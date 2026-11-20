@@ -426,9 +426,19 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const dr = active ? S.pose : null;
     kBody.rotation.x = dr ? -dr.spin : 0;
     kBody.position.set(GRIP[0], GRIP[1] + 0.075 * (dr?.toss || 0), GRIP[2] - 0.03 * (dr?.toss || 0));
-    if (dr?.flick) { knifeRoot.rotateZ(-0.5 * dr.flick); knifeRoot.rotateX(0.22 * dr.flick); }
+    if (dr?.flick) { knifeRoot.rotateZ(-0.24 * dr.flick); knifeRoot.rotateX(-0.05 * dr.flick); } // 幅度小一点：这里转的是整条前臂（原点在手肘）
   }
   const bi = (a, b, k) => a + (b - a) * k;
+  const MUTED = new Set(['fire', 'ads', 'reload', 'melee']);
+  function quietUpdate(dt) {
+    const inp = G.input;
+    if (!inp || !rifle?.update) return;
+    const down = inp.down, pressed = inp.pressed, fire = inp.fire, ads = inp.ads;
+    if (down) inp.down = (a) => !MUTED.has(a) && down.call(inp, a);
+    if (pressed) inp.pressed = (a) => !MUTED.has(a) && pressed.call(inp, a);
+    inp.fire = false; inp.ads = false;
+    try { rifle.update(dt); } finally { if (down) inp.down = down; if (pressed) inp.pressed = pressed; inp.fire = fire; inp.ads = ads; }
+  }
 
   const proxy = {
     stub: false,
@@ -461,7 +471,8 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
         }
       }
       const busy = !!S.phase || S.lowered > 0.3;
-      if (S.cur === 'rifle') { if (!S.phase || S.phase === 'raise') rifle?.update?.(dt); }
+      // 步枪每帧都要更新（它自己把模型摆回握姿，放下 / 掏出的偏移才加得上去）；切枪途中把开火、开镜、换弹的输入挡掉
+      if (S.cur === 'rifle') { if (S.phase) quietUpdate(dt); else rifle?.update?.(dt); }
       updatePistol(dt, S.cur === 'pistol', busy);
       updateKnife(dt, S.cur === 'knife', busy);
       // 放下去的量（切枪、翻越）：加在当前这把的模型上

@@ -19,6 +19,9 @@ export const PATCHES = [
   ['手枪：同一个枪声合成器，音调高、声音小一点',
     'I = I + 1 & 3, ze("rifle_shot", { variant: I, gain: 1, jitter: 0.012 });',
     'I = I + 1 & 3, ze("rifle_shot", wf && wf.kind === "pistol" ? { variant: I, gain: 0.8, pitch: 1.4, jitter: 0.02 } : { variant: I, gain: 1, jitter: 0.012 });'],
+  ['切枪的声音（arsenal.js 发 weapon:switch）：一声短促的布料 / 金属声，刀最脆、步枪最沉',
+    'ln("weapon:melee", () => ze("jump", { gain: 0.9, pitch: 1.2 })),',
+    'ln("weapon:melee", () => ze("jump", { gain: 0.9, pitch: 1.2 })), ln("weapon:switch", (ws) => ze("jump", { gain: 0.45, pitch: ws && ws.to === "knife" ? 1.8 : ws && ws.to === "pistol" ? 1.45 : 0.85 })),'],
   // ---- 输入 ----
   ['输入模块露出「按下 / 松开一个动作」的入口（actions.js 加的手机按键：近战；来源记在 touch 上，和原来的按键同一套）',
     'update: ee, endFrame: B, requestLock: A, exitLock: _, setGameplay(P) {',

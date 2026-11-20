@@ -6413,7 +6413,7 @@ function u_(i, e, t) {
       le = te, te - R > 0.28 && fo(1), J = Math.min(J, 0.55), Y > 0.3 && (Y = Math.min(1, Y + 0.015));
     }), ln("weapon:dry", () => ze("rifle_dry", { gain: 0.9 })), ln("weapon:reload", (te) => {
       te.phase === "magout" ? ze("reload_magout") : te.phase === "magin" ? ze("reload_magin") : te.phase === "bolt" ? ze("reload_bolt") : te.phase === "start" && ze("jump", { gain: 0.5, pitch: 1.3 });
-    }), ln("weapon:melee", () => ze("jump", { gain: 0.9, pitch: 1.2 })), ln("shell:bounce", (te) => {
+    }), ln("weapon:melee", () => ze("jump", { gain: 0.9, pitch: 1.2 })), ln("weapon:switch", (ws) => ze("jump", { gain: 0.45, pitch: ws && ws.to === "knife" ? 1.8 : ws && ws.to === "pistol" ? 1.45 : 0.85 })), ln("shell:bounce", (te) => {
       let he = e.currentTime;
       he - ce < 0.04 || (ce = he, te.surface === "water" ? ze("impact_water", { pos: Hn(te.pos), gain: 0.25, pitch: 1.7 }) : ze("shell_bounce", { pos: Hn(te.pos), gain: te.surface === "metal" ? 1 : 0.8, pitch: te.surface === "metal" ? 1.12 : 1 }));
     }), ln("impact", (te) => {
