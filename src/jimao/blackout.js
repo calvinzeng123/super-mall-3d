@@ -28,7 +28,7 @@ export const BLACKOUT = Object.freeze({
   // 颜色是偏中性略冷的白（常见的强光 LED 手电那样）：血、皮肤在暖黄光下会糊成一片土色，在中性白下红是红、灰是灰
   torch: Object.freeze({ power: 7, distance: 58, angle: 0.74, penumbra: 0.12, decay: 1, color: 0xf1f4ff, sway: 0.35,
     beam: Object.freeze({ core: 0.3, spill: 0.2, ring: 0.1, warm: 0.07, size: 128 }),
-    adapt: Object.freeze({ ref: 5, k: 0.9, min: 0.2, every: 0.12, spread: 0.2, down: 0.06, up: 0.45, turn: 0.12 }) }),
+    adapt: Object.freeze({ ref: 5, k: 0.9, min: 0.07, every: 0.12, spread: 0.2, down: 0.06, up: 0.45, turn: 0.12 }) }),
   flicker: Object.freeze({ every: [7, 19], dip: 0.45, time: 0.5 }),
 });
 
@@ -114,6 +114,9 @@ export function createBlackout({ app, scene, camera, viewLayer = 0, rng = Math.r
     cookie.magFilter = cookie.minFilter = THREE.LinearFilter; cookie.generateMipmaps = false;
     cookie.wrapS = cookie.wrapT = THREE.ClampToEdgeWrapping; cookie.needsUpdate = true;
     light.map = cookie;
+    // 光罩是按灯的「投影相机」投上去的，比它的近平面（默认 0.5 米）还近的地方不在罩里——贴着墙照，正好那儿光罩失效、
+    // 整个光锥一片均匀死白。近平面拉到几厘米（不投影，这个相机只拿来算光罩坐标，不影响别的）
+    light.shadow.camera.near = 0.03;
   }
   void viewLayer; // 手电不照枪那一层：离光源只有三四十厘米，手和枪会一片死白；枪靠环境反射和枪口火光
   camera.add(light); camera.add(light.target);

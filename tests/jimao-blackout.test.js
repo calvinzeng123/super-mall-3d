@@ -116,3 +116,30 @@ test('手电：探到墙就收光（变暗快、变亮慢），挪开回到原�
   const map = b.light.map; let gone = false; map.addEventListener('dispose', () => { gone = true; });
   b.dispose(); assert.ok(gone, '光罩释放了'); bad.dispose();
 });
+
+test('光罩贴着墙也有效：灯的投影相机近平面只有几厘米（默认 0.5 米以内光罩失效，近墙一片均匀死白）', () => {
+  const { scene, camera, app } = world();
+  const b = createBlackout({ app, scene, camera, probe: () => null });
+  assert.ok(b.light.shadow.camera.near <= 0.05, `近平面 ${b.light.shadow.camera.near}`);
+  b.light.shadow.updateMatrices(b.light);
+  // 灯前 0.3 米的一个点：投到光罩坐标里要落在 0–1 之内（z 也是），着色器才会去采光罩
+  camera.updateMatrixWorld(true); b.light.updateMatrixWorld(true); b.light.target.updateMatrixWorld(true);
+  const w = new THREE.Vector4(0, 0, -0.3, 1).applyMatrix4(b.light.matrixWorld);
+  const c = w.clone().applyMatrix4(b.light.shadow.matrix); const z = c.z / c.w;
+  assert.ok(z > 0 && z < 1, `0.3 米处的深度 ${z.toFixed(3)}`);
+  b.dispose();
+});
+
+test('猛一转身：不等下一次定时探测，马上重探（脸贴着墙不会先白一下）', () => {
+  const { scene, camera, env, app } = world();
+  let n = 0, wall = 40; const probe = (o, d, max) => { n++; return wall < max ? wall : null; };
+  const b = createBlackout({ app, scene, camera, rng: () => 0.5, probe });
+  b.enabled = true; env.step(); for (let i = 0; i < 40; i++) b.update(1 / 30);
+  const before = n; b.update(1 / 120); assert.equal(n, before, '镜头没动、没到时间：不探');
+  wall = 0.4; camera.rotation.y += Math.PI; camera.updateMatrixWorld(true);
+  b.update(1 / 120); assert.ok(n > before, '转身以后同一帧就探'); assert.ok(Math.abs(b.near - 0.4) < 1e-6);
+  for (let i = 0; i < 3; i++) b.update(1 / 30); // 0.1 秒
+  assert.ok(b.gain < torchGain(0.4) + 0.3, `0.1 秒后已经收到 ${b.gain.toFixed(2)}`);
+  assert.ok(torchGain(0.4) / 0.4 < 1.6 * torchGain(BLACKOUT.torch.adapt.ref) / BLACKOUT.torch.adapt.ref, '0.4 米的墙不比 5 米的墙亮多少');
+  b.dispose();
+});

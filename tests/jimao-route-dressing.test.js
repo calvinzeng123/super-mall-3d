@@ -21,7 +21,7 @@ test('图集格子：都在 16 × 16 以内、互不重叠、每格都画得出�
     assert.equal(uv.length, 4); assert.ok(uv[0] >= 0 && uv[1] >= 0 && uv[0] + uv[2] <= 1 + 1e-9 && uv[1] + uv[3] <= 1 + 1e-9);
   }
   for (const [name, g] of Object.entries(GRAFFITI)) { assert.ok(ATLAS_CELLS[name], `涂鸦 ${name} 有格子`); assert.ok(g.text.length > 0); }
-  assert.equal(cellAspect('drag'), 0.25); assert.equal(cellAspect('pool0'), 1); assert.equal(cellUv('nope'), null);
+  assert.equal(cellAspect('drag'), 1 / 3); assert.equal(cellAspect('pool0'), 1); assert.equal(cellUv('nope'), null);
   // UV 的 v 从图集下沿算（纹理 flipY）：最上面一行的格子 v 最大
   assert.ok(cellUv('pool0')[1] > cellUv('handL')[1]);
 });

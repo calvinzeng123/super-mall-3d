@@ -53,6 +53,8 @@ function atlas() {
   const g = c.getContext('2d'); if (!g) return null;
   // 先铺一层中性灰（画完之前的那几帧也不会是一片白）
   g.fillStyle = '#d8d8d8'; g.fillRect(0, 0, size, size);
+  // 贴花那几块（熏黑、干粉）先挖空：没画好之前不能是一块不透明的方片（贴在地上就是个黑长方形）
+  for (const k of ['scorch', 'powder']) { const r = ATLAS[k]; g.clearRect(r[0] * size / 1024, r[1] * size / 1024, r[2] * size / 1024, r[3] * size / 1024); }
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.name = 'siege-props';
   ATL = { tex, size, canvas: c };
   const s = size / 1024, later = slices(), mark = () => { tex.needsUpdate = true; };
@@ -265,7 +267,7 @@ float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a
 export function fireStep(list, t, fade = null) { for (const m of list) { m.uniforms.uTime.value = t % 600; if (fade != null) m.uniforms.uFade.value = typeof fade === 'function' ? fade(m) : fade; } }
 
 /** 火苗卡片：uv.y 0 在底、1 在顶；seed 让每张卡片的噪声错开。hot：颜色（普通火是橙黄，信号弹是红） */
-export function flameMaterial({ hot = [1.0, 0.86, 0.55], mid = [1.0, 0.4, 0.05], cool = [0.55, 0.06, 0.0], gain = 1.25 } = {}) {
+export function flameMaterial({ hot = [1.0, 0.74, 0.34], mid = [0.92, 0.33, 0.05], cool = [0.42, 0.05, 0.01], gain = 0.9 } = {}) {
   return new THREE.ShaderMaterial({
     name: 'siege-flame', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
     uniforms: { uTime: { value: 0 }, uFade: { value: 1 }, uHot: { value: new THREE.Vector3(...hot) }, uMid: { value: new THREE.Vector3(...mid) }, uCool: { value: new THREE.Vector3(...cool) }, uGain: { value: gain } },
@@ -284,11 +286,12 @@ export function flameMaterial({ hot = [1.0, 0.86, 0.55], mid = [1.0, 0.4, 0.05],
         float w = mix(0.44, 0.05, pow(y, 0.75));
         float x = abs(vUv.x - 0.5 + (n - 0.5) * 0.4 * y);
         float body = smoothstep(w, w * 0.25, x);
-        float shape = body * smoothstep(1.0, 0.3, y + (n2 - 0.5) * 0.6) * smoothstep(0.0, 0.1, y);
+        // 底下 0.2 慢慢长出来：卡片底边埋在踏步里，踏步口那条线上要是正好最亮，火苗就像被一刀切齐
+        float shape = body * smoothstep(1.0, 0.3, y + (n2 - 0.5) * 0.6) * smoothstep(0.02, 0.22, y + (n - 0.5) * 0.08);
         float heat = clamp(shape * (1.45 - y * 1.15) + (n - 0.5) * 0.35, 0.0, 1.0);
         vec3 col = mix(uCool, uMid, smoothstep(0.08, 0.5, heat));
         col = mix(col, uHot, smoothstep(0.62, 0.96, heat));
-        float a = shape * uFade * smoothstep(0.02, 0.2, heat);
+        float a = shape * uFade * smoothstep(0.02, 0.2, heat) * 0.85; // 几张卡片叠在一起是加色：单张收一点，叠出来才不会一片白
         gl_FragColor = vec4(col * uGain, a);
         #include <colorspace_fragment>
       }`,
@@ -366,14 +369,16 @@ export function flameLayout(n = 7, { half = 0.5, z0 = -0.35, z1 = 0.55, rng = rn
   for (let i = 0; i < n; i++) {
     const t = n > 1 ? i / (n - 1) : 0.5, x = -half + t * half * 2 + (rng() - 0.5) * 0.12, z = z0 + rng() * (z1 - z0);
     const mid = 1 - Math.abs(t - 0.5) * 1.4; // 中间的火高、两边矮
-    out.push({ x, z, w: 0.42 + rng() * 0.3, h: 0.7 + mid * 0.75 + rng() * 0.2, turn: rng() * Math.PI, seed: rng() });
+    out.push({ x, z, w: 0.42 + rng() * 0.3, h: 0.55 + mid * 0.6 + rng() * 0.15, turn: (rng() - 0.5) * 0.5, seed: rng() });
   }
   return out;
 }
 function flameGeometry(list, base = nosingY) {
   const pos = [], uv = [], seed = [], idx = [];
+  // 每朵火两张卡片，都大致横着（沿梯段宽度方向）、左右各偏 0.45 弧度交叉：
+  // 卡片要是顺着梯段方向摆，会斜穿好几级踏步，火苗底下就被踏步切出一道道水平的硬边；横着摆，底边只落在一两级上（再往下埋一点）
   for (const f of list) for (const k of [0, 1]) {
-    const a = f.turn + k * Math.PI / 2, cx = Math.cos(a) * f.w / 2, cz = Math.sin(a) * f.w / 2, y0 = base(f.z) - 0.05, s = f.seed + k * 0.37, o = pos.length / 3;
+    const a = f.turn + (k ? 0.45 : -0.45), cx = Math.cos(a) * f.w / 2, cz = Math.sin(a) * f.w / 2, y0 = base(f.z - Math.abs(cz)) - 0.05, s = f.seed + k * 0.37, o = pos.length / 3;
     pos.push(f.x - cx, y0, f.z - cz, f.x + cx, y0, f.z + cz, f.x + cx, y0 + f.h, f.z + cz, f.x - cx, y0 + f.h, f.z - cz);
     uv.push(0, 0, 1, 0, 1, 1, 0, 1); seed.push(s, s, s, s); idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
   }
@@ -407,7 +412,7 @@ function rawSheet(w, z0, z1, lift = 0.015) {
 
 // ---------- 家具零件（杂物堆、火堆、桌子共用） ----------
 const C = Object.freeze({ oak: 0x9a6a3e, walnut: 0x5a3a24, pine: 0xb48a58, kraft: 0xa98457, ticking: 0xb3ab98, steel: 0x8a8f94, galv: 0xa6aaad, dark: 0x1c1d1f, rubber: 0x121212,
-  red: 0xa8201a, door: 0x7a2e24, grey: 0xb9bcbc, greyGreen: 0x5f6e66, cream: 0xd9d3c4, black: 0x0d0d0e, char: 0x2a2725, blue: 0x2f5f9e, orange: 0xd9621e, yellow: 0xd9a21f, brass: 0xb08a3a, white: 0xeeeeea });
+  red: 0xa8201a, door: 0x7a2e24, grey: 0xb9bcbc, greyGreen: 0x5f6e66, cream: 0xd9d3c4, black: 0x0d0d0e, char: 0x3a3330, blue: 0x2f5f9e, orange: 0xd9621e, yellow: 0xd9a21f, brass: 0xb08a3a, white: 0xeeeeea });
 function chair(k, { color = C.oak, region = 'wood' } = {}) {
   const o = { color, region };
   k.box('paint', 0.42, 0.035, 0.4, { ...o, p: [0, 0.45, 0] });
@@ -655,7 +660,8 @@ export function buildFireStatic(g) {
     k.at([0.12, 0.35, -0.15], [0.3, 0.7, Math.PI / 2 + 0.2], () => { for (const [x, z] of [[-0.18, -0.17], [0.18, -0.17], [-0.18, 0.17]]) k.box('paint', 0.03, 0.42, 0.03, { ...o, p: [x, 0.21, z] }); k.box('paint', 0.42, 0.03, 0.36, { ...o, p: [0, 0.44, 0] }); });
     k.box('paint', 1.1, 0.06, 0.12, { ...o, p: [-0.05, 0.42, 0.1], r: [-0.3, 0.3, 0.12] });
     k.box('paint', 0.9, 0.05, 0.1, { ...o, p: [0.1, 0.2, -0.3], r: [0.25, -0.5, 0.05] });
-    k.box('paint', 0.42, 0.22, 0.35, { ...o, p: [-0.35, 0.3, -0.35], r: [0.3, 0.4, 0.15] });
+    // 烧塌的一摞木板（以前是一整块黑方块，手电一照像个黑箱子）
+    for (const [x, y, z, a, b] of [[-0.38, 0.05, -0.38, 0.25, 0.12], [-0.32, 0.1, -0.3, -0.35, 0.05], [-0.42, 0.14, -0.33, 0.6, -0.18], [-0.25, 0.06, -0.42, 1.4, 0.08]]) k.box('paint', 0.5, 0.035, 0.09, { ...o, p: [x, y, z], r: [b * 0.3, a + 0.4, b] });
     k.box('paint', 0.36, 0.08, 0.4, { color: 0x1a1817, region: 'charred', p: [0.38, 0.5, 0.25], r: [-0.45, 0.2, 0.2] });
     if (k.useAtlas) stairSheet(k, 'decal', 1.5, -2.1, 1.9, { region: 'scorch', color: C.black }); // 省内存档没有图集：贴花会变成一块黑方片，不要
   });
@@ -669,8 +675,8 @@ export function powderSheet() {
 export function buildFire(junk) {
   const flames = new THREE.Mesh(once('flames', () => flameGeometry(flameLayout(7))), flameMaterial()); flames.name = 'flames'; flames.frustumCulled = false; flames.renderOrder = 3; junk.add(flames);
   const r = rnd(11), embers = new THREE.Points(once('embers', () => emberGeometry(46, r)), emberMaterial()); embers.name = 'embers'; embers.frustumCulled = false; embers.renderOrder = 4; junk.add(embers);
-  const smoke = new THREE.Mesh(once('smoke', () => { const q = rnd(23), puffs = []; for (let i = 0; i < 7; i++) { const z = -0.2 + q() * 0.8; puffs.push([(q() - 0.5) * 0.8, nosingY(z) + 0.9, z, i / 7]); } return puffGeometry(puffs); }), smokeMaterial()); smoke.name = 'smoke'; smoke.frustumCulled = false; smoke.renderOrder = 2; junk.add(smoke);
-  const glow = new THREE.Mesh(once('fireGlow', () => rawSheet(2.8, -3.0, 2.6)), glowMaterial({ center: [0, nosingY(0.1) + 0.1, 0.1], radius: [1.35, 2.0, 2.9], strength: 0.42 })); glow.name = 'fire-glow'; glow.renderOrder = 1; junk.add(glow);
+  const smoke = new THREE.Mesh(once('smoke', () => { const q = rnd(23), puffs = []; for (let i = 0; i < 7; i++) { const z = -0.2 + q() * 0.8; puffs.push([(q() - 0.5) * 0.8, nosingY(z) + 0.9, z, i / 7]); } return puffGeometry(puffs); }), smokeMaterial({ fire: [0.22, 0.09, 0.03], opacity: 0.26 })); smoke.name = 'smoke'; smoke.frustumCulled = false; smoke.renderOrder = 2; junk.add(smoke);
+  const glow = new THREE.Mesh(once('fireGlow', () => rawSheet(2.8, -3.0, 2.6)), glowMaterial({ center: [0, nosingY(0.1) + 0.1, 0.1], radius: [1.35, 2.0, 2.9], strength: 0.3 })); glow.name = 'fire-glow'; glow.renderOrder = 1; junk.add(glow);
   return [flames.material, embers.material, smoke.material, glow.material];
 }
 /** 卷帘栅门（配电箱跳闸，断电落下）：两侧导轨、顶上卷筒箱（不动），帘片（junk 组：从卷筒箱往下挂，合闸后收上去） */

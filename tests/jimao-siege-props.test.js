@@ -109,3 +109,13 @@ test('纯函数：踏步前沿高度、火苗排布、Kit 合并、fireStep', ()
   const m = flameMaterial(); fireStep([m], 3.5, 0.4); assert.equal(m.uniforms.uTime.value, 3.5); assert.equal(m.uniforms.uFade.value, 0.4);
   const m2 = flameMaterial(); assert.notEqual(m.uniforms.uTime, m2.uniforms.uTime, '每处火自己一份时间');
 });
+
+test('火苗卡片大致横着摆（不顺着梯段斜穿踏步）；火、烟、信号弹的几何体各局共用，材质各自一份', () => {
+  for (const f of flameLayout(7)) assert.ok(Math.abs(f.turn) <= 0.25 + 1e-9, `turn ${f.turn.toFixed(2)}`);
+  const parts = (g) => { const m = {}; g.traverse((o) => { if (o.name && (o.isMesh || o.isPoints)) m[o.name] = o; }); return m; };
+  const a = parts(gateBlock('fire')), b = parts(gateBlock('fire'));
+  for (const k of ['flames', 'embers', 'smoke', 'fire-glow']) { assert.ok(a[k], k); assert.equal(a[k].geometry, b[k].geometry, `${k} 几何体共用`); assert.notEqual(a[k].material, b[k].material, `${k} 材质各自一份`); }
+  const fa = flareModel(), fb = flareModel(), lit = (g) => g.children.find((c) => c.userData.cutShow);
+  const ga = []; lit(fa).traverse((o) => o.isMesh && ga.push(o.geometry)); const gb = []; lit(fb).traverse((o) => o.isMesh && gb.push(o.geometry));
+  assert.deepEqual(ga, gb, '信号弹点着以后的火苗、烟、红光几何体共用');
+});

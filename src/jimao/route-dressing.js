@@ -40,8 +40,8 @@ export const ROUTE_DRESS = Object.freeze({
 export const ATLAS_CELLS = Object.freeze({
   pool0: [0, 0, 4, 4], pool1: [4, 0, 4, 4], splat0: [8, 0, 4, 4], splat1: [12, 0, 4, 4],
   holes: [0, 4, 4, 4], scorch: [4, 4, 4, 4], gInfected: [8, 4, 8, 2], gRoof: [8, 6, 8, 2],
-  drag: [0, 8, 8, 2], gPower: [8, 8, 8, 2],
-  gStairs: [0, 10, 8, 2], glass: [8, 10, 4, 2], debris: [12, 10, 4, 2],
+  drag: [0, 8, 6, 2], shoe: [6, 8, 2, 2], gPower: [8, 8, 8, 2],
+  gStairs: [0, 10, 6, 2], bag: [6, 10, 2, 2], glass: [8, 10, 4, 2], debris: [12, 10, 4, 2],
   gHelp: [0, 12, 4, 2], gSos: [4, 12, 4, 2], gTally: [8, 12, 4, 2], smear: [12, 12, 4, 1], tape: [12, 13, 4, 1],
   handL: [0, 14, 2, 2], handR: [2, 14, 2, 2], footL: [4, 14, 2, 2], footR: [6, 14, 2, 2], drops: [8, 14, 2, 2],
   paper0: [10, 14, 2, 2], paper1: [12, 14, 2, 2], phone: [14, 14, 1, 2], casings: [15, 14, 1, 2],
@@ -49,7 +49,7 @@ export const ATLAS_CELLS = Object.freeze({
 
 /** 涂鸦写什么、用什么画：spray 喷漆（有飞沫、往下流）、marker 记号笔、blood 手指蘸血、paint 刷子刷的白漆（屋顶地面） */
 export const GRAFFITI = Object.freeze({
-  gInfected: Object.freeze({ text: '里面有感染者', style: 'spray', color: '#a3170f', cross: true }),
+  gInfected: Object.freeze({ text: '里面有感染者', style: 'spray', color: '#a3170f' }),
   gRoof: Object.freeze({ text: '往楼顶走', arrow: 'up', style: 'spray', color: '#151515' }),
   gPower: Object.freeze({ text: 'B1 有电', arrow: 'down', style: 'spray', color: '#a3170f' }),
   gStairs: Object.freeze({ text: '别上楼！', style: 'spray', color: '#a3170f' }),
@@ -242,16 +242,28 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1 }) 
         const ok = [[x + fx * d, z + fz * d], [mx, mz], [ex, ez]].every(([px, pz]) => { const st = landAt(nav, px, pz, y + 0.6); return st && st.floor === floorId && Math.abs(st.y - y) < 0.05 && !inObstacle(px, pz) && wallGap(px, pz) > 0.22; });
         if (!ok || blocked(x, z, ex, ez)) break;
         // 拖痕格子横着画（x 方向长）：图的「右」顺着拖的方向
-        addFloor('drag', mx, mz, seg, { a: a + Math.PI / 2, mode: BLOOD, alpha: alpha * (d ? 0.8 : 1), h: seg * cellAspect('drag') * 1.15 });
+        addFloor('drag', mx, mz, seg, { a: a + Math.PI / 2, mode: BLOOD, alpha: alpha * (d ? 0.8 : 1), h: seg * cellAspect('drag') * 0.85 });
         put++;
       }
       return put;
     }
 
+    /**
+     * 贴花整个宽度都露在外面：两头往墙外 0.12 米的点从中间看过去不隔着别的墙（T 字形接上来的隔墙会把字挡掉一半），
+     * 两头前面也都是楼面（不伸到门洞、楼梯井上）
+     */
+    function spanFree(q, width) {
+      const cx0 = q.x + q.nx * 0.12, cz0 = q.z + q.nz * 0.12;
+      for (const s of [-1, 1]) {
+        const ex = cx0 + q.dx * s * width / 2, ez = cz0 + q.dz * s * width / 2;
+        if (blocked(cx0, cz0, ex, ez, q.w) || !supported(F, ex + q.nx * 0.3, ez + q.nz * 0.3)) return false;
+      }
+      return true;
+    }
     /** 墙上一处：返回 { x, z, nx, nz, w }（贴花中心在墙线上的位置和朝走道的法线），找不到返回 null */
     function wallPoint(width, { r1 = R, prefer = null, minLen = 0 } = {}) {
       const list = usable.filter((q) => q.len >= Math.max(minLen, width + 2 * ROUTE_DRESS.margin) && segDist(cx, cz, q.w) < r1);
-      for (let k = 0; k < 16 && list.length; k++) {
+      for (let k = 0, tries = prefer ? 48 : 16; k < tries && list.length; k++) {
         const { w, len } = prefer ? list.reduce((a, b) => (prefer(a) > prefer(b) ? a : b)) : pick(list);
         const dx = (w.x1 - w.x0) / len, dz = (w.z1 - w.z0) / len;
         // 墙段上取一点：离两头至少 margin + 半宽（门洞、转角不贴）
@@ -267,6 +279,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1 }) 
         if (Math.hypot(fx - cx, fz - cz) > r1 || blocked(cx, cz, fx, fz, w)) { if (prefer) list.splice(list.findIndex((q) => q.w === w), 1); continue; }
         let free = !avoid.some((a) => a.wall && (!a.floor || a.floor === floorId) && Math.hypot(a.x - px, a.z - pz) < a.wall + width / 2);
         for (const s of [-0.5, 0, 0.5]) for (const d of [0.2, 0.42]) if (inObstacle(px + dx * s * width + nx * d, pz + dz * s * width + nz * d)) free = false;
+        if (free && !spanFree({ x: px, z: pz, nx, nz, dx, dz, w }, width)) free = false;
         if (!free) { if (prefer) list.splice(list.findIndex((q) => q.w === w), 1); continue; }
         return { x: px, z: pz, nx, nz, w, t, len, dx, dz };
       }
@@ -290,7 +303,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1 }) 
       }
       return put;
     }
-    return { F, lv, y, walls: usable, floor, footsteps, drag, wall, wallPoint, addWall, addFloor, floorPoint, wallGap, inObstacle, range, pick, count };
+    return { F, lv, y, walls: usable, floor, footsteps, drag, wall, wallPoint, addWall, addFloor, floorPoint, wallGap, inObstacle, spanFree, range, pick, count };
   }
   return { spot, items, rng, range, pick, count };
 }
@@ -366,7 +379,9 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
   for (const g of plan.gates || []) if (g.model) avoid.push({ floor: g.floor, x: g.model.x, z: g.model.z, r: 1.25, wall: 0.9 });
   // 电梯门口：门是会动的，墙上、地上都不贴（候梯厅里的血留到离门一米多的地方）
   const tower = plan.tower, lift = tower ? nav.links.find((l) => l.id === tower.lift) : null;
-  for (const s of lift?.stops || []) avoid.push({ floor: s.floor, x: s.x, z: s.z, r: 0.9, wall: 1.3 });
+  // 这一层所有电梯（不只这栋楼那部：商场的电梯厅里并排好几部），门扇会开，贴在门上的血会悬在半空
+  const routeFloors = new Set(plan.stages.map((s) => s.floor));
+  for (const k of nav.links) if (k.kind === 'lift') for (const s of k.stops || []) if (k === lift || routeFloors.has(s.floor)) avoid.push({ floor: s.floor, x: s.x, z: s.z, r: 0.9, wall: 1.3 });
   // 每一步的目标物件（武器柜、配电柜、工具、信号弹）站的地方：地上不压、背后的墙也不贴（深度前移会盖到物件上）
   for (const st of plan.stages) if (st.site) avoid.push({ floor: st.floor, x: st.site.x, z: st.site.z, r: 0.7, wall: 1.4 });
   const P = createPlacer({ nav, rng, items, avoid, density });
@@ -378,19 +393,24 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
   if (arms) {
     const S = P.spot(arms.floor, arms.site.x, arms.site.z, 8);
     if (S) {
-      S.wall('holes', 4, { size: [0.55, 0.8], yc: [0.9, 1.6], tilt: 0.6 });
-      S.wall(['splat0', 'splat1'], 1, { size: [0.7, 1.0], yc: [0.8, 1.3], mode: BLOOD });
-      S.wall(['handL', 'handR'], 2, { size: [0.2, 0.24], yc: [0.9, 1.4], mode: BLOOD, r1: 5 });
-      S.wall('gPower', 1, { size: [1.5, 1.7], yc: [1.4, 1.6], tilt: 0.05, keep: true, prefer: (q) => q.len });
-      S.floor('casings', 9, { r1: 3, size: [0.09, 0.12], mode: GLOSS, gap: 0.2 });
+      S.wall('holes', 6, { size: [0.6, 0.85], yc: [0.9, 1.6], tilt: 0.6 });
+      yield;
+      S.wall(['splat0', 'splat1'], 2, { size: [0.75, 1.05], yc: [0.8, 1.3], mode: BLOOD });
+      S.wall(['handL', 'handR'], 3, { size: [0.2, 0.24], yc: [0.9, 1.4], mode: BLOOD, r1: 5 });
+      S.wall('gPower', 1, { size: [2.0, 2.3], yc: [1.45, 1.6], tilt: 0.05, keep: true, prefer: (q) => q.len });
+      yield;
+      S.floor('casings', 16, { r1: 3.2, size: [0.09, 0.12], mode: GLOSS, gap: 0.2 });
       const pool = S.floorPoint(1.2, 4, 0.6);
-      if (pool) { S.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(1.1, 1.5), { mode: BLOOD }); S.drag(pool[0], pool[1], Math.atan2(pool[0] - arms.site.x, pool[1] - arms.site.z), 3); }
-      S.floor(['paper0', 'paper1'], 6, { r1: 5, size: [0.3, 0.36] });
-      S.floor('glass', 1, { r1: 4, size: [0.9, 1.1], mode: GLOSS, alpha: [0.8, 1] });
-      S.floor('drops', 4, { r1: 5, size: [0.2, 0.3], mode: BLOOD });
+      if (pool) { S.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(1.2, 1.6), { mode: BLOOD }); S.drag(pool[0], pool[1], Math.atan2(pool[0] - arms.site.x, pool[1] - arms.site.z), 4); }
+      S.floor(['pool0', 'pool1'], 1, { r1: 6, size: [0.6, 0.8], mode: BLOOD, spaced: 2.5, keep: true });
+      yield;
+      S.floor(['paper0', 'paper1'], 10, { r1: 5.5, size: [0.32, 0.4] });
+      S.floor('glass', 2, { r1: 4.5, size: [0.9, 1.1], mode: GLOSS, alpha: [0.8, 1] });
+      S.floor('drops', 7, { r1: 5.5, size: [0.22, 0.32], mode: BLOOD });
       S.floor('phone', 1, { r1: 4, size: [0.085, 0.09], mode: GLOSS, keep: true });
+      S.floor(['shoe', 'bag'], 2, { r1: 6, size: [0.32, 0.4], mode: BLOOD, gap: 0.35 });
       const a = S.floorPoint(1, 3, 0.4), b = S.floorPoint(5, 7.5, 0.4);
-      if (a && b) S.footsteps(a[0], a[1], b[0], b[1], { n: 9 });
+      if (a && b) S.footsteps(a[0], a[1], b[0], b[1], { n: 10 });
     }
     yield;
   }
@@ -400,18 +420,22 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
   if (power) {
     const S = P.spot(power.floor, power.site.x, power.site.z, 7);
     if (S) {
-      S.wall(['handL', 'handR'], 3, { size: [0.2, 0.25], yc: [0.8, 1.5], mode: BLOOD, r1: 5 });
-      S.wall('smear', 1, { size: [0.8, 1.0], yc: [1.0, 1.25], mode: BLOOD, tilt: 0.15 });
-      S.wall(['splat0', 'splat1'], 1, { size: [0.7, 1.0], yc: [0.7, 1.3], mode: BLOOD });
-      S.wall('gRoof', 1, { size: [1.5, 1.7], yc: [1.4, 1.6], tilt: 0.05, keep: true, prefer: (q) => q.len });
-      S.wall('holes', 1, { size: [0.5, 0.7], yc: [1.0, 1.6], tilt: 0.6 });
+      S.wall(['handL', 'handR'], 6, { size: [0.2, 0.25], yc: [0.8, 1.5], mode: BLOOD, r1: 5, tilt: 0.4 });
+      S.wall('smear', 2, { size: [0.8, 1.0], yc: [1.0, 1.25], mode: BLOOD, tilt: 0.15 });
+      yield;
+      S.wall(['splat0', 'splat1'], 2, { size: [0.75, 1.05], yc: [0.7, 1.3], mode: BLOOD });
+      S.wall('gRoof', 1, { size: [1.9, 2.2], yc: [1.45, 1.6], tilt: 0.05, keep: true, prefer: (q) => q.len });
+      S.wall('holes', 2, { size: [0.55, 0.75], yc: [1.0, 1.6], tilt: 0.6 });
+      yield;
       const pool = S.floorPoint(1.5, 4.5, 0.7);
-      if (pool) { S.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(1.0, 1.4), { mode: BLOOD }); S.drag(pool[0], pool[1], rng() * Math.PI * 2, 4.4); }
-      S.floor('drops', 5, { r1: 6, size: [0.2, 0.32], mode: BLOOD });
-      S.floor(['paper0', 'paper1'], 3, { r1: 6, size: [0.3, 0.36] });
+      if (pool) { S.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(1.1, 1.5), { mode: BLOOD }); S.drag(pool[0], pool[1], rng() * Math.PI * 2, 4.4); }
+      S.floor(['pool0', 'pool1'], 1, { r1: 6, size: [0.6, 0.85], mode: BLOOD, spaced: 2.5, keep: true });
+      S.floor('drops', 9, { r1: 6, size: [0.22, 0.32], mode: BLOOD });
+      S.floor(['paper0', 'paper1'], 6, { r1: 6, size: [0.32, 0.4] });
       S.floor('glass', 1, { r1: 5, size: [0.8, 1.0], mode: GLOSS });
-      const a = S.floorPoint(0.5, 2, 0.4), b = S.floorPoint(4, 6.5, 0.4);
-      if (a && b) S.footsteps(a[0], a[1], b[0], b[1], { n: 8 });
+      S.floor(['shoe', 'bag'], 2, { r1: 6, size: [0.32, 0.4], mode: BLOOD, gap: 0.35 });
+      yield;
+      for (let k = 0; k < 2; k++) { const a = S.floorPoint(0.5, 2.5, 0.4), b = S.floorPoint(4, 6.5, 0.4); if (a && b) S.footsteps(a[0], a[1], b[0], b[1], { n: 8 }); }
     }
     yield;
   }
@@ -424,27 +448,32 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
     const S = P.spot(gate.floor, gate.site.x, gate.site.z, 5);
     if (S) {
       if (g.type === 'lock') { // 防火门反锁：有人拼命拍门——门边一片血手印、往下抹的手指印
-        S.wall(['handL', 'handR'], 6, { size: [0.19, 0.24], yc: [0.9, 1.7], mode: BLOOD, r1: 3, tilt: 0.5 });
+        S.wall(['handL', 'handR'], 8, { size: [0.19, 0.24], yc: [0.85, 1.7], mode: BLOOD, r1: 3, tilt: 0.5 });
         S.wall('smear', 2, { size: [0.7, 0.9], yc: [0.9, 1.4], mode: BLOOD, tilt: 1.2, r1: 3 });
       } else if (g.type === 'debris') { // 杂物堵楼梯：有人在这儿守过——弹孔、碎石灰
-        S.wall('holes', 2, { size: [0.55, 0.75], yc: [0.9, 1.7], tilt: 0.6, r1: 4 });
-        S.floor('debris', 3, { r1: 3, size: [0.9, 1.2], alpha: [0.8, 1] });
-        S.floor('casings', 5, { r1: 3, size: [0.09, 0.12], mode: GLOSS, gap: 0.2 });
+        S.wall('holes', 4, { size: [0.55, 0.8], yc: [0.9, 1.7], tilt: 0.6, r1: 4.5 });
+        S.floor('debris', 4, { r1: 3.5, size: [0.9, 1.3], alpha: [0.8, 1] });
+        S.floor('casings', 12, { r1: 3.5, size: [0.09, 0.12], mode: GLOSS, gap: 0.2 });
       } else if (g.type === 'fire') { // 楼梯间着火：熏黑的墙、烧过的碎屑
         S.wall('scorch', 2, { size: [1.6, 2.1], yc: [1.15, 1.25], tilt: 0.05, r1: 3.5, alpha: [0.8, 0.95] });
         S.floor('scorch', 1, { r1: 2.5, size: [1.4, 1.8], alpha: [0.6, 0.8] });
         S.floor('debris', 2, { r1: 3, size: [0.8, 1.0], alpha: [0.7, 0.9] });
       } else { // 配电箱跳闸：电梯厅里的人想撬开电动栅门
-        S.wall(['handL', 'handR'], 3, { size: [0.19, 0.24], yc: [0.9, 1.6], mode: BLOOD, r1: 3.5 });
-        S.wall('smear', 1, { size: [0.7, 0.9], yc: [1.0, 1.3], mode: BLOOD, r1: 3.5 });
+        S.wall(['handL', 'handR'], 5, { size: [0.19, 0.24], yc: [0.9, 1.6], mode: BLOOD, r1: 3.5, tilt: 0.4 });
+        S.wall('smear', 2, { size: [0.7, 0.9], yc: [1.0, 1.3], mode: BLOOD, r1: 3.5 });
         S.floor('glass', 1, { r1: 3, size: [0.8, 1.0], mode: GLOSS });
       }
-      S.wall(words[i % words.length], 1, { size: words[i % words.length] === 'gTally' ? [0.8, 0.9] : [1.4, 1.6], yc: [1.4, 1.6], tilt: 0.05, keep: true, prefer: (q) => q.len - segDist(gate.site.x, gate.site.z, q.w) * 0.5 });
-      S.wall(['splat0', 'splat1'], 1, { size: [0.6, 0.9], yc: [0.7, 1.3], mode: BLOOD, r1: 4 });
+      yield;
+      S.wall(words[i % words.length], 1, { size: words[i % words.length] === 'gTally' ? [0.9, 1.0] : [1.6, 1.9], yc: [1.45, 1.6], tilt: 0.05, keep: true, prefer: (q) => q.len - segDist(gate.site.x, gate.site.z, q.w) * 0.5 });
+      S.wall(['splat0', 'splat1'], 2, { size: [0.65, 0.95], yc: [0.7, 1.3], mode: BLOOD, r1: 4 });
+      S.wall(['handL', 'handR'], 2, { size: [0.19, 0.24], yc: [0.9, 1.5], mode: BLOOD, r1: 4, tilt: 0.4 });
       const pool = S.floorPoint(0.8, 3.2, 0.55);
-      if (pool) S.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(0.8, 1.15), { mode: BLOOD, alpha: 0.95 });
-      S.floor('drops', 5, { r1: 4, size: [0.2, 0.3], mode: BLOOD });
-      S.floor(['paper0', 'paper1'], 2, { r1: 4, size: [0.3, 0.36] });
+      if (pool) { S.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(0.9, 1.25), { mode: BLOOD, alpha: 0.95 }); if (g.type !== 'fire') S.drag(pool[0], pool[1], rng() * Math.PI * 2, 2.4, { alpha: 0.8 }); }
+      S.floor('drops', 8, { r1: 4.5, size: [0.2, 0.3], mode: BLOOD });
+      S.floor(['paper0', 'paper1'], 4, { r1: 4.5, size: [0.32, 0.4] });
+      if (rng() < 0.7) S.floor(['shoe', 'bag'], 1, { r1: 4, size: [0.32, 0.4], mode: BLOOD, gap: 0.35, keep: true });
+      const a = S.floorPoint(0.6, 2, 0.35), b = S.floorPoint(3, 4.8, 0.35);
+      if (a && b) S.footsteps(a[0], a[1], b[0], b[1], { n: 7 });
     }
     yield;
     // 3b. 走廊：电梯厅 → 那户门口 → 楼梯口。一路零星的血滴、门口一串血脚印走进去、一段拖痕从门里拖出来
@@ -459,7 +488,7 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
       const C = P.spot(gate.floor, (line[0].x + line[line.length - 1].x) / 2, (line[0].z + line[line.length - 1].z) / 2, Math.hypot(line[0].x - line[line.length - 1].x, line[0].z - line[line.length - 1].z) / 2 + 4);
       if (!C) continue;
       for (const q of line) {
-        if (rng() > 0.16 * density) continue;
+        if (rng() > 0.24 * density) continue;
         const a = rng() * Math.PI * 2, d = range(0, 0.45), x = q.x + Math.cos(a) * d, z = q.z + Math.sin(a) * d;
         const st = landAt(nav, x, z, C.y + 0.6);
         if (st && st.floor === gate.floor && !C.inObstacle(x, z) && C.wallGap(x, z) > 0.2) C.addFloor('drops', x, z, range(0.18, 0.28), { mode: BLOOD, alpha: range(0.6, 0.95) });
@@ -478,13 +507,15 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
       const T = P.spot(tool.floor, tool.site.x, tool.site.z, 4);
       if (T) {
         const pool = T.floorPoint(0.8, 3, 0.6);
-        if (pool) T.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(0.9, 1.3), { mode: BLOOD, alpha: 0.92 });
-        T.floor(['paper0', 'paper1'], 4, { r1: 3.5, size: [0.3, 0.36] });
+        if (pool) T.addFloor(pick(['pool0', 'pool1']), pool[0], pool[1], range(1.0, 1.4), { mode: BLOOD, alpha: 0.92 });
+        T.floor(['paper0', 'paper1'], 6, { r1: 3.5, size: [0.32, 0.4] });
         T.floor('phone', 1, { r1: 3, size: [0.085, 0.09], mode: GLOSS, keep: true });
         T.floor('glass', 1, { r1: 3.5, size: [0.8, 1.0], mode: GLOSS });
-        T.floor('drops', 3, { r1: 3.5, size: [0.2, 0.3], mode: BLOOD });
-        if (i === 1) T.wall('gHelp', 1, { size: [0.8, 0.9], yc: [1.2, 1.45], mode: BLOOD, tilt: 0.08, keep: true });
-        T.wall(['splat0', 'splat1', 'handL', 'handR'], 2, { size: [0.22, 0.7], yc: [0.8, 1.4], mode: BLOOD });
+        T.floor('drops', 5, { r1: 3.5, size: [0.2, 0.3], mode: BLOOD });
+        if (rng() < 0.6) T.floor(['shoe', 'bag'], 1, { r1: 3.5, size: [0.32, 0.4], mode: BLOOD, gap: 0.35, keep: true });
+        if (i === 1) T.wall('gHelp', 1, { size: [0.9, 1.0], yc: [1.2, 1.45], mode: BLOOD, tilt: 0.08, keep: true });
+        T.wall(['splat0', 'splat1'], 1, { size: [0.6, 0.85], yc: [0.8, 1.3], mode: BLOOD });
+        T.wall(['handL', 'handR'], 2, { size: [0.19, 0.24], yc: [0.85, 1.4], mode: BLOOD, tilt: 0.4 });
       }
       yield;
     }
@@ -493,8 +524,14 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
       const lv = layout.levels.find((l) => l.id === gate.floor);
       const units = (lv?.units || []).filter((u) => u.id !== tool?.site?.unit && u.wfronts?.length && u.residence?.entryDoor && u.residence?.level !== 'upper');
       const ref = tool?.site || gate.site, sorted = units.map((u) => ({ u, d: doorOf(u) })).filter((q) => q.d).sort((a, b) => Math.hypot(a.d.x - ref.x, a.d.z - ref.z) - Math.hypot(b.d.x - ref.x, b.d.z - ref.z));
-      const hit = sorted[Math.floor(rng() * Math.min(2, sorted.length))];
-      if (hit) tapeDoor(P, nav, gate.floor, hit.d, rng);
+      // 离路线近的几户里挑：先随机从最近两户之一开始，门边那面墙写不下整句的就换下一户；都不行就只拉警戒线
+      const start = Math.floor(rng() * Math.min(2, sorted.length)), order = [...sorted.slice(start, 5), ...sorted.slice(0, start)];
+      let done = false;
+      for (const hit of order) if ((done = tapeDoor(P, nav, gate.floor, hit.d, rng, false))) break;
+      if (!done && order[0]) tapeDoor(P, nav, gate.floor, order[0].d, rng, true);
+      // 那户门口附近哪儿都写不下：写到这一层电梯厅 / 楼梯口一带随便一面够长的墙上
+      const has = () => items.some((it) => it.cell === 'gInfected' && it.lv === levelOf(nav, gate.floor));
+      for (const [R, size] of [[7, [1.2, 1.5]], [10, [0.95, 1.1]]]) if (!has()) P.spot(gate.floor, gate.site.x, gate.site.z, R)?.wall('gInfected', 1, { size, yc: [1.45, 1.55], tilt: 0.05, keep: true, alpha: [0.9, 0.95], prefer: (q) => q.len });
       yield;
     }
   }
@@ -568,14 +605,26 @@ function doorOf(u) {
   return { x, z, nx: f.nx, nz: f.nz, w: e.width || 0.9, dx: (f.x1 - f.x0) / (Math.hypot(f.x1 - f.x0, f.z1 - f.z0) || 1), dz: (f.z1 - f.z0) / (Math.hypot(f.x1 - f.x0, f.z1 - f.z0) || 1) };
 }
 /** 门洞上贴两条交叉的警戒线、门边墙上喷「里面有感染者」、门口地上几只往外逃的血脚印 */
-function tapeDoor(P, nav, floorId, d, rng) {
+function tapeDoor(P, nav, floorId, d, rng, force = true) {
   // 法线朝走廊那一侧（门外 0.6 米有楼板、站得住的那边）
   let nx = d.nx, nz = d.nz;
-  const F = nav.floors.get(floorId); if (!F) return;
+  const F = nav.floors.get(floorId); if (!F) return false;
   const out = (s) => { const st = landAt(nav, d.x + nx * s * 0.7, d.z + nz * s * 0.7, F.y + 0.6); return st && st.floor === floorId && clear(nav, st); };
-  if (!out(1)) { if (!out(-1)) return; nx = -nx; nz = -nz; }
+  if (!out(1)) { if (!out(-1)) return false; nx = -nx; nz = -nz; }
   const S = P.spot(floorId, d.x + nx * 0.8, d.z + nz * 0.8, 3.2);
-  if (!S) return;
+  if (!S) return false;
+  // 门边的墙：和门脸共线的墙段里，离门洞边 0.45 米以外、墙段两头留够余量、整句都露在外面的一处
+  const gw = 1.7, need = d.w / 2 + 0.4 + gw / 2;
+  const cand = [];
+  for (const { w, len } of S.walls) {
+    const ux = (w.x1 - w.x0) / len, uz = (w.z1 - w.z0) / len;
+    if (Math.abs(ux * d.dz - uz * d.dx) > 0.02) continue; // 不平行
+    if (Math.abs((d.x - w.x0) * uz - (d.z - w.z0) * ux) > 0.05) continue; // 不在同一条线上
+    const td = (d.x - w.x0) * ux + (d.z - w.z0) * uz, m = ROUTE_DRESS.margin + gw / 2;
+    for (const t of [td + need, td - need]) if (t >= m && t <= len - m) { const q = { x: w.x0 + ux * t, z: w.z0 + uz * t, nx, nz, dx: ux, dz: uz, w }; if (S.spanFree(q, gw)) cand.push(q); }
+  }
+  const q = cand.length ? cand[Math.floor(rng() * cand.length)] : null;
+  if (!q && !force) return false;
   const w = d.w, x = d.x + nx * 0.13, z = d.z + nz * 0.13;
   // 两条斜着交叉的胶带：从门框一边 0.7 米高拉到另一边 1.7 米高
   const span = Math.hypot(w + 0.16, 1.0), phi = Math.atan2(1.0, w + 0.16);
@@ -583,20 +632,14 @@ function tapeDoor(P, nav, floorId, d, rng) {
     const ax = wallAxes(nx, nz, s * phi);
     P.items.push({ lv: S.lv, cell: 'tape', p: [x, S.y + 1.2 + (s > 0 ? 0 : 0.03), z], ...ax, w: span + 0.12, h: 0.075, mode: GLOSS, alpha: 0.95, pull: 0.0 });
   }
-  // 门边的墙：和门脸共线的墙段里，离门洞边 0.45 米以外、墙段两头留够余量的一处
-  const gw = 1.5, need = d.w / 2 + 0.45 + gw / 2;
-  const cand = [];
-  for (const { w, len } of S.walls) {
-    const ux = (w.x1 - w.x0) / len, uz = (w.z1 - w.z0) / len;
-    if (Math.abs(ux * d.dz - uz * d.dx) > 0.02) continue; // 不平行
-    if (Math.abs((d.x - w.x0) * uz - (d.z - w.z0) * ux) > 0.05) continue; // 不在同一条线上
-    const td = (d.x - w.x0) * ux + (d.z - w.z0) * uz, m = ROUTE_DRESS.margin + gw / 2;
-    for (const t of [td + need, td - need]) if (t >= m && t <= len - m) cand.push({ x: w.x0 + ux * t, z: w.z0 + uz * t, nx, nz });
-  }
-  const q = cand.length ? cand[Math.floor(rng() * cand.length)] : null;
   if (q) S.addWall('gInfected', q, gw, 1.5, { phi: (rng() - 0.5) * 0.08, alpha: 0.95 });
+  // 门边写不下（北区塔楼的入户门开在小小的电梯厅里）：写在这个厅里别的墙上，字小一点
+  else S.wall('gInfected', 1, { size: [1.1, 1.4], yc: [1.45, 1.55], tilt: 0.05, keep: true, r1: 3.2, alpha: [0.9, 0.95] });
+  // 门上、门框边几只血手印（里面的人想出来）
+  S.wall(['handL', 'handR'], 2, { size: [0.19, 0.23], yc: [0.9, 1.5], mode: BLOOD, r1: 1.6, tilt: 0.5 });
   const side = rng() < 0.5 ? 1 : -1;
   S.footsteps(d.x + nx * 0.5, d.z + nz * 0.5, d.x + nx * 0.5 + d.dx * side * -3.5, d.z + nz * 0.5 + d.dz * side * -3.5, { n: 5 });
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +648,8 @@ function tapeDoor(P, nav, floorId, d, rng) {
 const rgba = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const C = Object.freeze({
   fresh: [86, 5, 7], dark: [42, 2, 3], dry: [62, 26, 17], rim: [40, 15, 10],
+  // 薄薄一层的血（拖痕、抹痕）是透光的，颜色比厚的那滩亮、饱和；用暗色低透明度画出来会是一层灰
+  thin: [132, 14, 11], thinDry: [104, 36, 22],
   plaster: [168, 163, 152], crater: [74, 70, 64], hole: [18, 16, 14], soot: [14, 12, 10],
 });
 /** 不规则的圆：半径按几个随机相位的正弦起伏 */
@@ -669,20 +714,20 @@ function paintDrag(g, W, H, rng) {
   // 身体蹭出来的一整条：沿一条微微摆动的中线，宽窄、浓淡一路变（衣服吸走的地方淡、停顿的地方浓）
   const N = valueNoise(Math.floor(rng() * 1e6)), mid = (x) => H * (0.5 + 0.06 * Math.sin(x / W * 5.5 + 1.3) + 0.05 * (N(x / W * 3, 0.5, 2) - 0.5));
   for (let x = W * 0.02; x < W * 0.98; x += Math.max(1, W / 220)) {
-    const k = x / W, half = H * (0.2 + 0.12 * N(k * 4, 2.5, 3)), dense = 0.1 + 0.18 * N(k * 6, 7.5, 2);
+    const k = x / W, half = H * (0.18 + 0.12 * N(k * 4, 2.5, 3)), dense = 0.16 + 0.26 * N(k * 6, 7.5, 2);
     const yc = mid(x);
-    g.fillStyle = rgba(N(k * 9, 4.5, 2) > 0.52 ? C.fresh : C.dry, dense);
+    g.fillStyle = rgba(N(k * 9, 4.5, 2) > 0.5 ? C.thin : C.thinDry, dense);
     g.beginPath(); g.ellipse(x, yc, Math.max(1.5, W / 160), half, 0, 0, Math.PI * 2); g.fill();
   }
   // 布料、头发拖出来的细纹：顺着方向的一道道亮缝（透出地面）和几道更深的细线
   g.save(); g.globalCompositeOperation = 'destination-out'; g.lineCap = 'round';
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 12; i++) {
     const x0 = W * rng() * 0.8, x1 = Math.min(W, x0 + W * (0.12 + rng() * 0.4)), off = (rng() - 0.5) * H * 0.44;
-    g.strokeStyle = `rgba(0,0,0,${0.25 + rng() * 0.45})`; g.lineWidth = Math.max(1, H * (0.01 + rng() * 0.025));
+    g.strokeStyle = `rgba(0,0,0,${0.2 + rng() * 0.3})`; g.lineWidth = Math.max(1, H * (0.012 + rng() * 0.03));
     g.beginPath(); g.moveTo(x0, mid(x0) + off); g.quadraticCurveTo((x0 + x1) / 2, mid((x0 + x1) / 2) + off + (rng() - 0.5) * H * 0.04, x1, mid(x1) + off); g.stroke();
   }
   g.restore();
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 6; i++) {
     const x0 = W * rng() * 0.85, x1 = Math.min(W, x0 + W * (0.06 + rng() * 0.25)), off = (rng() - 0.5) * H * 0.36;
     g.strokeStyle = rgba(rng() < 0.5 ? C.dark : C.rim, 0.25 + rng() * 0.3); g.lineWidth = Math.max(1, H * 0.012);
     g.beginPath(); g.moveTo(x0, mid(x0) + off); g.lineTo(x1, mid(x1) + off); g.stroke();
@@ -698,16 +743,28 @@ function paintDrag(g, W, H, rng) {
 }
 /** 手指往一边抹出去的血痕：起头一块掌印，四道指痕越抹越淡 */
 function paintSmear(g, W, H, rng) {
-  const x0 = W * 0.1, y0 = H * 0.5;
-  pathPts(g, blobPts(x0 + W * 0.05, y0, H * 0.32, rng, 0.25, 30)); g.fillStyle = rgba(C.fresh, 0.85); g.fill();
-  for (let f = 0; f < 4; f++) {
-    const y = y0 + (f - 1.5) * H * 0.17, len = W * (0.55 + rng() * 0.3), x1 = x0 + len;
-    const gr = g.createLinearGradient(x0, 0, x1, 0); gr.addColorStop(0, rgba(C.fresh, 0.9)); gr.addColorStop(0.6, rgba(C.dry, 0.55)); gr.addColorStop(1, rgba(C.dry, 0));
-    g.strokeStyle = gr; g.lineCap = 'round'; g.lineWidth = H * (0.09 + rng() * 0.04); g.beginPath(); g.moveTo(x0 + W * 0.06, y); g.quadraticCurveTo(x0 + len * 0.5, y + H * (0.05 + rng() * 0.08), x1, y + H * (0.1 + rng() * 0.12)); g.stroke();
+  // 整只手按在墙上往一边抹：起头是浓的一块（手掌按下去的地方），后面是一整片越抹越薄的血，四根手指在里面拖出四道深一点的痕，
+  // 指缝之间只留很细的空隙（不是四道分开的线）
+  const x0 = W * 0.08, xe = W * (0.82 + rng() * 0.14), top = H * 0.14, bot = H * 0.86, drift = H * (0.06 + rng() * 0.1);
+  const yAt = (x, y) => y + drift * ((x - x0) / (xe - x0)) ** 1.5;
+  // 底下那一片：一列一列竖着的小段，透明度往后递减，上下边缘随机进退
+  for (let x = x0; x < xe; x += Math.max(1, W / 260)) {
+    const k = (x - x0) / (xe - x0), a = 0.55 * (1 - k) ** 1.3 + 0.04;
+    const t0 = yAt(x, top + (rng() - 0.5) * H * 0.06 + k * H * 0.08), t1 = yAt(x, bot + (rng() - 0.5) * H * 0.06 - k * H * 0.1);
+    g.fillStyle = rgba(k < 0.35 ? C.thin : C.thinDry, a); g.fillRect(x, t0, Math.max(1.5, W / 240), t1 - t0);
   }
-  // 指痕里的细丝（指纹、皮肤纹路刮出来的空隙）
+  // 四道指痕：宽、挨着，越往后越淡
+  for (let f = 0; f < 4; f++) {
+    const y = top + (f + 0.5) * (bot - top) / 4, len = (xe - x0) * (0.75 + rng() * 0.25);
+    const gr = g.createLinearGradient(x0, 0, x0 + len, 0); gr.addColorStop(0, rgba(C.fresh, 0.8)); gr.addColorStop(0.5, rgba(C.thin, 0.45)); gr.addColorStop(1, rgba(C.thinDry, 0));
+    g.strokeStyle = gr; g.lineCap = 'round'; g.lineWidth = (bot - top) / 4 * 0.78;
+    g.beginPath(); g.moveTo(x0 + W * 0.04, y); g.quadraticCurveTo(x0 + len * 0.5, yAt(x0 + len * 0.5, y) + (rng() - 0.5) * H * 0.04, x0 + len, yAt(x0 + len, y)); g.stroke();
+  }
+  // 手掌按下去的那块
+  pathPts(g, blobPts(x0 + W * 0.04, H * 0.5, H * 0.36, rng, 0.18, 30)); g.fillStyle = rgba(C.fresh, 0.85); g.fill();
+  // 皮纹刮出来的细丝空隙
   g.save(); g.globalCompositeOperation = 'destination-out'; g.lineWidth = 1;
-  for (let i = 0; i < 14; i++) { const y = H * (0.15 + rng() * 0.7); g.strokeStyle = `rgba(0,0,0,${0.3 + rng() * 0.4})`; g.beginPath(); g.moveTo(W * (0.2 + rng() * 0.2), y); g.lineTo(W * (0.6 + rng() * 0.35), y + H * 0.08); g.stroke(); }
+  for (let i = 0; i < 18; i++) { const y = top + rng() * (bot - top), xa = x0 + W * (0.05 + rng() * 0.2), xb = xa + W * (0.2 + rng() * 0.4); g.strokeStyle = `rgba(0,0,0,${0.2 + rng() * 0.35})`; g.beginPath(); g.moveTo(xa, yAt(xa, y)); g.lineTo(xb, yAt(xb, y)); g.stroke(); }
   g.restore();
 }
 /** 血手印（左手；右手镜像画）：手掌、四指、拇指，按得不均匀，皮肤纹路留白 */
@@ -787,26 +844,31 @@ function valueNoise(seed) {
  * 熏黑：火从墙根往上舔出来的烟痕——底下一段最黑、往上散成一缕一缕，边缘被噪声啃得不齐。
  * 逐像素算（渐变叠很多层在画布上会抖出网点），画在单独的小画布上（putImageData 不认裁剪和平移）。
  */
-function paintScorch(g, W, H, rng) {
+function paintScorch(g, W0, H0, rng) {
   if (typeof g.createImageData !== 'function') return;
+  // 烟是软的：按三分之一的分辨率算，再放大铺满（双线性插值正好把它抹匀；逐像素全分辨率算要两三百毫秒）
+  const W = Math.max(8, Math.round(W0 / 3)), H = Math.max(8, Math.round(H0 / 3));
   const img = g.createImageData(W, H); if (!img?.data) return;
-  const d = img.data, N = valueNoise(Math.floor(rng() * 1e6)), sx = 4 / W, lean = (rng() - 0.5) * 0.25;
+  const d = img.data, N = valueNoise(Math.floor(rng() * 1e6)), sx = 5 / W, lean = (rng() - 0.5) * 0.2;
+  const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   for (let y = 0; y < H; y++) {
-    const t = 1 - y / H; // 0 = 底，1 = 顶
-    const half = 0.16 + 0.3 * Math.pow(t, 0.8); // 烟柱半宽（相对 W）往上变宽
+    const t = 1 - y / H; // 0 = 墙根（火在这儿），1 = 顶
+    const half = 0.07 + 0.36 * Math.pow(t, 0.75); // 烟柱半宽：墙根窄、往上张开成 V 字
     for (let x = 0; x < W; x++) {
-      const u = x / W - 0.5 - lean * t;
-      const n = N(x * sx, y * sx * 0.55 - t * 1.5, 4), w = N(x * sx * 2.5 + 9, y * sx * 0.9, 2);
-      // 柱形 × 噪声：边缘按噪声进退，往上越来越淡、越来越碎
-      const edge = 1 - Math.min(1, Math.abs(u) / (half * (0.75 + 0.5 * n)));
-      let a = Math.pow(Math.max(0, edge), 0.7) * (1.05 - 0.9 * t) * (0.55 + 0.75 * n) - (t > 0.55 ? (w - 0.45) * 0.6 * t : 0);
-      a *= Math.min(1, y / (H * 0.04 + 1)) * Math.min(1, (H - y) / (H * 0.08)); // 上下两头收住，不出格
-      a = Math.max(0, Math.min(0.92, a));
-      const i = (y * W + x) * 4, c = 10 + 22 * n * (1 - a);
-      d[i] = c + 4; d[i + 1] = c + 2; d[i + 2] = c; d[i + 3] = a * 255;
+      const u = x / W - 0.5 - lean * t * t;
+      // 竖着拉长的噪声 = 一缕一缕往上窜的烟舌；另一层细一点的让边缘发毛
+      const tongue = N(x * sx * 1.6, y * sx * 0.35 + 3, 3), fine = N(x * sx * 4 + 11, y * sx * 2, 2);
+      const edge = 1 - Math.abs(u) / (half * (0.7 + 0.6 * tongue));
+      let a = sm(0, 0.45, edge) * (0.25 + 0.95 * tongue) * (1 - sm(0.45, 1, t)) * (0.85 + 0.3 * fine);
+      a += sm(0.12, 0, t) * sm(0, 0.6, edge) * 0.35; // 墙根最黑的那一条
+      a *= sm(0, 0.05, y / H + 0.02 * fine) * sm(1, 0.92, y / H); // 上下两头收住，不出格
+      a = Math.max(0, Math.min(0.9, a));
+      const i = (y * W + x) * 4, c = 8 + 26 * fine * (1 - a);
+      d[i] = c + 5; d[i + 1] = c + 3; d[i + 2] = c; d[i + 3] = a * 255;
     }
   }
   g.putImageData(img, 0, 0);
+  g.save(); g.globalCompositeOperation = 'copy'; g.imageSmoothingEnabled = true; g.drawImage(g.canvas, 0, 0, W, H, 0, 0, W0, H0); g.restore();
 }
 /** 碎玻璃：一堆小三角、四边形，边缘亮一点（着色器里整块光滑，手电一照会闪） */
 function paintGlass(g, W, H, rng) {
@@ -852,6 +914,40 @@ function paintPhone(g, W, H, rng) {
   const gr = g.createLinearGradient(x0, y0, x0 + w, y0 + h); gr.addColorStop(0, 'rgba(120,150,170,0.18)'); gr.addColorStop(0.5, 'rgba(120,150,170,0)'); g.fillStyle = gr; g.fillRect(x0 + w * 0.07, y0 + h * 0.05, w * 0.86, h * 0.9);
   const ix = x0 + w * (0.3 + rng() * 0.4), iy = y0 + h * (0.3 + rng() * 0.4); g.strokeStyle = 'rgba(220,230,235,0.55)'; g.lineWidth = 1;
   for (let k = 0; k < 9; k++) { let a = rng() * 6.28, px = ix, py = iy; g.beginPath(); g.moveTo(px, py); for (let j = 0; j < 4; j++) { a += (rng() - 0.5) * 0.6; px += Math.cos(a) * h * 0.1; py += Math.sin(a) * h * 0.1; g.lineTo(px, py); } g.stroke(); }
+}
+/** 跑掉的一只鞋（俯视，侧倒着）：深色鞋面、白鞋底露出一圈、鞋带，鞋头蹭了血；底下一圈影子 */
+function paintShoe(g, W, H, rng) {
+  const s = W / 100;
+  g.save(); g.translate(50 * s, 50 * s); g.rotate(-0.5 + (rng() - 0.5) * 0.4);
+  const outline = (k) => { g.beginPath(); g.moveTo(-38 * s * k, -2 * s); g.bezierCurveTo(-38 * s * k, -15 * s * k, -18 * s, -16 * s * k, 4 * s, -14 * s * k); g.bezierCurveTo(26 * s, -13 * s * k, 40 * s * k, -11 * s * k, 40 * s * k, 0); g.bezierCurveTo(40 * s * k, 11 * s * k, 24 * s, 13 * s * k, 4 * s, 13 * s * k); g.bezierCurveTo(-18 * s, 14 * s * k, -38 * s * k, 12 * s * k, -38 * s * k, -2 * s); g.closePath(); };
+  g.save(); g.translate(2.5 * s, 3.5 * s); outline(1.04); g.fillStyle = 'rgba(0,0,0,0.5)'; g.fill(); g.restore(); // 影子
+  outline(1); g.fillStyle = '#9d9991'; g.fill(); // 鞋底（脏了的白）
+  outline(0.84); const gr = g.createLinearGradient(0, -14 * s, 0, 12 * s); gr.addColorStop(0, '#4a4d55'); gr.addColorStop(0.5, '#33363d'); gr.addColorStop(1, '#1d1f24'); g.fillStyle = gr; g.fill(); // 鞋面
+  // 鞋口（脚伸进去的洞）和鞋带
+  g.fillStyle = '#121214'; g.beginPath(); g.ellipse(-20 * s, -1 * s, 10 * s, 6.5 * s, 0, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = 'rgba(160,158,150,0.7)'; g.lineWidth = 1.3 * s; g.lineCap = 'round';
+  for (let i = 0; i < 4; i++) { const x = -6 * s + i * 5.5 * s; g.beginPath(); g.moveTo(x, -5 * s); g.lineTo(x + 3 * s, 5 * s); g.moveTo(x + 3 * s, -5 * s); g.lineTo(x, 5 * s); g.stroke(); }
+  g.fillStyle = 'rgba(255,255,255,0.08)'; g.beginPath(); g.ellipse(14 * s, -6 * s, 18 * s, 3 * s, 0, 0, Math.PI * 2); g.fill(); // 鞋面的一点反光
+  // 鞋头蹭的血
+  g.save(); outline(1); g.clip(); pathPts(g, blobPts(30 * s, 4 * s, 9 * s, rng, 0.35, 20)); g.fillStyle = rgba(C.fresh, 0.8); g.fill(); g.restore();
+  g.restore();
+}
+/** 扔下的双肩包（俯视）：鼓起来的包身、盖布、拉链、一条背带甩在一边 */
+function paintBag(g, W, H, rng) {
+  const s = W / 100;
+  g.save(); g.translate(50 * s, 52 * s); g.rotate((rng() - 0.5) * 0.8);
+  const body = () => { g.beginPath(); g.roundRect ? g.roundRect(-24 * s, -30 * s, 48 * s, 60 * s, 14 * s) : g.rect(-24 * s, -30 * s, 48 * s, 60 * s); };
+  g.save(); g.translate(3 * s, 4 * s); body(); g.fillStyle = 'rgba(0,0,0,0.5)'; g.fill(); g.restore();
+  // 背带：一条甩出去的弧
+  g.strokeStyle = '#1b1e24'; g.lineWidth = 6 * s; g.lineCap = 'round'; g.beginPath(); g.moveTo(-14 * s, -26 * s); g.bezierCurveTo(-44 * s, -30 * s, -46 * s, 10 * s, -22 * s, 22 * s); g.stroke();
+  body(); const gr = g.createRadialGradient(-6 * s, -8 * s, 4 * s, 0, 0, 40 * s); gr.addColorStop(0, '#3e5068'); gr.addColorStop(1, '#1c2533'); g.fillStyle = gr; g.fill();
+  // 盖布和拉链
+  g.fillStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.moveTo(-24 * s, -10 * s); g.quadraticCurveTo(0, 2 * s, 24 * s, -10 * s); g.lineTo(24 * s, -16 * s); g.quadraticCurveTo(0, -4 * s, -24 * s, -16 * s); g.fill();
+  g.strokeStyle = 'rgba(170,175,180,0.7)'; g.lineWidth = 1.2 * s; g.beginPath(); g.moveTo(-18 * s, 14 * s); g.lineTo(18 * s, 14 * s); g.stroke();
+  g.fillStyle = '#9aa0a6'; g.fillRect(12 * s, 12 * s, 4 * s, 6 * s);
+  g.fillStyle = 'rgba(255,255,255,0.07)'; g.beginPath(); g.ellipse(-8 * s, -20 * s, 12 * s, 5 * s, -0.3, 0, Math.PI * 2); g.fill();
+  if (rng() < 0.7) { g.save(); body(); g.clip(); pathPts(g, blobPts(14 * s, 22 * s, 8 * s, rng, 0.3, 18)); g.fillStyle = rgba(C.dark, 0.75); g.fill(); g.restore(); }
+  g.restore();
 }
 /** 几颗弹壳（黄铜，着色器里光滑） */
 function paintCasings(g, W, H, rng) {
@@ -899,9 +995,6 @@ function paintGraffiti(g, W, H, rng, spec) {
       const ax = cx + fs * 0.42, ay = base, L = fs * 0.4, dir = spec.arrow === 'down' ? 1 : -1;
       g.save(); g.lineWidth = fs * 0.12; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = g.fillStyle; g.beginPath(); g.moveTo(ax, ay - dir * L); g.lineTo(ax, ay + dir * L); g.moveTo(ax - L * 0.6, ay + dir * L * 0.35); g.lineTo(ax, ay + dir * L); g.lineTo(ax + L * 0.6, ay + dir * L * 0.35); g.stroke(); g.restore();
     }
-    if (spec.cross) { // 「里面有感染者」上打一个大叉（有人写完又划掉？不——是标记：这户别进）
-      g.save(); g.lineWidth = fs * 0.07; g.lineCap = 'round'; g.strokeStyle = g.fillStyle; g.beginPath(); g.moveTo(x - fs * 0.2, H * 0.12); g.lineTo(x + total * k + fs * 0.1, H * 0.9); g.stroke(); g.restore();
-    }
   };
   const rgb = [parseInt(col.slice(1, 3), 16), parseInt(col.slice(3, 5), 16), parseInt(col.slice(5, 7), 16)];
   // 两遍用同一串抖动（同一个种子），虚的那层正好包着实的那层
@@ -940,7 +1033,7 @@ function paintGraffiti(g, W, H, rng, spec) {
 const OFFSCREEN = new Set(['scorch']);
 const PAINTERS = {
   pool0: paintPool, pool1: paintPool, splat0: paintSplat, splat1: paintSplat, holes: paintHoles, scorch: paintScorch, drag: paintDrag, smear: paintSmear,
-  glass: paintGlass, debris: paintDebris, tape: paintTape, drops: paintDrops, phone: paintPhone, casings: paintCasings,
+  glass: paintGlass, debris: paintDebris, tape: paintTape, drops: paintDrops, phone: paintPhone, casings: paintCasings, shoe: paintShoe, bag: paintBag,
   handL: (g, W, H, r) => paintHand(g, W, H, r, false), handR: (g, W, H, r) => paintHand(g, W, H, r, true),
   footL: (g, W, H, r) => paintFoot(g, W, H, r, false), footR: (g, W, H, r) => paintFoot(g, W, H, r, true),
   paper0: (g, W, H, r) => paintPaper(g, W, H, r, 0), paper1: (g, W, H, r) => paintPaper(g, W, H, r, 1),
