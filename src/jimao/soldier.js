@@ -86,7 +86,8 @@ const capsule = (a, b, r0, r1, hex) => [limb(a, b, r0, r1, hex), ball(r0, a.x, a
 const v = (x, y, z) => new THREE.Vector3(x, y, z);
 const merge = (list) => { const g = mergeGeometries(ensureRig(list.flat(Infinity).map((q) => (q.index ? q.toNonIndexed() : q)))); g.computeBoundingSphere(); return g; };
 // 人形骨架的合并：零件都带 rig 属性，走快速合并（mergeFlat，结果和上面一样，开局建人快几倍）
-const mergeRig = (list) => { const g = mergeFlat(ensureRig(list.flat(Infinity))); g.computeBoundingSphere(); return g; };
+// UV 不要：质感走三向投影（rig-skin.js），材质里也没有贴图用 UV，每个顶点省 8 个字节
+const mergeRig = (list) => { const g = mergeFlat(ensureRig(list.flat(Infinity))); g.deleteAttribute('uv'); g.computeBoundingSphere(); return g; };
 
 /** 搭模型、算命中用的小工具（zombie.js 也用） */
 export { rbox, ball, limb, capsule, merge, hitSphere, hitCapsule, buildParts };
