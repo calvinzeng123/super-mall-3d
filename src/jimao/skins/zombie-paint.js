@@ -383,16 +383,16 @@ export function* prepareLayers(src, S, body, plan, tables) {
  *   acid（喷酸者的酸蚀斑）、lesion（巨尸的烂疮）、soot（扑袭者的一身黑灰）、pustule（胖尸的脓疱）：特殊感染者各自的标记。
  */
 export const LOOKS = Object.freeze({
-  // 三套普通的：灰绿、发青发紫、蜡黄
+  // 三套普通的：灰绿、发青发灰、蜡黄
   walker: Object.freeze([
     Object.freeze({ claws: 1, back: 1, skinA: [104, 112, 92], skinB: [100, 92, 98], skinKeep: 0.7, veins: 0.6, bruise: 0.6, blood: 1, grime: 0.8, rips: 1, stains: 3 }),
-    Object.freeze({ claws: 2, back: 0, skinA: [98, 104, 104], skinB: [94, 84, 98], skinKeep: 0.65, veins: 0.75, bruise: 0.8, blood: 0.85, grime: 0.7, rips: 0.8, stains: 2 }),
+    Object.freeze({ claws: 2, back: 0, skinA: [100, 105, 99], skinB: [96, 88, 94], skinKeep: 0.65, veins: 0.75, bruise: 0.8, blood: 0.85, grime: 0.7, rips: 0.8, stains: 2 }),
     Object.freeze({ claws: 3, back: 1, skinA: [120, 112, 86], skinB: [104, 94, 88], skinKeep: 0.75, veins: 0.5, bruise: 0.5, blood: 1.25, grime: 0.9, rips: 1.2, stains: 5 }),
   ]),
   pale: Object.freeze({ claws: 2, back: 0, skinA: [176, 178, 172], skinB: [150, 146, 156], skinKeep: 0.55, veins: 1.25, bruise: 0.3, blood: 0.5, grime: 0.45, rips: 0.8, stains: 1, bloodTint: [0.32, 0.2, 0.22] }),
   lunger: Object.freeze({ claws: 3, back: 1, skinA: [76, 76, 78], skinB: [66, 60, 66], skinKeep: 0.6, veins: 0.5, bruise: 0.3, blood: 1, grime: 1, rips: 1.6, stains: 4, soot: 0.6 }),
   spitter: Object.freeze({ claws: 1, back: 0, skinA: [158, 150, 76], skinB: [122, 136, 66], skinKeep: 0.65, veins: 0.65, bruise: 0.3, blood: 0.6, grime: 0.7, rips: 1, stains: 2, fluid: [0.72, 0.8, 0.2], acid: 1 }),
-  brute: Object.freeze({ claws: 3, back: 1, skinA: [116, 58, 50], skinB: [96, 50, 54], skinKeep: 0.65, veins: 0.6, bruise: 0.4, blood: 1.6, grime: 0.8, rips: 1.4, stains: 6, lesion: 1, bloodTint: [0.5, 0.06, 0.05] }),
+  brute: Object.freeze({ claws: 3, back: 1, skinA: [110, 64, 56], skinB: [88, 54, 58], skinKeep: 0.65, veins: 0.6, bruise: 0.4, blood: 1.6, grime: 0.8, rips: 1.4, stains: 6, lesion: 1, bloodTint: [0.5, 0.06, 0.05] }),
   bloater: Object.freeze({ claws: 0, back: 1, skinA: [124, 134, 96], skinB: [98, 82, 106], skinKeep: 0.6, veins: 1.2, bruise: 0.85, blood: 0.9, grime: 0.8, rips: 1.3, stains: 4, pustule: 1 }),
 });
 
