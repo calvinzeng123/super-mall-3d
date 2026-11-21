@@ -4,6 +4,7 @@
 // 定位：射速快、单发伤害低、动静小——步枪 7 点响动一发，它只有 2.5；打散兵游勇不招尸潮，打尸潮得靠步枪和投掷物。
 // 这里只管这把枪自己（状态、开火、换弹、模型摆位）；切枪、HUD 读数在 arsenal.js。
 import * as THREE from 'three';
+import { skinSmg } from './skins/smg-skin.js';
 
 /**
  * interval：两发间隔（秒，按住连发）；noise：一发的响动（siege.js 读）；recoil：每发镜头上抬（弧度）；
@@ -39,7 +40,7 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
   const flashGeo = starGeometry(), flash = new THREE.Mesh(flashGeo, flashMat);
   flash.position.set(V.muzzle[0], V.muzzle[1], V.muzzle[2] - 0.02); flash.visible = false; if (layer) flash.layers.set(layer); root.add(flash);
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), q1 = new THREE.Quaternion(), e1 = new THREE.Euler();
-  let model = null, mixer = null, action = null, clipTime = 0;
+  let model = null, mixer = null, action = null, clipTime = 0, skin = null;
   const res = { geometries: new Set(), materials: new Set(), textures: new Set() };
 
   function attach(gltf) {
@@ -50,11 +51,11 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
       if (!o.isMesh) return;
       o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false;
       res.geometries.add(o.geometry);
-      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-        res.materials.add(m); m.envMapIntensity = 0.9;
-        for (const t of Object.values(m)) if (t?.isTexture) { res.textures.add(t); t.anisotropy = 4; }
-      }
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) { res.materials.add(m); m.envMapIntensity = 0.9; }
     });
+    // 贴图整理（去压缩方块、分开钢件和聚合物、棱边磨损、细节法线；见 skins/smg-skin.js）。它会把原贴图换掉并释放，所以贴图在它之后再登记
+    try { skin = skinSmg(model); } catch (e) { console.error('[零点突围] 冲锋枪贴图整理出错', e); }
+    for (const m of res.materials) for (const t of Object.values(m)) if (t?.isTexture) { res.textures.add(t); if (!skin?.textures.has(t)) t.anisotropy = 4; }
     root.add(model);
     const clip = gltf.animations?.find((c) => /reload/i.test(c.name)) || gltf.animations?.[0] || null;
     if (clip) { mixer = new THREE.AnimationMixer(model); action = mixer.clipAction(clip); action.play(); action.paused = true; clipTime = clip.duration; action.time = clipTime; mixer.update(0); }
@@ -144,7 +145,7 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
     addAmmo(n) { const b = S.reserve; S.reserve = Math.min(W.reserveMax, S.reserve + n); return S.reserve - b; },
     dispose() {
       root.removeFromParent(); flashGeo.dispose(); flashMat.dispose(); mixer?.stopAllAction();
-      for (const g of res.geometries) g.dispose(); for (const m of res.materials) m.dispose(); for (const t of res.textures) { t.dispose(); t.image?.close?.(); }
+      for (const g of res.geometries) g.dispose(); for (const m of res.materials) m.dispose(); for (const t of res.textures) { t.dispose(); t.image?.close?.(); } skin?.dispose();
     },
   };
 }

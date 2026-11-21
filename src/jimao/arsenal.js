@@ -11,6 +11,8 @@
 import * as THREE from 'three';
 import { SMG, createSmg } from './smg.js';
 import { LAUNCHER, createLauncher } from './launcher.js';
+import { createPistolSkin, scrubMarkings as scrubPistolMarkings } from './skins/pistol-skin.js';
+import { buildKnife, createKnifeMaterials } from './skins/knife-skin.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -79,41 +81,30 @@ export const PISTOL_SKIN = Object.freeze({
   slideTravel: 3.4, magDrop: 15,
   slides: /^(Slide_low|Safety_low|BoltMain_low|BoltAdd_low|RearSight_low|BoltButton_low|BoltBack_low)$/,
   mags: /^(Magazine_low|MagazineBase_low|BaseInside_low)$/, hidden: /^(BulletCase_low|Bullet_low)$/, hammer: /^Hammer_low$/,
-  // 原模型是亮面不锈钢，在商场的平光下发白、像玩具；压成深色烤蓝（贴图上的拉丝、划痕、防滑纹都还在）
+  // 原模型是亮面不锈钢，在商场的平光下发白、像玩具。贴图处理得了的时候（skins/pistol-skin.js）深色直接画进贴图里（烤蓝套筒、磷化黑的套筒座）；
+  // 处理不了（贴图没读出来）就退回老办法：材质颜色整体乘暗
   tint: Object.freeze({ Slide: 0.38, MainBody: 0.5, Magazine: 0.55 }),
-  // 贴图上原厂的铭文和握把徽标抹掉（园区里只用虚构品牌）：512 × 512 贴图上的像素框 [x, y, 宽, 高]，from 是旁边一块干净的拉丝面，拉过来盖住
+  // 贴图上原厂的铭文、口径、编号和握把徽标抹掉（园区里只用虚构品牌）。坐标是 512 × 512 贴图上的像素：
+  //   rects：at 是铭文所在的框 [x, y, 宽, 高]（框要落在同一块平面里，四边留一两个像素）；along：拉丝的方向——'v' 从框的上边接到下边，'h' 从左接到右；
+  //          from 是旁边一块干净的面，只借它的细颗粒；
+  //   discs：握把片上的圆片 [圆心 x, y, 半径]，改画成握把螺帽。
   scrub: Object.freeze({
-    Slide: Object.freeze({ rects: Object.freeze([{ at: [122, 134, 26, 104], from: [122, 84, 26, 48] }, { at: [148, 90, 25, 100], from: [148, 62, 25, 26] }]) }),
-    MainBody: Object.freeze({ rects: Object.freeze([{ at: [58, 100, 18, 56], from: [58, 50, 18, 44] }]), discs: Object.freeze([[398, 210, 15], [398, 343, 15]]), disc: '#6f5a2c' }),
+    Slide: Object.freeze({ rects: Object.freeze([
+      { at: [125, 134, 21, 99], from: [125, 62, 21, 58] },                 // 左侧：型号 / 产地两行
+      { at: [151, 92, 22, 93], from: [151, 54, 22, 34] },                  // 右侧：厂名两行
+      { at: [206, 271, 11, 31], from: [199, 272, 6, 28], along: 'h' },     // 枪口两侧的口径
+      { at: [198, 325, 11, 31], from: [194, 326, 4, 28], along: 'h' },
+      { at: [347, 72, 28, 17], from: [336, 63, 10, 9], along: 'h' },      // 抛壳窗里露出来的弹膛上还有一处口径
+    ]) }),
+    MainBody: Object.freeze({ rects: Object.freeze([{ at: [62, 108, 13, 45], from: [62, 92, 13, 14] }]), discs: Object.freeze([[400.1, 209.6, 13.6], [400, 342.7, 13.6]]) }), // 编号；两侧握把片的圆片
   }),
 });
 
 /**
- * 把一种材质贴图上的铭文 / 徽标抹掉：颜色和粗糙度贴图用旁边干净的一块盖住，法线贴图填平。
- * 贴图换成画布（glTF 贴图不翻转，画布坐标就是贴图文件的像素坐标）。没有 document（测试环境）就什么都不做。
+ * 把一种材质贴图上的铭文 / 徽标抹掉（颜色、粗糙度、法线三张图；做法见 skins/pistol-skin.js）。返回改了几张贴图。
+ * 没有 document（测试环境）就什么都不做、返回 0。
  */
-export function scrubMarkings(material, spec, doc = typeof document === 'undefined' ? null : document) {
-  if (!doc || !spec || !material) return 0;
-  let n = 0;
-  for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) {
-    const tex = material[key], img = tex?.image;
-    if (!img?.width || tex.userData?.scrubbed) continue;
-    const c = doc.createElement('canvas'); c.width = img.width; c.height = img.height;
-    const g = c.getContext('2d'); if (!g) continue;
-    g.drawImage(img, 0, 0);
-    const k = img.width / 512, flat = key === 'normalMap';
-    for (const r of spec.rects || []) {
-      const [x, y, w, h] = r.at.map((v) => v * k);
-      if (flat) { g.fillStyle = 'rgb(128,128,255)'; g.fillRect(x, y, w, h); } else { const [sx, sy, sw, sh] = r.from.map((v) => v * k); g.drawImage(img, sx, sy, sw, sh, x, y, w, h); }
-    }
-    for (const [x, y, rad] of spec.discs || []) {
-      if (key !== 'map' && !flat) continue;
-      g.fillStyle = flat ? 'rgb(128,128,255)' : spec.disc; g.beginPath(); g.arc(x * k, y * k, (flat ? rad - 2 : rad) * k, 0, Math.PI * 2); g.fill();
-    }
-    img.close?.(); tex.image = c; tex.userData = { ...tex.userData, scrubbed: true }; tex.needsUpdate = true; n++;
-  }
-  return n;
-}
+export function scrubMarkings(material, spec, doc = typeof document === 'undefined' ? null : document) { return scrubPistolMarkings(material, spec, doc); }
 
 /** 模型里的一点（厘米）换到手枪自己的坐标（原点在握把中心、−z 朝前、米）：绕 y 转半圈、缩放、平移 */
 export function skinPoint([x, y, z], K = PISTOL_SKIN) {
@@ -168,22 +159,13 @@ export function pistolGeometry() {
 
 /**
  * 战术刀的几何：原点在握把中心，握把沿着步枪握把的方向（斜着朝上朝前），刀尖朝握把上端。
- * 返回 { blade, handle, guard }。blade 是带血槽的单刃刀身（17 厘米），handle 是有防滑纹的握把，guard 是护手和尾锤。
+ * 返回 { blade, fuller, handle, guard }。blade 是单刃刀身（17 厘米：刀背、刀面、主刃面、刃口），fuller 是两面的血槽，
+ * handle 是带防滑槽的握把，guard 是护手和尾锤（带穿绳孔）。模型本身在 skins/knife-skin.js 里搭，这里只把它倾到握把的角度。
  */
 export function knifeGeometry() {
-  const s = new THREE.Shape();
-  // 刀身轮廓（x 是刃宽方向，y 是刀长）：刀背平直，刀刃从护手处鼓出去、到刀尖收拢
-  s.moveTo(-0.012, 0); s.lineTo(0.013, 0); s.lineTo(0.016, 0.05); s.quadraticCurveTo(0.016, 0.13, -0.004, 0.172); s.lineTo(-0.012, 0.15); s.lineTo(-0.012, 0); s.closePath();
-  const bladeG = new THREE.ExtrudeGeometry(s, { depth: 0.0032, bevelEnabled: true, bevelThickness: 0.0012, bevelSize: 0.0016, bevelSegments: 1 });
-  bladeG.translate(0, 0, -0.0016); bladeG.rotateY(Math.PI / 2);   // 刀面转到竖着（刃宽沿 z）
-  bladeG.translate(0, 0.062, 0);
-  const fuller = box(0.0048, 0.085, 0.004, 0, 0.062 + 0.06, -0.004);  // 血槽（深色）
-  const handle = [cyl(0.0135, 0.0125, 0.105, 0, 0, 0, 12, 'y')];
-  handle[0].scale(0.82, 1, 1.25);
-  for (let i = 0; i < 6; i++) handle.push(cyl(0.0142, 0.0142, 0.004, 0, -0.04 + i * 0.016, 0, 12, 'y').scale(0.82, 1, 1.25));
-  const guard = [box(0.011, 0.008, 0.052, 0, 0.058, 0, 0.003), box(0.014, 0.012, 0.03, 0, -0.058, 0, 0.004)];
-  const rot = (g) => { g.rotateX(GRIP_TILT); return g; };
-  return { blade: rot(metricUV(bladeG.index ? bladeG.toNonIndexed() : bladeG)), fuller: rot(metricUV(fuller.toNonIndexed())), handle: rot(merged(handle)), guard: rot(merged(guard)) };
+  const k = buildKnife();
+  for (const g of Object.values(k)) g.rotateX(GRIP_TILT);
+  return k;
 }
 
 const ease = (k) => k * k * (3 - 2 * k);
@@ -228,13 +210,12 @@ export function knifeReaches(eye, fx, fy, fz, enemy, reach = KNIFE.reach, cone =
 
 export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const rifle = G.weapon, rifleVm = camera.children.find((c) => /^viewmodel/.test(c.name || '')) || null;
-  // 自己的材质（原游戏那几种枪用材质要配它自己的顶点数据，直接拿来用会发白）：深色磷化钢、哑光聚合物、亮钢
+  // 手搭的方块手枪自己的材质（原游戏那几种枪用材质要配它自己的顶点数据，直接拿来用会发白）：深色磷化钢、哑光聚合物。
+  // 真模型加载出来以后这几个就不显示了；刀的材质在 skins/knife-skin.js
   const M = {
     slide: new THREE.MeshStandardMaterial({ color: 0x1d1f22, metalness: 0.62, roughness: 0.48 }),
     frame: new THREE.MeshStandardMaterial({ color: 0x151617, metalness: 0.08, roughness: 0.66 }),
     dark: new THREE.MeshStandardMaterial({ color: 0x070808, metalness: 0.3, roughness: 0.85 }),
-    steel: new THREE.MeshStandardMaterial({ color: 0xc4c8cc, metalness: 1, roughness: 0.2 }),
-    grip: new THREE.MeshStandardMaterial({ color: 0x1b1c1a, metalness: 0.05, roughness: 0.78 }),
     dot: new THREE.MeshBasicMaterial({ color: 0xf2f2ee, toneMapped: false }),
     flash: new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }),
   };
@@ -301,7 +282,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const knifeRoot = new THREE.Group(); knifeRoot.name = 'viewmodel-knife';
   const kArm = new THREE.Group(); kArm.position.copy(ELBOW).negate(); knifeRoot.add(kArm);
   const kBody = new THREE.Group(); kBody.position.set(...GRIP); kArm.add(kBody);
-  mesh(kg.blade, M.steel, kBody); mesh(kg.fuller, M.dark, kBody); mesh(kg.handle, M.grip, kBody); mesh(kg.guard, M.slide, kBody);
+  // 刀自己的三种材质（刀身专用贴图、橡胶握把、缎面钢的护手和尾锤）：见 skins/knife-skin.js
+  const KM = createKnifeMaterials();
+  mesh(kg.blade, KM.blade, kBody); mesh(kg.fuller, KM.blade, kBody); mesh(kg.handle, KM.handle, kBody); mesh(kg.guard, KM.steel, kBody);
   cloneHand(0, kArm);
   // 平时的握姿（刀尖朝前上方、往里斜）和这个姿势下手肘在镜头里的位置
   const K_IDLE = new THREE.Euler(-0.42, 0.3, 0.38), K_ELBOW = new THREE.Vector3(0.105, -0.085, -0.4).add(ELBOW.clone().applyEuler(K_IDLE));
@@ -651,7 +634,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       holder.scale.setScalar(K.scale); holder.rotation.y = Math.PI; // 模型枪口朝 +z，我们朝 −z
       holder.position.set(K.grip[0] * K.scale + K.offset[0], -K.grip[1] * K.scale + K.offset[1], K.grip[2] * K.scale + K.offset[2]);
       holder.add(scene);
-      const slides = [], mags = [], res = { geometries: new Set(), materials: new Set(), textures: new Set() };
+      const slides = [], mags = [], res = { geometries: new Set(), materials: new Set(), textures: new Set() }, dresser = createPistolSkin();
       let hammer = null, magAxis = new THREE.Vector3(0, 1, 0);
       scene.traverse((o) => {
         if (K.slides.test(o.name)) slides.push({ object: o, base: o.position.clone() });
@@ -667,8 +650,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
           if (res.materials.has(m)) continue;
           res.materials.add(m); m.side = THREE.FrontSide; m.envMapIntensity = 1.15;
           if (K.tint[m.name]) m.color.setScalar(K.tint[m.name]);
-          scrubMarkings(m, K.scrub[m.name]);
-          for (const v of Object.values(m)) if (v?.isTexture) { res.textures.add(v); v.anisotropy = 4; }
+          // 整套贴图处理（抹字、重新上色、放大锐化、细节）；做不了（测试环境、贴图不全）就只抹字，深色靠上面的颜色乘数
+          if (!dresser.dress(m, K.scrub[m.name])) scrubMarkings(m, K.scrub[m.name]);
+          for (const v of Object.values(m)) if (v?.isTexture) { res.textures.add(v); v.anisotropy = Math.max(v.anisotropy, 4); }
         }
       });
       if (layer) holder.layers.set(layer);
@@ -679,7 +663,8 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       Object.assign(fit, { muzzle: f.muzzle, eject: f.eject, sightY: f.sightY, slideTravel: f.slideTravel });
       pPivot.set(...f.pivot);
       flash.position.set(fit.muzzle[0], fit.muzzle[1], fit.muzzle[2] - 0.03);
-      skin = { holder, slides, mags, hammer, magAxis, res };
+      dresser.seal();
+      skin = { holder, slides, mags, hammer, magAxis, res, dresser };
       return true;
     },
     get skinned() { return !!skin; },
@@ -689,8 +674,8 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       if (typeof removeEventListener === 'function') { removeEventListener('keydown', onKey); removeEventListener('wheel', onWheel); }
       for (const r of [pistolRoot, knifeRoot]) r.removeFromParent(); smg.dispose(); gl.dispose();
       for (const g of [pg.frame, pg.slide, pg.dark, pg.mag, pg.trigger, pg.dots, kg.blade, kg.fuller, kg.handle, kg.guard]) g.dispose();
-      M.flash.map?.dispose?.(); for (const m of Object.values(M)) m.dispose();
-      if (skin) { for (const g of skin.res.geometries) g.dispose(); for (const m of skin.res.materials) m.dispose(); for (const t of skin.res.textures) { t.dispose(); t.image?.close?.(); } skin = null; }
+      M.flash.map?.dispose?.(); for (const m of Object.values(M)) m.dispose(); KM.dispose();
+      if (skin) { for (const g of skin.res.geometries) g.dispose(); for (const m of skin.res.materials) m.dispose(); for (const t of skin.res.textures) { t.dispose(); t.image?.close?.(); } skin.dresser.dispose(); skin = null; }
       btn?.remove();
     },
   };
