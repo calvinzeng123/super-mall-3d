@@ -18,6 +18,8 @@ import { buildParts, RIG } from './soldier.js';
 export const SQUAD = Object.freeze({
   follow: Object.freeze({ near: 2.2, far: 4.6, run: 8, warp: 24, warpSeconds: 2.2, walk: 3.4, sprint: 7.2 }),
   see: 24, bite: Object.freeze({ reach: 1.55, dps: 6.5, pull: 5.5 }),
+  // 巨尸够得着队友：一巴掌拍飞出去（掉 damage 点血、躺 stun 秒），every 秒内不再挨第二下
+  fling: Object.freeze({ damage: 28, speed: 11, stun: 1.2, every: 3.5 }),
   down: Object.freeze({ revive: 3, reach: 2.1, hp: 50, medic: 4.5 }),
   horde: 1.25,
   members: Object.freeze([
@@ -129,7 +131,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     const m = {
       member, id: member.id, name: member.name, pos: root.position, root, yaw: 0, speed: 0, hp: member.hp, maxHp: member.hp, alive: true, down: false, active: false,
       target: null, senseT: rng() * 0.3, cool: 0.6, burst: 0, shots: 0, kills: 0, path: null, wp: 0, planT: 0, pathJob: null, awayT: 0, gait: 0, pitch: 0, recoil: 0, lowReady: 1,
-      reviveT: 0, dodgeT: 0, dodgeSide: 1, holdT: 0, healT: 12 + rng() * 8, healing: 0, fallK: 0, muzzle: new THREE.Vector3(), chest: new THREE.Vector3(), parts, hurtT: 0, stuckT: 0, biteSay: 0,
+      reviveT: 0, flingT: 0, stun: 0, flingX: 0, flingZ: 0, dodgeT: 0, dodgeSide: 1, holdT: 0, healT: 12 + rng() * 8, healing: 0, fallK: 0, muzzle: new THREE.Vector3(), chest: new THREE.Vector3(), parts, hurtT: 0, stuckT: 0, biteSay: 0,
     };
 
     function place(at, yaw = 0) {
@@ -207,9 +209,26 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       for (const z of zs) {
         if (z.zs === 'idle' || z.fixed || Math.abs(z.pos.y - m.pos.y) > 1.6) continue;
         const d = Math.hypot(z.pos.x - m.pos.x, z.pos.z - m.pos.z);
-        if (d < P.bite.reach * (z.scale || 1)) biting += z.special && z.kind === 'brute' ? 4 : 1;
+        if (d < P.bite.reach * (z.scale || 1)) {
+          if (z.kind !== 'brute') biting++;
+          else if (!m.down && m.flingT <= 0) {
+            // 巨尸：一巴掌拍飞
+            const hx = m.pos.x - z.pos.x, hz = m.pos.z - z.pos.z, hd = Math.hypot(hx, hz) || 1;
+            m.flingT = P.fling.every; m.stun = P.fling.stun; m.flingX = hx / hd * P.fling.speed; m.flingZ = hz / hd * P.fling.speed; m.hp -= P.fling.damage; m.hurtT = 0.6; m.target = null; m.burst = 0;
+            G.events?.emit?.('squad:fling', { mate: m, by: z });
+            if (m.hp > 0) say(member, '被拍飞了——别让它近身！');
+          }
+        }
         // 贴近了、离他比离你近：转过去扑他，咬上了就不撒口（巨尸、正按着人的不管；倒地的不再招丧尸）
         if (!m.down && d < P.bite.pull && d < Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) - 0.5 && z.zs === 'chase') z.distract?.(m.pos, 0.6);
+      }
+      m.flingT -= dt;
+      if (m.hp <= 0 && !m.down) { goDown(); }
+      if (m.stun > 0 && !m.down) {
+        // 被拍飞：往后滑出去、摔在地上，过一秒多才爬起来
+        m.stun -= dt; vel.set(m.flingX, 0, m.flingZ); const k = Math.exp(-dt * 4.5); m.flingX *= k; m.flingZ *= k;
+        const res = G.physics?.moveCapsule?.(m.pos, vel, dt, 0.28, 1.7) || null; if (!res) { m.pos.x += vel.x * dt; m.pos.z += vel.z * dt; }
+        m.fallK = Math.min(1, m.fallK + dt * 5); m.speed = 0; pose(dt); return;
       }
       if (m.down) {
         // 倒地：等人来扶（你站在跟前三秒；林医生过来四秒半）

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { buildNav } from '../src/layout/nav.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
-import { createActions, SLIDE, GRENADE, ASSIST, THROWABLES, slideSpeed, blastDamage, aimAngles, wrapAngle, normalizeControls, CONTROLS_KEY, ACTIONS_CSS } from '../src/jimao/actions.js';
+import { createActions, SLIDE, GRENADE, ASSIST, THROWABLES, SHELL, slideSpeed, blastDamage, aimAngles, wrapAngle, normalizeControls, CONTROLS_KEY, ACTIONS_CSS } from '../src/jimao/actions.js';
 import { LAYOUT_ITEMS } from '../src/jimao/layout-editor.js';
 
 const nav = buildNav(buildPlayableLayout({ mode: 'arcade' }));
@@ -521,6 +521,54 @@ test('冲锋枪：模型没加载、没捡到之前换不过去；捡到就换�
   arsenal.select('rifle'); run(1); assert.equal(arsenal.current, 'rifle'); assert.ok(!root.visible);
   arsenal.smg.state.reserve = 0; arsenal.addAmmo(60); assert.equal(arsenal.smg.state.reserve, 42);
   arsenal.reset(); assert.equal(arsenal.owns.smg, false); assert.equal(arsenal.select('smg'), false); assert.deepEqual([...arsenal.slots], [...A.SLOTS]);
+  arsenal.dispose();
+});
+
+test('榴弹：飞得快、弹道平，碰到东西就炸，比手雷炸得狠；擦着敌人身边也炸；没炸死的被气浪掀开；贴脸打在墙上不炸（保险）', () => {
+  const { G, actions, player, enemy } = world();
+  const step = (secs) => { for (let t = 0; t < secs - 1e-9; t += 1 / 60) { actions.pre(1 / 60); actions.update(1 / 60); } };
+  assert.ok(SHELL.damage > GRENADE.damage && SHELL.speed > GRENADE.speed * 2);
+  const eye = new THREE.Vector3(player.pos.x, 1.6, player.pos.z), fwd = new THREE.Vector3(0, -0.04, -1).normalize();
+  assert.equal(actions.launch(eye, fwd), true);
+  let t = 0; while (t < 3 && !G.events.log.some((e) => e[0] === 'grenade:explode')) { step(1 / 60); t += 1 / 60; }
+  const boom = G.events.log.find((e) => e[0] === 'grenade:explode')[1];
+  const d = Math.hypot(boom.pos.x - player.pos.x, boom.pos.z - player.pos.z);
+  assert.ok(boom.kind === 'shell' && t < 1.2 && d > 12, `飞了 ${d.toFixed(0)} 米、${t.toFixed(2)} 秒落地就炸`);
+  assert.equal(actions.grenades, GRENADE.count, '不占手雷的数');
+  // 擦着身边炸：8 米外站一个血厚的，再远 3 米一个普通的
+  G.events.log.length = 0;
+  const big = enemy(player.pos.x + 0.5, player.pos.z - 8); big.hp = 5000; const shoved = []; big.shove = (x, z, p) => shoved.push([x, z, p]);
+  const near = enemy(player.pos.x - 1, player.pos.z - 10.5);
+  assert.equal(actions.launch(eye, new THREE.Vector3(0, 0, -1)), true); step(0.5);
+  const b2 = G.events.log.find((e) => e[0] === 'grenade:explode');
+  assert.ok(b2 && Math.abs(b2[1].pos.z - big.pos.z) < 1.2, '在它身边炸了，没有飞过去');
+  assert.ok(big.hits[0] > 150, `直接命中 ${big.hits[0]?.toFixed(0)}`); assert.ok(!near.alive, '三米外的普通丧尸一发就倒');
+  assert.equal(shoved.length, 1); assert.ok(shoved[0][2] > 5, '没炸死的被掀开');
+  // 保险：对着脚边的墙 / 地面打，飞行时间不够不炸，弹开以后到引信时间才炸
+  G.events.log.length = 0; big.alive = false;
+  actions.launch(new THREE.Vector3(player.pos.x, 0.5, player.pos.z), new THREE.Vector3(0, -1, 0)); step(0.3);
+  assert.ok(!G.events.log.some((e) => e[0] === 'grenade:explode'), '贴脸不炸');
+});
+
+test('榴弹枪：捡到才有（数字键 5），一发一装——打完自动撅开枪管塞一发，1.9 秒；榴弹打没了不能再装；重开一局收回去', async () => {
+  const { A, G, arsenal, run, log, pressed } = await arsenalWorld();
+  const { LAUNCHER, breakPose } = await import('../src/jimao/launcher.js'), { SIEGE } = await import('../src/jimao/siege.js');
+  assert.ok(SIEGE.noise.launcher > SIEGE.noise.rifle * 3);
+  assert.deepEqual([breakPose(0).open, breakPose(1).open, breakPose(0).hand, breakPose(1).hand], [0, 0, 0, 0]); assert.ok(breakPose(0.4).open > 0.95 && breakPose(0.45).hand > 0.9 && !breakPose(0.5).loaded && breakPose(0.65).loaded);
+  const shots = []; G.actions = { launch: (o, d) => { shots.push([o.clone(), d.clone()]); return true; } };
+  assert.equal(arsenal.select('launcher'), false); assert.equal(arsenal.owns.launcher, false);
+  assert.equal(arsenal.grant('launcher'), true); assert.deepEqual([...arsenal.slots], ['rifle', 'launcher', 'pistol', 'knife']);
+  run(1); assert.equal(arsenal.current, 'launcher'); assert.equal(arsenal.name, LAUNCHER.name); assert.equal(arsenal.ammo, 1); assert.equal(arsenal.reserve, LAUNCHER.reserve);
+  assert.ok(arsenal.roots.launcher.visible);
+  pressed.add('fire'); run(1 / 60); assert.equal(shots.length, 1); assert.equal(arsenal.ammo, 0);
+  assert.ok(log.some((e) => e[0] === 'weapon:fire' && e[1].kind === 'launcher')); assert.ok(shots[0][1].z < -0.99, '朝准星打');
+  pressed.add('fire'); run(0.2); assert.equal(shots.length, 1, '膛里没弹：打不出去');
+  run(0.6); assert.equal(arsenal.state, 'reloading', '自动装弹'); assert.ok(arsenal.launcher.parts.tube.rotation.x < -0.4, '枪管撅开了');
+  run(LAUNCHER.reload); assert.equal(arsenal.ammo, 1); assert.equal(arsenal.reserve, LAUNCHER.reserve - 1); assert.ok(Math.abs(arsenal.launcher.parts.tube.rotation.x) < 1e-6, '合上了');
+  // 打光
+  arsenal.launcher.state.reserve = 0; pressed.add('fire'); run(1 / 60); run(3); assert.equal(arsenal.ammo, 0); assert.notEqual(arsenal.state, 'reloading');
+  assert.equal(arsenal.launcher.addShells(20), LAUNCHER.reserveMax); assert.equal(arsenal.grant('launcher'), false, '带满了：再捡一把也装不下');
+  arsenal.reset(); assert.equal(arsenal.owns.launcher, false); assert.deepEqual([...arsenal.slots], [...A.SLOTS]);
   arsenal.dispose();
 });
 

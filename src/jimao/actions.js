@@ -55,6 +55,11 @@ export function vaultTarget(physics, nav, pos, dx, dz, floor) {
 /** 滑铲这一刻的速度（米/秒）：t 是已经滑了多久 */
 export const slideSpeed = (t) => SLIDE.v0 + (SLIDE.v1 - SLIDE.v0) * Math.min(1, Math.max(0, t / SLIDE.time));
 /** 手雷炸到 d 米外的东西掉多少血（线性衰减，radius 以外为 0） */
+/**
+ * 榴弹枪打出去的 40 毫米榴弹（丧尸围城）：飞得快、弹道平，飞出 arm 秒以后碰到东西就炸（太近了打在墙上只弹开、不炸——保险），
+ * 擦着敌人身边（near 米内）也炸。比手雷炸得狠一点，自己站在 selfRadius 米内一样挨炸。
+ */
+export const SHELL = Object.freeze({ speed: 44, gravity: 10, arm: 0.09, near: 0.85, fuse: 4, radius: 6.2, damage: 230, selfRadius: 5, selfDamage: 70, push: 10 });
 export const blastDamage = (d, radius = GRENADE.radius, damage = GRENADE.damage) => (d >= radius ? 0 : damage * (1 - d / radius));
 /** 朝 (dx, dy, dz) 看的视角：原游戏朝 (dx, dz) 看时 yaw = atan2(−dx, −dz)，pitch 向上为正 */
 export function aimAngles(dx, dy, dz) { const h = Math.hypot(dx, dz); return { yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(dy, h) }; }
@@ -130,15 +135,15 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
   function makeNade() {
     const g = new THREE.Group(); g.add(new THREE.Mesh(nadeGeo, nadeMat)); const pin = new THREE.Mesh(pinGeo, pinMat); pin.position.y = 0.08; g.add(pin);
     g.visible = false; scene.add(g);
-    return { mesh: g, vel: new THREE.Vector3(), fuse: 0, live: false, rest: false, kind: 'frag', beep: 0 };
+    return { mesh: g, vel: new THREE.Vector3(), fuse: 0, live: false, rest: false, kind: 'frag', beep: 0, age: 0 };
   }
-  for (let i = 0; i < 3; i++) nades.push(makeNade());
+  for (let i = 0; i < 4; i++) nades.push(makeNade());
   function throwNade() {
     const p = G.player, n = nades.find((q) => !q.live);
     const k = pickKind();
     if (!n || countOf(k) <= 0 || throwCool > 0 || !p?.alive) return false;
     if (k === 'frag') stock--; else extra[k]--;
-    throwCool = GRENADE.cooldown; n.kind = k; n.beep = 0;
+    throwCool = GRENADE.cooldown; n.kind = k; n.beep = 0; n.age = 0; n.mesh.scale.setScalar(1);
     n.mesh.children[0].material = k === 'fire' ? bottleMat : k === 'lure' ? lureMat : nadeMat; n.mesh.children[1].visible = k === 'frag';
     const cy = Math.cos(p.pitch), dir = v1.set(-Math.sin(p.yaw) * cy, Math.sin(p.pitch), -Math.cos(p.yaw) * cy);
     n.mesh.position.copy(p.eye || p.pos).addScaledVector(dir, 0.45); n.mesh.position.y -= 0.12;
@@ -183,27 +188,40 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       if (p?.alive && !p.invulnerable && Math.abs(p.pos.y - f.at.y) < 1.6 && Math.hypot(p.pos.x - f.at.x, p.pos.z - f.at.z) < F.radius * 0.9) p.damage(F.selfDps * F.tick, { pos: f.at.clone(), type: 'fire' });
     }
   }
+  /** 榴弹枪开火（launcher.js 调）：从 origin 朝 dir 打一发榴弹。池里没空位返回 false */
+  function launch(origin, dir) {
+    const n = nades.find((q) => !q.live); if (!n) return false;
+    n.kind = 'shell'; n.beep = 0; n.age = 0; n.rest = false; n.live = true; n.fuse = SHELL.fuse;
+    n.mesh.children[0].material = pinMat; n.mesh.children[1].visible = false; n.mesh.scale.setScalar(0.62); n.mesh.visible = true;
+    n.mesh.position.copy(origin).addScaledVector(dir, 0.35); n.vel.copy(dir).multiplyScalar(SHELL.speed);
+    G.events?.emit?.('grenade:throw', { pos: n.mesh.position.clone(), kind: 'shell' });
+    return true;
+  }
   function explode(n) {
     n.live = false; n.mesh.visible = false;
-    const c = n.mesh.position;
-    G.fx?.explosion?.(c, 1.6); G.audio?.play?.('explosion', { pos: c, gain: 1 });
+    const c = n.mesh.position, X = n.kind === 'shell' ? SHELL : GRENADE;
+    G.fx?.explosion?.(c, n.kind === 'shell' ? 1.9 : 1.6); G.audio?.play?.('explosion', { pos: c, gain: 1 });
     G.render?.lightPool?.flash?.(c, 0xffb060, 60, 18, 0.18);
     const from = v2.set(c.x, c.y + 0.35, c.z);
     let hits = 0;
     for (const e of G.enemies?.list || []) {
       if (!e.alive || !e.active) continue;
-      const chest = v3.set(e.pos.x, e.pos.y + 1.1, e.pos.z), d = chest.distanceTo(from), dmg = blastDamage(d);
+      const chest = v3.set(e.pos.x, e.pos.y + 1.1, e.pos.z), d = chest.distanceTo(from), dmg = blastDamage(d, X.radius, X.damage);
       if (dmg <= 0 || (d > 1.2 && !G.physics.lineOfSight(from, chest))) continue;
-      try { e.damage(dmg, chest.clone(), chest.clone().sub(from).normalize(), 'body'); hits++; } catch (err) { console.error('[零点突围] 手雷伤害出错', err); }
+      try {
+        const dead = e.damage(dmg, chest.clone(), chest.clone().sub(from).normalize(), 'body') === true; hits++;
+        // 没炸死的被气浪掀开（丧尸才有 shove；巨尸掀不动）
+        if (!dead && e.shove) { const hx = e.pos.x - c.x, hz = e.pos.z - c.z, hd = Math.hypot(hx, hz) || 1; e.shove(hx / hd, hz / hd, (X.push || 7) * (1 - d / X.radius * 0.6)); }
+      } catch (err) { console.error('[零点突围] 手雷伤害出错', err); }
     }
     const p = G.player;
     if (p?.alive && !p.invulnerable) {
       const d = from.distanceTo(p.eye || p.pos);
-      if (d < GRENADE.selfRadius && (d < 1.2 || G.physics.lineOfSight(from, p.eye || p.pos))) p.damage(GRENADE.selfDamage * (1 - d / GRENADE.selfRadius), { pos: c.clone(), type: 'grenade' });
+      if (d < X.selfRadius && (d < 1.2 || G.physics.lineOfSight(from, p.eye || p.pos))) p.damage(X.selfDamage * (1 - d / X.selfRadius), { pos: c.clone(), type: 'grenade' });
       else if (d < 14) p.addShake?.(0.5 * (1 - d / 14));
     }
     if (hits) G.hud?.hitmarker?.(false);
-    G.events?.emit?.('grenade:explode', { pos: c.clone(), hits });
+    G.events?.emit?.('grenade:explode', { pos: c.clone(), hits, kind: n.kind, radius: X.radius });
   }
   function stepNade(n, dt) {
     n.fuse -= dt;
@@ -214,13 +232,16 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       else lureMat.emissiveIntensity = Math.max(0, lureMat.emissiveIntensity - dt * 9);
     }
     if (n.rest) return;
-    n.vel.y -= GRENADE.gravity * dt;
-    const p = n.mesh.position, len = n.vel.length() * dt;
+    n.age += dt;
+    const shell = n.kind === 'shell';
+    n.vel.y -= (shell ? SHELL.gravity : GRENADE.gravity) * dt;
+    const p = n.mesh.position, len = n.vel.length() * dt, px = p.x, py = p.y, pz = p.z;
     if (len > 1e-5) {
       const dir = v1.copy(n.vel).normalize(), hit = G.physics.raycast(p, dir, len + 0.07);
       if (hit && hit.dist <= len + 0.07) {
         p.addScaledVector(dir, Math.max(0, hit.dist - 0.07));
         if (n.kind === 'fire') { n.live = false; n.mesh.visible = false; ignite(p); return; } // 燃烧瓶：一碰就碎
+        if (shell && n.age >= SHELL.arm) { explode(n); return; } // 榴弹：过了保险距离，碰到就炸
         const vn = n.vel.dot(hit.normal);
         n.vel.addScaledVector(hit.normal, -(1 + GRENADE.bounce) * vn);
         const floorHit = Math.abs(hit.normal.y) > 0.5;
@@ -228,6 +249,15 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
         if (floorHit && Math.abs(n.vel.y) < 1.1) { n.vel.y = 0; if (Math.hypot(n.vel.x, n.vel.z) < 0.6) { n.rest = true; n.vel.set(0, 0, 0); } }
         if (Math.abs(vn) > 2) G.audio?.play?.('shell_bounce', { pos: p, gain: 0.9, pitch: 0.55 });
       } else p.addScaledVector(dir, len);
+    }
+    // 榴弹擦着敌人身边：也炸
+    if (shell && n.age >= SHELL.arm) {
+      const sx = p.x - px, sz = p.z - pz, sl = sx * sx + sz * sz || 1e-9; // 这一步飞过的那一段：算敌人到这一段的最近距离（一步能飞两米，只看终点会漏）
+      for (const e of G.enemies?.list || []) {
+        if (!e.alive || !e.active) continue;
+        const t = Math.max(0, Math.min(1, ((e.pos.x - px) * sx + (e.pos.z - pz) * sz) / sl)), cx = px + sx * t, cz = pz + sz * t, cy = py + (p.y - py) * t;
+        if (Math.hypot(e.pos.x - cx, e.pos.z - cz) < SHELL.near && cy > e.pos.y - 0.2 && cy < e.pos.y + 2.2) { p.set(cx, cy, cz); explode(n); return; }
+      }
     }
     n.mesh.rotation.x += dt * 9; n.mesh.rotation.z += dt * 6;
     if (p.y < -60) { n.live = false; n.mesh.visible = false; }
@@ -385,7 +415,7 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       if (k === 'frag') stock = Math.min(GRENADE.max, stock + n); else if (k in extra) extra[k] = Math.min(max, extra[k] + n);
       pickKind(); paintHud(); return countOf(k) - before;
     },
-    countOf, cycleKind, get kind() { return pickKind(); }, get fires() { return fires; },
+    countOf, cycleKind, launch, get kind() { return pickKind(); }, get fires() { return fires; },
     reset() { stock = GRENADE.count; throwCool = 0; wantThrow = false; slide.t = -1; slide.cool = 0; if (vault.t >= 0 && G.player) G.player.mounted = false; vault.t = -1; vault.cool = 0; vault.push = 0; crouchLatch = false; btns?.crouch?.classList.remove('latched'); target = null; onTargetT = 0; fireHold = 0;
       for (const n of nades) { n.live = false; n.mesh.visible = false; } for (const f of fires.splice(0)) { f.g.removeFromParent(); f.glow?.release?.(); } extra.fire = 0; extra.lure = 0; kind = 'frag'; paintHud(); },
     buildUi,

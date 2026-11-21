@@ -24,10 +24,12 @@ export const SIEGE = Object.freeze({
   arms: Object.freeze({ floor: 'P1-1F', x: -169, z: -90, where: '商场西翼保安室' }),
   gates: Object.freeze([[4, 6], [9, 12], [15, 18]]), // 三道关各在哪几层里抽（公寓；别的楼见 TOWERS）
   hold: 70, waves: Object.freeze([3, 16, 29, 42, 55]), waveSize: [5, 7], land: 6,
-  noise: Object.freeze({ rifle: 7, pistol: 5, smg: 2.5, grenade: 45, switch: 70, pry: 40, panel: 25, spray: 20, card: 10, flare: 100, decay: 6, quiet: 1.5, horde: 100, after: 35, cooldown: 14, hear: 26 }),
+  noise: Object.freeze({ rifle: 7, pistol: 5, smg: 2.5, launcher: 30, grenade: 45, switch: 70, pry: 40, panel: 25, spray: 20, card: 10, flare: 100, decay: 6, quiet: 1.5, horde: 100, after: 35, cooldown: 14, hear: 26 }),
   ambient: Object.freeze({ mall: 9, tower: 6, roof: 4, every: 0.9, near: 12, far: 30, drop: 58 }),
   sweep: Object.freeze({ roof: 8, window: 6, ground: 14, screamers: 3, cap: 150 }),
   ammo: Object.freeze({ rifle: 30, reserve: 90 }),
+  // 被拍飞 / 掀飞以后：飞着撞上墙（一帧里速度掉一大半）再掉 wall 点血，落地掉 land 点；最多算 seconds 秒
+  fling: Object.freeze({ wall: 12, land: 6, seconds: 2, fast: 5.5, stop: 0.45 }),
 });
 
 /**
@@ -323,12 +325,12 @@ export const SIEGE_CSS = `
  */
 /**
  * 补给放在哪（supplies.js 管捡和用）：武器柜旁一瓶止痛药；每间放工具的屋里一件投掷物加一样小东西；
- * 合闸、每清掉一道关——那儿就是安全点（倒下了从这里重来），柜子里有医疗包（配电室还有一把微声冲锋枪）；楼顶信号弹旁边一个医疗包、一个弹匣。
+ * 合闸、每清掉一道关——那儿就是安全点（倒下了从这里重来），柜子里有医疗包（配电室还有一把微声冲锋枪，第二道关那儿有一把榴弹枪——清掉这道关巨尸就来了）；楼顶信号弹旁边一个医疗包、一个弹匣。
  */
 export const LOOT = Object.freeze({
-  locker: Object.freeze(['pills']), switch: Object.freeze(['medkit', 'smg', 'pills']), flare: Object.freeze(['medkit', 'ammo']),
+  locker: Object.freeze(['pills']), switch: Object.freeze(['medkit', 'smg', 'pills']), flare: Object.freeze(['medkit', 'ammo', 'shell']),
   tool: Object.freeze([['fire', 'pills'], ['lure', 'ammo'], ['frag', 'pills'], ['fire', 'ammo']]),
-  gate: Object.freeze([['medkit', 'ammo'], ['medkit', 'lure'], ['medkit', 'fire', 'ammo']]),
+  gate: Object.freeze([['medkit', 'ammo'], ['medkit', 'launcher', 'lure'], ['medkit', 'shell', 'fire']]),
 });
 /** 第 i 步的补给清单。纯函数 */
 export function lootOf(plan, i) {
@@ -422,7 +424,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 血不会自己回（原游戏的缓慢回血只在零点突围里留着）；医疗包、止痛药、地上的补给只有这个模式有
     G.noRegen = enabled;
     if (supplies) { supplies.enabled = enabled; supplies.reset(); }
-    Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, tellT: 0, loadout: false, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' });
+    Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, tellT: 0, loadout: false, pin: null, fling: null, bruteT: -1, brutes: 0, lastSpecial: '' });
     noiseEl?.classList.toggle('off', !enabled); clockEl?.classList.add('off'); copy();
     if (flow) {
       // 原游戏自己的巡逻、增援、追兵全停（丧尸由这里放）；换回零点突围时还原
@@ -541,6 +543,17 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     return z;
   }
   /** 被扑袭者按住：人钉在原地（还能转头、开枪、出刀），它死了或咬够了才松 */
+  /** 被巨尸拍飞 / 被胖尸掀飞：飞着撞墙、落地各再掉一次血 */
+  function flingTick(dt) {
+    const f = S.fling; if (!f) return;
+    const p = G.player, F = SIEGE.fling, sp = Math.hypot(p.vel?.x || 0, p.vel?.z || 0);
+    f.t += dt;
+    if (p.onGround === false) f.air = true;
+    if (!f.wall && f.prev > F.fast && sp < f.prev * F.stop) { f.wall = true; p.damage?.(F.wall, null); p.addShake?.(0.5); say('撞到墙上了！', 1.4); G.events?.emit?.('player:slam', { kind: 'wall', damage: F.wall }); }
+    else if (f.air && f.t > 0.25 && p.onGround !== false) { if (!f.wall) { p.damage?.(F.land, null); p.addShake?.(0.3); G.events?.emit?.('player:slam', { kind: 'land', damage: F.land }); } S.fling = null; return; }
+    f.prev = sp;
+    if (f.t > F.seconds) S.fling = null;
+  }
   function pinTick() {
     const pin = S.pin; if (!pin) return;
     if (!pin.by.alive || !pin.by.active || pin.by.zs !== 'pin') { S.pin = null; return; }
@@ -669,6 +682,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const c = director.state.checkpoint;
     if (enabled && c?.kind === 'safe') director.deadActions?.(true, `回到${c.label}重来`, '前面清掉的关卡都还在，身上的东西照到这儿时的算。', '换一局重来');
   });
+  G.events?.on?.('zombie:knock', (e) => { if (!playing() || director.riding) return; S.fling = { t: 0, air: false, wall: false, prev: Math.hypot(G.player.vel?.x || 0, G.player.vel?.z || 0) }; say(e?.burst ? '被气浪掀飞了！' : '被巨尸拍飞了！', 1.6); });
   G.events?.on?.('grenade:lure', (e) => { if (!playing() || !e?.pos) return; for (const z of zalive()) if (Math.abs(z.pos.y - e.pos.y) < 3.2 && Math.hypot(z.pos.x - e.pos.x, z.pos.z - e.pos.z) < e.range) z.distract?.(e.pos, 1.3); });
   G.events?.on?.('grenade:fire', (e) => addNoise(18, e?.pos));
   G.events?.on?.('weapon:fire', (e) => addNoise(SIEGE.noise[e?.kind] ?? SIEGE.noise.rifle));
@@ -695,7 +709,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       S.tellT -= dt;
       syncStage();
       if (director.riding) { clockEl?.classList.add('off'); return; }
-      wall(); pinTick(); acidTick(dt); ambient(dt); holdTick(dt);
+      wall(); pinTick(); flingTick(dt); acidTick(dt); ambient(dt); holdTick(dt);
       // 响动：安静一会儿才开始往下掉；攒满会把下一波尸潮催来
       S.hordeCool -= dt;
       if ((S.quietT += dt) > SIEGE.noise.quiet) S.noise = Math.max(0, S.noise - SIEGE.noise.decay * dt);

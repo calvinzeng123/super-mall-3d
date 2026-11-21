@@ -11,6 +11,7 @@ import { stairRuns } from '../src/jimao/stairs.js';
 import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots } from '../src/jimao/siege.js';
 import { createSupplies, SUPPLY, healChoice, MEDIC_CSS } from '../src/jimao/supplies.js';
 import { createSquad, SQUAD, pickTarget, shotHits, slotOf, SQUAD_CSS } from '../src/jimao/squad.js';
+import { createHealthBars, BARS, barWidth, pickBars, BARS_CSS } from '../src/jimao/healthbars.js';
 import { doorOutside } from '../src/jimao/guide.js';
 import { PACING, createPacing } from '../src/jimao/pacing.js';
 import { SPECIALS } from '../src/jimao/zombie.js';
@@ -278,12 +279,13 @@ test('响动：开枪攒响动（手枪比步枪小），攒满来一波尸群�
   const before = zombies.alive().length; run(0.3);
   assert.ok(msgs.some((t) => /尸潮要来了/.test(t)), '先预警'); assert.equal(siege.pacing.phase, 'build'); assert.ok(siege.pacing.warning > 2);
   assert.ok(zombies.alive().filter((q) => q.hunt).length < 4, '预警的三秒里还没来');
-  run(PACING.warn - 0.1);
+  run(PACING.warn - 0.45); const early = new Set(zombies.alive()); run(0.35);
   const now = zombies.alive();
   assert.equal(siege.pacing.phase, 'peak');
   assert.ok(now.length >= before + 4, `尸潮来了 ${now.length - before} 只`); assert.ok(now.filter((q) => q.hunt).length >= 4); assert.ok(msgs.some((t) => /^尸潮！/.test(t)));
   assert.ok(S.noise <= SIEGE.noise.after + 1); assert.ok(S.hordeCool > 10);
-  for (const q of now.filter((h) => h.hunt)) assert.ok(Math.hypot(q.pos.x - player.pos.x, q.pos.z - player.pos.z) >= 12, '不在脸上冒出来（14 米外出生，这 0.2 秒里奔尸已经跑了一米）');
+  // 只看这一波刚冒出来的（之前被尖叫者招来的已经跑了好几秒，离得近不算）
+  for (const q of now.filter((h) => h.hunt && !early.has(h))) assert.ok(Math.hypot(q.pos.x - player.pos.x, q.pos.z - player.pos.z) >= 12, '不在脸上冒出来（14 米外出生，这零点几秒里奔尸最多跑一米多）');
   // 手雷更响
   S.noise = 0; G.events.emit('grenade:explode', { pos: player.pos }); assert.equal(S.noise, SIEGE.noise.grenade);
 });
@@ -588,7 +590,7 @@ test('治疗：轻伤先吃药、重伤用医疗包；医疗包包扎 2.6 秒回
   step(0.1); assert.equal(supplies.inv.pills, 2); assert.equal(thrown.fire, 1); assert.equal(supplies.drops.length, 2, '远处的、楼上的没捡');
   assert.ok(supplies.drops.includes(kit) && supplies.drops.includes(up) && !supplies.drops.includes(pill) && !supplies.drops.includes(fire));
   supplies.place('pills', { x: p.x + 0.4, y: p.y, z: p.z }); step(0.2); assert.equal(supplies.drops.length, 3, '带满了：留在原地');
-  const snap = supplies.snapshot(); assert.deepEqual({ ...snap }, { medkit: 0, pills: 2, frag: 2, fire: 1, lure: 0, hp: 100, smg: false });
+  const snap = supplies.snapshot(); assert.deepEqual({ ...snap }, { medkit: 0, pills: 2, frag: 2, fire: 1, lure: 0, hp: 100, smg: false, shells: -1 });
   supplies.reset(); assert.equal(supplies.drops.length, 0); assert.equal(supplies.inv.pills, 0);
   thrown.fire = 0; player.health = 20; supplies.restore(snap); assert.equal(supplies.inv.pills, 2); assert.equal(thrown.fire, 1); assert.equal(player.health, 100);
   player.health = 20; supplies.restore({ ...snap, hp: 12 }); assert.equal(player.health, SUPPLY.restoreHp, '重来时血量至少 60');
@@ -618,7 +620,7 @@ test('围城里的补给和安全点：不回血；武器柜、工具间、楼�
   cut(1); run(0.1);
   const c = director.state.checkpoint;
   assert.ok(c && c.kind === 'safe' && c.stage === 2 && c.label === '配电室' && c.start.yaw === 1.2 && c.start.pos.distanceTo(player.pos) < 1e-6);
-  assert.deepEqual({ ...c.kit }, { medkit: 0, pills: 1, frag: 2, fire: 0, lure: 1, hp: 64, smg: false });
+  assert.deepEqual({ ...c.kit }, { medkit: 0, pills: 1, frag: 2, fire: 0, lure: 1, hp: 64, smg: false, shells: -1 });
   assert.ok(supplies.drops.length >= before + LOOT.switch.length - 2, kinds());
   // 倒下：阵亡页换成「回到配电室重来」
   G.events.emit('player:dead', {}); assert.equal(director.dead.length, 1); assert.match(director.dead[0][1], /配电室/);
@@ -774,4 +776,69 @@ test('林医生：你血量见底时跑过来包扎（+35，之后要等一分�
   const s0 = FPS_MISSION.spawn; player.pos.set(s0.x, elev(s0.floor), s0.z);
   run(3, () => { zhe.pos.set(s0.x, elev(s0.floor), s0.z); }); assert.ok(msgs.some((t) => /阿哲：喷酸者/.test(t)), JSON.stringify(msgs)); assert.equal(b.called, true);
   void G;
+});
+
+// ---- 血条、拍飞 ----
+test('血条：打中过的丧尸头顶亮两秒多，没打过的不显示；特殊感染者发现人以后 26 米内常亮；血越厚条越长；队友名牌下有一条；关掉模式全收起来', () => {
+  assert.ok(barWidth(60) > 0.45 && barWidth(60) < 0.6 && barWidth(1300) === BARS.max && barWidth(1) === BARS.min);
+  const mk = (x, o = {}) => ({ pos: { x, y: 0, z: 0 }, alive: true, active: true, hp: 30, maxHp: 60, zs: 'chase', ...o });
+  const eye = { x: 0, y: 1.6, z: 0 }, fresh = mk(5), hit = mk(8, { hitAt: 9 }), old = mk(6, { hitAt: 1 }), sp = mk(20, { special: true }), far = mk(40, { special: true }), idle = mk(10, { special: true, zs: 'idle' });
+  assert.deepEqual(pickBars([fresh, hit, old, sp, far, idle], eye, 10).map((b) => b.z), [hit, sp]);
+  assert.equal(pickBars(Array.from({ length: 30 }, (_, i) => mk(i + 2, { hitAt: 10 })), eye, 10).length, BARS.pool);
+  const { G, squad, enemies, ahead, run, player } = qworld();
+  const camera = new THREE.PerspectiveCamera(); camera.position.set(player.pos.x, player.pos.y + 1.6, player.pos.z); camera.updateMatrixWorld(true);
+  const bars = createHealthBars(G, { scene: G.scene, camera, zombies: G.zombiesApi || { alive: () => enemies.list.filter((q) => q.alive && q.active) }, squad });
+  squad.reset(); for (const m of squad.mates) m.cool = 999; run(0.2);
+  const z = enemies.spawn('zombie', ahead(6), { kind: 'walker', passive: true, fixed: true }), b = enemies.spawn('zombie', ahead(9, 1), { kind: 'brute', passive: true, fixed: true });
+  bars.enabled = true; bars.update(0.1);
+  assert.ok(bars.bars.every((q) => !q.back.visible), '没打过：不显示');
+  z.damage(20, null, null, 'body'); bars.update(0.1);
+  const on = bars.bars.filter((q) => q.back.visible); assert.equal(on.length, 1);
+  const wWalker = on[0].back.scale.x;
+  assert.ok(Math.abs(on[0].fill.scale.x / on[0].back.scale.x - 40 / 60) < 0.01, '按剩下的血量画'); assert.ok(on[0].back.position.y > z.pos.y + 1.8, '在头顶上');
+  for (let i = 0; i < 30; i++) bars.update(0.1); assert.ok(bars.bars.every((q) => !q.back.visible), '过了两秒多收起来');
+  b.zs = 'chase'; bars.update(0.1); const sb = bars.bars.filter((q) => q.back.visible);
+  assert.equal(sb.length, 1); assert.ok(sb[0].back.scale.x > wWalker * 1.8, '巨尸的条长得多');
+  assert.ok(bars.mateBars.every((q) => q.back.visible), '队友有血条'); squad.mates[0].hp = squad.mates[0].maxHp / 2; bars.update(0.1);
+  assert.ok(Math.abs(bars.mateBars[0].fill.scale.x / bars.mateBars[0].back.scale.x - 0.5) < 0.01);
+  bars.enabled = false; assert.ok([...bars.bars, ...bars.mateBars].every((q) => !q.back.visible && !q.fill.visible));
+  assert.match(BARS_CSS, /\.jm-boss/);
+});
+
+test('拍飞：巨尸一巴掌把人打飞出去（比咬人的伤害另算），飞着撞墙再掉 12、平安落地掉 6；胖尸炸开的气浪也把人掀飞；队友被巨尸拍飞、摔在地上一秒多才起来', () => {
+  const { G, siege, enemies, player, hurt, events, begin, run, ahead, msgs } = sworld();
+  begin(); siege.reset(); run(0.1); player.onGround = true;
+  const stop = () => { for (const z of enemies.list.filter((q) => q.alive && q.active)) z._deactivate(); siege.pacing.state.phase = 'relax'; siege.pacing.state.left = 999; siege.state.spawnT = 999; };
+  stop();
+  // 巨尸贴身抡一下
+  const b = enemies.spawn('zombie', ahead(1.6), { kind: 'brute', hunt: true }); hurt.length = 0;
+  let v0 = 0; run(1.6, () => { v0 = Math.max(v0, Math.hypot(player.vel.x, player.vel.z)); if (events.some(([n]) => n === 'zombie:knock')) b._deactivate(); });
+  const k = events.find(([n]) => n === 'zombie:knock');
+  assert.ok(k && k[1].power === KINDS.brute.knock, '拍飞了'); assert.ok(v0 > 10, `飞出去的速度 ${v0.toFixed(1)} 米 / 秒`); assert.ok(player.vel.y >= 5, '人离地');
+  assert.equal(hurt[0][0], KINDS.brute.bite); assert.ok(msgs.some((t) => /拍飞/.test(t)));
+  // 飞着撞墙：速度一下没了
+  hurt.length = 0; siege.state.fling = { t: 0, air: false, wall: false, prev: 0 };
+  player.onGround = false; player.vel.set(11, 2, 0); run(0.1); player.vel.set(0.5, 1, 0); run(0.1);
+  assert.deepEqual(hurt.map((h) => h[0]), [SIEGE.fling.wall], '撞墙掉血'); assert.ok(events.some(([n, e]) => n === 'player:slam' && e.kind === 'wall'));
+  player.onGround = true; run(0.4); assert.equal(siege.state.fling, null); assert.equal(hurt.length, 1, '撞过墙的落地不再算一次');
+  // 没撞墙：落地掉 6
+  hurt.length = 0; siege.state.fling = { t: 0, air: false, wall: false, prev: 0 };
+  player.onGround = false; player.vel.set(9, 3, 0); run(0.4); player.vel.set(7, 0, 0); player.onGround = true; run(0.1);
+  assert.deepEqual(hurt.map((h) => h[0]), [SIEGE.fling.land]); assert.equal(siege.state.fling, null);
+  // 胖尸炸开
+  stop(); events.length = 0; player.vel.set(0, 0, 0);
+  const fat = enemies.spawn('zombie', ahead(2), { kind: 'bloater', passive: true }); fat.damage(999, null, null, 'body');
+  assert.ok(events.some(([n, e]) => n === 'zombie:knock' && e.burst)); assert.ok(Math.hypot(player.vel.x, player.vel.z) > 3 && player.vel.y > 4, '被气浪掀出去');
+  void G;
+});
+
+test('队友被巨尸拍飞：掉 28 血、往后滑出去几米、躺一秒多再爬起来；三秒半内不挨第二下', () => {
+  const { squad, enemies, run, events, player } = qworld();
+  squad.reset(); for (const m of squad.mates) m.cool = 999; run(0.3);
+  const zhe = squad.mates[0], at = zhe.pos.clone(), hp0 = zhe.hp;
+  const away = Math.atan2(zhe.pos.z - player.pos.z, zhe.pos.x - player.pos.x);
+  enemies.spawn('zombie', new THREE.Vector3(zhe.pos.x + Math.cos(away) * 1.2, zhe.pos.y, zhe.pos.z + Math.sin(away) * 1.2), { kind: 'brute', hunt: true });
+  run(0.2); assert.ok(events.some(([n, e]) => n === 'squad:fling' && e.mate === zhe)); assert.equal(zhe.hp, hp0 - SQUAD.fling.damage); assert.ok(zhe.stun > 0.8);
+  run(0.8); assert.ok(zhe.pos.distanceTo(at) > 1.5, `滑出去 ${zhe.pos.distanceTo(at).toFixed(1)} 米`); assert.ok(zhe.fallK > 0.9, '摔在地上');
+  run(1.2); assert.ok(zhe.stun <= 0 && !zhe.down); assert.equal(events.filter(([n]) => n === 'squad:fling').length, 1, '冷却里不挨第二下');
 });

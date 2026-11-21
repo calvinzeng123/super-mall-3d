@@ -39,6 +39,7 @@ import { addZombies } from './zombie.js';
 import { createSiege, SIEGE_CSS } from './siege.js';
 import { createSupplies, MEDIC_CSS } from './supplies.js';
 import { createSquad, SQUAD_CSS } from './squad.js';
+import { createHealthBars, BARS_CSS } from './healthbars.js';
 import { createBlackout } from './blackout.js';
 import { loadZombieKit } from './zombie-skin.js';
 import { HELI_ORBIT } from './ride-paths.js';
@@ -98,7 +99,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -242,6 +243,9 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const squad = siege ? createSquad(G, { scene, nav, zombies, siege, director, ui }) : null;
   if (squad) { try { if (safeStorage()?.getItem('jimao-squad') === '0') squad.wanted = false; } catch { /* 读不了就按默认 */ } if (params.squad !== undefined) squad.wanted = params.squad !== '0'; }
   G.squad = squad;
+  // 血条（healthbars.js）：被打中的丧尸、近处的特殊感染者、队友；巨尸另有屏幕上方的大血条。只在丧尸围城里开
+  const bars = zombies ? createHealthBars(G, { scene, camera, zombies, squad, ui }) : null;
+  G.bars = bars;
   // 丧尸换上贴图外形（行人模型改的，后台加载；加载不出来就还是方块人）。网址带 ?boxzombie=1 不换
   if (zombies && !params.boxzombie) loadZombieKit().then((kit) => { if (G.zombies === zombies) zombies.useSkin(kit); else kit.dispose(); }).catch((e) => console.warn('[零点突围] 丧尸模型没加载出来，用简化模型', e));
   G.level.onReset = () => { pathfinder.reset(); director.roll(); siege?.reset(); squad?.reset(); ammo.reset(); guide.reset(); lift.reset(); stairs.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
@@ -251,7 +255,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.game = J.createGame(G);
   // 新封面和各菜单页的话术（cover.js）：原游戏的菜单建好以后改版面、改文字，按钮照旧
   const cover = applyCover(document);
-  actions.buildUi(); supplies?.buildUi(); squad?.buildUi();
+  actions.buildUi(); supplies?.buildUi(); squad?.buildUi(); bars?.buildUi();
   // 得分和连杀奖励（score.js）：菜单建好以后搭（结算页要加一行）
   const score = createScore(G, { ui });
   G.score = score;
@@ -347,6 +351,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (siege && G.game.state !== 'paused') { try { siege.update(dt); } catch (e) { fail('siege', e, '丧尸围城出错'); } }
       if (supplies && G.game.state !== 'paused') { try { supplies.update(dt); } catch (e) { fail('supplies', e, '补给出错'); } }
       if (squad && G.game.state !== 'paused') { try { squad.update(dt); } catch (e) { fail('squad', e, '队友出错'); } }
+      if (bars) { try { bars.enabled = !!siege?.enabled && !director.riding; bars.update(dt); } catch (e) { fail('bars', e, '血条出错'); } }
       blackout.enabled = !!siege?.enabled; blackout.open = director.riding ? 1 : 0; blackout.update(dt);
       // 丧尸围城里商场没有逛街的路人了（那些人就是丧尸）；切回零点突围把人群按画质设置放回来
       { const pq = app.ctx?.peopleQuality, want = siege?.enabled ? 0 : null;
@@ -475,7 +480,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); squad?.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

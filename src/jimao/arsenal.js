@@ -10,6 +10,7 @@
 // G.arms.setLowered(k) 给翻越用（翻的时候枪放低）。
 import * as THREE from 'three';
 import { SMG, createSmg } from './smg.js';
+import { LAUNCHER, createLauncher } from './launcher.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -20,10 +21,12 @@ export const SWAP = Object.freeze({ lower: 0.17 });
 /** 推搡：出刀的同时把贴身的敌人推开。reach 米内、身前（夹角余弦 > cos）的都算；power 是推开的速度（米 / 秒，持续 0.22 秒） */
 export const SHOVE = Object.freeze({ reach: 2.1, cos: 0.3, power: 7 });
 // 掏出来的动画各多长（秒）；quick 是近战键那种「马上要用」的快掏，不带花样
-export const DRAW = Object.freeze({ rifle: 0.46, pistol: 0.64, knife: 0.58, smg: 0.42, quick: 0.13 });
+export const DRAW = Object.freeze({ rifle: 0.46, pistol: 0.64, knife: 0.58, smg: 0.42, launcher: 0.55, quick: 0.13 });
 export const SLOTS = Object.freeze(['rifle', 'pistol', 'knife']);
 /** 捡到冲锋枪以后的顺序（数字键 4；滚轮、手机上的换枪键按这个顺序轮） */
 export const SLOTS_SMG = Object.freeze(['rifle', 'smg', 'pistol', 'knife']);
+/** 所有可能的槽位（榴弹枪：数字键 5，排在冲锋枪后面） */
+export const SLOTS_ALL = Object.freeze(['rifle', 'smg', 'launcher', 'pistol', 'knife']);
 /** 步枪握把在枪模型里的位置（原游戏的 grip）：手枪、刀的握把都摆在这里，手才握得上 */
 const GRIP = Object.freeze([0, -0.1, 0.073]);
 const GRIP_TILT = -0.3; // 握把往前倾的角度（弧度）：步枪握把大约这么斜
@@ -313,9 +316,11 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const X_AXIS = new THREE.Vector3(1, 0, 0);
   // 冲锋枪（smg.js）：模型后台加载，加载好、并且这一局捡到了才换得过去
   const smg = createSmg(G, { camera, layer }), Q = smg.state;
-  let hasSmg = false;
-  const slots = () => (hasSmg && smg.ready ? SLOTS_SMG : SLOTS);
-  const rootOf = (slot) => (slot === 'pistol' ? pistolRoot : slot === 'knife' ? knifeRoot : slot === 'smg' ? smg.root : rifleVm);
+  // 榴弹枪（launcher.js）：手搭的模型，步枪上的两只手原样搬过去
+  const gl = createLauncher(G, { camera, layer, cloneHand }), L = gl.state;
+  let hasSmg = false, hasGl = false;
+  const slots = () => (hasGl ? SLOTS_ALL.filter((s) => s !== 'smg' || (hasSmg && smg.ready)) : hasSmg && smg.ready ? SLOTS_SMG : SLOTS);
+  const rootOf = (slot) => (slot === 'pistol' ? pistolRoot : slot === 'knife' ? knifeRoot : slot === 'smg' ? smg.root : slot === 'launcher' ? gl.root : rifleVm);
   const rand = () => (G.rng?.fork ? Math.random() : Math.random());
 
   function muzzleWorld(out = new THREE.Vector3()) { pBody.updateWorldMatrix(true, false); return out.set(...fit.muzzle).applyMatrix4(pBody.matrixWorld); }
@@ -420,13 +425,13 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   }
   function applySwitch() {
     S.prev = S.cur; S.cur = S.next; S.next = null; S.phase = 'draw'; S.t = 0; S.racked = false;
-    for (const s of SLOTS_SMG) { const r = rootOf(s); if (s === 'rifle') rifle?.setVisible?.(S.shown && S.cur === 'rifle'); else if (r) r.visible = S.shown && S.cur === s; }
+    for (const s of SLOTS_ALL) { const r = rootOf(s); if (s === 'rifle') rifle?.setVisible?.(S.shown && S.cur === 'rifle'); else if (r) r.visible = S.shown && S.cur === s; }
     if (S.cur === 'rifle') rifle?.snap?.();
     ui?.classList?.toggle('jm-knife', S.cur === 'knife');
     paintBtn();
     G.events?.emit?.('weapon:switch', { to: S.cur, from: S.prev });
   }
-  const DIGIT = { Digit1: 'rifle', Digit2: 'pistol', Digit3: 'knife', Digit4: 'smg' };
+  const DIGIT = { Digit1: 'rifle', Digit2: 'pistol', Digit3: 'knife', Digit4: 'smg', Digit5: 'launcher' };
   const onKey = (e) => {
     if (e.repeat || G.game?.state !== 'playing') return;
     if (DIGIT[e.code]) select(DIGIT[e.code]); else if (e.code === 'KeyQ') select(S.prev === S.cur ? 'pistol' : S.prev);
@@ -434,7 +439,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const onWheel = (e) => { if (G.game?.state !== 'playing' || Math.abs(e.deltaY) < 1) return; const L = slots(), i = L.indexOf(S.next || S.cur); select(L[(i + (e.deltaY > 0 ? 1 : L.length - 1)) % L.length]); };
   if (typeof addEventListener === 'function') { addEventListener('keydown', onKey); addEventListener('wheel', onWheel, { passive: true }); }
   let btn = null;
-  const GUN_LABEL = { rifle: '步枪', smg: '冲锋枪', pistol: '手枪' };
+  const GUN_LABEL = { rifle: '步枪', smg: '冲锋枪', launcher: '榴弹枪', pistol: '手枪' };
   /** 手机上的换枪键换到哪把：几把枪轮着来（刀走近战键） */
   const nextGun = () => { const L = slots().filter((s) => s !== 'knife'), i = L.indexOf(S.next || S.cur); return L[(i + 1) % L.length] || 'rifle'; };
   function paintBtn() { if (btn) btn.querySelector('span').textContent = GUN_LABEL[nextGun()]; }
@@ -570,21 +575,25 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
 
   const proxy = {
     stub: false,
-    get name() { return S.cur === 'pistol' ? PISTOL.name : S.cur === 'knife' ? KNIFE.name : S.cur === 'smg' ? SMG.name : rifle?.name; },
+    get name() { return S.cur === 'pistol' ? PISTOL.name : S.cur === 'knife' ? KNIFE.name : S.cur === 'smg' ? SMG.name : S.cur === 'launcher' ? LAUNCHER.name : rifle?.name; },
     // 拿着刀时报满弹（HUD 上数字藏起来了）：报 0 的话原游戏会一直提示「弹药耗尽」「弹药不足」
-    get ammo() { return S.cur === 'pistol' ? P.ammo : S.cur === 'knife' ? 30 : S.cur === 'smg' ? Q.ammo : rifle?.ammo; },
-    get magSize() { return S.cur === 'pistol' ? PISTOL.mag : S.cur === 'knife' ? 30 : S.cur === 'smg' ? SMG.mag : rifle?.magSize; },
-    get reserve() { return S.cur === 'pistol' ? P.reserve : S.cur === 'knife' ? 150 : S.cur === 'smg' ? Q.reserve : rifle?.reserve; },
-    get state() { return S.phase ? 'idle' : S.cur === 'pistol' ? (P.reload ? 'reloading' : S.time - P.lastShot < 0.14 ? 'firing' : P.sprint > 0.5 ? 'sprinting' : 'idle') : S.cur === 'knife' ? (K.t >= 0 ? 'firing' : 'idle') : S.cur === 'smg' ? (Q.reload ? 'reloading' : Q.time - Q.lastShot < 0.12 ? 'firing' : Q.sprint > 0.5 ? 'sprinting' : 'idle') : rifle?.state; },
-    get ads() { return S.phase ? 0 : S.cur === 'pistol' ? P.ads : S.cur === 'knife' ? 0 : S.cur === 'smg' ? Q.ads : rifle?.ads; },
-    get spread() { return S.cur === 'pistol' ? P.spread : S.cur === 'knife' ? 0.004 : S.cur === 'smg' ? Q.spread : rifle?.spread; },
+    get ammo() { return S.cur === 'pistol' ? P.ammo : S.cur === 'knife' ? 30 : S.cur === 'smg' ? Q.ammo : S.cur === 'launcher' ? L.ammo : rifle?.ammo; },
+    get magSize() { return S.cur === 'pistol' ? PISTOL.mag : S.cur === 'knife' ? 30 : S.cur === 'smg' ? SMG.mag : S.cur === 'launcher' ? LAUNCHER.mag : rifle?.magSize; },
+    get reserve() { return S.cur === 'pistol' ? P.reserve : S.cur === 'knife' ? 150 : S.cur === 'smg' ? Q.reserve : S.cur === 'launcher' ? L.reserve : rifle?.reserve; },
+    get state() { return S.phase ? 'idle' : S.cur === 'pistol' ? (P.reload ? 'reloading' : S.time - P.lastShot < 0.14 ? 'firing' : P.sprint > 0.5 ? 'sprinting' : 'idle') : S.cur === 'knife' ? (K.t >= 0 ? 'firing' : 'idle') : S.cur === 'smg' ? (Q.reload ? 'reloading' : Q.time - Q.lastShot < 0.12 ? 'firing' : Q.sprint > 0.5 ? 'sprinting' : 'idle') : S.cur === 'launcher' ? (L.reload ? 'reloading' : L.time - L.lastShot < 0.2 ? 'firing' : L.sprint > 0.5 ? 'sprinting' : 'idle') : rifle?.state; },
+    get ads() { return S.phase ? 0 : S.cur === 'pistol' ? P.ads : S.cur === 'knife' ? 0 : S.cur === 'smg' ? Q.ads : S.cur === 'launcher' ? L.ads : rifle?.ads; },
+    get spread() { return S.cur === 'pistol' ? P.spread : S.cur === 'knife' ? 0.004 : S.cur === 'smg' ? Q.spread : S.cur === 'launcher' ? L.spread : rifle?.spread; },
     get current() { return S.cur; }, get switching() { return !!S.phase; }, get slashing() { return K.t >= 0; },
-    pistol: P, knife: K, smg, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm, smg: smg.root }, parts: { pistol: pBody, knife: kBody, left: pLeft }, get draw() { return S.pose; },
+    pistol: P, knife: K, smg, launcher: gl, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm, smg: smg.root, launcher: gl.root }, parts: { pistol: pBody, knife: kBody, left: pLeft }, get draw() { return S.pose; },
     select, slash, startReload, buildUi,
     /** 冲锋枪：模型加载好了交进来（run.js）；grant() = 这一局捡到了（换过去）；owns = 现在换得到 */
     skinSmg(gltf) { const ok = smg.attach(gltf); if (ok) { smg.root.visible = false; paintBtn(); } return ok; },
-    grant(slot = 'smg', { equip = true } = {}) { if (slot !== 'smg' || !smg.ready) return false; const fresh = !hasSmg; hasSmg = true; if (fresh) smg.reset(); else smg.addAmmo(SMG.mag * 2); if (equip && fresh) select('smg'); paintBtn(); return true; },
-    get owns() { return { smg: hasSmg && smg.ready }; }, get slots() { return slots(); },
+    grant(slot = 'smg', { equip = true } = {}) {
+      // 榴弹枪：第一次捡换到手上（带 4 发备弹）；已经有了就当两发榴弹
+      if (slot === 'launcher') { const fresh = !hasGl; hasGl = true; if (fresh) gl.reset(); else if (gl.addShells(2) <= 0) return false; if (equip && fresh) select('launcher'); paintBtn(); return true; }
+      if (slot !== 'smg' || !smg.ready) return false; const fresh = !hasSmg; hasSmg = true; if (fresh) smg.reset(); else smg.addAmmo(SMG.mag * 2); if (equip && fresh) select('smg'); paintBtn(); return true;
+    },
+    get owns() { return { smg: hasSmg && smg.ready, launcher: hasGl }; }, get slots() { return slots(); },
     /** 近战键：手里不是刀就先换成刀刺一下、刺完换回来 */
     quickKnife() { if (S.cur === 'knife' && !S.next) return slash(); if (S.next === 'knife') return false; return select('knife', { quick: true }); },
     update(dt) {
@@ -607,6 +616,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       if (S.cur === 'rifle') { if (S.phase) quietUpdate(dt); else rifle?.update?.(dt); }
       updatePistol(dt, S.cur === 'pistol', busy);
       smg.update(dt, S.cur === 'smg', busy);
+      gl.update(dt, S.cur === 'launcher', busy);
       updateKnife(dt, S.cur === 'knife', busy);
       // 放下去的量（切枪、翻越）：加在当前这把的模型上
       // 掏的时候 S.drop 已经是缓动过的（先快后慢地上来）；放下、翻越是线性的，这里再缓动
@@ -621,15 +631,15 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       Object.assign(P, { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, twist: 0, twistV: 0, lean: 0, flashT: 0, lastShot: -9, sprint: 0, left: 0 });
       Object.assign(K, { t: -1, cool: 0, hit: false });
       Object.assign(S, { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, quick: null, plain: false, pose: null, racked: false });
-      pistolRoot.visible = knifeRoot.visible = false; flash.visible = false; smg.root.visible = false; smg.reset(); hasSmg = false;
+      pistolRoot.visible = knifeRoot.visible = false; flash.visible = false; smg.root.visible = false; smg.reset(); hasSmg = false; gl.root.visible = false; gl.reset(); hasGl = false;
       rifle?.setVisible?.(S.shown);
       ui?.classList?.remove('jm-knife'); paintBtn();
     },
-    setVisible(v) { S.shown = !!v; rifle?.setVisible?.(S.shown && S.cur === 'rifle'); pistolRoot.visible = S.shown && S.cur === 'pistol'; knifeRoot.visible = S.shown && S.cur === 'knife'; smg.root.visible = S.shown && S.cur === 'smg'; },
+    setVisible(v) { S.shown = !!v; rifle?.setVisible?.(S.shown && S.cur === 'rifle'); pistolRoot.visible = S.shown && S.cur === 'pistol'; knifeRoot.visible = S.shown && S.cur === 'knife'; smg.root.visible = S.shown && S.cur === 'smg'; gl.root.visible = S.shown && S.cur === 'launcher'; },
     /** 弹药补给：步枪照旧，手枪顺带补四成（封顶） */
     addAmmo(n) { rifle?.addAmmo?.(n); P.reserve = Math.min(PISTOL.reserveMax, P.reserve + Math.round(n * 0.4)); if (hasSmg) smg.addAmmo(Math.round(n * 0.7)); },
-    muzzleWorld(out) { return S.cur === 'pistol' ? muzzleWorld(out) : S.cur === 'smg' ? smg.muzzleWorld(out) : rifle?.muzzleWorld?.(out); },
-    reloadNow() { return S.cur === 'pistol' ? startReload() : S.cur === 'smg' ? smg.startReload() : rifle?.reloadNow?.(); },
+    muzzleWorld(out) { return S.cur === 'pistol' ? muzzleWorld(out) : S.cur === 'smg' ? smg.muzzleWorld(out) : S.cur === 'launcher' ? gl.muzzleWorld(out) : rifle?.muzzleWorld?.(out); },
+    reloadNow() { return S.cur === 'pistol' ? startReload() : S.cur === 'smg' ? smg.startReload() : S.cur === 'launcher' ? gl.startReload() : rifle?.reloadNow?.(); },
     setWetness(v) { rifle?.setWetness?.(v); }, snap() { rifle?.snap?.(); },
     /**
      * 手枪换上真模型：scene 是加载好的 glTF 场景（run.js 在后台加载，加载不出来就一直用手搭的那把）。
@@ -677,7 +687,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     setLowered(k) { S.lowered = clamp01(k); },
     dispose() {
       if (typeof removeEventListener === 'function') { removeEventListener('keydown', onKey); removeEventListener('wheel', onWheel); }
-      for (const r of [pistolRoot, knifeRoot]) r.removeFromParent(); smg.dispose();
+      for (const r of [pistolRoot, knifeRoot]) r.removeFromParent(); smg.dispose(); gl.dispose();
       for (const g of [pg.frame, pg.slide, pg.dark, pg.mag, pg.trigger, pg.dots, kg.blade, kg.fuller, kg.handle, kg.guard]) g.dispose();
       M.flash.map?.dispose?.(); for (const m of Object.values(M)) m.dispose();
       if (skin) { for (const g of skin.res.geometries) g.dispose(); for (const m of skin.res.materials) m.dispose(); for (const t of skin.res.textures) { t.dispose(); t.image?.close?.(); } skin = null; }

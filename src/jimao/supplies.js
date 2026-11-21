@@ -16,9 +16,11 @@ export const SUPPLY = Object.freeze({
   lure: Object.freeze({ name: '诱饵弹', color: 0xff4a6a }),
   ammo: Object.freeze({ name: '弹匣', give: 45, color: 0x8ecbff }),
   smg: Object.freeze({ name: '冲锋枪', color: 0xffffff }),
+  launcher: Object.freeze({ name: '榴弹枪', color: 0xffc04a }),
+  shell: Object.freeze({ name: '榴弹', give: 2, color: 0xffc04a }),
   light: 40, pickR: 1.3, restoreHp: 60,
 });
-export const SUPPLY_KINDS = Object.freeze(['medkit', 'pills', 'frag', 'fire', 'lure', 'ammo', 'smg']);
+export const SUPPLY_KINDS = Object.freeze(['medkit', 'pills', 'frag', 'fire', 'lure', 'ammo', 'smg', 'launcher', 'shell']);
 
 /** 这一下该用哪样：hp / max 是现在和满的血量，inv = { medkit, pills }。纯函数；不用治（或没东西）返回 null */
 export function healChoice(hp, max, inv, S = SUPPLY) {
@@ -37,7 +39,7 @@ export const MEDIC_CSS = `
 .jm-heal.busy .bar { visibility: visible; }
 .jm-heal .bar u { display: block; height: 100%; width: 0; background: #ff8a7a; }
 /* 手机上数量写在治疗键上，这一行只在包扎的时候出来（进度条），放在响动条下面——屏幕中下是字幕 */
-.is-touch .jm-heal { display: none; left: 50%; bottom: auto; top: calc(88px + var(--sat, 0px)); transform: translateX(-50%); text-align: center; }
+.is-touch .jm-heal { display: none; left: 50%; bottom: auto; top: calc(118px + var(--sat, 0px)); transform: translateX(-50%); text-align: center; }
 .is-touch .jm-heal.busy:not(.off) { display: block; }
 .is-touch .jm-heal .bar { margin-inline: auto; }
 .is-touch .jm-heal i { display: none; }
@@ -60,6 +62,8 @@ function models() {
     frag: () => group(new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8), olive).translateY(0.06), cyl(0.018, 0.04, dark, 0, 0.125, 0), box(0.012, 0.07, 0.03, dark, 0.03, 0.11, 0)),
     fire: () => group(cyl(0.04, 0.16, amber, 0, 0.08, 0), cyl(0.016, 0.07, amber, 0, 0.195, 0, 0.014), box(0.03, 0.06, 0.03, white, 0, 0.25, 0)),
     lure: () => group(cyl(0.045, 0.13, dark, 0, 0.065, 0), cyl(0.012, 0.06, dark, 0, 0.16, 0), new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), std('#ff2a1a', { emissive: '#ff2a1a', emissiveIntensity: 2 })).translateY(0.2)),
+    launcher: () => group(cyl(0.034, 0.34, dark, 0, 0.13, -0.12).rotateX(Math.PI / 2), box(0.05, 0.07, 0.13, dark, 0, 0.12, 0.1), box(0.04, 0.06, 0.2, olive, 0, 0.11, 0.26), box(0.035, 0.1, 0.045, dark, 0, 0.04, 0.12)),
+    shell: () => group(cyl(0.024, 0.09, std('#b8923c', { metalness: 0.8, roughness: 0.3, emissive: '#3a2a08', emissiveIntensity: 0.6 }), -0.03, 0.045, 0), cyl(0.024, 0.09, olive, 0.03, 0.045, 0), new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 6), olive).translateX(0.03).translateY(0.09)),
     smg: () => group(box(0.05, 0.07, 0.36, dark, 0, 0.12, 0), box(0.04, 0.13, 0.05, dark, 0, 0.04, 0.08), box(0.035, 0.16, 0.045, dark, 0, 0.02, -0.05), cyl(0.02, 0.16, dark, 0, 0.12, -0.26).rotateX(Math.PI / 2), box(0.03, 0.05, 0.14, dark, 0, 0.11, 0.24)),
     ammo: () => group(box(0.07, 0.2, 0.045, blue, 0, 0.1, 0), box(0.07, 0.2, 0.045, blue, 0.085, 0.1, 0.01), box(0.05, 0.02, 0.03, std('#c8a24a', { metalness: 0.8, roughness: 0.3 }), 0, 0.21, 0)),
   };
@@ -97,6 +101,8 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
     if (kind === 'medkit' || kind === 'pills') { const before = inv[kind]; inv[kind] = Math.min(P[kind].max, before + n); got = inv[kind] - before; }
     else if (kind === 'ammo') { const w = G.weapon; got = ammo?.give && !(w && !w.stub && (w.reserve | 0) >= AMMO.cap) && ammo.give(P.ammo.give * n, '捡到弹匣') > 0 ? 1 : 0; }
     else if (kind === 'smg') got = G.weapon?.grant?.('smg') ? 1 : 0; // 第一次捡：换到手上；已经有了：当两个弹匣
+    else if (kind === 'launcher') got = G.weapon?.grant?.('launcher') ? 1 : 0;
+    else if (kind === 'shell') got = G.weapon?.owns?.launcher && G.weapon.launcher.addShells(P.shell.give * n) > 0 ? 1 : 0; // 没有榴弹枪的时候捡不了，留在原地
     else got = actions?.give?.(n, kind) || 0;
     paint();
     return got;
@@ -148,13 +154,14 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
     get drops() { return drops; }, get busy() { return busy; },
     get enabled() { return enabled; }, set enabled(v) { v = !!v; if (v !== enabled) { enabled = v; if (!v) { busy = null; clearDrops(); } paint(); } },
     /** 存档点记下身上的东西（投掷物、血量一起） */
-    snapshot() { return { medkit: inv.medkit, pills: inv.pills, frag: actions?.countOf?.('frag') ?? 0, fire: actions?.countOf?.('fire') ?? 0, lure: actions?.countOf?.('lure') ?? 0, hp: player()?.health ?? maxHp(), smg: !!G.weapon?.owns?.smg }; },
+    snapshot() { return { medkit: inv.medkit, pills: inv.pills, frag: actions?.countOf?.('frag') ?? 0, fire: actions?.countOf?.('fire') ?? 0, lure: actions?.countOf?.('lure') ?? 0, hp: player()?.health ?? maxHp(), smg: !!G.weapon?.owns?.smg, shells: G.weapon?.owns?.launcher ? (G.weapon.launcher.state.ammo | 0) + (G.weapon.launcher.state.reserve | 0) : -1 }; },
     /** 从存档点重来：身上的东西照存档时的来，血量至少 restoreHp */
     restore(snap) {
       if (!snap) return;
       inv.medkit = Math.min(P.medkit.max, snap.medkit | 0); inv.pills = Math.min(P.pills.max, snap.pills | 0);
       if (actions?.give) { for (const k of ['fire', 'lure']) if (snap[k] > 0) actions.give(snap[k], k); }
       if (snap.smg) G.weapon?.grant?.('smg', { equip: false });
+      if (snap.shells >= 0 && G.weapon?.grant?.('launcher', { equip: false })) { const st = G.weapon.launcher.state; st.ammo = Math.min(1, snap.shells); st.reserve = Math.max(0, snap.shells - st.ammo); }
       const p = player(); if (p) p.health = Math.min(maxHp(), Math.max(P.restoreHp, snap.hp || 0));
       paint();
     },
@@ -177,10 +184,10 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
         if (!playing || Math.abs(d.pos.y - p.pos.y) > 1.7 || Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) > P.pickR) continue;
         if (give(d.kind, 1) > 0) {
           d.g.removeFromParent(); drops.splice(i, 1);
-          if (d.kind === 'smg') say('捡到冲锋枪 · 动静小，按 4 换', 3); else if (d.kind !== 'ammo') say(`捡到${P[d.kind].name}`, 1.8);
+          if (d.kind === 'smg') say('捡到冲锋枪 · 动静小，按 4 换', 3); else if (d.kind === 'launcher') say('捡到榴弹枪 · 一发一装，按 5 换', 3); else if (d.kind === 'shell') say(`榴弹 +${P.shell.give}`, 1.8); else if (d.kind !== 'ammo') say(`捡到${P[d.kind].name}`, 1.8);
           G.audio?.play?.('reload', { gain: 0.4, pitch: 1.3 });
           G.events?.emit?.('supply:pickup', { kind: d.kind });
-        } else if (d.fullT <= 0) { d.fullT = 4; if (d.kind !== 'smg') say(`${P[d.kind].name}带满了`, 1.5); } // 冲锋枪捡不起来只会是模型还没加载好：不吭声，等一下就能捡
+        } else if (d.fullT <= 0) { d.fullT = 4; if (d.kind !== 'smg' && !(d.kind === 'shell' && !G.weapon?.owns?.launcher)) say(`${P[d.kind].name}带满了`, 1.5); } // 冲锋枪捡不起来只会是模型还没加载好：不吭声，等一下就能捡
       }
     },
     buildUi() {

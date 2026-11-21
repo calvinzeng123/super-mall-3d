@@ -37,7 +37,7 @@ export const ZOMBIE = Object.freeze({
 export const KINDS = Object.freeze({
   walker: Object.freeze({ name: '行尸', weight: 0.68 }),
   runner: Object.freeze({ name: '奔尸', weight: 0.16, speed: 4.7, hp: 36, bite: 10, windup: 0.26, cooldown: 0.7, scale: 0.96, lean: 0.4 }),
-  bloater: Object.freeze({ name: '胖尸', weight: 0.09, speed: 0.95, hp: 190, bite: 22, windup: 0.6, scale: 1.2, girth: 1.45, burst: Object.freeze({ radius: 3.6, damage: 34 }) }),
+  bloater: Object.freeze({ name: '胖尸', weight: 0.09, speed: 0.95, hp: 190, bite: 22, windup: 0.6, scale: 1.2, girth: 1.45, burst: Object.freeze({ radius: 3.6, damage: 34, push: 9 }) }),
   screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 3, heliEvery: 8, heliFirst: 5 }), scale: 1.02 }),
   // 下面三种不参加平时的随机抽取（weight 0），由节奏器（pacing.js）点名放：
   // 扑袭者：远远蹲下、一个飞扑把人按住撕咬——被按住走不了，打死它或它咬够了才松开；飞扑能侧身躲开
@@ -47,7 +47,7 @@ export const KINDS = Object.freeze({
   spitter: Object.freeze({ name: '喷酸者', weight: 0, speed: 2.3, hp: 60, bite: 8, keep: 12, scale: 1.04, look: 'spitter',
     spit: Object.freeze({ every: 5.2, first: 2.2, range: 22, flight: 0.8, radius: 2.7, seconds: 6.5, dps: 9 }) }),
   // 巨尸：又高又壮的头目，血极厚、打不出硬直，一巴掌把人拍飞；慢跑的速度比人走路快、比人冲刺慢
-  brute: Object.freeze({ name: '巨尸', weight: 0, speed: 4.3, hp: 1300, bite: 32, reach: 1.95, windup: 0.5, cooldown: 1.15, scale: 1.4, girth: 1.38, look: 'brute', knock: 9, sturdy: true }),
+  brute: Object.freeze({ name: '巨尸', weight: 0, speed: 4.3, hp: 1300, bite: 32, reach: 1.95, windup: 0.5, cooldown: 1.15, scale: 1.4, girth: 1.38, look: 'brute', knock: 12.5, lift: 5.4, sturdy: true }),
 });
 /** 特殊感染者（节奏器按名额放的那几种） */
 export const SPECIALS = Object.freeze(['bloater', 'screamer', 'lunger', 'spitter', 'brute']);
@@ -322,7 +322,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
           m.bit = true;
           if (alivePl && dist < C.reach * scale + 0.4 && Math.abs(dy) < 1.4) {
             pl.damage?.(C.bite, m.pos); G.events.emit('enemy:melee', { enemy: m, pos: m.pos, zombie: true });
-            if (C.knock && pl.vel) { pl.vel.x += dx / (dist || 1) * C.knock; pl.vel.z += dz / (dist || 1) * C.knock; pl.vel.y = Math.max(pl.vel.y || 0, 3.2); pl.addShake?.(0.6); G.events.emit('zombie:knock', { enemy: m }); }
+            if (C.knock && pl.vel) { pl.vel.x += dx / (dist || 1) * C.knock; pl.vel.z += dz / (dist || 1) * C.knock; pl.vel.y = Math.max(pl.vel.y || 0, C.lift || 3.2); pl.addShake?.(0.6); G.events.emit('zombie:knock', { enemy: m, power: C.knock }); }
           }
         }
         if (m.zsT >= C.windup + 0.25) { m.zs = 'chase'; m.cool = C.cooldown * (0.85 + rng() * 0.3); m.bit = false; m.lunge = 0; }
@@ -403,7 +403,11 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       G.fx?.explosion?.(at, 0.9); G.fx?.smoke?.(at, { size: 1.6, life: 1.4, color: 0x3c4a1e, rise: 0.6 });
       G.events.emit('zombie:burst', { enemy: m, pos: at });
       const pl = G.player;
-      if (pl && pl.alive !== false) { const d = Math.hypot(pl.pos.x - m.pos.x, pl.pos.z - m.pos.z, pl.pos.y - m.pos.y); if (d < B.radius) { pl.damage?.(Math.round(B.damage * (1 - d / B.radius * 0.7)), m.pos); pl.addShake?.(0.5); } }
+      if (pl && pl.alive !== false) { const d = Math.hypot(pl.pos.x - m.pos.x, pl.pos.z - m.pos.z, pl.pos.y - m.pos.y); if (d < B.radius) {
+          pl.damage?.(Math.round(B.damage * (1 - d / B.radius * 0.7)), m.pos); pl.addShake?.(0.5);
+          // 炸开的气浪把人掀出去（离得越近掀得越远）
+          if (B.push && pl.vel) { const k = B.push * (1 - d / B.radius * 0.6), hx = pl.pos.x - m.pos.x, hz = pl.pos.z - m.pos.z, hd = Math.hypot(hx, hz) || 1; pl.vel.x += hx / hd * k; pl.vel.z += hz / hd * k; pl.vel.y = Math.max(pl.vel.y || 0, 4.2); G.events.emit('zombie:knock', { enemy: m, power: k, burst: true }); }
+        } }
       for (const o of [...ctx.list]) { if (o === m || !o.alive || !o.active) continue; const d = Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z, o.pos.y - m.pos.y); if (d < B.radius) o.damage(B.damage * 1.6 * (1 - d / B.radius * 0.6), null, null, 'body'); }
     }
     function dead(dt) {
