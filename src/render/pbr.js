@@ -69,8 +69,9 @@ export const DETAIL_SURFACES = Object.freeze({
   // sheen：大块的粗糙度起伏（手电扫过去，有的地方哑、有的地方泛一点光）
   matte: { id: 'painted_plaster', strength: 0.9, normal: 0.8, patch: 0.07, sheen: 0.2 },
   ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.08, sheen: 0.12 },
-  ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.05, sheen: 0.1 },
-  garageSoffit: { id: 'formed_concrete', strength: 1, meters: 2.4, normal: 0.6, patch: 0.08, sheen: 0.12 },
+  // 吊顶板、清水混凝土的模板缝是规则的格子：转个角度再取一次会出斜缝，不做防重复（antiTile: false）
+  ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.05, sheen: 0.1, antiTile: false },
+  garageSoffit: { id: 'formed_concrete', strength: 1, meters: 2.4, normal: 0.6, patch: 0.08, sheen: 0.12, antiTile: false },
   floorPaint: { id: 'garage_concrete', strength: 0.8, meters: 4, normal: 0.45, patch: 0.06, sheen: 0.22 },
 });
 
@@ -142,6 +143,8 @@ export function setWorldGrime(v) {
   return WD.grime.value;
 }
 export const worldGrime = () => WD.grime.value;
+/** 调试 / 测试：当前停电污垢强度和估出来的脚下地面高度 */
+export const worldDetailState = () => ({ grime: WD.grime.value, floorY: WD.floorY.value, tracked: floorTrack.y });
 
 /**
  * 按相机高度估玩家脚下地面的高度：目标 = 相机 y − 站姿眼高，指数平滑（跳、蹲、上楼梯不会让墙根的脏忽上忽下）；
@@ -220,7 +223,7 @@ const smooth01 = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b -
 export function* macroNoiseSteps(size, seed, out) {
   const rand = mulberry(seed), n = size * size;
   const spec = { R: [[3, 3, 0.5], [6, 6, 0.25], [12, 12, 0.15], [24, 24, 0.1]], G: [[4, 4, 0.45], [8, 8, 0.3], [16, 16, 0.15], [32, 32, 0.1]],
-    S: [[104, 5, 0.75], [104, 13, 0.25]], Sg: [[9, 3, 0.7], [18, 6, 0.3]], A: [[3, 3, 0.7], [6, 6, 0.3]] };
+    S: [[160, 6, 0.7], [160, 17, 0.3]], Sg: [[9, 3, 0.7], [18, 6, 0.3]], A: [[3, 3, 0.7], [6, 6, 0.3]] };
   const ch = {};
   for (const [name, octaves] of Object.entries(spec)) {
     const acc = new Float32Array(n);
@@ -229,7 +232,7 @@ export function* macroNoiseSteps(size, seed, out) {
   }
   const { R, G, S, Sg, A } = ch;
   for (let i = 0; i < n; i++) {
-    const streak = smooth01(0.8, 0.97, S[i]) * smooth01(0.35, 0.8, Sg[i]);
+    const streak = smooth01(0.86, 0.98, S[i]) * smooth01(0.45, 0.85, Sg[i]);
     out[i * 4] = (R[i] * 255 + 0.5) | 0; out[i * 4 + 1] = (G[i] * 255 + 0.5) | 0;
     out[i * 4 + 2] = (streak * 255 + 0.5) | 0; out[i * 4 + 3] = (A[i] * 255 + 0.5) | 0;
   }
@@ -294,8 +297,8 @@ export function worldDetailChunks(v) {
     float wdH = vDetailPos.y - wdFloorY;
     float wdLow = (1.0 - smoothstep(0.0, 1.1, wdH)) * smoothstep(-0.4, -0.05, wdH);
     float wdBlot = smoothstep(0.45, 0.95, wdM.g);
-    float wdDirt = wdWall * (wdLow * wdLow * (0.3 + 0.45 * wdBlot) + wdM.b * (0.22 + 0.2 * smoothstep(0.3, 2.2, wdH)) + wdBlot * 0.12)
-      + wdDown * (wdStain * 0.3 + wdBlot * 0.16)
+    float wdDirt = wdWall * (wdLow * wdLow * (0.3 + 0.45 * wdBlot) + wdM.b * (0.06 + 0.2 * smoothstep(1.0, 2.6, wdH)) + wdBlot * 0.12)
+      + wdDown * (wdStain * 0.16 + wdBlot * 0.1)
       + wdUp * (wdBlot * 0.22 + smoothstep(0.5, 0.9, wdM.r) * 0.1);
     wdDirt *= wdGrime;
     wdMul *= mix(vec3(1.0), vec3(0.93, 0.89, 0.81), wdGrime);
@@ -310,7 +313,7 @@ export function worldDetailChunks(v) {
     else { wdP = vDetailPos.xy; wdT = vec3(1.0, 0.0, 0.0); wdB = vec3(0.0, 1.0, 0.0); }
     float wdUp = smoothstep(0.6, 0.8, wdN.y), wdDown = smoothstep(0.6, 0.8, -wdN.y), wdWall = 1.0 - wdUp - wdDown;`;
   const macro = `vec4 wdM = texture2D(wdMacro, wdP * ${f3(1 / MACRO_METERS)} + vec2(0.13, 0.41));
-    float wdStain = smoothstep(0.86, 0.9, wdM.g) * (1.0 - 0.6 * smoothstep(0.9, 0.97, wdM.g));`;
+    float wdStain = smoothstep(0.83, 0.9, wdM.g) * (1.0 - 0.55 * smoothstep(0.9, 0.98, wdM.g));`;
   let color;
   if (v.wearOnly) {
     // 自带贴图的材质（清水混凝土、抹灰、楼面）：只在停电时叠污垢，平时不多取样（按 uniform 分支，整批像素走同一边）
@@ -337,7 +340,7 @@ export function worldDetailChunks(v) {
     vec3 wdMul = mix(vec3(1.0), wdC, ${f3(v.strength)} * (0.7 + 0.6 * wdM.r));
     wdMul *= 1.0 + (wdM.r - 0.5) * ${f3(v.patch * 2)};
     // 天花上淡淡的水渍圈（漫游里几乎看不出，停电时深一些）
-    wdMul *= mix(vec3(1.0), vec3(0.93, 0.89, 0.8), wdStain * wdDown * 0.5);
+    wdMul *= mix(vec3(1.0), vec3(0.93, 0.88, 0.78), wdStain * wdDown * (0.45 + 0.55 * wdGrime));
     wdRough += (1.0 - wdLum) * 0.18 + (wdM.r - 0.5) * ${f3(v.sheen * 2)} - wdStain * wdDown * 0.08;
     ${v.roughMap ? `wdRough += (texture2D(wdRoughMap, wdUv).g - 0.5) * 0.3;` : ''}
     if (wdGrime > 0.001) {
@@ -405,7 +408,7 @@ function hookDetail(mat, variant, textures, key) {
 function detailBeforeRender(renderer, scene, camera) { updateFloor(renderer, scene, camera); }
 
 /** 这种材质在当前档位下的变体（哪些贴图、几次取样）。纯函数（mem 可以传进来测）。 */
-export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0] || 2, normal = 0, patch = 0.06, sheen = 0.15 } = {}, mem = MEM) {
+export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0] || 2, normal = 0, patch = 0.06, sheen = 0.15, antiTile = true } = {}, mem = MEM) {
   const tier = worldDetailTier(mem);
   if (tier === 'off' || !asset?.maps?.color) return null;
   const mean = asset.mean || [255, 255, 255];
@@ -415,7 +418,7 @@ export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0]
     gain: mean.map((v) => 1 / Math.max(0.05, srgbToLinear(v))),
     normal: !!(all && normal > 0 && asset.maps.normal), ns: normal,
     roughMap: !!(all && tier === 'full' && asset.maps.roughness),
-    antiTile: tier === 'full',
+    antiTile: tier === 'full' && antiTile !== false,
   };
 }
 
