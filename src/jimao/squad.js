@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
 import { buildParts, RIG } from './soldier.js';
+import { SURF, createRigMaterial } from './skins/rig-skin.js';
 
 /**
  * follow：站在你身后 [near, far] 米之间，超过 run 米跑着追，超过 warp 米（或不在同一层超过 warpSeconds 秒）直接跟到身后；
@@ -25,11 +26,19 @@ export const SQUAD = Object.freeze({
   members: Object.freeze([
     Object.freeze({ id: 'zhe', name: '阿哲', role: '夜班保安', hp: 130, side: -1, back: 2.6, trait: 'spotter',
       gun: Object.freeze({ name: '冲锋枪', interval: 0.11, burst: [4, 7], rest: [0.55, 1.1], damage: 9, hit: 0.78, falloff: 0.012, head: 0.08, range: 22 }),
-      look: Object.freeze({ shirt: 0x1f2a44, pants: 0x1b2030, vest: 0xd8d23a, strap: 0x9aa0a8, pouch: 0x2a3350, helmet: 0xe2c21e, mask: 0x23262b, glove: 0x1c1c1e, boot: 0x17181a, pad: 0x2b3148, heavy: false }) }),
+      // 阿哲：藏青保安制服 + 荧光黄反光背心（银灰反光条，手电一照就亮）、黄色安全帽带帽灯、黑皮手套和工装靴；寸头、胡茬。
+      // 打了两个钟头：裤腿和靴子一层灰，右袖口、左大腿、背心下摆蹭着血
+      look: Object.freeze({ face: 'zhe', skin: 0xa8765a, lip: 0x8a5446, hair: 0x17130f, iris: 0x24170f, shirt: 0x252d40, pants: 0x1e222c, vest: 0xb4c02a, strap: 0x9aa0a8, pouch: 0x262c3c, helmet: 0xcfa625, mask: 0x23262b, glove: 0x1d1b1a, boot: 0x1b1a19, pad: 0x262b3a,
+        tape: 0x6c7074, nameTape: 0x232a3a, patch: 0x3a4660, shirtSurf: SURF.CLOTH, vestSurf: SURF.HIVIS, heavy: false, who: 0, grime: 0.8,
+        blood: Object.freeze([Object.freeze({ c: [-0.13, 1.33, 0.2], r: 0.09, k: 0.9 }), Object.freeze({ c: [0.06, 0.78, 0.1], r: 0.1, k: 0.6 }), Object.freeze({ c: [-0.12, 1.12, 0.15], r: 0.07, k: 0.7 })]) }) }),
     Object.freeze({ id: 'lin', name: '林医生', role: '急诊科医生', hp: 90, side: 1, back: 4, trait: 'medic',
       gun: Object.freeze({ name: '手枪', interval: 0.5, burst: [1, 3], rest: [0.35, 0.7], damage: 24, hit: 0.9, falloff: 0.008, head: 0.3, range: 26 }),
       heal: Object.freeze({ below: 45, amount: 35, cooldown: 55, reach: 2.2, time: 1.4, range: 16 }),
-      look: Object.freeze({ shirt: 0x2f8f8a, pants: 0x2a6f6c, vest: 0xe9ebe6, strap: 0x7fbf9a, pouch: 0xcfd4cf, helmet: 0xf1f1ec, mask: 0x9ad6d0, glove: 0x9fc4e8, boot: 0xe6e6e0, pad: 0x8fc9c4, heavy: false }) }),
+      // 林医生：墨绿刷手服（短袖露小臂）、白色急救背心（绿十字、红色止血带包）、蓝色丁腈手套、白护士鞋；头发往后扎成髻，
+      // 外科口罩拉在下巴底下，脖子上挂着听诊器。手套、袖口和背心前面沾着别人的血，膝盖跪脏了
+      look: Object.freeze({ face: 'lin', skin: 0xc99a7c, lip: 0xa0605a, hair: 0x1f1714, iris: 0x2b1d14, shirt: 0x2e706d, pants: 0x2b605e, vest: 0xd2d3cc, strap: 0x5e7d72, pouch: 0xb9bcb4, helmet: 0xf1f1ec, mask: 0x9ad6d0, glove: 0x6f93bf, boot: 0xcfcfc8, pad: 0x8fc9c4,
+        sole: 0x9a9a96, nameTape: 0x3a5a56, shirtSurf: SURF.SCRUBS, pantsSurf: SURF.SCRUBS, gloveSurf: SURF.RUBBER, sleeve: 'short', pads: false, heavy: false, who: 1, grime: 0.75,
+        blood: Object.freeze([Object.freeze({ c: [-0.1, 1.34, 0.21], r: 0.07, k: 1 }), Object.freeze({ c: [-0.07, 1.38, 0.44], r: 0.07, k: 1 }), Object.freeze({ c: [0.09, 1.25, 0.15], r: 0.09, k: 0.8 }), Object.freeze({ c: [0, 0.48, 0.07], r: 0.08, k: 0.5 })]) }) }),
   ]),
 });
 
@@ -91,7 +100,8 @@ function nameTag(text, color) {
  */
 export function createSquad(G, { scene, nav, zombies, siege = null, director = null, ui = null, rng = Math.random, P = SQUAD } = {}) {
   const group = new THREE.Group(); group.name = 'squad'; scene?.add(group);
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.05, emissive: 0x16181a, name: 'squad' });
+  // 两人共用一个材质（rig-skin.js：顶点色 + 表面种类 + 细节图）；自发光按颜色走，停电里认得出人，黑衣服不会被抬成一层灰
+  const mat = createRigMaterial({ name: 'squad', emissive: 0x16181a, looks: P.members.map((m) => m.look) });
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xdff2ff, toneMapped: false, fog: false });
   const lampGeo = new THREE.SphereGeometry(0.022, 8, 6);
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), dir = new THREE.Vector3();

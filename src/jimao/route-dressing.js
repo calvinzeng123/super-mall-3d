@@ -1,5 +1,5 @@
 // 丧尸围城的「沿途痕迹」：停电两个小时以前这里出过事——玩家一路走过的地方（商场保安室、地下一层电梯厅、
-// 三道关所在楼层的楼梯间和走廊、放工具的那一户、关卡上面那段楼梯、屋顶出口）留下血迹、拖痕、手印、弹孔、
+// 三道关所在楼层的楼梯间和走廊、放工具的那一户、关卡之间一路往上的楼梯、屋顶出口）留下血迹、拖痕、手印、弹孔、
 // 散落的纸张碎玻璃、丢下的手机、警戒线和幸存者的涂鸦。以前这一路全是干干净净的白墙，一点不像出过事。
 //
 // 怎么做的（都只是画面，不碰导航、碰撞、射击判定）：
@@ -8,7 +8,7 @@
 //      场景几何体上传显卡以后顶点数组就释放了（app.js 的 releaseGeometryAfterUpload），没法对着模型打射线，所以落点全靠导航。
 //      导航的墙线有的在墙中线、有的在墙的外皮（楼梯间的墙往里收 0.2 米），贴花放在墙线外 0.1 米，
 //      着色器里再把深度朝镜头挪一点（屏幕上的位置不变）：真墙面在墙线前后 0.1 米以内都能盖住，不会被墙吞掉。
-//   2. 全部贴花共用一张程序画的图集（血泊、溅血、拖痕、手印、鞋印、弹孔、焦痕、碎玻璃、碎石灰、纸、手机、弹壳、警戒线、涂鸦），
+//   2. 全部贴花共用一张程序画的图集（血泊、溅血、拖痕、抹痕、手印、鞋印、弹孔、烟熏、碎玻璃、碎石灰、纸、手机、鞋、背包、弹壳、警戒线、涂鸦），
 //      一个 InstancedMesh 画完（1 次绘制调用）。图集每格的 UV、透明度、光泽、深度偏移都是逐实例的属性。
 //      新鲜的血（暗红、几乎不含绿）在着色器里变光滑，干了的褐色边缘是粗糙的——同一张图，不用另画一张粗糙度图。
 //   3. 只画玩家所在的那一层（和楼梯口要预搭的那一层）：别的楼层没搭内装时贴花不会悬在半空；顶点也少。
@@ -261,7 +261,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1 }) 
       return true;
     }
     /** 墙上一处：返回 { x, z, nx, nz, w }（贴花中心在墙线上的位置和朝走道的法线），找不到返回 null */
-    function wallPoint(width, { r1 = R, prefer = null, minLen = 0 } = {}) {
+    function wallPoint(width, { r1 = R, prefer = null, minLen = 0, inner = false } = {}) {
       const list = usable.filter((q) => q.len >= Math.max(minLen, width + 2 * ROUTE_DRESS.margin) && segDist(cx, cz, q.w) < r1);
       for (let k = 0, tries = prefer ? 48 : 16; k < tries && list.length; k++) {
         const { w, len } = prefer ? list.reduce((a, b) => (prefer(a) > prefer(b) ? a : b)) : pick(list);
@@ -272,7 +272,8 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1 }) 
         // 法线朝哪边：那一侧 0.45 米处有楼板（走道 / 房间）的那边；两边都有就朝热点
         let nx = -dz, nz = dx;
         const sideA = supported(F, px + nx * 0.45, pz + nz * 0.45), sideB = supported(F, px - nx * 0.45, pz - nz * 0.45);
-        if (!sideA && !sideB) { if (prefer) list.splice(list.findIndex((q) => q.w === w), 1); continue; }
+        // inner：只要两边都是楼面的隔墙（户内朝外的那面墙是落地窗、纱帘，不在导航里，贴上去就成了写在窗帘上）
+        if ((!sideA && !sideB) || (inner && !(sideA && sideB))) { if (prefer) list.splice(list.findIndex((q) => q.w === w), 1); continue; }
         if (!sideA || (sideB && (cx - px) * nx + (cz - pz) * nz < 0)) { nx = -nx; nz = -nz; }
         // 热点看得见这面墙（同一个房间 / 走廊里），墙前面没有家具、门扇挡着
         const fx = px + nx * 0.06, fz = pz + nz * 0.06;
@@ -291,11 +292,11 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1 }) 
       return items[items.length - 1];
     }
     /** 墙上贴 n 个：高度 yc = [低, 高]（贴花中心离地） */
-    function wall(cells, n, { size = [0.25, 0.4], yc = [0.9, 1.5], mode = MATTE, alpha = [0.85, 1], tilt = 0.25, r1 = R, keep = false, prefer = null } = {}) {
+    function wall(cells, n, { size = [0.25, 0.4], yc = [0.9, 1.5], mode = MATTE, alpha = [0.85, 1], tilt = 0.25, r1 = R, keep = false, prefer = null, inner = false } = {}) {
       let put = 0;
       for (let i = 0, want = keep ? n : count(n); i < want; i++) {
         const cell = Array.isArray(cells) ? pick(cells) : cells, s = range(size[0], size[1]), hgt = s * cellAspect(cell);
-        const q = wallPoint(s, { r1, prefer });
+        const q = wallPoint(s, { r1, prefer, inner });
         if (!q) continue;
         // 贴花上沿不过 2.3 米（天花板 2.6~2.9），下沿不进踢脚线
         const c = Math.min(2.3 - hgt / 2, Math.max(0.14 + hgt / 2, range(yc[0], yc[1])));
@@ -518,9 +519,9 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
         if (rng() < 0.6) T.floor(['shoe', 'bag'], 1, { r1: 3.5, size: [0.32, 0.4], mode: BLOOD, gap: 0.35, keep: true });
         // 户内的墙上挂着画、电视，窗台以上是玻璃和窗帘（这些都不在导航里）：墙上的东西压低，放在窗台、画框以下——
         // 「救命」是靠着墙坐在地上的人蘸血写的，本来也就这么高
-        if (i === 1) T.wall('gHelp', 1, { size: [0.85, 0.95], yc: [0.55, 0.7], mode: BLOOD, tilt: 0.1, keep: true });
-        T.wall(['splat0', 'splat1'], 1, { size: [0.55, 0.75], yc: [0.45, 0.7], mode: BLOOD });
-        T.wall(['handL', 'handR'], 2, { size: [0.19, 0.24], yc: [0.35, 0.85], mode: BLOOD, tilt: 0.5 });
+        if (i === 1) T.wall('gHelp', 1, { size: [0.85, 0.95], yc: [0.55, 0.7], mode: BLOOD, tilt: 0.1, keep: true, inner: true });
+        T.wall(['splat0', 'splat1'], 1, { size: [0.55, 0.75], yc: [0.45, 0.7], mode: BLOOD, inner: true });
+        T.wall(['handL', 'handR'], 2, { size: [0.19, 0.24], yc: [0.35, 0.85], mode: BLOOD, tilt: 0.5, inner: true });
       }
       yield;
     }

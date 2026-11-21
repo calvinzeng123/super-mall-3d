@@ -28,7 +28,7 @@ export const BLACKOUT = Object.freeze({
   // 手电的衰减故意比真实的慢（decay 1，不是平方反比）：二三十米外还照得见人影；贴着墙的过曝交给 adapt 收。
   // 颜色是偏中性略冷的白（常见的强光 LED 手电那样）：血、皮肤在暖黄光下会糊成一片土色，在中性白下红是红、灰是灰
   torch: Object.freeze({ power: 7, distance: 58, angle: 0.74, penumbra: 0.12, decay: 1, color: 0xf1f4ff, sway: 0.35, plain: Object.freeze({ angle: 0.62, penumbra: 0.8 }),
-    beam: Object.freeze({ core: 0.3, spill: 0.2, ring: 0.1, warm: 0.07, size: 128 }),
+    beam: Object.freeze({ core: 0.34, spill: 0.28, ring: 0.08, warm: 0.07, size: 128 }), // 泛光不能太暗：两边的丧尸要在泛光里认得出来
     adapt: Object.freeze({ ref: 5, k: 0.9, min: 0.07, every: 0.12, spread: 0.2, down: 0.06, up: 0.45, turn: 0.12 }) }),
   flicker: Object.freeze({ every: [7, 19], dip: 0.45, time: 0.5 }),
 });
@@ -55,7 +55,7 @@ export function beamAt(r, a = 0, P = BLACKOUT.torch.beam) {
   const c = P.core, core = Math.exp(-((r / (c * 0.78)) ** 2.4));
   const ring = P.ring * Math.exp(-(((r - c * 1.05) / (c * 0.16)) ** 2));
   const edge = 1 - smooth(0.62, 0.98, r);
-  const wob = 1 + 0.05 * Math.sin(a * 3 + 0.7) + 0.03 * Math.sin(a * 7 + 2.1) + 0.04 * Math.sin(r * 31); // 泛光里极淡的不匀和同心纹
+  const wob = 1 + 0.05 * Math.sin(a * 3 + 0.7) + 0.03 * Math.sin(a * 7 + 2.1) + 0.025 * Math.sin(r * 31); // 泛光里极淡的不匀和同心纹
   const spill = P.spill * edge * wob * smooth(0, c * 0.9, r);
   const v = Math.min(1, core + ring + spill * (1 - core));
   // 越往外越偏暖（LED 泛光边上那圈淡黄）；芯保持中性

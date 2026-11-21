@@ -618,7 +618,7 @@ export function litFlare() {
   flame.frustumCulled = false; grp.add(flame);
   const smoke = new THREE.Mesh(once('flarePuffs', () => { const puffs = []; for (let i = 0; i < 14; i++) puffs.push([0.45, 0.45, 0.1, i / 14]); return puffGeometry(puffs); }), smokeMaterial({ color: [0.42, 0.1, 0.1], fire: [0.9, 0.2, 0.15], opacity: 0.38, rise: 9, grow: 3.2, drift: [1.6, 0.6], period: 7 }));
   smoke.frustumCulled = false; smoke.renderOrder = 4; grp.add(smoke);
-  const glow = new THREE.Mesh(once('flareGlow', () => new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2).translate(0.45, 0.02, 0.1)), glowMaterial({ color: [1, 0.12, 0.08], center: [0.45, 0, 0.1], radius: [3, 3, 3], strength: 0.3 }));
+  const glow = new THREE.Mesh(once('flareGlow', () => new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2).translate(0.45, 0.02, 0.1)), glowMaterial({ color: [0.95, 0.07, 0.04], center: [0.45, 0, 0.1], radius: [2.6, 2.6, 2.6], strength: 0.2 }));
   grp.add(glow);
   grp.userData.mats = [flame.material, smoke.material, glow.material];
   return grp;
