@@ -8,6 +8,7 @@
   light = dark（停电：环境光压得很低，镜头上一支手电——游戏里丧尸围城的样子）| day（白天，看贴图本身）
   view  = front（全身正面）| back（背面）| close（上半身特写，看脸和衣服）| side（侧面）
   walk  = 0–1：走路姿势的相位（丧尸），默认 0.3
+  mem   = compact | standard | rich | full：按哪个内存档位载贴图（手机三档 / 电脑），默认 full（电脑）
   丧尸和队友都走游戏里同一套代码（zombie-skin.js 的 loadZombieKit、squad.js 的 createSquad），在这里看到的就是游戏里的。
 -->
 <html lang="zh">
@@ -26,10 +27,14 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { loadZombieKit } from '/src/jimao/zombie-skin.js';
 import { createSquad } from '/src/jimao/squad.js';
 import { addSoldiers } from '/src/jimao/soldier.js';
+import { configureMemory } from '/src/render/device.js';
 
 const q = new URLSearchParams(location.search);
+// 内存档位：手机的三档用「手机 + 某个画质」换算出来，电脑一律 full
+const MEMS = { compact: ['low', { mobile: true, lost: 0 }], standard: ['balanced', { mobile: true, lost: 0 }], rich: ['ultra', { mobile: true, lost: 0 }], full: ['ultra', { mobile: false, lost: 0 }] };
+const memName = configureMemory(...(MEMS[q.get('mem')] || MEMS.full));
 const who = q.get('who') || 'zombies', light = q.get('light') || 'dark', view = q.get('view') || 'front', dark = light === 'dark', walk = +(q.get('walk') || 0.3);
-document.getElementById('tag').textContent = `${who} · ${view} · ${light}`;
+document.getElementById('tag').textContent = `${who} · ${view} · ${light} · ${memName}`;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
