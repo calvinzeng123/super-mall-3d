@@ -13,7 +13,7 @@
 export const PAINT = Object.freeze({
   layout: 256,
   dilate: 4,
-  rows: 8, // 每画这么多行让一次（外面按时间决定要不要隔帧）
+  chunk: 2048, // 每画这么多格让一次（外面按时间决定要不要隔帧）：一段一两毫秒，外面的时间预算才掐得准
   // 颜色（sRGB 0–255）：鲜血深而饱和（湿的地方另外靠粗糙度反光），旧血发褐，污垢偏灰褐，撕口里面是暗的
   fresh: Object.freeze([92, 10, 9]),
   dried: Object.freeze([66, 30, 20]),
@@ -30,6 +30,8 @@ export const PART = Object.freeze({ none: 0, cloth: 1, skin: 2, hair: 3, shoe: 4
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 const mix = (a, b, t) => a + (b - a) * t;
+/** 一张 S 宽的图，每隔几行 yield 一次 */
+const rowsPer = (S) => Math.max(1, Math.round(PAINT.chunk / S));
 /** 把一个生成器一口气跑完，返回它的结果（测试和不需要切片的地方用） */
 export function finish(gen) { for (;;) { const r = gen.next(); if (r.done) return r.value; } }
 
@@ -164,9 +166,9 @@ export function bodyFrame(position) {
 function snap(body, [tx, ty, tz], ok = null) {
   const { L, used, pos } = body; let best = -1, bd = Infinity;
   for (let k = 0; k < L * L; k++) {
-    if (used[k] !== 1 || (ok && !ok(k))) continue;
+    if (used[k] !== 1) continue;
     const dx = pos[k * 3] - tx, dy = pos[k * 3 + 1] - ty, dz = pos[k * 3 + 2] - tz, d = dx * dx + dy * dy + dz * dz;
-    if (d < bd) { bd = d; best = k; }
+    if (d < bd && (!ok || ok(k))) { bd = d; best = k; }
   }
   return best < 0 ? [tx, ty, tz] : [body.pos[best * 3], body.pos[best * 3 + 1], body.pos[best * 3 + 2]];
 }
@@ -175,8 +177,8 @@ function snap(body, [tx, ty, tz], ok = null) {
  * 每个模型的伤口（所有外观共用，湿血和撕口都在这里定）：
  *   bite：脖子侧面 / 肩膀的咬伤，血往下洇满半边胸口；gut：肚子上的豁口，往下洇到裤腰；arm：前臂的咬痕，血顺到手上；
  *   mouth：嘴角往下的血（下巴、脖子、前胸）。
- * 另外两样不进共用的湿血 / 粗糙度、由各外观自己决定要不要：back：背上一块（画成干血）；claws：胸前、背后各一组三道的抓痕（撕口）。
- * 同一个模型的几套外观伤口要是全一样，一群从背后看过去全是同一块，所以这两样分开存、按外观挑。
+ * claws：胸前、背后各一组三道的抓痕（撕口），分开存、由各外观自己挑（背上的那块血在 planStains 里各外观各放各的）——
+ * 同一个模型的几套外观伤口要是全一样，一群从背后看过去全是同一处。
  * face：zombie-skin.js 的 faceOf（头顶高度、脸最前面的 z、头的左右中心）。每处 { x, y, z, r（半径）, run（往下淌多远）, wet（湿的程度） }。纯函数
  */
 export function planWounds(body, frame, face, seed) {
@@ -185,21 +187,24 @@ export function planWounds(body, frame, face, seed) {
   const torso = (k) => Math.abs(body.pos[k * 3] - cx) < 0.15;
   const w = (p, r, run, wet) => ({ x: p[0], y: p[1], z: p[2], r, run, wet });
   const bite = w(snap(body, [cx + side * 0.085, T * 0.82, frame.cz + 0.02]), 0.06, 0.58 + rnd() * 0.1, 1);
-  const gut = w(snap(body, [cx - side * (0.03 + rnd() * 0.05), T * (0.62 + rnd() * 0.04), frame.front], (k) => front(k) && torso(k)), 0.048, 0.3, 0.85);
+  const gut = w(snap(body, [cx - side * (0.03 + rnd() * 0.05), T * (0.645 + rnd() * 0.035), frame.front], (k) => front(k) && torso(k)), 0.046, 0.26, 0.85);
   const arm = w(snap(body, [cx - side * 0.24, T * 0.5, frame.cz + 0.03], (k) => !torso(k)), 0.035, 0.22, 0.9);
-  const backW = w(snap(body, [cx + side * 0.05, T * (0.66 + rnd() * 0.06), frame.back], (k) => back(k) && torso(k)), 0.07, 0.36, 0.7);
   const mouthY = face.top - 0.18, mouth = { x: face.x + (rnd() - 0.5) * 0.012, y: mouthY, z: face.front - 0.012, r: 0.017, run: 0.34, wet: 1 };
   const claw = (isBack) => ({ ...w(snap(body, [cx + side * (isBack ? -0.05 : 0.04), T * (isBack ? 0.7 : 0.66), isBack ? frame.back : frame.front], (k) => (isBack ? back(k) : front(k)) && torso(k)), 0.1, 0, 0),
     angle: (rnd() - 0.5) * 0.9 + side * (isBack ? -0.5 : 0.5), gap: 0.026 + rnd() * 0.006 });
   const eyes = [-1, 1].map((s) => ({ x: face.x + s * 0.031, y: face.top - 0.108, z: face.front - 0.012 }));
-  return { side, fresh: [bite, gut, arm], back: backW, mouth, claws: [claw(false), claw(true)], eyes, frame };
+  return { side, fresh: [bite, gut, arm], mouth, claws: [claw(false), claw(true)], eyes, frame };
 }
 
 /**
- * 每种外观自己的旧血块（哑光的褐色，不进共用的粗糙度图）：在衣服上随机找几处实点，往下洇开。纯函数
+ * 每种外观自己的旧血块（哑光的褐色，不进共用的粗糙度图）：在衣服上随机找几处实点，往下洇开；back：先在背上放一大块。纯函数
  */
-export function planStains(body, frame, seed, count) {
+export function planStains(body, frame, seed, count, back = false) {
   const rnd = makeRng(seed), out = [], T = frame.top;
+  if (back) {
+    const p = snap(body, [frame.cx + (rnd() - 0.5) * 0.16, T * (0.62 + rnd() * 0.14), frame.back], (k) => body.nrm[k * 3 + 2] < -0.3 && Math.abs(body.pos[k * 3] - frame.cx) < 0.15);
+    out.push({ x: p[0], y: p[1], z: p[2], r: 0.06 + rnd() * 0.02, run: 0.3 + rnd() * 0.12, wet: 0 });
+  }
   for (let i = 0; i < count; i++) {
     const p = snap(body, [frame.cx + (rnd() - 0.5) * 0.5, T * (0.3 + rnd() * 0.5), rnd() < 0.6 ? frame.front : frame.back]);
     out.push({ x: p[0], y: p[1], z: p[2], r: 0.035 + rnd() * 0.06, run: 0.12 + rnd() * 0.3, wet: 0 });
@@ -228,31 +233,34 @@ export function skinness(r, g, b) {
 /**
  * 每个模型的共用图层（尺寸 S×S，各外观的颜色图和共用的法线、粗糙度图都从这里出）。
  * src：原贴图缩到 S 的 RGBA；body：rasterBody；plan：planWounds；tables：{ n, a, b } 两张 noiseTable。
- * 生成器：每 PAINT.rows 行 yield 一次，最后 return 图层。
+ * 生成器：每 PAINT.chunk 格左右 yield 一次，最后 return 图层。
  * 图层（都是 0–255）：part（PART 编号）、skin（像皮肤的程度）、y（高度，每格 1 厘米）、front（朝前的程度）、fresh（血量：越大越湿越深）、
  * tear（撕口：0.5 以上是破洞，往外一圈是毛边）、grime（脏）、eye（眼窝）、lips（嘴唇）、vein（血管）、mottle（斑驳）、bruise（淤青）、hand（手）。
  */
 export function* prepareLayers(src, S, body, plan, tables) {
-  const n = S * S, { L, used, pos, nrm } = body, k = L / S;
+  const n = S * S, { L, used, pos, nrm } = body, k = L / S, every = rowsPer(S);
   const mk = () => new Uint8Array(n);
-  const layers = { S, part: mk(), skin: mk(), y: mk(), front: mk(), fresh: mk(), mouth: mk(), clawF: mk(), clawB: mk(), back: mk(), d1: mk(), d2: mk(), d3: mk(), tear: mk(), grime: mk(), eye: mk(), lips: mk(), vein: mk(), mottle: mk(), bruise: mk(), hand: mk(), plan, skinLum: 160 };
+  const layers = { S, part: mk(), skin: mk(), y: mk(), front: mk(), fresh: mk(), mouth: mk(), clawF: mk(), clawB: mk(), d1: mk(), d2: mk(), d3: mk(), tear: mk(), grime: mk(), eye: mk(), lips: mk(), vein: mk(), mottle: mk(), bruise: mk(), hand: mk(), plan, skinLum: 160 };
   // 低频三维噪声先在小网格上算好（每格一次），画的时候双线性取
   const lowA = new Float32Array(L * L), lowB = new Float32Array(L * L);
   for (let q = 0; q < L * L; q++) {
     if (!used[q]) continue;
     const x = pos[q * 3], y = pos[q * 3 + 1], z = pos[q * 3 + 2];
     lowA[q] = fbm3(x * 9, y * 9, z * 9, 11, 3); lowB[q] = fbm3(x * 4.2 + 7, y * 4.2, z * 4.2, 29, 3);
-    if ((q & 4095) === 4095) yield;
+    if ((q & 1023) === 1023) yield;
   }
-  const { fresh: wounds0, mouth, claws: clawSets, back: backW, eyes, frame } = plan, T = frame.top, cx = frame.cx;
+  const { fresh: wounds0, mouth, claws: clawSets, eyes, frame } = plan, T = frame.top, cx = frame.cx;
   const wounds = wounds0, nw = wounds.length;
   const reach = wounds.map((w) => [w.y - w.run - 0.02, w.y + w.r * 2.2, w.r * w.r * 2.6]); // 每处伤口管到的高度范围（之外直接跳过）
   const NT = tables.n, tA = tables.a, tB = tables.b, ts = NT / S; // 贴图空间的细噪声：S 越大，噪声表铺得越密，几档贴图上的细节一样大
   const clawK = clawSets.map((c) => [Math.cos(c.angle), Math.sin(c.angle), c.r * c.r * 2.5]);
-  const backReach = [backW.y - backW.run - 0.02, backW.y + backW.r * 2.2];
+
   const e0 = eyes[0], e1 = eyes[1];
   let skinSum = 0, skinN = 0;
-  for (let j = 0; j < S; j++) {
+  // 逐行的活放进普通函数（生成器里的浮点临时变量 V8 优化得不好，会大量装箱、频繁垃圾回收，一段拖到几十毫秒）
+  const rows = (j0, step) => {
+  let sum = 0, cnt = 0;
+  for (let j = j0; j < S; j += step) {
     const fy = (j + 0.5) * k - 0.5, yy = Math.floor(fy), y0 = Math.max(0, Math.min(L - 1, yy)), y1 = Math.min(L - 1, Math.max(0, yy + 1)), ty = fy - yy;
     for (let i = 0; i < S; i++) {
       const o = j * S + i, si = o * 4;
@@ -279,7 +287,7 @@ export function* prepareLayers(src, S, body, plan, tables) {
       else if (sk > 0.5) part = PART.skin;
       else if (head) part = PART.hair; // 头上不像皮肤的：头发、眉毛
       else if (py < 0.13) part = PART.shoe;
-      if (part === PART.skin) { skinSum += 0.2126 * r + 0.7152 * g + 0.0722 * bl; skinN++; }
+      if (part === PART.skin) { sum += 0.2126 * r + 0.7152 * g + 0.0722 * bl; cnt++; }
       layers.part[o] = part; layers.skin[o] = sk * 255; layers.y[o] = Math.min(255, py * 100); layers.front[o] = clamp01(nz * 0.5 + 0.5) * 255;
       // 血：几处伤口 + 嘴角往下（嘴只淌在朝前的面上）；边缘用三维低频噪声和贴图细噪声揉毛，伤口下方再挂几道细的血道子
       let f = 0;
@@ -331,8 +339,7 @@ export function* prepareLayers(src, S, body, plan, tables) {
           (q ? layers.clawB : layers.clawF)[o] = clamp01(tear) * 255;
         }
       }
-      // 背上那块（外观自己决定画不画；画成干的）
-      if (py > backReach[0] && py < backReach[1]) layers.back[o] = clamp01(soak(px, py, pz, backW) + ((a - 0.5) * 0.6 + (h2 - 0.5) * 0.34 + (h3 - 0.5) * 0.2) * 0.8) * 255;
+
       // 污垢：越靠近地面越脏（膝盖往下一路加重），再叠低频的大块
       const low = 1 - smooth(0.05, 1.05, py);
       layers.grime[o] = clamp01(low * low * 0.85 + (b - 0.45) * 0.6 + (h2 - 0.5) * 0.3) * 255;
@@ -357,8 +364,13 @@ export function* prepareLayers(src, S, body, plan, tables) {
         layers.hand[o] = Math.abs(px - cx) > 0.16 && py < T * 0.55 && py > T * 0.37 ? 255 : 0;
       }
     }
-    if (j % PAINT.rows === PAINT.rows - 1) yield;
   }
+  skinSum += sum; skinN += cnt;
+  };
+  // 行是隔着取的（第 c 段画第 c、c+段数、c+2×段数……行）：第一段就把脸、手、伤口各种情况都走一遍，
+  // V8 优化时类型信息齐全，后面不会一碰到新分支就退回解释执行（那样一段会慢上几十倍）
+  const chunks = Math.ceil(S / every);
+  for (let c = 0; c < chunks; c++) { rows(c, chunks); yield; }
   if (skinN) layers.skinLum = skinSum / skinN;
   return layers;
 }
@@ -368,7 +380,7 @@ export function* prepareLayers(src, S, body, plan, tables) {
  *   skinA / skinB：皮肤斑驳的两种底色（灰绿 ↔ 灰紫），按三维低频噪声在两者之间过渡；skinKeep：留多少原贴图的明暗细节；
  *   veins / bruise：血管、淤青有多重；blood：旧血洇开得多大（湿血的位置各外观一样）；grime：多脏；rips：撕口多不多；stains：额外的旧血块数；
  *   fluid：嘴里淌出来的是什么（血 / 喷酸者的黄绿涎水）；bloodTint：血染上去乘的颜色（尖叫者发黑、巨尸更红）；
- *   claws：抓痕画哪组（1 胸前、2 背后、3 两组都画）；back：背上那块血画不画；
+ *   claws：抓痕画哪组（1 胸前、2 背后、3 两组都画）；back：背上放不放一大块旧血（位置各外观自己随机）；
  *   acid（喷酸者的酸蚀斑）、lesion（巨尸的烂疮）、soot（扑袭者的一身黑灰）、pustule（胖尸的脓疱）：特殊感染者各自的标记。
  */
 export const LOOKS = Object.freeze({
@@ -406,14 +418,15 @@ const WET = [0.36, 0.07, 0.06], DRY = [0.52, 0.36, 0.28];
  * （zombie-skin.js 的 [R, G, B, 保留原色]）；stain：stainField（小网格）；body：rasterBody；out：S×S RGBA（写进去）。生成器，按行 yield。
  */
 export function* paintColour(src, layers, look, tone, stain, body, out) {
-  const S = layers.S, { L } = body, k = L / S;
+  const S = layers.S, { L } = body, k = L / S, every = rowsPer(S);
   const [tr, tg, tb, keep] = tone, G = PAINT.grime, U = PAINT.dust, R = PAINT.rip;
   const wet = look.bloodTint || WET, fluid = look.fluid || null, spread = look.blood, soot = look.soot || 0;
   // 旧血的颜色：一般是褐的；尖叫者、巨尸跟着各自的血色；胖尸身上洇开的多是发黄的脓水
   const dry = look.pustule ? [0.72, 0.64, 0.36] : look.bloodTint ? [wet[0] * 1.3, wet[1] * 1.3, wet[2] * 1.3] : DRY;
   const A = look.skinA, B = look.skinB, sKeep = look.skinKeep, skinRef = layers.skinLum, mouthTop = layers.plan.frame.top - 0.5;
-  const { d1, d2, d3, part, skin: skinL, mouth: mouthL, clawF, clawB, back: backL, y: yL, fresh: fr, tear: te, grime: gr, eye, lips, vein, mottle, bruise, hand, front } = layers;
-  for (let j = 0; j < S; j++) {
+  const { d1, d2, d3, part, skin: skinL, mouth: mouthL, clawF, clawB, y: yL, fresh: fr, tear: te, grime: gr, eye, lips, vein, mottle, bruise, hand, front } = layers;
+  const rows = (j0, step) => { // 同 prepareLayers：逐行的活放进普通函数，行隔着取
+  for (let j = j0; j < S; j += step) {
     const fy = (j + 0.5) * k - 0.5, yy = Math.floor(fy), y0 = Math.max(0, Math.min(L - 1, yy)), y1 = Math.min(L - 1, Math.max(0, yy + 1)), ty = fy - yy;
     for (let i = 0; i < S; i++) {
       const o = j * S + i, si = o * 4, p = part[o];
@@ -488,12 +501,12 @@ export function* paintColour(src, layers, look, tone, stain, body, out) {
       }
       // 血（乘上去）：最外一圈和这套外观自己的几块是干了的褐色，往里是暗红，中心湿得发黑（湿的那块各外观同一处，和共用的粗糙度对上）
       const hairK = p === PART.hair ? 0.7 : 1;
-      const dpot = Math.max(fresh * (0.75 + 0.35 * spread), st * spread + (n1 - 0.5) * 0.3 * Math.min(1, st * 4), look.back ? backL[o] / 255 : 0);
+      const dpot = Math.max(fresh * (0.75 + 0.35 * spread), st * spread + (n1 - 0.5) * 0.3 * Math.min(1, st * 4));
       const dpn = dpot + (n2 - 0.5) * 0.16 + (n3 - 0.5) * 0.08;
       const dcov = smooth(0.38, 0.47, dpn) * hairK * (0.72 + n1 * 0.28);
       if (dcov > 0) {
         // 干血洇开的外沿有一圈更深的「水线」，里面反而淡一点——像真的血渍
-        const tide = 1 + 0.35 * (smooth(0.38, 0.43, dpn) - smooth(0.43, 0.5, dpn));
+        const tide = 1 + 0.2 * (smooth(0.38, 0.43, dpn) - smooth(0.43, 0.5, dpn)) * n3 * 2;
         r = mix(r, r * dry[0] / tide, dcov); g = mix(g, g * dry[1] / tide, dcov); b = mix(b, b * dry[2] / tide, dcov);
       }
       const drop = smooth(0.84, 0.88, n3) * smooth(0.1, 0.3, Math.max(fresh, st)) * (1 - dcov) * Math.min(1, spread);
@@ -511,8 +524,10 @@ export function* paintColour(src, layers, look, tone, stain, body, out) {
       if (lp2 > 0) { r = mix(r, 34, lp2 * 0.55); g = mix(g, 14, lp2 * 0.55); b = mix(b, 16, lp2 * 0.55); }
       out[si] = r; out[si + 1] = g; out[si + 2] = b; out[si + 3] = al;
     }
-    if (j % PAINT.rows === PAINT.rows - 1) yield;
   }
+  };
+  const chunks = Math.ceil(S / every);
+  for (let c = 0; c < chunks; c++) { rows(c, chunks); yield; }
 }
 
 /**
@@ -520,9 +535,10 @@ export function* paintColour(src, layers, look, tone, stain, body, out) {
  * 粗糙度：湿血亮、皮肤有点蜡、布料哑光。nrmOut / roughOut：(S/2)² RGBA。生成器
  */
 export function* paintSurface(src, layers, tables, nrmOut, roughOut) {
-  const S = layers.S, H = S >> 1, NT = tables.n, tA = tables.a, ts = NT / H, Rg = PAINT.rough;
+  const S = layers.S, H = S >> 1, NT = tables.n, tA = tables.a, ts = NT / H, Rg = PAINT.rough, every = rowsPer(H);
   const height = new Float32Array(H * H);
-  for (let j = 0; j < H; j++) {
+  for (let j0 = 0; j0 < H; j0 += every) {
+  ((j1) => { for (let j = j0; j < j1; j++) {
     for (let i = 0; i < H; i++) {
       const o = (j * 2) * S + i * 2, o2 = o + 1, o3 = o + S, o4 = o + S + 1, h = j * H + i;
       let l = 0; for (const q of [o, o2, o3, o4]) l += lum(src[q * 4], src[q * 4 + 1], src[q * 4 + 2]);
@@ -542,10 +558,12 @@ export function* paintSurface(src, layers, tables, nrmOut, roughOut) {
       const rv = clamp01(rough) * 255, ro = h * 4;
       roughOut[ro] = rv; roughOut[ro + 1] = rv; roughOut[ro + 2] = rv; roughOut[ro + 3] = 255;
     }
-    if (j % PAINT.rows === PAINT.rows - 1) yield;
+  } })(Math.min(H, j0 + every));
+  yield;
   }
   const strength = H / 64; // 同样的起伏，贴图越大每格的坡度越小：按尺寸放大，几档贴图看起来一样凹凸
-  for (let j = 0; j < H; j++) {
+  for (let j0 = 0; j0 < H; j0 += every) {
+  ((j1) => { for (let j = j0; j < j1; j++) {
     for (let i = 0; i < H; i++) {
       const xl = height[j * H + Math.max(0, i - 1)], xr = height[j * H + Math.min(H - 1, i + 1)];
       const yu = height[Math.max(0, j - 1) * H + i], yd = height[Math.min(H - 1, j + 1) * H + i];
@@ -553,6 +571,7 @@ export function* paintSurface(src, layers, tables, nrmOut, roughOut) {
       const o = (j * H + i) * 4;
       nrmOut[o] = (nx * 0.5 + 0.5) * 255; nrmOut[o + 1] = (ny * 0.5 + 0.5) * 255; nrmOut[o + 2] = (nz * 0.5 + 0.5) * 255; nrmOut[o + 3] = 255;
     }
-    if (j % PAINT.rows === PAINT.rows - 1) yield;
+  } })(Math.min(H, j0 + every));
+  yield;
   }
 }

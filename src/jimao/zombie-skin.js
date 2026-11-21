@@ -79,12 +79,16 @@ export function faceOf(geometry) {
 // 切片：一个生成器跑到这一段用满 budget 毫秒就停，隔一帧再接着跑（和 arsenal.js 的 frameQueue 一个意思）
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const nextFrame = () => new Promise((done) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => setTimeout(done, 0)) : setTimeout(done, 0)));
-async function pause(clock) { if (now() - clock.t > clock.budget) { clock.slices.push(now() - clock.t); await nextFrame(); clock.t = now(); } }
-async function drain(gen, clock) {
+async function pause(clock, what) {
+  const d = now() - clock.t;
+  if (d > clock.worst[0]) clock.worst = [d, what]; // 记下最长的一段是在干什么（量切片用）
+  if (d > clock.budget) { clock.slices++; await nextFrame(); clock.t = now(); }
+}
+async function drain(gen, clock, what) {
   for (;;) {
     const r = gen.next();
     if (r.done) return r.value;
-    await pause(clock);
+    await pause(clock, what);
   }
 }
 
@@ -110,13 +114,15 @@ export function zombieTexSizes(mem = MEM) {
  * stats：画贴图花了多久（ms，总计 / 最长的一段）、几张图、显存大约多少。
  */
 export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
-  const t0 = now(), clock = { t: now(), budget, slices: [] };
+  // 没有 document（node 测试）就画不了贴图：直接拒绝，调用的地方（run.js）会接住、继续用方块人
+  if (typeof document === 'undefined') throw new Error('没有 document，画不了丧尸贴图');
+  const t0 = now(), clock = { t: now(), budget, slices: 0, worst: [0, ''] };
   const { colour: size, surface } = zombieTexSizes(MEM), compact = MEM.name === 'compact';
-  const tables = { n: 256, a: await drain(noiseTableSteps(256, seed ^ 0x51), clock), b: await drain(noiseTableSteps(256, seed ^ 0xa3, 4, 16), clock) };
+  const tables = { n: 256, a: await drain(noiseTableSteps(256, seed ^ 0x51), clock, 'noise'), b: await drain(noiseTableSteps(256, seed ^ 0xa3, 4, 16), clock, 'noise') };
   const bodies = [], shared = []; let bytes = 0, maps = 0;
   const count = (s) => { maps++; bytes += s * s * 4 * 4 / 3; }; // RGBA + mipmap
   for (const record of PEOPLE_ASSETS) {
-    await pause(clock);
+    await pause(clock, 'start');
     const bi = bodies.length, source = await parsePerson(record), image = source.material.map.image, geo = source.geometry;
     clock.t = now(); // 解析模型是浏览器在后台解码，不算在这一段里
     const face = faceOf(geo);
@@ -125,27 +131,29 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
     const g2 = canvas.getContext('2d', { willReadFrequently: true }); g2.drawImage(image, 0, 0, size, size);
     const src = g2.getImageData(0, 0, size, size).data; canvas.width = canvas.height = 1;
     source.material.map?.dispose(); source.material.dispose(); image.close?.();
-    await pause(clock);
-    const body = await drain(rasterBodySteps({ position: geo.attributes.position.array, uv: geo.attributes.uv.array, normal: geo.attributes.normal?.array, index: geo.index?.array }), clock);
+    await pause(clock, 'read');
+    const body = await drain(rasterBodySteps({ position: geo.attributes.position.array, uv: geo.attributes.uv.array, normal: geo.attributes.normal?.array, index: geo.index?.array }), clock, 'raster');
     const frame = bodyFrame(geo.attributes.position.array), plan = planWounds(body, frame, face, seed + bi * 101);
-    const layers = await drain(prepareLayers(src, size, body, plan, tables), clock);
+    await pause(clock, 'plan');
+    const layers = await drain(prepareLayers(src, size, body, plan, tables), clock, 'layers');
     // 法线和粗糙度：每个模型一张，各外观共用
     let normalMap = null, roughnessMap = null;
     if (surface) {
       const nPix = new Uint8ClampedArray(surface * surface * 4), rPix = new Uint8ClampedArray(surface * surface * 4);
-      await drain(paintSurface(src, layers, tables, nPix, rPix), clock);
-      await pause(clock);
-      normalMap = toTexture(nPix, surface, false); roughnessMap = toTexture(rPix, surface, false); count(surface); count(surface);
+      await drain(paintSurface(src, layers, tables, nPix, rPix), clock, 'surface');
+      await pause(clock, 'surface');
+      normalMap = toTexture(nPix, surface, false); await pause(clock, 'upload'); roughnessMap = toTexture(rPix, surface, false); count(surface); count(surface);
       shared.push(normalMap, roughnessMap);
     }
     const paint = async (look, tone, key) => {
-      const pix = new Uint8ClampedArray(size * size * 4), stains = planStains(body, frame, seed + bi * 7 + key * 131, tone[4] ?? look.stains);
-      await pause(clock);
-      await drain(paintColour(src, layers, look, tone, stainField(body, stains), body, pix), clock);
-      await pause(clock);
+      const pix = new Uint8ClampedArray(size * size * 4), stains = planStains(body, frame, seed + bi * 7 + key * 131, tone[4] ?? look.stains, !!look.back);
+      await pause(clock, 'stains');
+      await drain(paintColour(src, layers, look, tone, stainField(body, stains), body, pix), clock, 'colour');
+      await pause(clock, 'colour');
       const map = toTexture(pix, size, true); count(size);
       const m = new THREE.MeshStandardMaterial({ map, normalMap, roughnessMap, roughness: roughnessMap ? 1 : 0.86, alphaTest: 0.45, side: THREE.DoubleSide, metalness: 0, envMapIntensity: ZOMBIE_SKIN.envMapIntensity, name: 'zombie-skin' });
       shared.push(map, m);
+      await pause(clock, 'upload');
       return m;
     };
     const materials = []; for (let i = 0; i < ZOMBIE_SKIN.tones.length; i++) materials.push(await paint(LOOKS.walker[i], ZOMBIE_SKIN.tones[i], i));
@@ -161,7 +169,7 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
   const eyeOf = (color) => { const m = new THREE.MeshBasicMaterial({ color, toneMapped: false, fog: false }); shared.push(m); return m; };
   const eyeMat = eyeOf(E.color), eyeSpecial = Object.fromEntries(Object.entries(ZOMBIE_SKIN.special).map(([k, sp]) => [k, eyeOf(sp.eye)]));
   shared.push(eyeGeo);
-  const stats = { ms: Math.round(now() - t0), longest: Math.round(Math.max(0, ...clock.slices)), slices: clock.slices.length, maps, mb: +(bytes / 1048576).toFixed(1), size, surface };
+  const stats = { ms: Math.round(now() - t0), longest: Math.round(clock.worst[0]), longestIn: clock.worst[1], slices: clock.slices, maps, mb: +(bytes / 1048576).toFixed(1), size, surface };
 
   return {
     looks: bodies.length * ZOMBIE_SKIN.tones.length,
