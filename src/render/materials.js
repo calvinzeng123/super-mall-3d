@@ -1,7 +1,7 @@
 // 共享材质库。室内材质在夜间按自身颜色自发光（模拟室内照明），室外材质不发光。
 import * as THREE from 'three';
 import { floorTexture, stepTexture, chevronTexture } from './textures.js';
-import { FLOOR_SURFACES, pbrOptions, metricFloor, detailFor } from './pbr.js';
+import { FLOOR_SURFACES, pbrOptions, metricFloor, detailFor, worldWear, setWorldGrime } from './pbr.js';
 import { createFacadeMaterials } from './facade-materials.js';
 
 /** 让 emissive 乘以顶点色：夜间每个表面按自身颜色"亮起来" */
@@ -79,6 +79,9 @@ export class MaterialLib {
     this.night = 0;
     this.power = 1; // 供电：见 setPower()
     this.nightHooks = [];
+    // 停电污垢（pbr.js 的 worldDetail / worldWear）：跟着供电走——丧尸围城的停电（blackout.js 把 power 压到 0 再调 setNight）
+    // 时墙根发黑、流痕、天花水渍、地面落灰都出来；漫游、白天、来电以后是 0，画面干干净净。只有这里设它。
+    this.onNight(() => setWorldGrime(1 - this.power));
     // HDR 光影：finishes 记下哪些材质有「亮面」做法；outdoorMats 是室外材质，开着时反射真实天空
     this.hdr = false; this.sky = null; this.skyIntensity = 1;
     this.finishes = []; this.outdoorMats = new Set();
@@ -121,7 +124,7 @@ export class MaterialLib {
     if (surfaces.painted_plaster) {
       const m = interior({ roughness: 0.86, metalness: 0, ...pbrOptions(surfaces.painted_plaster, 0.3) }, 0.42);
       m.name = 'home wall · painted_plaster'; m.userData.homeFinish = true;
-      this.base.homeMatte = m;
+      this.base.homeMatte = worldWear(m);
     }
     if (shadows) {
       // 光斑贴花：灯下、窗边地面上的一团光。加色混合；白天淡，入夜（室内靠灯照明时）明显一些
@@ -162,6 +165,8 @@ export class MaterialLib {
         ...(asset ? pbrOptions(asset, strength) : {}) }, 0.14);
       this.base[key].name = `CC0 ${key}`;
     }
+    // 楼梯间的清水混凝土、抹灰墙（自带 UV 贴图）：停电时也一起变脏、变旧
+    for (const key of ['concrete', 'plaster']) worldWear(this.base[key]);
     for (const [key, roughness] of Object.entries(HDR_FINISH.base)) this.finish(this.base[key], roughness);
     for (const key of ['ext', 'extSatin', 'extMetal', 'foliage', 'glassTint', 'water', 'mirror']) this.outdoor(this.base[key], SKY_GAIN[key]);
     // 外立面材质（地铁站厅的两种墙面虽然也在那张表里，但在地下，不反射天空）
@@ -257,6 +262,7 @@ export class MaterialLib {
         roughness: def.roughness ?? Math.min(1, roughness + 0.2), metalness: 0,
         emissiveMap: colorAsset.maps.color, emissive: 0x000000,
       }), asset, colorAsset);
+      worldWear(m); // 停电时地面落灰、发暗（平时不多取样）
       m.name = `${kind} · ${asset.id} · CC0`;
       m.userData = { surface: asset.id, pattern: colorAsset.id, finish: kind, outdoor: !!outdoor };
       this.onNight((t) => m.emissive.copy(WARM).multiplyScalar(t * (def.glow ?? (outdoor ? .055 : .32))));
