@@ -1,6 +1,6 @@
 // 第五把武器：G40 榴弹枪（丧尸围城里在第二道关的安全点捡到，正好赶上巨尸出来）。
 // 单发、撅把式：打一发，枪管往下一撅，左手塞一发 40 毫米榴弹进去，合上——换弹 1.9 秒。榴弹的飞行和爆炸在 actions.js（launch / SHELL）。
-// 模型是手搭的（没有找到授权合适的贴图模型）：粗枪管、护木、机匣、握把、枪托、立式表尺，按步枪握把和护木的位置摆，
+// 模型是手搭的（没有找到授权合适的贴图模型）：粗枪管、木护木、圆机匣、木握把和枪托、表尺，按步枪握把和护木的位置摆，
 // 所以步枪上那两只手原样搬过来就握得住——右手握把、左手托护木。
 // 这里只管这把枪自己；切枪、HUD 读数在 arsenal.js。
 import * as THREE from 'three';
@@ -8,7 +8,7 @@ import * as THREE from 'three';
 /** reserve：捡到时带几发备弹；noise：开火那一下的响动（炸点另算一次手雷的响动）；recoil：镜头上抬（弧度） */
 export const LAUNCHER = Object.freeze({ name: 'G40 榴弹枪', mag: 1, reserve: 4, reserveMax: 8, reload: 1.9, recoil: 0.032, adsRate: 4.6, noise: 30, spreadHip: 0.012, spreadAds: 0.003 });
 /** 腰射 / 开镜时模型原点在镜头前的位置；sightY：表尺缺口比原点高多少；muzzle：枪口；hinge：枪管撅下去绕的轴 */
-export const LAUNCHER_VIEW = Object.freeze({ hip: Object.freeze([0.118, -0.07, -0.3]), ads: Object.freeze([0, -0.0585, -0.22]), sightY: 0.0585, muzzle: Object.freeze([0, 0.006, -0.37]), hinge: Object.freeze([0, -0.032, -0.012]), open: 0.62 });
+export const LAUNCHER_VIEW = Object.freeze({ hip: Object.freeze([0.125, -0.105, -0.4]), ads: Object.freeze([0, -0.05, -0.34]), sightY: 0.05, muzzle: Object.freeze([0, 0.006, -0.36]), hinge: Object.freeze([0, -0.032, -0.012]), open: 0.62 });
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const ease = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
@@ -28,37 +28,46 @@ export function breakPose(k) {
  */
 export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAUNCHER_VIEW, W = LAUNCHER } = {}) {
   const root = new THREE.Group(); root.name = 'viewmodel-g40'; root.visible = false; camera.add(root);
+  // 材质压暗、少反光：第一版金属度太高，在枪那一层的环境光下整把枪发白
+  const mk = (color, roughness, metalness) => { const m = new THREE.MeshStandardMaterial({ color, roughness, metalness }); m.envMapIntensity = 0.35; return m; };
   const M = {
-    steel: new THREE.MeshStandardMaterial({ color: 0x1c1e21, metalness: 0.7, roughness: 0.42 }),
-    drab: new THREE.MeshStandardMaterial({ color: 0x3a4030, metalness: 0.1, roughness: 0.7 }),
-    poly: new THREE.MeshStandardMaterial({ color: 0x131415, metalness: 0.05, roughness: 0.75 }),
-    brass: new THREE.MeshStandardMaterial({ color: 0xb8923c, metalness: 0.9, roughness: 0.3 }),
+    steel: mk(0x17191c, 0.62, 0.35), // 枪管、机匣：发蓝的钢
+    wood: mk(0x4a2f1c, 0.7, 0.02),   // 枪托、护木：胡桃木
+    poly: mk(0x0e0f10, 0.8, 0.02),   // 托底、握把片
+    brass: mk(0xa9853a, 0.4, 0.75),
     flash: new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }),
   };
   const geos = [];
   const add = (geo, mat, parent, x = 0, y = 0, z = 0, rx = 0) => { geos.push(geo); const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.x = rx; m.castShadow = false; m.receiveShadow = false; m.frustumCulled = false; parent.add(m); return m; };
-  const tubeGeo = (r, len, seg = 18) => new THREE.CylinderGeometry(r, r, len, seg).rotateX(Math.PI / 2);
+  const tubeGeo = (r, len, seg = 20, r2 = r) => new THREE.CylinderGeometry(r2, r, len, seg).rotateX(Math.PI / 2); // 沿 z：r 在后（+z）、r2 在前
+  const AX = 0.006; // 枪膛轴线的高度
   // 机匣、握把、枪托（不动的部分）
   const body = new THREE.Group(); root.add(body);
-  add(new THREE.BoxGeometry(0.05, 0.066, 0.13), M.steel, body, 0, -0.012, 0.047);
-  add(new THREE.BoxGeometry(0.034, 0.1, 0.046), M.poly, body, 0, -0.118, 0.086, -0.3); // 握把
-  add(new THREE.BoxGeometry(0.01, 0.008, 0.075), M.steel, body, 0, -0.078, 0.03); // 扳机护圈
-  add(new THREE.BoxGeometry(0.006, 0.024, 0.008), M.steel, body, 0, -0.062, 0.04, 0.3); // 扳机
-  add(new THREE.BoxGeometry(0.04, 0.058, 0.2), M.drab, body, 0, -0.024, 0.21); // 枪托
-  add(new THREE.BoxGeometry(0.046, 0.1, 0.022), M.poly, body, 0, -0.04, 0.32); // 托底
-  add(new THREE.BoxGeometry(0.03, 0.036, 0.004), M.steel, body, 0, 0.042, 0.005); // 立式表尺
-  add(new THREE.BoxGeometry(0.012, 0.012, 0.03), M.steel, body, 0, 0.026, 0.07); // 开闩扳把
+  add(tubeGeo(0.0265, 0.1), M.steel, body, 0, AX, 0.05);                    // 机匣上半：接着枪管的圆筒
+  add(new THREE.BoxGeometry(0.04, 0.04, 0.1), M.steel, body, 0, -0.03, 0.05); // 机匣下半
+  add(new THREE.BoxGeometry(0.03, 0.095, 0.042), M.wood, body, 0, -0.112, 0.088, -0.32); // 握把（和枪托一块木头）
+  add(new THREE.BoxGeometry(0.008, 0.006, 0.07), M.steel, body, 0, -0.078, 0.03); // 扳机护圈
+  add(new THREE.BoxGeometry(0.008, 0.03, 0.006), M.steel, body, 0, -0.064, 0.0);  // 护圈前缘
+  add(new THREE.BoxGeometry(0.005, 0.022, 0.007), M.steel, body, 0, -0.06, 0.04, 0.3); // 扳机
+  add(tubeGeo(0.03, 0.2, 14, 0.024), M.wood, body, 0, -0.012, 0.2).scale.set(0.72, 1.15, 1); // 枪托：前细后粗、压扁的圆木
+  add(new THREE.BoxGeometry(0.044, 0.074, 0.016), M.poly, body, 0, -0.012, 0.306); // 托底
+  add(new THREE.BoxGeometry(0.01, 0.01, 0.026), M.steel, body, 0, AX + 0.03, 0.075); // 开闩扳把
+  // 表尺：平放的尺板 + 后端竖起的缺口（两片窄立柱，中间是缺口）
+  add(new THREE.BoxGeometry(0.018, 0.004, 0.06), M.steel, body, 0, AX + 0.029, 0.03);
+  for (const x of [-0.007, 0.007]) add(new THREE.BoxGeometry(0.005, 0.014, 0.003), M.steel, body, x, AX + 0.038, 0.058);
   // 枪管那一截（换弹时绕铰链往下撅）
   const tube = new THREE.Group(); tube.position.set(...V.hinge); root.add(tube);
   const T = (x, y, z) => [x - V.hinge[0], y - V.hinge[1], z - V.hinge[2]];
-  add(tubeGeo(0.0265, 0.34), M.steel, tube, ...T(0, 0.006, -0.19));
-  add(tubeGeo(0.0295, 0.024), M.steel, tube, ...T(0, 0.006, -0.35)); // 枪口箍
-  add(tubeGeo(0.0285, 0.03), M.steel, tube, ...T(0, 0.006, -0.03)); // 药室箍
-  add(new THREE.BoxGeometry(0.05, 0.04, 0.17), M.drab, tube, ...T(0, -0.04, -0.2)); // 护木
-  add(new THREE.BoxGeometry(0.036, 0.03, 0.05), M.steel, tube, ...T(0, -0.034, -0.03)); // 铰链座
-  add(new THREE.BoxGeometry(0.004, 0.024, 0.004), M.steel, tube, ...T(0, 0.045, -0.335)); // 准星
-  const shell = add(tubeGeo(0.019, 0.07, 12), M.brass, tube, ...T(0, 0.006, 0.0)); shell.visible = false; // 撅开时露出来的弹底
-  const flash = add(new THREE.CircleGeometry(0.06, 14), M.flash, root, V.muzzle[0], V.muzzle[1], V.muzzle[2] - 0.02); flash.visible = false;
+  add(tubeGeo(0.0245, 0.35), M.steel, tube, ...T(0, AX, -0.175));
+  add(tubeGeo(0.027, 0.02), M.steel, tube, ...T(0, AX, -0.34));  // 枪口箍
+  add(tubeGeo(0.0262, 0.014), M.steel, tube, ...T(0, AX, -0.12)); // 护木前箍
+  add(tubeGeo(0.0262, 0.014), M.steel, tube, ...T(0, AX, -0.27));
+  add(tubeGeo(0.03, 0.15, 14), M.wood, tube, ...T(0, AX - 0.02, -0.195)).scale.set(0.9, 0.85, 1); // 护木：包着枪管下半的圆木
+  add(new THREE.BoxGeometry(0.03, 0.026, 0.045), M.steel, tube, ...T(0, -0.03, -0.022)); // 铰链座
+  add(new THREE.BoxGeometry(0.003, 0.016, 0.004), M.steel, tube, ...T(0, AX + 0.033, -0.335)); // 准星
+  add(new THREE.BoxGeometry(0.012, 0.006, 0.012), M.steel, tube, ...T(0, AX + 0.026, -0.335)); // 准星座
+  const shell = add(tubeGeo(0.019, 0.07, 12), M.brass, tube, ...T(0, AX, 0.0)); shell.visible = false; // 撅开时露出来的弹底
+  const flash = add(new THREE.CircleGeometry(0.05, 14), M.flash, root, V.muzzle[0], V.muzzle[1], V.muzzle[2] - 0.02); flash.visible = false;
   const right = cloneHand?.(0, root) || null, left = cloneHand?.(1, root) || null, leftBase = left ? left.position.clone() : null;
   root.traverse((o) => { if (layer) o.layers.set(layer); });
 

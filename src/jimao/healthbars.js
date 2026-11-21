@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 
 /** show：打中后亮几秒；special：特殊感染者多远以内常亮；pool：同时最多几条；w / h：1 米宽对应多少血、条高（米） */
-export const BARS = Object.freeze({ show: 2.6, special: 26, pool: 14, min: 0.42, max: 1.25, h: 0.05, rise: 0.16, boss: 60 });
+export const BARS = Object.freeze({ show: 2.6, special: 26, pool: 14, min: 0.42, max: 1.25, h: 0.07, rise: 0.17, boss: 60 });
 
 /** 血条多宽（米）：血越厚越长，开方压一压——行尸 60 血约 0.5 米，巨尸 1300 血封顶 1.25 米。纯函数 */
 export const barWidth = (maxHp, B = BARS) => Math.max(B.min, Math.min(B.max, 0.065 * Math.sqrt(Math.max(1, maxHp))));
@@ -28,7 +28,7 @@ export function pickBars(zombies, eye, now, B = BARS) {
 }
 
 export const BARS_CSS = `
-.jm-boss { position: absolute; left: 50%; top: calc(84px + var(--sat, 0px)); transform: translateX(-50%); z-index: 3; pointer-events: none; width: min(46vw, 420px); display: grid; gap: 5px; font: 700 13px/1 var(--f-label, sans-serif); letter-spacing: .3em; color: #ffb38a; text-align: center; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+.jm-boss { position: absolute; left: 50%; top: calc(142px + var(--sat, 0px)); transform: translateX(-50%); z-index: 3; pointer-events: none; width: min(46vw, 420px); display: grid; gap: 5px; font: 700 13px/1 var(--f-label, sans-serif); letter-spacing: .3em; color: #ffb38a; text-align: center; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
 .jm-boss.off { display: none; }
 .jm-boss i { display: block; height: 7px; background: rgba(0, 0, 0, .55); border: 1px solid rgba(255, 140, 90, .5); }
 .jm-boss i b { display: block; height: 100%; background: linear-gradient(90deg, #c8321e, #ff7a3c); }
