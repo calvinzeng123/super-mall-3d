@@ -9,21 +9,37 @@
 //   零件：贴图本身分不出零件（弹匣和机匣在原贴图里是同一种材质），所以从模型的三角形量——
 //       按网格名、按 UV 岛在枪上的位置把每个岛归到一类（机匣聚合物 / 枪托 / 托底橡胶 / 弹匣 / 钢件 / 裸钢 / 导轨 / 弹壳），
 //       画成一张和贴图一样大的「零件图」，顺带记下每个像素在枪上的位置（合模线、托底横棱、弹匣擦痕靠它定位）。
-//   颜色：每类有自己的深浅和色调；大片云斑压平；细碎的斑点减半（挪到粗糙度上），划痕留着；
+//   颜色：每类有自己的深浅和色调；大片云斑压掉一半多（机匣留得多一点——全抹平了是一块没有用过的新塑料）；
+//       细碎的斑点减半（挪到粗糙度上），划痕留着；
 //       烘进去的亮棱绝大部分抹掉，只在一张低频噪声选中的三四成长度上留一截（亮度打六折），
 //       凹槽、散热孔的沿不留；弹匣口、抛壳窗、拉机柄槽、枪托铰链这些真会磨的地方留得多一点；岛外的填充色改成和岛内一样深。
 //   粗糙度 / 金属度：按类重定（聚合物金属度 0、哑光；弹匣是烤蓝薄钢、更光、有顺着插拔方向的擦痕；导轨是阳极氧化的缎面；
 //       销子、枪机是磨亮的钢），再叠大范围的起伏、手常摸的地方磨光一点、凹处积灰更哑；没有镜面一样的地方。
-//   细节（着色器里按 UV 平铺）：枪托是模压的麻点（疏），机匣是很细的麻点，钢件是磷化颗粒——各类各用多少写在一张「权重图」里。
+//   细节（着色器里平铺）：枪托是模压的麻点（疏），机匣是很细的麻点，钢件是磷化颗粒——各类各用多少写在一张「权重图」里。
+//       枪上的细节按零件自己坐标里的位置铺、不按 UV：玩家腰射、开镜时看得最多的枪托顶面，在贴图上只是二十个像素宽的一条，
+//       贴图里画什么都是糊的，按 UV 铺的颗粒在那儿也又大又扁；按位置铺，整把枪的颗粒一样大（见 skinShader）。
+//       合模线、灯色收敛、环境反射压低也在着色器里。
 //   手：布面不反光（粗糙度抬到 0.85 以上）、叠一层平纹织物；手掌的皮面略亮一点、叠细皮纹。颜色和法线贴图不动。
 // 贴图里没有任何厂牌字样（逐块放大看过颜色和法线贴图），不需要抹字。
 // 耗时是按「第一次跑」（代码还没被引擎优化）控制的：金属粗糙度贴图缩到 512 再算，大范围的平均值在缩小的图上算，
-// 没被任何三角形用到的像素（占四成）直接填底色。
+// 没被任何三角形用到的像素（占四成）直接填底色；几个大循环的写法见 inBatches、boxBlur 上面的说明。
 // 像素运算全是纯函数（类型数组进、就地改），测试环境没有 document 时 skinSmg 什么都不做。
 import * as THREE from 'three';
 import { noiseField, fbmField, seeded } from '../gun-surface.js';
 
 const hasCanvas = () => typeof document !== 'undefined';
+const BATCH = 8, SPREAD = 32; // 逐像素的循环一批跑几行、先隔几行跑一行（见 boxBlur 上面的说明）
+/**
+ * 把 rows(K, ya, yb, step)（处理第 ya、ya + step…… 行，不到 yb）对 0 到 h 的每一行各调到一次。
+ * 先隔 SPREAD 行跑一行、一次只跑一行，再把其余的按 BATCH 行一批补上：
+ *   一张贴图从上到下是不同的零件，照顺序跑的话引擎拿最上面几十行（多半是空白）学到的情况去优化，
+ *   往下每碰到一种没见过的零件，优化好的代码就作废重来一次（这个函数编译一次要几十毫秒）；
+ *   头几次只跑一行，是让函数从头到尾先完整走过几遍——不然循环后面的收尾还没跑过就被优化，一出循环又作废。
+ */
+function inBatches(rows, K, h) {
+  for (let y = 0; y < h; y += SPREAD) rows(K, y, y + 1, 1);
+  for (let y = 0; y < h; y += SPREAD) for (let k = 1; k < SPREAD; k += BATCH) rows(K, y + k, Math.min(y + Math.min(k + BATCH, SPREAD), h), 1);
+}
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 /** 平滑阶跃：x 从 lo 到 hi，结果从 0 到 1 */
 export const smoothstep = (lo, hi, x) => { const t = clamp01((x - lo) / (hi - lo)); return t * t * (3 - 2 * t); };
@@ -39,7 +55,8 @@ const part = (o) => Object.freeze({ ...o, tint: Object.freeze(o.tint) });
  * size：颜色、法线贴图的边长；mrSize：金属粗糙度贴图、权重图的边长；partSize：零件图的边长；detailSize：细节贴图的边长；pad：岛外补几个像素的边（零件图的像素）。
  * gun.parts：按 PART 的编号排。tone 大面的平均亮度往这个值靠（flatten：靠多少；0 = 不改深浅）；plain 原贴图上几个到十几个像素宽的明暗带抹掉几成（枪托顶上两条浅带，看着像条纹）；tint 去掉原来的暖色以后乘上的色调；
  *     rough / metal 这一类的粗糙度、金属度；min 粗糙度下限；wear 烘焙的亮棱最多留几成（乘 edge.max）；bare 磨亮处露不露钢（金属度往 1 靠多少）；
- *     accent 原贴图标成裸钢的小件（销子、螺丝）算不算数；stipple / fine / grain 三种细节各用多少。
+ *     accent 原贴图标成裸钢的小件（销子、螺丝）算不算数；stipple / fine / grain 三种细节各用多少；
+ *     keep 原贴图里细碎的起伏留几成、ao 遮蔽的下限——托底在贴图上只有二十来个像素宽，上面画的东西（一个小方框、烘进去的阴影）放大十倍是几块糊斑，不如不要。
  * gun.metal：没有零件图时（假模型）的退路——原贴图金属度低于 lo 当聚合物、高于 hi 当钢件。accent：[lo, hi] 摊开以后的金属度高于这个的是裸钢小件。
  * gun.keepSat：[lo, hi] 颜色鲜艳到这个程度的小标记（快慢机的红点、弹壳）不动调子；bright：[拐点, 斜率] 比拐点亮的灰白压下来（快慢机那根白杆子变成磨亮的钢）。
  * gun.grit：细碎起伏的处理。小于 soft 的乘 low（斑点减半），大于 hard 的乘 high（划痕锐化），中间过渡。
@@ -48,44 +65,45 @@ const part = (o) => Object.freeze({ ...o, tint: Object.freeze(o.tint) });
  * gun.cloud：大范围起伏。albedo 颜色 ±；rough 粗糙度 ±；polish 磨光处粗糙度降多少、gate [lo, hi] 噪声门槛、handled 手握处把门槛降多少；
  *     cheek 枪托上高于这个高度（模型单位）的是顶上贴腮的那一条，门槛降 cheekBias（磨光的是其中几块，不是一整条）；side 枪托侧面、腹板的疏麻点打几折（贴近看太粗像橘子皮）；dust 凹处粗糙度升多少。
  * gun.rough：flatten 往这一类的值靠多少、blur 去方块的模糊半径（按 1024 的像素算）、max 上限；scratch：亮划痕处降多少；wear：留下的亮棱处降多少。
- * gun.seam：合模线（枪托、机匣正中）。width 半宽（贴图像素）；light 提亮；bump 法线鼓多少；body 机匣上打几折。
+ * gun.seam：合模线（枪托、机匣正中，着色器里画）。width 半宽（模型单位，1 ≈ 1.5 厘米）；light 提亮几成；body 机匣上打几折；rough 粗糙度降多少。
+ * gun.neutral：直接光的颜色往灰里收几成；gun.env：非金属的环境反射压多狠（反射越亮压得越多：白天的黑塑料不泛灰，停电时暗处的那点反光还在）。
  * gun.scuff：枪托上的蹭痕（原贴图的枪托是光板一块）。count 几道；length [最短, 最长]（贴图像素）；light 提亮；rough 算作多深的划痕（0–1，粗糙度按 rough.scratch 降）。
  * gun.f90：聚合物掠射角的反光打几折（1 = 不动）。暗场里轮廓光是冷色的，黑塑料的侧面被它一擦就是一片藏蓝。
- * gun.ribs：托底的横棱。pitch 间距（模型单位，1 ≈ 1.5 厘米）；dark 沟里压暗；bump 法线。 gun.streak：弹匣的插拔擦痕。light 提亮；rough 降粗糙度。
+ * gun.ribs：托底的横棱。pitch 间距（模型单位，1 ≈ 1.5 厘米）；dark 沟里压暗；bump 法线；steep [lo, hi] 高度在贴图上每像素变多少（1/256 模型单位）才算朝后的面。 gun.streak：弹匣的插拔擦痕。light 提亮；rough 降粗糙度。
  * gun.flat：[lo, hi] 法线偏离正上方小于 lo 的当噪点抹平，大于 hi 的原样留着。
- * A / B / C：着色器里叠的三层细节（scale 在 UV 上铺几次、normal 法线强弱、rough 对粗糙度的影响、tint 对颜色的影响）。
+ * A / B / C：着色器里叠的三层细节（scale 铺多密——枪是每个模型单位铺几次，手是在 UV 上铺几次；normal 法线强弱、rough 对粗糙度的影响、tint 对颜色的影响）。
  *     枪：A 疏麻点（枪托）、B 磷化颗粒（钢件）、C 细麻点（机匣）；手：A 皮纹、B 织物。
  */
 export const SMG_SKIN = Object.freeze({
   size: 1024, mrSize: 512, partSize: 512, detailSize: 256, anisotropy: 8, pad: 1.5,
   gun: Object.freeze({
     parts: Object.freeze([
-      part({ name: 'body', tone: 31, flatten: 0.7, plain: 0, tint: [0.99, 1, 1.02], rough: 0.66, metal: 0, min: 0.5, wear: 0.6, bare: 0, accent: 1, stipple: 0, fine: 1, grain: 0 }),
-      part({ name: 'stock', tone: 35, flatten: 0.8, plain: 0.85, tint: [1, 1, 1.01], rough: 0.7, metal: 0, min: 0.52, wear: 0.5, bare: 0, accent: 0, stipple: 1, fine: 0.3, grain: 0 }),
-      part({ name: 'rubber', tone: 27, flatten: 0.8, plain: 0.85, tint: [1, 1, 1], rough: 0.88, metal: 0, min: 0.75, wear: 0, bare: 0, accent: 0, stipple: 0, fine: 0.25, grain: 0 }),
-      part({ name: 'mag', tone: 44, flatten: 0.7, plain: 0, tint: [0.92, 0.99, 1.1], rough: 0.44, metal: 0.75, min: 0.32, wear: 0.8, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.35 }),
-      part({ name: 'steel', tone: 40, flatten: 0.65, plain: 0, tint: [0.96, 1, 1.05], rough: 0.58, metal: 0.8, min: 0.4, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 1 }),
-      part({ name: 'bright', tone: 0, flatten: 0, plain: 0, tint: [0.98, 1, 1.03], rough: 0.4, metal: 1, min: 0.32, wear: 1, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.6 }),
-      part({ name: 'rail', tone: 36, flatten: 0.7, plain: 0, tint: [0.97, 1, 1.04], rough: 0.6, metal: 0.25, min: 0.45, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 0.4 }),
-      part({ name: 'brass', tone: 0, flatten: 0, plain: 0, tint: [1, 1, 1], rough: 0.36, metal: 1, min: 0.3, wear: 1, bare: 0, accent: 0, stipple: 0, fine: 0, grain: 0.2 }),
+      part({ name: 'body', tone: 40, flatten: 0.55, plain: 0, tint: [0.99, 1, 1.02], rough: 0.66, metal: 0, min: 0.5, wear: 0.6, bare: 0, accent: 1, stipple: 0, fine: 1, grain: 0, keep: 1, ao: 0 }),
+      part({ name: 'stock', tone: 43, flatten: 0.8, plain: 0.85, tint: [1, 1, 1.01], rough: 0.7, metal: 0, min: 0.52, wear: 0.5, bare: 0, accent: 0, stipple: 1, fine: 0.3, grain: 0, keep: 1, ao: 0 }),
+      part({ name: 'rubber', tone: 31, flatten: 0.8, plain: 1, tint: [1, 1, 1], rough: 0.88, metal: 0, min: 0.75, wear: 0, bare: 0, accent: 0, stipple: 0, fine: 0.7, grain: 0, keep: 0, ao: 0.86 }),
+      part({ name: 'mag', tone: 44, flatten: 0.7, plain: 0, tint: [0.92, 0.99, 1.1], rough: 0.44, metal: 0.75, min: 0.32, wear: 0.8, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.35, keep: 1, ao: 0 }),
+      part({ name: 'steel', tone: 40, flatten: 0.65, plain: 0, tint: [0.96, 1, 1.05], rough: 0.58, metal: 0.8, min: 0.4, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 1, keep: 1, ao: 0 }),
+      part({ name: 'bright', tone: 0, flatten: 0, plain: 0, tint: [0.98, 1, 1.03], rough: 0.4, metal: 1, min: 0.32, wear: 1, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.6, keep: 1, ao: 0 }),
+      part({ name: 'rail', tone: 36, flatten: 0.7, plain: 0, tint: [0.97, 1, 1.04], rough: 0.6, metal: 0.25, min: 0.45, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 0.4, keep: 1, ao: 0 }),
+      part({ name: 'brass', tone: 0, flatten: 0, plain: 0, tint: [1, 1, 1], rough: 0.36, metal: 1, min: 0.3, wear: 1, bare: 0, accent: 0, stipple: 0, fine: 0, grain: 0.2, keep: 1, ao: 0 }),
       // 照门、准星：哑黑（真枪也是，免得反光晃眼）——准星护圈只有一两个像素粗，亮了在暗背景上是一圈虚线
-      part({ name: 'sight', tone: 28, flatten: 0.8, plain: 0, tint: [0.98, 1, 1.03], rough: 0.8, metal: 0.3, min: 0.66, wear: 0.3, bare: 0.5, accent: 0, stipple: 0, fine: 0, grain: 0.8 }),
+      part({ name: 'sight', tone: 26, flatten: 0.8, plain: 0, tint: [0.98, 1, 1.03], rough: 0.86, metal: 0.1, min: 0.7, wear: 0.3, bare: 0.5, accent: 0, stipple: 0, fine: 0, grain: 0.8, keep: 1, ao: 0 }),
     ]),
     metal: Object.freeze([0.25, 0.4]), accent: Object.freeze([0.64, 0.8]),
     lowRadius: 20, lowClamp: 110, bg: Object.freeze([32, 33, 35]),
     keepSat: Object.freeze([22, 46]), bright: Object.freeze([96, 0.2]),
     grit: Object.freeze({ soft: 4, hard: 11, low: 0.5, high: 1.5 }),
     edge: Object.freeze({ reach: 3, min: 1.5, bevel: 0.07, keep: 0.1, max: 0.62, patch: Object.freeze([0.5, 0.64]), contact: 0.18, recess: 0.62, ao: 0.72 }),
-    cloud: Object.freeze({ albedo: 0.08, rough: 0.12, polish: 0.2, gate: Object.freeze([0.5, 0.66]), handled: 0.2, cheek: 10.4, cheekBias: 0.05, side: 0.6, dust: 0.1 }),
+    cloud: Object.freeze({ albedo: 0.11, rough: 0.12, polish: 0.2, gate: Object.freeze([0.5, 0.66]), handled: 0.2, cheek: 10.4, cheekBias: 0.05, side: 0.6, dust: 0.1 }),
     rough: Object.freeze({ flatten: 0.7, blur: 3, max: 0.94, scratch: 0.14, wear: 0.12 }),
-    seam: Object.freeze({ width: 1.3, light: 4, bump: 0.22, body: 0.5 }),
+    seam: Object.freeze({ width: 0.035, light: 0.12, body: 0.5, rough: 0.08 }), neutral: 0.6, env: 10,
     scuff: Object.freeze({ count: 60, length: Object.freeze([8, 34]), light: 7, rough: 0.5, seed: 23 }),
-    ribs: Object.freeze({ pitch: 0.62, dark: 0.3, bump: 0.3 }),
+    ribs: Object.freeze({ pitch: 0.62, dark: 0.3, bump: 0.3, steep: Object.freeze([8, 14]) }),
     streak: Object.freeze({ light: 16, rough: 0.14 }),
     flat: Object.freeze([0.025, 0.08]), f90: 0.8,
-    A: Object.freeze({ scale: 11, normal: 0.3, rough: 0.12, tint: 0.11 }),   // 枪托：模压的麻点
-    B: Object.freeze({ scale: 12, normal: 0.16, rough: 0.1, tint: 0.04 }),  // 钢件：磷化颗粒
-    C: Object.freeze({ scale: 37, normal: 0.1, rough: 0.07, tint: 0.04 }),  // 机匣：细麻点
+    A: Object.freeze({ scale: 0.18, normal: 0.45, rough: 0.14, tint: 0.14 }),  // 枪托：模压的麻点
+    B: Object.freeze({ scale: 0.2, normal: 0.16, rough: 0.1, tint: 0.04 }),   // 钢件：磷化颗粒
+    C: Object.freeze({ scale: 0.62, normal: 0.1, rough: 0.07, tint: 0.04 }),  // 机匣：细麻点
   }),
   hands: Object.freeze({
     leather: Object.freeze([27, 36]),        // 颜色暗于 lo 的是手掌的皮面，亮于 hi 的是布面
@@ -96,6 +114,23 @@ export const SMG_SKIN = Object.freeze({
   }),
 });
 
+// 关于写法：下面几个大循环都拆成「一个函数只有一个循环」，逐像素的那两个按几行一批反复调。
+// 引擎是按函数热起来的——一个只调一次、里面排着好几个大循环的函数，每个循环都要从解释执行重新热一遍
+// （前一个循环热好的代码走到没跑过的下一个循环就作废），第一次跑要多花一两倍的时间；而第一次跑正是玩家等的那一次。
+function blurRows(a, b, w, h, r, k) {
+  for (let y = 0; y < h; y++) {
+    const o = y * w; let s = a[o] * (r + 1); for (let i = 1; i <= r; i++) s += a[o + (i < w ? i : w - 1)];
+    for (let x = 0; x < w; x++) { b[o + x] = s * k; const xa = x + r + 1, xb = x - r; s += a[o + (xa < w ? xa : w - 1)] - a[o + (xb > 0 ? xb : 0)]; }
+  }
+}
+function blurCols(b, a, acc, w, h, r, k) { // 按行扫，每列一个累加器
+  for (let x = 0; x < w; x++) acc[x] = b[x] * (r + 1);
+  for (let i = 1; i <= r; i++) { const o = (i < h ? i : h - 1) * w; for (let x = 0; x < w; x++) acc[x] += b[o + x]; }
+  for (let y = 0; y < h; y++) {
+    const o = y * w, ya = y + r + 1, yb = y - r, oa = (ya < h ? ya : h - 1) * w, ob = (yb > 0 ? yb : 0) * w;
+    for (let x = 0; x < w; x++) { a[o + x] = acc[x] * k; acc[x] += b[oa + x] - b[ob + x]; }
+  }
+}
 /**
  * 盒式模糊（单通道 Float32Array，就地；边上按边缘像素延伸）。r：半径；passes：做几遍（两遍接近高斯）。
  * 用滑动求和，耗时和半径无关。返回 a 本身。
@@ -103,19 +138,7 @@ export const SMG_SKIN = Object.freeze({
 export function boxBlur(a, w, h, r, passes = 1) {
   if (r < 1) return a;
   const b = new Float32Array(a.length), acc = new Float32Array(w), k = 1 / (2 * r + 1);
-  for (let p = 0; p < passes; p++) {
-    for (let y = 0; y < h; y++) { // 横向：a → b
-      const o = y * w; let s = a[o] * (r + 1); for (let i = 1; i <= r; i++) s += a[o + (i < w ? i : w - 1)];
-      for (let x = 0; x < w; x++) { b[o + x] = s * k; const xa = x + r + 1, xb = x - r; s += a[o + (xa < w ? xa : w - 1)] - a[o + (xb > 0 ? xb : 0)]; }
-    }
-    // 纵向：b → a（按行扫，每列一个累加器）
-    for (let x = 0; x < w; x++) acc[x] = b[x] * (r + 1);
-    for (let i = 1; i <= r; i++) { const o = (i < h ? i : h - 1) * w; for (let x = 0; x < w; x++) acc[x] += b[o + x]; }
-    for (let y = 0; y < h; y++) {
-      const o = y * w, ya = y + r + 1, yb = y - r, oa = (ya < h ? ya : h - 1) * w, ob = (yb > 0 ? yb : 0) * w;
-      for (let x = 0; x < w; x++) { a[o + x] = acc[x] * k; acc[x] += b[oa + x] - b[ob + x]; }
-    }
-  }
+  for (let p = 0; p < passes; p++) { blurRows(a, b, w, h, r, k); blurCols(b, a, acc, w, h, r, k); }
   return a;
 }
 
@@ -147,6 +170,45 @@ export function classifySmg(name, lo, hi) {
 }
 
 /**
+ * partMap 里填一个三角形（S：partMap 的数组和当前网格的顶点；ia / ib / ic：三个顶点的编号；code：类别 + 标记 × 256）。
+ * 单独一个函数、一个三角形调一次：几千次调用下来各种朝向的三角形都见过了，引擎优化出来的代码不会半路作废。
+ */
+function fillTriangle(S, ia, ib, ic, code) {
+  const { cls, zone, X, Y, size, pad, pos, uv } = S;
+  // 像素中心在 (i + 0.5) / size；glTF 的贴图不翻转，v = 0 是最上面一行
+  const ax = uv[ia * 2] * size - 0.5, ay = uv[ia * 2 + 1] * size - 0.5, bx = uv[ib * 2] * size - 0.5, by = uv[ib * 2 + 1] * size - 0.5, cx = uv[ic * 2] * size - 0.5, cy = uv[ic * 2 + 1] * size - 0.5;
+  const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax); if (!(Math.abs(area) > 1e-6)) return;
+  const s = area > 0 ? 1 : -1, inv = 1 / (area * s);
+  const x0 = Math.max(0, Math.ceil(Math.min(ax, bx, cx) - pad)), x1 = Math.min(size - 1, Math.floor(Math.max(ax, bx, cx) + pad)), y0 = Math.max(0, Math.ceil(Math.min(ay, by, cy) - pad)), y1 = Math.min(size - 1, Math.floor(Math.max(ay, by, cy) + pad));
+  if (x1 < x0 || y1 < y0) return;
+  // 三条边的边函数（朝里为正）和「岛外 pad 像素以内」的门槛
+  const e0x = (by - cy) * s, e0y = (cx - bx) * s, e1x = (cy - ay) * s, e1y = (ax - cx) * s, e2x = (ay - by) * s, e2y = (bx - ax) * s;
+  const m0 = -pad * Math.hypot(e0x, e0y), m1 = -pad * Math.hypot(e1x, e1y), m2 = -pad * Math.hypot(e2x, e2y);
+  const kind = code & 255, flag = (code >> 8) & 127;
+  const pax = pos[ia * 3] * 256, pay = pos[ia * 3 + 1] * 256, dbx = pos[ib * 3] * 256 - pax, dby = pos[ib * 3 + 1] * 256 - pay, dcx = pos[ic * 3] * 256 - pax, dcy = pos[ic * 3 + 1] * 256 - pay;
+  S.drawn++; let covered = 0;
+  for (let y = y0; y <= y1; y++) {
+    const o = y * size;
+    const r0 = e0x * (x0 - bx) + e0y * (y - by), r1 = e1x * (x0 - cx) + e1y * (y - cy), r2 = e2x * (x0 - ax) + e2y * (y - ay);
+    // 这一行里三条边都不低于门槛的那一段（细长的斜三角形，包围盒里大半是空的）
+    let xa = x0, xb = x1;
+    if (e0x > 0) { const t = x0 + Math.ceil((m0 - r0) / e0x); if (t > xa) xa = t; } else if (e0x < 0) { const t = x0 + Math.floor((m0 - r0) / e0x); if (t < xb) xb = t; } else if (r0 < m0) continue;
+    if (e1x > 0) { const t = x0 + Math.ceil((m1 - r1) / e1x); if (t > xa) xa = t; } else if (e1x < 0) { const t = x0 + Math.floor((m1 - r1) / e1x); if (t < xb) xb = t; } else if (r1 < m1) continue;
+    if (e2x > 0) { const t = x0 + Math.ceil((m2 - r2) / e2x); if (t > xa) xa = t; } else if (e2x < 0) { const t = x0 + Math.floor((m2 - r2) / e2x); if (t < xb) xb = t; } else if (r2 < m2) continue;
+    let w0 = r0 + e0x * (xa - x0), w1 = r1 + e1x * (xa - x0), w2 = r2 + e2x * (xa - x0);
+    for (let x = xa; x <= xb; x++, w0 += e0x, w1 += e1x, w2 += e2x) {
+      const inside = w0 >= 0 && w1 >= 0 && w2 >= 0, i = o + x;
+      if (!inside && (cls[i] !== PART.NONE || w0 < m0 || w1 < m1 || w2 < m2)) continue;
+      if (inside && zone[i] & ZONE.GUTTER) covered++;
+      cls[i] = kind; zone[i] = inside ? flag : flag | ZONE.GUTTER;
+      const u = w1 * inv, v = w2 * inv, px = pax + dbx * u + dcx * v, py = pay + dby * u + dcy * v;
+      X[i] = px < -32767 ? -32767 : px > 32767 ? 32767 : px; Y[i] = py < -32767 ? -32767 : py > 32767 ? 32767 : py;
+    }
+  }
+  S.covered += covered;
+}
+
+/**
  * 把几个网格的三角形按 UV 画成零件图（纯计算）。
  * meshes：[{ name, position, uv, index }]（数组或类型数组；index 可以没有）；classify(name, lo, hi)：见 classifySmg。
  * 先按顶点连通把三角形分成 UV 岛（UV 接缝处顶点是拆开的，所以连通的就是一个岛），一个岛一类；
@@ -156,7 +218,8 @@ export function classifySmg(name, lo, hi) {
  */
 export function partMap(meshes, size, classify = classifySmg, pad = 3) {
   const n = size * size, cls = new Uint8Array(n).fill(PART.NONE), zone = new Uint8Array(n).fill(ZONE.GUTTER), X = new Int16Array(n), Y = new Int16Array(n);
-  let covered = 0, islands = 0, drawn = 0;
+  let islands = 0;
+  const S = { cls, zone, X, Y, size, pad, pos: null, uv: null, covered: 0, drawn: 0 };
   for (const M of meshes) {
     const pos = M.position, uv = M.uv, idx = M.index, nv = Math.floor(pos.length / 3), nt = Math.floor((idx ? idx.length : nv) / 3);
     if (!nv || !nt || !uv || uv.length < nv * 2) continue;
@@ -170,93 +233,40 @@ export function partMap(meshes, size, classify = classifySmg, pad = 3) {
       for (let a = 0; a < 3; a++) { const v = pos[i * 3 + a]; if (v < e.lo[a]) e.lo[a] = v; if (v > e.hi[a]) e.hi[a] = v; }
     }
     for (const e of box.values()) { e.code = classify(M.name || '', e.lo, e.hi); if (e.code >= 0) islands++; }
+    S.pos = pos; S.uv = uv;
     for (let t = 0; t < nt; t++) {
-      const ia = idx ? idx[t * 3] : t * 3, ib = idx ? idx[t * 3 + 1] : t * 3 + 1, ic = idx ? idx[t * 3 + 2] : t * 3 + 2, code = box.get(find(ia)).code;
-      if (code < 0) continue;
-      // 像素中心在 (i + 0.5) / size；glTF 的贴图不翻转，v = 0 是最上面一行
-      const ax = uv[ia * 2] * size - 0.5, ay = uv[ia * 2 + 1] * size - 0.5, bx = uv[ib * 2] * size - 0.5, by = uv[ib * 2 + 1] * size - 0.5, cx = uv[ic * 2] * size - 0.5, cy = uv[ic * 2 + 1] * size - 0.5;
-      const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax); if (!(Math.abs(area) > 1e-6)) continue;
-      const s = area > 0 ? 1 : -1, inv = 1 / (area * s);
-      const x0 = Math.max(0, Math.ceil(Math.min(ax, bx, cx) - pad)), x1 = Math.min(size - 1, Math.floor(Math.max(ax, bx, cx) + pad)), y0 = Math.max(0, Math.ceil(Math.min(ay, by, cy) - pad)), y1 = Math.min(size - 1, Math.floor(Math.max(ay, by, cy) + pad));
-      if (x1 < x0 || y1 < y0) continue;
-      // 三条边的边函数（朝里为正）和「岛外 pad 像素以内」的门槛
-      const e0x = (by - cy) * s, e0y = (cx - bx) * s, e1x = (cy - ay) * s, e1y = (ax - cx) * s, e2x = (ay - by) * s, e2y = (bx - ax) * s;
-      const m0 = -pad * Math.hypot(e0x, e0y), m1 = -pad * Math.hypot(e1x, e1y), m2 = -pad * Math.hypot(e2x, e2y);
-      const kind = code & 255, flag = (code >> 8) & 127;
-      const pax = pos[ia * 3] * 256, pay = pos[ia * 3 + 1] * 256, dbx = pos[ib * 3] * 256 - pax, dby = pos[ib * 3 + 1] * 256 - pay, dcx = pos[ic * 3] * 256 - pax, dcy = pos[ic * 3 + 1] * 256 - pay;
-      drawn++;
-      for (let y = y0; y <= y1; y++) {
-        const o = y * size;
-        const r0 = e0x * (x0 - bx) + e0y * (y - by), r1 = e1x * (x0 - cx) + e1y * (y - cy), r2 = e2x * (x0 - ax) + e2y * (y - ay);
-        // 这一行里三条边都不低于门槛的那一段（细长的斜三角形，包围盒里大半是空的）
-        let xa = x0, xb = x1;
-        if (e0x > 0) { const t = x0 + Math.ceil((m0 - r0) / e0x); if (t > xa) xa = t; } else if (e0x < 0) { const t = x0 + Math.floor((m0 - r0) / e0x); if (t < xb) xb = t; } else if (r0 < m0) continue;
-        if (e1x > 0) { const t = x0 + Math.ceil((m1 - r1) / e1x); if (t > xa) xa = t; } else if (e1x < 0) { const t = x0 + Math.floor((m1 - r1) / e1x); if (t < xb) xb = t; } else if (r1 < m1) continue;
-        if (e2x > 0) { const t = x0 + Math.ceil((m2 - r2) / e2x); if (t > xa) xa = t; } else if (e2x < 0) { const t = x0 + Math.floor((m2 - r2) / e2x); if (t < xb) xb = t; } else if (r2 < m2) continue;
-        let w0 = r0 + e0x * (xa - x0), w1 = r1 + e1x * (xa - x0), w2 = r2 + e2x * (xa - x0);
-        for (let x = xa; x <= xb; x++, w0 += e0x, w1 += e1x, w2 += e2x) {
-          const inside = w0 >= 0 && w1 >= 0 && w2 >= 0, i = o + x;
-          if (!inside && (cls[i] !== PART.NONE || w0 < m0 || w1 < m1 || w2 < m2)) continue;
-          if (inside && zone[i] & ZONE.GUTTER) covered++;
-          cls[i] = kind; zone[i] = inside ? flag : flag | ZONE.GUTTER;
-          const u = w1 * inv, v = w2 * inv, px = pax + dbx * u + dcx * v, py = pay + dby * u + dcy * v;
-          X[i] = px < -32767 ? -32767 : px > 32767 ? 32767 : px; Y[i] = py < -32767 ? -32767 : py > 32767 ? 32767 : py;
-        }
-      }
+      const ia = idx ? idx[t * 3] : t * 3, code = box.get(find(ia)).code;
+      if (code >= 0) fillTriangle(S, ia, idx ? idx[t * 3 + 1] : t * 3 + 1, idx ? idx[t * 3 + 2] : t * 3 + 2, code);
     }
   }
-  return drawn ? { size, cls, zone, x: X, y: Y, covered, islands } : null;
+  return S.drawn ? { size, cls, zone, x: X, y: Y, covered: S.covered, islands } : null;
 }
 
-/**
- * 枪的三张贴图就地重算。base / normal：size × size 的 RGBA 字节；mr：mrSize × mrSize（R 遮蔽、G 粗糙度、B 金属度），
- * mrSize 可以比 size 小（size 的 1/2、1/4……）。
- * parts：零件图（partMap 的结果，边长是 size 或者 size 的 1/2、1/4）；没有就按原贴图的金属度分成聚合物、钢件两类（假模型的退路）。
- * weights：mrSize × mrSize 的 RGBA，写出细节的权重（R 疏麻点、G 磷化颗粒、B 细麻点）；不要就不传。
- * 返回统计数（测试、调参用）：{ metalShare 金属度过半的占比, wearShare 留下亮棱的像素占比, cutShare 抹掉亮棱的像素占比, roughMin, roughMax, ms [准备, 颜色和法线, 金属粗糙度] 各段耗时 }。
- */
-export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = size, parts = null, weights = null) {
-  const now = () => (typeof performance !== 'undefined' ? performance.now() : 0), T0 = now();
-  const w = size, n = w * w, mw = mrSize, mn = mw * mw, sh = Math.max(0, Math.round(Math.log2(w / mw))), R = P.rough, E = P.edge, CL = P.cloud, C = P.parts;
-  // 零件图可以比颜色贴图小一号（边长是 size 的 1/2、1/4……）：psh 是差几档，pw 是它的边长
-  const psh = parts ? Math.round(Math.log2(w / parts.size)) : -1, pw = psh >= 0 && parts.size << psh === w ? parts.size : 0;
-  const cls = pw ? parts.cls : null, zone = cls ? parts.zone : null, PX = cls ? parts.x : null, PY = cls ? parts.y : null;
-  // 每一类的参数摊成数组（循环里按类别取）
-  const NP = C.length, tTone = new Float32Array(NP), tFlat = new Float32Array(NP), tR = new Float32Array(NP), tG = new Float32Array(NP), tB = new Float32Array(NP), tWear = new Float32Array(NP), tAcc = new Float32Array(NP), tPlain = new Float32Array(NP),
-    tRough = new Float32Array(NP), tMetal = new Float32Array(NP), tMin = new Float32Array(NP), tBare = new Float32Array(NP), tStip = new Float32Array(NP), tFine = new Float32Array(NP), tGrain = new Float32Array(NP);
-  for (let k = 0; k < NP; k++) { const c = C[k]; tTone[k] = c.tone; tFlat[k] = c.flatten; tR[k] = c.tint[0]; tG[k] = c.tint[1]; tB[k] = c.tint[2]; tWear[k] = c.wear; tAcc[k] = c.accent; tPlain[k] = c.plain || 0; tRough[k] = c.rough; tMetal[k] = c.metal; tMin[k] = c.min; tBare[k] = c.bare; tStip[k] = c.stipple; tFine[k] = c.fine; tGrain[k] = c.grain; }
-  // 金属度、粗糙度、遮蔽：去 JPEG 方块。有零件图时金属度多摊开一点——烘进去的亮棱（细线）被冲淡，成片的裸钢（销子、螺丝）留着
-  const metal = new Float32Array(mn), rough = new Float32Array(mn), ao = new Float32Array(mn), br = Math.max(1, Math.round(R.blur * mw / w));
-  for (let i = 0, j = 0; i < mn; i++, j += 4) { ao[i] = mr[j] / 255; rough[i] = mr[j + 1] / 255; metal[i] = mr[j + 2] / 255; }
-  boxBlur(metal, mw, mw, cls ? br : 1, cls ? 2 : 1); boxBlur(rough, mw, mw, br, 1); boxBlur(ao, mw, mw, br, 1);
-  for (let i = 0, j = 0; i < mn; i++, j += 4) mr[j] = ao[i] * 255; // 遮蔽也有压缩方块（托底上一块亮一块暗），去过方块的写回去
-  // 亮度；顺手攒出缩小 4 倍的一张，大片云斑在它上面量。只算岛内的像素（岛外的填充是亮的，会把边上的平均值带高）
-  const lum = new Float32Array(n), qw = (w + 3) >> 2, low = new Float32Array(qw * qw), cnt = new Float32Array(qw * qw), cap = P.lowClamp;
+/** 金属粗糙度贴图（R 遮蔽、G 粗糙度、B 金属度）拆成三张 0–1 的 */
+function splitMr(mr, ao, rough, metal) { for (let i = 0, j = 0; i < ao.length; i++, j += 4) { ao[i] = mr[j] / 255; rough[i] = mr[j + 1] / 255; metal[i] = mr[j + 2] / 255; } }
+function writeAo(mr, ao) { for (let i = 0, j = 0; i < ao.length; i++, j += 4) mr[j] = ao[i] * 255; }
+/** 亮度（lum）和缩小 4 倍的亮度之和 / 个数（low / cnt）。zone：零件图的标记（没有就传 null），岛外的像素不计入 low */
+function lumLow(base, lum, low, cnt, w, qw, cap, zone, psh, pw) {
   for (let y = 0; y < w; y++) {
     const qo = (y >> 2) * qw, yo = y * w, pro = (y >> psh) * pw;
     for (let x = 0; x < w; x++) {
       const i = yo + x, j = i * 4, l = base[j] * 0.299 + base[j + 1] * 0.587 + base[j + 2] * 0.114; lum[i] = l;
-      if (!cls || zone[pro + (x >> psh)] < 128) { low[qo + (x >> 2)] += l < cap ? l : cap; cnt[qo + (x >> 2)]++; }
+      if (zone === null || zone[pro + (x >> psh)] < 128) { low[qo + (x >> 2)] += l < cap ? l : cap; cnt[qo + (x >> 2)]++; }
     }
   }
-  const lr = Math.max(1, Math.round(P.lowRadius / 4)); boxBlur(low, qw, qw, lr, 2); boxBlur(cnt, qw, qw, lr, 2);
-  for (let i = 0; i < low.length; i++) low[i] = cnt[i] > 0.05 ? low[i] / cnt[i] : -1;
-  // 低频噪声（128 一张，铺满整张贴图）：patch 管亮棱留哪几截，cloud 管大范围的深浅和粗糙度；rows 是弹匣擦痕（一行一个数）
-  const N = 128, patch = fbmField(N, 14, 14, 2, 41), cloud = fbmField(N, 5, 5, 3, 57), ps = N / w, rnd = seeded(77), rows = new Float32Array(w);
-  for (let y = 0; y < w; y++) { const v = rnd(); rows[y] = v > 0.55 ? (v - 0.55) / 0.45 : 0; }
-  for (let y = w - 1; y > 0; y--) rows[y] = rows[y] * 0.65 + rows[y - 1] * 0.35;
-  // 下面这个循环一百万次：参数先取到局部变量里，分支能跳过的就跳过
-  const m0 = P.metal[0], mk = 1 / (P.metal[1] - m0), a0 = P.accent[0], ak = 1 / (P.accent[1] - a0), s0 = P.keepSat[0], sk = 1 / (P.keepSat[1] - s0), knee = P.bright[0], slope = P.bright[1];
-  const gSoft = P.grit.soft, gk = 1 / (P.grit.hard - gSoft), gLow = P.grit.low, gHigh = P.grit.high - gLow;
-  const D = E.reach, eMin = E.min, bevel = E.bevel * 255, eKeep = E.keep, eMax = E.max - E.keep, p0 = E.patch[0], pk = 1 / (E.patch[1] - p0), eContact = E.contact, eRecess = E.recess, eAo = E.ao;
-  const f0 = P.flat[0] * 127.5, fk = 1 / ((P.flat[1] - P.flat[0]) * 127.5), [bgR, bgG, bgB] = P.bg, cAlb = CL.albedo * 2;
-  const SM = P.seam, RB = P.ribs, ST = P.streak, seamW = SM.width, ribK = 1 / (RB.pitch * 256);
-  const scr = new Float32Array(mn), edg = new Float32Array(mn), brt = new Uint8Array(mn); // 划痕、留下的亮棱、压过的灰白：给粗糙度那张（小一号）用
-  const tapDX = [1, 0, 1, -1], tapDY = [0, 1, 1, 1], a2 = 2 * 4, b2 = 2 * w * 4, f0q = f0 * f0, f1q = P.flat[1] * 127.5 * P.flat[1] * 127.5, pk2 = 1 / (1 << (psh > 0 ? psh : 0));
-  const slopeAt = (q) => { const nx = normal[q] - 127.5, ny = normal[q + 1] - 127.5; return (nx < 0 ? -nx : nx) + (ny < 0 ? -ny : ny); };
+}
+function lowMean(low, cnt) { for (let i = 0; i < low.length; i++) low[i] = cnt[i] > 0.05 ? low[i] / cnt[i] : -1; }
+
+/** 法线贴图上一个像素偏离正上方多少（|x| + |y|，0–255 的刻度） */
+function slopeAt(normal, q) { const nx = normal[q] - 127.5, ny = normal[q + 1] - 127.5; return (nx < 0 ? -nx : nx) + (ny < 0 ? -ny : ny); }
+/**
+ * processGun 的第一遍：颜色、法线贴图的第 ya、ya + step…… 行（不到 yb；K：processGun 备好的数组和参数；先取成局部变量，循环里才快）。
+ * 顺带记下每个像素的划痕深浅（scr）、留下的亮棱（edg）、压过的灰白（brt），第二遍定粗糙度要用；计数累加在 K.wearCount / K.cutCount 上。
+ */
+function paintRows(K, ya, yb, step) {
+  const { base, normal, lum, low, metal, ao, patch, cloud, rows, scr, edg, brt, cls, zone, PY, w, mw, N, ps, qw, sh, psh, pw, pk2, NP, tTone, tFlat, tR, tG, tB, tWear, tAcc, tPlain, tKeep, m0, mk, a0, ak, s0, sk, knee, slope, gSoft, gk, gLow, gHigh, D, eMin, bevel, eKeep, eMax, p0, pk, eContact, eRecess, eAo, f0, fk, f0q, f1q, bgR, bgG, bgB, cAlb, RB, ST, ribK, tapDX, tapDY, a2, b2 } = K;
   let wearCount = 0, cutCount = 0;
-  const T1 = now();
-  for (let y = 0; y < w; y++) {
+  for (let y = ya; y < yb; y += step) {
     const yo = y * w, ym = (y > 0 ? y - 1 : 0) * w, yp = (y < w - 1 ? y + 1 : y) * w, po = ((y * ps) | 0) * N, qo = (y >> 2) * qw, mo = (y >> sh) * mw, rowOk = y >= D && y < w - D, pro = (y >> psh) * pw;
     for (let x = 0; x < w; x++) {
       const i = yo + x, j = i * 4, pc = pro + (x >> psh);
@@ -310,7 +320,7 @@ export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = si
         const ridge = L - bg;
         if (ridge > eMin) {
           let onEdge = border;
-          if (!onEdge) onEdge = slopeAt(j) > bevel || slopeAt(j + a2) > bevel || slopeAt(j - a2) > bevel || slopeAt(j + b2) > bevel || slopeAt(j - b2) > bevel;
+          if (!onEdge) onEdge = slopeAt(normal, j) > bevel || slopeAt(normal, j + a2) > bevel || slopeAt(normal, j - a2) > bevel || slopeAt(normal, j + b2) > bevel || slopeAt(normal, j - b2) > bevel;
           if (onEdge) {
             // 留几成：噪声选中的那几截留得多（常磕碰的地方门槛低一点）；挨着凹槽（旁边比大面暗一大截）、遮蔽重的地方不留
             let keep = 0;
@@ -326,10 +336,11 @@ export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = si
       // 细碎的起伏减半（斑点挪到粗糙度上），大的（划痕）锐化；抹掉的亮棱从细节里扣掉
       d -= cut;
       const ad = d < 0 ? -d : d; let gk2 = (ad - gSoft) * gk; gk2 = gk2 <= 0 ? 0 : gk2 >= 1 ? 1 : gk2 * gk2 * (3 - 2 * gk2);
-      let add = (d > kept ? d - kept : d < 0 ? d : 0) * (gLow + gHigh * gk2 - 1) * tone - cut;
-      if (d > scr[mi]) scr[mi] = d;
+      const keepD = tKeep[A];
+      let add = (d > kept ? d - kept : d < 0 ? d : 0) * (gLow + gHigh * gk2 - 1) * tone * keepD - cut;
+      if (d * keepD > scr[mi]) scr[mi] = d * keepD;
       // 这一类的中等宽度的明暗带抹掉：往「大面的平均 + 细节」靠
-      if (plain > 0) add += (lvs + d - (L - cut)) * plain * tone;
+      if (plain > 0) add += (lvs + d * keepD - (L - cut)) * plain * tone;
       r = (r + add) * gain; g = (g + add) * gain; b = (b + add) * gain;
       // 去暖色：往灰度靠，再乘上这一类的色调；大范围的深浅起伏
       let grey = r * 0.299 + g * 0.587 + b * 0.114;
@@ -341,30 +352,15 @@ export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = si
       // 法线：平面上的压缩噪点抹平（陡的棱线原样留着）
       let nx = normal[j] - 127.5, ny = normal[j + 1] - 127.5; const nq = nx * nx + ny * ny;
       if (nq <= f0q) { nx = 0; ny = 0; } else if (nq < f1q) { let nk = (Math.sqrt(nq) - f0) * fk; nk = nk * nk * (3 - 2 * nk); nx *= nk; ny *= nk; }
-      if (PX && pc > pw && pc < pw * pw - pw - 1) {
-        if (c === PART.STOCK || c === PART.BODY) {
-          // 合模线：两半模具在枪的正中（x = 0）合上，留一道细细的凸线。离中线多远按贴图像素算（位置在这儿每像素变多少）
-          let px = PX[pc];
-          if (px < 300 && px > -300 && cls[pc - 1] === c && cls[pc + 1] === c && cls[pc - pw] === c && cls[pc + pw] === c) {
-            // 位置每个贴图像素变多少；零件图小一号时，这个像素离零件图那一格的中心还差一点，按这个斜率补上（不然线是锯齿的）
-            const gx = (PX[pc + 1] - PX[pc - 1]) * 0.5 * pk2, gy = (PX[pc + pw] - PX[pc - pw]) * 0.5 * pk2, gl = Math.sqrt(gx * gx + gy * gy);
-            if (psh > 0) { const h = (1 << psh) * 0.5 - 0.5; px += gx * ((x & ((1 << psh) - 1)) - h) + gy * ((y & ((1 << psh) - 1)) - h); }
-            const apx = px < 0 ? -px : px;
-            if (gl > 3 && apx < 220) {
-              const dist = apx / gl;
-              if (dist < seamW * 2) {
-                const amt = c === PART.STOCK ? 1 : SM.body, t = dist / seamW, line = t >= 1 ? 0 : 1 - t * t * (3 - 2 * t), side = t < 2 ? Math.sin(t * Math.PI * 0.5) : 0, sgn = px < 0 ? -1 : 1;
-                const up = SM.light * line * amt * tone; r += up; g += up; b += up;
-                nx += sgn * gx / gl * side * SM.bump * amt * 127; ny += sgn * gy / gl * side * SM.bump * amt * 127;
-              }
-            }
-          }
-        } else if (c === PART.RUBBER) {
+      if (PY && pc > pw && pc < pw * pw - pw - 1) {
+        if (c === PART.RUBBER) {
           // 托底的横棱：按高度（y）一道一道的沟
           const gx = (PY[pc + 1] - PY[pc - 1]) * 0.5 * pk2, gy = (PY[pc + pw] - PY[pc - pw]) * 0.5 * pk2, gl = Math.sqrt(gx * gx + gy * gy);
-          if (gl > 3 && cls[pc - 1] === c && cls[pc + 1] === c && cls[pc - pw] === c && cls[pc + pw] === c) {
+          // 只画在朝后的那一面上（高度在贴图上变得快的地方）：顶面、圆角上高度几乎不变，横棱在那儿会被拉成一坨一坨的暗斑
+          if (gl > RB.steep[0] && cls[pc - 1] === c && cls[pc + 1] === c && cls[pc - pw] === c && cls[pc + pw] === c) {
             let py = PY[pc]; if (psh > 0) { const h = (1 << psh) * 0.5 - 0.5; py += gx * ((x & ((1 << psh) - 1)) - h) + gy * ((y & ((1 << psh) - 1)) - h); }
-            const ph = py * ribK, f = ph - Math.floor(ph), groove = f < 0.3 ? Math.sin(f / 0.3 * Math.PI) : 0, slopeN = f < 0.3 ? Math.cos(f / 0.3 * Math.PI) : 0, k = 1 - RB.dark * groove;
+            const amt = gl >= RB.steep[1] ? 1 : (gl - RB.steep[0]) / (RB.steep[1] - RB.steep[0]);
+            const ph = py * ribK, f = ph - Math.floor(ph), groove = f < 0.3 ? Math.sin(f / 0.3 * Math.PI) * amt : 0, slopeN = f < 0.3 ? Math.cos(f / 0.3 * Math.PI) * amt : 0, k = 1 - RB.dark * groove;
             r *= k; g *= k; b *= k; nx += gx / gl * slopeN * RB.bump * 127; ny += gy / gl * slopeN * RB.bump * 127;
           }
         } else if (c === PART.MAG) {
@@ -379,27 +375,16 @@ export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = si
       base[j] = r; base[j + 1] = g; base[j + 2] = b; normal[j] = 127.5 + nx; normal[j + 1] = 127.5 + ny;
     }
   }
-  // 枪托上的蹭痕：随手撒一些短的浅道子（落在枪托上的才画），两头轻中间重
-  if (cls && P.scuff.count > 0) {
-    const SC = P.scuff, r2 = seeded(SC.seed), pmax = 1 / (1 << psh);
-    for (let k = 0, tries = 0; k < SC.count && tries < SC.count * 60; tries++) {
-      const x0 = r2() * w, y0 = r2() * w, ang = r2() * Math.PI, len = SC.length[0] + r2() * (SC.length[1] - SC.length[0]), amp = 0.4 + r2() * 0.6, bend = (r2() - 0.5) * 0.02;
-      if (cls[((y0 * pmax) | 0) * pw + ((x0 * pmax) | 0)] !== PART.STOCK) continue;
-      k++;
-      for (let t = 0, a = ang; t < len; t++, a += bend) {
-        const fx = x0 + Math.cos(ang + bend * t * 0.5) * t, fy = y0 + Math.sin(ang + bend * t * 0.5) * t, xi = Math.round(fx), yi = Math.round(fy);
-        if (xi < 0 || yi < 0 || xi >= w || yi >= w) break;
-        const pc = (yi >> psh) * pw + (xi >> psh); if (cls[pc] !== PART.STOCK || zone[pc] >= 128) break;
-        const v = Math.sin(t / len * Math.PI) * amp, j = (yi * w + xi) * 4, up = SC.light * v, mi = (yi >> sh) * mw + (xi >> sh), sd = v * SC.rough * 14;
-        base[j] += up; base[j + 1] += up; base[j + 2] += up; if (sd > scr[mi]) scr[mi] = sd;
-      }
-    }
-  }
-  // 金属粗糙度：按类重定，叠大范围的起伏、磨光、积灰；亮划痕和留下的亮棱更光一点；最后限幅。权重图：各类用哪种细节、用多少
-  const T2 = now();
-  const cRough = CL.rough * 2, g0 = CL.gate[0], gkk = 1 / (CL.gate[1] - g0), msk = N / mw, pm = pw / mw;
-  let metalCount = 0, rMin = 1, rMax = 0;
-  for (let y = 0; y < mw; y++) {
+  K.wearCount += wearCount; K.cutCount += cutCount;
+}
+/**
+ * processGun 的第二遍：金属粗糙度贴图和权重图的第 ya、ya + step…… 行（不到 yb）。按类重定，叠大范围的起伏、磨光、积灰；亮划痕和留下的亮棱更光一点；最后限幅。
+ * 统计累加在 K.metalCount / K.rMin / K.rMax 上。
+ */
+function finishRows(K, ya, yb, step) {
+  const { mr, weights, metal, rough, ao, cloud, scr, edg, brt, cls, zone, PY, mw, N, msk, pm, pw, NP, tAcc, tRough, tMetal, tMin, tBare, tStip, tFine, tGrain, tAo, m0, mk, a0, ak, gSoft, R, CL, ST, cRough, g0, gkk } = K;
+  let metalCount = 0, rMin = K.rMin, rMax = K.rMax;
+  for (let y = ya; y < yb; y += step) {
     const so = (((y + 0.5) * pm) | 0) * pw, po = ((y * msk) | 0) * N, po2 = (((mw - 1 - y) * msk) | 0) * N;
     for (let x = 0; x < mw; x++) {
       const i = y * mw + x, j = i * 4, si = so + (((x + 0.5) * pm) | 0);
@@ -419,13 +404,80 @@ export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = si
       const dust = (0.92 - ao[i]) * 2; if (dust > 0) q += (dust > 1 ? 1 : dust) * CL.dust;
       if (d > gSoft) q -= (d > 14 ? 1 : d / 14) * R.scratch * (0.5 + 0.5 * mt);
       if (edge > 0) q -= edge * (c === PART.MAG ? ST.rough : R.wear);
+      if (mr[j] < tAo[A]) mr[j] = tAo[A];
       const qmin = tMin[A] + (tMin[B] - tMin[A]) * wB; q = q < qmin ? qmin : q > R.max ? R.max : q; if (q < rMin) rMin = q; if (q > rMax) rMax = q;
       mr[j + 1] = q * 255;
       const mo = mt + (1 - mt) * edge * (tBare[A] + (tBare[B] - tBare[A]) * wB); mr[j + 2] = mo * 255; if (mo > 0.5) metalCount++;
       if (weights) { const soft = 1 - 0.6 * pz; weights[j] = tStip[A] * (1 - wB) * soft * top * 255; weights[j + 1] = (tGrain[A] + (tGrain[B] - tGrain[A]) * wB) * 255; weights[j + 2] = tFine[A] * (1 - wB) * soft * 255; weights[j + 3] = 255; }
     }
   }
-  return { metalShare: metalCount / mn, wearShare: wearCount / n, cutShare: cutCount / n, roughMin: rMin, roughMax: rMax, ms: [T1 - T0, T2 - T1, now() - T2] };
+  K.metalCount += metalCount; K.rMin = rMin; K.rMax = rMax;
+}
+
+/**
+ * 枪的三张贴图就地重算。base / normal：size × size 的 RGBA 字节；mr：mrSize × mrSize（R 遮蔽、G 粗糙度、B 金属度），
+ * mrSize 可以比 size 小（size 的 1/2、1/4……）。
+ * parts：零件图（partMap 的结果，边长是 size 或者 size 的 1/2、1/4）；没有就按原贴图的金属度分成聚合物、钢件两类（假模型的退路）。
+ * weights：mrSize × mrSize 的 RGBA，写出细节的权重（R 疏麻点、G 磷化颗粒、B 细麻点）；不要就不传。
+ * 返回统计数（测试、调参用）：{ metalShare 金属度过半的占比, wearShare 留下亮棱的像素占比, cutShare 抹掉亮棱的像素占比, roughMin, roughMax, ms [准备, 颜色和法线, 金属粗糙度] 各段耗时 }。
+ */
+export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = size, parts = null, weights = null) {
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : 0), T0 = now();
+  const w = size, n = w * w, mw = mrSize, mn = mw * mw, sh = Math.max(0, Math.round(Math.log2(w / mw))), R = P.rough, E = P.edge, CL = P.cloud, C = P.parts;
+  // 零件图可以比颜色贴图小一号（边长是 size 的 1/2、1/4……）：psh 是差几档，pw 是它的边长
+  const psh = parts ? Math.round(Math.log2(w / parts.size)) : -1, pw = psh >= 0 && parts.size << psh === w ? parts.size : 0;
+  const cls = pw ? parts.cls : null, zone = cls ? parts.zone : null, PY = cls ? parts.y : null;
+  // 每一类的参数摊成数组（循环里按类别取）
+  const NP = C.length, tTone = new Float32Array(NP), tFlat = new Float32Array(NP), tR = new Float32Array(NP), tG = new Float32Array(NP), tB = new Float32Array(NP), tWear = new Float32Array(NP), tAcc = new Float32Array(NP), tPlain = new Float32Array(NP),
+    tRough = new Float32Array(NP), tMetal = new Float32Array(NP), tMin = new Float32Array(NP), tBare = new Float32Array(NP), tStip = new Float32Array(NP), tFine = new Float32Array(NP), tGrain = new Float32Array(NP), tKeep = new Float32Array(NP), tAo = new Float32Array(NP);
+  for (let k = 0; k < NP; k++) { const c = C[k]; tTone[k] = c.tone; tFlat[k] = c.flatten; tR[k] = c.tint[0]; tG[k] = c.tint[1]; tB[k] = c.tint[2]; tWear[k] = c.wear; tAcc[k] = c.accent; tPlain[k] = c.plain || 0; tRough[k] = c.rough; tMetal[k] = c.metal; tMin[k] = c.min; tBare[k] = c.bare; tStip[k] = c.stipple; tFine[k] = c.fine; tGrain[k] = c.grain; tKeep[k] = c.keep ?? 1; tAo[k] = (c.ao || 0) * 255; }
+  // 金属度、粗糙度、遮蔽：去 JPEG 方块。有零件图时金属度多摊开一点——烘进去的亮棱（细线）被冲淡，成片的裸钢（销子、螺丝）留着
+  const metal = new Float32Array(mn), rough = new Float32Array(mn), ao = new Float32Array(mn), br = Math.max(1, Math.round(R.blur * mw / w));
+  splitMr(mr, ao, rough, metal);
+  boxBlur(metal, mw, mw, cls ? br : 1, cls ? 2 : 1); boxBlur(rough, mw, mw, br, 1); boxBlur(ao, mw, mw, br, 1);
+  writeAo(mr, ao); // 遮蔽也有压缩方块（托底上一块亮一块暗），去过方块的写回去
+  // 亮度；顺手攒出缩小 4 倍的一张，大片云斑在它上面量。只算岛内的像素（岛外的填充是亮的，会把边上的平均值带高）
+  const lum = new Float32Array(n), qw = (w + 3) >> 2, low = new Float32Array(qw * qw), cnt = new Float32Array(qw * qw);
+  lumLow(base, lum, low, cnt, w, qw, P.lowClamp, zone, psh, pw);
+  const lr = Math.max(1, Math.round(P.lowRadius / 4)); boxBlur(low, qw, qw, lr, 2); boxBlur(cnt, qw, qw, lr, 2);
+  lowMean(low, cnt);
+  // 低频噪声（128 一张，铺满整张贴图）：patch 管亮棱留哪几截，cloud 管大范围的深浅和粗糙度；rows 是弹匣擦痕（一行一个数）
+  const N = 128, patch = fbmField(N, 14, 14, 2, 41), cloud = fbmField(N, 5, 5, 3, 57), ps = N / w, rnd = seeded(77), rows = new Float32Array(w);
+  for (let y = 0; y < w; y++) { const v = rnd(); rows[y] = v > 0.55 ? (v - 0.55) / 0.45 : 0; }
+  for (let y = w - 1; y > 0; y--) rows[y] = rows[y] * 0.65 + rows[y - 1] * 0.35;
+  // 下面这个循环一百万次：参数先取到局部变量里，分支能跳过的就跳过；按 BATCH 行一批调（paint），引擎几批以后就换上优化过的代码
+  const m0 = P.metal[0], mk = 1 / (P.metal[1] - m0), a0 = P.accent[0], ak = 1 / (P.accent[1] - a0), s0 = P.keepSat[0], sk = 1 / (P.keepSat[1] - s0), knee = P.bright[0], slope = P.bright[1];
+  const gSoft = P.grit.soft, gk = 1 / (P.grit.hard - gSoft), gLow = P.grit.low, gHigh = P.grit.high - gLow;
+  const D = E.reach, eMin = E.min, bevel = E.bevel * 255, eKeep = E.keep, eMax = E.max - E.keep, p0 = E.patch[0], pk = 1 / (E.patch[1] - p0), eContact = E.contact, eRecess = E.recess, eAo = E.ao;
+  const f0 = P.flat[0] * 127.5, fk = 1 / ((P.flat[1] - P.flat[0]) * 127.5), [bgR, bgG, bgB] = P.bg, cAlb = CL.albedo * 2;
+  const RB = P.ribs, ST = P.streak, ribK = 1 / (RB.pitch * 256);
+  const scr = new Float32Array(mn), edg = new Float32Array(mn), brt = new Uint8Array(mn); // 划痕、留下的亮棱、压过的灰白：给粗糙度那张（小一号）用
+  const tapDX = [1, 0, 1, -1], tapDY = [0, 1, 1, 1], a2 = 2 * 4, b2 = 2 * w * 4, f0q = f0 * f0, f1q = P.flat[1] * 127.5 * P.flat[1] * 127.5, pk2 = 1 / (1 << (psh > 0 ? psh : 0));
+  const T1 = now();
+  const K = { base, normal, lum, low, metal, ao, patch, cloud, rows, scr, edg, brt, cls, zone, PY, w, mw, N, ps, qw, sh, psh, pw, pk2, NP, tTone, tFlat, tR, tG, tB, tWear, tAcc, tPlain, tKeep, m0, mk, a0, ak, s0, sk, knee, slope, gSoft, gk, gLow, gHigh, D, eMin, bevel, eKeep, eMax, p0, pk, eContact, eRecess, eAo, f0, fk, f0q, f1q, bgR, bgG, bgB, cAlb, RB, ST, ribK, tapDX, tapDY, a2, b2, wearCount: 0, cutCount: 0 };
+  inBatches(paintRows, K, w);
+  // 枪托上的蹭痕：随手撒一些短的浅道子（落在枪托上的才画），两头轻中间重
+  if (cls && P.scuff.count > 0) {
+    const SC = P.scuff, r2 = seeded(SC.seed), pmax = 1 / (1 << psh);
+    for (let k = 0, tries = 0; k < SC.count && tries < SC.count * 60; tries++) {
+      const x0 = r2() * w, y0 = r2() * w, ang = r2() * Math.PI, len = SC.length[0] + r2() * (SC.length[1] - SC.length[0]), amp = 0.4 + r2() * 0.6, bend = (r2() - 0.5) * 0.02;
+      if (cls[((y0 * pmax) | 0) * pw + ((x0 * pmax) | 0)] !== PART.STOCK) continue;
+      k++;
+      for (let t = 0, a = ang; t < len; t++, a += bend) {
+        const fx = x0 + Math.cos(ang + bend * t * 0.5) * t, fy = y0 + Math.sin(ang + bend * t * 0.5) * t, xi = Math.round(fx), yi = Math.round(fy);
+        if (xi < 0 || yi < 0 || xi >= w || yi >= w) break;
+        const pc = (yi >> psh) * pw + (xi >> psh); if (cls[pc] !== PART.STOCK || zone[pc] >= 128) break;
+        const v = Math.sin(t / len * Math.PI) * amp, j = (yi * w + xi) * 4, up = SC.light * v, mi = (yi >> sh) * mw + (xi >> sh), sd = v * SC.rough * 14;
+        base[j] += up; base[j + 1] += up; base[j + 2] += up; if (sd > scr[mi]) scr[mi] = sd;
+      }
+    }
+  }
+  // 金属粗糙度：按类重定，叠大范围的起伏、磨光、积灰；亮划痕和留下的亮棱更光一点；最后限幅。权重图：各类用哪种细节、用多少
+  const T2 = now();
+  const cRough = CL.rough * 2, g0 = CL.gate[0], gkk = 1 / (CL.gate[1] - g0), msk = N / mw, pm = pw / mw;
+  Object.assign(K, { mr, weights, rough, msk, pm, tRough, tMetal, tMin, tBare, tStip, tFine, tGrain, tAo, R, CL, cRough, g0, gkk, metalCount: 0, rMin: 1, rMax: 0 });
+  inBatches(finishRows, K, mw);
+  return { metalShare: K.metalCount / mn, wearShare: K.wearCount / n, cutShare: K.cutCount / n, roughMin: K.rMin, roughMax: K.rMax, ms: [T1 - T0, T2 - T1, now() - T2] };
 }
 
 /**
@@ -504,30 +556,85 @@ export function detailPixels(height, size, bump = 0.5) {
 }
 
 /**
- * 着色器里叠细节：改 shader.fragmentShader（three 的标准材质）。
+ * 着色器里叠细节：改 shader.fragmentShader（three 的标准材质）；object = true 时还改 shader.vertexShader。
  * 三层：uSkinDetA 按 uSkinA 的密度铺、uSkinDetB 按 uSkinB、uSkinDetA 再按 uSkinC 铺一遍（同一张图，更密）；
- * 每层用多少看权重图 uSkinPart 的 R、G、B（和粗糙度贴图同一套 UV）。
- * 细节贴图带多级渐远：离远了自动变平，不闪。uSkinF90：非金属掠射角的反光打几折（金属不动）。
+ * 每层用多少看权重图 uSkinPart 的 R、G、B（和粗糙度贴图同一套 UV）。uSkinF90：非金属掠射角的反光打几折（金属不动）。
+ * 细节贴图带多级渐远：离远了自动变平，不闪。
+ * 两种铺法：
+ *   object = false（手）：按贴图的 UV 铺——手是蒙皮的，UV 跟着皮肤走，密度也匀。
+ *   object = true（枪）：按零件自己坐标里的位置铺（朝哪个轴就从哪个轴正投影），密度的单位是「每个模型单位铺几次」。
+ *     这把枪各个 UV 岛的贴图密度差好几倍——腰射、开镜时占了半个画面的枪托顶面，在贴图上只是一条二十个像素宽的窄条，
+ *     而且横竖密度差一倍：按 UV 铺的麻点在那儿又大又扁，托底上更是摊成一坨一坨。按位置铺，整把枪的颗粒一样大。
+ *     换投影方向的那条线上 UV 是断的：导数要用断开之前的（textureGrad），不然那条线上取到最糊的一级，是一道平的缝。
+ *     顺带两样只有按位置才画得细的东西——
+ *     合模线（uSkinSeam：x 半宽、y 提亮、z 机匣上打几折、w 粗糙度降多少）：两半模具在枪的正中（x = 0）合上，留一道细线；
+ *       画在贴图里的话在枪托顶上只有一两个像素宽，放大了是一条糊带子。线比屏幕上一个像素还细时按盖住的比例变淡，不闪。
+ *     灯色打几折（uSkinNeutral）：枪是黑的，没有自己的颜色——冷色的轮廓光照在只有它照得到的面上，那个面就成了藏蓝色，像阳极氧化的蓝件。
+ *       直接光的颜色往灰里收一截（亮度不变），冷暖还在，只是不像染了色。
+ *     环境反射压低（uSkinEnv，只管非金属）：黑塑料的漫反射几乎是零，白天整把枪的亮度全是它反射的天光——一片均匀的浅灰，像没上色的塑料件。
+ *       反射越亮压得越多（除以 1 + uSkinEnv × 亮度）：白天压掉近一半，停电时本来就暗、几乎不动（暗场里枪的轮廓还要靠它）。
  */
-export function skinShader(shader, U) {
+export function skinShader(shader, U, object = false) {
   Object.assign(shader.uniforms, U);
-  shader.fragmentShader = shader.fragmentShader
-    .replace('#include <normalmap_pars_fragment>', '#include <normalmap_pars_fragment>\nuniform sampler2D uSkinDetA;\nuniform sampler2D uSkinDetB;\nuniform sampler2D uSkinPart;\nuniform vec4 uSkinA;\nuniform vec4 uSkinB;\nuniform vec4 uSkinC;\nuniform float uSkinF90;\nvec2 skinNormal = vec2( 0.0 );')
-    .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+  const pars = '\nuniform sampler2D uSkinDetA;\nuniform sampler2D uSkinDetB;\nuniform sampler2D uSkinPart;\nuniform vec4 uSkinA;\nuniform vec4 uSkinB;\nuniform vec4 uSkinC;\nuniform float uSkinF90;\nvec2 skinNormal = vec2( 0.0 );';
+  const mix3 = `
+		vec3 sa = sw.r * uSkinA.yzw, sb = sw.g * uSkinB.yzw, sc = sw.b * uSkinC.yzw;
+		skinNormal = ( da.xy * sa.x + db.xy * sb.x + dc.xy * sc.x ) * 2.0;
+		roughnessFactor = clamp( roughnessFactor - ( da.z * sa.y + db.z * sb.y + dc.z * sc.y ), 0.05, 1.0 );
+		diffuseColor.rgb *= 1.0 + da.z * sa.z + db.z * sb.z + dc.z * sc.z;`;
+  let f = shader.fragmentShader.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n\tmaterial.specularF90 = mix( uSkinF90, 1.0, metalnessFactor );');
+  if (!object) {
+    f = f.replace('#include <normalmap_pars_fragment>', `#include <normalmap_pars_fragment>${pars}`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 #ifdef USE_ROUGHNESSMAP
 	{
 		vec3 sw = texture2D( uSkinPart, vRoughnessMapUv ).rgb;
 		vec3 da = texture2D( uSkinDetA, vRoughnessMapUv * uSkinA.x ).xyz - 0.5;
 		vec3 db = texture2D( uSkinDetB, vRoughnessMapUv * uSkinB.x ).xyz - 0.5;
-		vec3 dc = texture2D( uSkinDetA, vRoughnessMapUv * uSkinC.x ).xyz - 0.5;
-		vec3 sa = sw.r * uSkinA.yzw, sb = sw.g * uSkinB.yzw, sc = sw.b * uSkinC.yzw;
-		skinNormal = ( da.xy * sa.x + db.xy * sb.x + dc.xy * sc.x ) * 2.0;
-		roughnessFactor = clamp( roughnessFactor - ( da.z * sa.y + db.z * sb.y + dc.z * sc.y ), 0.05, 1.0 );
-		diffuseColor.rgb *= 1.0 + da.z * sa.z + db.z * sb.z + dc.z * sc.z;
+		vec3 dc = texture2D( uSkinDetA, vRoughnessMapUv * uSkinC.x ).xyz - 0.5;${mix3}
 	}
 #endif`)
-    .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n\tmaterial.specularF90 = mix( uSkinF90, 1.0, metalnessFactor );')
-    .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n#ifdef USE_NORMALMAP_TANGENTSPACE\n\tnormal = normalize( normal + tbn * vec3( skinNormal, 0.0 ) );\n#endif');
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n#ifdef USE_NORMALMAP_TANGENTSPACE\n\tnormal = normalize( normal + tbn * vec3( skinNormal, 0.0 ) );\n#endif');
+  } else {
+    if (shader.vertexShader) shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vSkinPos;\nvarying vec3 vSkinNrm;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvSkinPos = position;\n\tvSkinNrm = normal;');
+    f = f.replace('#include <normalmap_pars_fragment>', `#include <normalmap_pars_fragment>${pars}\nvarying vec3 vSkinPos;\nvarying vec3 vSkinNrm;\nuniform vec4 uSkinSeam;\nuniform float uSkinNeutral;\nuniform float uSkinEnv;\nvec2 skinDx = vec2( 0.0 );\nvec2 skinDy = vec2( 0.0 );`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+#ifdef USE_ROUGHNESSMAP
+	{
+		vec3 sw = texture2D( uSkinPart, vRoughnessMapUv ).rgb;
+		vec3 sn = abs( normalize( vSkinNrm ) ), spx = dFdx( vSkinPos ), spy = dFdy( vSkinPos );
+		vec2 suv;
+		if ( sn.x > max( sn.y, sn.z ) ) { suv = vSkinPos.zy; skinDx = spx.zy; skinDy = spy.zy; }
+		else if ( sn.y > sn.z ) { suv = vSkinPos.xz; skinDx = spx.xz; skinDy = spy.xz; }
+		else { suv = vSkinPos.xy; skinDx = spx.xy; skinDy = spy.xy; }
+		vec3 da = textureGrad( uSkinDetA, suv * uSkinA.x, skinDx * uSkinA.x, skinDy * uSkinA.x ).xyz - 0.5;
+		vec3 db = textureGrad( uSkinDetB, suv * uSkinB.x, skinDx * uSkinB.x, skinDy * uSkinB.x ).xyz - 0.5;
+		vec3 dc = textureGrad( uSkinDetA, suv * uSkinC.x, skinDx * uSkinC.x, skinDy * uSkinC.x ).xyz - 0.5;${mix3}
+		float sfw = abs( spx.x ) + abs( spy.x ) + 1e-5;
+		float seam = clamp( ( uSkinSeam.x - abs( vSkinPos.x ) ) / sfw + 0.5, 0.0, 1.0 ) * min( 1.0, 2.0 * uSkinSeam.x / sfw ) * ( 1.0 - sn.x )
+			* max( smoothstep( 0.1, 0.2, sw.r ), uSkinSeam.z * smoothstep( 0.32, 0.4, sw.b ) );
+		diffuseColor.rgb *= 1.0 + uSkinSeam.y * seam;
+		roughnessFactor = max( roughnessFactor - uSkinSeam.w * seam, 0.05 );
+	}
+#endif`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+#ifdef USE_NORMALMAP_TANGENTSPACE
+	{
+		vec3 sq0 = dFdx( - vViewPosition ), sq1 = dFdy( - vViewPosition );
+		vec3 sq1p = cross( sq1, normal ), sq0p = cross( normal, sq0 );
+		vec3 st = sq1p * skinDx.x + sq0p * skinDy.x, sb = sq1p * skinDx.y + sq0p * skinDy.y;
+		float sdet = max( dot( st, st ), dot( sb, sb ) );
+		normal = normalize( normal + ( st * skinNormal.x + sb * skinNormal.y ) * ( sdet == 0.0 ? 0.0 : inversesqrt( sdet ) ) );
+	}
+#endif`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+	reflectedLight.indirectSpecular *= mix( 1.0 / ( 1.0 + uSkinEnv * dot( reflectedLight.indirectSpecular, vec3( 0.2126, 0.7152, 0.0722 ) ) ), 1.0, metalnessFactor );
+	reflectedLight.directDiffuse = mix( reflectedLight.directDiffuse, vec3( dot( reflectedLight.directDiffuse, vec3( 0.2126, 0.7152, 0.0722 ) ) ), uSkinNeutral );
+	reflectedLight.directSpecular = mix( reflectedLight.directSpecular, vec3( dot( reflectedLight.directSpecular, vec3( 0.2126, 0.7152, 0.0722 ) ) ), uSkinNeutral );`);
+  }
+  shader.fragmentShader = f;
   return shader;
 }
 
@@ -619,14 +726,15 @@ export function skinSmg(model, { S = SMG_SKIN } = {}) {
     const isGun = gun.includes(m), sleeve = !isGun && /sleeve/i.test(m.name), weights = part.get(m.roughnessMap.image);
     for (const k of SLOTS) { const t = m[k], nt = t && swap.get(t.image); if (nt && nt !== t) { old.add(t); m[k] = nt; } }
     let U;
-    if (isGun) U = { uSkinDetA: { value: stipple }, uSkinDetB: { value: grain }, uSkinPart: { value: weights }, uSkinA: { value: vec(S.gun.A) }, uSkinB: { value: vec(S.gun.B) }, uSkinC: { value: vec(S.gun.C) }, uSkinF90: { value: S.gun.f90 } };
+    if (isGun) U = { uSkinDetA: { value: stipple }, uSkinDetB: { value: grain }, uSkinPart: { value: weights }, uSkinA: { value: vec(S.gun.A) }, uSkinB: { value: vec(S.gun.B) }, uSkinC: { value: vec(S.gun.C) }, uSkinF90: { value: S.gun.f90 },
+      uSkinSeam: { value: new THREE.Vector4(S.gun.seam.width, S.gun.seam.light, S.gun.seam.body, S.gun.seam.rough) }, uSkinNeutral: { value: S.gun.neutral }, uSkinEnv: { value: S.gun.env } };
     else {
       const D = sleeve ? S.hands.sleeve : S.hands.glove;
       U = { uSkinDetA: { value: pebble }, uSkinDetB: { value: weave }, uSkinPart: { value: sleeve ? cloth : weights }, uSkinA: { value: vec(D.A) }, uSkinB: { value: vec(D.B) }, uSkinC: { value: vec(null) }, uSkinF90: { value: S.hands.f90 } };
     }
     m.userData.skin = U;
-    m.onBeforeCompile = (shader) => { skinShader(shader, U); };
-    m.customProgramCacheKey = () => 'smg-skin-2';
+    m.onBeforeCompile = (shader) => { skinShader(shader, U, isGun); };
+    m.customProgramCacheKey = () => (isGun ? 'smg-skin-3-pos' : 'smg-skin-3-uv');
     m.needsUpdate = true;
   }
   for (const t of old) { t.dispose(); t.image?.close?.(); }

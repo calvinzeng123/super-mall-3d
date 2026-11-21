@@ -8,8 +8,12 @@ import { buildG40, createG40Materials } from './skins/launcher-skin.js';
 
 /** reserve：捡到时带几发备弹；noise：开火那一下的响动（炸点另算一次手雷的响动）；recoil：镜头上抬（弧度） */
 export const LAUNCHER = Object.freeze({ name: 'G40 榴弹枪', mag: 1, reserve: 4, reserveMax: 8, reload: 1.9, recoil: 0.032, adsRate: 4.6, noise: 30, spreadHip: 0.012, spreadAds: 0.003 });
-/** 腰射 / 开镜时模型原点在镜头前的位置；sightY：表尺缺口比原点高多少；muzzle：枪口；hinge：枪管撅下去绕的轴 */
-export const LAUNCHER_VIEW = Object.freeze({ hip: Object.freeze([0.14, -0.115, -0.43]), ads: Object.freeze([0, -0.05, -0.4]), sightY: 0.05, muzzle: Object.freeze([0, 0.006, -0.36]), hinge: Object.freeze([0, -0.032, -0.012]), open: 0.62 });
+/**
+ * 腰射 / 开镜时模型原点在镜头前的位置；sightY：表尺缺口比原点高多少；muzzle：枪口；hinge：枪管撅下去绕的轴。
+ * 开镜时整把枪比原来再往前送 4 厘米（−0.4 → −0.44）：镜头在枪托正后上方，枪托离得太近时屏幕正下方是一大条木头；
+ * 送远一点它窄一截，缺口和准星还在屏幕正中（只动了前后）。
+ */
+export const LAUNCHER_VIEW = Object.freeze({ hip: Object.freeze([0.14, -0.115, -0.43]), ads: Object.freeze([0, -0.05, -0.44]), sightY: 0.05, muzzle: Object.freeze([0, 0.006, -0.36]), hinge: Object.freeze([0, -0.032, -0.012]), open: 0.62 });
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const ease = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
