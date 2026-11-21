@@ -65,6 +65,13 @@ function core(B, lv, { door, garage, H, y0, stairs, lifts, K }) {
   wallRun(B, K, C.rect.x1 - t / 2, C.rect.z0, C.rect.x1 - t / 2, C.rect.z1, y0, h, t, clad);
   wallRun(B, K, C.rect.x0, C.rect.z0 + t / 2, C.rect.x1, C.rect.z0 + t / 2, y0, h, t, clad);
   wallRun(B, K, C.rect.x0, C.rect.z1 - t / 2, C.rect.x1, C.rect.z1 - t / 2, y0, h, t, clad);
+  // 两部楼梯之间（以及外框以内）的楼梯间侧墙：楼梯里的墙裙、扶手按墙内皮 = 楼梯外框内 0.2 m 画（tower-stairs 的
+  // 实例化模板），这里把外框没有盖住的那一侧补上；穿越层（封死的楼层）连门所在的那道墙一起补，楼梯里不会看到空当。
+  for (const s of stairs) {
+    if (s.rect.x0 > C.rect.x0 + .25) wallRun(B, K, s.rect.x0 + .1, s.rect.z0, s.rect.x0 + .1, s.rect.z1, y0, h, .2, clad);
+    if (s.rect.x1 < C.rect.x1 - .25) wallRun(B, K, s.rect.x1 - .1, s.rect.z0, s.rect.x1 - .1, s.rect.z1, y0, h, .2, clad);
+    if (!door) wallRun(B, K, s.rect.x0, band.z1 + .1, s.rect.x1, band.z1 + .1, y0, h, .2, clad);
+  }
   if (!door) {
     // Sealed: a fire-rated cap line at mid height reads the column as solid from both sides.
     B.get('matte').box(0, y0 + h + .015, 0, rw(C.rect), .03, rd(C.rect), '#5d5650');
@@ -104,12 +111,60 @@ function core(B, lv, { door, garage, H, y0, stairs, lifts, K }) {
   wallRun(B, K, band.x0, band.z1 + .1, band.x1, band.z1 + .1, y0, h, .2, clad, stairDoors);
   for (const s of stairs) {
     const m = (s.door.x0 + s.door.x1) / 2, w = s.door.x1 - s.door.x0;
+    // 门头以上封到顶（门洞原来一直开到天花）；钢门框、闭门器在楼梯的实例化模板里画。
+    if (h > 2.25) B.get(K).box(m, y0 + (2.2 + h) / 2, band.z1 + .1, w, h - 2.2, .2, clad);
     B.get('metal').box(m, y0 + 2.15, band.z1 + .05, w + .12, .1, .26, TRIM);
     B.get('satin').box(s.door.x1 - .03, y0 + 1.05, band.z1 + .02 + w / 2, .05, 2.1, w, '#9aa3a8');   // fire door parked open
     B.get('glow').box(m, y0 + 2.42, band.z1 - .02, .42, .16, .03, '#18c26a');                        // 安全出口
   }
   // Stair enclosures behind the doors: side walls and the rear wall to the shaft.
-  for (const s of stairs) wallRun(B, K, s.rect.x0 + .1, s.rect.z0, s.rect.x0 + .1, s.rect.z1, y0, h, .2, clad);
+  // （不在外框边上的那一侧上面已经补过，这里只画贴外框的，免得两层墙重叠闪烁。）
+  for (const s of stairs) if (s.rect.x0 <= C.rect.x0 + .25) wallRun(B, K, s.rect.x0 + .1, s.rect.z0, s.rect.x0 + .1, s.rect.z1, y0, h, .2, clad);
+  lobbyFittings(B, { band, lifts, stairs, landing, half, y0, h, K, garage });
+}
+
+/**
+ * 候梯厅的日常设施（开门层）：墙根一圈踢脚（避开电梯门、楼梯门和西侧开口），楼梯门外侧的墙上
+ * 一个嵌墙消火栓 + 灭火器组合箱、一组电表箱 / 弱电箱（都只凸出 3 cm），吊顶上两盏吸顶灯和一块检修口。
+ * 全部用这一层已有的材质（地库 concrete / 地上 stone、metal、satin、glass、glow、matte），不加绘制调用。
+ */
+function lobbyFittings(B, { band, lifts, stairs, landing, half, y0, h, K, garage }) {
+  const skirt = garage ? '#55585a' : '#6b6258', zN = band.z0, zS = band.z1, x0 = band.x0 + .2, x1 = band.x1;
+  const liftGaps = lifts.filter((e) => landing(e) !== null).map((e) => [e.lu - half(e) - .14, e.lu + half(e) + .14]);
+  const stairGaps = stairs.map((s) => [s.door.x0 - .08, s.door.x1 + .08]);
+  const run = (z, nz, gaps) => {
+    let ivs = [[x0, x1 - .2]];
+    for (const [a, b] of gaps) ivs = ivs.flatMap(([p, q]) => [[p, Math.min(q, a)], [Math.max(p, b), q]]).filter(([p, q]) => q - p > .05);
+    for (const [a, b] of ivs) B.get(K).box((a + b) / 2, y0 + .06, z + nz * .009, b - a, .12, .018, skirt);
+  };
+  run(zN, 1, liftGaps);
+  run(zS, -1, stairGaps);
+  // 消火栓箱在西边那部楼梯门的外侧，表箱在东边那部的外侧（两部楼梯门挨着中间，两头墙面够宽）。
+  const sorted = [...stairs].sort((a, b) => a.door.x0 - b.door.x0), w = .72, zf = zS - .015;
+  if (sorted.length) {
+    const xH = sorted[0].door.x0 - .3 - w / 2, xM = sorted.at(-1).door.x1 + .3 + w / 2;
+    if (xH - w / 2 > x0 + .2) {
+      B.get('satin').box(xH, y0 + .9, zf, w, 1.8, .03, '#9f241e');
+      B.get('metal').box(xH, y0 + 1.24, zf - .017, w - .08, .012, .006, '#4c524e');
+      B.get('glass').box(xH + .06, y0 + 1.62, zf - .018, w - .3, .38, .006, 0xffffff);
+      B.get('satin').box(xH, y0 + 1.37, zf - .017, w - .26, .07, .006, '#e6e1d3');
+      B.get('satin').box(xH, y0 + .95, zf - .017, w - .3, .06, .006, '#e6e1d3');
+      for (const y of [1.5, .7]) B.get('metal').box(xH + w / 2 - .07, y0 + y, zf - .03, .03, .13, .03, '#5f6662');
+    }
+    if (xM + w / 2 < x1 - .3) for (const [y, hh] of [[1.55, .72], [.82, .58]]) {
+      B.get('satin').box(xM, y0 + y, zS - .012, w, hh, .024, '#8a918b');
+      for (const e of [-1, 1]) B.get('metal').box(xM, y0 + y + e * (hh / 2 - .012), zS - .026, w, .01, .006, '#4c524e');
+      B.get('metal').box(xM + w / 2 - .08, y0 + y, zS - .03, .025, .07, .02, '#5f6662');
+    }
+  }
+  // 吸顶灯两盏（glow 随供电变暗，停电时不亮）和一块 0.6 m 见方的检修口。
+  const ceil = y0 + h - .01, cz = (zN + zS) / 2;
+  for (const x of [-2.2, 2.2]) {
+    B.get('metal').box(x, ceil - .025, cz, .42, .05, .42, '#a9adb0');
+    B.get('glow').box(x, ceil - .052, cz, .34, .006, .34, '#f3ead6');
+  }
+  B.get('metal').box(0, ceil - .004, cz, .62, .008, .62, '#7d8286');
+  B.get('matte').box(0, ceil - .009, cz, .56, .004, .56, garage ? '#b9bcbd' : '#d6d0c4');
 }
 
 function residents(ctx, L, lv, b, B, { garage, H, y0, K }) {

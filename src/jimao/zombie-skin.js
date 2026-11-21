@@ -1,7 +1,9 @@
 // 丧尸的外形：用园区行人的贴图模型（Microsoft Rocketbox，MIT；一男一女，各带八个走路姿势），把贴图重画成丧尸。
 // 怎么画在 skins/zombie-paint.js：先把模型的三角形按 UV 摊到一张小网格上，贴图上每一处都知道自己在身体的哪里，
-// 于是伤口落在身体的实处、血往下淌、越往脚下越脏、眼窝和嘴唇按脸的三维位置压黑，UV 接缝两边对得上。
-// 每种外观一张颜色图（几套色调 + 特殊感染者）；法线和粗糙度每个模型一张、各外观共用（湿血反光、布料哑光、皮肤有点蜡）。
+// 于是伤口落在身体的实处、血往下淌、越往脚下越脏、眼窝和嘴唇按脸的三维位置压暗，UV 接缝两边对得上。
+// 每种外观一张颜色图（几套色调 + 特殊感染者），伤口各外观各挑各的（一群里不会个个胸口同一块血）；
+// 法线和粗糙度每个模型一张、各外观共用（布料哑光、皮肤有点蜡）。各外观自己的湿血、伤口、涎水、油泥的光泽
+// 编在颜色图的透明通道里（zombie-paint.js 的 encodeWet），这里的着色器补丁读出来改粗糙度、把湿处的布纹法线抹平。
 // 走路用模型自带的姿势循环，前倾、摇晃、扑咬、倒地都是整个人的姿态（模型没有骨骼，胳膊抬不起来）。眼睛是两粒很小的发光点：停电的楼里先看见眼睛。
 // zombie.js 里手搭的方块人留着：模型没加载出来（或测试环境）就还用它。
 // 行人那份几何上传显卡后内存里的贴图可能已经缩过 / 关掉了，这里单独再解析一份。
@@ -11,11 +13,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PEOPLE_ASSETS } from '../render/people-data.js';
 import { fetchBinary } from '../render/fetch-binary.js';
 import { MEM } from '../render/device.js';
-import { LOOKS, noiseTableSteps, rasterBodySteps, bodyFrame, planWounds, planStains, stainField, prepareLayers, paintColour, paintSurface } from './skins/zombie-paint.js';
+import { LOOKS, PAINT, noiseTableSteps, rasterBodySteps, bodyFrame, planFace, planLook, bloodField, prepareLayers, paintColour, paintSurface } from './skins/zombie-paint.js';
 
 /**
  * tones：几套色调 [衣服去色后乘上的 R, G, B, 保留多少原来的颜色, 旧血块数]（皮肤、血、脏怎么画见 zombie-paint.js 的 LOOKS.walker，一一对应）；
- * special：特殊感染者的（body：用哪个模型，0 男 1 女，不写两个都做；eye：眼睛的颜色；optional：省内存档不做，用普通的那套顶上）。
+ * special：特殊感染者的（body：用哪个模型，0 男 1 女，不写两个都做；eye：眼睛的颜色；optional：省内存档不做，用普通的那套顶上；env：环境反射多强，不写用 envMapIntensity）。
  * size：颜色图最大边长（电脑 1024；手机按内存档位的 modelTex：512 / 256）；法线和粗糙度是颜色图的一半，省内存档不做。
  * cyclesPerMetre：每走一米走路姿势转多少圈。
  */
@@ -25,12 +27,13 @@ export const ZOMBIE_SKIN = Object.freeze({
   // 尖叫者惨白没血色，扑袭者一身黑灰、红眼，喷酸者蜡黄发绿、嘴边淌涎水，巨尸暗红满身烂疮，胖尸灰绿发紫、一身脓疱
   special: Object.freeze({
     pale: Object.freeze({ tone: [0.84, 0.86, 0.8, 0.12, 1], eye: 0xffffff }),
-    lunger: Object.freeze({ tone: [0.42, 0.4, 0.42, 0.2, 4], body: 0, eye: 0xff4a3a }),
+    lunger: Object.freeze({ tone: [0.42, 0.4, 0.42, 0.2, 4], body: 0, eye: 0xff4a3a, env: 0.62 }), // 一身黑，环境反射多给一点，手电下才有轮廓
     spitter: Object.freeze({ tone: [0.74, 0.8, 0.42, 0.3, 2], body: 1, eye: 0xb6ff5a }),
     brute: Object.freeze({ tone: [0.5, 0.34, 0.3, 0.22, 6], body: 0, eye: 0xffa040 }),
     bloater: Object.freeze({ tone: [0.66, 0.7, 0.52, 0.3, 3], eye: 0xd8e070, optional: true }),
   }),
-  eyes: Object.freeze({ below: 0.108, half: 0.031, inset: 0.01, radius: 0.0068, color: 0xffe9a8 }), // 眼睛：离头顶多少米、两眼间距的一半、比脸的最前面缩进多少、半径
+  // 眼睛：放在眼球（模型自带、贴图上那一小块）的正前面，往里缩 inset；量不到眼球时按离头顶 below、两眼间距的一半 half 估。radius：发光点的半径
+  eyes: Object.freeze({ below: 0.108, half: 0.031, inset: 0.0015, radius: 0.0068, color: 0xffe9a8 }),
   envMapIntensity: 0.38, // 停电时环境光本来就压得很低，留一点让湿血、皮肤在暗处有个轮廓，不至于一团死黑
   bloatGirth: 1.3, // 横向撑开超过这么多、又不是别的特殊感染者的，就是胖尸（zombie.js 只给胖尸撑这么宽）
   cyclesPerMetre: 0.62,
@@ -64,16 +67,33 @@ async function parsePerson(record) {
 
 /**
  * 脸在哪：按第 0 个走路姿势量（基础顶点 + 第 0 帧位移；模型的基础姿势和走路姿势头的位置不完全一样）。
- * 返回 { top（头顶高度）, front（眼睛那一圈最靠前的 z）, x（头的左右中心） }。
+ * 返回 { top（头顶高度）, front（眼睛那一圈最靠前的 z）, x（头的左右中心）, nose? }，几何带 UV 时再加
+ * eyes（两个眼球 [{ x, y, z, front }]）和 mouth（口腔的中心 { x, y }）——从贴图上眼球、口腔那两小块对应的顶点量
+ * （第一轮按头顶往下的固定距离估，眼睛落在眉骨上，发光点和眼窝都高了两三厘米）。
  */
 export function faceOf(geometry) {
-  const P = geometry.attributes.position, D = geometry.morphAttributes.position?.[0], rel = geometry.morphTargetsRelative;
+  const P = geometry.attributes.position, D = geometry.morphAttributes.position?.[0], rel = geometry.morphTargetsRelative, UV = geometry.attributes.uv;
   const at = (i, get) => (D ? (rel ? get(P, i) + get(D, i) : get(D, i)) : get(P, i));
   const X = (a, i) => a.getX(i), Y = (a, i) => a.getY(i), Z = (a, i) => a.getZ(i);
   let top = -Infinity; for (let i = 0; i < P.count; i++) top = Math.max(top, at(i, Y));
   let front = -Infinity, sx = 0, n = 0;
   for (let i = 0; i < P.count; i++) { const y = at(i, Y); if (y > top - 0.15 && y < top - 0.07) { front = Math.max(front, at(i, Z)); sx += at(i, X); n++; } }
-  return { top, front, x: n ? sx / n : 0 };
+  const out = { top, front, x: n ? sx / n : 0 };
+  if (!UV) return out;
+  const inBox = (b, u, v) => u >= b[0] && u <= b[2] && v >= b[1] && v <= b[3];
+  const E = [[0, 0, 0, 0, -Infinity], [0, 0, 0, 0, -Infinity]], M = [0, 0, 0];
+  let noseZ = -Infinity, noseY = 0;
+  for (let i = 0; i < P.count; i++) {
+    const x = at(i, X), y = at(i, Y), z = at(i, Z), u = UV.getX(i), v = UV.getY(i);
+    if (y < top - 0.32) continue;
+    if (inBox(PAINT.islands.eye, u, v)) { const e = E[x < out.x ? 0 : 1]; e[0] += x; e[1] += y; e[2] += z; e[3]++; e[4] = Math.max(e[4], z); }
+    else if (inBox(PAINT.islands.mouth, u, v)) { M[0] += x; M[1] += y; M[2]++; }
+    else if (y < top - 0.1 && Math.abs(x - out.x) < 0.03 && z > noseZ) { noseZ = z; noseY = y; }
+  }
+  if (E[0][3] && E[1][3]) out.eyes = E.map((e) => ({ x: e[0] / e[3], y: e[1] / e[3], z: e[2] / e[3], front: e[4] }));
+  if (M[2]) out.mouth = { x: M[0] / M[2], y: M[1] / M[2] };
+  if (noseZ > -Infinity) out.nose = { x: out.x, y: noseY, z: noseZ };
+  return out;
 }
 
 // 切片：一个生成器跑到这一段用满 budget 毫秒就停，隔一帧再接着跑（和 arsenal.js 的 frameQueue 一个意思）
@@ -92,14 +112,27 @@ async function drain(gen, clock, what) {
   }
 }
 
-// 一张画好的像素 → 贴图。上传显卡以后就把画布缩掉（手机上内存紧，画布那份像素留着没用；显示资源被回收会整页刷新，不需要重传）
+// 一张画好的像素 → 贴图（直接用像素数组：颜色图的透明通道里编着湿度，走画布会被预乘透明度吃掉精度）。
+// 上传显卡以后就把像素扔掉（手机上内存紧；显示资源被回收会整页刷新，不需要重传）
 function toTexture(pixels, size, srgb) {
-  const canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
-  const g = canvas.getContext('2d'); g.putImageData(new ImageData(pixels, size, size), 0, 0);
-  const t = new THREE.CanvasTexture(canvas);
-  t.flipY = false; t.anisotropy = srgb ? 4 : 2; if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  t.onUpdate = () => { t.onUpdate = null; t.image = { width: size, height: size }; canvas.width = canvas.height = 1; };
+  const t = new THREE.DataTexture(pixels, size, size, THREE.RGBAFormat);
+  t.flipY = false; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
+  t.anisotropy = srgb ? 4 : 2; if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  t.onUpdate = () => { t.onUpdate = null; t.image = { width: size, height: size, data: null }; };
   return t;
+}
+
+/**
+ * 着色器补丁：颜色图的透明通道 → 湿度（zombie-paint.js 的 encodeWet：0.5 以下是头发的半透明，0.5 往上越大越湿）。
+ * 湿处粗糙度降下来（干血痂 0.8 左右、油泥 0.5、刚淌的血 0.12），越湿越把共用法线图里的布纹抹平（血把布纹填平了，伤口里也不会透出条纹的高光）。
+ * 透明通道读完以后改回 1：材质不透明，输出的透明度不能跟着变。
+ */
+function wetShader(shader) {
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\n\tfloat zWet = clamp( diffuseColor.a * 2.0 - 1.0, 0.0, 1.0 );\n\tdiffuseColor.a = 1.0;')
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor, mix( 0.82, 0.12, zWet * zWet ), smoothstep( 0.0, 0.1, zWet ) );')
+    .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = normalize( mix( normal, nonPerturbedNormal, smoothstep( 0.35, 0.9, zWet ) * 0.85 ) );');
 }
 
 /** 这一档内存下贴图多大：{ colour（颜色图边长）, surface（法线 / 粗糙度边长，0 = 不做） }。纯函数 */
