@@ -38,9 +38,9 @@ export const SURF_PARAMS = Object.freeze([
   /* CLOTH   */ Object.freeze({ w: [1, 0.15, 0.15, 0.3], s: 14, fold: 0.0021, rough: 0.86, rv: 0.06, av: 0.16, metal: 0, bump: 0.00022, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0, kind: 0 }),
   /* SCRUBS  */ Object.freeze({ w: [0.25, 1, 0.1, 0], s: 18, fold: 0.0019, rough: 0.8, rv: 0.05, av: 0.1, metal: 0, bump: 0.00016, retro: 0, glow: 0, grime: 0.8, blood: 1, scuff: 0, kind: 0 }),
   /* CORDURA */ Object.freeze({ w: [0, 1, 0.25, 0], s: 9, fold: 0.0005, rough: 0.78, rv: 0.06, av: 0.18, metal: 0, bump: 0.0003, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0, kind: 0 }),
-  /* HIVIS   */ Object.freeze({ w: [0, 1, 0.1, 0], s: 6, fold: 0.0011, rough: 0.64, rv: 0.06, av: 0.22, metal: 0, bump: 0.00028, retro: 0, glow: 0.035, grime: 1, blood: 1, scuff: 0, kind: 0 }),
+  /* HIVIS   */ Object.freeze({ w: [0, 1, 0.1, 0], s: 6, fold: 0.0011, rough: 0.64, rv: 0.06, av: 0.18, metal: 0, bump: 0.00028, retro: 0, glow: 0.035, grime: 0.7, blood: 1, scuff: 0, kind: 0 }),
   /* RETRO   */ Object.freeze({ w: [0, 0.15, 1, 0], s: 30, fold: 0.0006, rough: 0.26, rv: 0.08, av: 0.08, metal: 0.6, bump: 0.00004, retro: 1.1, glow: 0, grime: 0.5, blood: 1, scuff: 0, kind: 0 }),
-  /* LEATHER */ Object.freeze({ w: [0, 0, 1, 0], s: 12, fold: 0.0012, rough: 0.56, rv: 0.14, av: 0.18, metal: 0, bump: 0.00018, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0.4, kind: 0 }),
+  /* LEATHER */ Object.freeze({ w: [0, 0, 1, 0], s: 12, fold: 0.0012, rough: 0.56, rv: 0.14, av: 0.18, metal: 0, bump: 0.00018, retro: 0, glow: 0, grime: 0.8, blood: 1, scuff: 0.15, kind: 0 }),
   /* RUBBER  */ Object.freeze({ w: [0, 0, 1, 0], s: 20, fold: 0, rough: 0.7, rv: 0.06, av: 0.08, metal: 0, bump: 0.00008, retro: 0, glow: 0, grime: 0.9, blood: 1, scuff: 0, kind: 0 }),
   /* PLASTIC */ Object.freeze({ w: [0, 0, 1, 0], s: 10, fold: 0, rough: 0.34, rv: 0.14, av: 0.04, metal: 0, bump: 0.00002, retro: 0, glow: 0, grime: 0.6, blood: 1, scuff: 1, kind: 0 }),
   /* SKIN    */ Object.freeze({ w: [0, 0, 1, 0], s: 40, fold: 0, rough: 0.52, rv: 0.06, av: 0.045, metal: 0, bump: 0.00003, retro: 0, glow: 0, grime: 0.25, blood: 0, scuff: 0, kind: 0 }),
@@ -355,7 +355,7 @@ function drawFace(g, x0, y0, S, F, look) {
   { const [cx, cy] = P(0, -0.66); soft(cx, cy, 13 * u, 4 * u, deep, 0.2); }
   // 眼睛：杏仁形的眼白（偏暖灰，不是纯白）、虹膜（上眼睑压住一截）、瞳孔、一道上眼睑线（外眼角拖出一点）、淡淡的下眼睑
   for (const s of [-1, 1]) {
-    const [ex, ey] = P(s * 0.34, 0.07), w = (F.male ? 12.5 : 12) * u, h = (F.male ? 4.6 : 5.2) * u;
+    const [ex, ey] = P(s * 0.34, 0.07), w = (F.male ? 15.5 : 15) * u, h = (F.male ? 5.2 : 5.8) * u;
     const inn = [ex - s * w, ey + 0.6 * u], out = [ex + s * w, ey - 0.8 * u];
     const almond = () => { g.beginPath(); g.moveTo(...inn); g.bezierCurveTo(ex - s * w * 0.4, ey - h * 1.5, ex + s * w * 0.55, ey - h * 1.45, ...out); g.bezierCurveTo(ex + s * w * 0.45, ey + h * 1.05, ex - s * w * 0.45, ey + h * 1.15, ...inn); g.closePath(); };
     g.save(); almond(); g.clip();
@@ -378,8 +378,8 @@ function drawFace(g, x0, y0, S, F, look) {
     g.lineCap = 'round';
     for (let k = 0; k <= 22; k++) {
       const t = k / 22, q = t < 0.6 ? t / 0.6 : (t - 0.6) / 0.4, A = t < 0.6 ? b0 : b1, B = t < 0.6 ? b1 : b2;
-      const x = A[0] + (B[0] - A[0]) * q, y = A[1] + (B[1] - A[1]) * q, th = (F.male ? 5.5 : 3.6) * u * (t < 0.15 ? 0.6 + t * 2.6 : 1 - Math.max(0, t - 0.6) * 1.6);
-      g.strokeStyle = hexCss(hair, 1.15).replace('rgb', 'rgba').replace(')', `,${(0.5 + 0.4 * Math.min(1, t * 3)) * (F.male ? 0.9 : 0.8)})`);
+      const x = A[0] + (B[0] - A[0]) * q, y = A[1] + (B[1] - A[1]) * q, th = (F.male ? 5.5 : 3) * u * (t < 0.15 ? 0.6 + t * 2.6 : 1 - Math.max(0, t - 0.6) * 1.6);
+      g.strokeStyle = hexCss(hair, 1.15).replace('rgb', 'rgba').replace(')', `,${(0.5 + 0.4 * Math.min(1, t * 3)) * (F.male ? 0.9 : 0.62)})`);
       g.lineWidth = 1.1 * u;
       for (let j = -1; j <= 1; j++) { g.beginPath(); g.moveTo(x, y + j * th * 0.45 + th * 0.2); g.lineTo(x + s * 3.2 * u, y + j * th * 0.45 - th * 0.35); g.stroke(); }
     }
@@ -520,7 +520,7 @@ const FRAG_SURF = `
     float jk = exp(-pow((rp.y - 0.48) / 0.055, 2.0));
     float je = max(exp(-dot(rp - vec3(-0.25, 1.28, 0.09), rp - vec3(-0.25, 1.28, 0.09)) / 0.0036), exp(-dot(rp - vec3(0.17, 1.3, 0.26), rp - vec3(0.17, 1.3, 0.26)) / 0.0036));
     float jc = exp(-pow((rp.y - 0.88) / 0.06, 2.0)) * smoothstep(0.12, 0.02, abs(rp.x));
-    fold += 0.55 * jk * sin(rp.y * 260.0 + md.b * 5.0) + 0.5 * je * sin(length(rp - vec3(0.0, 1.29, 0.17)) * 300.0 + md.r * 4.0) + 0.4 * jc * sin((rp.y + abs(rp.x) * 0.8) * 220.0);
+    fold += (0.16 * jk * sin(rp.y * 240.0 + md.b * 9.0) + 0.3 * je * sin(length(rp - vec3(0.0, 1.29, 0.17)) * 280.0 + md.r * 7.0) + 0.25 * jc * sin((rp.y + abs(rp.x) * 0.8) * 200.0 + md.a * 6.0)) * (0.4 + md.g);
   }
   rigH = (hn - 0.5) * rb.y + fold * rx.x;
   // 织纹凹处暗一点；大块褪色让布料不那么匀（很轻）
@@ -529,21 +529,21 @@ const FRAG_SURF = `
   diffuseColor.rgb *= 1.0 + 0.14 * ra.w * (md.a - 0.5) + fold * 0.25;
   float rough = ra.y + ra.z * (md.a - 0.5) * 2.0 + (hn - 0.5) * 0.06;
   // 硬壳上的磨痕：一片片发白发毛的地方（安全帽、头盔、枪）
-  float sc = rx.z * smoothstep(0.66, 0.74, md.b + (fd.b - 0.5) * 0.35);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.33))) * 1.35 + 0.02, sc * 0.45);
-  rough += sc * 0.25;
+  float sc = rx.z * smoothstep(0.62, 0.7, fd.b + (md.b - 0.5) * 0.25) * smoothstep(0.45, 0.75, md.a);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.33))) * 1.15 + 0.01, sc * 0.3);
+  rough += sc * 0.2;
   // 脏：按站直时的位置逐像素算——越往下越脏（裤腿、靴子），膝盖前面跪脏一块、袖口手套蹭脏；
   // 是一层渐变的浮土，斑驳只让浓淡起伏，不是一块块的迷彩
   float gw = who == 0 ? rigGrime.x : who == 1 ? rigGrime.y : who == 2 ? rigGrime.z : rigGrime.w;
   float low = smoothstep(1.0, 0.04, rp.y);
   float knee = exp(-pow((rp.y - 0.5) / 0.075, 2.0)) * smoothstep(0.02, 0.08, rp.z);
   float cuff = max(exp(-dot(rp - vec3(-0.1, 1.34, 0.21), rp - vec3(-0.1, 1.34, 0.21)) / 0.006), exp(-dot(rp - vec3(-0.07, 1.38, 0.44), rp - vec3(-0.07, 1.38, 0.44)) / 0.006));
-  float g = gw * vRig.y * (0.12 + 0.85 * low * low + 0.7 * knee + 0.45 * cuff);
-  float dm = clamp(g * (1.0 + (md.b - 0.5) * 1.3 + (fd.b - 0.5) * 0.25), 0.0, 1.0);
+  float g = gw * vRig.y * (0.12 + 0.85 * low * low + 0.7 * knee + 0.25 * cuff);
+  float dm = clamp(g * (1.0 + (md.b - 0.5) * 1.1 + (md.a - 0.5) * 0.4), 0.0, 1.0);
   // 深色衣服上是一层浅灰土，浅色衣服上是发暗的污渍（同一个颜色往中间拉）
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.15, 0.13, 0.105) * (0.8 + 0.4 * md.a), dm * 0.55);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.13, 0.115, 0.095) * (0.85 + 0.3 * md.a), dm * 0.42);
   rough += dm * 0.06;
-  // 血：干了的暗红褐色——溅上去顺着往下淌（拉长的一道），中心积得深，边缘红一点、碎成点；新的地方湿一点（粗糙度低）
+  // 血：干了的暗红褐色（#5a1812 到 #3a0e0b，氧化了的颜色，不是颜料红）——溅上去顺着往下淌（拉长的一道），中心积得深，边缘红一点、碎成点；新的地方湿一点（粗糙度低）
   float bl = 0.0, spr = 0.0;
   for (int i = 0; i < ${MAX_SPOTS}; i++) {
     vec4 K = rigSpotK[i];
@@ -558,7 +558,7 @@ const FRAG_SURF = `
   float brk = (md.b - 0.5) * 0.7 + (fd.b - 0.5) * 0.5;
   float bm = smoothstep(0.4, 0.48, bl + brk * 0.5);
   bm = max(bm, spr * smoothstep(0.78, 0.84, fd.b + (md.b - 0.5) * 0.4)) * rx.y;
-  vec3 bc = mix(vec3(0.147, 0.012, 0.008), vec3(0.06, 0.008, 0.005), smoothstep(0.55, 0.95, bl));
+  vec3 bc = mix(vec3(0.1, 0.009, 0.006), vec3(0.042, 0.006, 0.004), smoothstep(0.55, 0.95, bl));
   diffuseColor.rgb = mix(diffuseColor.rgb, bc, bm * 0.92);
   rough = mix(rough, 0.3 + 0.35 * (1.0 - bl), bm);
   rigRough = clamp(rough, 0.05, 1.0);
@@ -715,8 +715,8 @@ export function humanHead(o) {
     let r = sk.r * kk * (1 + 0.06 * cheek) * (1 - 0.06 * beard), g = sk.g * kk * (1 - 0.01 * cheek) * (1 - 0.02 * beard), b = sk.b * kk * (1 - 0.03 * cheek) * (1 + 0.04 * beard);
     let hw = 0;
     if (hc) {
-      // 头发涂在头皮上：发际线 3–4 厘米的软边，再往里是头发壳盖住的地方
-      hw = smooth(hairT(o.line, nz) - 0.03, hairT(o.line, nz) + 0.04, ny);
+      // 头发涂在头皮上：发际线是跨两排顶点的软边（只跨一排的话三角形的斜边会把它切成锯齿），再往里是头发壳盖住的地方
+      hw = smooth(hairT(o.line, nz) - 0.07, hairT(o.line, nz) + 0.08, ny);
       const n = 0.92 + 0.1 * noise3(nx * 14, ny * 30, nz * 14);
       r += (hc.r * n - r) * hw; g += (hc.g * n - g) * hw; b += (hc.b * n - b) * hw;
     }
@@ -724,30 +724,24 @@ export function humanHead(o) {
     if (slot) { rig[i * 4 + 2] = slot; rig[i * 4 + 3] = Math.round(255 * smooth(0.22, 0.55, nz) * (1 - hw)); }
   }
   out.push(skull);
-  // 鼻子：鼻梁往下渐宽到鼻头（一段锥，顺着鼻梁斜出脸面），鼻头一个小球，两侧鼻翼贴在脸上；朝下的面压暗（鼻孔）
-  const br = facePoint(head, 0, 0.02), tp = facePoint(head, 0, -0.27);
-  const bridge = [br[0], br[1], br[2] - 0.004], tip = [tp[0], tp[1] + 0.002, tp[2] + 0.017 * ns];
-  const nose = rod(o.skin, SURF.SKIN, bridge, tip, 1, 10);
-  { const p = nose.attributes.position, L = Math.hypot(tip[1] - bridge[1], tip[2] - bridge[2]);
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), t = Math.max(0, Math.min(1, ((bridge[1] - y) * (bridge[1] - tip[1]) + (z - bridge[2]) * (tip[2] - bridge[2])) / (L * L)));
-      const ax = bridge[0], ay = bridge[1] + (tip[1] - bridge[1]) * t, az = bridge[2] + (tip[2] - bridge[2]) * t, r = (0.0052 + 0.0042 * t) * (0.6 + 0.4 * ns);
-      p.setXYZ(i, ax + (x - ax) * r * 1.05, ay + (y - ay) * r, az + (z - az) * r * 0.95);
-    }
-    nose.computeVertexNormals(); }
-  const tipBall = ellip(o.skin, SURF.SKIN, [0.0085 * ns, 0.0078 * ns, 0.0078 * ns], [tip[0], tip[1] - 0.0015, tip[2] - 0.004]);
-  const wings = [-1, 1].map((s) => ellip(o.skin, SURF.SKIN, [0.0068 * ns, 0.0058 * ns, 0.007], [tip[0] + s * 0.0095 * ns, tip[1] - 0.0035, tip[2] - 0.011]));
-  for (const g of [nose, tipBall, ...wings]) {
-    g.computeVertexNormals();
-    const nn = g.attributes.normal;
-    shade(g, (x, y, z, i) => { const d = Math.max(0, -nn.getY(i)); const m = 1 - 0.45 * d * d; return [m, m * 0.96, m * 0.95]; });
+  // 鼻子：一整块变形的球（不再是一根锥 + 几个球拼起来，接缝处不会有一圈一圈的明暗）——鼻梁窄、往下渐宽，
+  // 鼻头最往前，两侧鼻翼鼓出来，后半截埋进脸里；朝下的面压暗（鼻孔）
+  const br = facePoint(head, 0, 0.04), bs = facePoint(head, 0, -0.3), H = (br[1] - bs[1]) * 1.02, cy = (br[1] + bs[1]) / 2;
+  const nose = new THREE.SphereGeometry(1, 14, 12), np = nose.attributes.position;
+  for (let i = 0; i < np.count; i++) {
+    const x = np.getX(i), y = np.getY(i), z = np.getZ(i), t = (1 - y) / 2; // t：0 鼻根 → 1 鼻底
+    const w = (0.0052 + 0.0085 * t * t + 0.0042 * gauss(t - 0.84, 0.1)) * (0.7 + 0.3 * ns);
+    const fwd = (0.003 + 0.0135 * Math.pow(t, 1.3) * (1 - 0.55 * smooth(0.86, 1, t))) * ns;
+    const fz = br[2] + (bs[2] - br[2]) * t - 0.004; // 脸面（鼻子后半截埋在这里面）
+    np.setXYZ(i, x * w, cy + y * H / 2, fz + (z > 0 ? z * fwd : z * 0.006));
   }
-  out.push(nose, tipBall, ...wings);
-  // 嘴唇的体积（有贴花时唇形、唇色画在贴花里，这两块只给侧面一点起伏，也接贴花）
-  const m = facePoint(head, 0, -0.5), lipHex = slot ? o.skin : o.lip;
-  const lips = [ellip(lipHex, SURF.SKIN, [0.019, 0.0045, 0.0065], [m[0], m[1] + 0.0042, m[2] - 0.003]), ellip(lipHex, SURF.SKIN, [0.0165, 0.0058, 0.0072], [m[0], m[1] - 0.0048, m[2] - 0.0035])];
-  if (slot) for (const g of lips) decalGeo(g, slot, () => 1);
-  out.push(...lips);
+  paintGeo(nose, o.skin, SURF.SKIN); nose.computeVertexNormals();
+  { const nn = nose.attributes.normal; shade(nose, (x, y, z, i) => { const d = Math.max(0, -nn.getY(i)), m = 1 - 0.5 * d * d * smooth(cy - H * 0.2, cy - H * 0.45, y); return [m, m * 0.95, m * 0.94]; }); }
+  out.push(nose);
+  // 嘴唇的体积（只在没有贴花时用）
+  const m = facePoint(head, 0, -0.5), lipHex = o.lip;
+  const lips = [ellip(lipHex, SURF.SKIN, [0.019, 0.0045, 0.0045], [m[0], m[1] + 0.0042, m[2] - 0.0025]), ellip(lipHex, SURF.SKIN, [0.0165, 0.0058, 0.005], [m[0], m[1] - 0.0048, m[2] - 0.003])];
+  if (!slot) out.push(...lips); // 有贴花时唇形画在贴花里，嘴部的体积由头型给（单独的两块唇会像两个泡）
   if (!slot) {
     // 没有贴花：眼睛（眼白偏暖灰、虹膜、上眼皮压一点）、睫毛线、两段眉毛
     for (const s of [-1, 1]) {
@@ -783,7 +777,7 @@ export function humanHead(o) {
 export function hairShell(o) {
   const head = { c: o.c, r: o.r, k: o.k ?? 1 };
   const at = (nx, ny, nz) => {
-    const t = hairT(o.line, nz), w = smooth(t + 0.01, t + 0.14, ny);
+    const t = hairT(o.line, nz), w = smooth(t + 0.07, t + 0.22, ny);
     // 头顶最厚，往两边收（贴头皮的短发 / 扎起来的长发）
     return 0.975 + (o.inflate - 0.975 + 0.02 * smooth(0.3, 0.95, ny) + 0.012 * (noise3(nx * 6, ny * 9, nz * 6) - 0.5)) * w;
   };

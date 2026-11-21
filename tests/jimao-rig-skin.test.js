@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import {
   SURF, SURF_PARAMS, paint, paintGeo, ensureRig, mergeFlat, weather, REST_RANGE, MAX_SPOTS, lookUniforms, detailSize, detailContext, fillDetailRows,
   acquireRigDetail, releaseRigDetail, rigDetailState, surfGlsl, patchRigShader, createRigMaterial, sculpt, facePoint, humanHead, hairShell,
+  macroContext, fillMacroRows, acquireRigDecals, releaseRigDecals, rigDecalsOn, DECAL, FACES, setDecalBox, decalBox, decalGeo, grimeGeo,
+  torsoSurface, shellPatch, edgeTube, shoulderArch, lathe,
 } from '../src/jimao/skins/rig-skin.js';
 import { buildParts, RIG, merge } from '../src/jimao/soldier.js';
 import { SQUAD } from '../src/jimao/squad.js';
@@ -18,13 +20,17 @@ test('表面种类和参数表一一对应，GLSL 查表按表生成', () => {
   assert.deepEqual([...ids].sort((a, b) => a - b), ids.map((_, i) => i), '种类编号从 0 连续');
   for (const p of SURF_PARAMS) {
     assert.equal(p.w.length, 4);
-    assert.ok(p.rough > 0 && p.rough <= 1 && p.metal >= 0 && p.metal <= 1 && p.bump >= 0 && p.bump < 0.01, '粗糙度 / 金属度 / 起伏在合理范围');
+    assert.ok(p.rough > 0 && p.rough <= 1 && p.metal >= 0 && p.metal <= 1 && p.bump >= 0 && p.bump < 0.001 && p.fold >= 0 && p.fold < 0.004, '粗糙度 / 金属度 / 起伏在合理范围');
   }
+  // 织纹周期：细图 R 每块 48 道、G 64 格——布料的织纹在 1–2.5 毫米（上一版的科迪拉方格有 1 厘米）
+  for (const k of ['CLOTH', 'SCRUBS', 'CORDURA']) { const p = SURF_PARAMS[SURF[k]], mm = 1000 / p.s / (p.w[0] >= p.w[1] ? 48 : 64); assert.ok(mm > 0.7 && mm < 2.5, `${k} 织纹 ${mm.toFixed(2)} 毫米`); }
+  assert.equal(SURF_PARAMS[SURF.PLASTIC].fold, 0, '硬壳（安全帽、头盔）不起衣褶');
+  assert.ok(SURF_PARAMS[SURF.RETRO].rough <= 0.3 && SURF_PARAMS[SURF.RETRO].metal >= 0.5, '反光条：低粗糙度、有金属感（银灰）');
   assert.ok(SURF_PARAMS[SURF.RETRO].retro > 0 && SURF_PARAMS.filter((p) => p.retro > 0).length === 1, '只有反光条逆反射');
   assert.equal(SURF_PARAMS[SURF.SKIN].blood, 0, '脸上不画血');
   const glsl = surfGlsl();
   assert.equal((glsl.match(/if \(t == \d+\)/g) || []).length, SURF_PARAMS.length);
-  assert.match(glsl, /void rigSurf\(int t, out vec4 w, out vec4 a, out vec4 b, out float c\)/);
+  assert.match(glsl, /void rigSurf\(int t, out vec4 w, out vec4 a, out vec4 b, out vec4 x\)/);
   assert.doesNotMatch(glsl, /NaN|undefined/);
 });
 
@@ -58,6 +64,9 @@ test('weather 记下站姿位置和是谁；lookUniforms 按 who 取脏和血，
   assert.equal(u.rigGrime.value.x, 0.3); assert.equal(u.rigGrime.value.y, 0.9);
   assert.equal(u.rigSpot.value.length, MAX_SPOTS); assert.equal(u.rigSpotK.value.length, MAX_SPOTS);
   assert.equal(u.rigSpotK.value[0].x, 0); assert.equal(u.rigSpotK.value[0].y, 0.5); assert.equal(u.rigSpotK.value[1].x, 1);
+  assert.equal(u.rigSpotK.value[0].z, 1, '没写拉长就是圆的');
+  const du = lookUniforms([{ who: 2, blood: [{ c: [0, 1, 0], r: 0.05, e: 3, a: 0.4 }] }]).rigSpotK.value, dr = du[0];
+  assert.equal(dr.z, 3); assert.equal(dr.w, 0.4); assert.equal(du[MAX_SPOTS - 1].x, -1, '空位谁也不是');
   // 队友的血迹全部放得下
   const sq = lookUniforms(SQUAD.members.map((m) => m.look));
   assert.equal(sq.rigSpotK.value.filter((k) => k.x >= 0).length, SQUAD.members.reduce((n, m) => n + m.look.blood.length, 0));
@@ -82,6 +91,18 @@ test('细节图：按档位定大小（省内存档不要），可平铺，数�
     assert.ok(edge <= inner * 1.6 + size * 2, `通道 ${c} 左右 / 上下接得上（接缝 ${edge}，图内 ${inner}）`);
   }
   const again = detailContext(size); fillDetailRows(again, 0, size); assert.deepEqual(Array.from(again.data.slice(0, 400)), Array.from(d.slice(0, 400)), '可复现');
+  // 粗图同样无缝，四个通道都拉开了对比
+  const mc = macroContext(64); let my = 0; while (my < 64) my = fillMacroRows(mc, my, Math.min(64, my + 7));
+  const m = mc.data, mat = (x, yy, c) => m[(yy * 64 + x) * 4 + c];
+  for (let c = 0; c < 4; c++) {
+    let edge = 0, inner = 0, lo = 255, hi = 0;
+    for (let i = 0; i < 64; i++) { edge += Math.abs(mat(0, i, c) - mat(63, i, c)) + Math.abs(mat(i, 0, c) - mat(i, 63, c)); inner += Math.abs(mat(32, i, c) - mat(31, i, c)) + Math.abs(mat(i, 32, c) - mat(i, 31, c)); }
+    for (let i = c; i < m.length; i += 4) { lo = Math.min(lo, m[i]); hi = Math.max(hi, m[i]); }
+    assert.ok(edge <= inner * 1.6 + 128, `粗图通道 ${c} 接得上`); assert.ok(hi - lo > 120, `粗图通道 ${c} 有对比`);
+  }
+  // 够快：拿的时候同步生成也不卡（512² 细图 + 256² 粗图，留足余量：机器忙的时候也在 150 毫秒内）
+  const t0 = performance.now(); const big = detailContext(512); fillDetailRows(big, 0, 512); const bm = macroContext(256); fillMacroRows(bm, 0, 256);
+  assert.ok(performance.now() - t0 < 150, `生成用了 ${(performance.now() - t0).toFixed(0)} 毫秒`);
 });
 
 test('没有 document：不生成贴图，材质照样能建、能销毁', () => {
@@ -89,6 +110,7 @@ test('没有 document：不生成贴图，材质照样能建、能销毁', () =>
   assert.equal(acquireRigDetail(512), null);
   assert.equal(rigDetailState(), null);
   releaseRigDetail();
+  assert.equal(rigDecalsOn(), false); assert.equal(acquireRigDecals([{ face: 'zhe' }]), null); releaseRigDecals();
   const mat = createRigMaterial({ name: 't', looks: SQUAD.members.map((m) => m.look) });
   assert.ok(mat.vertexColors && typeof mat.onBeforeCompile === 'function');
   assert.equal(mat.defines.RIG_DETAIL, undefined, '没细节图就不开 RIG_DETAIL');
@@ -96,12 +118,16 @@ test('没有 document：不生成贴图，材质照样能建、能销毁', () =>
   const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
   mat.onBeforeCompile(shader);
   for (const s of ['vRest = vec4', 'attribute vec4 rest']) assert.ok(shader.vertexShader.includes(s), s);
-  for (const s of ['rigSurf(rigT', 'roughnessFactor = rigRough', 'metalnessFactor = rigMetal', 'rigRetro * irradiance', 'totalEmissiveRadiance *= 0.3']) assert.ok(shader.fragmentShader.includes(s), s);
+  for (const s of ['rigSurf(rigT', 'roughnessFactor = rigRough', 'metalnessFactor = rigMetal', 'rigRetro * rigTint * irradiance', 'totalEmissiveRadiance *= 0.3', 'normalize( vViewPosition )']) assert.ok(shader.fragmentShader.includes(s), s);
   assert.ok(shader.uniforms.rigSpot && shader.uniforms.rigGrime);
   assert.equal(shader.uniforms.rigDetail, undefined);
-  const m2 = patchRigShader(new THREE.MeshStandardMaterial(), { value: null });
-  assert.equal(m2.defines.RIG_DETAIL, '');
+  assert.doesNotMatch(shader.fragmentShader, /#ifdef RIG_DECAL[\s\S]*rigDecalBox\[slot/, '贴花数组不用动态下标（按循环挑）');
+  const m2 = patchRigShader(new THREE.MeshStandardMaterial(), { value: null, macro: { value: null } }, [], { value: null });
+  assert.equal(m2.defines.RIG_DETAIL, ''); assert.equal(m2.defines.RIG_DECAL, '');
   assert.notEqual(m2.customProgramCacheKey(), mat.customProgramCacheKey());
+  const sh2 = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
+  m2.onBeforeCompile(sh2);
+  assert.ok(sh2.uniforms.rigDetail && sh2.uniforms.rigMacro && sh2.uniforms.rigDecal && sh2.uniforms.rigDecalBox.value.length === 4 && sh2.uniforms.rigDecalUv.value.length === 4);
   mat.dispose();
 });
 
@@ -112,9 +138,49 @@ test('人头：雕过的头型左右对称，脸面五官在脸前', () => {
   const eye = facePoint(head, 0.33, 0.07), chin = facePoint(head, 0, -0.85);
   assert.ok(eye[2] > 0.07 && eye[1] > chin[1]);
   const parts = humanHead({ c: head.c, r: head.r, skin: 0xa8765a, lip: 0x8a5446, brow: 0x111111 });
-  assert.ok(parts.length > 10 && parts.every((g) => g.attributes.rig && g.attributes.color));
+  assert.ok(parts.length > 10 && parts.every((g) => g.attributes.rig && g.attributes.color), '没有贴花：小几何体的眼睛眉毛');
+  // 下颌角：下半脸侧面（下颌角）比下巴宽得多；下巴底下压平
+  const jaw = sculpt(0.85, -0.5, Math.sqrt(1 - 0.85 ** 2 - 0.25), 1), chinS = sculpt(0.25, -0.75, Math.sqrt(1 - 0.0625 - 0.5625), 1);
+  assert.ok(jaw[0] > 0.7 && chinS[0] < 0.2, `下颌角 ${jaw[0].toFixed(2)}、下巴 ${chinS[0].toFixed(2)}`);
+  // 耳朵露在头外面（一侧伸出头的半宽）
+  const merged = new THREE.Box3(); for (const g of parts) { g.computeBoundingBox(); merged.union(g.boundingBox); }
+  assert.ok(merged.max.x > head.r[0] * 1.02 && merged.min.x < -head.r[0] * 1.02, '有耳朵');
+  // 有贴花：五官画在贴花里，头皮的脸面标了槽号，往两侧渐隐；没有几何体的眼白
+  const dec = humanHead({ c: head.c, r: head.r, skin: 0xa8765a, lip: 0x8a5446, brow: 0x111111, hair: 0x111111, line: [0.5, 0.1, -0.5], decal: DECAL.ZHE_FACE });
+  const skull = dec[0], rg = skull.attributes.rig.array, pos = skull.attributes.position;
+  let front = 0, side = 0;
+  for (let i = 0; i < pos.count; i++) { assert.equal(rg[i * 4 + 2], DECAL.ZHE_FACE); if (pos.getZ(i) > 0.09 && Math.abs(pos.getY(i) - 0.09) < 0.03) front = Math.max(front, rg[i * 4 + 3]); if (Math.abs(pos.getX(i)) > 0.08) side = Math.max(side, rg[i * 4 + 3]); }
+  assert.ok(front > 200 && side < 60, `脸前 ${front}、两侧 ${side}`);
+  assert.ok(!dec.some((g) => g.attributes.rig.array[0] === SURF.GLOSS), '有贴花就不要几何体的眼白');
+  assert.ok(dec.length < parts.length);
   const hair = hairShell({ c: head.c, r: head.r, hair: 0x111111, line: [0.5, 0.1, -0.5], inflate: 1.045 });
   hair.computeBoundingBox(); assert.ok(hair.boundingBox.max.y > head.c[1] + head.r[1], '头发盖住头顶');
+  // 发际线以外的头发壳缩在头皮里（头皮那一圈已经涂成发色，交线藏在发色里，不会一格一格地锯齿）
+  const hp = hair.attributes.position, dir = hair.userData.dir; let out = 0, n = 0;
+  for (let i = 0; i < hp.count; i++) {
+    const nx = dir[i * 3], ny = dir[i * 3 + 1], nz = dir[i * 3 + 2]; if (nz < 0.3 || ny > 0.3) continue; // 脸面（发际线 0.5 以下）
+    const q = sculpt(nx, ny, nz, 1), sk = [head.c[0] + q[0] * head.r[0], head.c[1] + q[1] * head.r[1], head.c[2] + q[2] * head.r[2]];
+    n++; if (Math.hypot(hp.getX(i) - head.c[0], hp.getY(i) - head.c[1], hp.getZ(i) - head.c[2]) > Math.hypot(sk[0] - head.c[0], sk[1] - head.c[1], sk[2] - head.c[2]) - 1e-4) out++;
+  }
+  assert.ok(n > 20); assert.equal(out, 0, '脸前的头发壳都缩在头皮里');
+});
+
+test('贴身背心：壳离躯干一厘多，不是一块板；反光条、肩带、包边、车出来的肢体都带齐属性', () => {
+  const T = torsoSurface({ off: 0.013 });
+  // 躯干圆角方块的有向距离
+  const sdf = ([x, y, z]) => { const qx = Math.abs(x) - 0.1, qy = Math.abs(y - 0.24) - 0.14, qz = Math.abs(z) - 0.03; return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - 0.08; };
+  for (let i = 0; i < 40; i++) for (const y of [0.1, 0.2, 0.3, 0.4, 0.44]) { const d = sdf(T.point(i / 40, y).p); assert.ok(d > 0.009 && d < 0.016, `s=${i / 40} y=${y} 离躯干 ${d.toFixed(4)}`); }
+  assert.ok(T.sAt(0.1) < 0.15 && T.sAt(0.1, false) > 0.35 && T.sAt(0.1, false) < 0.5);
+  const sh = shellPatch(T, { y0: 0.1, y1: (s) => 0.3 + 0.1 * Math.sin(s * 6.28), cols: 16, rows: 3, hex: 0xffff00, surf: SURF.HIVIS, wrap: true });
+  const tube = edgeTube(Array.from({ length: 12 }, (_, i) => T.point(i / 12, 0.1)), 0.005, 0x333333);
+  const arch = shoulderArch(T, { x0: 0.07, x1: 0.13, off: 0.016, hex: 0xffff00 });
+  const arm = lathe(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.3, 0.1), [[0, 0.06], [0.5, 0.05], [1, 0.04]], 0x223344);
+  for (const g of [sh, tube, ...arch, arm]) for (const a of ['position', 'normal', 'uv', 'color', 'rig']) assert.ok(g.attributes[a], a);
+  assert.ok(mergeFlat([sh, tube, ...arch, arm]).attributes.position.count > 0, '能和别的零件合并');
+  grimeGeo(sh, () => 0.25); assert.equal(sh.attributes.rig.array[1], 64);
+  decalGeo(sh, 3, () => 0.5); assert.equal(sh.attributes.rig.array[2], 3); assert.equal(sh.attributes.rig.array[3], 128);
+  setDecalBox(2, 0.1, 1.6, 0.08, 0.1); assert.deepEqual(decalBox(2).toArray(), [0.1, 1.6, 0.08, 0.1]);
+  assert.ok(FACES.zhe.slot === DECAL.ZHE_FACE && FACES.lin.slot === DECAL.LIN_FACE);
 });
 
 test('buildParts：部件和轴心不变，三角形不超过原来的两倍左右，队友露脸、劫持者戴面罩', () => {
@@ -124,7 +190,7 @@ test('buildParts：部件和轴心不变，三角形不超过原来的两倍左�
     assert.deepEqual(Object.keys(P).sort(), ['aim', 'head', 'pelvis', 'shin', 'thigh', 'torso', 'visor']);
     for (const [k, g] of Object.entries(P)) if (k !== 'visor') for (const a of ['position', 'normal', 'color', 'rig', 'rest']) assert.ok(g.attributes[a], `${k}.${a}`);
     const total = ['pelvis', 'torso', 'head', 'aim'].reduce((n, k) => n + tris(P[k]), 0) + 2 * (tris(P.thigh) + tris(P.shin));
-    assert.ok(total < 30000, `每个人 ${total} 个三角形（原来约 1.5 万）`);
+    assert.ok(total < 30000, `每个人 ${total} 个三角形（原来约 1.5 万，最多两倍）`);
   }
   assert.equal(RIG.HIP_Y, 0.98);
   const surfs = (g) => new Set(Array.from({ length: g.attributes.rig.count }, (_, i) => g.attributes.rig.array[i * 4]));
@@ -133,6 +199,15 @@ test('buildParts：部件和轴心不变，三角形不超过原来的两倍左�
   assert.ok(surfs(lin.head).has(SURF.SKIN) && !surfs(lin.head).has(SURF.PLASTIC), '林医生不戴头盔');
   assert.ok(surfs(lin.aim).has(SURF.SKIN), '短袖露小臂');
   assert.ok(surfs(soldier.head).has(SURF.KNIT) && !surfs(soldier.head).has(SURF.HAIR), '劫持者戴面罩');
+  assert.ok(tris(soldier.visor) > 20 && surfs(soldier.head).has(SURF.RUBBER), '护目镜：一整片弧形镜片 + 橡胶镜框');
+  // 背心是贴身的薄壳：荧光布的顶点离躯干（圆角方块）都不超过 2.5 厘米（上一版的板子正面离衬衫 2–3 厘米，还往下多出一截）
+  const sdf = ([x, y, z]) => { const qx = Math.abs(x) - 0.1, qy = Math.abs(y - 0.24) - 0.14, qz = Math.abs(z) - 0.03; return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - 0.08; };
+  const tp = zhe.torso.attributes.position, tr = zhe.torso.attributes.rig.array, rest = zhe.torso.attributes.rest.array;
+  let far = 0, lowest = 9;
+  for (let i = 0; i < tp.count; i++) if (tr[i * 4] === SURF.HIVIS) { const p = [rest[i * 4] / 32767 * REST_RANGE, rest[i * 4 + 1] / 32767 * REST_RANGE - 1.08, rest[i * 4 + 2] / 32767 * REST_RANGE]; far = Math.max(far, sdf(p)); lowest = Math.min(lowest, p[1]); }
+  assert.ok(far < 0.025, `背心离躯干最远 ${far.toFixed(3)} 米`); assert.ok(lowest > 0.085, '下摆不往下多出一截');
+  assert.ok(surfs(zhe.head).has(SURF.SKIN) && !surfs(zhe.torso).has(SURF.KNIT), '阿哲不戴面罩');
+  assert.ok(surfs(lin.head).has(SURF.SCRUBS) && surfs(lin.head).has(SURF.RUBBER), '林医生：口罩、头绳');
   // 头的包围球大致不变（命中判定按骨架算，模型不能大出一圈）
   for (const P of [zhe, lin]) { P.head.computeBoundingBox(); assert.ok(P.head.boundingBox.max.y < 0.3 && P.head.boundingBox.min.y > -0.06); }
 });

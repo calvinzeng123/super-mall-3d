@@ -144,7 +144,7 @@ function lobbyFittings(B, { band, lifts, stairs, landing, half, y0, h, K, garage
   if (sorted.length) {
     const xH = sorted[0].door.x0 - .3 - w / 2, xM = sorted.at(-1).door.x1 + .3 + w / 2;
     if (xH - w / 2 > x0 + .2) {
-      B.get('satin').box(xH, y0 + .9, zf, w, 1.8, .03, '#9f241e');
+      B.get('satin').box(xH, y0 + .9, zf, w, 1.8, .03, '#8a2620');
       B.get('metal').box(xH, y0 + 1.24, zf - .017, w - .08, .012, .006, '#4c524e');
       B.get('glass').box(xH + .06, y0 + 1.62, zf - .018, w - .3, .38, .006, 0xffffff);
       B.get('satin').box(xH, y0 + 1.37, zf - .017, w - .26, .07, .006, '#e6e1d3');

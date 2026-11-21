@@ -10,11 +10,11 @@ const WALL = '#dce1d8', STEP = '#c8cec3', METAL = '#607967';
  */
 export const STAIR_PAINT = Object.freeze({
   tread: '#b4b1a7', riser: '#9d9e97', landing: '#aba99f', nosing: '#2b2e2c', soffit: '#c4c6bf',
-  dado: '#7b897f', dadoLine: '#3b4740', skirting: '#4a4f4b',
+  dado: '#89938a', dadoLine: '#47524b', skirting: '#4a4f4b',
   rail: '#5b4130', baluster: '#3a433e', bracket: '#5f6662',
   pipe: '#952c24', conduit: '#80857f', lamp: '#d7d3c2', lampBase: '#575c59',
   frame: '#4b524e', closer: '#6d726e',
-  hydrant: '#9f241e', hydrantGlass: '#b9c7c6', hydrantLabel: '#e6e1d3', meter: '#8a918b', meterSeam: '#4c524e',
+  hydrant: '#8a2620', hydrantGlass: '#b9c7c6', hydrantLabel: '#e6e1d3', meter: '#8a918b', meterSeam: '#4c524e',
 });
 /** 墙裙（梯段处沿踏步前缘斜着走）、踢脚线的高度。 */
 export const DADO_HEIGHT = 1.2, SKIRTING_HEIGHT = .16;

@@ -16,24 +16,24 @@ import { MEM } from '../render/device.js';
 import { LOOKS, PAINT, noiseTableSteps, rasterBodySteps, bodyFrame, planFace, planLook, bloodField, prepareLayers, paintColour, paintSurface } from './skins/zombie-paint.js';
 
 /**
- * tones：几套色调 [衣服去色后乘上的 R, G, B, 保留多少原来的颜色, 旧血块数]（皮肤、血、脏怎么画见 zombie-paint.js 的 LOOKS.walker，一一对应）；
+ * tones：几套色调 [衣服去色后乘上的 R, G, B, 保留多少原来的颜色]（皮肤、伤、血、脏怎么画见 zombie-paint.js 的 LOOKS.walker，一一对应）；
  * special：特殊感染者的（body：用哪个模型，0 男 1 女，不写两个都做；eye：眼睛的颜色；optional：省内存档不做，用普通的那套顶上；env：环境反射多强，不写用 envMapIntensity）。
  * size：颜色图最大边长（电脑 1024；手机按内存档位的 modelTex：512 / 256）；法线和粗糙度是颜色图的一半，省内存档不做。
  * cyclesPerMetre：每走一米走路姿势转多少圈。
  */
 export const ZOMBIE_SKIN = Object.freeze({
   size: 1024,
-  tones: Object.freeze([[0.62, 0.7, 0.56, 0.34, 3], [0.56, 0.6, 0.62, 0.26, 2], [0.7, 0.62, 0.5, 0.4, 5]]),
+  tones: Object.freeze([[0.62, 0.7, 0.56, 0.34], [0.56, 0.6, 0.62, 0.26], [0.7, 0.62, 0.5, 0.4]]),
   // 尖叫者惨白没血色，扑袭者一身黑灰、红眼，喷酸者蜡黄发绿、嘴边淌涎水，巨尸暗红满身烂疮，胖尸灰绿发紫、一身脓疱
   special: Object.freeze({
-    pale: Object.freeze({ tone: [0.84, 0.86, 0.8, 0.12, 1], eye: 0xffffff }),
-    lunger: Object.freeze({ tone: [0.42, 0.4, 0.42, 0.2, 4], body: 0, eye: 0xff4a3a, env: 0.62 }), // 一身黑，环境反射多给一点，手电下才有轮廓
-    spitter: Object.freeze({ tone: [0.74, 0.8, 0.42, 0.3, 2], body: 1, eye: 0xb6ff5a }),
-    brute: Object.freeze({ tone: [0.5, 0.34, 0.3, 0.22, 6], body: 0, eye: 0xffa040 }),
-    bloater: Object.freeze({ tone: [0.66, 0.7, 0.52, 0.3, 3], eye: 0xd8e070, optional: true }),
+    pale: Object.freeze({ tone: [0.84, 0.86, 0.8, 0.12], eye: 0xffffff }),
+    lunger: Object.freeze({ tone: [0.42, 0.4, 0.42, 0.2], body: 0, eye: 0xff4a3a, env: 0.62 }), // 一身黑，环境反射多给一点，手电下才有轮廓
+    spitter: Object.freeze({ tone: [0.7, 0.74, 0.46, 0.26], body: 1, eye: 0xb6ff5a }),
+    brute: Object.freeze({ tone: [0.5, 0.34, 0.3, 0.22], body: 0, eye: 0xffa040 }),
+    bloater: Object.freeze({ tone: [0.66, 0.7, 0.52, 0.3], eye: 0xd8e070, optional: true }),
   }),
   // 眼睛：放在眼球（模型自带、贴图上那一小块）的正前面，往里缩 inset；量不到眼球时按离头顶 below、两眼间距的一半 half 估。radius：发光点的半径
-  eyes: Object.freeze({ below: 0.108, half: 0.031, inset: 0.0015, radius: 0.0068, color: 0xffe9a8 }),
+  eyes: Object.freeze({ below: 0.108, half: 0.031, inset: 0.003, radius: 0.005, color: 0xffe9a8 }),
   envMapIntensity: 0.38, // 停电时环境光本来就压得很低，留一点让湿血、皮肤在暗处有个轮廓，不至于一团死黑
   bloatGirth: 1.3, // 横向撑开超过这么多、又不是别的特殊感染者的，就是胖尸（zombie.js 只给胖尸撑这么宽）
   cyclesPerMetre: 0.62,
@@ -125,13 +125,13 @@ function toTexture(pixels, size, srgb) {
 
 /**
  * 着色器补丁：颜色图的透明通道 → 湿度（zombie-paint.js 的 encodeWet：0.5 以下是头发的半透明，0.5 往上越大越湿）。
- * 湿处粗糙度降下来（干血痂 0.8 左右、油泥 0.5、刚淌的血 0.12），越湿越把共用法线图里的布纹抹平（血把布纹填平了，伤口里也不会透出条纹的高光）。
+ * 湿处粗糙度降下来（干血痂 0.8 左右、油泥 0.55、刚淌的血 0.4、伤口正中 0.2），越湿越把共用法线图里的布纹抹平（血把布纹填平了，伤口里也不会透出条纹的高光）。
  * 透明通道读完以后改回 1：材质不透明，输出的透明度不能跟着变。
  */
 function wetShader(shader) {
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\n\tfloat zWet = clamp( diffuseColor.a * 2.0 - 1.0, 0.0, 1.0 );\n\tdiffuseColor.a = 1.0;')
-    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor, mix( 0.82, 0.12, zWet * zWet ), smoothstep( 0.0, 0.1, zWet ) );')
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor, mix( 0.82, 0.2, zWet * zWet ), smoothstep( 0.0, 0.1, zWet ) );')
     .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = normalize( mix( normal, nonPerturbedNormal, smoothstep( 0.35, 0.9, zWet ) * 0.85 ) );');
 }
 
@@ -166,25 +166,31 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
     source.material.map?.dispose(); source.material.dispose(); image.close?.();
     await pause(clock, 'read');
     const body = await drain(rasterBodySteps({ position: geo.attributes.position.array, uv: geo.attributes.uv.array, normal: geo.attributes.normal?.array, index: geo.index?.array }), clock, 'raster');
-    const frame = bodyFrame(geo.attributes.position.array), plan = planWounds(body, frame, face, seed + bi * 101);
+    const frame = bodyFrame(geo.attributes.position.array), fp = planFace(body, frame, face);
     await pause(clock, 'plan');
-    const layers = await drain(prepareLayers(src, size, body, plan, tables), clock, 'layers');
+    const layers = await drain(prepareLayers(src, size, body, fp, tables), clock, 'layers');
+    // 网格第 k 格是身体哪部分（伤口、破口挑落点用：破口只开在衣服上，烂疮只长在皮上）
+    const L = body.L, partAt = (k) => layers.part[Math.min(size - 1, Math.floor(((Math.floor(k / L) + 0.5) * size) / L)) * size + Math.min(size - 1, Math.floor((((k % L) + 0.5) * size) / L))];
     // 法线和粗糙度：每个模型一张，各外观共用
     let normalMap = null, roughnessMap = null;
     if (surface) {
       const nPix = new Uint8ClampedArray(surface * surface * 4), rPix = new Uint8ClampedArray(surface * surface * 4);
-      await drain(paintSurface(src, layers, tables, nPix, rPix), clock, 'surface');
+      await drain(paintSurface(src, layers, tables, nPix, rPix, body), clock, 'surface');
       await pause(clock, 'surface');
       normalMap = toTexture(nPix, surface, false); await pause(clock, 'upload'); roughnessMap = toTexture(rPix, surface, false); count(surface); count(surface);
       shared.push(normalMap, roughnessMap);
     }
-    const paint = async (look, tone, key) => {
-      const pix = new Uint8ClampedArray(size * size * 4), stains = planStains(body, frame, seed + bi * 7 + key * 131, tone[4] ?? look.stains, !!look.back);
-      await pause(clock, 'stains');
-      await drain(paintColour(src, layers, look, tone, stainField(body, stains), body, pix), clock, 'colour');
+    // 一种外观：伤按 (模型, 外观) 定——同一个模型的几套色调伤口各不相同，主伤口按外观轮换（rot 让男女两个模型错开）
+    const paint = async (look, tone, key, env = ZOMBIE_SKIN.envMapIntensity) => {
+      const plan = planLook(body, frame, fp, seed + bi * 101 + key * 131, look, key, partAt, bi * 2);
+      await pause(clock, 'plan');
+      const field = await drain(bloodField(body, plan, frame), clock, 'blood');
+      const pix = new Uint8ClampedArray(size * size * 4);
+      await drain(paintColour(src, layers, look, tone, plan, field, body, tables, pix), clock, 'colour');
       await pause(clock, 'colour');
       const map = toTexture(pix, size, true); count(size);
-      const m = new THREE.MeshStandardMaterial({ map, normalMap, roughnessMap, roughness: roughnessMap ? 1 : 0.86, alphaTest: 0.45, side: THREE.DoubleSide, metalness: 0, envMapIntensity: ZOMBIE_SKIN.envMapIntensity, name: 'zombie-skin' });
+      const m = new THREE.MeshStandardMaterial({ map, normalMap, roughnessMap, roughness: roughnessMap ? 1 : 0.86, alphaTest: 0.225, side: THREE.DoubleSide, metalness: 0, envMapIntensity: env, name: 'zombie-skin' });
+      m.onBeforeCompile = wetShader; m.customProgramCacheKey = () => 'zombie-wet-1';
       shared.push(map, m);
       await pause(clock, 'upload');
       return m;
@@ -193,7 +199,7 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
     const special = {};
     for (const [name, sp] of Object.entries(ZOMBIE_SKIN.special)) {
       if ((sp.body != null && sp.body !== bi) || (sp.optional && compact)) continue; // 省内存档不多做胖尸那两张，和以前一样多
-      special[name] = await paint(LOOKS[name], sp.tone, 10 + Object.keys(special).length);
+      special[name] = await paint(LOOKS[name], sp.tone, 10 + Object.keys(special).length, sp.env);
     }
     shared.push(geo);
     bodies.push({ geometry: geo, poses: record.poses, face, materials, special });
@@ -212,7 +218,9 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
       const meshes = bodies.map((b) => {
         const mesh = new THREE.Mesh(b.geometry, b.materials[0]);
         mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = false; mesh.visible = false; // 姿势会把四肢带出站姿的包围盒
-        for (const sx of [1, -1]) { const eye = new THREE.Mesh(eyeGeo, eyeMat); eye.position.set(b.face.x + E.half * sx, b.face.top - E.below, b.face.front - E.inset); mesh.add(eye); }
+        // 眼睛：贴在眼球正前面（量不到眼球就按头顶往下估）
+        const spots = b.face.eyes ? b.face.eyes.map((e) => [e.x, e.y, e.front - E.inset]) : [1, -1].map((sx) => [b.face.x + E.half * sx, b.face.top - E.below, b.face.front - 0.01]);
+        for (const [x, y, z] of spots) { const eye = new THREE.Mesh(eyeGeo, eyeMat); eye.position.set(x, y, z); mesh.add(eye); }
         group.add(mesh);
         return mesh;
       });
