@@ -1,0 +1,98 @@
+<!doctype html>
+<!--
+  枪械预览台（开发工具，不进构建）：只加载枪和它的贴图，两三秒出图——调贴图、材质、摆位不用每次等整个商场加载。
+  用法：在仓库根目录起一个静态服务器（python3 -m http.server 5174），打开
+    /scripts/jimao/gun-studio.html?gun=smg&pose=hip&light=dark
+  gun   = rifle 以外的四把：smg（冲锋枪）| launcher（榴弹枪）| pistol（手枪）| knife（刀）
+  pose  = hip（腰射）| ads（开镜）| reload（换弹到一半，t=0–1 指定进度）| left / right（枪的左、右侧面，整把入画）|
+          close（侧面贴近看机匣，查贴图细节）| top（从上往下）| q（四分之三侧）
+  light = dark（停电：和游戏里丧尸围城的亮度相当）| day（白天）
+  rig   = 0 关掉枪的专用打光（view-light.js），看没有它的时候什么样
+  这里的环境光、太阳、半球光是按游戏里的数值近似的（真实效果以游戏里的截图为准）；枪走的是和游戏同一套代码
+  （arsenal.js → smg.js / launcher.js / 手枪换肤），所以在这儿看到的贴图处理就是游戏里的。
+-->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>枪械预览台</title>
+<style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } canvas { display: block; width: 100vw; height: 100vh; } #tag { position: fixed; left: 10px; top: 8px; font: 12px/1.4 monospace; color: #9aa; }</style>
+<script type="importmap">{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="tag"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createArsenal } from '/src/jimao/arsenal.js';
+import { createViewLight } from '/src/jimao/view-light.js';
+
+const q = new URLSearchParams(location.search);
+const gun = q.get('gun') || 'smg', pose = q.get('pose') || 'hip', light = q.get('light') || 'dark', dark = light === 'dark';
+document.getElementById('tag').textContent = `${gun} · ${pose} · ${light}${q.get('rig') === '0' ? ' · 无专用打光' : ''}`;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = dark ? 1.2 : 0.95;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(dark ? 0x0c0e11 : 0x8c8f93);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.03).texture;
+scene.environmentIntensity = dark ? 0.42 : 1.1; // 游戏里画枪那一层时的环境反射强度（run.js 的 drawView）
+// 世界里照到枪上的光：太阳（夜里是月光）、半球光
+const sun = new THREE.DirectionalLight(dark ? 0xb9c8ff : 0xfff3df, dark ? 0.16 : 2.2); sun.position.set(0.5, 1, 0.35); scene.add(sun);
+scene.add(new THREE.HemisphereLight(dark ? 0x4a5a78 : 0xdfe8ff, dark ? 0x14161a : 0x6a6258, dark ? 0.22 : 0.85));
+// 背景：一面远处的墙和地面，暗场里看枪的轮廓分不分得出来
+{ const m = new THREE.MeshStandardMaterial({ color: dark ? 0x1a1c20 : 0x9a968c, roughness: 0.9 });
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), m); wall.position.set(0, 2, -9); scene.add(wall);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), m); floor.rotation.x = -Math.PI / 2; floor.position.y = -1.6; scene.add(floor); }
+
+const camera = new THREE.PerspectiveCamera(54, innerWidth / innerHeight, 0.01, 60); scene.add(camera);
+const rig = createViewLight({ camera }); if (q.get('rig') === '0') rig.scale = 0; rig.update(dark ? 1 : 0);
+
+// 假的游戏上下文：够 arsenal.js 跑起来就行
+const pressed = new Set();
+const rifle = { name: '九式突击步枪', ammo: 30, magSize: 30, reserve: 150, state: 'idle', ads: 0, spread: 0.0125, update() {}, reset() {}, setVisible() {}, addAmmo() {}, snap() {} };
+const G = {
+  weapon: rifle, game: { state: 'playing' }, enemies: { list: [] }, physics: { lineOfSight: () => true },
+  player: { pos: new THREE.Vector3(), vel: new THREE.Vector3(), onGround: true, sprinting: false, addRecoil() {}, addShake() {} },
+  input: { look: { dx: 0, dy: 0 }, move: { x: 0, y: 0 }, fire: false, ads: false, pressed: (a) => pressed.has(a), down: () => false },
+  events: { emit() {}, on() {} }, combat: { playerShot: () => null }, fx: { tracer() {}, shell() {}, smoke() {} }, render: { lightPool: { flash() {} } },
+  actions: { launch: () => true },
+};
+const arsenal = createArsenal(G, { camera }); G.rifle = rifle; G.weapon = arsenal;
+const load = async (file) => new GLTFLoader().loadAsync(`/assets/models/fps/${file}`);
+const step = (secs) => { for (let t = 0; t < secs - 1e-9; t += 1 / 60) { arsenal.update(1 / 60); pressed.clear(); } };
+
+if (gun === 'smg') { arsenal.skinSmg(await load('smg45-mobile.glb')); arsenal.grant('smg'); }
+else if (gun === 'launcher') arsenal.grant('launcher');
+else if (gun === 'pistol') { arsenal.skinPistol((await load('desert-eagle-mobile.glb')).scene); arsenal.select('pistol', { plain: true }); }
+else if (gun === 'knife') arsenal.select('knife', { plain: true });
+step(2);
+if (pose === 'ads') { G.input.ads = true; step(0.9); }
+if (pose === 'reload') {
+  const t = +(q.get('t') || 0.45);
+  if (gun === 'smg') { arsenal.smg.state.ammo = 5; arsenal.reloadNow(); step(arsenal.smg.spec.reload * t); }
+  else if (gun === 'launcher') { arsenal.launcher.state.ammo = 0; arsenal.reloadNow(); step(arsenal.launcher.spec.reload * t); }
+  else if (gun === 'pistol') { arsenal.pistol.ammo = 5; arsenal.startReload(); step(1.45 * t); }
+}
+const root = arsenal.roots[gun];
+// 看侧面 / 俯视 / 特写：把枪从握姿里拿出来，摆到镜头正前方转一个角度
+const INSPECT = { left: [0, Math.PI / 2, 1], right: [0, -Math.PI / 2, 1], top: [Math.PI / 2, Math.PI / 2, 1], q: [0.18, Math.PI / 2 - 0.75, 1.05], close: [0, Math.PI / 2, 0.42] };
+if (INSPECT[pose]) {
+  root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
+  // 只按枪本身量大小（冲锋枪的模型带两条手臂，手臂不算）
+  const focus = q.get('focus') ? new RegExp(q.get('focus'), 'i') : gun === 'smg' ? /smg/i : null, box = new THREE.Box3();
+  root.traverse((o) => { if (!o.isMesh || !o.visible) return; const name = `${o.name} ${[].concat(o.material).map((m) => m?.name).join(' ')}`; if (focus && !focus.test(name)) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); });
+  const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()), [rx, ry, k] = INSPECT[pose];
+  const len = Math.max(size.x, size.y, size.z), dist = (len / 2) / Math.tan(THREE.MathUtils.degToRad(54 / 2)) / (innerWidth / innerHeight) * 1.25 * k + len * 0.2;
+  const rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, 0, 'YXZ'));
+  root.quaternion.copy(rot); root.position.copy(c).applyQuaternion(rot).multiplyScalar(-1).add(new THREE.Vector3(+(q.get('dx') || 0), +(q.get('dy') || 0), -dist));
+}
+root.updateMatrixWorld(true);
+renderer.render(scene, camera);
+window.__studio = { THREE, G, arsenal, root, renderer, scene, camera, rig, render: () => renderer.render(scene, camera) };
+document.body.dataset.ready = '1';
+</script>
+</body>
+</html>

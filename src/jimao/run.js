@@ -40,6 +40,7 @@ import { createSiege, SIEGE_CSS } from './siege.js';
 import { createSupplies, MEDIC_CSS } from './supplies.js';
 import { createSquad, SQUAD_CSS } from './squad.js';
 import { createHealthBars, BARS_CSS } from './healthbars.js';
+import { createViewLight } from './view-light.js';
 import { createBlackout } from './blackout.js';
 import { loadZombieKit } from './zombie-skin.js';
 import { HELI_ORBIT } from './ride-paths.js';
@@ -192,6 +193,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 第二把枪和刀（arsenal.js）：G.weapon 换成「当前武器」，原来的步枪留在 G.rifle；G.arms 给翻越用（把枪放低）
   G.rifle = G.weapon;
   G.weapon = createArsenal(G, { camera, layer: VIEW_LAYER, ui });
+  // 枪那一层的专用打光（view-light.js）：主光 + 轮廓光 + 一点补光，只照枪，停电时更要靠它——不然贴图再细也是一团黑
+  const viewLight = createViewLight({ camera, layer: VIEW_LAYER });
+  if (params.gunlight !== undefined) viewLight.scale = +params.gunlight || 0; // ?gunlight=0 关掉对比
+  G.viewLight = viewLight;
   G.arms = G.weapon;
   // 手枪换上带贴图的真模型（2 MB，后台加载；加载不出来就用 arsenal.js 里手搭的那把，不影响开打）
   { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'pistol'), arsenal = G.weapon;
@@ -394,6 +399,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const drawView = () => {
     viewCamera.position.copy(camera.position); viewCamera.quaternion.copy(camera.quaternion);
     if (Math.abs(viewCamera.aspect - camera.aspect) > 1e-4) { viewCamera.aspect = camera.aspect; viewCamera.updateProjectionMatrix(); }
+    viewLight.update(blackout.level);
     const undo = blackout.begin(); // 停电时枪也跟着暗（靠手电和枪口火光照亮），不然黑屋子里飘着一把亮枪
     const auto = renderer.autoClear, envI = scene.environmentIntensity, fog = scene.fog;
     renderer.autoClear = false; renderer.clearDepth();
@@ -480,7 +486,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); viewLight.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }
