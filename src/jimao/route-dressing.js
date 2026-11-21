@@ -376,7 +376,8 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
   if (!plan?.stages?.length) return items;
   const avoid = [];
   // 关卡的大件（杂物堆、火、配电箱、防火门）占的地方：地面贴花不压进去
-  for (const g of plan.gates || []) if (g.model) avoid.push({ floor: g.floor, x: g.model.x, z: g.model.z, r: 1.25, wall: 0.9 });
+  // 着火那道关例外：墙上的烟熏就该紧挨着火（熏黑的墙在火后面，挡不住也不会穿帮）
+  for (const g of plan.gates || []) if (g.model) avoid.push({ floor: g.floor, x: g.model.x, z: g.model.z, r: 1.25, wall: g.type === 'fire' ? 0.05 : 0.9 });
   // 电梯门口：门是会动的，墙上、地上都不贴（候梯厅里的血留到离门一米多的地方）
   const tower = plan.tower, lift = tower ? nav.links.find((l) => l.id === tower.lift) : null;
   // 这一层所有电梯（不只这栋楼那部：商场的电梯厅里并排好几部），门扇会开，贴在门上的血会悬在半空
@@ -455,7 +456,9 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
         S.floor('debris', 4, { r1: 3.5, size: [0.9, 1.3], alpha: [0.8, 1] });
         S.floor('casings', 12, { r1: 3.5, size: [0.09, 0.12], mode: GLOSS, gap: 0.2 });
       } else if (g.type === 'fire') { // 楼梯间着火：熏黑的墙、烧过的碎屑
-        S.wall('scorch', 2, { size: [1.6, 2.1], yc: [1.15, 1.25], tilt: 0.05, r1: 3.5, alpha: [0.8, 0.95] });
+        const near = (q) => -segDist(g.model.x, g.model.z, q.w);
+        S.wall('scorch', 1, { size: [1.7, 2.1], yc: [1.05, 1.15], tilt: 0.04, r1: 4, alpha: [0.85, 0.95], keep: true, prefer: near });
+        S.wall('scorch', 1, { size: [1.4, 1.8], yc: [1.0, 1.1], tilt: 0.04, r1: 4, alpha: [0.7, 0.85] });
         S.floor('scorch', 1, { r1: 2.5, size: [1.4, 1.8], alpha: [0.6, 0.8] });
         S.floor('debris', 2, { r1: 3, size: [0.8, 1.0], alpha: [0.7, 0.9] });
       } else { // 配电箱跳闸：电梯厅里的人想撬开电动栅门
@@ -513,9 +516,11 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
         T.floor('glass', 1, { r1: 3.5, size: [0.8, 1.0], mode: GLOSS });
         T.floor('drops', 5, { r1: 3.5, size: [0.2, 0.3], mode: BLOOD });
         if (rng() < 0.6) T.floor(['shoe', 'bag'], 1, { r1: 3.5, size: [0.32, 0.4], mode: BLOOD, gap: 0.35, keep: true });
-        if (i === 1) T.wall('gHelp', 1, { size: [0.9, 1.0], yc: [1.2, 1.45], mode: BLOOD, tilt: 0.08, keep: true });
-        T.wall(['splat0', 'splat1'], 1, { size: [0.6, 0.85], yc: [0.8, 1.3], mode: BLOOD });
-        T.wall(['handL', 'handR'], 2, { size: [0.19, 0.24], yc: [0.85, 1.4], mode: BLOOD, tilt: 0.4 });
+        // 户内的墙上挂着画、电视，窗台以上是玻璃和窗帘（这些都不在导航里）：墙上的东西压低，放在窗台、画框以下——
+        // 「救命」是靠着墙坐在地上的人蘸血写的，本来也就这么高
+        if (i === 1) T.wall('gHelp', 1, { size: [0.85, 0.95], yc: [0.55, 0.7], mode: BLOOD, tilt: 0.1, keep: true });
+        T.wall(['splat0', 'splat1'], 1, { size: [0.55, 0.75], yc: [0.45, 0.7], mode: BLOOD });
+        T.wall(['handL', 'handR'], 2, { size: [0.19, 0.24], yc: [0.35, 0.85], mode: BLOOD, tilt: 0.5 });
       }
       yield;
     }
@@ -531,7 +536,7 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
       if (!done && order[0]) tapeDoor(P, nav, gate.floor, order[0].d, rng, true);
       // 那户门口附近哪儿都写不下：写到这一层电梯厅 / 楼梯口一带随便一面够长的墙上
       const has = () => items.some((it) => it.cell === 'gInfected' && it.lv === levelOf(nav, gate.floor));
-      for (const [R, size] of [[7, [1.2, 1.5]], [10, [0.95, 1.1]]]) if (!has()) P.spot(gate.floor, gate.site.x, gate.site.z, R)?.wall('gInfected', 1, { size, yc: [1.45, 1.55], tilt: 0.05, keep: true, alpha: [0.9, 0.95], prefer: (q) => q.len });
+      for (const [R, size] of [[7, [1.8, 2.1]], [10, [1.3, 1.5]]]) if (!has()) P.spot(gate.floor, gate.site.x, gate.site.z, R)?.wall('gInfected', 1, { size, yc: [1.45, 1.55], tilt: 0.05, keep: true, alpha: [0.9, 0.95], prefer: (q) => q.len });
       yield;
     }
   }
@@ -614,7 +619,7 @@ function tapeDoor(P, nav, floorId, d, rng, force = true) {
   const S = P.spot(floorId, d.x + nx * 0.8, d.z + nz * 0.8, 3.2);
   if (!S) return false;
   // 门边的墙：和门脸共线的墙段里，离门洞边 0.45 米以外、墙段两头留够余量、整句都露在外面的一处
-  const gw = 1.7, need = d.w / 2 + 0.4 + gw / 2;
+  const gw = 2.3, need = d.w / 2 + 0.35 + gw / 2;
   const cand = [];
   for (const { w, len } of S.walls) {
     const ux = (w.x1 - w.x0) / len, uz = (w.z1 - w.z0) / len;
@@ -634,7 +639,7 @@ function tapeDoor(P, nav, floorId, d, rng, force = true) {
   }
   if (q) S.addWall('gInfected', q, gw, 1.5, { phi: (rng() - 0.5) * 0.08, alpha: 0.95 });
   // 门边写不下（北区塔楼的入户门开在小小的电梯厅里）：写在这个厅里别的墙上，字小一点
-  else S.wall('gInfected', 1, { size: [1.1, 1.4], yc: [1.45, 1.55], tilt: 0.05, keep: true, r1: 3.2, alpha: [0.9, 0.95] });
+  else S.wall('gInfected', 1, { size: [1.6, 1.9], yc: [1.45, 1.55], tilt: 0.05, keep: true, r1: 3.2, alpha: [0.9, 0.95] });
   // 门上、门框边几只血手印（里面的人想出来）
   S.wall(['handL', 'handR'], 2, { size: [0.19, 0.23], yc: [0.9, 1.5], mode: BLOOD, r1: 1.6, tilt: 0.5 });
   const side = rng() < 0.5 ? 1 : -1;
@@ -976,8 +981,9 @@ function warp(g, W, H, rng, amp) {
   if (!(amp > 0.5) || typeof g.getImageData !== 'function') return;
   let img = null; try { img = g.getImageData(0, 0, W, H); } catch { img = null; }
   if (!img?.data) return;
-  const wave = () => { const f1 = 2 + rng() * 2, f2 = 5 + rng() * 4, p1 = rng() * 6.3, p2 = rng() * 6.3; return (u) => Math.sin(u * f1 * 6.283 + p1) * 0.65 + Math.sin(u * f2 * 6.283 + p2) * 0.35; };
-  const wx = wave(), wy = wave(), src = new Uint32Array(img.data.buffer), tmp = new Uint32Array(src.length);
+  // 频率要低：行与行之间错得太急，笔画边缘就成了撕开的锯齿
+  const wave = (a, b) => { const f1 = a + rng() * a, f2 = b + rng() * b, p1 = rng() * 6.3, p2 = rng() * 6.3; return (u) => Math.sin(u * f1 * 6.283 + p1) * 0.7 + Math.sin(u * f2 * 6.283 + p2) * 0.3; };
+  const wx = wave(0.7, 1.8), wy = wave(1.5, 4), src = new Uint32Array(img.data.buffer), tmp = new Uint32Array(src.length);
   for (let y = 0; y < H; y++) { const dx = Math.round(wx(y / H) * amp), r = y * W; for (let x = 0; x < W; x++) { const sx = x - dx; tmp[r + x] = sx >= 0 && sx < W ? src[r + sx] : 0; } }
   for (let x = 0; x < W; x++) { const dy = Math.round(wy(x / W) * amp * 0.7); for (let y = 0; y < H; y++) { const sy = y - dy; src[y * W + x] = sy >= 0 && sy < H ? tmp[sy * W + x] : 0; } }
   g.putImageData(img, 0, 0);
@@ -986,7 +992,7 @@ function warp(g, W, H, rng, amp) {
 const FONT = '"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif';
 /** 涂鸦：逐字画（每个字转一点、大小高低不一），喷漆带飞沫和往下流的漆，记号笔干净，血字往下淌，白漆有刷痕 */
 function paintGraffiti(g, W, H, rng, spec) {
-  const chars = [...spec.text], arrow = spec.arrow ? 1 : 0, fs0 = H * (spec.latin ? 0.74 : 0.72);
+  const chars = [...spec.text], arrow = spec.arrow ? 1 : 0, fs0 = H * (spec.latin ? 0.74 : 0.8);
   const style = spec.style, col = spec.color;
   g.font = `${spec.latin ? 900 : 500} ${fs0}px ${FONT}`;
   const widths = chars.map((ch) => (ch === ' ' ? fs0 * 0.35 : g.measureText(ch).width * (spec.latin ? 1.05 : 0.96)));
@@ -1000,7 +1006,7 @@ function paintGraffiti(g, W, H, rng, spec) {
     chars.forEach((ch, i) => {
       if (ch !== ' ') {
         g.save(); g.translate(cx, base + slope * (cx / W - 0.5) + (rng() - 0.5) * fs * 0.1); g.rotate((rng() - 0.5) * 0.16); g.transform(1, 0, (rng() - 0.6) * 0.3, 1, 0, 0); g.scale(0.88 + rng() * 0.2, 0.9 + rng() * 0.2);
-        if (style !== 'paint') { g.lineWidth = fs * (style === 'spray' ? 0.07 : 0.05); g.lineJoin = 'round'; g.strokeStyle = g.fillStyle; g.strokeText(ch, 0, 0); }
+        if (style !== 'paint') { g.lineWidth = fs * (style === 'spray' ? 0.09 : 0.06); g.lineJoin = 'round'; g.strokeStyle = g.fillStyle; g.strokeText(ch, 0, 0); }
         g.fillText(ch, 0, 0); g.restore();
       }
       cx += widths[i] * k;
@@ -1020,7 +1026,7 @@ function paintGraffiti(g, W, H, rng, spec) {
   g.fillStyle = rgba(rgb, style === 'paint' ? 0.92 : 0.95);
   ink(mulberry32(jitter));
   // 手写的抖：整句字按横条左右错一点、按竖条上下错一点（低频的波），笔画就不再是字库里那么直
-  if (style !== 'paint') warp(g, W, H, rng, fs * 0.06);
+  if (style !== 'paint') warp(g, W, H, rng, fs * 0.035);
   // 往下流的漆 / 血：在字的像素里挑几处往下画细线
   if (style === 'spray' || style === 'blood') {
     let img = null; try { img = g.getImageData(0, 0, W, H); } catch { img = null; }

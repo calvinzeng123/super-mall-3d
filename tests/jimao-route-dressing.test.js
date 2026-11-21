@@ -126,7 +126,8 @@ test('落点：地面贴花平放在楼面上（不浮、不在洞口）、不�
         for (const g of plan.gates) if (Math.abs(g.model.y - st.y) < 0.5 && it.cell !== 'drops') assert.ok(Math.hypot(g.model.x - it.p[0], g.model.z - it.p[2]) > 1.0, `${it.cell} 没压在 ${g.type} 上`);
       } else if (Math.abs(it.n[1]) < 1e-6) { // 墙面
         if (it.cell === 'tape') continue;
-        const F = [...nav.floors.values()].find((f) => Math.abs(f.y - (it.p[1] - 1.5)) < 2.5 && supported(f, it.p[0] + it.n[0] * 0.3, it.p[2] + it.n[2] * 0.3));
+        // 贴花前面那块楼面：贴花中心以下最近的一层（户内的东西贴得低，不能按 1.5 米高去猜）
+        const F = [...nav.floors.values()].filter((f) => f.y <= it.p[1] && it.p[1] - f.y < 2.6 && supported(f, it.p[0] + it.n[0] * 0.3, it.p[2] + it.n[2] * 0.3)).sort((a, b) => b.y - a.y)[0];
         assert.ok(F, `${it.cell} 前面是能走的楼面`);
         const top = it.p[1] + Math.abs(it.u[1]) * it.h / 2 - F.y;
         assert.ok(top < 2.45, `${it.cell} 上沿 ${top.toFixed(2)} 米没碰天花板`);
