@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  人物预览台（开发工具，不进构建）：只加载丧尸贴图模型和队友的骨架，几秒出图——调人物贴图不用每次等整个商场加载。
+  用法：仓库根目录起静态服务器（python3 -m http.server 5174），打开
+    /scripts/jimao/people-studio.html?who=zombies&light=dark&view=front
+  who   = zombies（六只普通丧尸：两个模型 × 三套色调）| specials（尖叫者、扑袭者、喷酸者、巨尸，加一只普通的对照）|
+          squad（阿哲、林医生）| soldier（零点突围的两种劫持者）
+  light = dark（停电：环境光压得很低，镜头上一支手电——游戏里丧尸围城的样子）| day（白天，看贴图本身）
+  view  = front（全身正面）| back（背面）| close（上半身特写，看脸和衣服）| side（侧面）
+  walk  = 0–1：走路姿势的相位（丧尸），默认 0.3
+  丧尸和队友都走游戏里同一套代码（zombie-skin.js 的 loadZombieKit、squad.js 的 createSquad），在这里看到的就是游戏里的。
+-->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<base href="/">
+<title>人物预览台</title>
+<style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } canvas { display: block; width: 100vw; height: 100vh; } #tag { position: fixed; left: 10px; top: 8px; font: 12px/1.4 monospace; color: #9aa; }</style>
+<script type="importmap">{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/", "polygon-clipping": "/node_modules/polygon-clipping/dist/polygon-clipping.esm.js", "splaytree": "/node_modules/splaytree/dist/splaytree.js", "robust-predicates": "/node_modules/robust-predicates/index.js" } }</script>
+</head>
+<body>
+<div id="tag"></div>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { loadZombieKit } from '/src/jimao/zombie-skin.js';
+import { createSquad } from '/src/jimao/squad.js';
+import { addSoldiers } from '/src/jimao/soldier.js';
+
+const q = new URLSearchParams(location.search);
+const who = q.get('who') || 'zombies', light = q.get('light') || 'dark', view = q.get('view') || 'front', dark = light === 'dark', walk = +(q.get('walk') || 0.3);
+document.getElementById('tag').textContent = `${who} · ${view} · ${light}`;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = dark ? 1.15 : 0.95;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(dark ? 0x07090c : 0x9a9d9f);
+scene.fog = dark ? new THREE.Fog(0x06080b, 5, 40) : null;
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.03).texture;
+scene.environmentIntensity = dark ? 0.12 : 0.9;
+const sun = new THREE.DirectionalLight(dark ? 0xb9c8ff : 0xfff3df, dark ? 0.12 : 2.0); sun.position.set(3, 6, 4); sun.castShadow = !dark; scene.add(sun);
+scene.add(new THREE.HemisphereLight(dark ? 0x4a5a78 : 0xdfe8ff, dark ? 0x101215 : 0x6a6258, dark ? 0.18 : 0.8));
+// 地面：商场的浅色石材地面那种颜色
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: dark ? 0x3a3630 : 0xb8b0a2, roughness: 0.6 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(60, 12), new THREE.MeshStandardMaterial({ color: dark ? 0x2a2c30 : 0xa8a49a, roughness: 0.9 })); wall.position.set(0, 6, -6); scene.add(wall);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 80); scene.add(camera);
+if (dark) { // 手电：和 blackout.js 一样挂在镜头上，稍偏右下
+  const torch = new THREE.SpotLight(0xfff0d8, 6.5, 58, 0.62, 0.9, 1); torch.position.set(0.16, -0.14, 0.05); torch.target.position.set(0.02, -0.02, -6); camera.add(torch); camera.add(torch.target);
+}
+
+const people = [];
+const G = { scene, time: { frame: 0 }, player: { pos: new THREE.Vector3(0, 0, 6), yaw: 0, alive: true }, physics: { lineOfSight: () => true, groundHeight: () => 0 }, game: { state: 'playing' }, events: { emit() {}, on() {} }, hud: {}, fx: {} };
+if (who === 'zombies' || who === 'specials') {
+  const kit = await loadZombieKit();
+  const list = who === 'zombies' ? [0, 1, 2, 3, 4, 5].map((i) => [i, null, 1, 1]) : [[0, null, 1, 1], [3, 'pale', 1, 1], [1, 'lunger', 0.98, 1], [2, 'spitter', 1.04, 1], [4, 'brute', 1.4, 1.38]];
+  list.forEach(([look, special, scale, girth], i) => {
+    const sk = kit.create(); sk.setLook(look, special); sk.group.scale.set(scale * girth, scale, scale * girth);
+    sk.pose({ phase: walk + i * 0.17, moving: 1, lean: 0.12, sway: 0, lunge: 0 });
+    sk.group.position.set((i - (list.length - 1) / 2) * 1.05, 0, 0); scene.add(sk.group);
+    sk.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    people.push(sk.group);
+  });
+  window.__kit = kit;
+} else if (who === 'squad') {
+  const squad = createSquad(G, { scene, nav: null, zombies: { alive: () => [] }, siege: { enabled: true, state: {} }, director: { riding: false } });
+  squad.reset();
+  squad.mates.forEach((m, i) => { m.root.visible = true; m.place({ x: (i - 0.5) * 1.1, y: 0, z: 0 }, 0); m.lowReady = 1; m.pose(0.016); people.push(m.root); });
+  window.__squad = squad;
+} else if (who === 'soldier') {
+  const ctx = { rng: Math.random, list: [], pools: {} }, enemies = { debug: { ctx } };
+  const pool = addSoldiers(G, enemies, { count: 3 });
+  [0, 2].forEach((k, i) => { const s = pool[k]; s.rig.group.visible = true; s.rig.group.position.set((i - 0.5) * 1.1, 0, 0); s.yaw = 0; s.lowReady = 1; people.push(s.rig.group); });
+}
+// 机位
+const n = people.length, span = Math.max(2.2, n * 1.05);
+const VIEWS = { front: [0, 1.0, span * 1.05 + 1.4, 0, 0.95], back: [0, 1.0, -(span * 1.05 + 1.4), 0, 0.95], side: [span * 1.05 + 1.6, 1.0, 0.4, 0, 0.95], close: [0, 1.48, Math.max(1.5, n * 0.55), 0, 1.4] };
+const [cx, cy, cz, tx, ty] = VIEWS[view] || VIEWS.front;
+camera.position.set(cx, cy, cz); camera.lookAt(tx, ty, 0); camera.updateMatrixWorld(true);
+renderer.render(scene, camera);
+window.__studio = { THREE, scene, camera, renderer, people, render: () => renderer.render(scene, camera) };
+document.body.dataset.ready = '1';
+</script>
+</body>
+</html>
