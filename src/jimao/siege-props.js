@@ -261,7 +261,7 @@ const NOISE = /* glsl */`
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
-float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return v; }
+float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 3; i++) { v += a * vnoise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return v / 0.875; } // 三层就够（手机上火苗卡片叠好几层，每层都要算两遍）
 `;
 /** 推进一组火 / 烟材质的时间、设淡出（uFade：1 = 正常，0 = 没了）。每个物件自己一份 uniform，几处火互不影响 */
 export function fireStep(list, t, fade = null) { for (const m of list) { m.uniforms.uTime.value = t % 600; if (fade != null) m.uniforms.uFade.value = typeof fade === 'function' ? fade(m) : fade; } }
@@ -280,7 +280,7 @@ export function flameMaterial({ hot = [1.0, 0.74, 0.34], mid = [0.92, 0.33, 0.05
       uniform float uTime, uFade, uGain; uniform vec3 uHot, uMid, uCool; varying vec2 vUv; varying float vSeed;
       ${NOISE}
       void main() {
-        float y = vUv.y;
+        float y = vUv.y / mix(0.3, 1.0, uFade); // 灭的时候火苗是往下缩回去的（不是原地变透明）
         float n = fbm(vec2(vUv.x * 3.0 + vSeed * 7.0, y * 2.2 - uTime * 2.6 + vSeed * 3.0));
         float n2 = fbm(vec2(vUv.x * 6.0 - vSeed * 3.0, y * 4.5 - uTime * 4.2));
         float w = mix(0.44, 0.05, pow(y, 0.75));
@@ -411,7 +411,7 @@ function rawSheet(w, z0, z1, lift = 0.015) {
 }
 
 // ---------- 家具零件（杂物堆、火堆、桌子共用） ----------
-const C = Object.freeze({ oak: 0x9a6a3e, walnut: 0x5a3a24, pine: 0xb48a58, kraft: 0xa98457, ticking: 0xb3ab98, steel: 0x8a8f94, galv: 0xa6aaad, dark: 0x1c1d1f, rubber: 0x121212,
+const C = Object.freeze({ oak: 0x9a6a3e, walnut: 0x5a3a24, pine: 0xb48a58, kraft: 0xa98457, ticking: 0x9d9584, steel: 0x8a8f94, galv: 0xa6aaad, dark: 0x1c1d1f, rubber: 0x121212,
   red: 0xa8201a, door: 0x7a2e24, grey: 0xb9bcbc, greyGreen: 0x5f6e66, cream: 0xd9d3c4, black: 0x0d0d0e, char: 0x3a3330, blue: 0x2f5f9e, orange: 0xd9621e, yellow: 0xd9a21f, brass: 0xb08a3a, white: 0xeeeeea });
 function chair(k, { color = C.oak, region = 'wood' } = {}) {
   const o = { color, region };

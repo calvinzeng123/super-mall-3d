@@ -249,12 +249,12 @@ function setState(g, on) { g.traverse((o) => { if (o.userData.beacon) o.visible 
 
 // 物件本身怎么搭见 siege-props.js（按材质合并、共用图集）；这里只管各自的状态：cutHide / cutShow、灯的颜色、关卡解决时的动画。
 const lens = () => (M.lens ||= new THREE.CylinderGeometry(0.02, 0.02, 0.02, 12).rotateX(Math.PI / 2));
-/** 一对指示灯：没完成时红灯亮，完成（cut）后绿灯亮；灭着的那只换成暗灯罩 */
-function lamps(g, red, green) {
-  const P = propMats(), r = new THREE.Mesh(lens(), P.ledRed), gr = new THREE.Mesh(lens(), P.lamp);
-  r.position.set(...red); gr.position.set(...green); g.add(r, gr);
-  const set = (s) => { const done = s === 'cut'; r.material = done ? P.lamp : P.ledRed; gr.material = done ? P.ledGreen : P.lamp; };
-  set.meshes = [r, gr]; return set;
+/** 一对指示灯：没完成时红灯亮，完成（cut）后绿灯亮；灭着的那只换成暗灯罩。green 不给：只有一只灯，红换绿（读卡器上那种双色灯） */
+function lamps(g, red, green = null) {
+  const P = propMats(), r = new THREE.Mesh(lens(), P.ledRed), gr = green ? new THREE.Mesh(lens(), P.lamp) : null;
+  r.position.set(...red); g.add(r); if (gr) { gr.position.set(...green); g.add(gr); }
+  const set = (s) => { const done = s === 'cut'; if (!gr) { r.material = done ? P.ledGreen : P.ledRed; return; } r.material = done ? P.lamp : P.ledRed; gr.material = done ? P.ledGreen : P.lamp; };
+  set.meshes = gr ? [r, gr] : [r]; return set;
 }
 export function lockerModel() {
   const g = new THREE.Group(); g.name = '武器柜';
@@ -296,7 +296,7 @@ export function gateBlock(type) {
   if (type === 'debris') buildDebris(junk);
   else if (type === 'fire') { fire = buildFire(junk); buildFireStatic(g); powder = powderSheet(); powder.visible = false; g.add(powder); }
   else if (type === 'fuse') { buildShutterFrame(g); junk.position.y = SHUTTER.top; buildShutterCurtain(junk); }
-  else { buildDoorFrame(g); junk.position.set(-DOOR.half, 0, DOOR.z); buildDoorLeaf(junk); led = lamps(g, [DOOR.half + 0.04, DOOR.bottom + 1.405, DOOR.z - 0.11], [DOOR.half + 0.04, DOOR.bottom + 1.405, DOOR.z - 0.11]); led('in'); }
+  else { buildDoorFrame(g); junk.position.set(-DOOR.half, 0, DOOR.z); buildDoorLeaf(junk); led = lamps(g, [DOOR.half + 0.04, DOOR.bottom + 1.405, DOOR.z - 0.11]); led('in'); }
   const base = junk.position.clone();
   let cleared = false, t = 0;
   g.userData.update = (dt) => {

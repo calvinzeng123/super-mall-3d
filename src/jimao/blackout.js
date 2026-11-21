@@ -16,6 +16,7 @@ import { MEM } from '../render/device.js';
 /**
  * glow：室内自发光留多少（0 = 全黑，1 = 正常夜景）；hemi / room / sun / exposure：补光、环境反射、月光、曝光各乘多少；
  * fog：雾从几米起、到几米全遮住；torch：手电的光强（聚光芯正中）、照多远、光锥半角（泛光的外沿）、边缘虚化、衰减指数、颜色。
+ * torch.plain：不挂光罩时（省内存档）光锥的半角和边缘虚化。
  * torch.beam：光罩——core 聚光芯半径（光锥半径的几分之几）、spill 泛光亮度（芯的几分之几）、ring 芯边上那道环、warm 泛光偏暖多少、size 光罩边长（像素）。
  * torch.adapt：近处收光——ref 米以内开始收、k 收的快慢（亮度 ∝ (距离/ref)^k）、min 最少留几成、every 几秒探一次、spread 侧边几条射线偏开多少弧度、
  *   down / up：变暗、变亮各用几秒（挡到墙上很快收，移开慢慢放，像眼睛）；turn：镜头一下子转过这么多弧度就不等下一次，马上再探
@@ -26,7 +27,7 @@ export const BLACKOUT = Object.freeze({
   fog: Object.freeze({ near: 5, far: 62, color: 0x06080b, openNear: 60, openFar: 900 }), // open*：坐上直升机 / 到了室外，雾退远（不然从天上什么都看不见）
   // 手电的衰减故意比真实的慢（decay 1，不是平方反比）：二三十米外还照得见人影；贴着墙的过曝交给 adapt 收。
   // 颜色是偏中性略冷的白（常见的强光 LED 手电那样）：血、皮肤在暖黄光下会糊成一片土色，在中性白下红是红、灰是灰
-  torch: Object.freeze({ power: 7, distance: 58, angle: 0.74, penumbra: 0.12, decay: 1, color: 0xf1f4ff, sway: 0.35,
+  torch: Object.freeze({ power: 7, distance: 58, angle: 0.74, penumbra: 0.12, decay: 1, color: 0xf1f4ff, sway: 0.35, plain: Object.freeze({ angle: 0.62, penumbra: 0.8 }),
     beam: Object.freeze({ core: 0.3, spill: 0.2, ring: 0.1, warm: 0.07, size: 128 }),
     adapt: Object.freeze({ ref: 5, k: 0.9, min: 0.07, every: 0.12, spread: 0.2, down: 0.06, up: 0.45, turn: 0.12 }) }),
   flicker: Object.freeze({ every: [7, 19], dip: 0.45, time: 0.5 }),
@@ -60,6 +61,11 @@ export function beamAt(r, a = 0, P = BLACKOUT.torch.beam) {
   // 越往外越偏暖（LED 泛光边上那圈淡黄）；芯保持中性
   const w = P.warm * smooth(c * 0.6, 1, r);
   return [v, v * (1 - w * 0.35), v * (1 - w)];
+}
+
+/** 这一档内存挂多大的光罩（边长像素，0 = 不挂）：省内存档不挂，其余 128²（线性、不要 mipmap，64 KB）。读的是传进来的 MEM。纯函数 */
+export function beamSize(T = BLACKOUT.torch, mem = MEM) {
+  return T.beam && mem.modelTex >= 512 ? T.beam.size : 0;
 }
 
 /** 光罩图（size × size，RGBA，线性值 0–255）。纯函数：节点测试里也能算，不需要画布。 */
@@ -106,18 +112,25 @@ export function createBlackout({ app, scene, camera, viewLayer = 0, rng = Math.r
   light.name = 'siege-torch'; light.castShadow = false;
   light.position.set(0.16, -0.14, 0.05); light.target.position.set(0.02, -0.02, -6);
   // 光罩：聚光芯 + 泛光（见文件头）。128² 的线性图，不要 mipmap（光斑很柔，放大缩小都看不出），64 KB
-  let cookie = null;
-  if (T.beam) {
-    const c = beamCookie(MEM.modelTex >= 512 ? T.beam.size : T.beam.size / 2, T.beam); // 省内存档 64²（16 KB）
+  // 省内存档（低画质手机）不挂光罩：多一张图、每个被照亮的像素多一次采样都不要；光锥边缘改回软的（plain），近处收光照样有
+  let cookie = null, beamNow = -1;
+  function beam() {
+    const size = beamSize(T, MEM);
+    if (size === beamNow) return;
+    beamNow = size; cookie?.dispose(); cookie = null; light.map = null;
+    light.angle = size ? T.angle : T.plain.angle; light.penumbra = size ? T.penumbra : T.plain.penumbra;
+    if (!size) return;
+    const c = beamCookie(size, T.beam);
     cookie = new THREE.DataTexture(c.data, c.size, c.size, THREE.RGBAFormat);
     cookie.name = 'siege-torch-beam'; cookie.colorSpace = THREE.NoColorSpace;
     cookie.magFilter = cookie.minFilter = THREE.LinearFilter; cookie.generateMipmaps = false;
     cookie.wrapS = cookie.wrapT = THREE.ClampToEdgeWrapping; cookie.needsUpdate = true;
     light.map = cookie;
-    // 光罩是按灯的「投影相机」投上去的，比它的近平面（默认 0.5 米）还近的地方不在罩里——贴着墙照，正好那儿光罩失效、
-    // 整个光锥一片均匀死白。近平面拉到几厘米（不投影，这个相机只拿来算光罩坐标，不影响别的）
-    light.shadow.camera.near = 0.03;
   }
+  // 光罩是按灯的「投影相机」投上去的，比它的近平面（默认 0.5 米）还近的地方不在罩里——贴着墙照，正好那儿光罩失效、
+  // 整个光锥一片均匀死白。近平面拉到几厘米（不投影，这个相机只拿来算光罩坐标，不影响别的）
+  light.shadow.camera.near = 0.03;
+  beam();
   void viewLayer; // 手电不照枪那一层：离光源只有三四十厘米，手和枪会一片死白；枪靠环境反射和枪口火光
   camera.add(light); camera.add(light.target);
   const wasNight = !!app.state?.night;
@@ -148,6 +161,7 @@ export function createBlackout({ app, scene, camera, viewLayer = 0, rng = Math.r
   function setEnabled(v) {
     v = !!v; if (v === enabled) return;
     enabled = v;
+    if (enabled) beam(); // 画质（内存档）可能在两局之间换过：开的时候按当时的档重做光罩
     // 天色跟着换：开 → 入夜；关 → 回到进来时的样子
     app.setNight?.(enabled ? true : wasNight);
   }

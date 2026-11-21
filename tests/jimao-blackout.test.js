@@ -143,3 +143,23 @@ test('猛一转身：不等下一次定时探测，马上重探（脸贴着墙�
   assert.ok(torchGain(0.4) / 0.4 < 1.6 * torchGain(BLACKOUT.torch.adapt.ref) / BLACKOUT.torch.adapt.ref, '0.4 米的墙不比 5 米的墙亮多少');
   b.dispose();
 });
+
+test('内存档：省内存档不挂光罩（光锥边缘改软），其余档 128²；换了档下一次打开手电时按新档重做', async () => {
+  const { MEMORY_PROFILES, configureMemory, MEM } = await import('../src/render/device.js');
+  const { beamSize } = await import('../src/jimao/blackout.js');
+  const T = BLACKOUT.torch;
+  assert.equal(beamSize(T, MEMORY_PROFILES.compact), 0);
+  for (const k of ['standard', 'rich', 'full']) assert.equal(beamSize(T, MEMORY_PROFILES[k]), T.beam.size, k);
+  const keep = MEM.name;
+  try {
+    configureMemory('low', { mobile: true, lost: 0 });
+    const dev = await import('../src/render/device.js'); assert.equal(dev.MEM.name, 'compact');
+    const { scene, camera, env, app } = world();
+    const b = createBlackout({ app, scene, camera, probe: () => null });
+    assert.equal(b.light.map, null, '省内存档没有光罩'); assert.equal(b.light.penumbra, T.plain.penumbra); assert.equal(b.light.angle, T.plain.angle);
+    configureMemory('ultra', { mobile: false, lost: 0 });
+    b.enabled = true; env.step(); b.update(1 / 30);
+    assert.ok(b.light.map?.isDataTexture, '换到高档：打开时挂上光罩'); assert.equal(b.light.penumbra, T.penumbra);
+    b.dispose();
+  } finally { configureMemory(keep === 'full' ? 'ultra' : keep === 'compact' ? 'low' : 'balanced', { mobile: keep !== 'full', lost: 0 }); }
+});

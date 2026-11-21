@@ -968,6 +968,20 @@ function paintTape(g, W, H, rng) {
   g.save(); g.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 30; i++) drop(g, rng() * W, H * (0.18 + rng() * 0.64), H * 0.05, [0, 0, 0], 0.3); g.restore();
   g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, H * 0.2, W, H * 0.08);
 }
+/**
+ * 把画布内容按行左右错、按列上下错（两层正弦叠出来的低频抖动）。直接改像素：
+ * 用 drawImage 一条一条地挪，画布在显卡和内存之间来回倒，手机上一句字要好几秒。没有像素（测试）就不动
+ */
+function warp(g, W, H, rng, amp) {
+  if (!(amp > 0.5) || typeof g.getImageData !== 'function') return;
+  let img = null; try { img = g.getImageData(0, 0, W, H); } catch { img = null; }
+  if (!img?.data) return;
+  const wave = () => { const f1 = 2 + rng() * 2, f2 = 5 + rng() * 4, p1 = rng() * 6.3, p2 = rng() * 6.3; return (u) => Math.sin(u * f1 * 6.283 + p1) * 0.65 + Math.sin(u * f2 * 6.283 + p2) * 0.35; };
+  const wx = wave(), wy = wave(), src = new Uint32Array(img.data.buffer), tmp = new Uint32Array(src.length);
+  for (let y = 0; y < H; y++) { const dx = Math.round(wx(y / H) * amp), r = y * W; for (let x = 0; x < W; x++) { const sx = x - dx; tmp[r + x] = sx >= 0 && sx < W ? src[r + sx] : 0; } }
+  for (let x = 0; x < W; x++) { const dy = Math.round(wy(x / W) * amp * 0.7); for (let y = 0; y < H; y++) { const sy = y - dy; src[y * W + x] = sy >= 0 && sy < H ? tmp[sy * W + x] : 0; } }
+  g.putImageData(img, 0, 0);
+}
 /** 字体：手写感靠逐字的旋转、大小、高低起伏 */
 const FONT = '"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif';
 /** 涂鸦：逐字画（每个字转一点、大小高低不一），喷漆带飞沫和往下流的漆，记号笔干净，血字往下淌，白漆有刷痕 */
@@ -1005,6 +1019,8 @@ function paintGraffiti(g, W, H, rng, spec) {
   }
   g.fillStyle = rgba(rgb, style === 'paint' ? 0.92 : 0.95);
   ink(mulberry32(jitter));
+  // 手写的抖：整句字按横条左右错一点、按竖条上下错一点（低频的波），笔画就不再是字库里那么直
+  if (style !== 'paint') warp(g, W, H, rng, fs * 0.06);
   // 往下流的漆 / 血：在字的像素里挑几处往下画细线
   if (style === 'spray' || style === 'blood') {
     let img = null; try { img = g.getImageData(0, 0, W, H); } catch { img = null; }
