@@ -9,7 +9,7 @@ import { siegePlan, TOWERS } from '../src/jimao/siege.js';
 import { MEMORY_PROFILES } from '../src/render/device.js';
 import {
   ROUTE_DRESS, ATLAS_CELLS, GRAFFITI, cellUv, cellAspect, atlasSize, densityFor, hashString, mulberry32, dressSeed,
-  floorAxes, wallAxes, itemMatrix, resampleLine, routeLegs, planDressing, paintAtlas, createRouteDressing,
+  floorAxes, wallAxes, itemMatrix, resampleLine, routeLegs, planDressing, paintAtlas, createRouteDressing, coreOf, routeFlights,
 } from '../src/jimao/route-dressing.js';
 
 test('图集格子：都在 16 × 16 以内、互不重叠、每格都画得出来（涂鸦有字）', () => {
@@ -139,4 +139,24 @@ test('落点：地面贴花平放在楼面上（不浮、不在洞口）、不�
 test('省内存档：同一局放得更少', () => {
   const full = dress('A', 7, 1).items.length, lite = dress('A', 7, densityFor(MEMORY_PROFILES.compact)).items.length;
   assert.ok(lite < full, `${lite} < ${full}`);
+});
+
+test('楼梯：关卡上下那两段多滴血，关卡之间、最后一道关到屋顶一路往上的梯段也有零星几滴（同一个楼梯间）', () => {
+  assert.equal(coreOf('T1-ST-B-11F-12F-flight-1'), 'T1-ST-B');
+  assert.equal(coreOf('A-ST2-6F-7F-flight-2'), 'A-ST2');
+  for (const T of ['T1', 'A']) {
+    const plan = siegePlan(seq(7), L, nav, runs, TOWERS[T]);
+    const fl = routeFlights(plan, L, nav, runs), ids = new Set(fl.map((f) => f.id));
+    assert.equal(ids.size, fl.length, '梯段不重复');
+    const yOf = (f) => nav.floors.get(f)?.y ?? 0;
+    for (const g of plan.gates) {
+      const heavy = fl.filter((f) => f.heavy && coreOf(f.id) === coreOf(g.core));
+      assert.ok(heavy.some((f) => f.from === g.floor), `${T} ${g.floor} 往上那段`);
+      assert.ok(heavy.some((f) => f.to === g.floor), `${T} 从下面上到 ${g.floor} 的那段`);
+    }
+    const light = fl.filter((f) => !f.heavy);
+    assert.ok(light.length >= 4, `${T} 关卡之间的梯段 ${light.length}`);
+    const lo = yOf(plan.gates[0].floor), hi = yOf(plan.tower.roof);
+    for (const f of light) assert.ok(f.bottom.y >= lo - 0.2 && f.bottom.y < hi, `${f.id} 在第一道关和屋顶之间`);
+  }
 });

@@ -328,15 +328,28 @@ export function resampleLine(points, spacing = 0.8) {
   return out;
 }
 
-/** 关卡那层楼梯（往上那一段）的梯段：[{ id, steps, bottom, top, width, low }]（踏步上滴血用） */
-function gateFlights(plan, layout, nav, runs) {
-  const out = [];
+/** 楼梯间（核心筒）的名字：梯段 id「T1-ST-B-11F-12F-flight-1」去掉后四节 →「T1-ST-B」 */
+export const coreOf = (id) => String(id).split('-').slice(0, -4).join('-');
+/**
+ * 要滴血的梯段：[{ ...梯段, lv, heavy }]。
+ * heavy：关卡那层往上那一段、和从下面上到关卡那层的那一段（人在这儿打过、逃过）；
+ * 其余是关卡之间（和最后一道关到屋顶）一路爬上去的梯段：只零星几滴，告诉玩家「有人受着伤从这儿上去了」。
+ */
+export function routeFlights(plan, layout, nav, runs) {
+  const out = [], seen = new Set();
   const byId = new Map();
   for (const b of layout.buildings) for (const f of b.access?.flights || []) byId.set(f.id, f);
-  for (const g of plan.gates || []) {
-    const up = runs.find((r) => r.id === g.core), down = runs.find((r) => r.to === g.floor && r.id.split('-').slice(0, -3).join('-') === g.core.split('-').slice(0, -3).join('-'));
-    for (const r of [up, down]) for (const id of r?.slopes || []) { const f = byId.get(id); if (f?.steps) out.push({ ...f, lv: levelOf(nav, f.from), gate: g }); }
+  const add = (r, heavy) => { for (const id of r?.slopes || []) { const f = byId.get(id); if (!f?.steps || seen.has(id)) continue; seen.add(id); out.push({ ...f, lv: levelOf(nav, f.from), heavy }); } };
+  const gates = plan.gates || [], yOf = (f) => nav.floors.get(f)?.y ?? 0, roof = plan.tower?.roof;
+  for (const g of gates) {
+    const core = coreOf(g.core);
+    add(runs.find((r) => r.id === g.core), true);
+    add(runs.find((r) => r.to === g.floor && coreOf(r.id) === core), true);
   }
+  gates.forEach((g, i) => {
+    const core = coreOf(g.core), y0 = yOf(g.floor), next = gates[i + 1], y1 = next ? yOf(next.floor) : (roof ? yOf(roof) : y0);
+    for (const r of runs) if (coreOf(r.id) === core && yOf(r.from) >= y0 - 0.1 && yOf(r.from) < y1 - 0.1) add(r, false);
+  });
   return out;
 }
 
@@ -487,10 +500,12 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
   }
 
   // ---- 4. 关卡往上那段楼梯（和下面上来那段）：踏步上滴着血，休息平台上一摊、墙上一只手印 ----
-  for (const f of gateFlights(plan, layout, nav, runs)) {
+  let light = 0;
+  for (const f of routeFlights(plan, layout, nav, runs)) {
     const dx = f.top.x - f.bottom.x, dz = f.top.z - f.bottom.z, dy = f.top.y - f.bottom.y, L = Math.hypot(dx, dz) || 1, a = Math.atan2(dx, dz);
+    if (!f.heavy) light++;
     for (let s = 0; s < f.steps; s++) {
-      if (rng() > 0.32 * density) continue;
+      if (rng() > (f.heavy ? 0.32 : 0.09) * density) continue;
       const t = (s + 0.5) / f.steps, side = range(-1, 1) * Math.max(0, f.width / 2 - 0.2);
       const x = f.bottom.x + dx * t - (dz / L) * side, z = f.bottom.z + dz * t + (dx / L) * side, y = f.bottom.y + dy * (s + 1) / f.steps;
       // 踏步只有二十几厘米深：只放小的血滴
@@ -498,11 +513,13 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
       items[items.length - 1].h = items[items.length - 1].w;
     }
     // 休息平台
-    if (/-landing$/.test(f.to)) {
+    if (/-landing$/.test(f.to) && (f.heavy || light % 3 === 1)) {
       const F = nav.floors.get(f.to);
       if (F) {
         const S = P.spot(f.to, f.top.x + (dx / L) * 0.9, f.top.z + (dz / L) * 0.9, 2.2, { level: f.lv });
-        if (S) { S.floor('drops', 2, { r1: 1.6, size: [0.2, 0.28], mode: BLOOD }); if (rng() < 0.5) S.floor(['pool0', 'pool1'], 1, { r1: 1.2, size: [0.55, 0.75], mode: BLOOD, keep: true }); }
+        if (S && f.heavy) { S.floor('drops', 2, { r1: 1.6, size: [0.2, 0.28], mode: BLOOD }); if (rng() < 0.5) S.floor(['pool0', 'pool1'], 1, { r1: 1.2, size: [0.55, 0.75], mode: BLOOD, keep: true }); }
+        // 一路往上的休息平台：隔两三层一只扶着墙歇脚留下的手印，或者几滴血
+        else if (S) { if (rng() < 0.55) S.wall(['handL', 'handR'], 1, { size: [0.19, 0.23], yc: [0.95, 1.3], mode: BLOOD, r1: 2, keep: true }); else S.floor('drops', 1, { r1: 1.4, size: [0.2, 0.26], mode: BLOOD, keep: true }); }
       }
     }
     yield;
@@ -587,7 +604,7 @@ function tapeDoor(P, nav, floorId, d, rng) {
 
 const rgba = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const C = Object.freeze({
-  fresh: [86, 5, 7], dark: [42, 2, 3], dry: [72, 30, 17], rim: [52, 18, 9],
+  fresh: [86, 5, 7], dark: [42, 2, 3], dry: [62, 26, 17], rim: [40, 15, 10],
   plaster: [168, 163, 152], crater: [74, 70, 64], hole: [18, 16, 14], soot: [14, 12, 10],
 });
 /** 不规则的圆：半径按几个随机相位的正弦起伏 */
@@ -649,16 +666,31 @@ function paintSplat(g, W, H, rng) {
 }
 /** 拖痕：两道宽的抹痕（身体）+ 很多顺着方向的细丝，中间时断时续；两头淡出，可以一段接一段 */
 function paintDrag(g, W, H, rng) {
-  const lanes = [H * (0.36 + rng() * 0.06), H * (0.6 + rng() * 0.06)];
-  for (let s = 0; s < 70; s++) {
-    const lane = lanes[s % 2], y0 = lane + (rng() - 0.5) * H * 0.24, wv = H * (0.008 + rng() * 0.03), x0 = W * (0.02 + rng() * 0.2), x1 = W * (0.7 + rng() * 0.28);
-    const gr = g.createLinearGradient(x0, 0, x1, 0), a = 0.18 + rng() * 0.35;
-    gr.addColorStop(0, rgba(C.dry, 0)); gr.addColorStop(0.15, rgba(rng() < 0.5 ? C.fresh : C.dry, a)); gr.addColorStop(0.5 + (rng() - 0.5) * 0.3, rgba(C.dry, a * (0.3 + rng() * 0.7))); gr.addColorStop(0.85, rgba(C.fresh, a * 0.8)); gr.addColorStop(1, rgba(C.dry, 0));
-    g.strokeStyle = gr; g.lineWidth = wv; g.lineCap = 'round'; g.beginPath(); g.moveTo(x0, y0);
-    const k = (rng() - 0.5) * H * 0.08; g.bezierCurveTo(x0 + (x1 - x0) * 0.33, y0 + k, x0 + (x1 - x0) * 0.66, y0 - k, x1, y0 + (rng() - 0.5) * H * 0.05); g.stroke();
+  // 身体蹭出来的一整条：沿一条微微摆动的中线，宽窄、浓淡一路变（衣服吸走的地方淡、停顿的地方浓）
+  const N = valueNoise(Math.floor(rng() * 1e6)), mid = (x) => H * (0.5 + 0.06 * Math.sin(x / W * 5.5 + 1.3) + 0.05 * (N(x / W * 3, 0.5, 2) - 0.5));
+  for (let x = W * 0.02; x < W * 0.98; x += Math.max(1, W / 220)) {
+    const k = x / W, half = H * (0.2 + 0.12 * N(k * 4, 2.5, 3)), dense = 0.1 + 0.18 * N(k * 6, 7.5, 2);
+    const yc = mid(x);
+    g.fillStyle = rgba(N(k * 9, 4.5, 2) > 0.52 ? C.fresh : C.dry, dense);
+    g.beginPath(); g.ellipse(x, yc, Math.max(1.5, W / 160), half, 0, 0, Math.PI * 2); g.fill();
   }
-  // 拖的时候按出来的几块（手、衣服）
-  for (let i = 0; i < 5; i++) { const x = W * (0.15 + rng() * 0.7), y = lanes[i % 2]; pathPts(g, blobPts(x, y, H * (0.05 + rng() * 0.06), rng, 0.3, 24)); g.fillStyle = rgba(C.fresh, 0.5 + rng() * 0.3); g.fill(); }
+  // 布料、头发拖出来的细纹：顺着方向的一道道亮缝（透出地面）和几道更深的细线
+  g.save(); g.globalCompositeOperation = 'destination-out'; g.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    const x0 = W * rng() * 0.8, x1 = Math.min(W, x0 + W * (0.12 + rng() * 0.4)), off = (rng() - 0.5) * H * 0.44;
+    g.strokeStyle = `rgba(0,0,0,${0.25 + rng() * 0.45})`; g.lineWidth = Math.max(1, H * (0.01 + rng() * 0.025));
+    g.beginPath(); g.moveTo(x0, mid(x0) + off); g.quadraticCurveTo((x0 + x1) / 2, mid((x0 + x1) / 2) + off + (rng() - 0.5) * H * 0.04, x1, mid(x1) + off); g.stroke();
+  }
+  g.restore();
+  for (let i = 0; i < 14; i++) {
+    const x0 = W * rng() * 0.85, x1 = Math.min(W, x0 + W * (0.06 + rng() * 0.25)), off = (rng() - 0.5) * H * 0.36;
+    g.strokeStyle = rgba(rng() < 0.5 ? C.dark : C.rim, 0.25 + rng() * 0.3); g.lineWidth = Math.max(1, H * 0.012);
+    g.beginPath(); g.moveTo(x0, mid(x0) + off); g.lineTo(x1, mid(x1) + off); g.stroke();
+  }
+  // 拖的时候手按下去、衣角蹭出来的几块浓的
+  for (let i = 0; i < 3; i++) { const x = W * (0.15 + rng() * 0.7), y = mid(x) + (rng() - 0.5) * H * 0.3; pathPts(g, blobPts(x, y, H * (0.06 + rng() * 0.05), rng, 0.3, 24)); g.fillStyle = rgba(C.fresh, 0.45 + rng() * 0.3); g.fill(); }
+  // 边上零星的血点
+  for (let i = 0; i < 30; i++) { const x = W * (0.05 + rng() * 0.9), y = mid(x) + (rng() < 0.5 ? -1 : 1) * H * (0.25 + rng() * 0.18); drop(g, x, y, Math.max(0.8, H * (0.006 + rng() * 0.012)), rng() < 0.5 ? C.dry : C.fresh, 0.75); }
   // 两头淡出（接缝处不显）
   g.save(); g.globalCompositeOperation = 'destination-out';
   for (const [a, b] of [[0, W * 0.12], [W, W * 0.88]]) { const gr = g.createLinearGradient(a, 0, b, 0); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(Math.min(a, b), 0, Math.abs(b - a), H); }
@@ -682,19 +714,25 @@ function paintSmear(g, W, H, rng) {
 function paintHand(g, W, H, rng, mirror = false) {
   g.save(); if (mirror) { g.translate(W, 0); g.scale(-1, 1); }
   const s = W / 100;
-  g.fillStyle = rgba(C.fresh, 0.88);
-  pathPts(g, blobPts(52 * s, 66 * s, 19 * s, rng, 0.08, 28)); g.fill();
-  g.beginPath(); g.ellipse(52 * s, 72 * s, 20 * s, 16 * s, 0, 0, Math.PI * 2); g.fill();
-  const fingers = [[33, 44, 6.2, 22, -0.32], [44, 36, 6.6, 26, -0.1], [56, 35, 6.6, 27, 0.06], [67, 41, 6, 22, 0.24], [76, 66, 6.4, 19, 1.0]];
+  // 比例照真手：手掌宽 ≈ 手掌高，四指和手掌差不多长、细；拇指从掌根侧面斜出去（指头短粗就成了爪印）
+  g.fillStyle = rgba(C.fresh, 0.9);
+  g.beginPath(); g.moveTo(37 * s, 52 * s); g.quadraticCurveTo(36 * s, 80 * s, 46 * s, 90 * s); g.quadraticCurveTo(58 * s, 94 * s, 64 * s, 84 * s); g.quadraticCurveTo(68 * s, 66 * s, 66 * s, 50 * s); g.quadraticCurveTo(52 * s, 46 * s, 37 * s, 52 * s); g.fill();
+  // 四指：根部在掌上沿，指尖分开一点；每节之间按得浅（指节横纹）
+  const fingers = [[39.5, 52, 3.6, 25, -0.2], [47, 49, 3.9, 31, -0.06], [55, 49, 3.9, 32, 0.06], [62.5, 51, 3.4, 26, 0.2], [66, 72, 4.2, 24, 1.05]];
   for (const [x, y, r, len, a] of fingers) {
-    g.save(); g.translate(x * s, y * s); g.rotate(a); g.beginPath();
-    g.moveTo(-r * s, 0); g.lineTo(-r * s, -len * s * 0.55); g.arc(0, -len * s * 0.55, r * s, Math.PI, 0); g.lineTo(r * s, 0); g.closePath(); g.fill();
-    g.restore();
+    g.save(); g.translate(x * s, y * s); g.rotate(a + (rng() - 0.5) * 0.08); g.beginPath();
+    g.moveTo(-r * s, 2 * s); g.lineTo(-r * s * 0.92, -len * s + r * s); g.arc(0, -len * s + r * s, r * s * 0.92, Math.PI, 0); g.lineTo(r * s, 2 * s); g.closePath(); g.fill();
+    g.save(); g.globalCompositeOperation = 'destination-out'; g.fillStyle = 'rgba(0,0,0,0.55)';
+    for (const k of [0.38, 0.68]) g.fillRect(-r * s, -len * s * k, r * s * 2, Math.max(1, 0.9 * s));
+    g.restore(); g.restore();
   }
-  // 按压不匀：指尖、掌心淡一些；皮纹空隙
+  // 按压不匀：掌心中间凹下去没沾到、指尖最浓；皮纹空隙
   g.globalCompositeOperation = 'destination-out';
-  for (let i = 0; i < 90; i++) drop(g, (20 + rng() * 70) * s, (12 + rng() * 80) * s, (0.5 + rng() * 1.6) * s, [0, 0, 0], 0.25 + rng() * 0.5);
-  const gr = g.createRadialGradient(54 * s, 66 * s, 2 * s, 54 * s, 66 * s, 16 * s); gr.addColorStop(0, 'rgba(0,0,0,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  const gr = g.createRadialGradient(52 * s, 70 * s, 2 * s, 52 * s, 70 * s, 13 * s); gr.addColorStop(0, 'rgba(0,0,0,0.7)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 110; i++) drop(g, (30 + rng() * 42) * s, (18 + rng() * 74) * s, (0.4 + rng() * 1.2) * s, [0, 0, 0], 0.25 + rng() * 0.5);
+  g.globalCompositeOperation = 'source-over';
+  // 往下淌的两三道（墙上的手印是竖着按的）
+  for (let i = 0, n = 1 + Math.floor(rng() * 3); i < n; i++) { const x = (40 + rng() * 24) * s, y0 = 86 * s; g.strokeStyle = rgba(C.fresh, 0.8); g.lineWidth = 1.4 * s; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y0 + (4 + rng() * 9) * s); g.stroke(); }
   g.restore();
 }
 /** 血鞋印（左脚；右脚镜像）：前掌和鞋跟，横纹鞋底，前掌重、跟淡 */
@@ -738,14 +776,37 @@ function paintHoles(g, W, H, rng) {
     for (let k = 0; k < 6; k++) drop(g, x + (rng() - 0.5) * r * 2, y + r * (1 + rng() * 1.5), W * 0.003, C.plaster, 0.6);
   }
 }
-/** 熏黑：从下往上越来越散的烟痕（墙上用；地上转着放也像一摊烧过的地方） */
+/** 平滑的值噪声（格点哈希 + 平滑插值），几层叠起来；画烟熏这种大片柔和的东西用 */
+function valueNoise(seed) {
+  const h = (i, j) => { let t = Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(seed, 2246822519); t = Math.imul(t ^ (t >>> 13), 1274126177); return ((t ^ (t >>> 16)) >>> 0) / 4294967296; };
+  const s = (t) => t * t * (3 - 2 * t);
+  const n = (x, y) => { const i = Math.floor(x), j = Math.floor(y), fx = s(x - i), fy = s(y - j); const a = h(i, j), b = h(i + 1, j), c = h(i, j + 1), d = h(i + 1, j + 1); return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy; };
+  return (x, y, oct = 4) => { let v = 0, A = 0.5, f = 1, sum = 0; for (let o = 0; o < oct; o++) { v += n(x * f, y * f) * A; sum += A; A *= 0.5; f *= 2.03; } return v / sum; };
+}
+/**
+ * 熏黑：火从墙根往上舔出来的烟痕——底下一段最黑、往上散成一缕一缕，边缘被噪声啃得不齐。
+ * 逐像素算（渐变叠很多层在画布上会抖出网点），画在单独的小画布上（putImageData 不认裁剪和平移）。
+ */
 function paintScorch(g, W, H, rng) {
-  for (let i = 0; i < 70; i++) {
-    const t = rng(), x = W / 2 + (rng() - 0.5) * W * (0.15 + t * 0.55), y = H * (0.92 - t * 0.78), r = W * (0.08 + t * 0.2);
-    const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, rgba(C.soot, 0.1 + (1 - t) * 0.16)); gr.addColorStop(1, rgba(C.soot, 0)); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  if (typeof g.createImageData !== 'function') return;
+  const img = g.createImageData(W, H); if (!img?.data) return;
+  const d = img.data, N = valueNoise(Math.floor(rng() * 1e6)), sx = 4 / W, lean = (rng() - 0.5) * 0.25;
+  for (let y = 0; y < H; y++) {
+    const t = 1 - y / H; // 0 = 底，1 = 顶
+    const half = 0.16 + 0.3 * Math.pow(t, 0.8); // 烟柱半宽（相对 W）往上变宽
+    for (let x = 0; x < W; x++) {
+      const u = x / W - 0.5 - lean * t;
+      const n = N(x * sx, y * sx * 0.55 - t * 1.5, 4), w = N(x * sx * 2.5 + 9, y * sx * 0.9, 2);
+      // 柱形 × 噪声：边缘按噪声进退，往上越来越淡、越来越碎
+      const edge = 1 - Math.min(1, Math.abs(u) / (half * (0.75 + 0.5 * n)));
+      let a = Math.pow(Math.max(0, edge), 0.7) * (1.05 - 0.9 * t) * (0.55 + 0.75 * n) - (t > 0.55 ? (w - 0.45) * 0.6 * t : 0);
+      a *= Math.min(1, y / (H * 0.04 + 1)) * Math.min(1, (H - y) / (H * 0.08)); // 上下两头收住，不出格
+      a = Math.max(0, Math.min(0.92, a));
+      const i = (y * W + x) * 4, c = 10 + 22 * n * (1 - a);
+      d[i] = c + 4; d[i + 1] = c + 2; d[i + 2] = c; d[i + 3] = a * 255;
+    }
   }
-  for (let i = 0; i < 260; i++) drop(g, W * (0.15 + rng() * 0.7), H * (0.2 + rng() * 0.75), W * (0.002 + rng() * 0.004), C.soot, 0.5);
-  g.save(); g.globalCompositeOperation = 'destination-out'; const gr = g.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.5); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.restore();
+  g.putImageData(img, 0, 0);
 }
 /** 碎玻璃：一堆小三角、四边形，边缘亮一点（着色器里整块光滑，手电一照会闪） */
 function paintGlass(g, W, H, rng) {
@@ -815,21 +876,21 @@ function paintTape(g, W, H, rng) {
 const FONT = '"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif';
 /** 涂鸦：逐字画（每个字转一点、大小高低不一），喷漆带飞沫和往下流的漆，记号笔干净，血字往下淌，白漆有刷痕 */
 function paintGraffiti(g, W, H, rng, spec) {
-  const chars = [...spec.text], arrow = spec.arrow ? 1 : 0, fs0 = H * (spec.latin ? 0.74 : 0.6);
+  const chars = [...spec.text], arrow = spec.arrow ? 1 : 0, fs0 = H * (spec.latin ? 0.74 : 0.72);
   const style = spec.style, col = spec.color;
-  g.font = `${spec.latin ? 900 : 700} ${fs0}px ${FONT}`;
+  g.font = `${spec.latin ? 900 : 500} ${fs0}px ${FONT}`;
   const widths = chars.map((ch) => (ch === ' ' ? fs0 * 0.35 : g.measureText(ch).width * (spec.latin ? 1.05 : 0.96)));
   const total = widths.reduce((a, b) => a + b, 0) + (arrow ? fs0 * 0.85 : 0);
   const k = Math.min(1, (W * 0.9) / total), fs = fs0 * k;
-  g.font = `${spec.latin ? 900 : 700} ${fs}px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.font = `${spec.latin ? 900 : 500} ${fs}px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left';
   let x = (W - total * k) / 2, slope = (rng() - 0.5) * H * 0.12;
   const base = H * 0.5;
   const ink = (rng) => {
     let cx = x;
     chars.forEach((ch, i) => {
       if (ch !== ' ') {
-        g.save(); g.translate(cx, base + slope * (cx / W - 0.5) + (rng() - 0.5) * fs * 0.1); g.rotate((rng() - 0.5) * 0.16); g.scale(0.92 + rng() * 0.16, 0.92 + rng() * 0.16);
-        if (style === 'marker' || style === 'blood') { g.lineWidth = fs * 0.05; g.lineJoin = 'round'; g.strokeStyle = g.fillStyle; g.strokeText(ch, 0, 0); }
+        g.save(); g.translate(cx, base + slope * (cx / W - 0.5) + (rng() - 0.5) * fs * 0.1); g.rotate((rng() - 0.5) * 0.16); g.transform(1, 0, (rng() - 0.6) * 0.3, 1, 0, 0); g.scale(0.88 + rng() * 0.2, 0.9 + rng() * 0.2);
+        if (style !== 'paint') { g.lineWidth = fs * (style === 'spray' ? 0.07 : 0.05); g.lineJoin = 'round'; g.strokeStyle = g.fillStyle; g.strokeText(ch, 0, 0); }
         g.fillText(ch, 0, 0); g.restore();
       }
       cx += widths[i] * k;
@@ -847,7 +908,7 @@ function paintGraffiti(g, W, H, rng, spec) {
   const jitter = Math.floor(rng() * 4294967296);
   if (style === 'spray') {
     // 喷漆：先一层虚的（飞散的漆雾），再一层实的
-    g.save(); g.shadowColor = rgba(rgb, 0.55); g.shadowBlur = fs * 0.1; g.fillStyle = rgba(rgb, 0.5); ink(mulberry32(jitter)); g.restore();
+    g.save(); g.shadowColor = rgba(rgb, 0.5); g.shadowBlur = fs * 0.045; g.fillStyle = rgba(rgb, 0.35); ink(mulberry32(jitter)); g.restore();
   }
   g.fillStyle = rgba(rgb, style === 'paint' ? 0.92 : 0.95);
   ink(mulberry32(jitter));
@@ -875,6 +936,8 @@ function paintGraffiti(g, W, H, rng, spec) {
   if (style === 'marker') { g.save(); g.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 120; i++) drop(g, rng() * W, rng() * H, 0.6, [0, 0, 0], 0.35); g.restore(); }
 }
 
+/** 要先画在单独小画布上的格子（逐像素写的） */
+const OFFSCREEN = new Set(['scorch']);
 const PAINTERS = {
   pool0: paintPool, pool1: paintPool, splat0: paintSplat, splat1: paintSplat, holes: paintHoles, scorch: paintScorch, drag: paintDrag, smear: paintSmear,
   glass: paintGlass, debris: paintDebris, tape: paintTape, drops: paintDrops, phone: paintPhone, casings: paintCasings,
@@ -894,10 +957,14 @@ export function* paintAtlas(g, size, seed = 1) {
     const x = cx * unit + pad, y = cy * unit + pad, W = cw * unit - pad * 2, H = ch * unit - pad * 2, rng = mulberry32(seed ^ hashString(name));
     g.save(); g.beginPath(); g.rect(x, y, W, H); g.clip(); g.translate(x, y);
     try {
-      if (GRAFFITI[name]) {
-        // 涂鸦要读回像素找往下流的位置：先画在一张小画布上，再贴进图集
+      if (GRAFFITI[name] || OFFSCREEN.has(name)) {
+        // 涂鸦要读回像素找往下流的位置、烟熏逐像素写：先画在一张小画布上，再贴进图集
         const doc = g.canvas?.ownerDocument || (typeof document !== 'undefined' ? document : null), c = doc?.createElement('canvas');
-        if (c) { c.width = W; c.height = H; const q = c.getContext('2d', { willReadFrequently: true }); paintGraffiti(q, W, H, rng, GRAFFITI[name]); g.drawImage(c, 0, 0); c.width = c.height = 1; }
+        if (c) {
+          c.width = W; c.height = H; const q = c.getContext('2d', { willReadFrequently: true });
+          if (GRAFFITI[name]) paintGraffiti(q, W, H, rng, GRAFFITI[name]); else PAINTERS[name](q, W, H, rng);
+          g.drawImage(c, 0, 0); c.width = c.height = 1;
+        }
       } else PAINTERS[name]?.(g, W, H, rng);
     } finally { g.restore(); }
     yield name;

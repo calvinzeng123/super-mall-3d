@@ -237,6 +237,9 @@ function cached(key, build) {
   if (!GEO.has(k)) { const kit = new Kit(!!PM.map); build(kit); GEO.set(k, { geos: kit.geometries(), tris: kit.tris }); }
   return GEO.get(k).geos;
 }
+/** 火、烟、信号弹这些着色器物件的几何体也只建一次（材质每处一份：各自的时间、淡出互不影响；没有贴图，丢了也不占显存） */
+const RAW = new Map();
+const once = (key, make) => { if (!RAW.has(key)) RAW.set(key, make()); return RAW.get(key); };
 /** 把合并好的几何体挂成网格（每个材质一个） */
 function meshes(parent, geos, { shadow = true } = {}) {
   const M = propMats(), out = {};
@@ -604,14 +607,13 @@ export function litFlare() {
   const grp = new THREE.Group(); grp.name = '点燃的信号弹';
   const geos = cached('flareLit', (k) => { k.cyl('paint', 0.022, 0.022, 0.32, 12, { color: C.red, p: [0.45, 0.16, 0.1] }); k.cyl('gloss', 0.05, 0.08, 0.04, 12, { color: C.dark, p: [0.45, 0.02, 0.1] }); });
   meshes(grp, geos, { shadow: false });
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe2d0, toneMapped: false })); head.position.set(0.45, 0.34, 0.1); grp.add(head);
-  const flame = new THREE.Mesh(flameGeometry([{ x: 0.45, z: 0.1, w: 0.22, h: 0.5, turn: 0.3, seed: 0.2 }, { x: 0.45, z: 0.1, w: 0.16, h: 0.38, turn: 1.1, seed: 0.7 }], () => 0.32),
+  const head = new THREE.Mesh(once('flareHead', () => new THREE.SphereGeometry(0.035, 10, 8)), once('flareHeadMat', () => new THREE.MeshBasicMaterial({ color: 0xffe2d0, toneMapped: false }))); head.position.set(0.45, 0.34, 0.1); grp.add(head);
+  const flame = new THREE.Mesh(once('flareFlame', () => flameGeometry([{ x: 0.45, z: 0.1, w: 0.22, h: 0.5, turn: 0.3, seed: 0.2 }, { x: 0.45, z: 0.1, w: 0.16, h: 0.38, turn: 1.1, seed: 0.7 }], () => 0.32)),
     flameMaterial({ hot: [1, 0.85, 0.8], mid: [1, 0.18, 0.08], cool: [0.6, 0.02, 0.02], gain: 1.5 }));
   flame.frustumCulled = false; grp.add(flame);
-  const puffs = []; for (let i = 0; i < 14; i++) puffs.push([0.45, 0.45, 0.1, i / 14]);
-  const smoke = new THREE.Mesh(puffGeometry(puffs), smokeMaterial({ color: [0.42, 0.1, 0.1], fire: [0.9, 0.2, 0.15], opacity: 0.38, rise: 9, grow: 3.2, drift: [1.6, 0.6], period: 7 }));
+  const smoke = new THREE.Mesh(once('flarePuffs', () => { const puffs = []; for (let i = 0; i < 14; i++) puffs.push([0.45, 0.45, 0.1, i / 14]); return puffGeometry(puffs); }), smokeMaterial({ color: [0.42, 0.1, 0.1], fire: [0.9, 0.2, 0.15], opacity: 0.38, rise: 9, grow: 3.2, drift: [1.6, 0.6], period: 7 }));
   smoke.frustumCulled = false; smoke.renderOrder = 4; grp.add(smoke);
-  const glow = new THREE.Mesh(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2).translate(0.45, 0.02, 0.1), glowMaterial({ color: [1, 0.12, 0.08], center: [0.45, 0, 0.1], radius: [3, 3, 3], strength: 0.3 }));
+  const glow = new THREE.Mesh(once('flareGlow', () => new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2).translate(0.45, 0.02, 0.1)), glowMaterial({ color: [1, 0.12, 0.08], center: [0.45, 0, 0.1], radius: [3, 3, 3], strength: 0.3 }));
   grp.add(glow);
   grp.userData.mats = [flame.material, smoke.material, glow.material];
   return grp;
@@ -665,11 +667,10 @@ export function powderSheet() {
 }
 /** 火本身（junk 组里：灭火时缩没）：火苗、火星、烟、火光。返回要推进时间、淡出的材质 */
 export function buildFire(junk) {
-  const flames = new THREE.Mesh(flameGeometry(flameLayout(7)), flameMaterial()); flames.name = 'flames'; flames.frustumCulled = false; flames.renderOrder = 3; junk.add(flames);
-  const r = rnd(11), embers = new THREE.Points(emberGeometry(46, r), emberMaterial()); embers.name = 'embers'; embers.frustumCulled = false; embers.renderOrder = 4; junk.add(embers);
-  const puffs = []; for (let i = 0; i < 7; i++) { const z = -0.2 + r() * 0.8; puffs.push([(r() - 0.5) * 0.8, nosingY(z) + 0.9, z, i / 7]); }
-  const smoke = new THREE.Mesh(puffGeometry(puffs), smokeMaterial()); smoke.name = 'smoke'; smoke.frustumCulled = false; smoke.renderOrder = 2; junk.add(smoke);
-  const glow = new THREE.Mesh(rawSheet(2.8, -3.0, 2.6), glowMaterial({ center: [0, nosingY(0.1) + 0.1, 0.1], radius: [1.35, 2.0, 2.9], strength: 0.42 })); glow.name = 'fire-glow'; glow.renderOrder = 1; junk.add(glow);
+  const flames = new THREE.Mesh(once('flames', () => flameGeometry(flameLayout(7))), flameMaterial()); flames.name = 'flames'; flames.frustumCulled = false; flames.renderOrder = 3; junk.add(flames);
+  const r = rnd(11), embers = new THREE.Points(once('embers', () => emberGeometry(46, r)), emberMaterial()); embers.name = 'embers'; embers.frustumCulled = false; embers.renderOrder = 4; junk.add(embers);
+  const smoke = new THREE.Mesh(once('smoke', () => { const q = rnd(23), puffs = []; for (let i = 0; i < 7; i++) { const z = -0.2 + q() * 0.8; puffs.push([(q() - 0.5) * 0.8, nosingY(z) + 0.9, z, i / 7]); } return puffGeometry(puffs); }), smokeMaterial()); smoke.name = 'smoke'; smoke.frustumCulled = false; smoke.renderOrder = 2; junk.add(smoke);
+  const glow = new THREE.Mesh(once('fireGlow', () => rawSheet(2.8, -3.0, 2.6)), glowMaterial({ center: [0, nosingY(0.1) + 0.1, 0.1], radius: [1.35, 2.0, 2.9], strength: 0.42 })); glow.name = 'fire-glow'; glow.renderOrder = 1; junk.add(glow);
   return [flames.material, embers.material, smoke.material, glow.material];
 }
 /** 卷帘栅门（配电箱跳闸，断电落下）：两侧导轨、顶上卷筒箱（不动），帘片（junk 组：从卷筒箱往下挂，合闸后收上去） */

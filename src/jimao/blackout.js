@@ -18,7 +18,8 @@ import { MEM } from '../render/device.js';
  * fog：雾从几米起、到几米全遮住；torch：手电的光强（聚光芯正中）、照多远、光锥半角（泛光的外沿）、边缘虚化、衰减指数、颜色。
  * torch.beam：光罩——core 聚光芯半径（光锥半径的几分之几）、spill 泛光亮度（芯的几分之几）、ring 芯边上那道环、warm 泛光偏暖多少、size 光罩边长（像素）。
  * torch.adapt：近处收光——ref 米以内开始收、k 收的快慢（亮度 ∝ (距离/ref)^k）、min 最少留几成、every 几秒探一次、spread 侧边几条射线偏开多少弧度、
- *   down / up：变暗、变亮各用几秒（挡到墙上很快收，移开慢慢放，像眼睛）。
+ *   down / up：变暗、变亮各用几秒（挡到墙上很快收，移开慢慢放，像眼睛）；turn：镜头一下子转过这么多弧度就不等下一次，马上再探
+ *   （猛一转身脸贴着墙，不然要白一下才暗下来）。
  */
 export const BLACKOUT = Object.freeze({
   glow: 0.11, power: 0, hemi: 1, room: 0.9, sun: 0.6, exposure: 1.1, // power：灯具、招牌、LED 屏的供电（materials.setPower）
@@ -27,7 +28,7 @@ export const BLACKOUT = Object.freeze({
   // 颜色是偏中性略冷的白（常见的强光 LED 手电那样）：血、皮肤在暖黄光下会糊成一片土色，在中性白下红是红、灰是灰
   torch: Object.freeze({ power: 7, distance: 58, angle: 0.74, penumbra: 0.12, decay: 1, color: 0xf1f4ff, sway: 0.35,
     beam: Object.freeze({ core: 0.3, spill: 0.2, ring: 0.1, warm: 0.07, size: 128 }),
-    adapt: Object.freeze({ ref: 5, k: 0.9, min: 0.2, every: 0.12, spread: 0.2, down: 0.12, up: 0.45 }) }),
+    adapt: Object.freeze({ ref: 5, k: 0.9, min: 0.2, every: 0.12, spread: 0.2, down: 0.06, up: 0.45, turn: 0.12 }) }),
   flicker: Object.freeze({ every: [7, 19], dip: 0.45, time: 0.5 }),
 });
 
@@ -120,7 +121,8 @@ export function createBlackout({ app, scene, camera, viewLayer = 0, rng = Math.r
   const fogColor = new THREE.Color(B.fog.color), keepFog = new THREE.Color();
 
   // 探测射线：正中一条，上下左右各偏 spread 弧度一条（偏出去的落在泛光里，权重低一些）
-  const origin = new THREE.Vector3(), fwd = new THREE.Vector3(), dir = new THREE.Vector3(), q = new THREE.Quaternion();
+  const origin = new THREE.Vector3(), fwd = new THREE.Vector3(), dir = new THREE.Vector3(), q = new THREE.Quaternion(), lastDir = new THREE.Vector3(), nowDir = new THREE.Vector3();
+  const turnCos = Math.cos(A.turn ?? 0.12);
   const OFFS = [[0, 0, 1], [A.spread, 0, 0.62], [-A.spread, 0, 0.62], [0, A.spread, 0.55], [0, -A.spread, 0.7]], W = OFFS.map((o) => o[2]), dists = OFFS.map(() => 0);
   const ray = probe || ((o, d, max) => {
     const P = physics || app?.physics || globalThis.__G?.physics || null;
@@ -129,7 +131,7 @@ export function createBlackout({ app, scene, camera, viewLayer = 0, rng = Math.r
   });
   function measure() {
     camera.updateMatrixWorld?.();
-    camera.getWorldPosition(origin); camera.getWorldQuaternion(q);
+    camera.getWorldPosition(origin); camera.getWorldQuaternion(q); lastDir.set(0, 0, -1).applyQuaternion(q);
     for (let i = 0; i < OFFS.length; i++) {
       fwd.set(OFFS[i][0], OFFS[i][1], -1).normalize().applyQuaternion(q);
       dir.copy(fwd);
@@ -163,7 +165,9 @@ export function createBlackout({ app, scene, camera, viewLayer = 0, rng = Math.r
     } else if (mats && level === 0 && glowNow >= 0) { glowNow = -1; mats.power = 1; mats.setNight(night); }
     // 近处收光：每 every 秒探一次，变暗快、变亮慢（指数逼近，帧率高低结果一样）
     if (level > 0.01) {
-      probeT -= dt; if (probeT <= 0) { probeT = A.every; measure(); }
+      probeT -= dt;
+      if (probeT > 0) { camera.getWorldQuaternion(q); if (nowDir.set(0, 0, -1).applyQuaternion(q).dot(lastDir) < turnCos) probeT = 0; } // 猛一转：马上探
+      if (probeT <= 0) { probeT = A.every; measure(); }
       const tau = gainTo < gain ? A.down : A.up;
       gain += (gainTo - gain) * (1 - Math.exp(-dt / Math.max(1e-3, tau)));
     } else { gain = gainTo = 1; probeT = 0; }
