@@ -373,7 +373,9 @@ const DETAIL_VERTEX = `#include <project_vertex>
 
 /** 给材质挂上着色器补丁：前面已有的补丁（夜间自发光、楼面米制坐标……）照样先跑；克隆出来的材质（各栋楼带剖切面那份）也对 */
 function hookDetail(mat, variant, textures, key) {
-  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey;
+  // 材质上原来的补丁和缓存键：只认自己挂上去的（原型上的默认缓存键是整段 onBeforeCompile 的源码，不串进来）
+  const own = (k) => Object.prototype.hasOwnProperty.call(mat, k) ? mat[k] : null;
+  const prev = own('onBeforeCompile'), prevKey = own('customProgramCacheKey');
   mat.onBeforeCompile = function (shader, renderer) {
     prev?.call(this, shader, renderer);
     if (typeof shader.fragmentShader !== 'string' || typeof shader.vertexShader !== 'string') return;
