@@ -1,8 +1,8 @@
-// 丧尸围城的停电场景：手电的亮度曲线、画之前压暗 / 画完还原、供电开关对灯具材质的作用。
+// 丧尸围城的停电场景：手电的亮度曲线、光罩（聚光芯 + 泛光）、近处收光、画之前压暗 / 画完还原、供电开关对灯具材质的作用。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { BLACKOUT, torchAt, createBlackout } from '../src/jimao/blackout.js';
+import { BLACKOUT, torchAt, createBlackout, beamAt, beamCookie, torchGain, nearOf } from '../src/jimao/blackout.js';
 
 // 材质库建贴图要画布：给一个什么都不画的替身
 const paint = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'measureText' ? () => ({ width: 10 }) : String(k).startsWith('create') ? () => ({ addColorStop() {} }) : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
@@ -69,4 +69,50 @@ test('供电：灯具、招牌、LED 屏在断电时都暗下去，恢复供电�
   mats.setPower(1); mats.setNight(1);
   assert.deepEqual({ glow: mats.base.glow.color.r, soft: mats.base.glowSoft.color.r, sign: sign.emissiveIntensity, screen: screen.color.r }, on, '恢复供电回到原样');
   mats.setPower(7); assert.equal(mats.power, 1); mats.setPower(-1); assert.equal(mats.power, 0);
+});
+
+test('光罩：正中最亮、芯外是一圈暗得多的泛光、到光锥外沿收到 0；泛光略偏暖，芯是中性白', () => {
+  const P = BLACKOUT.torch.beam, at = (r) => beamAt(r)[0];
+  assert.ok(at(0) > 0.97, `正中 ${at(0)}`);
+  const spill = at(0.55); assert.ok(spill > P.spill * 0.6 && spill < P.spill * 1.5, `泛光 ${spill.toFixed(3)}`);
+  assert.ok(at(P.core * 0.5) > 0.6, '芯里面还很亮');
+  assert.ok(at(0.97) < 0.03 && at(1) === 0 && at(1.2) === 0, '外沿收到 0');
+  for (let r = 0.65; r < 0.98; r += 0.05) assert.ok(at(r) >= at(r + 0.05) - 1e-6, `${r.toFixed(2)} 往外越来越暗`);
+  const [r0, , b0] = beamAt(0), [r1, , b1] = beamAt(0.7); assert.ok(Math.abs(r0 - b0) < 0.02, '芯是中性白'); assert.ok(b1 < r1, '泛光偏暖');
+  const c = beamCookie(32); assert.equal(c.size, 32); assert.equal(c.data.length, 32 * 32 * 4);
+  const px = (x, y) => c.data[(y * 32 + x) * 4];
+  assert.ok(px(16, 16) > 240 && px(0, 0) === 0 && px(31, 16) < 10, '中间亮、角上黑');
+});
+
+test('近处收光：越近收得越多（但墙上照度仍随距离单调）、ref 米以外不收；几条射线取最亮的那块', () => {
+  const A = BLACKOUT.torch.adapt;
+  assert.equal(torchGain(A.ref), 1); assert.equal(torchGain(30), 1); assert.equal(torchGain(0.05), A.min); assert.equal(torchGain(NaN), A.min);
+  assert.ok(torchGain(1) < 0.35 && torchGain(2.5) > torchGain(1), `1 米 ${torchGain(1).toFixed(2)}`);
+  // 墙上的照度 ∝ 光强 ÷ 距离：近了还是更亮一点（不然像手电自己没电了），但比不收的时候暗得多
+  const lit = (d) => torchGain(d) / d;
+  assert.ok(lit(0.8) > lit(2) && lit(2) > lit(4), '照度仍随距离单调');
+  assert.ok(lit(0.8) / lit(A.ref) < 2.5, `0.8 米处只比 ${A.ref} 米处亮 ${(lit(0.8) / lit(A.ref)).toFixed(1)} 倍（不收是 ${(A.ref / 0.8).toFixed(1)} 倍）`);
+  assert.equal(nearOf([10, 10, 10], [1, 0.6, 0.6], 58), 10);
+  assert.ok(Math.abs(nearOf([10, 1, 10], [1, 0.5, 0.5], 58) - 2) < 1e-9, '侧边一条打到 1 米的墙，按权重折成 2 米');
+  assert.equal(nearOf([null, 0, -1], [1, 1, 1], 58), 58, '都没打到');
+});
+
+test('手电：探到墙就收光（变暗快、变亮慢），挪开回到原来的亮度；光罩挂在灯上，dispose 一起释放', () => {
+  const { scene, camera, env, app } = world();
+  let wall = 0.8; const probe = (o, d, max) => (wall < max ? wall : null);
+  const b = createBlackout({ app, scene, camera, rng: () => 0.5, probe });
+  assert.ok(b.light.map?.isDataTexture, '光罩'); assert.equal(b.light.castShadow, false, '不投影');
+  b.enabled = true; env.step();
+  for (let i = 0; i < 60; i++) b.update(1 / 30);
+  assert.ok(Math.abs(b.near - 0.8) < 1e-6, `探到 ${b.near}`);
+  assert.ok(Math.abs(b.gain - torchGain(0.8)) < 0.02, `收到 ${b.gain.toFixed(2)}`);
+  assert.ok(b.light.intensity < BLACKOUT.torch.power * 0.4, `光强 ${b.light.intensity.toFixed(2)}`);
+  wall = 40; for (let i = 0; i < 4; i++) b.update(1 / 30);
+  assert.ok(b.gain < 0.8, '移开以后慢慢放亮，不是一下子'); for (let i = 0; i < 90; i++) b.update(1 / 30);
+  assert.ok(Math.abs(b.light.intensity - BLACKOUT.torch.power) < 0.05, `远处照人还是原来的亮度：${b.light.intensity.toFixed(2)}`);
+  wall = 0.6; for (let i = 0; i < 9; i++) b.update(1 / 30); assert.ok(b.gain < 0.45, `挡到墙上很快收：0.3 秒后 ${b.gain.toFixed(2)}`);
+  // 探测出错不影响手电
+  const bad = createBlackout({ app, scene, camera: new THREE.PerspectiveCamera(), probe: () => { throw new Error('x'); } }); bad.enabled = true; for (let i = 0; i < 30; i++) bad.update(1 / 30); assert.ok(bad.gain > 0.99);
+  const map = b.light.map; let gone = false; map.addEventListener('dispose', () => { gone = true; });
+  b.dispose(); assert.ok(gone, '光罩释放了'); bad.dispose();
 });

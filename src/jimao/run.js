@@ -40,6 +40,7 @@ import { createSiege, SIEGE_CSS } from './siege.js';
 import { createSupplies, MEDIC_CSS } from './supplies.js';
 import { createSquad, SQUAD_CSS } from './squad.js';
 import { createHealthBars, BARS_CSS } from './healthbars.js';
+import { createRouteDressing } from './route-dressing.js';
 import { createViewLight } from './view-light.js';
 import { createBlackout } from './blackout.js';
 import { loadZombieKit } from './zombie-skin.js';
@@ -251,6 +252,9 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 血条（healthbars.js）：被打中的丧尸、近处的特殊感染者、队友；巨尸另有屏幕上方的大血条。只在丧尸围城里开
   const bars = zombies ? createHealthBars(G, { scene, camera, zombies, squad, ui }) : null;
   G.bars = bars;
+  // 沿途痕迹（route-dressing.js）：血迹、拖痕、弹孔、纸张、警戒线、涂鸦，按这一局的关卡摆；只画玩家所在那一层。只在丧尸围城里有
+  const routeDress = siege ? createRouteDressing(G, { scene, nav, layout: ctx.layout, runs: stairs.runs, renderer, explore: () => app.state?.explore }) : null;
+  G.routeDress = routeDress;
   // 丧尸换上贴图外形（行人模型改的，后台加载；加载不出来就还是方块人）。网址带 ?boxzombie=1 不换
   if (zombies && !params.boxzombie) loadZombieKit().then((kit) => { if (G.zombies === zombies) zombies.useSkin(kit); else kit.dispose(); }).catch((e) => console.warn('[零点突围] 丧尸模型没加载出来，用简化模型', e));
   G.level.onReset = () => { pathfinder.reset(); director.roll(); siege?.reset(); squad?.reset(); ammo.reset(); guide.reset(); lift.reset(); stairs.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
@@ -356,6 +360,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (siege && G.game.state !== 'paused') { try { siege.update(dt); } catch (e) { fail('siege', e, '丧尸围城出错'); } }
       if (supplies && G.game.state !== 'paused') { try { supplies.update(dt); } catch (e) { fail('supplies', e, '补给出错'); } }
       if (squad && G.game.state !== 'paused') { try { squad.update(dt); } catch (e) { fail('squad', e, '队友出错'); } }
+      if (routeDress) { try { routeDress.update(rawDt); } catch (e) { fail('dress', e, '沿途痕迹出错'); } }
       if (bars) { try { bars.enabled = !!siege?.enabled && !director.riding; bars.update(dt); } catch (e) { fail('bars', e, '血条出错'); } }
       blackout.enabled = !!siege?.enabled; blackout.open = director.riding ? 1 : 0; blackout.update(dt);
       // 丧尸围城里商场没有逛街的路人了（那些人就是丧尸）；切回零点突围把人群按画质设置放回来
@@ -486,7 +491,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); viewLight.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

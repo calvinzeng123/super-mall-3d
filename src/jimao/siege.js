@@ -17,6 +17,7 @@ import { doorOutside } from './guide.js';
 import { createPacing } from './pacing.js';
 import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
+import { propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR } from './siege-props.js';
 
 export const SIEGE = Object.freeze({
   building: 'A', roof: 'A-RF', power: 'A-B1',
@@ -246,55 +247,77 @@ const cyl = (g, r, h, x, y, z, m, rx = 0, rz = 0) => { const b = new THREE.Mesh(
 function beacon(g, color = 'glow', h = 2.6) { const m = mats(); const b = box(g, 0.05, h, 0.05, 0, h / 2 + 0.2, 0, m[color]); b.castShadow = false; b.userData.beacon = true; return b; }
 function setState(g, on) { g.traverse((o) => { if (o.userData.beacon) o.visible = on !== 'cut'; if (o.userData.cutHide) o.visible = on !== 'cut'; if (o.userData.cutShow) o.visible = on === 'cut'; }); }
 
+// 物件本身怎么搭见 siege-props.js（按材质合并、共用图集）；这里只管各自的状态：cutHide / cutShow、灯的颜色、关卡解决时的动画。
+const lens = () => (M.lens ||= new THREE.CylinderGeometry(0.02, 0.02, 0.02, 12).rotateX(Math.PI / 2));
+/** 一对指示灯：没完成时红灯亮，完成（cut）后绿灯亮；灭着的那只换成暗灯罩 */
+function lamps(g, red, green) {
+  const P = propMats(), r = new THREE.Mesh(lens(), P.ledRed), gr = new THREE.Mesh(lens(), P.lamp);
+  r.position.set(...red); gr.position.set(...green); g.add(r, gr);
+  const set = (s) => { const done = s === 'cut'; r.material = done ? P.lamp : P.ledRed; gr.material = done ? P.ledGreen : P.lamp; };
+  set.meshes = [r, gr]; return set;
+}
 export function lockerModel() {
-  const m = mats(), g = new THREE.Group(); g.name = '武器柜';
-  box(g, 1.1, 1.9, 0.5, 0, 0.95, 0, m.steel); const door = box(g, 0.52, 1.8, 0.04, -0.27, 0.95, 0.27, m.dark); box(g, 0.52, 1.8, 0.04, 0.27, 0.95, 0.27, m.dark); door.userData.cutHide = true;
-  box(g, 0.9, 0.05, 0.3, 0, 1.2, 0.1, m.steel); box(g, 0.06, 0.9, 0.06, -0.2, 0.75, 0.1, m.dark, 0, 0.12); box(g, 0.06, 0.9, 0.06, 0.2, 0.75, 0.1, m.dark, 0, -0.12);
-  beacon(g); g.userData.setState = (s) => setState(g, s); return g;
+  const g = new THREE.Group(); g.name = '武器柜';
+  buildLocker(g);
+  const d = lockerDoors(); d.closed.userData.cutHide = true; d.open.userData.cutShow = true; d.open.visible = false; g.add(d.closed, d.open);
+  const led = lamps(g, [0.065, 1.31, 0.3], [0.095, 1.31, 0.3]); led('in'); for (const m of led.meshes) m.userData.cutHide = true; // 电子锁在门上：门开了跟着门走
+  beacon(g); g.userData.setState = (s) => { setState(g, s); led(s); }; return g;
 }
 export function switchModel() {
-  const m = mats(), g = new THREE.Group(); g.name = '配电柜';
-  box(g, 0.9, 1.7, 0.35, 0, 0.95, 0, m.steel); box(g, 0.7, 0.5, 0.03, 0, 1.4, 0.19, m.yellow);
-  const off = box(g, 0.08, 0.34, 0.08, 0, 0.82, 0.24, m.red, 0, 0); off.rotation.x = 0.9; off.userData.cutHide = true;
-  const on = box(g, 0.08, 0.34, 0.08, 0, 1.0, 0.24, m.green); on.rotation.x = -0.9; on.userData.cutShow = true; on.visible = false;
-  const lamp = box(g, 0.1, 0.1, 0.03, 0.28, 1.4, 0.21, m.glowGreen); lamp.userData.cutShow = true; lamp.visible = false;
-  beacon(g); g.userData.setState = (s) => setState(g, s); return g;
+  const g = new THREE.Group(); g.name = '配电柜';
+  buildSwitchCabinet(g);
+  const off = switchLever(false); off.userData.cutHide = true; const on = switchLever(true); on.userData.cutShow = true; on.visible = false; g.add(off, on);
+  const led = lamps(g, [0.22, 1.66, 0.258], [0.29, 1.66, 0.258]); led('in');
+  beacon(g); g.userData.setState = (s) => { setState(g, s); led(s); }; return g;
 }
 export function toolModel(tool) {
-  const m = mats(), g = new THREE.Group(); g.name = tool;
-  const table = box(g, 0.7, 0.05, 0.45, 0, 0.72, 0, m.wood); for (const [x, z] of [[-0.3, -0.18], [0.3, -0.18], [-0.3, 0.18], [0.3, 0.18]]) box(g, 0.05, 0.7, 0.05, x, 0.35, z, m.wood);
-  const item = new THREE.Group(); item.position.y = 0.76; item.userData.cutHide = true; g.add(item); table.castShadow = false;
-  if (tool === '撬棍') { cyl(item, 0.018, 0.7, 0, 0.03, 0, m.red, 0, Math.PI / 2); box(item, 0.05, 0.03, 0.12, 0.35, 0.03, 0.04, m.red); }
-  else if (tool === '保险丝') { box(item, 0.3, 0.12, 0.2, 0, 0.06, 0, m.dark); for (const x of [-0.08, 0, 0.08]) cyl(item, 0.022, 0.1, x, 0.16, 0, m.white, 0, 0); }
-  else if (tool === '灭火器') { cyl(item, 0.09, 0.45, 0, 0.23, 0, m.red); cyl(item, 0.03, 0.08, 0, 0.5, 0, m.dark); box(item, 0.16, 0.03, 0.03, 0.06, 0.55, 0, m.dark); }
-  else { box(item, 0.09, 0.006, 0.055, 0, 0.01, 0, m.white); box(item, 0.05, 0.007, 0.012, 0, 0.012, 0.012, m.green); }
+  const g = new THREE.Group(); g.name = tool;
+  // 灭火器立在地上（放桌上反而假）；别的工具搁在小边桌上
+  const floor = tool === '灭火器';
+  if (!floor) buildTable(g);
+  const item = new THREE.Group(); item.position.set(floor ? 0.22 : 0, floor ? 0 : 0.7175, 0); item.userData.cutHide = true; g.add(item);
+  buildTool(item, tool);
   beacon(g); g.userData.setState = (s) => setState(g, s); return g;
 }
-/** 关卡挡在那儿的东西：type 是 GATES 的键。交互点上只放一块小牌子（真正的大件摆在楼梯口，见 gateBlock） */
+/** 关卡挡在那儿的东西：type 是 GATES 的键。交互点上只放小件（真正的大件摆在楼梯口，见 gateBlock）：
+ * 跳闸 → 电梯厅里一个落地的分区配电箱（门敞着，熔断器座空着）；反锁 → 读卡器在防火门的门框上，交互点只留光柱 */
 export function gateModel(type) {
-  const m = mats(), g = new THREE.Group(); g.name = GATES[type].name;
-  if (type === 'fuse') { box(g, 0.6, 0.8, 0.16, 0, 1.3, 0, m.steel); const a = box(g, 0.1, 0.1, 0.02, 0, 1.45, 0.09, m.red); a.userData.cutHide = true; const b = box(g, 0.1, 0.1, 0.02, 0, 1.45, 0.09, m.glowGreen); b.userData.cutShow = true; b.visible = false; }
-  else if (type === 'lock') { box(g, 0.12, 0.18, 0.04, 0, 1.25, 0, m.dark); const a = box(g, 0.04, 0.04, 0.01, 0, 1.3, 0.025, m.red); a.userData.cutHide = true; const b = box(g, 0.04, 0.04, 0.01, 0, 1.3, 0.025, m.glowGreen); b.userData.cutShow = true; b.visible = false; }
-  beacon(g, 'glow', 2.2); g.userData.setState = (s) => setState(g, s); return g;
+  const g = new THREE.Group(); g.name = GATES[type].name;
+  let led = null;
+  if (type === 'fuse') { buildFuseBox(g); const f = fuseInserts(); f.userData.cutShow = true; f.visible = false; g.add(f); led = lamps(g, [0.17, 1.835, 0.06], [0.23, 1.835, 0.06]); led('in'); }
+  beacon(g, 'glow', 2.2); g.userData.setState = (s) => { setState(g, s); led?.(s); }; return g;
 }
-/** 堵在楼梯口的大件：杂物 / 火 / 落下的栅门 / 关死的防火门。clear() 以后挪开、熄灭、升起 */
+/** 堵在楼梯口的大件：杂物 / 火 / 落下的卷帘栅门 / 关死的防火门。clear() 以后：杂物推到一边（+x）、火灭（烟再飘一会儿、地上留下干粉）、栅门收上去、门朝人这边转开。
+ * 第一个子节点一直是会动的那一组（junk）。 */
 export function gateBlock(type) {
-  const m = mats(), g = new THREE.Group(); g.name = `${GATES[type].name}（挡路）`;
+  const g = new THREE.Group(); g.name = `${GATES[type].name}（挡路）`;
   const junk = new THREE.Group(); g.add(junk);
-  if (type === 'debris') { box(junk, 1.4, 0.9, 0.5, 0, 0.55, 0, m.wood, 0.3, 0.5); box(junk, 0.9, 0.5, 0.6, 0.2, 0.25, 0.3, m.steel, -0.4); box(junk, 0.5, 1.5, 0.08, -0.4, 0.8, -0.2, m.wood, 0.2, -0.35); box(junk, 0.6, 0.4, 0.4, -0.3, 1.2, 0.1, m.dark, 0.6, 0.2); }
-  else if (type === 'fire') { for (let i = 0; i < 6; i++) { const f = box(junk, 0.35, 0.5 + (i % 3) * 0.3, 0.35, -0.6 + i * 0.24, 0.3 + (i % 3) * 0.12, (i % 2) * 0.2 - 0.1, m.flame, i); f.castShadow = false; f.userData.flame = i; } box(junk, 1.3, 0.12, 0.6, 0, 0.06, 0, m.dark); }
-  else { const n = type === 'fuse' ? 7 : 1; for (let i = 0; i < n; i++) box(junk, type === 'fuse' ? 0.04 : 1.3, 2.1, type === 'fuse' ? 0.04 : 0.07, type === 'fuse' ? -0.6 + i * 0.2 : 0, 1.05, 0, type === 'fuse' ? m.steel : m.red); if (type === 'fuse') { box(junk, 1.3, 0.05, 0.05, 0, 2.1, 0, m.steel); box(junk, 1.3, 0.05, 0.05, 0, 0.9, 0, m.steel); } else box(junk, 0.3, 0.1, 0.1, 0.4, 1.05, 0.07, m.steel); }
+  let fire = [], powder = null, led = null;
+  if (type === 'debris') buildDebris(junk);
+  else if (type === 'fire') { fire = buildFire(junk); buildFireStatic(g); powder = powderSheet(); powder.visible = false; g.add(powder); }
+  else if (type === 'fuse') { buildShutterFrame(g); junk.position.y = SHUTTER.top; buildShutterCurtain(junk); }
+  else { buildDoorFrame(g); junk.position.set(-DOOR.half, 0, DOOR.z); buildDoorLeaf(junk); led = lamps(g, [DOOR.half + 0.04, DOOR.bottom + 1.405, DOOR.z - 0.11], [DOOR.half + 0.04, DOOR.bottom + 1.405, DOOR.z - 0.11]); led('in'); }
+  const base = junk.position.clone();
   let cleared = false, t = 0;
-  g.userData.update = (dt) => { t += dt; if (type === 'fire' && !cleared) for (const f of junk.children) if (f.userData.flame !== undefined) { f.scale.y = 0.8 + 0.35 * Math.sin(t * 9 + f.userData.flame * 1.7); f.rotation.y += dt * 2; } if (cleared && junk.visible) { const k = Math.min(1, (g.userData.clearT += dt) / 0.8); if (type === 'debris') { junk.position.x = 1.6 * k; junk.rotation.z = -0.5 * k; } else if (type === 'fire') junk.scale.setScalar(1 - k); else junk.position.y = 2.2 * k; if (k >= 1 && type === 'fire') junk.visible = false; } };
-  g.userData.clear = () => { cleared = true; g.userData.clearT = 0; };
-  g.userData.reset = () => { cleared = false; junk.visible = true; junk.position.set(0, 0, 0); junk.rotation.set(0, 0, 0); junk.scale.setScalar(1); };
+  g.userData.update = (dt) => {
+    t += dt;
+    if (type === 'fire' && junk.visible) fireStep(fire, t, cleared ? (m) => (m.name === 'siege-smoke' ? 1 - Math.min(1, g.userData.clearT / 6) : 1 - Math.min(1, g.userData.clearT / 1.2)) : null);
+    if (!cleared || !junk.visible) return;
+    const c = (g.userData.clearT += dt), k = Math.min(1, c / 0.8), e = 1 - (1 - k) ** 3;
+    if (type === 'debris') { junk.position.x = 1.6 * k; junk.rotation.z = -0.5 * k; }
+    else if (type === 'fire') { if (c > 0.4) powder.visible = true; if (c >= 6) junk.visible = false; }
+    else if (type === 'fuse') junk.scale.y = 1 - 0.96 * Math.min(1, c / 1.6); // 卷帘慢慢收进卷筒箱
+    else junk.rotation.y = 1.7 * e;
+  };
+  g.userData.clear = () => { cleared = true; g.userData.clearT = 0; led?.('cut'); };
+  g.userData.reset = () => { cleared = false; t = 0; junk.visible = true; junk.position.copy(base); junk.rotation.set(0, 0, 0); junk.scale.setScalar(1); if (powder) powder.visible = false; if (fire.length) fireStep(fire, 0, 1); led?.('in'); };
   return g;
 }
 export function flareModel() {
-  const m = mats(), g = new THREE.Group(); g.name = '信号弹';
-  box(g, 0.5, 0.3, 0.35, 0, 0.15, 0, m.red); cyl(g, 0.035, 0.3, 0, 0.42, 0, m.yellow);
-  const smoke = box(g, 0.5, 9, 0.5, 0, 5, 0, new THREE.MeshBasicMaterial({ color: 0xff4a2e, transparent: true, opacity: 0.4, toneMapped: false, depthWrite: false })); smoke.castShadow = false; smoke.userData.cutShow = true; smoke.visible = false;
-  const light = box(g, 0.14, 0.14, 0.14, 0, 0.62, 0, m.glow); light.userData.cutShow = true; light.visible = false;
+  const g = new THREE.Group(); g.name = '信号弹';
+  buildFlareKit(g);
+  const lit = litFlare(); lit.userData.cutShow = true; lit.visible = false; g.add(lit);
+  let t = 0; g.userData.update = (dt) => { if (!lit.visible) return; t += dt; fireStep(lit.userData.mats, t); };
   beacon(g); g.userData.setState = (s) => setState(g, s); return g;
 }
 /** 一个阳台：楼板、两侧挡板、整面玻璃（pane）。朝 +x 伸出去 */
