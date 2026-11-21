@@ -65,11 +65,13 @@ export const FLOOR_SURFACES = {
  * garageSoffit 是车库顶板，floorPaint 是车库车道的地坪漆。
  */
 export const DETAIL_SURFACES = Object.freeze({
-  matte: { id: 'painted_plaster', strength: 0.9 },
-  ext: { id: 'tunnel_concrete', strength: 0.75 },
-  ceiling: { id: 'ceiling_panels', strength: 1 },
-  garageSoffit: { id: 'formed_concrete', strength: 1, meters: 2.4 },
-  floorPaint: { id: 'garage_concrete', strength: 0.8, meters: 4 },
+  // normal：法线细节的深浅（贴图有法线、档位载入了法线才有）；patch：大块深浅（补过的漆、晒褪的一片）；
+  // sheen：大块的粗糙度起伏（手电扫过去，有的地方哑、有的地方泛一点光）
+  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.8, patch: 0.07, sheen: 0.2 },
+  ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.08, sheen: 0.12 },
+  ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.05, sheen: 0.1 },
+  garageSoffit: { id: 'formed_concrete', strength: 1, meters: 2.4, normal: 0.6, patch: 0.08, sheen: 0.12 },
+  floorPaint: { id: 'garage_concrete', strength: 0.8, meters: 4, normal: 0.45, patch: 0.06, sheen: 0.22 },
 });
 
 export function pbrOptions(asset, normalStrength = 0.35) {
