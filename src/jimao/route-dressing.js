@@ -265,7 +265,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1 }) 
         // 热点看得见这面墙（同一个房间 / 走廊里），墙前面没有家具、门扇挡着
         const fx = px + nx * 0.06, fz = pz + nz * 0.06;
         if (Math.hypot(fx - cx, fz - cz) > r1 || blocked(cx, cz, fx, fz, w)) { if (prefer) list.splice(list.findIndex((q) => q.w === w), 1); continue; }
-        let free = true;
+        let free = !avoid.some((a) => a.wall && (!a.floor || a.floor === floorId) && Math.hypot(a.x - px, a.z - pz) < a.wall + width / 2);
         for (const s of [-0.5, 0, 0.5]) for (const d of [0.2, 0.42]) if (inObstacle(px + dx * s * width + nx * d, pz + dz * s * width + nz * d)) free = false;
         if (!free) { if (prefer) list.splice(list.findIndex((q) => q.w === w), 1); continue; }
         return { x: px, z: pz, nx, nz, w, t, len, dx, dz };
@@ -350,10 +350,12 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
   if (!plan?.stages?.length) return items;
   const avoid = [];
   // 关卡的大件（杂物堆、火、配电箱、防火门）占的地方：地面贴花不压进去
-  for (const g of plan.gates || []) if (g.model) avoid.push({ floor: g.floor, x: g.model.x, z: g.model.z, r: 1.25 });
+  for (const g of plan.gates || []) if (g.model) avoid.push({ floor: g.floor, x: g.model.x, z: g.model.z, r: 1.25, wall: 0.9 });
   // 电梯门口：门是会动的，墙上、地上都不贴（候梯厅里的血留到离门一米多的地方）
   const tower = plan.tower, lift = tower ? nav.links.find((l) => l.id === tower.lift) : null;
-  for (const s of lift?.stops || []) avoid.push({ floor: s.floor, x: s.x, z: s.z, r: 0.9 });
+  for (const s of lift?.stops || []) avoid.push({ floor: s.floor, x: s.x, z: s.z, r: 0.9, wall: 1.3 });
+  // 每一步的目标物件（武器柜、配电柜、工具、信号弹）站的地方：地上不压、背后的墙也不贴（深度前移会盖到物件上）
+  for (const st of plan.stages) if (st.site) avoid.push({ floor: st.floor, x: st.site.x, z: st.site.z, r: 0.7, wall: 1.4 });
   const P = createPlacer({ nav, rng, items, avoid, density });
   const { range, pick } = P;
   const stage = (id) => plan.stages.find((s) => s.id === id);
@@ -1062,6 +1064,8 @@ export function createRouteDressing(G, { scene, nav, layout, runs = [], explore 
   return {
     stats, mesh,
     get ready() { return !!(built && atlas); },
+    /** 这一局摆好的贴花（调试、实拍用；只读） */
+    get items() { return built; },
     update(dt) {
       const siege = G.siege, on = !!siege?.enabled && !!siege?.plan;
       if (!on) { if (plan || atlas || painter) { clearPlan(); freeAtlas(); } return; }
