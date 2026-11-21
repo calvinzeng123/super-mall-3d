@@ -201,7 +201,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 手枪换上带贴图的真模型（2 MB，后台加载；加载不出来就用 arsenal.js 里手搭的那把，不影响开打）
   { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'pistol'), arsenal = G.weapon;
     if (rec) fetchBinary(rec.url, { label: '手枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
-      .then((gltf) => { if (G.weapon === arsenal) arsenal.skinPistol(gltf.scene); })
+      .then((gltf) => { if (G.weapon === arsenal) arsenal.skinPistol(gltf.scene, undefined, { sliced: true }); }) // sliced：贴图一帧处理一种材质，不卡一下长的
       .catch((e) => console.warn('[零点突围] 手枪模型没加载出来，用简化模型', e)); }
   // 冲锋枪（丧尸围城里捡得到的第四把）：带手臂和换弹动画的真模型，2.9 MB，手枪之后再加载；加载不出来就没有这把枪
   { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'rifle'), arsenal = G.weapon;

@@ -10,7 +10,9 @@
 //       按网格名、按 UV 岛在枪上的位置把每个岛归到一类（机匣聚合物 / 枪托 / 托底橡胶 / 弹匣 / 钢件 / 裸钢 / 导轨 / 弹壳），
 //       画成一张和贴图一样大的「零件图」，顺带记下每个像素在枪上的位置（合模线、托底横棱、弹匣擦痕靠它定位）。
 //   颜色：每类有自己的深浅和色调；大片云斑压掉一半多（机匣留得多一点——全抹平了是一块没有用过的新塑料）；
-//       细碎的斑点减半（挪到粗糙度上），划痕留着；
+//       细碎的斑点减半（挪到粗糙度上；机匣只减三成多），划痕留着；
+//       凹处（槽、孔、销子周围、弹匣口里）压暗、更哑，凸棱断断续续地亮一点、更光——机匣在腰射的距离上才不是一整块平的深灰；
+//       握把和枪托是同一种黑塑料（不磨光、不发亮）；
 //       烘进去的亮棱绝大部分抹掉，只在一张低频噪声选中的三四成长度上留一截（亮度打六折），
 //       凹槽、散热孔的沿不留；弹匣口、抛壳窗、拉机柄槽、枪托铰链这些真会磨的地方留得多一点；岛外的填充色改成和岛内一样深。
 //   粗糙度 / 金属度：按类重定（聚合物金属度 0、哑光；弹匣是烤蓝薄钢、更光、有顺着插拔方向的擦痕；导轨是阳极氧化的缎面；
@@ -18,7 +20,10 @@
 //   细节（着色器里平铺）：枪托是模压的麻点（疏），机匣是很细的麻点，钢件是磷化颗粒——各类各用多少写在一张「权重图」里。
 //       枪上的细节按零件自己坐标里的位置铺、不按 UV：玩家腰射、开镜时看得最多的枪托顶面，在贴图上只是二十个像素宽的一条，
 //       贴图里画什么都是糊的，按 UV 铺的颗粒在那儿也又大又扁；按位置铺，整把枪的颗粒一样大（见 skinShader）。
-//       合模线、灯色收敛、环境反射压低也在着色器里。
+//       大范围的斑驳（颜色、粗糙度）、灯色收敛、环境反射压低也在着色器里。
+//       枪托顶面的 UV 是左右镜像的（两半共用一块贴图）：画在贴图里的蹭痕、斑点在开镜时会左右对称地出现两遍，
+//       所以枪托上不往贴图里画任何不对称的东西，斑驳按零件坐标在着色器里算。
+//   右手：模型自带的握姿食指、中指伸在扳机护圈外面，像在比剪刀手；SMG_GRIP 把它们扣回握把上（gripPose，smg.js 每帧在动画之后套上）。
 //   手：布面不反光（粗糙度抬到 0.85 以上）、叠一层平纹织物；手掌的皮面略亮一点、叠细皮纹。颜色和法线贴图不动。
 // 贴图里没有任何厂牌字样（逐块放大看过颜色和法线贴图），不需要抹字。
 // 耗时是按「第一次跑」（代码还没被引擎优化）控制的：金属粗糙度贴图缩到 512 再算，大范围的平均值在缩小的图上算，
@@ -56,18 +61,23 @@ const part = (o) => Object.freeze({ ...o, tint: Object.freeze(o.tint) });
  * gun.parts：按 PART 的编号排。tone 大面的平均亮度往这个值靠（flatten：靠多少；0 = 不改深浅）；plain 原贴图上几个到十几个像素宽的明暗带抹掉几成（枪托顶上两条浅带，看着像条纹）；tint 去掉原来的暖色以后乘上的色调；
  *     rough / metal 这一类的粗糙度、金属度；min 粗糙度下限；wear 烘焙的亮棱最多留几成（乘 edge.max）；bare 磨亮处露不露钢（金属度往 1 靠多少）；
  *     accent 原贴图标成裸钢的小件（销子、螺丝）算不算数；stipple / fine / grain 三种细节各用多少；
- *     keep 原贴图里细碎的起伏留几成、ao 遮蔽的下限——托底在贴图上只有二十来个像素宽，上面画的东西（一个小方框、烘进去的阴影）放大十倍是几块糊斑，不如不要。
+ *     keep 原贴图里细碎的起伏留几成、ao 遮蔽的下限——托底在贴图上只有二十来个像素宽，上面画的东西（一个小方框、烘进去的阴影）放大十倍是几块糊斑，不如不要；
+ *     mottle 细碎斑点按 grit 减多少（1 = 照减，机匣只减三成多：原贴图的旧斑是它唯一的「用过」的痕迹）；
+ *     cav 凹处的颜色压暗几成（负的是提亮：枪托凹处积的是浅灰）；lit 凸棱见光提亮多少（贴图值，噪声选中的地方才满）。
  * gun.metal：没有零件图时（假模型）的退路——原贴图金属度低于 lo 当聚合物、高于 hi 当钢件。accent：[lo, hi] 摊开以后的金属度高于这个的是裸钢小件。
- * gun.keepSat：[lo, hi] 颜色鲜艳到这个程度的小标记（快慢机的红点、弹壳）不动调子；bright：[拐点, 斜率] 比拐点亮的灰白压下来（快慢机那根白杆子变成磨亮的钢）。
+ * gun.keepSat：[lo, hi] 颜色鲜艳到这个程度的小标记（快慢机的红点、弹壳）不动调子；bright：[拐点, 斜率, 粗糙度下限] 比拐点亮的灰白压下来（快慢机那根白杆子变成磨亮的钢）。
+ *     那根杆子其实是画在快慢机平面上的一道白漆：压到磨亮的钢那么亮还不够——平面金属、粗糙度 0.4，主光一扫整条反白，所以粗糙度也抬到下限以上。
  * gun.grit：细碎起伏的处理。小于 soft 的乘 low（斑点减半），大于 hard 的乘 high（划痕锐化），中间过渡。
  * gun.edge：烘焙亮棱。reach 隔几个像素找两侧的暗底；min 比周围亮多少才算；bevel 法线偏多少算在棱上；keep 没被选中的地方留几成；max 选中的地方留几成；
  *     patch [lo, hi] 断续（噪声低于 lo 的不留）；contact 常磕碰处把门槛降多少；recess 旁边比大面暗到这个比例算凹槽、ao 遮蔽低于这个也算——都不留。
  * gun.cloud：大范围起伏。albedo 颜色 ±；rough 粗糙度 ±；polish 磨光处粗糙度降多少、gate [lo, hi] 噪声门槛、handled 手握处把门槛降多少；
  *     cheek 枪托上高于这个高度（模型单位）的是顶上贴腮的那一条，门槛降 cheekBias（磨光的是其中几块，不是一整条）；side 枪托侧面、腹板的疏麻点打几折（贴近看太粗像橘子皮）；dust 凹处粗糙度升多少。
  * gun.rough：flatten 往这一类的值靠多少、blur 去方块的模糊半径（按 1024 的像素算）、max 上限；scratch：亮划痕处降多少；wear：留下的亮棱处降多少。
- * gun.seam：合模线（枪托、机匣正中，着色器里画）。width 半宽（模型单位，1 ≈ 1.5 厘米）；light 提亮几成；body 机匣上打几折；rough 粗糙度降多少。
  * gun.neutral：直接光的颜色往灰里收几成；gun.env：非金属的环境反射压多狠（反射越亮压得越多：白天的黑塑料不泛灰，停电时暗处的那点反光还在）。
- * gun.scuff：枪托上的蹭痕（原贴图的枪托是光板一块）。count 几道；length [最短, 最长]（贴图像素）；light 提亮；rough 算作多深的划痕（0–1，粗糙度按 rough.scratch 降）。
+ * gun.curv：凹凸（法线贴图的散度，见 curvature）。reach 隔几个像素量；lo / hi 散度从多少到多少算「有」到「满」；ao 遮蔽贴图的暗处颜色压几成；
+ *     rough 凹处粗糙度升多少（积灰）；gloss 凸棱粗糙度降多少（磨亮，主光扫过时那条棱先亮）；patch 凸棱见光的最低几成（其余看噪声，不是每条棱都一样亮）。
+ * gun.grip：握把（机匣上标 HANDLED 的岛）。和枪托同一种黑塑料：颜色乘 dark、粗糙度不低于 rough、不磨光——磨光了在换弹时是全枪最亮的一块，像一块铝。
+ * gun.mottle：着色器里按零件坐标叠的大范围斑驳（见 skinShader）。scale 每个模型单位几个周期；albedo 颜色 ±；rough 粗糙度 ±；metal 金属件上打几折。
  * gun.f90：聚合物掠射角的反光打几折（1 = 不动）。暗场里轮廓光是冷色的，黑塑料的侧面被它一擦就是一片藏蓝。
  * gun.ribs：托底的横棱。pitch 间距（模型单位，1 ≈ 1.5 厘米）；dark 沟里压暗；bump 法线；steep [lo, hi] 高度在贴图上每像素变多少（1/256 模型单位）才算朝后的面。 gun.streak：弹匣的插拔擦痕。light 提亮；rough 降粗糙度。
  * gun.flat：[lo, hi] 法线偏离正上方小于 lo 的当噪点抹平，大于 hi 的原样留着。
@@ -78,26 +88,33 @@ export const SMG_SKIN = Object.freeze({
   size: 1024, mrSize: 512, partSize: 512, detailSize: 256, anisotropy: 8, pad: 1.5,
   gun: Object.freeze({
     parts: Object.freeze([
-      part({ name: 'body', tone: 40, flatten: 0.55, plain: 0, tint: [0.99, 1, 1.02], rough: 0.66, metal: 0, min: 0.5, wear: 0.6, bare: 0, accent: 1, stipple: 0, fine: 1, grain: 0, keep: 1, ao: 0 }),
-      part({ name: 'stock', tone: 43, flatten: 0.8, plain: 0.85, tint: [1, 1, 1.01], rough: 0.7, metal: 0, min: 0.52, wear: 0.5, bare: 0, accent: 0, stipple: 1, fine: 0.3, grain: 0, keep: 1, ao: 0 }),
-      part({ name: 'rubber', tone: 31, flatten: 0.8, plain: 1, tint: [1, 1, 1], rough: 0.88, metal: 0, min: 0.75, wear: 0, bare: 0, accent: 0, stipple: 0, fine: 0.7, grain: 0, keep: 0, ao: 0.86 }),
-      part({ name: 'mag', tone: 44, flatten: 0.7, plain: 0, tint: [0.92, 0.99, 1.1], rough: 0.44, metal: 0.75, min: 0.32, wear: 0.8, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.35, keep: 1, ao: 0 }),
-      part({ name: 'steel', tone: 40, flatten: 0.65, plain: 0, tint: [0.96, 1, 1.05], rough: 0.58, metal: 0.8, min: 0.4, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 1, keep: 1, ao: 0 }),
-      part({ name: 'bright', tone: 0, flatten: 0, plain: 0, tint: [0.98, 1, 1.03], rough: 0.4, metal: 1, min: 0.32, wear: 1, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.6, keep: 1, ao: 0 }),
-      part({ name: 'rail', tone: 36, flatten: 0.7, plain: 0, tint: [0.97, 1, 1.04], rough: 0.6, metal: 0.25, min: 0.45, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 0.4, keep: 1, ao: 0 }),
-      part({ name: 'brass', tone: 0, flatten: 0, plain: 0, tint: [1, 1, 1], rough: 0.36, metal: 1, min: 0.3, wear: 1, bare: 0, accent: 0, stipple: 0, fine: 0, grain: 0.2, keep: 1, ao: 0 }),
-      // 照门、准星：哑黑（真枪也是，免得反光晃眼）——准星护圈只有一两个像素粗，亮了在暗背景上是一圈虚线
-      part({ name: 'sight', tone: 26, flatten: 0.8, plain: 0, tint: [0.98, 1, 1.03], rough: 0.86, metal: 0.1, min: 0.7, wear: 0.3, bare: 0.5, accent: 0, stipple: 0, fine: 0, grain: 0.8, keep: 1, ao: 0 }),
+      // 机匣：冷一点的炭黑，比枪托深半档；原贴图的旧斑留得多（全抹平了像一层灰喷漆），凹处积黑、凸棱见光都最明显
+      part({ name: 'body', tone: 32, flatten: 0.22, plain: 0, tint: [0.97, 1, 1.045], rough: 0.68, metal: 0, min: 0.5, wear: 0.6, bare: 0, accent: 1, stipple: 0, fine: 1, grain: 0, keep: 1, ao: 0, mottle: 0.15, cav: 0.34, lit: 6 }),
+      // 枪托：凹处（镂空的内沿、铰链根）积的是浅色的灰，不是黑泥——黑塑料上灰尘发白
+      part({ name: 'stock', tone: 40, flatten: 0.8, plain: 0.85, tint: [1, 1, 1.01], rough: 0.7, metal: 0, min: 0.52, wear: 0.5, bare: 0, accent: 0, stipple: 1, fine: 0.3, grain: 0, keep: 1, ao: 0, mottle: 1, cav: -0.12, lit: 0 }),
+      part({ name: 'rubber', tone: 31, flatten: 0.8, plain: 1, tint: [1, 1, 1], rough: 0.88, metal: 0, min: 0.75, wear: 0, bare: 0, accent: 0, stipple: 0, fine: 0.7, grain: 0, keep: 0, ao: 0.86, mottle: 1, cav: 0, lit: 0 }),
+      // 弹匣：磷化的薄钢板，哑光（原来 0.44 的粗糙度在暗场里是一整条镜面反光，像漆过的玻璃）
+      part({ name: 'mag', tone: 38, flatten: 0.7, plain: 0, tint: [0.95, 0.99, 1.06], rough: 0.6, metal: 0.55, min: 0.5, wear: 0.8, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.6, keep: 1, ao: 0, mottle: 1, cav: 0.25, lit: 4 }),
+      part({ name: 'steel', tone: 38, flatten: 0.65, plain: 0, tint: [0.96, 1, 1.05], rough: 0.58, metal: 0.8, min: 0.4, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 1, keep: 1, ao: 0, mottle: 1, cav: 0.3, lit: 6 }),
+      part({ name: 'bright', tone: 0, flatten: 0, plain: 0, tint: [0.98, 1, 1.03], rough: 0.4, metal: 1, min: 0.32, wear: 1, bare: 1, accent: 0, stipple: 0, fine: 0, grain: 0.6, keep: 1, ao: 0, mottle: 1, cav: 0.25, lit: 0 }),
+      // 导轨：缎面，比机匣光一截——齿顶要接得住主光，暗场里才分得出一道一道
+      part({ name: 'rail', tone: 34, flatten: 0.7, plain: 0, tint: [0.97, 1, 1.04], rough: 0.52, metal: 0.3, min: 0.42, wear: 0.8, bare: 1, accent: 1, stipple: 0, fine: 0, grain: 0.4, keep: 1, ao: 0, mottle: 1, cav: 0.3, lit: 7 }),
+      part({ name: 'brass', tone: 0, flatten: 0, plain: 0, tint: [1, 1, 1], rough: 0.36, metal: 1, min: 0.3, wear: 1, bare: 0, accent: 0, stipple: 0, fine: 0, grain: 0.2, keep: 1, ao: 0, mottle: 1, cav: 0, lit: 0 }),
+      // 照门、准星：哑黑（真枪也是，免得反光晃眼）——准星护圈只有一两个像素粗，亮了在暗背景上是一圈虚线；
+      // 只在凸棱上留一点见光，轮廓不至于在暗场里化掉
+      part({ name: 'sight', tone: 26, flatten: 0.8, plain: 0, tint: [0.98, 1, 1.03], rough: 0.8, metal: 0.1, min: 0.66, wear: 0.3, bare: 0.5, accent: 0, stipple: 0, fine: 0, grain: 0.8, keep: 1, ao: 0, mottle: 1, cav: 0.2, lit: 4 }),
     ]),
     metal: Object.freeze([0.25, 0.4]), accent: Object.freeze([0.64, 0.8]),
     lowRadius: 20, lowClamp: 110, bg: Object.freeze([32, 33, 35]),
-    keepSat: Object.freeze([22, 46]), bright: Object.freeze([96, 0.2]),
+    keepSat: Object.freeze([22, 46]), bright: Object.freeze([84, 0.08, 0.55]),
     grit: Object.freeze({ soft: 4, hard: 11, low: 0.5, high: 1.5 }),
     edge: Object.freeze({ reach: 3, min: 1.5, bevel: 0.07, keep: 0.1, max: 0.62, patch: Object.freeze([0.5, 0.64]), contact: 0.18, recess: 0.62, ao: 0.72 }),
     cloud: Object.freeze({ albedo: 0.11, rough: 0.12, polish: 0.2, gate: Object.freeze([0.5, 0.66]), handled: 0.2, cheek: 10.4, cheekBias: 0.05, side: 0.6, dust: 0.1 }),
     rough: Object.freeze({ flatten: 0.7, blur: 3, max: 0.94, scratch: 0.14, wear: 0.12 }),
-    seam: Object.freeze({ width: 0.035, light: 0.12, body: 0.5, rough: 0.08 }), neutral: 0.6, env: 10,
-    scuff: Object.freeze({ count: 60, length: Object.freeze([8, 34]), light: 7, rough: 0.5, seed: 23 }),
+    neutral: 0.6, env: 10,
+    curv: Object.freeze({ reach: 2, lo: 4, hi: 16, ao: 0.5, rough: 0.12, gloss: 0.1, patch: 0.35 }),
+    grip: Object.freeze({ dark: 0.84, rough: 0.74 }),
+    mottle: Object.freeze({ scale: 0.11, albedo: 0.4, rough: 0.2, metal: 0.45 }),
     ribs: Object.freeze({ pitch: 0.62, dark: 0.3, bump: 0.3, steep: Object.freeze([8, 14]) }),
     streak: Object.freeze({ light: 16, rough: 0.14 }),
     flat: Object.freeze([0.025, 0.08]), f90: 0.8,
@@ -109,8 +126,10 @@ export const SMG_SKIN = Object.freeze({
     leather: Object.freeze([27, 36]),        // 颜色暗于 lo 的是手掌的皮面，亮于 hi 的是布面
     f90: 0.4,                                // 布、哑光皮：掠射角不泛白
     rough: Object.freeze({ fabric: 0.9, leather: 0.64, keep: 0.25, min: 0.5 }),
-    glove: Object.freeze({ A: Object.freeze({ scale: 14, normal: 0.25, rough: 0.12, tint: 0.1 }), B: Object.freeze({ scale: 16, normal: 0.32, rough: 0.05, tint: 0.1 }) }),
-    sleeve: Object.freeze({ B: Object.freeze({ scale: 16, normal: 0.32, rough: 0.05, tint: 0.1 }) }),
+    glove: Object.freeze({ A: Object.freeze({ scale: 14, normal: 0.25, rough: 0.12, tint: 0.1 }), B: Object.freeze({ scale: 28, normal: 0.22, rough: 0.05, tint: 0.07 }) }),
+    // 袖子的织物：一根线在第一人称的距离上要比一个像素细——铺得粗了近看像麻袋、稍远就是一片斜着爬的摩尔纹；
+    // 法线也压一半，袖子的明暗交给褶皱，织纹只是贴近了才看得出的那层布感
+    sleeve: Object.freeze({ B: Object.freeze({ scale: 44, normal: 0.15, rough: 0.04, tint: 0.05 }) }),
   }),
 });
 
@@ -257,6 +276,25 @@ function lumLow(base, lum, low, cnt, w, qw, cap, zone, psh, pw) {
 }
 function lowMean(low, cnt) { for (let i = 0; i < low.length; i++) low[i] = cnt[i] > 0.05 ? low[i] / cnt[i] : -1; }
 
+/**
+ * 法线贴图（w × w）的散度，写进小一号的 cur（mw × mw，和金属粗糙度贴图一样大；sh：差几档）：
+ * 正的是凸棱（法线向外散开），负的是凹槽、孔沿、零件根部（法线往里收）。R：在原图上隔几个像素量。
+ * 只在小图上量：倒角在原图上四五个像素宽，小一号照样量得出来，这一遍和后面的模糊都只有四分之一的量（加载时间省二三十毫秒）。
+ * 量到岛外（零件图上标 GUTTER）的不算：岛外的填充色接在棱上，会量出一圈假的凸棱——那就又是描白边了。
+ */
+function curvature(normal, cur, w, mw, sh, R, zone, psh, pw) {
+  const o = R * 4, ow = R * w * 4, k = 1 / (2 * R);
+  for (let Y = 0; Y < mw; Y++) {
+    const y = Y << sh; if (y < R || y >= w - R) continue;
+    const pr = (y >> psh) * pw, pa = ((y - R) >> psh) * pw, pb = ((y + R) >> psh) * pw;
+    for (let X = 0; X < mw; X++) {
+      const x = X << sh; if (x < R || x >= w - R) continue;
+      if (zone && (zone[pr + ((x - R) >> psh)] | zone[pr + ((x + R) >> psh)] | zone[pa + (x >> psh)] | zone[pb + (x >> psh)]) & 128) continue;
+      const j = (y * w + x) * 4;
+      cur[Y * mw + X] = (normal[j + o] - normal[j - o] + normal[j + ow + 1] - normal[j - ow + 1]) * k;
+    }
+  }
+}
 /** 法线贴图上一个像素偏离正上方多少（|x| + |y|，0–255 的刻度） */
 function slopeAt(normal, q) { const nx = normal[q] - 127.5, ny = normal[q + 1] - 127.5; return (nx < 0 ? -nx : nx) + (ny < 0 ? -ny : ny); }
 /**
@@ -264,7 +302,7 @@ function slopeAt(normal, q) { const nx = normal[q] - 127.5, ny = normal[q + 1] -
  * 顺带记下每个像素的划痕深浅（scr）、留下的亮棱（edg）、压过的灰白（brt），第二遍定粗糙度要用；计数累加在 K.wearCount / K.cutCount 上。
  */
 function paintRows(K, ya, yb, step) {
-  const { base, normal, lum, low, metal, ao, patch, cloud, rows, scr, edg, brt, cls, zone, PY, w, mw, N, ps, qw, sh, psh, pw, pk2, NP, tTone, tFlat, tR, tG, tB, tWear, tAcc, tPlain, tKeep, m0, mk, a0, ak, s0, sk, knee, slope, gSoft, gk, gLow, gHigh, D, eMin, bevel, eKeep, eMax, p0, pk, eContact, eRecess, eAo, f0, fk, f0q, f1q, bgR, bgG, bgB, cAlb, RB, ST, ribK, tapDX, tapDY, a2, b2 } = K;
+  const { base, normal, lum, low, metal, ao, patch, cloud, rows, scr, edg, brt, cur, cav, vex, cls, zone, PY, w, mw, N, ps, qw, sh, psh, pw, pk2, NP, tTone, tFlat, tR, tG, tB, tWear, tAcc, tPlain, tKeep, tMott, tCav, tLit, cLo, cK, cAo, cPatch, gDark, m0, mk, a0, ak, s0, sk, knee, slope, gSoft, gk, gLow, gHigh, D, eMin, bevel, eKeep, eMax, p0, pk, eContact, eRecess, eAo, f0, fk, f0q, f1q, bgR, bgG, bgB, cAlb, RB, ST, ribK, tapDX, tapDY, a2, b2 } = K;
   let wearCount = 0, cutCount = 0;
   for (let y = ya; y < yb; y += step) {
     const yo = y * w, ym = (y > 0 ? y - 1 : 0) * w, yp = (y < w - 1 ? y + 1 : y) * w, po = ((y * ps) | 0) * N, qo = (y >> 2) * qw, mo = (y >> sh) * mw, rowOk = y >= D && y < w - D, pro = (y >> psh) * pw;
@@ -294,8 +332,8 @@ function paintRows(K, ya, yb, step) {
       if (wB > 0) { target += ((tTone[B] > 0 ? tTone[B] : lvs) - target) * wB; flat += (tFlat[B] - flat) * wB; tr += (tR[B] - tr) * wB; tg += (tG[B] - tg) * wB; tb += (tB[B] - tb) * wB; wearK += (tWear[B] - wearK) * wB; plain *= 1 - wB; }
       const gain = 1 + (target / lvs - 1) * flat * tone;
       if (z >= 128) {
-        // 岛外补的那圈边：不要原来的浅色填充，填成岛内大面的颜色
-        const v = lvs * gain; base[j] = v * tr; base[j + 1] = v * tg; base[j + 2] = v * tb;
+        // 岛外补的那圈边：不要原来的浅色填充，填成岛内大面的颜色（遮蔽也照岛内一样压——不然遮蔽重的地方岛比边暗，缩小采样时渗出一圈浅边）
+        const v = lvs * gain * (1 - cAo * (1 - ao[mi]) * tone) * (z & ZONE.HANDLED && A === PART.BODY ? gDark : 1); base[j] = v * tr; base[j + 1] = v * tg; base[j + 2] = v * tb;
         continue;
       }
       const xm = x > 0 ? x - 1 : 0, xp = x < w - 1 ? x + 1 : x;
@@ -337,7 +375,7 @@ function paintRows(K, ya, yb, step) {
       d -= cut;
       const ad = d < 0 ? -d : d; let gk2 = (ad - gSoft) * gk; gk2 = gk2 <= 0 ? 0 : gk2 >= 1 ? 1 : gk2 * gk2 * (3 - 2 * gk2);
       const keepD = tKeep[A];
-      let add = (d > kept ? d - kept : d < 0 ? d : 0) * (gLow + gHigh * gk2 - 1) * tone * keepD - cut;
+      let add = (d > kept ? d - kept : d < 0 ? d : 0) * (gLow + gHigh * gk2 - 1) * tMott[A] * tone * keepD - cut;
       if (d * keepD > scr[mi]) scr[mi] = d * keepD;
       // 这一类的中等宽度的明暗带抹掉：往「大面的平均 + 细节」靠
       if (plain > 0) add += (lvs + d * keepD - (L - cut)) * plain * tone;
@@ -346,6 +384,16 @@ function paintRows(K, ya, yb, step) {
       let grey = r * 0.299 + g * 0.587 + b * 0.114;
       const shade = 1 + (cloud[pi] - 0.5) * cAlb * tone;
       r += (grey * tr * shade - r) * tone; g += (grey * tg * shade - g) * tone; b += (grey * tb * shade - b) * tone;
+      // 凹处压暗（枪托是提亮：浅灰的积灰）、遮蔽贴图的暗处跟着暗；凸棱断断续续地亮一点（噪声选中的那几截亮得多）
+      const cv = cur[mi]; let f = 1 - cAo * (1 - ao[mi]) * tone;
+      if (cv < -cLo) { let k = (-cv - cLo) * cK; k = k >= 1 ? 1 : k * k * (3 - 2 * k); f -= tCav[A] * k * tone; if (k > cav[mi]) cav[mi] = k; }
+      else if (cv > cLo && tLit[A] > 0) {
+        let k = (cv - cLo) * cK; k = (k >= 1 ? 1 : k * k * (3 - 2 * k)) * (cPatch + (1 - cPatch) * patch[pi]);
+        const v = tLit[A] * k * tone; r += v; g += v; b += v * 1.03; if (k > vex[mi]) vex[mi] = k;
+      }
+      // 握把：和枪托一样深的黑塑料
+      if (z & ZONE.HANDLED && A === PART.BODY) f *= gDark;
+      r *= f; g *= f; b *= f;
       // 很亮的灰白（快慢机的杆子、准星的白点）压到磨亮的钢那么亮：不然暗场里是一根不吃光的白棍
       grey = r * 0.299 + g * 0.587 + b * 0.114;
       if (grey > knee && hi - lo < s0) { const k = (knee + (grey - knee) * slope) / grey; r *= k; g *= k; b *= k; if (grey > knee * 1.3) brt[mi] = 1; }
@@ -382,7 +430,7 @@ function paintRows(K, ya, yb, step) {
  * 统计累加在 K.metalCount / K.rMin / K.rMax 上。
  */
 function finishRows(K, ya, yb, step) {
-  const { mr, weights, metal, rough, ao, cloud, scr, edg, brt, cls, zone, PY, mw, N, msk, pm, pw, NP, tAcc, tRough, tMetal, tMin, tBare, tStip, tFine, tGrain, tAo, m0, mk, a0, ak, gSoft, R, CL, ST, cRough, g0, gkk } = K;
+  const { mr, weights, metal, rough, ao, cloud, scr, edg, brt, cav, vex, cls, zone, PY, mw, N, msk, pm, pw, NP, tAcc, tRough, tMetal, tMin, tBare, tStip, tFine, tGrain, tAo, m0, mk, a0, ak, gSoft, R, CL, ST, CV, GP, cRough, g0, gkk, bMin } = K;
   let metalCount = 0, rMin = K.rMin, rMax = K.rMax;
   for (let y = ya; y < yb; y += step) {
     const so = (((y + 0.5) * pm) | 0) * pw, po = ((y * msk) | 0) * N, po2 = (((mw - 1 - y) * msk) | 0) * N;
@@ -398,14 +446,19 @@ function finishRows(K, ya, yb, step) {
       q += (cloud[pi] - 0.5) * cRough;
       // 磨光：另取一处的噪声（不和深浅的起伏重合）；手握的地方、枪托顶上贴腮的地方门槛低
       let pz = cloud[po2 + (((mw - 1 - x) * msk) | 0)] - g0, top = 1;
-      if (z & 2) pz += CL.handled; else if (c === PART.STOCK) { if (PY[si] > CL.cheek * 256) pz += CL.cheekBias; else top = CL.side; }
-      pz *= gkk; pz = pz <= 0 ? 0 : pz >= 1 ? 1 : pz * pz * (3 - 2 * pz);
+      const grip = (z & ZONE.HANDLED) !== 0 && A === PART.BODY;
+      if (z & ZONE.HANDLED) pz += CL.handled; else if (c === PART.STOCK) { if (PY[si] > CL.cheek * 256) pz += CL.cheekBias; else top = CL.side; }
+      pz *= gkk; pz = grip || pz <= 0 ? 0 : pz >= 1 ? 1 : pz * pz * (3 - 2 * pz);
       q -= pz * CL.polish;
+      // 凹处积灰更哑，凸棱磨得更光（主光扫过时先亮的是棱）
+      q += cav[i] * CV.rough - vex[i] * CV.gloss;
+      if (grip && q < GP.rough) q = GP.rough;
       const dust = (0.92 - ao[i]) * 2; if (dust > 0) q += (dust > 1 ? 1 : dust) * CL.dust;
       if (d > gSoft) q -= (d > 14 ? 1 : d / 14) * R.scratch * (0.5 + 0.5 * mt);
       if (edge > 0) q -= edge * (c === PART.MAG ? ST.rough : R.wear);
       if (mr[j] < tAo[A]) mr[j] = tAo[A];
-      const qmin = tMin[A] + (tMin[B] - tMin[A]) * wB; q = q < qmin ? qmin : q > R.max ? R.max : q; if (q < rMin) rMin = q; if (q > rMax) rMax = q;
+      let qmin = tMin[A] + (tMin[B] - tMin[A]) * wB; if (brt[i] && qmin < bMin) qmin = bMin;
+      q = q < qmin ? qmin : q > R.max ? R.max : q; if (q < rMin) rMin = q; if (q > rMax) rMax = q;
       mr[j + 1] = q * 255;
       const mo = mt + (1 - mt) * edge * (tBare[A] + (tBare[B] - tBare[A]) * wB); mr[j + 2] = mo * 255; if (mo > 0.5) metalCount++;
       if (weights) { const soft = 1 - 0.6 * pz; weights[j] = tStip[A] * (1 - wB) * soft * top * 255; weights[j + 1] = (tGrain[A] + (tGrain[B] - tGrain[A]) * wB) * 255; weights[j + 2] = tFine[A] * (1 - wB) * soft * 255; weights[j + 3] = 255; }
@@ -429,8 +482,9 @@ export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = si
   const cls = pw ? parts.cls : null, zone = cls ? parts.zone : null, PY = cls ? parts.y : null;
   // 每一类的参数摊成数组（循环里按类别取）
   const NP = C.length, tTone = new Float32Array(NP), tFlat = new Float32Array(NP), tR = new Float32Array(NP), tG = new Float32Array(NP), tB = new Float32Array(NP), tWear = new Float32Array(NP), tAcc = new Float32Array(NP), tPlain = new Float32Array(NP),
-    tRough = new Float32Array(NP), tMetal = new Float32Array(NP), tMin = new Float32Array(NP), tBare = new Float32Array(NP), tStip = new Float32Array(NP), tFine = new Float32Array(NP), tGrain = new Float32Array(NP), tKeep = new Float32Array(NP), tAo = new Float32Array(NP);
-  for (let k = 0; k < NP; k++) { const c = C[k]; tTone[k] = c.tone; tFlat[k] = c.flatten; tR[k] = c.tint[0]; tG[k] = c.tint[1]; tB[k] = c.tint[2]; tWear[k] = c.wear; tAcc[k] = c.accent; tPlain[k] = c.plain || 0; tRough[k] = c.rough; tMetal[k] = c.metal; tMin[k] = c.min; tBare[k] = c.bare; tStip[k] = c.stipple; tFine[k] = c.fine; tGrain[k] = c.grain; tKeep[k] = c.keep ?? 1; tAo[k] = (c.ao || 0) * 255; }
+    tRough = new Float32Array(NP), tMetal = new Float32Array(NP), tMin = new Float32Array(NP), tBare = new Float32Array(NP), tStip = new Float32Array(NP), tFine = new Float32Array(NP), tGrain = new Float32Array(NP), tKeep = new Float32Array(NP), tAo = new Float32Array(NP),
+    tMott = new Float32Array(NP), tCav = new Float32Array(NP), tLit = new Float32Array(NP);
+  for (let k = 0; k < NP; k++) { const c = C[k]; tTone[k] = c.tone; tFlat[k] = c.flatten; tR[k] = c.tint[0]; tG[k] = c.tint[1]; tB[k] = c.tint[2]; tWear[k] = c.wear; tAcc[k] = c.accent; tPlain[k] = c.plain || 0; tRough[k] = c.rough; tMetal[k] = c.metal; tMin[k] = c.min; tBare[k] = c.bare; tStip[k] = c.stipple; tFine[k] = c.fine; tGrain[k] = c.grain; tKeep[k] = c.keep ?? 1; tAo[k] = (c.ao || 0) * 255; tMott[k] = c.mottle ?? 1; tCav[k] = c.cav || 0; tLit[k] = c.lit || 0; }
   // 金属度、粗糙度、遮蔽：去 JPEG 方块。有零件图时金属度多摊开一点——烘进去的亮棱（细线）被冲淡，成片的裸钢（销子、螺丝）留着
   const metal = new Float32Array(mn), rough = new Float32Array(mn), ao = new Float32Array(mn), br = Math.max(1, Math.round(R.blur * mw / w));
   splitMr(mr, ao, rough, metal);
@@ -452,30 +506,17 @@ export function processGun(base, mr, normal, size, P = SMG_SKIN.gun, mrSize = si
   const f0 = P.flat[0] * 127.5, fk = 1 / ((P.flat[1] - P.flat[0]) * 127.5), [bgR, bgG, bgB] = P.bg, cAlb = CL.albedo * 2;
   const RB = P.ribs, ST = P.streak, ribK = 1 / (RB.pitch * 256);
   const scr = new Float32Array(mn), edg = new Float32Array(mn), brt = new Uint8Array(mn); // 划痕、留下的亮棱、压过的灰白：给粗糙度那张（小一号）用
+  // 凹凸：先在法线贴图还没被改之前整张量一遍（paintRows 会把平面上的噪点抹平，边算边量的话量到的一半是改过的）
+  const CV = P.curv, cur = new Float32Array(mn), cav = new Float32Array(mn), vex = new Float32Array(mn);
+  curvature(normal, cur, w, mw, sh, CV.reach, zone, psh, pw); boxBlur(cur, mw, mw, 1, 1);
   const tapDX = [1, 0, 1, -1], tapDY = [0, 1, 1, 1], a2 = 2 * 4, b2 = 2 * w * 4, f0q = f0 * f0, f1q = P.flat[1] * 127.5 * P.flat[1] * 127.5, pk2 = 1 / (1 << (psh > 0 ? psh : 0));
   const T1 = now();
-  const K = { base, normal, lum, low, metal, ao, patch, cloud, rows, scr, edg, brt, cls, zone, PY, w, mw, N, ps, qw, sh, psh, pw, pk2, NP, tTone, tFlat, tR, tG, tB, tWear, tAcc, tPlain, tKeep, m0, mk, a0, ak, s0, sk, knee, slope, gSoft, gk, gLow, gHigh, D, eMin, bevel, eKeep, eMax, p0, pk, eContact, eRecess, eAo, f0, fk, f0q, f1q, bgR, bgG, bgB, cAlb, RB, ST, ribK, tapDX, tapDY, a2, b2, wearCount: 0, cutCount: 0 };
+  const K = { base, normal, lum, low, metal, ao, patch, cloud, rows, scr, edg, brt, cur, cav, vex, tMott, tCav, tLit, cLo: CV.lo, cK: 1 / (CV.hi - CV.lo), cAo: CV.ao, cPatch: CV.patch, gDark: P.grip.dark, cls, zone, PY, w, mw, N, ps, qw, sh, psh, pw, pk2, NP, tTone, tFlat, tR, tG, tB, tWear, tAcc, tPlain, tKeep, m0, mk, a0, ak, s0, sk, knee, slope, gSoft, gk, gLow, gHigh, D, eMin, bevel, eKeep, eMax, p0, pk, eContact, eRecess, eAo, f0, fk, f0q, f1q, bgR, bgG, bgB, cAlb, RB, ST, ribK, tapDX, tapDY, a2, b2, wearCount: 0, cutCount: 0 };
   inBatches(paintRows, K, w);
-  // 枪托上的蹭痕：随手撒一些短的浅道子（落在枪托上的才画），两头轻中间重
-  if (cls && P.scuff.count > 0) {
-    const SC = P.scuff, r2 = seeded(SC.seed), pmax = 1 / (1 << psh);
-    for (let k = 0, tries = 0; k < SC.count && tries < SC.count * 60; tries++) {
-      const x0 = r2() * w, y0 = r2() * w, ang = r2() * Math.PI, len = SC.length[0] + r2() * (SC.length[1] - SC.length[0]), amp = 0.4 + r2() * 0.6, bend = (r2() - 0.5) * 0.02;
-      if (cls[((y0 * pmax) | 0) * pw + ((x0 * pmax) | 0)] !== PART.STOCK) continue;
-      k++;
-      for (let t = 0, a = ang; t < len; t++, a += bend) {
-        const fx = x0 + Math.cos(ang + bend * t * 0.5) * t, fy = y0 + Math.sin(ang + bend * t * 0.5) * t, xi = Math.round(fx), yi = Math.round(fy);
-        if (xi < 0 || yi < 0 || xi >= w || yi >= w) break;
-        const pc = (yi >> psh) * pw + (xi >> psh); if (cls[pc] !== PART.STOCK || zone[pc] >= 128) break;
-        const v = Math.sin(t / len * Math.PI) * amp, j = (yi * w + xi) * 4, up = SC.light * v, mi = (yi >> sh) * mw + (xi >> sh), sd = v * SC.rough * 14;
-        base[j] += up; base[j + 1] += up; base[j + 2] += up; if (sd > scr[mi]) scr[mi] = sd;
-      }
-    }
-  }
   // 金属粗糙度：按类重定，叠大范围的起伏、磨光、积灰；亮划痕和留下的亮棱更光一点；最后限幅。权重图：各类用哪种细节、用多少
   const T2 = now();
   const cRough = CL.rough * 2, g0 = CL.gate[0], gkk = 1 / (CL.gate[1] - g0), msk = N / mw, pm = pw / mw;
-  Object.assign(K, { mr, weights, rough, msk, pm, tRough, tMetal, tMin, tBare, tStip, tFine, tGrain, tAo, R, CL, cRough, g0, gkk, metalCount: 0, rMin: 1, rMax: 0 });
+  Object.assign(K, { mr, weights, rough, msk, pm, tRough, tMetal, tMin, tBare, tStip, tFine, tGrain, tAo, R, CL, CV, GP: P.grip, cRough, g0, gkk, bMin: P.bright[2] || 0, metalCount: 0, rMin: 1, rMax: 0 });
   inBatches(finishRows, K, mw);
   return { metalShare: K.metalCount / mn, wearShare: K.wearCount / n, cutShare: K.cutCount / n, roughMin: K.rMin, roughMax: K.rMax, ms: [T1 - T0, T2 - T1, now() - T2] };
 }
@@ -566,9 +607,10 @@ export function detailPixels(height, size, bump = 0.5) {
  *     这把枪各个 UV 岛的贴图密度差好几倍——腰射、开镜时占了半个画面的枪托顶面，在贴图上只是一条二十个像素宽的窄条，
  *     而且横竖密度差一倍：按 UV 铺的麻点在那儿又大又扁，托底上更是摊成一坨一坨。按位置铺，整把枪的颗粒一样大。
  *     换投影方向的那条线上 UV 是断的：导数要用断开之前的（textureGrad），不然那条线上取到最糊的一级，是一道平的缝。
- *     顺带两样只有按位置才画得细的东西——
- *     合模线（uSkinSeam：x 半宽、y 提亮、z 机匣上打几折、w 粗糙度降多少）：两半模具在枪的正中（x = 0）合上，留一道细线；
- *       画在贴图里的话在枪托顶上只有一两个像素宽，放大了是一条糊带子。线比屏幕上一个像素还细时按盖住的比例变淡，不闪。
+ *     顺带只有按位置才画得对的东西——
+ *     大范围的斑驳（uSkinMottle：x 每个模型单位几个周期、y 颜色 ±、z 粗糙度 ±、w 金属件上打几折）：两个八度的三维值噪声，按零件坐标算，
+ *       所以枪托顶面那块左右镜像的 UV 上不会出现两遍对称的斑；颜色浅的地方粗糙度偏高（积了灰、发哑），深的偏光（手摸出来的油光），高光在大平面上才会游走。
+ *       噪声用的是不带 sin 的散列（手机上 sin 大数精度不够，会出成格子）。
  *     灯色打几折（uSkinNeutral）：枪是黑的，没有自己的颜色——冷色的轮廓光照在只有它照得到的面上，那个面就成了藏蓝色，像阳极氧化的蓝件。
  *       直接光的颜色往灰里收一截（亮度不变），冷暖还在，只是不像染了色。
  *     环境反射压低（uSkinEnv，只管非金属）：黑塑料的漫反射几乎是零，白天整把枪的亮度全是它反射的天光——一片均匀的浅灰，像没上色的塑料件。
@@ -599,7 +641,13 @@ export function skinShader(shader, U, object = false) {
     if (shader.vertexShader) shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vSkinPos;\nvarying vec3 vSkinNrm;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvSkinPos = position;\n\tvSkinNrm = normal;');
-    f = f.replace('#include <normalmap_pars_fragment>', `#include <normalmap_pars_fragment>${pars}\nvarying vec3 vSkinPos;\nvarying vec3 vSkinNrm;\nuniform vec4 uSkinSeam;\nuniform float uSkinNeutral;\nuniform float uSkinEnv;\nvec2 skinDx = vec2( 0.0 );\nvec2 skinDy = vec2( 0.0 );`)
+    f = f.replace('#include <normalmap_pars_fragment>', `#include <normalmap_pars_fragment>${pars}\nvarying vec3 vSkinPos;\nvarying vec3 vSkinNrm;\nuniform vec4 uSkinMottle;\nuniform float uSkinNeutral;\nuniform float uSkinEnv;\nvec2 skinDx = vec2( 0.0 );\nvec2 skinDy = vec2( 0.0 );
+float skinHash( vec3 p ) { p = fract( p * 0.3183099 + 0.1 ); p *= 17.0; return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) ); }
+float skinNoise( vec3 x ) {
+	vec3 i = floor( x ), f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( mix( skinHash( i ), skinHash( i + vec3( 1.0, 0.0, 0.0 ) ), f.x ), mix( skinHash( i + vec3( 0.0, 1.0, 0.0 ) ), skinHash( i + vec3( 1.0, 1.0, 0.0 ) ), f.x ), f.y ),
+		mix( mix( skinHash( i + vec3( 0.0, 0.0, 1.0 ) ), skinHash( i + vec3( 1.0, 0.0, 1.0 ) ), f.x ), mix( skinHash( i + vec3( 0.0, 1.0, 1.0 ) ), skinHash( i + vec3( 1.0, 1.0, 1.0 ) ), f.x ), f.y ), f.z );
+}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 #ifdef USE_ROUGHNESSMAP
 	{
@@ -612,11 +660,11 @@ export function skinShader(shader, U, object = false) {
 		vec3 da = textureGrad( uSkinDetA, suv * uSkinA.x, skinDx * uSkinA.x, skinDy * uSkinA.x ).xyz - 0.5;
 		vec3 db = textureGrad( uSkinDetB, suv * uSkinB.x, skinDx * uSkinB.x, skinDy * uSkinB.x ).xyz - 0.5;
 		vec3 dc = textureGrad( uSkinDetA, suv * uSkinC.x, skinDx * uSkinC.x, skinDy * uSkinC.x ).xyz - 0.5;${mix3}
-		float sfw = abs( spx.x ) + abs( spy.x ) + 1e-5;
-		float seam = clamp( ( uSkinSeam.x - abs( vSkinPos.x ) ) / sfw + 0.5, 0.0, 1.0 ) * min( 1.0, 2.0 * uSkinSeam.x / sfw ) * ( 1.0 - sn.x )
-			* max( smoothstep( 0.1, 0.2, sw.r ), uSkinSeam.z * smoothstep( 0.32, 0.4, sw.b ) );
-		diffuseColor.rgb *= 1.0 + uSkinSeam.y * seam;
-		roughnessFactor = max( roughnessFactor - uSkinSeam.w * seam, 0.05 );
+		vec3 smp = vSkinPos * uSkinMottle.x;
+		float sm1 = skinNoise( smp ), sm2 = skinNoise( smp * 3.7 + 17.0 );
+		float smk = mix( uSkinMottle.w, 1.0, clamp( sw.r + sw.b, 0.0, 1.0 ) );
+		diffuseColor.rgb *= 1.0 + ( sm1 * 0.7 + sm2 * 0.3 - 0.5 ) * uSkinMottle.y * smk;
+		roughnessFactor = clamp( roughnessFactor + ( sm1 * 0.45 + sm2 * 0.55 - 0.5 ) * uSkinMottle.z * smk, 0.05, 1.0 );
 	}
 #endif`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -636,6 +684,50 @@ export function skinShader(shader, U, object = false) {
   }
   shader.fragmentShader = f;
   return shader;
+}
+
+// ---- 右手的握姿 ----
+/**
+ * 右手扣回握把上的修正（模型自带的握姿：食指伸在扳机护圈外面，中指平伸在护圈下面，两根手指张成一个 V，看着像在朝枪挥手）。
+ * bone：骨骼名；axis：绕哪根轴转（模型自己的坐标：y 朝上、z 朝枪口），angle：转多少（弧度）。
+ *   中指绕竖轴（握把的方向）往里转，指肚贴到握把前面——无名指、小指本来就是这么包着的；
+ *   食指绕横轴往下压，进到护圈里、搭在扳机上。
+ * 轴取模型坐标而不是骨骼自己的：几根指骨的本地轴各朝各的方向，按模型坐标说「绕握把转」才是一个意思。
+ */
+export const SMG_GRIP = Object.freeze([
+  Object.freeze({ bone: 'R_middle1', axis: Object.freeze([0, 1, 0]), angle: 0.8 }),
+  Object.freeze({ bone: 'R_point1', axis: Object.freeze([1, 0, 0]), angle: 0.45 }),
+]);
+/**
+ * 按 SMG_GRIP 准备好右手的修正：在模型当前的姿势（握好的那一帧）上把「绕模型坐标轴转」折算成骨骼自己坐标里的一个旋转，
+ * 以后每次动画写完骨骼就乘在后面——换弹时手指跟着动画走，修正跟着手指走。
+ * clip：动画；只修正动画管着的骨骼。没有骨骼、没有动画（测试里的假模型）返回 null。
+ * 返回 { bones, apply() }。apply 每帧在 mixer.update 之后调：
+ *   动画值没变时 three 的混合器不重写骨骼（PropertyMixer 只在值变了才写），所以骨骼还是上一帧乘好的——这时不能再乘一遍，
+ *   记下自己写进去的值，骨骼还是它就跳过。
+ */
+export function gripPose(model, clip, G = SMG_GRIP) {
+  if (!model?.traverse || !clip?.tracks) return null;
+  model.updateMatrixWorld(true);
+  const mq = model.getWorldQuaternion(new THREE.Quaternion()).invert(), items = [];
+  for (const g of G) {
+    let bone = null; model.traverse((o) => { if (!bone && o.isBone && o.name.startsWith(g.bone)) bone = o; });
+    if (!bone?.parent || !clip.tracks.some((t) => t.name === `${bone.name}.quaternion`)) continue;
+    const P = mq.clone().multiply(bone.parent.getWorldQuaternion(new THREE.Quaternion()));
+    const R = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...g.axis).normalize(), g.angle);
+    const W = P.clone().invert().multiply(R).multiply(P); // 父骨骼坐标里的旋转
+    items.push({ bone, O: bone.quaternion.clone().invert().multiply(W).multiply(bone.quaternion), last: null });
+  }
+  if (!items.length) return null;
+  return {
+    bones: items.map((it) => it.bone),
+    apply() {
+      for (const it of items) {
+        if (it.last && it.bone.quaternion.equals(it.last)) continue;
+        it.bone.quaternion.multiply(it.O); it.last = (it.last || new THREE.Quaternion()).copy(it.bone.quaternion);
+      }
+    },
+  };
 }
 
 // ---- 以下要画布 ----
@@ -727,14 +819,17 @@ export function skinSmg(model, { S = SMG_SKIN } = {}) {
     for (const k of SLOTS) { const t = m[k], nt = t && swap.get(t.image); if (nt && nt !== t) { old.add(t); m[k] = nt; } }
     let U;
     if (isGun) U = { uSkinDetA: { value: stipple }, uSkinDetB: { value: grain }, uSkinPart: { value: weights }, uSkinA: { value: vec(S.gun.A) }, uSkinB: { value: vec(S.gun.B) }, uSkinC: { value: vec(S.gun.C) }, uSkinF90: { value: S.gun.f90 },
-      uSkinSeam: { value: new THREE.Vector4(S.gun.seam.width, S.gun.seam.light, S.gun.seam.body, S.gun.seam.rough) }, uSkinNeutral: { value: S.gun.neutral }, uSkinEnv: { value: S.gun.env } };
+      uSkinMottle: { value: new THREE.Vector4(S.gun.mottle.scale, S.gun.mottle.albedo, S.gun.mottle.rough, S.gun.mottle.metal) }, uSkinNeutral: { value: S.gun.neutral }, uSkinEnv: { value: S.gun.env } };
     else {
       const D = sleeve ? S.hands.sleeve : S.hands.glove;
+      // 左手腕上手套的袖口从袖子里穿出来一块（模型本身的穿插，原样就有），腰射时正好在画面里，是一块锯齿边的浅色布。
+      // 袖子往镜头挪一点点深度就盖住了；穿插只有几毫米，手套真正在袖子外面的地方差得远，不受影响
+      if (sleeve) { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -4; }
       U = { uSkinDetA: { value: pebble }, uSkinDetB: { value: weave }, uSkinPart: { value: sleeve ? cloth : weights }, uSkinA: { value: vec(D.A) }, uSkinB: { value: vec(D.B) }, uSkinC: { value: vec(null) }, uSkinF90: { value: S.hands.f90 } };
     }
     m.userData.skin = U;
     m.onBeforeCompile = (shader) => { skinShader(shader, U, isGun); };
-    m.customProgramCacheKey = () => (isGun ? 'smg-skin-3-pos' : 'smg-skin-3-uv');
+    m.customProgramCacheKey = () => (isGun ? 'smg-skin-4-pos' : 'smg-skin-4-uv');
     m.needsUpdate = true;
   }
   for (const t of old) { t.dispose(); t.image?.close?.(); }

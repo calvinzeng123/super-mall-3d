@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { SMG, createSmg } from './smg.js';
 import { LAUNCHER, createLauncher } from './launcher.js';
-import { createPistolSkin, scrubMarkings as scrubPistolMarkings } from './skins/pistol-skin.js';
+import { createPistolSkin, scrubMarkings as scrubPistolMarkings, addSightDots } from './skins/pistol-skin.js';
 import { buildKnife, createKnifeMaterials } from './skins/knife-skin.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -98,6 +98,14 @@ export const PISTOL_SKIN = Object.freeze({
     ]) }),
     MainBody: Object.freeze({ rects: Object.freeze([{ at: [62, 108, 13, 45], from: [62, 92, 13, 14] }]), discs: Object.freeze([[400.1, 209.6, 13.6], [400, 342.7, 13.6]]) }), // 编号；两侧握把片的圆片
   }),
+  // 瞄具的荧光点（做法见 skins/pistol-skin.js 的 addSightDots）。坐标是模型里的厘米：准星是一片往前斜的刀片（后面那个斜面朝后上方），
+  // 点在斜面正中；照门后面是一个竖直的平面，两个点在缺口两边、和准星的点一样高（开镜时三点一线）
+  // 准星的点更亮一档：它最远、最小，开镜时眼睛要先找到它
+  dots: Object.freeze({ glow: Object.freeze([0.16, 0.62, 0.1]), items: Object.freeze([
+    Object.freeze({ node: 'FrontSight_low', at: Object.freeze([0, 25.975, 9.52]), normal: Object.freeze([0, 0.834, -0.552]), r: Object.freeze([0.105, 0.15]), glow: Object.freeze([0.3, 1.0, 0.2]) }),
+    Object.freeze({ node: 'RearSight_low', at: Object.freeze([-0.74, 25.92, -11.7]), normal: Object.freeze([0, 0, -1]), r: Object.freeze([0.09, 0.145]) }),
+    Object.freeze({ node: 'RearSight_low', at: Object.freeze([0.74, 25.92, -11.7]), normal: Object.freeze([0, 0, -1]), r: Object.freeze([0.09, 0.145]) }),
+  ]) }),
 });
 
 /**
@@ -208,8 +216,28 @@ export function knifeReaches(eye, fx, fy, fz, enemy, reach = KNIFE.reach, cone =
   return Math.acos(Math.max(-1, Math.min(1, (dx * fx + dy * fy + dz * fz) / d))) <= cone;
 }
 
+/**
+ * 一次性的贴图活儿（几十到几百毫秒的同步计算）排成队，一帧做一件：开局时手枪真模型、刀、榴弹枪的贴图不挤在同一帧里，
+ * 手机上不会卡出一下长的停顿。每件之间隔一次 requestAnimationFrame（中间画一帧）。没有画布（测试环境）时不排队，当场做。
+ * 返回 { add(job), stop() }；stop 以后排着的不再做。
+ */
+function frameQueue() {
+  const q = []; let busy = false, dead = false;
+  const tick = typeof requestAnimationFrame === 'function' ? (f) => requestAnimationFrame(() => setTimeout(f, 0)) : (f) => setTimeout(f, 16);
+  const run = () => {
+    if (dead) return;
+    const job = q.shift();
+    if (job) { try { job(); } catch (e) { console.error('[零点突围] 武器贴图处理出错', e); } }
+    if (q.length) tick(run); else busy = false;
+  };
+  return {
+    add(job) { if (dead) return; if (typeof document === 'undefined' || typeof setTimeout !== 'function') { job(); return; } q.push(job); if (!busy) { busy = true; tick(run); } },
+    stop() { dead = true; q.length = 0; },
+  };
+}
+
 export function createArsenal(G, { camera, layer = 0, ui = null }) {
-  const rifle = G.weapon, rifleVm = camera.children.find((c) => /^viewmodel/.test(c.name || '')) || null;
+  const rifle = G.weapon, later = frameQueue(), rifleVm = camera.children.find((c) => /^viewmodel/.test(c.name || '')) || null;
   // 手搭的方块手枪自己的材质（原游戏那几种枪用材质要配它自己的顶点数据，直接拿来用会发白）：深色磷化钢、哑光聚合物。
   // 真模型加载出来以后这几个就不显示了；刀的材质在 skins/knife-skin.js
   const M = {
@@ -228,7 +256,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const pg = pistolGeometry();
   // 枪口、抛壳口、照门高度、套筒行程：先按手搭的方块枪，换上真模型（skinPistol）后改成模型的
   const fit = { muzzle: [...pg.muzzle], eject: [...pg.eject], sightY: pg.sightY, slideTravel: pg.slideTravel };
-  let skin = null;
+  let skin = null, pending = null; // pending：真模型的贴图还在一帧一种材质地处理（skinPistol 的 sliced），处理完才换上
   const pistolRoot = new THREE.Group(); pistolRoot.name = 'viewmodel-p17';
   const pBody = new THREE.Group(); pBody.position.set(...GRIP); pistolRoot.add(pBody);
   mesh(pg.frame, M.frame, pBody);
@@ -283,7 +311,8 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const kArm = new THREE.Group(); kArm.position.copy(ELBOW).negate(); knifeRoot.add(kArm);
   const kBody = new THREE.Group(); kBody.position.set(...GRIP); kArm.add(kBody);
   // 刀自己的三种材质（刀身专用贴图、橡胶握把、缎面钢的护手和尾锤）：见 skins/knife-skin.js
-  const KM = createKnifeMaterials();
+  // 贴图推迟到开局后的下一帧做（later）；在那之前就换到刀的话，updateKnife 里当场做
+  const KM = createKnifeMaterials({ defer: true }); later.add(() => KM.dress());
   mesh(kg.blade, KM.blade, kBody); mesh(kg.fuller, KM.blade, kBody); mesh(kg.handle, KM.handle, kBody); mesh(kg.guard, KM.steel, kBody);
   cloneHand(0, kArm);
   // 平时的握姿（刀尖朝前上方、往里斜）和这个姿势下手肘在镜头里的位置
@@ -300,7 +329,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   // 冲锋枪（smg.js）：模型后台加载，加载好、并且这一局捡到了才换得过去
   const smg = createSmg(G, { camera, layer }), Q = smg.state;
   // 榴弹枪（launcher.js）：手搭的模型，步枪上的两只手原样搬过去
-  const gl = createLauncher(G, { camera, layer, cloneHand }), L = gl.state;
+  const gl = createLauncher(G, { camera, layer, cloneHand, defer: true }), L = gl.state; later.add(() => gl.prepare());
   let hasSmg = false, hasGl = false;
   const slots = () => (hasGl ? SLOTS_ALL.filter((s) => s !== 'smg' || (hasSmg && smg.ready)) : hasSmg && smg.ready ? SLOTS_SMG : SLOTS);
   const rootOf = (slot) => (slot === 'pistol' ? pistolRoot : slot === 'knife' ? knifeRoot : slot === 'smg' ? smg.root : slot === 'launcher' ? gl.root : rifleVm);
@@ -521,6 +550,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     if (pLeft) { pLeft.visible = P.left > 0.04; pLeft.position.copy(leftBase); pLeft.position.y -= 0.21 * hand + 0.32 * (1 - P.left); pLeft.position.z += 0.05 * hand + 0.07 * (1 - P.left); }
   }
   function updateKnife(dt, active, busy) {
+    if (active && !KM.ready) KM.dress();
     const inp = G.input;
     K.cool -= dt;
     if (active && !busy && K.t < 0 && (inp.pressed?.('fire') || inp.pressed?.('melee') || (inp.fire && K.cool <= -0.15))) slash();
@@ -556,6 +586,11 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     try { rifle.update(dt); } finally { if (down) inp.down = down; if (pressed) inp.pressed = pressed; inp.fire = fire; inp.ads = ads; }
   }
 
+  /** 真模型手枪的资源全部释放（也用于处理到一半就放弃的：还没处理的材质上挂的是原贴图，一起放掉） */
+  function freeSkin(k) {
+    for (const m of k.res.materials) for (const v of Object.values(m)) if (v?.isTexture) k.res.textures.add(v);
+    for (const g of k.res.geometries) g.dispose(); for (const m of k.res.materials) m.dispose(); for (const t of k.res.textures) { t.dispose(); t.image?.close?.(); } k.dresser.dispose();
+  }
   const proxy = {
     stub: false,
     get name() { return S.cur === 'pistol' ? PISTOL.name : S.cur === 'knife' ? KNIFE.name : S.cur === 'smg' ? SMG.name : S.cur === 'launcher' ? LAUNCHER.name : rifle?.name; },
@@ -627,15 +662,18 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     /**
      * 手枪换上真模型：scene 是加载好的 glTF 场景（run.js 在后台加载，加载不出来就一直用手搭的那把）。
      * 套筒那几个部件、弹匣、击锤各自记下原位，之后跟着开火 / 换弹动；方块枪的网格藏起来。
+     * sliced：贴图一帧处理一种材质（套筒、套筒座各要三四百毫秒），全处理完才把真模型换上（之前一直是方块枪，
+     *   不会露出没抹字的原贴图）；中途出错就放弃、继续用方块枪。不传（预览台、测试）就当场全做完。
      */
-    skinPistol(scene, K = PISTOL_SKIN) {
-      if (skin || !scene) return false;
+    skinPistol(scene, K = PISTOL_SKIN, { sliced = false } = {}) {
+      if (skin || pending || !scene) return false;
       const holder = new THREE.Group(); holder.name = 'p17-skin';
       holder.scale.setScalar(K.scale); holder.rotation.y = Math.PI; // 模型枪口朝 +z，我们朝 −z
       holder.position.set(K.grip[0] * K.scale + K.offset[0], -K.grip[1] * K.scale + K.offset[1], K.grip[2] * K.scale + K.offset[2]);
       holder.add(scene);
-      const slides = [], mags = [], res = { geometries: new Set(), materials: new Set(), textures: new Set() }, dresser = createPistolSkin();
+      const slides = [], mags = [], res = { geometries: new Set(), materials: new Set(), textures: new Set() }, dresser = createPistolSkin(), uses = new Map();
       let hammer = null, magAxis = new THREE.Vector3(0, 1, 0);
+      scene.updateMatrixWorld(true); const toScene = new THREE.Matrix4().copy(scene.matrixWorld).invert(), rel = new THREE.Matrix4();
       scene.traverse((o) => {
         if (K.slides.test(o.name)) slides.push({ object: o, base: o.position.clone() });
         if (K.mags.test(o.name)) mags.push({ object: o, base: o.position.clone() });
@@ -647,24 +685,53 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
         o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false;
         res.geometries.add(o.geometry);
         for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-          if (res.materials.has(m)) continue;
-          res.materials.add(m); m.side = THREE.FrontSide; m.envMapIntensity = 1.15;
-          if (K.tint[m.name]) m.color.setScalar(K.tint[m.name]);
-          // 整套贴图处理（抹字、重新上色、放大锐化、细节）；做不了（测试环境、贴图不全）就只抹字，深色靠上面的颜色乘数
-          if (!dresser.dress(m, K.scrub[m.name])) scrubMarkings(m, K.scrub[m.name]);
-          for (const v of Object.values(m)) if (v?.isTexture) { res.textures.add(v); v.anisotropy = Math.max(v.anisotropy, 4); }
+          if (!uses.has(m)) uses.set(m, []);
+          // 这件的 UV 和顶点（贴图处理要知道每个部件在贴图上占哪几块：渗掉岛缝里的白边、把网纹拨片压平、找防滑槽的槽壁）
+          // 法线（nrm）和这件在模型里的缩放（unit）：按几何找棱时用——分得清硬棱和顺滑的圆弧，带宽按厘米算
+          const uv = o.geometry.attributes.uv, pa = o.geometry.attributes.position, na = o.geometry.attributes.normal;
+          if (uv && pa) {
+            const a = new Float32Array(uv.count * 2), pos = new Float32Array(pa.count * 3), nrm = na ? new Float32Array(na.count * 3) : null;
+            for (let i = 0; i < uv.count; i++) { a[i * 2] = uv.getX(i); a[i * 2 + 1] = uv.getY(i); }
+            for (let i = 0; i < pa.count; i++) { pos[i * 3] = pa.getX(i); pos[i * 3 + 1] = pa.getY(i); pos[i * 3 + 2] = pa.getZ(i); }
+            if (nrm) for (let i = 0; i < na.count; i++) { nrm[i * 3] = na.getX(i); nrm[i * 3 + 1] = na.getY(i); nrm[i * 3 + 2] = na.getZ(i); }
+            const unit = rel.multiplyMatrices(toScene, o.matrixWorld).getMaxScaleOnAxis() || 1;
+            uses.get(m).push({ name: `${o.name}|${o.parent?.name || ''}`, uv: a, pos, nrm, unit, index: o.geometry.index?.array || null });
+          }
         }
       });
-      if (layer) holder.layers.set(layer);
-      pBody.add(holder);
-      for (const o of [...pBody.children]) if (o !== holder && o !== flash && o !== pSlide && o !== pMag) o.visible = false; // 套筒座、扳机
-      pSlide.visible = false; pMag.visible = false;
-      const f = pistolSkinFit(K);
-      Object.assign(fit, { muzzle: f.muzzle, eject: f.eject, sightY: f.sightY, slideTravel: f.slideTravel });
-      pPivot.set(...f.pivot);
-      flash.position.set(fit.muzzle[0], fit.muzzle[1], fit.muzzle[2] - 0.03);
-      dresser.seal();
-      skin = { holder, slides, mags, hammer, magAxis, res, dresser };
+      for (const m of uses.keys()) res.materials.add(m);
+      const dressOne = (m, parts) => {
+        m.side = THREE.FrontSide; m.envMapIntensity = 1.15;
+        if (K.tint[m.name]) m.color.setScalar(K.tint[m.name]);
+        // 整套贴图处理（抹字、重新上色、放大锐化、细节）；做不了（测试环境、贴图不全）就只抹字，深色靠上面的颜色乘数
+        if (!dresser.dress(m, K.scrub[m.name], parts)) scrubMarkings(m, K.scrub[m.name]);
+        for (const v of Object.values(m)) if (v?.isTexture) { res.textures.add(v); v.anisotropy = Math.max(v.anisotropy, 8); }
+      };
+      const finishSkin = () => {
+        // 瞄具的荧光点：等材质处理完再加（不进上面那一遍贴图处理）
+        const dots = addSightDots(scene, K.dots);
+        for (const m of dots.meshes) if (layer) m.layers.set(layer);
+        for (const g of dots.geometries) res.geometries.add(g); for (const m of dots.materials) res.materials.add(m);
+        if (layer) holder.layers.set(layer);
+        pBody.add(holder);
+        for (const o of [...pBody.children]) if (o !== holder && o !== flash && o !== pSlide && o !== pMag) o.visible = false; // 套筒座、扳机
+        pSlide.visible = false; pMag.visible = false;
+        const f = pistolSkinFit(K);
+        Object.assign(fit, { muzzle: f.muzzle, eject: f.eject, sightY: f.sightY, slideTravel: f.slideTravel });
+        pPivot.set(...f.pivot);
+        flash.position.set(fit.muzzle[0], fit.muzzle[1], fit.muzzle[2] - 0.03);
+        dresser.seal();
+        skin = { holder, slides, mags, hammer, magAxis, res, dresser };
+      };
+      if (sliced && typeof document !== 'undefined') {
+        const job = { res, dresser, failed: false }; pending = job;
+        const step = (f) => () => { if (pending !== job || job.failed) return; try { f(); } catch (e) { job.failed = true; pending = null; freeSkin(job); console.warn('[零点突围] 手枪贴图处理出错，继续用简化模型', e); } };
+        for (const [m, parts] of uses) later.add(step(() => dressOne(m, parts)));
+        later.add(step(() => { pending = null; finishSkin(); }));
+        return true;
+      }
+      for (const [m, parts] of uses) dressOne(m, parts);
+      finishSkin();
       return true;
     },
     get skinned() { return !!skin; },
@@ -675,7 +742,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       for (const r of [pistolRoot, knifeRoot]) r.removeFromParent(); smg.dispose(); gl.dispose();
       for (const g of [pg.frame, pg.slide, pg.dark, pg.mag, pg.trigger, pg.dots, kg.blade, kg.fuller, kg.handle, kg.guard]) g.dispose();
       M.flash.map?.dispose?.(); for (const m of Object.values(M)) m.dispose(); KM.dispose();
-      if (skin) { for (const g of skin.res.geometries) g.dispose(); for (const m of skin.res.materials) m.dispose(); for (const t of skin.res.textures) { t.dispose(); t.image?.close?.(); } skin.dresser.dispose(); skin = null; }
+      later.stop();
+      if (skin) { freeSkin(skin); skin = null; }
+      if (pending) { freeSkin(pending); pending = null; }
       btn?.remove();
     },
   };

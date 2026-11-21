@@ -4,7 +4,7 @@
 // 定位：射速快、单发伤害低、动静小——步枪 7 点响动一发，它只有 2.5；打散兵游勇不招尸潮，打尸潮得靠步枪和投掷物。
 // 这里只管这把枪自己（状态、开火、换弹、模型摆位）；切枪、HUD 读数在 arsenal.js。
 import * as THREE from 'three';
-import { skinSmg } from './skins/smg-skin.js';
+import { skinSmg, gripPose } from './skins/smg-skin.js';
 
 /**
  * interval：两发间隔（秒，按住连发）；noise：一发的响动（siege.js 读）；recoil：每发镜头上抬（弧度）；
@@ -40,7 +40,7 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
   const flashGeo = starGeometry(), flash = new THREE.Mesh(flashGeo, flashMat);
   flash.position.set(V.muzzle[0], V.muzzle[1], V.muzzle[2] - 0.02); flash.visible = false; if (layer) flash.layers.set(layer); root.add(flash);
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), q1 = new THREE.Quaternion(), e1 = new THREE.Euler();
-  let model = null, mixer = null, action = null, clipTime = 0, skin = null;
+  let model = null, mixer = null, action = null, clipTime = 0, skin = null, grip = null;
   const res = { geometries: new Set(), materials: new Set(), textures: new Set() };
 
   function attach(gltf) {
@@ -59,6 +59,8 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
     root.add(model);
     const clip = gltf.animations?.find((c) => /reload/i.test(c.name)) || gltf.animations?.[0] || null;
     if (clip) { mixer = new THREE.AnimationMixer(model); action = mixer.clipAction(clip); action.play(); action.paused = true; clipTime = clip.duration; action.time = clipTime; mixer.update(0); }
+    // 右手扣回握把上（模型自带的握姿两根手指张在护圈外面；见 skins/smg-skin.js 的 SMG_GRIP），每次动画写完骨骼再套
+    if (mixer) { try { grip = gripPose(model, clip); grip?.apply(); } catch (e) { console.error('[零点突围] 冲锋枪握姿修正出错', e); } }
     return true;
   }
 
@@ -125,7 +127,7 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
       S.spread = damp(S.spread, Math.max(target, Math.min(S.spread, W.spreadMax)), 6, dt);
       if (S.time - S.lastShot > 0.12) S.spread = damp(S.spread, target, 7, dt);
       // 换弹动画：从头放到尾；平时停在最后一帧
-      if (action) { action.time = S.reload ? clamp01(S.reload.t / W.reload) * clipTime : clipTime; mixer.update(0); }
+      if (action) { action.time = S.reload ? clamp01(S.reload.t / W.reload) * clipTime : clipTime; mixer.update(0); grip?.apply(); }
       if (!active) return;
       // 摆位：腰射在右下、开镜到正中；走路起伏、转头滞后、冲刺时枪口朝上收
       const amt = Math.min(1, moving / 4) * (p?.onGround === false ? 0.2 : 1) * (1 - 0.8 * S.ads);
@@ -145,6 +147,7 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
     addAmmo(n) { const b = S.reserve; S.reserve = Math.min(W.reserveMax, S.reserve + n); return S.reserve - b; },
     dispose() {
       root.removeFromParent(); flashGeo.dispose(); flashMat.dispose(); mixer?.stopAllAction();
+      model?.traverse((o) => o.skeleton?.dispose()); // 骨骼贴图（boneTexture）不随几何、材质释放
       for (const g of res.geometries) g.dispose(); for (const m of res.materials) m.dispose(); for (const t of res.textures) { t.dispose(); t.image?.close?.(); } skin?.dispose();
     },
   };

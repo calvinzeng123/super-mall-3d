@@ -1,8 +1,10 @@
 // G40 榴弹枪的外形和表面（launcher.js 只管开火、换弹、摆位；这里管它长什么样）。
 // 原来的模型是几根圆柱加几个方块、一个颜色到底——暗场里就是一坨黑加一坨棕。这里换成：
 //   外形：车出来的枪管（膛口、箍、药室加厚段）、带圆顶的机匣、一整块胡桃木的枪托连握把、包着枪管下半的护木（带指槽）、
-//         弯的扳机护圈和扳机、开闩扳把、铰链销、立起来的梯形表尺、带护耳的准星、背带环、橡胶托底、带底缘和底火的弹底；
-//   表面：自己的两套贴图配方——胡桃木（细而直、顺着枪托长度方向的木纹，不是斑马纹）和烤蓝钢（近中性的深灰、很细的顺向抛光纹，没有麻点）；
+//         弯的扳机护圈和扳机、开闩扳把、铰链销、往前放倒的梯形表尺和立着的方缺口照门（三点夜光）、带护耳的准星、背带环、橡胶托底、带底缘和底火的弹底；
+//         机匣尾端是一段收口的后盖，盖住枪托插进来的那一截（从后上方看是实心的铁，不是一个罩着木头的空壳）；
+//   表面：自己的两套贴图配方——胡桃木（不对称的年轮 + 大块明暗 + 浅的细线和棕眼，不是斑马纹也不是梳过的头发）和烤蓝钢
+//         （近中性的深灰、半哑的磷化颗粒，粗糙度 0.5 上下带缓的大斑——暗场里不是一条镀铬的镜面带）；
 //         木头的 UV 是按位置投影的（loft 的 grain）：木纹长在木料里，不跟着外形拐弯——枪托、机匣下面那一角、握把是一块木头，纹一路接过去；
 //         举枪时枪托贴着镜头，木头在着色器里再叠一层三倍密的细纹（wearable 的 detail），不糊；木头的高光压低，冷色的轮廓光不把它洗成灰的；
 //         磨损不画在贴图里（贴图是平铺的，画进去每隔一段就重复一次），而是按模型自己的棱角算出来存在顶点上，
@@ -42,20 +44,27 @@ export function walnut(size, seed = 1) {
   const color = new Float32Array(n * 3), height = new Float32Array(n), rough = new Float32Array(n), early = new Float32Array(n), detail = new Float32Array(n);
   // 「眼」：线在 (u0, v0) 附近往上下两边让开。横竖两个方向的形状分开算好（都按平铺的距离算，接得上缝）
   const eyes = [0, 1].map(() => { const u0 = r() * S, v0 = r() * S, A = S * (0.03 + r() * 0.02), gx = new Float32Array(S), hy = new Float32Array(S); for (let k = 0; k < S; k++) { let du = Math.abs(k - u0); du = Math.min(du, S - du) / (S * 0.17); let dv = k - v0; if (dv > S / 2) dv -= S; if (dv < -S / 2) dv += S; dv /= S * 0.085; gx[k] = Math.exp(-du * du); hy[k] = A * dv * Math.exp(-dv * dv * 0.5); } return { gx, hy }; });
+  // 年轮：一格贴图（横纹 15 厘米）里 RINGS 圈，间距忽宽忽窄（ringJit 往前往后推相位），每圈是「浅的早材慢慢变深、到晚材一道窄的深线、
+  // 再一下跳回浅的」——不对称的锯齿，不是 sin 的对称条（那就是斑马）；每一圈的深浅也不一样（ringAmp），有的几乎看不见
+  const RINGS = 13, ringJit = fbmField(S, 2, 3, 2, seed + 25, 0.5), ringAmp = noiseField(S, 2, RINGS, seed + 27), figure = fbmField(S, 3, 2, 2, seed + 29, 0.5);
   for (let y = 0, i = 0; y < S; y++) for (let x = 0; x < S; x++, i++) {
     const fy = y + (warp[i] - 0.5) * S * 0.09 - eyes[0].gx[x] * eyes[0].hy[y] - eyes[1].gx[x] * eyes[1].hy[y] + S * 2, y0 = Math.floor(fy), t = fy - y0, a = (y0 % S) * S + x, b = ((y0 + 1) % S) * S + x;
     const ln = line[a] + (line[b] - line[a]) * t, bd = band[a] + (band[b] - band[a]) * t, hr = hair[a] + (hair[b] - hair[a]) * t, sk = streak[a] + (streak[b] - streak[a]) * t;
-    const fine = 0.3 + 1.2 * crisp[i], g = clamp01((bd - 0.5) * 0.95 + ((ln - 0.5) * 0.42 + (hr - 0.5) * 0.2) * fine + 0.5), d = sstep(0.66, 0.92, sk); // d：深色矿物线（窄、淡，不通长——宽了深了就是斑马纹）
-    const lum = (0.58 + 0.76 * g) * (0.8 + 0.4 * tone[i]) * (1 - 0.3 * d);
+    const ph = (fy / S) * RINGS + (ringJit[a] - 0.5) * 2.2, fr = ph - Math.floor(ph), ra = 0.35 + 0.65 * (ringAmp[a] + (ringAmp[b] - ringAmp[a]) * t);
+    const ring = (fr * 0.55 + sstep(0.78, 0.93, fr) * 0.6 * (1 - sstep(0.95, 1, fr)) - 0.4) * ra; // 早材到晚材：-0.4 … +0.6 的不对称一圈
+    // 细线、发丝压到上一版的一半——上一版满幅都是一样细、一样硬的平行线，腰射时枪托上像梳过的头发
+    const fine = 0.3 + 1.2 * crisp[i], g = clamp01((bd - 0.5) * 0.7 - ring * 0.34 + ((ln - 0.5) * 0.2 + (hr - 0.5) * 0.08) * fine + 0.5), d = sstep(0.7, 0.93, sk); // d：深色矿物线（窄、淡，不通长——宽了深了就是斑马纹）
+    // figure：横着纹路的大块明暗（一格里两三块），木料各处吃色不一样——整块枪托不是一个色
+    const lum = (0.6 + 0.7 * g) * (0.8 + 0.4 * tone[i]) * (0.88 + 0.24 * figure[i]) * (1 - 0.26 * d);
     color[i * 3] = 54 * lum + 5 * g; color[i * 3 + 1] = 32 * lum + 4 * g - d; color[i * 3 + 2] = 20 * lum + 2 * g - d;
-    height[i] = 0.5 + ((ln - 0.5) * 0.2 + (hr - 0.5) * 0.14) * fine;
-    rough[i] = clamp01(0.6 - (g - 0.5) * 0.1 + (sheen[i] - 0.5) * 0.2); early[i] = g; detail[i] = 0.5 + (ln - 0.5) * 0.5 + (hr - 0.5) * 0.4;
+    height[i] = 0.5 + ((ln - 0.5) * 0.09 + (hr - 0.5) * 0.05) * fine - ring * 0.05;
+    rough[i] = clamp01(0.5 - (g - 0.5) * 0.08 + (sheen[i] - 0.5) * 0.14 + ring * 0.04); early[i] = g; detail[i] = 0.5 + (ln - 0.5) * 0.3 + (hr - 0.5) * 0.15;
   }
-  // 棕眼：顺纹的短黑道，浅色（早材）的地方多
+  // 棕眼：顺纹的短黑道，浅色（早材）的地方多；凹得浅（深了每个棕眼的边都接一点高光，枪托顶上是一片发白的碎道）
   for (let k = 0, count = Math.round(n / 46); k < count; k++) {
     const x0 = Math.floor(r() * S), y0 = Math.floor(r() * S), len = 2 + Math.floor(r() * S / 36), deep = 0.74 + r() * 0.16;
     if (early[y0 * S + x0] < r() * 0.75) continue;
-    for (let e = 0; e < len; e++) { const i = y0 * S + ((x0 + e) % S), f = Math.sin((e + 0.5) / len * Math.PI), m = 1 - (1 - deep) * f; color[i * 3] *= m; color[i * 3 + 1] *= m; color[i * 3 + 2] *= m; height[i] -= 0.22 * f; rough[i] = clamp01(rough[i] + 0.1 * f); detail[i] = Math.max(0, detail[i] - 0.3 * f); }
+    for (let e = 0; e < len; e++) { const i = y0 * S + ((x0 + e) % S), f = Math.sin((e + 0.5) / len * Math.PI), m = 1 - (1 - deep) * f; color[i * 3] *= m; color[i * 3 + 1] *= m; color[i * 3 + 2] *= m; height[i] -= 0.12 * f; rough[i] = clamp01(rough[i] + 0.12 * f); detail[i] = Math.max(0, detail[i] - 0.3 * f); }
   }
   // 用过的痕迹：几个磕出来的小坑（坑里积了一点灰，暗一点）、几道横着木纹的浅划痕（漆面划破了，发白一点）。都很淡
   const px = (x, y) => (((Math.round(y) % S) + S) % S) * S + (((Math.round(x) % S) + S) % S);
@@ -79,18 +88,21 @@ export function walnut(size, seed = 1) {
 export function blued(size, seed = 1) {
   const S = size, n = S * S, r = seeded(seed + 31);
   const cloud = fbmField(S, 2, 4, 2, seed), brown = noiseField(S, 2, 4, seed + 2), brush = noiseField(S, 6, S, seed + 3), brush2 = noiseField(S, 14, Math.max(4, S >> 1), seed + 4), amp = noiseField(S, 3, 6, seed + 5), smudge = fbmField(S, 3, 8, 2, seed + 9);
-  const mask = fbmField(S, 5, 10, 3, seed + 21, 0.68);
+  const mask = fbmField(S, 5, 10, 3, seed + 21, 0.68), mottle = fbmField(S, 2, 3, 2, seed + 41, 0.55), grain = noiseField(S, S >> 1, S >> 1, seed + 43);
   const color = new Float32Array(n * 3), height = new Float32Array(n), rough = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const b = (brush[i] * 0.65 + brush2[i] * 0.35 - 0.5) * (0.4 + 1.0 * amp[i]), c = cloud[i] - 0.5, v = 1 + c * 0.26 + b * 0.05, w = (brown[i] - 0.5) * 5;
+    // 拉丝压到上一版的一半以下、再叠一层很细的磷化颗粒（grain，各向同性）：上一版侧面一道道横的亮纹，暗场里像拉丝不锈钢
+    const b = (brush[i] * 0.65 + brush2[i] * 0.35 - 0.5) * (0.4 + 1.0 * amp[i]) * 0.45, gr = grain[i] - 0.5, c = cloud[i] - 0.5, v = 1 + c * 0.26 + b * 0.05 + gr * 0.05, w = (brown[i] - 0.5) * 5;
     color[i * 3] = 50 * v + w; color[i * 3 + 1] = 51 * v + w * 0.4; color[i * 3 + 2] = 53.5 * v - w * 0.5;
-    // 粗糙度的深浅要很小：金属高光的亮度对粗糙度极敏感，起伏大了高光里就是一块一块发白的雾斑
-    height[i] = 0.5 + b * 0.2; rough[i] = clamp01(0.34 + (smudge[i] - 0.5) * 0.085 + b * 0.04 + c * 0.03);
+    // 粗糙度整体抬到半哑（0.5 上下）：上一版 0.34，暗场里环境反射在枪管、机匣顶上拉出一整条白的镜面带，像镀铬。
+    // 再叠一层很缓的大斑（mottle，一格贴图里两三块）：反光带沿着枪管忽明忽暗、边是虚的，不是一根尺子画的线
+    height[i] = 0.5 + b * 0.2 + gr * 0.12; rough[i] = clamp01(0.5 + (mottle[i] - 0.5) * 0.2 + (smudge[i] - 0.5) * 0.06 + b * 0.03 + gr * 0.04 + c * 0.03);
   }
-  // 划痕：细、短、大多顺着长度方向，亮一点、滑一点
-  for (let k = 0; k < 9; k++) {
-    let x = r() * S, y = r() * S; const a = (r() - 0.5) * 0.4 + (r() < 0.2 ? 0.9 : 0), len = S * (0.03 + r() * 0.12), deep = 0.3 + r() * 0.7;
-    for (let e = 0; e < len; e++) { x += Math.cos(a); y += Math.sin(a); const i = (((Math.round(y) % S) + S) % S) * S + (((Math.round(x) % S) + S) % S), f = deep * Math.sin(e / len * Math.PI); color[i * 3] += 13 * f; color[i * 3 + 1] += 13 * f; color[i * 3 + 2] += 14 * f; rough[i] = clamp01(rough[i] - 0.03 * f); height[i] -= 0.15 * f; }
+  // 划痕：细、短、大多顺着长度方向。颜色几乎不变（平铺的贴图，显眼了每格重复一次），主要落在粗糙度上——
+  // 擦着光看才看得见一道道发亮的细线，正着看是干净的哑光
+  for (let k = 0; k < 26; k++) {
+    let x = r() * S, y = r() * S; const a = (r() - 0.5) * 0.5 + (r() < 0.25 ? 0.9 + r() * 0.6 : 0), len = S * (0.02 + r() * 0.1), deep = 0.3 + r() * 0.7;
+    for (let e = 0; e < len; e++) { x += Math.cos(a); y += Math.sin(a); const i = (((Math.round(y) % S) + S) % S) * S + (((Math.round(x) % S) + S) % S), f = deep * Math.sin(e / len * Math.PI); color[i * 3] += 5 * f; color[i * 3 + 1] += 5 * f; color[i * 3 + 2] += 5.5 * f; rough[i] = clamp01(rough[i] - 0.14 * f); height[i] -= 0.12 * f; }
   }
   return { color, height, rough, mask };
 }
@@ -152,7 +164,9 @@ export function loft(rings, { tileU = 0.1, tileV = tileU, capStart = false, capE
       for (let i = 0; i < m - 1; i++) { const a = rings[i][j], b = rings[i][(j + 1) % n], c = rings[i + 1][j]; sx += (c[1] - a[1]) * (b[2] - a[2]) - (c[2] - a[2]) * (b[1] - a[1]); sp += ((c[2] - a[2]) * (b[0] - a[0]) - (c[0] - a[0]) * (b[2] - a[2])) * cs + ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) * sn; }
       kind[j] = Math.abs(sx) >= Math.abs(sp) ? (sx * sg > 0 ? 0 : 1) : (sp * sg > 0 ? 2 : 3);
     }
-    GUV = (p, k) => { const along = (-p[1] * sn + p[2] * cs) / tileU + du, perp = (p[1] * cs + p[2] * sn) / tileV + dv; return k < 2 ? [along, perp + k * 0.43] : k < 4 ? [along + 0.21, p[0] / tileV + (k === 2 ? 0.17 : 0.71) + dv] : [p[0] / tileV + du, perp + 0.29]; };
+    // bend：[幅度 米, 波长 米, 相位]——侧面的纹顺着长度方向缓缓起伏一下（枪托腕部那里往下走），不是一把尺子画的平行线
+    const [ba, bl, bp] = grain.bend || [0, 1, 0];
+    GUV = (p, k) => { const al = -p[1] * sn + p[2] * cs, along = al / tileU + du, perp = (p[1] * cs + p[2] * sn + ba * Math.sin(al / bl * Math.PI * 2 + bp)) / tileV + dv; return k < 2 ? [along, perp + k * 0.43] : k < 4 ? [along + 0.21, p[0] / tileV + (k === 2 ? 0.17 : 0.71) + dv] : [p[0] / tileV + du, perp + 0.29]; };
   }
   const tri = (p, q, s, tp, tq, ts) => { if (rev) { pos.push(...p, ...s, ...q); uv.push(...tp, ...ts, ...tq); } else { pos.push(...p, ...q, ...s); uv.push(...tp, ...tq, ...ts); } };
   for (let i = 0; i < m - 1; i++) for (let j = 0; j < n; j++) {
@@ -287,9 +301,12 @@ const AX = 0.006;            // 枪膛轴线的高度
 const R_BARREL = 0.024, R_CHAMBER = 0.0262, R_BORE = 0.0203, R_BAND = 0.0256, R_MUZZLE = 0.0264;
 const R_RECV = 0.0268, W_FRAME = 0.0203; // 机匣上半（圆顶）的半径、下半（机框）的半宽
 const SIGHT_Z = -0.12, FRONT_Z = -0.3445;
+const LINE_Y = 0.05, ADS_EYE_Z = 0.44; // 开镜时镜头在模型里的位置（LAUNCHER_VIEW 的 sightY 和 −ads[2]）：只用来摆三点里照门那两点的高度
 /** 表尺缺口、准星尖的高度（都要等于 LAUNCHER_VIEW.sightY，开镜时两点一线正好在屏幕中心）；枪托各段的上沿、下沿、半宽 */
 export const G40 = Object.freeze({
-  axis: AX, notchY: 0.0505, bladeY: 0.0505, sightZ: SIGHT_Z, frontZ: FRONT_Z, leafTop: 0.09,
+  // 表尺：梯形尺框平时往前放倒（叠在枪管上），立着的只有座上那片带方缺口的照门（rearTop 是它的上沿）——
+  // 开镜时是「方缺口套着准星」一眼就对得上，不再是一个高高的空框框着天
+  axis: AX, notchY: 0.0505, bladeY: 0.0505, rearTop: 0.051, sightZ: SIGHT_Z, frontZ: FRONT_Z, leafTop: 0.09, leafFold: 0.21,
   // 枪托：上沿出了机匣就往下掉、再顺着往后斜——开镜时镜头在枪托正后上方，上沿高一分、屏幕下半就多一片糊着的木头，
   // 所以贴腮的棱压得低、收得窄（比瞄准线低 3–9 厘米）。0.092 以前的那一段藏在机匣斜切的尾部下面
   stockTop: Object.freeze([[0.052, -0.042], [0.092, -0.008], [0.0925, 0.021], [0.105, 0.0145], [0.125, 0.004], [0.16, -0.0105], [0.22, -0.0295], [0.292, -0.047]].map(Object.freeze)),
@@ -297,7 +314,7 @@ export const G40 = Object.freeze({
   stockHalf: Object.freeze([[0.052, 0.0172], [0.075, 0.0186], [0.092, 0.0196], [0.0925, 0.0197], [0.11, 0.02], [0.14, 0.0188], [0.2, 0.0192], [0.292, 0.0205]].map(Object.freeze)),
   buttZ: 0.292, padZ: 0.3055,
   // 木纹的走向：整块木料（枪托连握把）的纹顺着枪托的中线，从机匣往托底斜下去
-  grainSlope: 0.3,
+  grainSlope: 0.3, grainBend: Object.freeze([0.007, 0.32, 0.6]),
   // 握把：和原来的方块一样的位置和斜度（右手就是照那个摆的），截面改成椭圆
   gripTop: Object.freeze([-0.044, 0.0654]), gripSlant: 0.32, gripLen: 0.12,
   // 护木：包着枪管下半，z 从后到前
@@ -344,6 +361,29 @@ function foreRing(z) {
 }
 const arc = (cx, cy, r, a0, a1, n) => { const out = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } return out; };
 const shapeOf = (pts) => new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1])));
+/** 多边形的每个角倒圆：radii 是每个角的圆角大小（数或数组，按两边各退多少米算，不超过边长的四成），每个角换成 4 个点的二次曲线 */
+export function rounded(pts, radii) {
+  const n = pts.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[(i + n - 1) % n], c = pts[i], q = pts[(i + 1) % n], r0 = Array.isArray(radii) ? radii[i] : radii;
+    const l1 = Math.hypot(c[0] - p[0], c[1] - p[1]), l2 = Math.hypot(q[0] - c[0], q[1] - c[1]), r = Math.min(r0, l1 * 0.4, l2 * 0.4);
+    if (!(r > 0)) { out.push(c); continue; }
+    const a = [c[0] + (p[0] - c[0]) * r / l1, c[1] + (p[1] - c[1]) * r / l1], b = [c[0] + (q[0] - c[0]) * r / l2, c[1] + (q[1] - c[1]) * r / l2];
+    for (let k = 0; k <= 3; k++) { const t = k / 3, u = 1 - t; out.push([u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]); }
+  }
+  return out;
+}
+/** 一圈凸的截面（[x, y, …] 的数组）从 (0, cy) 往 th 方向打一条射线，交点离起点多远（取 xy 平面） */
+export function radial(ring, cy, th) {
+  const dx = Math.cos(th), dy = Math.sin(th); let best = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const p = ring[i], q = ring[(i + 1) % ring.length], ex = q[0] - p[0], ey = q[1] - p[1], px = p[0], py = p[1] - cy, D = dx * ey - dy * ex;
+    if (Math.abs(D) < 1e-14) continue;
+    const t = (px * ey - ex * py) / D, s = (px * dy - py * dx) / D;
+    if (t > 0 && s >= -1e-9 && s <= 1 + 1e-9) best = Math.max(best, t);
+  }
+  return best;
+}
 
 /**
  * 搭 G40 的全部几何。hinge：枪管撅下去绕的轴（tube 那一组的几何是相对它的）。
@@ -353,7 +393,7 @@ const shapeOf = (pts) => new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], 
 export function buildG40({ hinge = [0, -0.032, -0.012] } = {}) {
   // 钢：顺着拉丝的方向一格贴图 12 厘米、横着 6 厘米（压扁了贴：拉丝细一倍，云和手印也跟着顺向拉长）；
   // 木头：顺纹 30 厘米一格、横纹 15 厘米一格（木纹横着看才密）
-  const TS = 0.12, TSV = 0.06, TWU = 0.3, TWV = 0.15, GRAIN = { slope: G40.grainSlope }, GRAIN_FORE = { slope: 0, shift: [0.37, 0.53] };
+  const TS = 0.12, TSV = 0.06, TWU = 0.3, TWV = 0.15, GRAIN = { slope: G40.grainSlope, bend: G40.grainBend }, GRAIN_FORE = { slope: 0, shift: [0.37, 0.53] };
   const B = { steel: [], dark: [], wood: [], rubber: [], ink: [] }, Tb = { steel: [], dark: [], wood: [], bore: [], ink: [] };
   const [hx, hy, hz] = hinge;
   const at = (g, x = 0, y = 0, z = 0) => g.translate(x, y, z);
@@ -363,18 +403,32 @@ export function buildG40({ hinge = [0, -0.032, -0.012] } = {}) {
   // ---- 机匣（不动的部分）
   // 圆顶、直壁、下半收窄成机框；底面在握把上方斜着往上切（木头从这个斜口里接出来），尾端收一圈肩
   // 磨损：尾端那一圈肩（枪托、手、枪套都蹭它）、圆顶靠后扳把两边（拇指扳开闩的地方）、前端贴着枪管的那一圈口
-  // 朝上的那一片烤蓝磨薄了（手提、背带蹭的）：从后上方看过去——腰射、换弹时看到的就是这一面——不再是一整块匀的黑
-  const wearRecv = (x, y, z) => [sstep(0.086, 0.0925, z) * 0.22 + sstep(AX + 0.015, AX + R_RECV, y) * (0.46 + 0.1 * Math.exp(-(((z - 0.07) / 0.02) ** 2))) + sstep(0.006, 0, z) * 0.16, 0];
-  B.steel.push(finish(loft([recvRing(0, 0.0012), recvRing(0.0012), recvRing(0.005), recvRing(0.04), recvRing(0.05), recvRing(0.068), recvRing(0.088), recvRing(0.0925), recvRing(0.0925, 0.0008, 0.0942), recvRing(0.0925, 0.0028, 0.0955)], { tileU: TS, tileV: TSV, capStart: true, capEnd: true, vRef: 1 }),
+  // 朝上的那一片只给一点点（上一版给了将近一半，整条顶上是一道亮的镜面带，像镀铬）：磨损靠噪声咬成一块一块的，落在棱上和扳把两边。
+  // 暗角：闭锁面（z = 0 那一面，火药燎黑的）；扳把贴着圆顶的那一块（接触阴影，扳把才是「压在」机匣上，不是飘着的一片）
+  const wearRecv = (x, y, z) => {
+    const top = sstep(AX + 0.015, AX + R_RECV, y), lat = sstep(0.057, 0.063, z) * (1 - sstep(0.09, 0.095, z)) * sstep(-0.008, -0.003, x) * (1 - sstep(0.012, 0.016, x)) * top;
+    // 尾端那一圈棱藏在后盖（shroud）里面，不算磨损（不压掉的话接缝上是一圈白点）
+    return [z > 0.0915 ? -1 : top * (0.1 + 0.12 * Math.exp(-(((z - 0.075) / 0.012) ** 2))) + sstep(0.006, 0, z) * 0.14, sstep(0.0016, 0, z) * 0.5 + lat * 0.55];
+  };
+  // 尾端不再是一圈往里缩的台阶（从后上方看是一个空的铁罩子、木头塞在里面），而是一段收口的后盖（见下面的 shroud）
+  B.steel.push(finish(loft([recvRing(0, 0.0012), recvRing(0.0012), recvRing(0.005), recvRing(0.04), recvRing(0.05), recvRing(0.057), recvRing(0.063), recvRing(0.07), recvRing(0.078), recvRing(0.085), recvRing(0.0925)], { tileU: TS, tileV: TSV, capStart: true, capEnd: true, vRef: 1 }),
     { crease: 36, edge: 0.55, extra: wearRecv }));
+  // 后盖：从机匣的截面收到比枪托截面大一圈（上半），像一个包住木头的护套——下半留在机匣的截面上（埋在木头里）。
+  // 收口是先平后陡（1 − cos）：接机匣那头和机匣的面顺着走，到木头那头是一道陡的、朝后的窄边，边上压暗（木头插进铁里的那一道缝）
+  { const N = 24, CY = 0, R0 = recvRing(0.0925), Z1 = 0.11, zs = [0.0925, 0.0965, 0.101, 0.1055, Z1], S1 = stockRing(Z1), rings = [];
+    const base = [], end = [];
+    for (let j = 0; j < N; j++) { const th = Math.PI / 2 - j / N * Math.PI * 2, rr = radial(R0, CY, th), k = 0.97 + 0.085 * sstep(-0.45, 0.15, Math.sin(th)); base.push(rr); end.push(Math.min(rr, radial(S1, CY, th) * k + 0.0004 * sstep(-0.45, 0.15, Math.sin(th)))); }
+    for (const z of zs) { const e = 1 - Math.cos((z - zs[0]) / (Z1 - zs[0]) * Math.PI / 2), ring = []; for (let j = 0; j < N; j++) { const th = Math.PI / 2 - j / N * Math.PI * 2, r = base[j] + (end[j] - base[j]) * e; ring.push([Math.cos(th) * r, CY + Math.sin(th) * r, z]); } rings.push(ring); }
+    B.steel.push(finish(loft(rings, { tileU: TS, tileV: TSV, capEnd: true, vRef: 0 }), { crease: 50, edge: 0.3, extra: (x, y, z) => [0, sstep(0.106, Z1, z) * 0.5] })); }
   // 机匣顶上一条矮的瞄准棱（顶面横着铣了防反光的细槽，这里只做出棱）：圆顶上有了两道直边，高光和磨亮的边有地方落
   B.steel.push(finish(at(extrude(shapeOf([[-0.0046, -0.054], [0.0046, -0.054], [0.0046, -0.006], [0.0034, -0.0035], [-0.0034, -0.0035], [-0.0046, -0.006]]), 0.0016, { bevel: 0.0005, plane: 'top', tile: TSV, tileV: TS }), 0, AX + R_RECV - 0.0004, 0), { edge: 0.6, extra: () => [0.12, 0] }));
   // 机框前端夹着枪管耳座的两片颊板，铰链销从中间穿过去
   const cheek = shapeOf([[0.002, -0.0495], ...arc(hz, -0.0328, 0.0167, -Math.PI / 2, -Math.PI * 1.5, 10), [0.002, -0.0161]]);
   for (const sx of [-1, 1]) B.steel.push(finish(at(extrude(cheek, 0.006, { bevel: 0.0008, tile: TS, tileV: TSV }), sx * (W_FRAME - 0.003), 0, 0), { edge: 0.5 }));
   // 机框两侧的侧板（发火机构装在里面）：比机框高出半毫米的一块，后沿顺着机匣尾部的斜切走
-  const plate = shapeOf([[0.007, -0.0465], [0.047, -0.0465], [0.0685, -0.0275], [0.064, -0.0185], [0.007, -0.0185]]);
-  for (const sx of [-1, 1]) B.steel.push(finish(at(extrude(plate, 0.0012, { bevel: 0.0005, tile: TS, tileV: TSV }), sx * (W_FRAME + 0.0001), 0, 0), { edge: 0.45 }));
+  // 尾端原来是一个 4 毫米的尖角，倒角在尖上挤成一根亮的细斜线——现在每个角都倒圆（rounded），尾部是一道顺的斜边
+  const plate = shapeOf(rounded([[0.007, -0.0465], [0.047, -0.0465], [0.0655, -0.0235], [0.0655, -0.0185], [0.007, -0.0185]], [0.0015, 0.004, 0.0025, 0.0012, 0.0015]));
+  for (const sx of [-1, 1]) B.steel.push(finish(at(extrude(plate, 0.0012, { bevel: 0.0004, tile: TS, tileV: TSV }), sx * (W_FRAME + 0.0002), 0, 0), { edge: 0.3 }));
   B.dark.push(finish(pinX(hy, hz, 0.0046, W_FRAME * 2 + 0.0026, 12), { crease: 50, edge: 0.7 }));
   // 侧板上两颗一字螺丝、机匣后上方一根销：头上倒一圈角（磨亮的是一圈软边，不是几个白点），螺丝的槽是一道黑
   for (const [y, z, slot] of [[-0.031, 0.02, 0.5], [-0.027, 0.054, -0.9], [-0.0015, 0.078, null]]) {
@@ -391,28 +445,33 @@ export function buildG40({ hinge = [0, -0.032, -0.012] } = {}) {
   const trig = curve2([[0.041, -0.046], [0.0398, -0.055], [0.0366, -0.0635], [0.031, -0.0705]], 9);
   B.dark.push(finish(extrude(stripShape(trig, (t) => 0.0058 - 0.0018 * t), 0.0074, { bevel: 0.0007, tile: TS, tileV: TSV }), { crease: 50, edge: 0.5 }));
   // 开闩扳把：机匣顶上靠后，轴座 + 往右后方甩出去的柄，柄尾是带棱的拇指垫
-  B.dark.push(finish(at(lathe([[0, 0.0058], [-0.003, 0.0058], [-0.0038, 0.005], [-0.0038, 0]], { segs: 14, tileU: TS, refine: 0 }).rotateX(Math.PI / 2), 0, AX + R_RECV - 0.0006, 0.066), { edge: 0.5 }));
+  // 扳把是一块 3.8 毫米厚的锻件（上一版 2.6 毫米、平着悬在圆顶上面，腰射时像一张纸片），柄往右侧顺着圆顶的弧往下压（LEVER_TILT），
+  // 底面离机匣只有半毫米；轴座是一个高出扳把的圆鼓，上面一道一字槽
+  const LEVER_Y = AX + R_RECV + 0.0002, LEVER_TILT = -0.2;
+  B.dark.push(finish(at(lathe([[0, 0.0058], [-0.0045, 0.0058], [-0.0053, 0.005], [-0.0053, 0]], { segs: 16, tileU: TS, refine: 0 }).rotateX(Math.PI / 2), 0, AX + R_RECV - 0.0006, 0.066), { edge: 0.5 }));
+  { const g = new THREE.PlaneGeometry(0.0072, 0.0008).toNonIndexed(); g.rotateX(-Math.PI / 2).rotateY(0.6); B.ink.push(ink(at(g, 0, AX + R_RECV + 0.0048, 0.066), 0.01)); }
   const lever = shapeOf([[-0.0042, -0.0635], [0.0042, -0.0635], [0.0056, -0.07], [0.0096, -0.083], [0.0118, -0.0905], [0.0066, -0.0925], [0.0028, -0.084], [-0.0036, -0.071]]);
-  B.dark.push(finish(at(extrude(lever, 0.0026, { bevel: 0.0007, plane: 'top', tile: TS, tileV: TSV }), 0, AX + R_RECV + 0.0008, 0), { edge: 0.55 }));
-  for (let k = 0; k < 3; k++) B.dark.push(finish(at(extrude(shapeOf([[0.0062 + k * 0.0009, -0.0842 - k * 0.0026], [0.0098 + k * 0.0009, -0.0858 - k * 0.0026], [0.0102 + k * 0.0009, -0.0846 - k * 0.0026], [0.0066 + k * 0.0009, -0.083 - k * 0.0026]]), 0.0011, { bevel: 0.0003, plane: 'top', tile: TS, tileV: TSV }), 0, AX + R_RECV + 0.0033, 0), { edge: 0.6 }));
+  B.dark.push(finish(at(extrude(lever, 0.0038, { bevel: 0.0008, plane: 'top', tile: TS, tileV: TSV }).rotateZ(LEVER_TILT), 0, LEVER_Y, 0), { edge: 0.55 }));
+  for (let k = 0; k < 3; k++) B.dark.push(finish(at(at(extrude(shapeOf([[0.0062 + k * 0.0009, -0.0842 - k * 0.0026], [0.0098 + k * 0.0009, -0.0858 - k * 0.0026], [0.0102 + k * 0.0009, -0.0846 - k * 0.0026], [0.0066 + k * 0.0009, -0.083 - k * 0.0026]]), 0.0011, { bevel: 0.0003, plane: 'top', tile: TS, tileV: TSV }), 0, 0.0036, 0).rotateZ(LEVER_TILT), 0, LEVER_Y, 0), { edge: 0.6 }));
 
   // ---- 枪托、握把（一整块胡桃木）和橡胶托底
-  const wearStock = (x, y, z) => {
+  const wearStock = (x, y, z, nx, ny) => {
     const top = pw(G40.stockTop, z), bot = pw(G40.stockBottom, z), nearButt = sstep(0.262, 0.29, z);
     // 贴着铁的地方发暗（一条窄的阴影，不是整块压暗——整块压暗的话机匣下面那一角木头像另外粘上去的一块）
-    const steel = z < 0.0925 ? 1 - sstep(0.001, 0.008, recvBottom(z) - y) : (1 - sstep(0.0925, 0.101, z)) * sstep(-0.022, -0.012, y);
-    // 磨白：托底那一圈，托踵托趾最重（枪托杵在地上磨的）；发黑发亮：虎口卡着的握把后上方
-    return [nearButt * (0.3 + sstep(top - 0.012, top, y) * 0.3 + sstep(bot + 0.014, bot, y) * 0.35), steel * 0.5 + sstep(0.135, 0.1, z) * sstep(-0.07, -0.045, y) * 0.22];
+    const steel = z < 0.0925 ? 1 - sstep(0.001, 0.008, recvBottom(z) - y) : (1 - sstep(0.111, 0.12, z)) * sstep(-0.03, -0.014, y);
+    // 磨白：托底那一圈，托踵托趾最重（枪托杵在地上磨的）；发黑发亮：虎口卡着的腕部；
+    // 油色（patina）：圆过去的四条棱上颜色深一点（手摸、油吃得多）——法线斜着 45° 的地方最重，平的侧面、顶面不动
+    return [nearButt * (0.3 + sstep(top - 0.012, top, y) * 0.3 + sstep(bot + 0.014, bot, y) * 0.35), steel * 0.6 + sstep(0.15, 0.105, z) * sstep(-0.075, -0.04, y) * 0.3 + 4 * nx * nx * ny * ny * 0.32];
   };
-  const stockZ = [0.052, 0.066, 0.08, 0.092, 0.0925, 0.1, 0.11, 0.125, 0.14, 0.16, 0.19, 0.22, 0.25, 0.275, 0.292];
+  const stockZ = [0.052, 0.066, 0.08, 0.092, 0.0925, 0.1, 0.11, 0.114, 0.118, 0.125, 0.14, 0.16, 0.19, 0.22, 0.25, 0.275, 0.292];
   B.wood.push(finish(loft(stockZ.map((z) => stockRing(z)), { tileU: TWU, tileV: TWV, capStart: true, grain: GRAIN }), { crease: 75, edge: 0, extra: wearStock }));
   // 握把：顶上多伸一截埋进机框和枪托里（封口不露在外面）；纹路和枪托是同一个投影，相贯的地方接得上——看上去是一块木头
   const gs = [-0.014, 0, 0.012, 0.024, 0.04, 0.058, 0.076, 0.094, 0.11];
   B.wood.push(finish(loft([...gs.map((s) => gripRing(s)), gripRing(0.117, 0.94), gripRing(G40.gripLen, 0.78)], { tileU: TWU, tileV: TWV, capStart: true, capEnd: true, grain: GRAIN }),
-    { crease: 75, edge: 0.12, extra: (x, y) => [sstep(-0.15, -0.16, y) * 0.3, 0.16 + sstep(-0.075, -0.055, y) * 0.2] }));
+    { crease: 75, edge: 0.12, extra: (x, y, z, nx) => [sstep(-0.15, -0.16, y) * 0.3, 0.16 + sstep(-0.075, -0.055, y) * 0.2 + 4 * nx * nx * (1 - nx * nx) * 0.25] }));
   // 托底：两指厚的黑橡胶，侧面和后面都是横棱（贴图的棱是沿 v 排的，所以侧面把 u、v 对调）
   B.rubber.push(finish(loft([stockRing(G40.buttZ, 1.004), stockRing(G40.buttZ, 1.004, 0.3035), stockRing(G40.buttZ, 0.975, 0.305), stockRing(G40.buttZ, 0.93, G40.padZ)], { tileU: 0.06, tileV: 0.06, swapUV: true, capEnd: true }), { crease: 50, edge: 0, occl: 0 }));
-  for (const y of [-0.043, -0.088]) B.ink.push(ink(at(new THREE.CircleGeometry(0.0032, 10).toNonIndexed(), 0, y, G40.padZ + 0.0002), 0.012)); // 托底螺丝孔
+  for (const y of [-0.062, -0.103]) B.ink.push(ink(at(new THREE.CircleGeometry(0.0032, 10).toNonIndexed(), 0, y, G40.padZ + 0.0002), 0.012)); // 托底螺丝孔（上一版上面那个在 −0.043，比托底的上沿还高，悬在托踵上方一个黑点）
   // 后背带环：托腹上的座 + 一个扁环
   const swivel = (y, z, lean) => [at(lathe([[0, 0.0034], [-0.0045, 0.003], [-0.0052, 0.0022], [-0.0052, 0]], { segs: 10, tileU: TS, refine: 0 }).rotateX(-Math.PI / 2), 0, y, z),
     at(plain(new THREE.TorusGeometry(0.0078, 0.0013, 5, 12), 2, 1).scale(1.35, 1, 1).rotateX(lean), 0, y - 0.0052 - 0.0074 * Math.cos(lean), z - 0.0074 * Math.sin(lean)), pinX(y - 0.0048, z, 0.0016, 0.0125)];
@@ -423,8 +482,13 @@ export function buildG40({ hinge = [0, -0.032, -0.012] } = {}) {
   const barrel = [[0, 0.0206], [0, R_CHAMBER - 0.001], [-0.001, R_CHAMBER], [-0.05, R_CHAMBER], [-0.055, R_BARREL + 0.0009], [-0.06, R_BARREL],
     ...bandAt(SIGHT_Z + 0.008, SIGHT_Z - 0.008), ...bandAt(-0.279, -0.293),
     [-0.327, R_BARREL], [-0.3315, R_MUZZLE], [-0.357, R_MUZZLE], [-0.3592, R_MUZZLE - 0.001], [-0.36, R_MUZZLE - 0.0032], [-0.36, R_BORE + 0.0016], [-0.3584, R_BORE], [-0.352, R_BORE]];
-  const wearBarrel = (x, y, z) => { const r = Math.hypot(x, y - AX); return [sstep(-0.333, -0.358, z) * 0.4 + (r > R_BAND - 0.0002 && z > -0.3 ? 0.3 : 0) + sstep(0.55, 0.98, (y - AX) / (r || 1)) * 0.46, 0]; };
-  Tb.steel.push(finish(at(lathe(barrel, { segs: 24, tileU: TS, tileV: TSV }), 0, AX, 0), { edge: 0.7, extra: wearBarrel }));
+  // 磨损：枪口那一圈、两道箍的棱，顶上只给一点（上一版 0.46，整根枪管顶上一道镜面）；
+  // 暗角：枪口端面和膛口一圈积碳发黑、枪口外面往后一两厘米淡淡的一层烟；药室口的端面（撅开时看得见）燎黑
+  const wearBarrel = (x, y, z) => {
+    const r = Math.hypot(x, y - AX), crown = z < -0.3595 && r < R_MUZZLE - 0.002 ? 0.6 : 0, lip = z < -0.35 && r < R_BORE + 0.0003 ? 0.5 : 0, breech = z > -0.0002 && r < R_CHAMBER - 0.0008 ? 0.45 : 0;
+    return [sstep(-0.333, -0.358, z) * 0.45 + (r > R_BAND - 0.0002 && z > -0.3 ? 0.12 : 0) + sstep(0.55, 0.98, (y - AX) / (r || 1)) * 0.12, Math.max(crown, lip, breech) + sstep(-0.335, -0.357, z) * 0.12];
+  };
+  Tb.steel.push(finish(at(lathe(barrel, { segs: 24, tileU: TS, tileV: TSV }), 0, AX, 0), { edge: 0.5, extra: wearBarrel }));
   // 枪膛：朝里的一截管子，颜色存在顶点上——一条阳线一条阴线交替、每往里四五厘米错一格（膛线的缠度很缓），越往里越黑
   { const segs = 24, zs = [-0.3584, -0.3465, -0.3285, -0.3135, -0.27, -0.225, -0.18, -0.135, -0.09, -0.052, -0.046, -0.002], pos = [], col = [];
     for (let i = 0; i < zs.length - 1; i++) for (let j = 0; j < segs; j++) {
@@ -444,23 +508,29 @@ export function buildG40({ hinge = [0, -0.032, -0.012] } = {}) {
   const wearFore = (x, y, z, nx, ny, nz) => [sstep(G40.foreTop - 0.004, G40.foreTop, y) * 0.2 + sstep(-0.262, -0.276, z) * 0.2 + sstep(-0.044, -0.037, z) * 0.14,
     Math.exp(-(((y - (G40.foreTop - 0.0105)) / 0.004) ** 2)) * 0.5 * sstep(-0.268, -0.24, z) * (1 - sstep(-0.07, -0.045, z)) + (y < -0.02 ? 0.14 : 0) + (Math.abs(nz) > 0.7 ? 0.4 : 0)];
   Tb.wood.push(finish(loft(foreZ.map(foreRing), { tileU: TWU, tileV: TWV, capStart: true, capEnd: true, grain: GRAIN_FORE }), { crease: 55, edge: 0.3, extra: wearFore }));
-  // 表尺：箍上的座 + 立着的梯形尺框 + 带缺口的游标 + 右侧的调节钮；尺框朝后的那面两边有刻度
+  // 表尺：箍上的座 + 往前放倒的梯形尺框（铰在座上的横销上，尖头搭在枪管上方）+ 座后部立着的照门（方缺口）；尺框朝上的那面两边有刻度
   const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const PIV = 0.0388, fold = (g) => g.translate(0, -PIV, -SIGHT_Z).rotateX(-(Math.PI / 2 + G40.leafFold)).translate(0, PIV + 0.0021, SIGHT_Z); // 抬 2 毫米：放倒后底面贴着座顶，不陷进去
   Tb.dark.push(finish(at(extrude(shapeOf([[-0.011, 0.028], [0.011, 0.028], [0.011, 0.0362], [0.0085, 0.0388], [-0.0085, 0.0388], [-0.011, 0.0362]]), 0.014, { bevel: 0.0007, plane: 'back', tile: TS, tileV: TSV }), 0, 0, SIGHT_Z), { edge: 0.8 }));
   const leaf = shapeOf(rect(-0.0105, 0.0375, 0.0105, G40.leafTop)); leaf.holes.push(new THREE.Path(rect(-0.0077, 0.0415, 0.0077, G40.leafTop - 0.003).map((p) => new THREE.Vector2(p[0], p[1]))));
-  Tb.dark.push(finish(at(extrude(leaf, 0.0022, { bevel: 0.0004, plane: 'back', tile: TS, tileV: TSV }), 0, 0, SIGHT_Z), { edge: 0.5 }));
-  const nb = G40.notchY - 0.002, nt = G40.notchY + 0.0028; // 缺口：底在 notchY 下面 2 毫米，游标上沿在上面不到 3 毫米——准星尖正好卡在缺口里
-  Tb.dark.push(finish(at(extrude(shapeOf([[-0.0122, nb - 0.0045], [0.0122, nb - 0.0045], [0.0122, nt], [0.0025, nt], [0.0019, nb], [-0.0019, nb], [-0.0025, nt], [-0.0122, nt]]), 0.0036, { bevel: 0.0004, plane: 'back', tile: TS, tileV: TSV }), 0, 0, SIGHT_Z + 0.0004), { edge: 0.5 }));
-  Tb.dark.push(finish(at(lathe([[-0.002, 0], [-0.002, 0.0026], [0.002, 0.0026], [0.002, 0]], { segs: 10, tileU: TS, refine: 0 }).rotateY(Math.PI / 2), 0.0142, nb - 0.001, SIGHT_Z + 0.0004), { edge: 0.5 }));
-  Tb.dark.push(finish(pinX(0.0388, SIGHT_Z, 0.0019, 0.0236), { crease: 50, edge: 0.5 }));
-  { const pos = [], zf = SIGHT_Z + 0.0011 + 0.00015; // 刻度：白漆填的细线，长短相间
+  Tb.dark.push(finish(fold(at(extrude(leaf, 0.0022, { bevel: 0.0004, plane: 'back', tile: TS, tileV: TSV }), 0, 0, SIGHT_Z)), { edge: 0.5 }));
+  // 照门：缺口 8 毫米宽、4 毫米深，上沿（rearTop）和准星尖差不多平——开镜时准星落在缺口正中，两边各留一道亮缝
+  const nb = G40.notchY - 0.0035, nt = G40.rearTop, RZ = SIGHT_Z + 0.0042, RT = 0.0034;
+  Tb.dark.push(finish(at(extrude(shapeOf([[-0.0095, 0.0378], [0.0095, 0.0378], [0.0095, nt - 0.0009], [0.0086, nt], [0.004, nt], [0.004, nb + 0.0005], [0.0035, nb], [-0.0035, nb], [-0.004, nb + 0.0005], [-0.004, nt], [-0.0086, nt], [-0.0095, nt - 0.0009]]), RT, { bevel: 0.0004, plane: 'back', tile: TS, tileV: TSV }), 0, 0, RZ), { edge: 0.45 }));
+  Tb.dark.push(finish(pinX(PIV, SIGHT_Z, 0.0019, 0.0236), { crease: 50, edge: 0.5 }));
+  { const pos = [], zf = SIGHT_Z + 0.0011 + 0.00015; // 刻度：白漆填的细线，长短相间（画在立着的尺框上，再跟尺框一起放倒）
     for (let k = 0; k < 7; k++) for (const sx of [-1, 1]) { const y = 0.0575 + k * 0.0042, len = k % 2 ? 0.0013 : 0.0022, x0 = sx * 0.0081, x1 = sx * (0.0081 + len), h = 0.00032; const q = sx > 0 ? [[x0, y - h], [x1, y - h], [x1, y + h], [x0, y + h]] : [[x1, y - h], [x0, y - h], [x0, y + h], [x1, y + h]]; for (const i of [0, 1, 2, 0, 2, 3]) pos.push(q[i][0], q[i][1], zf); }
-    // 缺口正下方一道白线、准星背上一个白点：暗处举枪时眼睛有地方落
-    for (const [x0, y0, x1, y1, z0, z1] of [[-0.00045, nb - 0.0034, 0.00045, nb - 0.0008, SIGHT_Z + 0.0024, SIGHT_Z + 0.0024], [-0.0007, G40.bladeY - 0.0046, 0.0007, G40.bladeY - 0.0008, FRONT_Z + 0.0033, FRONT_Z + 0.0018]]) pos.push(x0, y0, z0, x1, y0, z0, x1, y1, z1, x0, y0, z0, x1, y1, z1, x0, y1, z1);
-    Tb.ink.push(ink(rawGeo(pos, new Array(pos.length / 3 * 2).fill(0)), 0.5)); }
+    Tb.ink.push(ink(fold(rawGeo(pos, new Array(pos.length / 3 * 2).fill(0))), 0.5)); }
+  { const pos = [], zr = RZ + RT / 2 + 0.00012, zb = (y) => FRONT_Z + 0.0012 + (G40.bladeY - y) * 0.4 + 0.0002;
+    // 三点：准星尖背上一块白（夜光点的意思），照门缺口两边各一点，三点和镜头连成一条水平线（照门那两点的高度按两者到镜头的远近折算）——
+    // 暗处举枪时眼睛一下就找到「三点一线」
+    const fy = G40.bladeY - 0.00195, ry = LINE_Y + (fy - LINE_Y) * (-ADS_EYE_Z + RZ) / (-ADS_EYE_Z + FRONT_Z), d = 0.0008;
+    for (const [x0, y0, x1, y1, z0, z1] of [[-0.0016, G40.bladeY - 0.0034, 0.0016, G40.bladeY - 0.0005, zb(G40.bladeY - 0.0034), zb(G40.bladeY - 0.0005)], [0.0062 - d, ry - d, 0.0062 + d, ry + d, zr, zr], [-0.0062 - d, ry - d, -0.0062 + d, ry + d, zr, zr]]) pos.push(x0, y0, z0, x1, y0, z0, x1, y1, z1, x0, y0, z0, x1, y1, z1, x0, y1, z1);
+    Tb.ink.push(ink(rawGeo(pos, new Array(pos.length / 3 * 2).fill(0)), 0.62)); }
   // 准星：枪口箍上的座、一片斜背的刀形准星、两边的护耳
   Tb.dark.push(finish(at(extrude(shapeOf([[-0.0085, 0.03], [0.0085, 0.03], [0.0085, 0.0352], [0.0068, 0.0366], [-0.0068, 0.0366], [-0.0085, 0.0352]]), 0.017, { bevel: 0.0007, plane: 'back', tile: TS, tileV: TSV }), 0, 0, FRONT_Z), { edge: 0.8 }));
-  Tb.dark.push(finish(extrude(shapeOf([[FRONT_Z + 0.007, 0.036], [FRONT_Z + 0.0012, G40.bladeY], [FRONT_Z - 0.0012, G40.bladeY], [FRONT_Z - 0.003, 0.036]]), 0.0022, { bevel: 0.0003, tile: TS, tileV: TSV }), { edge: 0.5 }));
+  // 准星片 4.4 毫米厚（上一版 2.2 毫米，开镜时在屏幕上只有两个像素宽）——还是比照门缺口窄得多，两边透亮
+  Tb.dark.push(finish(extrude(shapeOf([[FRONT_Z + 0.007, 0.036], [FRONT_Z + 0.0012, G40.bladeY], [FRONT_Z - 0.0012, G40.bladeY], [FRONT_Z - 0.003, 0.036]]), 0.0044, { bevel: 0.0004, tile: TS, tileV: TSV }), { edge: 0.5 }));
   const ear = shapeOf([[FRONT_Z + 0.0075, 0.036], [FRONT_Z + 0.0065, 0.047], ...arc(FRONT_Z, 0.0492, 0.0046, 0.35, Math.PI - 0.35, 6), [FRONT_Z - 0.0065, 0.047], [FRONT_Z - 0.0075, 0.036]]);
   for (const sx of [-1, 1]) Tb.dark.push(finish(at(extrude(ear, 0.0018, { bevel: 0.0004, tile: TS, tileV: TSV }), sx * 0.0074, 0, 0), { edge: 0.45 }));
   // 前背带环：枪口箍后面、枪管底下
@@ -507,37 +577,53 @@ export function wearable(material, { color = 0x6f7278, rough = 0.34, amount = 1,
 }
 /**
  * G40 用的全部材质。有画布时带贴图（胡桃木、烤蓝钢各一套 512，托底用公用的橡胶 256）；没有时是纯色。
- * 返回 { M: { steel, dark, wood, rubber, brass, bore, ink }, textures, ms（做贴图花了多少毫秒）, dispose() }。
+ * 返回 { M: { steel, dark, wood, rubber, brass, bore, ink }, textures, ms（做贴图花了多少毫秒）, ready, dress(), dispose() }。
+ * defer：先只建材质（数值和有贴图时一样），贴图等调 dress() 再做——三百来毫秒的同步计算，开局时不和别的活儿挤在同一帧里；
+ * ready：贴图做好了没有（没有画布时一开始就是 true，dress() 什么都不做）。
  */
-export function createG40Materials({ size = 512 } = {}) {
-  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-  const RW = hasCanvas() ? walnut(size, 4) : null, RS = hasCanvas() ? blued(size, 2) : null;
-  const wood = textureSet(RW, size, 0.08), steel = textureSet(RS, size, 0.03), rubber = surface('rubber', { size: 256, seed: 3, bump: 2 });
+export function createG40Materials({ size = 512, defer = false } = {}) {
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : 0), canvas = hasCanvas();
   const mk = (color, roughness, metalness, env) => { const m = new THREE.MeshStandardMaterial({ color, roughness, metalness }); m.envMapIntensity = env; return m; };
-  const tex = (m, set, ns, withMap = true) => { if (!set) return m; if (withMap) { m.map = set.map; m.color.set(0xffffff); } m.normalMap = set.normalMap; m.normalScale.set(ns, ns); m.roughnessMap = set.roughnessMap; return m; };
+  const tex = (m, set, ns, withMap = true) => { if (!set) return m; if (withMap) { m.map = set.map; m.color.set(0xffffff); } m.normalMap = set.normalMap; m.normalScale.set(ns, ns); m.roughnessMap = set.roughnessMap; m.needsUpdate = true; return m; };
   const M = {
-    // 烤蓝的大件：金属感要有（高光是窄的一道），但环境反射压着——枪那一层的环境光很亮，放开了整把枪发白。
-    // 磨损往中性的亮灰靠（磨掉烤蓝露出来的白钢），凹角里积灰：暗一点、涩一点
-    steel: wearable(tex(mk(0x1a1b1d, hasCanvas() ? 1 : 0.5, 0.5, 0.7), steel, 1), { color: 0x6a6c70, rough: 0.31, amount: 0.75, occl: 0.6, occlRough: 0.15, maskScale: [0.41, 1] }),
-    // 哑光的小件：同一套贴图，颜色压暗、粗糙度乘大
-    dark: wearable(tex(mk(0x131416, hasCanvas() ? 1.6 : 0.72, 0.45, 0.5), steel, 1), { color: 0x66686c, rough: 0.4, amount: 0.8, occl: 0.6, occlRough: 0.1 }),
-    // 胡桃木：上过油的半哑光。高光压到一半（见 wearable 的 spec）、环境反射压低——木头要靠自己的颜色亮，不靠反光；
-    // 手常握的地方（存在暗角那一路里）颜色深一点、也滑一点
-    wood: wearable(tex(mk(0x4a2f1c, hasCanvas() ? 1.06 : 0.62, 0.0, 0.3), wood, 1), { color: 0x7a5a3c, rough: 0.72, amount: 0.5, occl: 0.5, occlRough: -0.14, spec: 0.5, detail: { scale: [3, 3], amount: 1.1, normal: 0.6 } }),
-    rubber: tex(mk(0x0e0f10, hasCanvas() ? 1 : 0.85, 0.0, 0.3), rubber, 0.3),
-    // 黄铜：没有自己的贴图，借钢的法线和粗糙度（有一点拉丝和深浅就够了）
-    brass: wearable(tex(mk(0x7c5f2a, hasCanvas() ? 1.1 : 0.4, 0.85, 0.45), steel, 1, false), { color: 0xb8964e, rough: 0.3, occl: 0.85 }),
+    steel: mk(0x1a1b1d, canvas ? 1 : 0.5, 0.5, 0.9),
+    dark: mk(0x131416, canvas ? 1.2 : 0.72, 0.45, 0.5),
+    wood: mk(0x4a2f1c, canvas ? 0.92 : 0.62, 0.0, 0.3),
+    rubber: mk(0x0e0f10, canvas ? 1 : 0.85, 0.0, 0.3),
+    brass: mk(0x7c5f2a, canvas ? 0.75 : 0.4, 0.85, 0.45),
     // 枪膛不受光：里面本来就照不进去，受光的话专用灯（没有阴影）会把膛壁打得比枪身还亮
     bore: new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true }),
     ink: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, metalness: 0 }),
   };
-  if (steel) M.dark.color.set(0xb4b4b4);
   M.ink.envMapIntensity = 0.2;
   for (const [k, m] of Object.entries(M)) m.name = `g40-${k}`;
-  const textures = [wood, steel].filter(Boolean).flatMap((s) => Object.values(s));
+  const textures = []; let ms = 0, ready = !canvas, gone = false;
+  const dress = () => {
+    if (ready || gone) return false; ready = true;
+    const t0 = now();
+    const wood = textureSet(walnut(size, 4), size, 0.08), steel = textureSet(blued(size, 2), size, 0.03), rubber = surface('rubber', { size: 256, seed: 3, bump: 2 });
+    // 烤蓝的大件：金属感要有（高光是窄的一道），但环境反射压着——枪那一层的环境光很亮，放开了整把枪发白。
+    // 磨损往中性的亮灰靠（磨掉烤蓝露出来的白钢），凹角里积灰：暗一点、涩一点
+    // 磨损：粗糙度贴图是 0.5 上下的半哑，磨亮的边是 0.28——亮、滑的只有棱和箍，不是整根枪管
+    wearable(tex(M.steel, steel, 1), { color: 0x7c7f84, rough: 0.28, amount: 1, occl: 0.7, occlRough: 0.2, maskScale: [0.41, 1] });
+    // 哑光的小件：同一套贴图，颜色压暗、粗糙度乘大
+    wearable(tex(M.dark, steel, 1), { color: 0x7a7c80, rough: 0.34, amount: 0.9, occl: 0.6, occlRough: 0.1 });
+    // 胡桃木：上过油的半哑光。高光压到一半（见 wearable 的 spec）、环境反射压低——木头要靠自己的颜色亮，不靠反光；
+    // 手常握的地方（存在暗角那一路里）颜色深一点、也滑一点
+    // 上过油的木头是一层软的光（粗糙度 0.45 上下），不是哑的；细节层（三倍密的细纹）压到上一版的一半——多了就是梳过的头发
+    wearable(tex(M.wood, wood, 1), { color: 0x7a5a3c, rough: 0.72, amount: 0.5, occl: 0.55, occlRough: -0.1, spec: 0.62, detail: { scale: [3, 3], amount: 0.5, normal: 0.35 } });
+    tex(M.rubber, rubber, 0.3);
+    // 黄铜：没有自己的贴图，借钢的法线和粗糙度（有一点拉丝和深浅就够了）
+    wearable(tex(M.brass, steel, 1, false), { color: 0xb8964e, rough: 0.3, occl: 0.85 });
+    if (steel) M.dark.color.set(0xb4b4b4);
+    textures.push(...[wood, steel].filter(Boolean).flatMap((s) => Object.values(s)));
+    ms += now() - t0;
+    return true;
+  };
+  if (!defer) dress();
   return {
-    M, textures, ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0,
+    M, textures, get ms() { return ms; }, get ready() { return ready; }, dress,
     // 橡胶那一套是 gun-surface.js 缓存里公用的，不归这里释放
-    dispose() { for (const t of textures) t.dispose(); for (const m of Object.values(M)) m.dispose(); },
+    dispose() { gone = true; for (const t of textures) t.dispose(); for (const m of Object.values(M)) m.dispose(); },
   };
 }

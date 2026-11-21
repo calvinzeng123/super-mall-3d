@@ -34,10 +34,11 @@ test('胡桃木和烤蓝钢的配方：范围对、可复现、接得上缝；�
   // 钢：颜色几乎是匀的（没有麻点），粗糙度有缓缓的深浅
   let sd = 0; const m0 = mean(B, 0); for (let i = 0; i < B.color.length; i += 3) sd += (B.color[i] - m0) ** 2; sd = Math.sqrt(sd / (S * S));
   assert.ok(sd < m0 * 0.2, `钢的颜色匀：均值 ${m0.toFixed(1)} 标准差 ${sd.toFixed(1)}`);
-  // 粗糙度：有一点深浅，但幅度小（金属高光对粗糙度很敏感，起伏大了高光里是一块一块的雾斑）
-  let rl = 1, rh = 0; for (const v of B.rough) { rl = Math.min(rl, v); rh = Math.max(rh, v); } assert.ok(rh - rl > 0.04 && rh - rl < 0.2 && rh < 0.55 && rl > 0.2, `钢的粗糙度 ${rl.toFixed(2)} … ${rh.toFixed(2)}`);
-  // 拉丝：一行一条（竖向相邻像素的高度差明显比横向大），而且幅度小
-  { let du = 0, dv = 0; for (let y = 0; y < S - 1; y++) for (let x = 0; x < S - 1; x++) { const i = y * S + x; du += Math.abs(B.height[i + 1] - B.height[i]); dv += Math.abs(B.height[i + S] - B.height[i]); } assert.ok(dv > du * 1.5 && dv / ((S - 1) * (S - 1)) < 0.08, `拉丝顺着 u、很浅：横 ${du.toFixed(1)} 竖 ${dv.toFixed(1)}`); }
+  // 粗糙度：半哑（平均 0.45–0.55，太滑了暗场里枪管顶上是一条镜面带），有缓缓的大斑；划痕只落在粗糙度上，比底子滑
+  let rl = 1, rh = 0, rm = 0; for (const v of B.rough) { rl = Math.min(rl, v); rh = Math.max(rh, v); rm += v; } rm /= B.rough.length;
+  assert.ok(rm > 0.45 && rm < 0.55 && rh - rl > 0.1 && rh < 0.75 && rl > 0.15, `钢的粗糙度 ${rl.toFixed(2)} … ${rh.toFixed(2)}，平均 ${rm.toFixed(3)}`);
+  // 拉丝：还是顺着 u（竖向相邻像素的高度差比横向大），但压得很浅、底下是各向同性的细颗粒——不是拉丝不锈钢那种一道道的亮纹
+  { let du = 0, dv = 0; for (let y = 0; y < S - 1; y++) for (let x = 0; x < S - 1; x++) { const i = y * S + x; du += Math.abs(B.height[i + 1] - B.height[i]); dv += Math.abs(B.height[i + S] - B.height[i]); } assert.ok(dv > du * 1.15 && dv < du * 2.5 && dv / ((S - 1) * (S - 1)) < 0.05, `拉丝顺着 u、很浅：横 ${du.toFixed(1)} 竖 ${dv.toFixed(1)}`); }
   // 木头的细节层：只有细线和棕眼（平均在 0.5 上下，没有宽色带的大起伏），钢没有
   assert.equal(W.detail.length, S * S); assert.equal(B.detail, undefined);
   { let m = 0; for (const v of W.detail) { assert.ok(v >= 0 && v <= 1); m += v; } m /= S * S; assert.ok(Math.abs(m - 0.5) < 0.06, `细节层的平均 ${m.toFixed(3)}`); }
@@ -83,10 +84,11 @@ test('木纹投影：UV 按位置取，不跟着截面的大小走；侧面的�
   const tilt = loft([sq(0, 0.01), sq(0.1, 0.01)], { tileU: 0.2, tileV: 0.1, grain: { slope: 0.3, shift: [0.1, 0.2] } }), TP = tilt.attributes.position, TU = tilt.attributes.uv;
   for (let t = 0; t < count(tilt) / 3; t++) for (const i of [t * 3, t * 3 + 1, t * 3 + 2]) if ([0, 1, 2].every((c) => Math.abs(TP.getX(t * 3 + c) - 0.01) < 1e-9)) { const along = -TP.getY(i) * Math.sin(0.3) + TP.getZ(i) * Math.cos(0.3), perp = TP.getY(i) * Math.cos(0.3) + TP.getZ(i) * Math.sin(0.3); assert.ok(Math.abs(TU.getX(i) - (along / 0.2 + 0.1)) < 1e-6 && Math.abs(TU.getY(i) - (perp / 0.1 + 0.2)) < 1e-6); }
   // 枪托和握把：同一个投影，所以侧面上同一个位置的 UV 是同一个函数——拿整枪的木头几何查：右侧面上所有顶点都满足同一个式子
-  const m = buildG40(), W = m.body.wood, WP = W.attributes.position, WN = W.attributes.normal, WU = W.attributes.uv, sl = G40.grainSlope; let checked = 0;
+  const m = buildG40(), W = m.body.wood, WP = W.attributes.position, WN = W.attributes.normal, WU = W.attributes.uv, sl = G40.grainSlope, [ba, bl, bp] = G40.grainBend; let checked = 0;
   for (let t = 0; t < count(W) / 3; t++) {
     const idx = [t * 3, t * 3 + 1, t * 3 + 2]; if (!idx.every((i) => WN.getX(i) > 0.97)) continue;
-    for (const i of idx) { const along = (-WP.getY(i) * Math.sin(sl) + WP.getZ(i) * Math.cos(sl)) / 0.3, perp = (WP.getY(i) * Math.cos(sl) + WP.getZ(i) * Math.sin(sl)) / 0.15; assert.ok(Math.abs(WU.getX(i) - along) < 1e-5 && Math.abs(WU.getY(i) - perp) < 1e-5, '枪托、握把右侧面：u 顺着枪托中线、v 垂直于它'); checked++; }
+    // 侧面的纹顺着长度缓缓起伏一下（bend）：v 多一项只跟 along 有关的正弦
+    for (const i of idx) { const al = -WP.getY(i) * Math.sin(sl) + WP.getZ(i) * Math.cos(sl), along = al / 0.3, perp = (WP.getY(i) * Math.cos(sl) + WP.getZ(i) * Math.sin(sl) + ba * Math.sin(al / bl * Math.PI * 2 + bp)) / 0.15; assert.ok(Math.abs(WU.getX(i) - along) < 1e-5 && Math.abs(WU.getY(i) - perp) < 1e-5, '枪托、握把右侧面：u 顺着枪托中线、v 垂直于它'); checked++; }
   }
   assert.ok(checked > 60, `查了 ${checked} 个顶点`);
   for (const g2 of [...Object.values(m.body), ...Object.values(m.tube), m.shell, g, tilt]) g2.dispose();
@@ -123,7 +125,7 @@ test('小工具：加粗的中线、光滑曲线、自带几何转换、拼合',
 
 test('G40 整枪：三角形数在预算里、数据都是有限的；枪管那一组相对铰链；缺口和准星对着瞄准线；枪托不挡视线；握把、护木还在手的位置', () => {
   const V = LAUNCHER_VIEW, m = buildG40({ hinge: V.hinge });
-  assert.ok(m.triangles > 3000 && m.triangles < 8600, `三角形 ${m.triangles}`);
+  assert.ok(m.triangles > 3000 && m.triangles < 8800, `三角形 ${m.triangles}`);
   assert.deepEqual(Object.keys(m.body), ['steel', 'dark', 'wood', 'rubber', 'ink']); assert.deepEqual(Object.keys(m.tube), ['steel', 'dark', 'wood', 'bore', 'ink']);
   for (const g of [...Object.values(m.body), ...Object.values(m.tube), m.shell]) {
     assert.ok(g && count(g) % 3 === 0);
@@ -136,7 +138,11 @@ test('G40 整枪：三角形数在预算里、数据都是有限的；枪管那�
   assert.ok(Math.abs((barrel.max.x + barrel.min.x) / 2) < 1e-4 && barrel.max.x > 0.024 && barrel.max.x < 0.03);
   // 瞄准线：缺口、准星尖都在 sightY（开镜时 V.ads 把这个高度放在屏幕正中）
   assert.ok(Math.abs(G40.notchY - V.sightY) < 0.001 && Math.abs(G40.bladeY - V.sightY) < 0.001); assert.ok(G40.frontZ < G40.sightZ && G40.sightZ < 0);
-  const sights = box(m.tube.dark); assert.ok(Math.abs(sights.max.y + V.hinge[1] - G40.leafTop) < 1e-3, '表尺框立着'); assert.ok(sights.min.z + V.hinge[2] < G40.frontZ);
+  // 表尺框平时放倒：枪管那一组的哑光小件最高处是照门的上沿（rearTop），比缺口底高、和准星尖差不多平；放倒的尺框不高过缺口底
+  const sights = box(m.tube.dark); assert.ok(sights.min.z + V.hinge[2] < G40.frontZ);
+  { const D = m.tube.dark.attributes.position; let rear = -Infinity; for (let i = 0; i < D.count; i++) if (Math.abs(D.getZ(i) + V.hinge[2] - G40.sightZ) < 0.008) rear = Math.max(rear, D.getY(i) + V.hinge[1]); assert.ok(Math.abs(rear - G40.rearTop) < 1e-3, `照门上沿 ${rear.toFixed(4)}`); }
+  assert.ok(G40.rearTop >= G40.bladeY && G40.rearTop - G40.bladeY < 0.0015, '准星尖和照门上沿差不多平');
+  { const D = m.tube.dark.attributes.position; let leafMax = -Infinity; for (let i = 0; i < D.count; i++) { const z = D.getZ(i) + V.hinge[2]; if (z < G40.sightZ - 0.008 && z > G40.frontZ + 0.02) leafMax = Math.max(leafMax, D.getY(i) + V.hinge[1]); } assert.ok(leafMax < G40.notchY - 0.006 && leafMax > 0.028, `放倒的尺框 ${leafMax.toFixed(4)}`); }
   // 枪托：机匣后面的上沿一路往下走，处处比瞄准线低至少 2.5 厘米，到托底低 9 厘米以上（开镜时它在屏幕正下方，高了就是一大条木头）；
   // 镜头（开镜时在 z = −V.ads[2]）看缺口的那条线从它上面过
   let prev = Infinity; for (const [z, y] of G40.stockTop) { if (z < 0.0925) continue; assert.ok(y <= prev && y < V.sightY - 0.025, `z=${z} 上沿 ${y}`); prev = y; }
@@ -173,8 +179,21 @@ test('没有画布（测试环境）：不做贴图、材质是纯色的、磨�
   // 整把枪
   const camera = new THREE.PerspectiveCamera(), gl = createLauncher({}, { camera, layer: 3 });
   let meshes = 0, tris = 0; gl.root.traverse((o) => { assert.equal(o.layers.mask, 1 << 3, '都在枪那一层'); if (o.isMesh) { meshes++; tris += o.geometry.attributes.position.count / 3; } });
-  assert.ok(meshes <= 12, `绘制次数 ${meshes}`); assert.ok(tris < 8000);
+  assert.ok(meshes <= 12, `绘制次数 ${meshes}`); assert.ok(tris < 8800, `三角形 ${tris}`);
   assert.equal(gl.parts.tube.position.y, LAUNCHER_VIEW.hinge[1]); assert.equal(gl.parts.shell.parent, gl.parts.tube); assert.equal(gl.parts.shell.visible, false); assert.ok(gl.parts.body.children.length >= 4);
   const mz = gl.muzzleWorld(); assert.ok(Math.abs(mz.z - LAUNCHER_VIEW.muzzle[2]) < 1e-9);
   assert.doesNotThrow(() => gl.dispose()); assert.equal(gl.root.parent, null);
+});
+
+test('贴图可以推迟：defer 时材质先建好、没有贴图；dress() 才做（只做一次）；没有画布时一开始就算做好了', () => {
+  const plainSet = createG40Materials({ defer: true }); assert.equal(plainSet.ready, true); assert.equal(plainSet.dress(), false); plainSet.dispose();
+  const canvas = () => { const c = { width: 0, height: 0 }; c.getContext = () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }), putImageData() {} }); return c; };
+  globalThis.document = { createElement: canvas };
+  try {
+    const L = createG40Materials({ size: 32, defer: true });
+    assert.equal(L.ready, false); assert.equal(L.textures.length, 0); assert.equal(L.M.steel.roughnessMap, null); assert.equal(L.M.steel.userData.wear, undefined);
+    assert.equal(L.dress(), true); assert.equal(L.ready, true); assert.equal(L.textures.length, 6);
+    assert.ok(L.M.steel.roughnessMap && L.M.wood.map && L.M.rubber.normalMap && L.M.brass.normalMap); assert.ok(L.M.steel.userData.wear && L.M.wood.defines.G40_DETAIL === '');
+    assert.equal(L.dress(), false, '只做一次'); L.dispose();
+  } finally { delete globalThis.document; }
 });

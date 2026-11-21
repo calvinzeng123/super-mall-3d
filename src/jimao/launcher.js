@@ -1,6 +1,6 @@
 // 第五把武器：G40 榴弹枪（丧尸围城里在第二道关的安全点捡到，正好赶上巨尸出来）。
 // 单发、撅把式：打一发，枪管往下一撅，左手塞一发 40 毫米榴弹进去，合上——换弹 1.9 秒。榴弹的飞行和爆炸在 actions.js（launch / SHELL）。
-// 模型是手搭的（没有找到授权合适的贴图模型）：粗枪管、木护木、圆顶机匣、连着握把的木枪托、立着的梯形表尺，按步枪握把和护木的位置摆，
+// 模型是手搭的（没有找到授权合适的贴图模型）：粗枪管、木护木、圆顶机匣、连着握把的木枪托、放倒的梯形表尺和方缺口照门，按步枪握把和护木的位置摆，
 // 所以步枪上那两只手原样搬过来就握得住——右手握把、左手托护木。外形和贴图在 skins/launcher-skin.js。
 // 这里只管这把枪自己；切枪、HUD 读数在 arsenal.js。
 import * as THREE from 'three';
@@ -29,12 +29,13 @@ export function breakPose(k) {
 
 /**
  * camera：镜头；layer：枪那一层；cloneHand(i, parent)：把步枪上的第 i 只手搬一份过来（0 右、1 左；测试环境可以没有）。
- * 返回 { root, state, update(dt, active, busy), reset(), startReload(), muzzleWorld(out), addShells(n), dispose() }。
+ * defer：贴图先不做，等 prepare()（arsenal.js 开局后隔几帧调）；在那之前就拿到手上的话，第一次 update 时当场做。
+ * 返回 { root, state, update(dt, active, busy), reset(), startReload(), muzzleWorld(out), addShells(n), prepare(), dispose() }。
  */
-export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAUNCHER_VIEW, W = LAUNCHER } = {}) {
+export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAUNCHER_VIEW, W = LAUNCHER, defer = false } = {}) {
   const root = new THREE.Group(); root.name = 'viewmodel-g40'; root.visible = false; camera.add(root);
   // 外形和表面都在 skins/launcher-skin.js：按材质拼成几个大件（机匣这一组 5 个、枪管那一组 5 个），不是一个零件一次绘制
-  const look = createG40Materials(), M = look.M, model = buildG40({ hinge: V.hinge });
+  const look = createG40Materials({ defer }), M = look.M, model = buildG40({ hinge: V.hinge });
   const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
   const geos = [];
   const add = (geo, mat, parent, x = 0, y = 0, z = 0) => { geos.push(geo); const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = false; m.receiveShadow = false; m.frustumCulled = false; parent.add(m); return m; };
@@ -77,7 +78,10 @@ export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAU
   return {
     root, state: S, spec: W, parts: { tube, body, left, right, shell },
     muzzleWorld, startReload,
+    /** 把推迟的贴图做掉（做过了返回 false） */
+    prepare: () => look.dress(),
     update(dt, active, busy) {
+      if (active && !look.ready) look.dress(); // 贴图还没做（拿到得太早）：显示之前当场做
       S.time += dt; S.flashT -= dt; S.cool -= dt;
       if (S.flashT <= 0 && flash.visible) { flash.visible = false; flashMat.opacity = 0; }
       const inp = G.input, p = G.player;

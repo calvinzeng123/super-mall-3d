@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { PISTOL_FINISH, smoothstep, boxBlur, bridgeFill, grainFill, scrubRects, paintCaps, scrubPixels, toneTables, analyse, patchMask, finishMR, finishBase, finishNormal, rowSampler, grainHeight, scrubMarkings, createPistolSkin } from '../src/jimao/skins/pistol-skin.js';
-import { KNIFE_SHAPE, BLADE_FINISH, curveAt, bladeSection, buildKnife, normalFromHeight, bladePixels, gripPixels, satinPixels, createKnifeMaterials } from '../src/jimao/skins/knife-skin.js';
+import { PISTOL_FINISH, smoothstep, boxBlur, bridgeFill, grainFill, scrubRects, paintCaps, scrubPixels, toneTables, analyse, patchMask, finishMR, finishBase, finishNormal, rowSampler, grainHeight, scrubMarkings, createPistolSkin, rasterParts, grooveWalls, bleed, markMask, applyMark, specularAA, creaseMask, addSightDots } from '../src/jimao/skins/pistol-skin.js';
+import { KNIFE_SHAPE, BLADE_FINISH, curveAt, bladeSection, buildKnife, normalFromHeight, bladePixels, gripPixels, satinPixels, brushLine, createKnifeMaterials, roundEnd } from '../src/jimao/skins/knife-skin.js';
 import { PISTOL_SKIN, knifeGeometry, scrubMarkings as arsenalScrub } from '../src/jimao/arsenal.js';
 
 const seeded = (s) => () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -19,7 +19,11 @@ test('手枪调参表：贴图不超过 1024、细节贴图 256；抹字的框�
   }
   assert.ok(PISTOL_FINISH.detailSize <= 256); assert.equal(PISTOL_FINISH.Magazine.size, 512, '弹匣只在换弹时露一下：不放大');
   assert.ok(PISTOL_FINISH.Slide.steel.rough < PISTOL_FINISH.MainBody.steel.rough, '套筒比套筒座亮');
-  const [r, g, b] = PISTOL_FINISH.Slide.steel.color; assert.ok(b > r && b > g && b < 110, '烤蓝：偏蓝的深色');
+  const [r, g, b] = PISTOL_FINISH.Slide.steel.color; assert.ok(b > r && b > g && b < 110 && b - r <= 12, '烤蓝：蓝黑（只带一点冷色，不是蓝漆）');
+  const F = PISTOL_FINISH.MainBody; assert.ok(F.steel.color[0] > F.poly.color[0] + 10 && F.poly.rough >= F.steel.rough + 0.12 && F.steel.metal < 0.7, '套筒座（磷化钢灰）和握把片（黑橡胶）明暗、光泽都分得开');
+  assert.ok(F.poly.color[0] >= 48 && F.poly.color[0] <= 66 && F.poly.rough <= 0.75, '握把片不是死黑：停电时防滑纹接得住光');
+  assert.ok(PISTOL_FINISH.Slide.env > 1 && PISTOL_FINISH.Slide.steel.color[0] >= 80, '套筒是钢：底色（反光的颜色）够亮，转过去也有一片光泽，不是黑塑料');
+  for (const name of ['Slide', 'MainBody']) assert.ok(PISTOL_FINISH[name].clip[0] <= 130 && PISTOL_FINISH[name].clip[1] < 1, '颜色贴图的高光软压');
   assert.equal(PISTOL_FINISH.MainBody.poly.metal, 0); assert.equal(PISTOL_FINISH.Slide.poly, null);
   let rects = 0;
   for (const spec of Object.values(PISTOL_SKIN.scrub)) {
@@ -95,7 +99,7 @@ test('表面：量原图（钢件 / 握把片分开，平面的相对亮度是 1
   assert.ok(base[(30 * n + 20) * 4] * A.kwref[30 * n + 20] / 64 > 2, '亮棱的相对亮度远高于 1');
   const T = toneTables(P.steel), at = (x) => Math.round(x * 64);
   assert.equal(T.wear[at(1)], 0); assert.equal(T.wear[at(1.25)], 0); assert.ok(Math.abs(T.wear[at(2.5)] - P.steel.wear) < 1e-6); assert.ok(T.wear[at(1.6)] > 0 && T.wear[at(1.6)] < P.steel.wear);
-  assert.ok(Math.abs(T.shade[at(1)] - 1) < 1e-6 && T.shade[at(0.2)] < 0.6 && T.shade[at(3)] <= 1 + (P.steel.hi - 1) * P.steel.contrast + 1e-6, '明暗限幅');
+  assert.ok(Math.abs(T.shade[at(1)] - 1) < 1e-6 && T.shade[at(0.2)] < 0.7 && T.shade[at(3)] <= 1 + (P.steel.hi - 1) * P.steel.contrast + 1e-6, '明暗限幅');
   assert.equal(T.cav[at(1)], 0); assert.equal(T.cav[at(0.3)], 1);
   const m = patchMask(Float32Array.from([0, 0.36, 0.47, 0.58, 1]), [0.36, 0.58]); assert.ok(m[0] === 0 && m[1] < 1e-9 && m[4] === 1 && Math.abs(m[2] - 0.5) < 1e-5);
 });
@@ -106,12 +110,12 @@ test('表面：重新上色——放大一倍；平面是烤蓝的深色（偏�
   finishBase(out, size, base, A, n, P, grainHeight(256, 11), on, 256); finishBase(bare, size, base, A, n, P, null, off, 256);
   assert.ok(out.every((v, i) => i % 4 !== 3 || v === 255), '不透明度写满');
   const flat = px(out, size, 90, 20), edge = px(out, size, 41, 20), cav = px(out, size, 90, 81), [cr, cg, cb] = P.steel.color;
-  assert.ok(Math.abs(flat[0] - cr) < cr * 0.3 && flat[2] > flat[0] + 8, `平面 ${flat}`); assert.ok(edge[0] > flat[0] + 35, `棱 ${edge}`); assert.ok(cav[0] < flat[0] * 0.75, `凹缝 ${cav}`);
-  assert.ok(px(bare, size, 41, 20)[0] < edge[0] - 20, '噪声不放行的地方棱不磨'); assert.ok(px(bare, size, 41, 20)[0] <= cr * 1.45, '没磨的棱只比平面亮一点：不是一圈白边');
+  assert.ok(Math.abs(flat[0] - cr) < cr * 0.3 && flat[2] >= flat[0] + 3 && flat[2] - flat[0] <= 14, `平面 ${flat}`); assert.ok(edge[0] > flat[0] + 25, `棱 ${edge}`); assert.ok(cav[0] < flat[0] * 0.75, `凹缝 ${cav}`);
+  assert.ok(px(bare, size, 41, 20)[0] < edge[0] - 8, `噪声不放行的地方棱不磨 ${px(bare, size, 41, 20)} / ${edge}`); assert.ok(px(bare, size, 41, 20)[0] <= cr * 1.45, '没磨的棱只比平面亮一点：不是一圈白边');
   // 握把片：黑的、不发蓝
   const B = PISTOL_FINISH.MainBody, M = fakeMaps(n, { flat: 45, poly: true }), AB = analyse(M.base, M.mr, n, B), o2 = new Uint8ClampedArray(n * n * 4);
   finishBase(o2, n, M.base.slice(), AB, n, B, null, on, 256);
-  const grip = px(o2, n, 54, 10); assert.ok(grip[0] < 40 && Math.abs(grip[0] - grip[2]) < 6, `握把片 ${grip}`);
+  const grip = px(o2, n, 54, 10); assert.ok(grip[0] < 66 && Math.abs(grip[0] - grip[2]) < 6, `握把片 ${grip}`);
   // 放大：不改尺寸时每个像素取的就是原图那个像素
   const src = rgba(4, 4, (x, y) => [x * 10 + y, 0, 0]), row = rowSampler(src, 4, 4), buf = row(2, 0, new Float32Array(4)); assert.deepEqual([...buf], [2, 12, 22, 32]);
   const up = rowSampler(src, 4, 8)(0, 0, new Float32Array(8)); assert.ok(up[0] === 0 && up[7] === 30 && up[3] > up[2] && up[2] > up[1], '放大是平滑过渡的');
@@ -224,23 +228,31 @@ test('刀的模型：四件都有、没有坏数；刀身 17 厘米、五毫米�
   assert.equal(inward, 0); radii.sort((a, b) => a[0] - b[0]);
   let dips = 0; for (let i = 1; i < radii.length - 1; i++) if (radii[i][1] < radii[i - 1][1] && radii[i][1] < radii[i + 1][1] && radii[i][1] < KNIFE_SHAPE.handle.a * 0.985) dips++;
   assert.equal(dips, KNIFE_SHAPE.handle.grooves, '防滑槽的条数');
-  const gb = k.guard.boundingBox; assert.ok(Math.abs(gb.min.y - KNIFE_SHAPE.pommel.y1) < 0.002 && gb.max.y > KNIFE_SHAPE.guard.y + 0.005, '尾锤在最下面（倒角往外多出一毫米多）'); assert.ok(gb.min.z < bb.min.z - 0.008 && gb.max.z > bb.max.z + 0.005, '护手伸出刀身');
+  const gb = k.guard.boundingBox; assert.ok(Math.abs(gb.min.y - KNIFE_SHAPE.pommel.y1) < 0.002 && gb.max.y > KNIFE_SHAPE.guard.y + 0.0035 && gb.max.y < KNIFE_SHAPE.guard.y + 0.005, '尾锤在最下面；护手是四毫米上下的薄钢板'); assert.ok(gb.min.z < bb.min.z - 0.008 && gb.max.z > bb.max.z + 0.005, '护手伸出刀身');
   for (const g of Object.values(k)) g.dispose();
   // arsenal.js 那一层：倾到握把的角度，老测试量的「刀身长」还在 15–22 厘米
   const tilted = knifeGeometry(); tilted.blade.computeBoundingBox(); const tb = tilted.blade.boundingBox, len = Math.hypot(tb.max.y - tb.min.y, tb.max.z - tb.min.z);
   assert.ok(len > 0.15 && len < 0.22, `刀身 ${len.toFixed(3)} 米`); assert.deepEqual(Object.keys(tilted).sort(), ['blade', 'fuller', 'guard', 'handle']);
 });
 
-test('刀的贴图：刀面是深色涂层、主刃面是亮的缎面钢、刃口最亮也最光；涂层不是纯金属；血槽里暗一点；法线贴图平的地方朝上；握把、钢件的图可平铺', () => {
+test('刀的贴图：刀面是中灰的缎面钢（白天、停电一个样）、主刃面亮一档、刃口最亮也最光；拉丝在粗糙度里、颜色里很淡；两个方向像素密度差不多；护手钢不偏蓝；法线贴图平的地方朝上；握把、钢件的图可平铺', () => {
   const P = bladePixels(), { w, h, z0, z1 } = KNIFE_SHAPE.tex; assert.deepEqual([P.w, P.h, P.color.length, P.mr.length, P.height.length], [w, h, w * h * 4, w * h * 4, w * h]);
   assert.ok(w <= 1024 && h <= 1024);
   const at = (t, z) => { const x = Math.round(t / KNIFE_SHAPE.blade.len * w), y = Math.round((z - z0) / (z1 - z0) * h), o = (y * w + x) * 4; return { c: P.color[o], rough: P.mr[o + 1] / 255, metal: P.mr[o + 2] / 255 }; };
   const s = bladeSection(0.06), avg = (z, key) => { let a = 0; for (let t = 0.05; t < 0.09; t += 0.002) a += at(t, z)[key]; return a / 20; };
   const coat = avg(s.fz + s.fw + 0.0012, 'c'), bevel = avg((s.zg + s.zh) / 2, 'c'), hone = avg(s.ze + 0.0003, 'c'), groove = avg(s.fz, 'c');
-  assert.ok(coat < 90 && bevel > coat + 25 && hone > bevel + 30, `涂层 ${coat.toFixed(0)} / 刃面 ${bevel.toFixed(0)} / 刃口 ${hone.toFixed(0)}`); assert.ok(groove < coat, '血槽里暗');
+  assert.ok(coat > 100 && coat < 140 && bevel > coat + 8 && hone > bevel + 15, `刀面 ${coat.toFixed(0)} / 刃面 ${bevel.toFixed(0)} / 刃口 ${hone.toFixed(0)}`); assert.ok(groove < coat, '血槽里暗');
   assert.ok(avg(s.ze + 0.0003, 'rough') < avg((s.zg + s.zh) / 2, 'rough') && avg((s.zg + s.zh) / 2, 'rough') < avg(s.fz + s.fw + 0.0012, 'rough'), '越磨越光');
-  assert.ok(avg(s.fz + s.fw + 0.0012, 'metal') < 0.6 && avg((s.zg + s.zh) / 2, 'metal') > 0.98, '涂层有漫反射，钢是金属');
-  assert.ok(P.mr.every((v, i) => i % 4 !== 1 || (v >= 0.12 * 255 && v <= 0.8 * 255)), '没有镜面、也没有粉笔');
+  const fm = avg(s.fz + s.fw + 0.0012, 'metal'); assert.ok(fm > 0.8 && fm < 0.92 && avg((s.zg + s.zh) / 2, 'metal') > 0.98, '刀面留一点漫反射，刃面是金属');
+  assert.ok(P.mr.every((v, i) => i % 4 !== 1 || (v >= 0.28 * 255 && v <= 0.8 * 255)), '没有镜面（假刃、刃口不会亮成一条死白）、也没有粉笔');
+  // 拉丝：刀面上一列像素（横跨很多条线）的颜色起伏很小，粗糙度的起伏大得多
+  { const x = Math.round(0.07 / KNIFE_SHAPE.blade.len * w), y0 = Math.round((s.fz + s.fw + 0.0008 - z0) / (z1 - z0) * h), cs = [], rs = [];
+    for (let y = y0; y < y0 + 8; y++) { const o = (y * w + x) * 4; cs.push(P.color[o]); rs.push(P.mr[o + 1]); }
+    const spread = (a) => Math.max(...a) - Math.min(...a); assert.ok(spread(cs) <= 10 && spread(rs) >= spread(cs), `颜色起伏 ${spread(cs)}、粗糙度起伏 ${spread(rs)}`); }
+  const dl = w / KNIFE_SHAPE.blade.len, dw = h / (z1 - z0); assert.ok(Math.max(dl, dw) / Math.min(dl, dw) < 1.2, '两个方向每毫米的像素差不多：纹路不拉长');
+  for (let i = 0; i < 50; i++) { const v = brushLine(i, i * 13); assert.ok(v >= 0 && v < 1); }
+  assert.ok(new Set(Array.from({ length: 12 }, (_, i) => Math.round(brushLine(i, 0) * 100))).size > 6, '相邻的线深浅不一样');
+  const S = satinPixels(64); let warm = 0; for (let i = 0; i < 64 * 64; i++) warm = Math.max(warm, S.color[i * 4 + 2] - S.color[i * 4]); assert.ok(warm <= 4, '护手钢是中性灰，不偏蓝');
   assert.ok(BLADE_FINISH.hone.rough < BLADE_FINISH.bevel.rough && BLADE_FINISH.bevel.rough < BLADE_FINISH.coat.rough);
   const flat = normalFromHeight(new Float32Array(8 * 4).fill(0.4), 8, 4, 2); assert.deepEqual([flat[0], flat[1], flat[2], flat[3]], [128, 128, 255, 255]);
   const ramp = normalFromHeight(Float32Array.from({ length: 16 }, (_, i) => (i % 4) * 0.25), 4, 4, 1); assert.ok(ramp[(1 * 4 + 1) * 4] < 110 && Math.abs(ramp[(1 * 4 + 1) * 4 + 1] - 127.5) <= 1, '往右升高的坡：法线朝左');
@@ -255,6 +267,142 @@ test('刀的材质：没有 document 时是三个单色材质、没有贴图；d
   const M = createKnifeMaterials();
   assert.equal(M.textures.length, 0); assert.equal(M.ms, 0);
   for (const m of [M.blade, M.handle, M.steel]) { assert.ok(m.isMeshStandardMaterial); assert.equal(m.map, null); assert.equal(m.normalMap, null); }
-  assert.equal(M.blade.metalness, 1); assert.equal(M.handle.metalness, 0); assert.ok(M.handle.color.r < M.steel.color.r && M.steel.color.r < M.blade.color.r);
+  assert.ok(M.blade.metalness >= 0.85 && M.blade.roughness >= 0.34); assert.equal(M.handle.metalness, 0); assert.ok(M.handle.color.r < M.steel.color.r && M.steel.color.r < M.blade.color.r);
   M.dispose();
+});
+
+// ---- 第二轮：UV 岛、槽壁、钢印、高光抗锯齿 ----
+test('UV 岛：像素中心落在三角形里才算；按顺序画（后画的盖住先画的）；pick 跳过的三角形不画；整个三角形挪回 0–1 那一格', () => {
+  const quad = (a, b) => ({ uv: Float32Array.from([a, a, b, a, b, b, a, a, b, b, a, b]), index: null });
+  const one = rasterParts([{ ...quad(0.25, 0.75), code: 1 }], 16); assert.equal(one.reduce((s, v) => s + v, 0), 64); assert.equal(one[4 * 16 + 4], 1); assert.equal(one[3 * 16 + 4], 0);
+  const two = rasterParts([{ ...quad(0.25, 0.75), code: 3 }, { ...quad(0.25, 0.75), code: 1, pick: Uint8Array.from([1, 0]) }], 16);
+  assert.ok(two.includes(3) && two.includes(1), '第二个三角形没被盖住'); assert.equal(two.filter((v) => v === 3).length + two.filter((v) => v === 1).length, 64);
+  const wrapped = rasterParts([{ ...quad(1.25, 1.75), code: 2 }], 16); assert.equal(wrapped.filter((v) => v === 2).length, 64, '平铺：1.25–1.75 落在 0.25–0.75');
+});
+
+test('槽壁：沿长轴朝前 / 朝后的小三角形算；朝侧面的不算；同一平面上加起来很大的（端面）不算', () => {
+  const pos = [], tri = (a, b, c) => pos.push(...a, ...b, ...c);
+  // 长轴是 y（0–20）；侧面一个大三角形（法线朝 x）
+  tri([1, 0, 0], [1, 20, 0], [1, 0, 3]);
+  // 侧面上 6 道小槽壁：各在自己的 y 平面上，法线朝 y
+  for (let k = 0; k < 6; k++) { const y = 5 + k * 1.5; tri([0.8, y, 0], [1, y, 0], [1, y, 0.6]); }
+  // 端面：y = 18 平面上 40 个小三角形（每个都小，加起来大）
+  for (let i = 0; i < 40; i++) { const x = -1 + (i % 8) * 0.25, z = Math.floor(i / 8) * 0.6; tri([x, 18, z], [x + 0.25, 18, z], [x + 0.25, 18, z + 0.6]); }
+  const pick = grooveWalls(Float32Array.from(pos), null);
+  assert.equal(pick[0], 0, '侧面'); for (let k = 1; k <= 6; k++) assert.equal(pick[k], 1, `槽壁 ${k}`); assert.equal(pick.slice(7).reduce((a, b) => a + b, 0), 0, '端面');
+});
+
+test('渗色：岛外的像素一圈一圈取岛里的颜色，几张图一起渗；岛里的像素不动；渗不到的地方不动', () => {
+  const n = 9, cover = new Uint8Array(n * n); cover[4 * n + 4] = 1;
+  const a = new Uint8ClampedArray(n * n * 4).fill(250), b = new Uint8ClampedArray(n * n * 4).fill(10); a.set([40, 50, 60], (4 * n + 4) * 4); b.set([200, 200, 200], (4 * n + 4) * 4);
+  const changed = bleed([a, b], n, cover, 2);
+  assert.equal(changed, 4 + 8); assert.deepEqual([...a.slice((4 * n + 5) * 4, (4 * n + 5) * 4 + 3)], [40, 50, 60]); assert.deepEqual([...a.slice((6 * n + 4) * 4, (6 * n + 4) * 4 + 3)], [40, 50, 60]);
+  assert.equal(b[(4 * n + 6) * 4], 200, '第二张图一起渗'); assert.equal(a[(4 * n + 7) * 4], 250, '第三圈不渗'); assert.equal(a[(4 * n + 4) * 4], 40);
+});
+
+test('压平和槽壁：calm 部件不磨、明暗压平；只给槽壁用的像素更暗、更涩；颜色贴图的高光软压', () => {
+  const n = 64, P = PISTOL_FINISH.Slide, { base, mr } = fakeMaps(n), isl = new Uint8Array(n * n).fill(1);
+  for (let y = 0; y < n; y++) { isl[y * n + 20] = isl[y * n + 21] = 2; isl[y * n + 50] = 3; } // 亮棱那两列是 calm，x = 50 一列是槽壁
+  const A = analyse(base, mr, n, P, isl), on = new Float32Array(256 * 256).fill(1), out = new Uint8ClampedArray(n * n * 4), plain = new Uint8ClampedArray(n * n * 4);
+  assert.equal(A.calm[20], 1); assert.equal(A.groove[50], 1); assert.equal(A.groove[51], 0);
+  finishBase(out, n, base, A, n, P, null, on, 256); finishBase(plain, n, base, analyse(base, mr, n, P), n, P, null, on, 256);
+  assert.ok(px(out, n, 20, 10)[0] < px(plain, n, 20, 10)[0] - 20, `calm 的亮棱不磨 ${px(out, n, 20, 10)} / ${px(plain, n, 20, 10)}`); assert.ok(px(out, n, 50, 10)[0] < px(plain, n, 50, 10)[0] * 0.7, '槽壁更暗');
+  for (let i = 0; i < n * n; i++) assert.ok((plain[i * 4] + plain[i * 4 + 1] + plain[i * 4 + 2]) / 3 <= P.clip[0] + 255 * P.clip[1], '软压以后没有发白的像素');
+  const m1 = mr.slice(), m2 = mr.slice(); finishMR(m1, base, n, A, P, on, 256); finishMR(m2, base, n, analyse(base, mr, n, P), P, on, 256);
+  assert.ok(m1[(10 * n + 50) * 4 + 1] > m2[(10 * n + 50) * 4 + 1] + 30, '槽壁更涩'); assert.ok(m1[(10 * n + 20) * 4 + 1] > m2[(10 * n + 20) * 4 + 1], 'calm 的棱不磨光');
+});
+
+test('钢印：没有画布时不打；刻进去——颜色压暗、粗糙度升高、字边上的法线斜过去；高光抗锯齿接在原来的着色器补丁后面、单独编译', () => {
+  assert.equal(markMask(PISTOL_FINISH.Slide.mark, 2), null); assert.equal(applyMark(new Uint8ClampedArray(16), 2, null), 0);
+  const n = 16, a = new Float32Array(6 * 6); for (let y = 1; y < 5; y++) for (let x = 1; x < 5; x++) a[y * 6 + x] = 1; const mask = { x: 5, y: 5, w: 6, h: 6, a };
+  const col = new Uint8ClampedArray(n * n * 4).fill(100), data = new Uint8ClampedArray(n * n * 4).fill(100), nrm = new Uint8ClampedArray(n * n * 4); for (let i = 0; i < n * n; i++) nrm.set([128, 128, 255, 255], i * 4);
+  assert.ok(applyMark(col, n, mask, 'color') > 0); applyMark(data, n, mask, 'data'); applyMark(nrm, n, mask, 'normal');
+  assert.ok(px(col, n, 7, 7)[0] < 80 && px(col, n, 0, 0)[0] === 100); assert.ok(data[(7 * n + 7) * 4 + 1] > 130); assert.ok(Math.abs(px(nrm, n, 6, 8)[0] - 128) > 20, `字边 ${px(nrm, n, 6, 8)}`); assert.deepEqual(px(nrm, n, 0, 0), [128, 128, 255]);
+  const m = new THREE.MeshStandardMaterial(); let first = 0; m.onBeforeCompile = () => { first++; }; m.customProgramCacheKey = () => 'gun-detail';
+  specularAA(m, 1.5); const sh = { fragmentShader: '#include <lights_physical_fragment>\n', vertexShader: '', uniforms: {} }; m.onBeforeCompile(sh, null);
+  assert.equal(first, 1, '原来的补丁还在'); assert.ok(sh.fragmentShader.includes('geometryRoughness * 1.50') && sh.fragmentShader.includes('material.specularColor')); assert.notEqual(m.customProgramCacheKey(), 'gun-detail');
+  assert.equal(specularAA(null), null);
+});
+
+// ---- 第三轮：按几何找棱、小螺帽、瞄具荧光点、血槽圆头 ----
+
+test('棱线遮罩：方块的棱是凸棱（带宽按厘米算）、面中间是 0；L 形里面那条折角是凹棱；顺滑的圆柱一圈折面不算棱', () => {
+  // 一个 2 × 2 × 2 的方块，每个面单独一套顶点（硬棱），UV：六个面排成 3 × 2 格，每格 1/3 × 1/2
+  const faces = [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]], pos = [], uv = [], nrm = [];
+  faces.forEach(([ax, sg], f) => {
+    const u = (ax + 1) % 3, v = (ax + 2) % 3, cu = (f % 3) / 3, cv = Math.floor(f / 3) / 2;
+    const corner = (a, b) => { const p = [0, 0, 0]; p[ax] = sg; p[u] = a; p[v] = b; return p; };
+    const quad = sg > 0 ? [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]] : [[-1, -1], [1, 1], [1, -1], [-1, -1], [-1, 1], [1, 1]];
+    for (const [a, b] of quad) { pos.push(...corner(a, b)); uv.push(cu + (a + 1) / 2 / 3 * 0.9 + 0.01, cv + (b + 1) / 2 / 2 * 0.9 + 0.01); const n = [0, 0, 0]; n[ax] = sg; nrm.push(...n); }
+  });
+  const n = 192, M = creaseMask([{ pos: Float32Array.from(pos), uv: Float32Array.from(uv), nrm: Float32Array.from(nrm), index: null }], n, { wear: 0.12, grime: 0.12, maxPx: 8 });
+  // 第一个面（+x）在贴图上是 x ∈ [0.01, 0.31] × n、y ∈ [0.01, 0.46] × n：边上满、正中间 0
+  const at = (x, y) => M.convex[Math.round(y) * n + Math.round(x)];
+  assert.ok(at(0.012 * n + 1, 0.2 * n) > 0.6, `棱上 ${at(0.012 * n + 1, 0.2 * n)}`); assert.equal(at(0.16 * n, 0.23 * n), 0, '面中间不磨');
+  assert.ok(M.concave.every((v) => v === 0), '方块没有凹棱');
+  // 带宽：2 个单位 = 0.3 × 192 ≈ 58 像素，0.12 厘米 ≈ 3.5 像素：离边 7 个像素以外没有
+  assert.equal(at(0.012 * n + 8, 0.2 * n), 0);
+  // 同一个方块缩一半（unit = 2：网格里 1 个单位是 2 厘米）：带宽按厘米算，像素宽度减半
+  const M2 = creaseMask([{ pos: Float32Array.from(pos), uv: Float32Array.from(uv), nrm: Float32Array.from(nrm), index: null, unit: 2 }], n, { wear: 0.12, grime: 0.12, maxPx: 8 });
+  let w1 = 0, w2 = 0; for (let x = 2; x < 30; x++) { if (M.convex[Math.round(0.2 * n) * n + x] > 0.3) w1++; if (M2.convex[Math.round(0.2 * n) * n + x] > 0.3) w2++; }
+  assert.ok(w2 < w1 && w2 >= 1, `带宽 ${w1} → ${w2}`);
+  // L 形的凹折：两个平面（地面朝上、墙朝 −x... 面向内侧）共一条边，往里折
+  const L = { pos: Float32Array.from([0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, /* 墙 */ 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1]),
+    uv: Float32Array.from([0.5, 0.1, 0.9, 0.5, 0.9, 0.1, 0.5, 0.1, 0.5, 0.5, 0.9, 0.5, 0.45, 0.1, 0.05, 0.1, 0.05, 0.5, 0.45, 0.1, 0.05, 0.5, 0.45, 0.5]), index: null };
+  const ML = creaseMask([L], 64, { grime: 0.1, maxPx: 4 });
+  assert.ok(ML.concave.some((v) => v > 0.5) && ML.convex.every((v) => v === 0), '往里折的是凹棱');
+  // 顺滑的十二边形圆柱（顶点共用、法线顺着）：每个折角 30°，不算棱
+  const cyl = [], cuv = [], cn = [], idx = []; for (let i = 0; i <= 12; i++) { const a = i / 12 * Math.PI * 2; cyl.push(Math.cos(a), Math.sin(a), 0, Math.cos(a), Math.sin(a), 2); cn.push(Math.cos(a), Math.sin(a), 0, Math.cos(a), Math.sin(a), 0); cuv.push(i / 12 * 0.9, 0.1, i / 12 * 0.9, 0.9); } // 第 12 个和第 0 个位置相同（UV 接缝），法线一样
+  for (let i = 0; i < 12; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  const MC = creaseMask([{ pos: Float32Array.from(cyl), uv: Float32Array.from(cuv), nrm: Float32Array.from(cn), index: Uint16Array.from(idx) }], 64);
+  assert.ok(MC.convex.every((v) => v < 0.05), '圆柱不成斑马条');
+  assert.deepEqual([creaseMask(null, 8).convex.length, creaseMask([{ pos: null }], 8).n], [64, 8]);
+});
+
+test('小螺帽：head < 1 时螺帽只占圆片的 head 那么大，外圈是钢的倒角（比钢面亮）、外面是握把片上的圆窝（橡胶色、不是金属）', () => {
+  const S = 512, spec = { discs: [[256, 256, 60]] }, opt = { head: 0.6, recess: [47, 47, 50] }, c = 256, Rh = 36;
+  const col = rgba(S, S, () => [150, 120, 40]), data = rgba(S, S, () => [255, 140, 10]), nrm = rgba(S, S, () => [128, 128, 255]);
+  paintCaps(col, S, S, spec, 'color', opt); paintCaps(data, S, S, spec, 'data', opt); paintCaps(nrm, S, S, spec, 'normal', opt);
+  const ring = px(col, S, c + Rh - 1, c), face = px(col, S, c + 20, c), recess = px(col, S, c + 48, c), hole = px(col, S, c, c);
+  assert.ok(ring[0] > face[0] + 15, `钢圈 ${ring} / 钢面 ${face}`); assert.ok(hole[0] < face[0] * 0.5, '孔里是黑的');
+  assert.ok(Math.abs(recess[0] - 47) < 12 && Math.abs(recess[0] - recess[2]) < 6, `圆窝 ${recess}`); assert.deepEqual(px(col, S, 4, 4), [150, 120, 40], '圆片外不动');
+  assert.equal(px(data, S, c + 20, c)[2], 255, '螺帽是金属'); assert.ok(px(data, S, c + 48, c)[2] < 10 && px(data, S, c + 48, c)[1] > 170, '圆窝：橡胶，涩');
+  assert.ok(px(nrm, S, c + Rh - 1, c)[0] > 140 && px(nrm, S, c - Rh, c)[0] < 116, '螺帽边上的法线朝外斜'); const fl = px(nrm, S, c + 48, c); assert.ok(Math.abs(fl[0] - 128) < 8 && fl[2] > 245, '窝底是平的');
+});
+
+test('瞄具荧光点：挂在准星、照门的节点上（照门的点跟着套筒走）、朝后；白圈 + 绿点，绿点比白圈小；找不到节点的跳过；不给 spec 什么都不加', () => {
+  const scene = new THREE.Group(), front = new THREE.Group(), rear = new THREE.Group(); front.name = 'FrontSight_low'; rear.name = 'RearSight_low';
+  front.position.set(0, 25.9, 9.7); rear.position.set(0, 25.5, -11.2); rear.rotation.y = Math.PI / 2; scene.add(front, rear);
+  const made = addSightDots(scene, PISTOL_SKIN.dots);
+  assert.equal(made.meshes.length, 6, '三个点、每个两件'); assert.ok(made.materials.length >= 2 && made.geometries.length >= 2);
+  assert.equal(front.children.length, 1); assert.equal(rear.children.length, 2);
+  scene.updateMatrixWorld(true);
+  const w = new THREE.Vector3(); rear.children[0].getWorldPosition(w); assert.ok(Math.abs(Math.abs(w.x) - 0.74) < 1e-6 && Math.abs(w.y - 25.92) < 1e-6 && w.z < -11.7, `照门的点 ${w.toArray()}`);
+  const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(rear.children[0].getWorldQuaternion(new THREE.Quaternion())); assert.ok(dir.z < -0.99, '朝后（朝开镜的眼睛）');
+  for (const g of [...front.children, ...rear.children]) { const [ring, dot] = g.children; assert.ok(ring.material.isMeshStandardMaterial && dot.material.isMeshBasicMaterial); ring.geometry.computeBoundingSphere(); dot.geometry.computeBoundingSphere(); assert.ok(dot.geometry.boundingSphere.radius < ring.geometry.boundingSphere.radius); }
+  const fd = front.children[0].children[1].material.color, rd = rear.children[0].children[1].material.color; assert.ok(fd.g > fd.r * 2 && fd.g >= rd.g, '绿的，准星的点更亮');
+  assert.equal(addSightDots(new THREE.Group(), PISTOL_SKIN.dots).meshes.length, 0); assert.equal(addSightDots(scene, null).meshes.length, 0);
+  for (const g of made.geometries) g.dispose(); for (const m of made.materials) m.dispose();
+});
+
+test('血槽圆头：两头是四分之一圆（起头就有一道利落的边、不是一团慢慢变浅的光斑）；圆头那几毫米截面加密', () => {
+  assert.equal(roundEnd(0), 0); assert.equal(roundEnd(-1), 0); assert.equal(roundEnd(2), 1); assert.ok(roundEnd(0.1) > 0.4, '起头陡');
+  const B = KNIFE_SHAPE.blade, [f0, f1, , fw, fdep] = B.fuller;
+  assert.equal(bladeSection(f0 - 0.0005).fd, 0); assert.ok(bladeSection(f0 + fw * 0.1).fd > fdep * 0.4); assert.ok(Math.abs(bladeSection(f0 + fw).fd - fdep) < 1e-9 && Math.abs(bladeSection(f0 + fw).fw - fw) < 1e-9);
+  assert.ok(bladeSection(f0 + fw * 0.2).fw < fw * 0.7, '圆头处槽变窄（俯看是半圆）'); assert.ok(bladeSection(f1 - fw * 0.1).fd > fdep * 0.4 && bladeSection(f1 + 0.0005).fd === 0);
+  const k = buildKnife(), fp = k.fuller.attributes.position, ys = new Set(); for (let i = 0; i < fp.count; i++) { const y = fp.getY(i) - B.y0; if (y > f0 && y < f0 + fw) ys.add(y.toFixed(6)); }
+  assert.ok(ys.size >= 6, `圆头里有 ${ys.size} 个截面`); for (const g of Object.values(k)) g.dispose();
+  const P = bladePixels(), { w, h, z0, z1 } = KNIFE_SHAPE.tex, s = bladeSection(0.06), col = (z) => P.color[(Math.round((z - z0) / (z1 - z0) * h) * w + Math.round(0.06 / B.len * w)) * 4];
+  assert.ok(col(s.fz + s.fw) < col(s.fz + s.fw + 0.0012) - 15, '槽口一道暗线');
+});
+
+test('刀的贴图可以推迟：defer 时先是单色材质，dress() 才做贴图（只做一次）；释放以后不再做', () => {
+  globalThis.document = fakeDocument();
+  try {
+    const M = createKnifeMaterials({ defer: true });
+    assert.equal(M.ready, false); assert.equal(M.textures.length, 0); assert.equal(M.blade.map, null);
+    assert.equal(M.dress(), true); assert.equal(M.ready, true); assert.equal(M.textures.length, 9); assert.ok(M.blade.map && M.handle.normalMap && M.steel.roughnessMap); assert.ok(M.ms > 0);
+    assert.equal(M.dress(), false, '只做一次'); M.dispose();
+    const N = createKnifeMaterials({ defer: true }); N.dispose(); assert.equal(N.dress(), false, '释放了就不做'); assert.equal(N.textures.length, 0);
+  } finally { delete globalThis.document; }
 });
