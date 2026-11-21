@@ -8,7 +8,7 @@ import * as THREE from 'three';
 /** reserve：捡到时带几发备弹；noise：开火那一下的响动（炸点另算一次手雷的响动）；recoil：镜头上抬（弧度） */
 export const LAUNCHER = Object.freeze({ name: 'G40 榴弹枪', mag: 1, reserve: 4, reserveMax: 8, reload: 1.9, recoil: 0.032, adsRate: 4.6, noise: 30, spreadHip: 0.012, spreadAds: 0.003 });
 /** 腰射 / 开镜时模型原点在镜头前的位置；sightY：表尺缺口比原点高多少；muzzle：枪口；hinge：枪管撅下去绕的轴 */
-export const LAUNCHER_VIEW = Object.freeze({ hip: Object.freeze([0.125, -0.105, -0.4]), ads: Object.freeze([0, -0.05, -0.34]), sightY: 0.05, muzzle: Object.freeze([0, 0.006, -0.36]), hinge: Object.freeze([0, -0.032, -0.012]), open: 0.62 });
+export const LAUNCHER_VIEW = Object.freeze({ hip: Object.freeze([0.14, -0.115, -0.43]), ads: Object.freeze([0, -0.05, -0.4]), sightY: 0.05, muzzle: Object.freeze([0, 0.006, -0.36]), hinge: Object.freeze([0, -0.032, -0.012]), open: 0.62 });
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const ease = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
@@ -49,8 +49,9 @@ export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAU
   add(new THREE.BoxGeometry(0.008, 0.006, 0.07), M.steel, body, 0, -0.078, 0.03); // 扳机护圈
   add(new THREE.BoxGeometry(0.008, 0.03, 0.006), M.steel, body, 0, -0.064, 0.0);  // 护圈前缘
   add(new THREE.BoxGeometry(0.005, 0.022, 0.007), M.steel, body, 0, -0.06, 0.04, 0.3); // 扳机
-  add(tubeGeo(0.03, 0.2, 14, 0.024), M.wood, body, 0, -0.012, 0.2).scale.set(0.72, 1.15, 1); // 枪托：前细后粗、压扁的圆木
-  add(new THREE.BoxGeometry(0.044, 0.074, 0.016), M.poly, body, 0, -0.012, 0.306); // 托底
+  // 枪托：前细后粗、压扁的圆木，往后往下斜（贴腮的那条棱比瞄准线低，开镜时不挡视线）
+  add(tubeGeo(0.028, 0.2, 14, 0.022), M.wood, body, 0, -0.04, 0.2, 0.2).scale.set(0.72, 1.05, 1);
+  add(new THREE.BoxGeometry(0.042, 0.068, 0.016), M.poly, body, 0, -0.061, 0.304, 0.2); // 托底
   add(new THREE.BoxGeometry(0.01, 0.01, 0.026), M.steel, body, 0, AX + 0.03, 0.075); // 开闩扳把
   // 表尺：平放的尺板 + 后端竖起的缺口（两片窄立柱，中间是缺口）
   add(new THREE.BoxGeometry(0.018, 0.004, 0.06), M.steel, body, 0, AX + 0.029, 0.03);
