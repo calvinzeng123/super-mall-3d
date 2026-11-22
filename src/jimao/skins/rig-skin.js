@@ -90,18 +90,25 @@ export function grimeGeo(geo, f) {
  * 人形几十上百个零件，three 的通用合并要给每个零件先拆一份新数组，开局建人时慢好几倍。
  * 零件要有同样的属性（position、normal、uv、color、rig）；缺 rig 的先用 ensureRig 补。
  */
+// 按索引拷属性：每种数组一个函数（内容一样）。同一段循环要碰 Float32 / Uint8 / Int16 好几种数组的话，
+// V8 在这里退成多态访问，冷启动时建一个人光这一处就要四五十毫秒；分开以后每个函数只见一种数组，冷启动快四五倍，结果一样
+function gatherF32(dst, src, idx, k, o) { for (let i = 0; i < idx.length; i++) { const s = idx[i] * k; for (let j = 0; j < k; j++) dst[o++] = src[s + j]; } return o; }
+function gatherU8(dst, src, idx, k, o) { for (let i = 0; i < idx.length; i++) { const s = idx[i] * k; for (let j = 0; j < k; j++) dst[o++] = src[s + j]; } return o; }
+function gatherI16(dst, src, idx, k, o) { for (let i = 0; i < idx.length; i++) { const s = idx[i] * k; for (let j = 0; j < k; j++) dst[o++] = src[s + j]; } return o; }
+function gatherAny(dst, src, idx, k, o) { for (let i = 0; i < idx.length; i++) { const s = idx[i] * k; for (let j = 0; j < k; j++) dst[o++] = src[s + j]; } return o; }
+const gatherFor = (a) => (a instanceof Float32Array ? gatherF32 : a instanceof Uint8Array ? gatherU8 : a instanceof Int16Array ? gatherI16 : gatherAny);
 export function mergeFlat(list) {
   const names = Object.keys(list[0].attributes);
   let total = 0;
   for (const g of list) total += g.index ? g.index.count : g.attributes.position.count;
   const out = new THREE.BufferGeometry();
   for (const name of names) {
-    const a0 = list[0].attributes[name], k = a0.itemSize, dst = new a0.array.constructor(total * k);
+    const a0 = list[0].attributes[name], k = a0.itemSize, dst = new a0.array.constructor(total * k), gather = gatherFor(dst);
     let o = 0;
     for (const g of list) {
-      const a = g.attributes[name], src = a.array, idx = g.index ? g.index.array : null;
+      const a = g.attributes[name], src = a?.array, idx = g.index ? g.index.array : null;
       if (!a || a.itemSize !== k || a.isInterleavedBufferAttribute) throw new Error('mergeFlat: 零件属性不一致 ' + name);
-      if (idx) { for (let i = 0; i < idx.length; i++) { const s = idx[i] * k; for (let j = 0; j < k; j++) dst[o++] = src[s + j]; } }
+      if (idx) o = (src.constructor === dst.constructor ? gather : gatherAny)(dst, src, idx, k, o); // 数组类型不一样的零件（少见）照旧按值转
       else { dst.set(src.subarray(0, a.count * k), o); o += a.count * k; }
     }
     out.setAttribute(name, new THREE.BufferAttribute(dst, k, a0.normalized));

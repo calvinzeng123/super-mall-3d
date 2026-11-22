@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import * as Z from '../src/jimao/skins/zombie-paint.js';
-import { zombieTexSizes, ZOMBIE_SKIN, loadZombieKit, faceOf } from '../src/jimao/zombie-skin.js';
+import { zombieTexSizes, ZOMBIE_SKIN, loadZombieKit, faceOf, decodeBase64 } from '../src/jimao/zombie-skin.js';
 import { MEMORY_PROFILES } from '../src/render/device.js';
 
 // 一个最简单的「人」：一根竖着的方柱（0–1.8 米），四个侧面按 UV 摊在贴图左半边，从上到下对应从头到脚
@@ -171,6 +171,35 @@ test('脸的量法：带 UV 时从眼球、口腔那两小块的顶点量；没�
   assert.ok(Math.abs(f.mouth.y - 1.5925) < 1e-3, JSON.stringify(f.mouth));
   assert.ok(Math.abs(f.nose.z - 0.15) < 1e-6);
   geo.deleteAttribute('uv'); const g = faceOf(geo); assert.equal(g.eyes, undefined); assert.ok(Math.abs(g.top - 1.8) < 1e-6);
+});
+
+test('切片：每一步的活有上限（颜色图一步最多 PAINT.span.colour 格、图层 PAINT.span.layers 格、血 1024 格），切小不改结果', () => {
+  // 不按毫秒卡（机器忙的时候会挂），按「一步做多少格」卡：解释执行时一步慢几十倍，一步越小最长的一段越短
+  const { body, frame, fp } = setup();
+  const S = 256, src = new Uint8ClampedArray(S * S * 4);
+  for (let i = 0; i < S * S; i++) { const x = i % S, y = Math.floor(i / S); src.set(x < S / 2 ? [150 + (y % 4 < 2 ? 60 : 0), 150, 160, 255] : [255, 255, 255, 255], i * 4); }
+  const tables = { n: 64, a: Z.noiseTable(64, 1), b: Z.noiseTable(64, 2, 4, 16) };
+  const steps = (gen) => { let n = 0, r; while (!(r = gen.next()).done) n++; return [n, r.value]; };
+  const [nl, L] = steps(Z.prepareLayers(src, S, body, fp, tables));
+  assert.ok(nl >= (S * S) / Z.PAINT.span.layers, `图层切成 ${nl} 步`);
+  const plan = Z.planLook(body, frame, fp, 3, Z.LOOKS.walker[0], 0);
+  const [nb, field] = steps(Z.bloodField(body, plan, frame));
+  assert.ok(nb >= (body.L * body.L) / 1024, `血切成 ${nb} 步`);
+  const out = new Uint8ClampedArray(S * S * 4), [nc] = steps(Z.paintColour(src, L, Z.LOOKS.walker[0], ZOMBIE_SKIN.tones[0], plan, field, body, tables, out));
+  assert.ok(nc >= (S * S) / Z.PAINT.span.colour, `颜色图切成 ${nc} 步`);
+  assert.ok(Z.PAINT.span.colour <= 128 && Z.PAINT.span.layers <= 256, '一步不超过半毫秒的活（桌面上）');
+  // 同一份输入再画一遍、一步一步走和一口气 finish 结果一样（切片只改在哪停）
+  const again = new Uint8ClampedArray(S * S * 4); Z.finish(Z.paintColour(src, L, Z.LOOKS.walker[0], ZOMBIE_SKIN.tones[0], plan, field, body, tables, again));
+  assert.deepEqual(again, out);
+  const L2 = Z.finish(Z.prepareLayers(src, S, body, fp, tables)); assert.equal(L2.skinLum, L.skinLum); assert.deepEqual(L2.low, L.low);
+});
+
+test('内嵌模型的 base64 分段解码：和一次解完一样（长度不是分段的整数倍、带不同的补位）', async () => {
+  for (const n of [0, 1, 2, 3, 1000, (1 << 18) * 3 / 4 + 5, 700001]) {
+    const bytes = new Uint8Array(n); for (let i = 0; i < n; i++) bytes[i] = (i * 131 + (i >> 7)) & 255;
+    const b64 = Buffer.from(bytes).toString('base64');
+    assert.deepEqual(new Uint8Array(await decodeBase64(b64)), bytes, `${n} 字节`);
+  }
 });
 
 test('贴图大小按内存档位：电脑 1024 + 法线粗糙度 512，手机 512 + 256，省内存 256、不做法线粗糙度；不超过 1024', () => {

@@ -7,7 +7,8 @@
 // 走路用模型自带的姿势循环，前倾、摇晃、扑咬、倒地都是整个人的姿态（模型没有骨骼，胳膊抬不起来）。眼睛是两粒很小的发光点：停电的楼里先看见眼睛。
 // zombie.js 里手搭的方块人留着：模型没加载出来（或测试环境）就还用它。
 // 行人那份几何上传显卡后内存里的贴图可能已经缩过 / 关掉了，这里单独再解析一份。
-// 画贴图是开局时的大块 CPU 活：全部切成小段，每段十来毫秒，隔帧接着画（不卡开局那几秒）。
+// 画贴图是开局时的大块 CPU 活：全部切成小段，每段不到十毫秒，隔帧接着画（不卡开局那几秒）。
+// 不切片的几块（解码模型、读原贴图、定伤口）开始前先看这一段还剩多少，不够就先隔一帧，免得叠在一段的末尾。
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PEOPLE_ASSETS } from '../render/people-data.js';
@@ -54,10 +55,26 @@ export function walkBlend(phase, poses) {
   return { a, b: (a + 1) % poses, t: f - Math.floor(f) };
 }
 
-async function parsePerson(record) {
+/**
+ * 内嵌的 base64 → 字节，分段解（一段 256K 个字符，几毫秒），段与段之间 pause。
+ * 上一版 Uint8Array.from(atob(...), 回调) 逐字符调回调：两百多万个字符一口气一两百毫秒，机器一忙就是大半秒——整个加载里最长的一段。
+ */
+export async function decodeBase64(b64, clock = { t: now(), budget: Infinity, slices: 0, worst: [0, ''] }) {
+  const out = new Uint8Array(Math.ceil(b64.length / 4) * 3), STEP = 1 << 18; // 一段的字符数是 4 的倍数，段与段之间不拆开一组
+  let o = 0;
+  for (let at = 0; at < b64.length; at += STEP) {
+    const bin = atob(b64.slice(at, at + STEP));
+    for (let i = 0; i < bin.length; i++) out[o++] = bin.charCodeAt(i);
+    await pause(clock, 'decode');
+  }
+  return o === out.length ? out.buffer : out.buffer.slice(0, o); // 末尾的补位（= / ==）少出一两个字节
+}
+
+async function parsePerson(record, clock) {
   const bytes = record.url.startsWith('data:')
-    ? Uint8Array.from(atob(record.url.slice(record.url.indexOf(',') + 1)), (c) => c.charCodeAt(0)).buffer
+    ? await decodeBase64(record.url.slice(record.url.indexOf(',') + 1), clock)
     : await fetchBinary(record.url, { label: '丧尸模型' });
+  await pause(clock, 'decode', clock.budget * 0.5); // 解析模型在主线程上十到二十来毫秒（头一回更久；图片在后台解码）：单独占一段
   const gltf = await new GLTFLoader().parseAsync(bytes, '');
   let mesh = null;
   gltf.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
@@ -99,16 +116,23 @@ export function faceOf(geometry) {
 // 切片：一个生成器跑到这一段用满 budget 毫秒就停，隔一帧再接着跑（和 arsenal.js 的 frameQueue 一个意思）
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const nextFrame = () => new Promise((done) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => setTimeout(done, 0)) : setTimeout(done, 0)));
-async function pause(clock, what) {
+/**
+ * 这一段用了多久；超过预算就隔一帧。ahead：接下来要做一块不切片的活、大约这么多毫秒——放不下就先隔一帧，
+ * 免得十来毫秒的活叠在一段用满了预算的末尾。clock.trace（量切片用，可选）记下每一段 [开始, 时长, 在干什么]
+ */
+async function pause(clock, what, ahead = 0) {
   const d = now() - clock.t;
+  if (d + ahead <= clock.budget) return;
   if (d > clock.worst[0]) clock.worst = [d, what]; // 记下最长的一段是在干什么（量切片用）
-  if (d > clock.budget) { clock.slices++; await nextFrame(); clock.t = now(); }
+  clock.slices++; clock.trace?.push([Math.round(clock.t), +d.toFixed(1), what]);
+  await nextFrame(); clock.t = now();
 }
+// 生成器一步只有零点一毫秒上下：预算没用完就同步接着走，不是每一步都 await（每一步一个 Promise，十万步光调度就要几百毫秒）
 async function drain(gen, clock, what) {
   for (;;) {
     const r = gen.next();
     if (r.done) return r.value;
-    await pause(clock, what);
+    if (now() - clock.t > clock.budget) await pause(clock, what);
   }
 }
 
@@ -146,20 +170,26 @@ export function zombieTexSizes(mem = MEM) {
  * 载入一次，之后 create() 出任意多只。返回 { looks, create(), dispose(), stats }；
  * create() 返回 { group, setLook(index, special), pose({ phase, moving, lean, sway, lunge }), dispose() }：group 的原点在脚下、面朝局部 +Z。
  * stats：画贴图花了多久（ms，总计 / 最长的一段）、几张图、显存大约多少。
+ * budget：一段最多画多少毫秒（之后隔一帧）；trace：给一个数组就把每一段 [开始, 时长, 在干什么] 记进去（量切片用）。
+ * 中途出错时已经建好的贴图、材质、几何都释放掉再往外抛（调用的地方接住、继续用方块人）。
  */
-export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
+export async function loadZombieKit({ seed = 20261120, budget = 8, trace = null } = {}) {
   // 没有 document（node 测试）就画不了贴图：直接拒绝，调用的地方（run.js）会接住、继续用方块人
   if (typeof document === 'undefined') throw new Error('没有 document，画不了丧尸贴图');
-  const t0 = now(), clock = { t: now(), budget, slices: 0, worst: [0, ''] };
+  const t0 = now(), clock = { t: now(), budget, slices: 0, worst: [0, ''], trace };
   const { colour: size, surface } = zombieTexSizes(MEM), compact = MEM.name === 'compact';
   const tables = { n: 256, a: await drain(noiseTableSteps(256, seed ^ 0x51), clock, 'noise'), b: await drain(noiseTableSteps(256, seed ^ 0xa3, 4, 16), clock, 'noise') };
   const bodies = [], shared = []; let bytes = 0, maps = 0;
   const count = (s) => { maps++; bytes += s * s * 4 * 4 / 3; }; // RGBA + mipmap
+  try {
   for (const record of PEOPLE_ASSETS) {
     await pause(clock, 'start');
-    const bi = bodies.length, source = await parsePerson(record), image = source.material.map.image, geo = source.geometry;
-    clock.t = now(); // 解析模型是浏览器在后台解码，不算在这一段里
+    const bi = bodies.length, source = await parsePerson(record, clock), image = source.material.map.image, geo = source.geometry;
+    shared.push(geo);
+    // 等图片解码的那段时间主线程是空着的：从这里重新计时。量脸、读原贴图（缩放 + 取像素，一两毫秒到十几毫秒）各自开一段
+    clock.t = now();
     const face = faceOf(geo);
+    await pause(clock, 'read', clock.budget * 0.5);
     // 原贴图按这一档的大小取出像素
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
     const g2 = canvas.getContext('2d', { willReadFrequently: true }); g2.drawImage(image, 0, 0, size, size);
@@ -167,12 +197,14 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
     source.material.map?.dispose(); source.material.dispose(); image.close?.();
     await pause(clock, 'read');
     const body = await drain(rasterBodySteps({ position: geo.attributes.position.array, uv: geo.attributes.uv.array, normal: geo.attributes.normal?.array, index: geo.index?.array }), clock, 'raster');
+    await pause(clock, 'plan', clock.budget * 0.5);
     const frame = bodyFrame(geo.attributes.position.array), fp = planFace(body, frame, face);
     await pause(clock, 'plan');
     const layers = await drain(prepareLayers(src, size, body, fp, tables), clock, 'layers');
     // 网格第 k 格是身体哪部分（伤口、破口挑落点用：破口只开在衣服上，烂疮只长在皮上）
     const L = body.L, partAt = (k) => layers.part[Math.min(size - 1, Math.floor(((Math.floor(k / L) + 0.5) * size) / L)) * size + Math.min(size - 1, Math.floor((((k % L) + 0.5) * size) / L))];
     // 这个模型固定的几处破口：各外观从里面挑，共用的法线图里全压出来
+    await pause(clock, 'plan', clock.budget * 0.5);
     const tears = bodyTears(body, frame, fp, partAt, seed + bi);
     await pause(clock, 'plan');
     // 法线和粗糙度：每个模型一张，各外观共用
@@ -186,6 +218,7 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
     }
     // 一种外观：伤按 (模型, 外观) 定——同一个模型的几套色调伤口各不相同，主伤口按外观轮换（rot 让男女两个模型错开）
     const paint = async (look, tone, key, env = ZOMBIE_SKIN.envMapIntensity) => {
+      await pause(clock, 'plan', clock.budget * 0.6); // 定伤口（在身体网格上找几十处落点）一口气五到十毫秒
       const plan = planLook(body, frame, fp, seed + bi * 101 + key * 131, look, key, partAt, bi * 2, tears);
       await pause(clock, 'plan');
       const field = await drain(bloodField(body, plan, frame), clock, 'blood');
@@ -205,13 +238,17 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
       if ((sp.body != null && sp.body !== bi) || (sp.optional && compact)) continue; // 省内存档不多做胖尸那两张，和以前一样多
       special[name] = await paint(LOOKS[name], sp.tone, 10 + Object.keys(special).length, sp.env);
     }
-    shared.push(geo);
     bodies.push({ geometry: geo, poses: record.poses, face, materials, special });
+  }
+  } catch (e) {
+    for (const item of shared) item.dispose();
+    throw e;
   }
   const E = ZOMBIE_SKIN.eyes, eyeGeo = new THREE.SphereGeometry(E.radius, 8, 6);
   const eyeOf = (color) => { const m = new THREE.MeshBasicMaterial({ color, toneMapped: false, fog: false }); shared.push(m); return m; };
   const eyeMat = eyeOf(E.color), eyeSpecial = Object.fromEntries(Object.entries(ZOMBIE_SKIN.special).map(([k, sp]) => [k, eyeOf(sp.eye)]));
   shared.push(eyeGeo);
+  { const d = now() - clock.t; if (d > clock.worst[0]) clock.worst = [d, 'end']; trace?.push([Math.round(clock.t), +d.toFixed(1), 'end']); } // 最后一段
   const stats = { ms: Math.round(now() - t0), longest: Math.round(clock.worst[0]), longestIn: clock.worst[1], slices: clock.slices, maps, mb: +(bytes / 1048576).toFixed(1), size, surface };
 
   return {

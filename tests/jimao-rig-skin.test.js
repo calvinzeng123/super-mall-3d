@@ -100,9 +100,21 @@ test('细节图：按档位定大小（省内存档不要），可平铺，数�
     for (let i = c; i < m.length; i += 4) { lo = Math.min(lo, m[i]); hi = Math.max(hi, m[i]); }
     assert.ok(edge <= inner * 1.6 + 128, `粗图通道 ${c} 接得上`); assert.ok(hi - lo > 120, `粗图通道 ${c} 有对比`);
   }
-  // 够快：拿的时候同步生成也不卡（512² 细图 + 256² 粗图，留足余量：机器忙的时候也在 150 毫秒内）
+  // 够快：拿的时候同步补完也不卡。不按墙上时间卡（机器一忙就挂过一次），改成卡「活有多少」：
+  // 每一档最大的图（电脑 512² 细图 + 256² 粗图，手机两档 256² + 128²）一共多少像素；
+  // 预生成一步 8 行，按行分几次填和一次填完一个像素都不差（分帧预生成的结果和同步生成一样）
+  const px = (m) => { const s = detailSize(m); return s * s + (s >> 1) * (s >> 1); };
+  assert.ok(px(MEMORY_PROFILES.full) <= 512 * 512 + 256 * 256, '电脑一档最多 512² + 256²');
+  for (const m of [MEMORY_PROFILES.standard, MEMORY_PROFILES.rich]) assert.ok(px(m) <= px(MEMORY_PROFILES.full) / 4, `${m.name} 档的活是电脑的四分之一`);
+  assert.equal(px(MEMORY_PROFILES.compact), 0);
+  const one = detailContext(96); fillDetailRows(one, 0, 96);
+  const parts = detailContext(96); for (let r = 0; r < 96; r += 8) assert.equal(fillDetailRows(parts, r, Math.min(96, r + 8)), Math.min(96, r + 8));
+  assert.deepEqual(Array.from(parts.data), Array.from(one.data), '细图分段填和一次填完一样');
+  const m1 = macroContext(48); fillMacroRows(m1, 0, 48); const m2 = macroContext(48); for (let r = 0; r < 48; r += 8) fillMacroRows(m2, r, Math.min(48, r + 8));
+  assert.deepEqual(Array.from(m2.data), Array.from(m1.data), '粗图分段填和一次填完一样');
+  // 墙上时间只兜一个很松的底（桌面上二三十毫秒，这里给到 3 秒）：只为抓住「一不小心变成逐像素建对象 / 平方级」这种量级上的退步
   const t0 = performance.now(); const big = detailContext(512); fillDetailRows(big, 0, 512); const bm = macroContext(256); fillMacroRows(bm, 0, 256);
-  assert.ok(performance.now() - t0 < 150, `生成用了 ${(performance.now() - t0).toFixed(0)} 毫秒`);
+  assert.ok(performance.now() - t0 < 3000, `生成用了 ${(performance.now() - t0).toFixed(0)} 毫秒`);
 });
 
 test('没有 document：不生成贴图，材质照样能建、能销毁', () => {

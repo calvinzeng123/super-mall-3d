@@ -34,14 +34,19 @@
 // 颜色图每种外观一张；法线和粗糙度每个模型一张、各外观共用（只放布料、皮肤、头发这些「底子」）。
 // 每种外观自己的湿血、伤口、涎水、油泥的光泽写在颜色图的透明通道里（见 encodeWet），zombie-skin.js 的着色器读出来
 // 改粗糙度、把布纹法线抹平——伤口各外观不同，共用的粗糙度图装不下，又不想多做十几张图。
-// 所有大循环都写成生成器：每处理两千来格就 yield 一次，外面按时间预算切片、隔帧继续（不卡开局那几秒）。
+// 所有大循环都写成生成器：每处理一两百到一千来格就 yield 一次（一步在桌面上零点一毫秒上下），外面按时间预算切片、隔帧继续（不卡开局那几秒）。
+// 步子要小：某种外观头一回走到新分支时 V8 会退回解释执行，那一步慢几十倍——一步越小，最长的一段越短（见 SLICE）。
+// 切小只改了在哪里停，不改算的顺序（逐格累加的那几处按原来的顺序加），画出来的图一个像素都不变。
 // 颜色都按 sRGB 0–255 算（贴图里就是这个），血是「乘」上去的，底下的褶子还透得出来。
 
 /** 画法的常数。layout：身体网格的分辨率（贴图上每格对应身体上一个点）；dilate：岛边往外补几格（接缝处取样不落空） */
 export const PAINT = Object.freeze({
   layout: 256,
   dilate: 4,
-  chunk: 1024, // 每画这么多格让一次（外面按时间决定要不要隔帧）：一段一两毫秒，外面的时间预算才掐得准；某种外观头一回走到新分支时 V8 会退回解释执行，段小了那一段也短
+  chunk: 1024, // 按行切的时候每段几行（rowsPer）：行是隔着取的，这个数定了行的先后，改了画出来的图会差一点点，别动
+  // 一步最多画一行里的多少格（颜色图 128、图层 256）：上一版颜色图一步半行（512 格），解释执行时一步就是三五十毫秒，
+  // 单张图的最长一段超过 50 毫秒；现在一步零点一毫秒上下，最坏也就几毫秒
+  span: Object.freeze({ colour: 128, layers: 256 }),
   // 颜色（sRGB 0–255）：污垢偏灰褐（乘上去），裤脚上的土发灰白，鞋上的泥发暗褐
   grime: Object.freeze([58, 50, 40]),
   dust: Object.freeze([134, 126, 110]),
@@ -96,7 +101,7 @@ export function fbm3(x, y, z, seed, octaves = 3) {
  * 比逐像素算噪声便宜得多。纯函数
  */
 export function noiseTable(n, seed, octaves = 4, base = 8) { return finish(noiseTableSteps(n, seed, octaves, base)); }
-/** 同上，按八度 yield（开局切片用） */
+/** 同上，每 64 行 yield 一次（开局切片用） */
 export function* noiseTableSteps(n, seed, octaves = 4, base = 8) {
   const out = new Float32Array(n * n), rnd = makeRng(seed);
   let w = 0.5, total = 0;
@@ -104,6 +109,7 @@ export function* noiseTableSteps(n, seed, octaves = 4, base = 8) {
     const lat = new Float32Array(p * p); for (let i = 0; i < lat.length; i++) lat[i] = rnd();
     const k = p / n;
     for (let y = 0; y < n; y++) {
+      if (y && (y & 63) === 0) yield;
       const fy = y * k, yi = Math.floor(fy), ty = fy - yi, sy = ty * ty * (3 - 2 * ty), y0 = (yi % p) * p, y1 = ((yi + 1) % p) * p;
       for (let x = 0; x < n; x++) {
         const fx = x * k, xi = Math.floor(fx), tx = fx - xi, sx = tx * tx * (3 - 2 * tx), x0 = xi % p, x1 = (xi + 1) % p;
@@ -113,6 +119,7 @@ export function* noiseTableSteps(n, seed, octaves = 4, base = 8) {
     total += w; w *= 0.5;
     yield;
   }
+  yield;
   let lo = Infinity, hi = -Infinity; for (let i = 0; i < out.length; i++) { out[i] /= total; lo = Math.min(lo, out[i]); hi = Math.max(hi, out[i]); }
   const span = hi - lo || 1; for (let i = 0; i < out.length; i++) out[i] = (out[i] - lo) / span; // 拉满 0–1，阈值好定
   return out;
@@ -130,7 +137,7 @@ export function tap(t, n, u, v) {
  * 返回 { L, used（1 = 三角形盖到，2 = 岛边往外补出来的），pos, nrm }。纯函数
  */
 export function rasterBody(geo, L = PAINT.layout, dilate = PAINT.dilate) { return finish(rasterBodySteps(geo, L, dilate)); }
-/** 同上，每几百个三角形、每圈补边 yield 一次（开局切片用） */
+/** 同上，每 128 个三角形、补边每 32 行 yield 一次（开局切片用） */
 export function* rasterBodySteps(geo, L = PAINT.layout, dilate = PAINT.dilate) {
   const P = geo.position, UV = geo.uv, N = geo.normal, I = geo.index, n = L * L;
   const used = new Uint8Array(n), pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3);
@@ -140,7 +147,7 @@ export function* rasterBodySteps(geo, L = PAINT.layout, dilate = PAINT.dilate) {
     const ax = UV[a * 2] * L, ay = UV[a * 2 + 1] * L, bx = UV[b * 2] * L, by = UV[b * 2 + 1] * L, cx = UV[c * 2] * L, cy = UV[c * 2 + 1] * L;
     const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
     if (Math.abs(den) < 1e-9) continue;
-    if ((t & 511) === 511) yield;
+    if ((t & 127) === 127) yield;
     // 面法线兜底（几何没带法线时）
     const e1x = P[b * 3] - P[a * 3], e1y = P[b * 3 + 1] - P[a * 3 + 1], e1z = P[b * 3 + 2] - P[a * 3 + 2];
     const e2x = P[c * 3] - P[a * 3], e2y = P[c * 3 + 1] - P[a * 3 + 1], e2z = P[c * 3 + 2] - P[a * 3 + 2];
@@ -163,6 +170,7 @@ export function* rasterBodySteps(geo, L = PAINT.layout, dilate = PAINT.dilate) {
   for (let pass = 0; pass < dilate; pass++) {
     const add = [];
     for (let y = 0; y < L; y++) for (let x = 0; x < L; x++) {
+      if (x === 0 && y && (y & 31) === 0) yield;
       const k = y * L + x; if (used[k]) continue;
       let cnt = 0; const s = [0, 0, 0, 0, 0, 0];
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -170,7 +178,7 @@ export function* rasterBodySteps(geo, L = PAINT.layout, dilate = PAINT.dilate) {
         const q = yy * L + xx; if (!used[q]) continue;
         cnt++; for (let d = 0; d < 3; d++) { s[d] += pos[q * 3 + d]; s[d + 3] += nrm[q * 3 + d]; }
       }
-      if (cnt) add.push(k, cnt, ...s);
+      if (cnt) add.push(k, cnt, s[0], s[1], s[2], s[3], s[4], s[5]);
     }
     yield;
     for (let i = 0; i < add.length; i += 8) { const k = add[i], c = add[i + 1]; used[k] = 2; for (let d = 0; d < 3; d++) { pos[k * 3 + d] = add[i + 2 + d] / c; nrm[k * 3 + d] = add[i + 5 + d] / c; } }
@@ -512,14 +520,14 @@ export function woundAt(W, px, py, pz, nx, nz, na, nb, frame, out, nc = 0.5) {
 
 /**
  * 一种外观的血在身体网格上的分布（L×L）：pot（血量：0.35 往上就染上了，越大越饱和）、wet（湿：新血）、open（皮肉翻开）、
- * fluid（胖尸渗出来的脓水，和血分开画）。生成器，每几千格 yield 一次。
+ * fluid（胖尸渗出来的脓水，和血分开画）。生成器，每 1024 格 yield 一次。
  */
 export function* bloodField(body, plan, frame) {
   const { L, used, pos, nrm } = body, n = L * L;
   const pot = new Float32Array(n), wet = new Float32Array(n), open = new Float32Array(n), fluid = new Float32Array(n);
   const all = plan.wounds, tmp = [0, 0, 0];
-  for (let q0 = 0; q0 < n; q0 += 8192) {
-    for (let q = q0, q1 = Math.min(n, q0 + 8192); q < q1; q++) {
+  for (let q0 = 0; q0 < n; q0 += 1024) {
+    for (let q = q0, q1 = Math.min(n, q0 + 1024); q < q1; q++) {
       if (!used[q]) continue;
       const px = pos[q * 3], py = pos[q * 3 + 1], pz = pos[q * 3 + 2], h = Math.sqrt(nrm[q * 3] * nrm[q * 3] + nrm[q * 3 + 2] * nrm[q * 3 + 2]) || 1, nx = nrm[q * 3] / h, nz = nrm[q * 3 + 2] / h;
       for (let w = 0; w < all.length; w++) {
@@ -579,7 +587,7 @@ const inBox = (b, u, v) => u >= b[0] && u <= b[2] && v >= b[1] && v <= b[3];
 /**
  * 每个模型的共用图层（尺寸 S×S，各外观的颜色图和共用的法线、粗糙度图都从这里出）。
  * src：原贴图缩到 S 的 RGBA；body：rasterBody；fp：planFace；tables：{ n, a, b } 两张 noiseTable。
- * 生成器：每 PAINT.chunk 格左右 yield 一次，最后 return 图层。
+ * 生成器：每一行里每 PAINT.span.layers 格 yield 一次，最后 return 图层。
  * 图层（S×S，0–255）：part（PART 编号）、skin（像皮肤的程度）、d1–d3（三档细噪声）、grime（脏：越往脚下越重）、
  * eye（眼窝：往颧骨散开的软阴影）、lips（嘴唇）、shade（脸上凹处的暗：颧骨下、太阳穴、下巴底下；255 = 不压）、
  * vein（血管：太阳穴、下颌、脖子、前臂和手背上分叉的细纹）、mottle（斑驳）、bruise（淤青）、hand（手）；
@@ -596,7 +604,7 @@ export function* prepareLayers(src, S, body, fp, tables) {
     if (!used[q]) continue;
     const x = pos[q * 3], y = pos[q * 3 + 1], z = pos[q * 3 + 2];
     lowA[q] = fbm3(x * 9, y * 9, z * 9, 11, 3); lowB[q] = fbm3(x * 4.2 + 7, y * 4.2, z * 4.2, 29, 3); lowC[q] = fbm3(x * 34, y * 3.4, z * 34, 41, 2);
-    if ((q & 1023) === 1023) yield;
+    if ((q & 511) === 511) yield;
   }
   const lowSum = new Float32Array(L * L), lowN = new Float32Array(L * L);
   const { eyes, mouth, temples, cheeks, frame } = fp, T = frame.top, cx = frame.cx, fx0 = fp.x;
@@ -604,12 +612,14 @@ export function* prepareLayers(src, S, body, fp, tables) {
   const IE = PAINT.islands.eye, IM = PAINT.islands.mouth;
   let skinSum = 0, skinN = 0;
   // 逐行的活放进普通函数（生成器里的浮点临时变量 V8 优化得不好，会大量装箱、频繁垃圾回收，一段拖到几十毫秒）
-  const rows = (j0, step) => {
-  let sum = 0, cnt = 0;
+  // acc：这一段的皮肤亮度和、格数（一段 = 原来 rows(c) 画的那几行；拆成小步以后照原来的顺序往同一个和里加，结果一位不差）
+  const acc = new Float64Array(2);
+  const rows = (j0, step, i0, i1) => {
+  let sum = acc[0], cnt = acc[1];
   for (let j = j0; j < S; j += step) {
     const fy = (j + 0.5) * k - 0.5, yy = Math.floor(fy), y0 = Math.max(0, Math.min(L - 1, yy)), y1 = Math.min(L - 1, Math.max(0, yy + 1)), ty = fy - yy;
     const qy = Math.min(L - 1, Math.floor((j + 0.5) * k));
-    for (let i = 0; i < S; i++) {
+    for (let i = i0; i < i1; i++) {
       const o = j * S + i, si = o * 4;
       const fx = (i + 0.5) * k - 0.5, xx = Math.floor(fx), x0 = Math.max(0, Math.min(L - 1, xx)), x1 = Math.min(L - 1, Math.max(0, xx + 1)), tx = fx - xx;
       const q00 = y0 * L + x0, q10 = y0 * L + x1, q01 = y1 * L + x0, q11 = y1 * L + x1;
@@ -704,18 +714,24 @@ export function* prepareLayers(src, S, body, fp, tables) {
       layers.hand[o] = smooth(0.145, 0.175, Math.abs(px - cx)) * (1 - smooth(T * 0.47, T * 0.58, py - (sc - 0.5) * 0.14)) * 255;
     }
   }
-  skinSum += sum; skinN += cnt;
+  acc[0] = sum; acc[1] = cnt;
   };
   // 行是隔着取的（第 c 段画第 c、c+段数、c+2×段数……行）：第一段就把脸、手、衣服各种情况都走一遍，
   // V8 优化时类型信息齐全，后面不会一碰到新分支就退回解释执行（那样一段会慢上几十倍）
-  const chunks = Math.ceil(S / every);
-  for (let c = 0; c < chunks; c++) { rows(c, chunks); yield; }
+  // 每段再按行、按 PAINT.span.layers 格拆成小步（一步一两百微秒；以前一步一整行一千格，解释执行时三十多毫秒）
+  const chunks = Math.ceil(S / every), span = Math.min(S, PAINT.span.layers);
+  for (let c = 0; c < chunks; c++) {
+    acc[0] = 0; acc[1] = 0;
+    for (let j = c; j < S; j += chunks) for (let i0 = 0; i0 < S; i0 += span) { rows(j, S, i0, Math.min(S, i0 + span)); yield; }
+    skinSum += acc[0]; skinN += acc[1];
+  }
   if (skinN) layers.skinLum = skinSum / skinN;
   // 低通：格子平均以后再按格子糊两遍（只在用到的格子之间糊，不混进岛外的黑）
   const low = layers.low; for (let q = 0; q < L * L; q++) low[q] = lowN[q] ? lowSum[q] / lowN[q] / 255 : -1;
   for (let pass = 0; pass < 4; pass++) { // 糊四遍：条纹（一厘米上下一道）基本糊没了，褶子（几厘米）还在
     const prev = low.slice();
     for (let y = 0; y < L; y++) for (let x = 0; x < L; x++) {
+      if (x === 0 && y && (y & 31) === 0) yield;
       let s = 0, c = 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= L || yy >= L) continue; const v = prev[yy * L + xx]; if (v >= 0) { s += v; c++; } }
       if (prev[y * L + x] >= 0 || c >= 3) low[y * L + x] = c ? s / c : -1;
@@ -1020,9 +1036,10 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
   }
   };
   const chunks = Math.ceil(S / every);
-  // 一段画半行：某种外观头一回走到自己的分支（烂疮、酸蚀、灰烬）时 V8 会退回解释执行，那一段慢几十倍；段小一半，最长的一段也短一半
-  const half = S >= 1024 ? S >> 1 : S;
-  for (let c = 0; c < chunks; c++) for (let i0 = 0; i0 < S; i0 += half) { rows(c, chunks, i0, i0 + half); yield; }
+  // 一步画一行里的 PAINT.span.colour 格：某种外观头一回走到自己的分支（烂疮、酸蚀、灰烬）时 V8 会退回解释执行，那一步慢几十倍——
+  // 上一版一步半行（512 格），那一步就是三五十毫秒；现在一步 128 格，最坏几毫秒。每格各算各的，怎么切都不改结果
+  const span = Math.min(S, PAINT.span.colour);
+  for (let c = 0; c < chunks; c++) for (let j = c; j < S; j += chunks) for (let i0 = 0; i0 < S; i0 += span) { rows(j, S, i0, Math.min(S, i0 + span)); yield; }
 }
 
 /**
@@ -1034,7 +1051,8 @@ export function* paintSurface(src, layers, tables, nrmOut, roughOut, body, tears
   const S = layers.S, H = S >> 1, NT = tables.n, tA = tables.a, ts = NT / H, Rg = PAINT.rough, every = rowsPer(H);
   const L = body ? body.L : 0, low = layers.low, k = L / H, pos = body ? body.pos : null, nrm = body ? body.nrm : null, tl = L && tears ? tears : [], sl = [0, 0, 0];
   const height = new Float32Array(H * H);
-  for (let j0 = 0; j0 < H; j0 += every) {
+  // 第一遍（高度、粗糙度，布上还要算破口）一步一行：几种破口头一回算到时解释执行，两行一步会拖到十几毫秒
+  for (let j0 = 0; j0 < H; j0++) {
   ((j1) => { for (let j = j0; j < j1; j++) {
     const fy = (j + 0.5) * k - 0.5, yy = Math.floor(fy), y0 = Math.max(0, Math.min(L - 1, yy)), y1 = Math.min(L - 1, Math.max(0, yy + 1)), ty = fy - yy;
     for (let i = 0; i < H; i++) {
@@ -1061,7 +1079,7 @@ export function* paintSurface(src, layers, tables, nrmOut, roughOut, body, tears
       const rv = clamp01(base + (weave - 0.5) * 0.06) * 255, ro = h * 4;
       roughOut[ro] = rv; roughOut[ro + 1] = rv; roughOut[ro + 2] = rv; roughOut[ro + 3] = 255;
     }
-  } })(Math.min(H, j0 + every));
+  } })(j0 + 1);
   yield;
   }
   const strength = H / 64; // 同样的起伏，贴图越大每格的坡度越小：按尺寸放大，几档贴图看起来一样凹凸
