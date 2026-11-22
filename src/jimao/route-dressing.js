@@ -558,6 +558,7 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
         S.floor('casings', 12, { r1: 3.2, size: [0.16, 0.2], mode: GLOSS, gap: 0.2 });
       } else if (g.type === 'fire') { // 楼梯间着火：火背后那面墙从墙根熏黑到天花板，地上烧焦一块
         fireSoot(S, M, until, rng);
+        S.wall(HANDS, 2, { size: [0.2, 0.24], yc: [0.9, 1.5], mode: BLOOD, r1: 3, keep: true, prefer: nearM, toward: toM, spread: 1.4 }); // 有人想从火边上挤过去
         S.wall('scorch', 1, { size: [0.9, 1.1], yc: [1.15, 1.2], tilt: 0.03, r1: 3.5, alpha: [0.55, 0.7] });
         const b = S.floorPoint(0, 0.5, 0.45, { from: [M.x - az[0] * 1.25, M.z - az[1] * 1.25] });
         if (b) S.addFloor('burn', b[0], b[1], range(1.4, 1.7), { alpha: 0.92 });
@@ -740,6 +741,19 @@ export function* planDressing({ plan, nav, layout, runs = [], rng = Math.random,
       S0.floor(['paper0', 'paper1'], 4, { r0: 1.5, r1: 7, size: [0.32, 0.4] });
       S0.floor('bag', 1, { r0: 2, r1: 5, size: [0.36, 0.42], gap: 0.4, keep: true });
       S0.floor('drops', 2, { r0: 1.5, r1: 6, size: [0.22, 0.28], mode: BLOOD });
+    }
+    yield;
+  }
+
+  // ---- 商场段（武器柜之前的每一步：店里、扶梯口）：比住宅楼轻——零星血滴、散落的纸、一处血手印。放在最后算，不动前面的随机序列 ----
+  const armsAt = plan.stages.indexOf(arms);
+  for (const st of plan.stages.slice(0, Math.max(0, armsAt))) {
+    const S = P.spot(st.floor, st.site.x, st.site.z, 6);
+    if (S) {
+      S.floor('drops', 4, { r0: 0.8, r1: 4.5, size: [0.2, 0.28], mode: BLOOD, keep: true });
+      S.floor(['paper0', 'paper1'], 3, { r0: 0.8, r1: 5, size: [0.32, 0.4] });
+      S.wall(HANDS, 1, { size: [0.2, 0.24], yc: [0.9, 1.4], mode: BLOOD, r1: 5 });
+      if (st.obj === 'relay') S.wall(['splat0', 'splat1'], 1, { size: [0.65, 0.9], yc: [0.8, 1.3], mode: BLOOD, r1: 5 });
     }
     yield;
   }
