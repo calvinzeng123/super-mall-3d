@@ -7,6 +7,7 @@ import { MEMORY_PROFILES } from '../src/render/device.js';
 import {
   worldDetail, worldWear, detailFor, detailVariant, worldDetailTier, worldDetailChunks, trackFloor, stepFloor, setWorldGrime, worldGrime, FLOOR_STILL,
   macroNoise, macroNoiseSteps, macroTexture, MACRO_NEUTRAL, DETAIL_SURFACES, DETAIL_EYE, metricFloor, disposeWorldDetail, detailFrame, hashText,
+  uvDetail, uvVariant, UV_SURFACES, detailFetches,
 } from '../src/render/pbr.js';
 import { MaterialLib } from '../src/render/materials.js';
 
@@ -256,4 +257,96 @@ test('缓存键：前面的补丁没给缓存键时，按它的源码区分；�
   const w = worldWear(new THREE.MeshStandardMaterial());
   worldDetail(w, asset(), DETAIL_SURFACES.matte);
   assert.equal(w.userData.detail, undefined);
+});
+
+// three 的真着色器里有 <map_fragment>、<normal_fragment_maps>：投影轴那段要放在取颜色之前（清水混凝土按模板块错开 UV）
+const realShader = () => ({
+  uniforms: {},
+  vertexShader: '#include <common>\nvoid main() {\n#include <uv_vertex>\n#include <beginnormal_vertex>\n#include <project_vertex>\n}',
+  fragmentShader: '#include <common>\nvoid main() {\n#include <map_fragment>\n#include <color_fragment>\n#include <roughnessmap_fragment>\n#include <normal_fragment_begin>\n#include <normal_fragment_maps>\n#include <emissivemap_fragment>\n}',
+});
+const surf = (id, mean, normal = true) => ({ id, meters: [id === 'formed_concrete' ? 1.5 : 2, 2], mean, maps: { color: tex(), ...(normal ? { normal: tex() } : {}) } });
+const SURF = { painted_plaster: surf('painted_plaster', [242, 241, 239]), formed_concrete: surf('formed_concrete', [222, 222, 220]), garage_concrete: surf('garage_concrete', [128, 128, 126]) };
+
+test('自带 UV 的楼梯间面层：档位、取样次数（手机墙面 +1、踏步 +2；电脑墙面 +2、踏步 +3），省内存档不做', () => {
+  assert.equal(uvVariant(UV_SURFACES.plaster, SURF.painted_plaster, SURF.garage_concrete, MEMORY_PROFILES.compact), null);
+  for (const [name, wall, up] of [['standard', 1, 2], ['rich', 1, 2], ['full', 2, 3]]) {
+    const v = uvVariant(UV_SURFACES.plaster, SURF.painted_plaster, SURF.garage_concrete, MEMORY_PROFILES[name]);
+    assert.deepEqual(detailFetches(v), { wall, up }, name);
+    const c = worldDetailChunks(v);
+    // 着色器里真正的取样次数和 detailFetches 对得上（墙面那几次 + 朝上的面才取的水泥贴图）
+    assert.equal(fetches(c.color) + fetches(c.normal) + fetches(c.rough), wall + up - 1, `${name} 取样`);
+    assert.ok(fetches(c.color) <= (name === 'full' ? 4 : 2));
+  }
+  // 抹灰才有低频法线；清水混凝土没有（板缝放大 3.7 倍会成一道道大横纹）
+  assert.equal(uvVariant(UV_SURFACES.concrete, SURF.formed_concrete, SURF.garage_concrete, MEMORY_PROFILES.full).broad, 0);
+  // 低频法线、踏步法线只在电脑上
+  const lite = uvVariant(UV_SURFACES.plaster, SURF.painted_plaster, SURF.garage_concrete, MEMORY_PROFILES.rich);
+  assert.equal(lite.broad, 0); assert.equal(lite.treadNormal, false); assert.equal(lite.tread, true);
+  // 纯色材质的细节：低频法线也只给电脑档
+  assert.ok(detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.full).broad > 0);
+  assert.equal(detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.standard).broad, 0);
+  assert.deepEqual(detailFetches(detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.standard)), { wall: 2, up: 2 });
+  assert.deepEqual(detailFetches(detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.full)), { wall: 4, up: 4 });
+});
+
+test('清水混凝土：投影轴放在取颜色之前，颜色和法线都按错开后的 UV 取，墙上的板缝压浅', () => {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: tex(), normalMap: tex() });
+  m.onBeforeCompile = () => {}; m.customProgramCacheKey = () => 'vertex-emissive';
+  uvDetail(m, SURF, 'concrete');
+  assert.equal(m.userData.uvDetail, 'concrete');
+  assert.equal(m.userData.wear, true, '再 worldWear 不会叠第二层');
+  const sh = realShader();
+  m.onBeforeCompile(sh, null);
+  const f = sh.fragmentShader;
+  assert.ok(!f.includes('#include <map_fragment>'), '换成了自己的取色');
+  assert.ok(f.indexOf('vec2 wdOff') < f.indexOf('texture2D( map, vMapUv * 0.5000 + wdOff )'), '先算错开量再取色');
+  assert.match(f, /texture2D\( normalMap, vNormalMapUv \* 0\.5000 \+ wdOff \)/);
+  assert.ok(!f.includes('#include <normal_fragment_maps>'));
+  assert.ok(f.indexOf('vec3 wdN =') < f.indexOf('#include <color_fragment>'));
+  assert.ok(['wdTreadMap', 'wdTreadNormal', 'wdMacro', 'wdGrime', 'wdFloorY'].every((k) => k in sh.uniforms));
+  assert.match(m.customProgramCacheKey(), /^vertex-emissive\|uv-concrete-full-tnp2\.4-0\.5-0\.5/);
+  // 抹灰：不换取色，有补漆、低频法线（材质自己的法线贴图放大取）；缓存键和混凝土不同
+  const p = uvDetail(new THREE.MeshStandardMaterial({ map: tex(), normalMap: tex() }), SURF, 'plaster');
+  const sp = realShader(); p.onBeforeCompile(sp, null);
+  assert.ok(sp.fragmentShader.includes('#include <map_fragment>'));
+  assert.ok(sp.fragmentShader.indexOf('vec3 wdN =') < sp.fragmentShader.indexOf('#include <map_fragment>'));
+  assert.match(sp.fragmentShader, /texture2D\(normalMap, wdP \* /);
+  assert.match(sp.fragmentShader, /wdRep/);
+  assert.notEqual(p.customProgramCacheKey(), m.customProgramCacheKey());
+});
+
+test('楼梯间面层：省内存档、没有贴图、不是标准材质、已经叠过的，都原样返回', () => {
+  const plain = new THREE.MeshStandardMaterial();
+  assert.equal(uvDetail(plain, {}, 'nope'), plain);
+  assert.equal(uvDetail(new THREE.MeshBasicMaterial(), SURF, 'plaster').userData.uvDetail, undefined);
+  const w = worldWear(new THREE.MeshStandardMaterial());
+  const hook = w.onBeforeCompile;
+  uvDetail(w, SURF, 'plaster');
+  assert.equal(w.onBeforeCompile, hook);
+  // 没有水泥贴图：不取踏步那次
+  const v = uvVariant(UV_SURFACES.plaster, SURF.painted_plaster, undefined, MEMORY_PROFILES.full);
+  assert.equal(v.tread, false);
+  assert.equal(fetches(worldDetailChunks(v).color), 2, '大块噪声 + 低频法线');
+});
+
+test('停电污垢是往棕灰色上混（深色墙裙上也看得出），平时为 0；天花板的水渍按整块板来', () => {
+  const v = detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.full);
+  const { color } = worldDetailChunks(v);
+  assert.match(color, /wdCol \* vec3\(0\.42, 0\.36, 0\.28\) \+ vec3/);
+  assert.match(color, /if \(wdGrime > 0\.001\)/);
+  const ceil = worldDetailChunks(detailVariant({ ...asset(false), id: 'ceiling_panels' }, DETAIL_SURFACES.ceiling, MEMORY_PROFILES.full)).color;
+  assert.match(ceil, /floor\(wdTq\)/, '按板取格子');
+  assert.match(ceil, /wdTide/, '水线');
+  assert.ok(!/wdStain \* wdDown \* \(0\.45/.test(ceil), '不再是不管板缝的一团');
+});
+
+test('材质库：楼梯间的抹灰、清水混凝土叠楼梯间面层，法线压到 0.35', () => {
+  const mats = withDocument(() => new MaterialLib({ ...SURF }));
+  assert.equal(mats.base.plaster.userData.uvDetail, 'plaster');
+  assert.equal(mats.base.concrete.userData.uvDetail, 'concrete');
+  assert.ok(Math.abs(mats.base.concrete.normalScale.x - 0.35) < 1e-9);
+  const sh = realShader();
+  mats.base.concrete.onBeforeCompile(sh, null);
+  assert.match(sh.fragmentShader, /totalEmissiveRadiance \*= vColor\.rgb/, '夜间自发光的补丁照样在');
 });

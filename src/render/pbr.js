@@ -69,7 +69,7 @@ export const DETAIL_SURFACES = Object.freeze({
   // sheen：大块的粗糙度起伏（±sheen：应急灯、手电扫过去，有的地方哑、有的地方泛一点光）；
   // repaint：补漆的方块（硬边、略冷或略暖几个百分点——3–8 米外平涂的墙就靠它和 patch 读出「刷过好几遍」）；
   // broad：低频法线（同一张法线贴图放大约 3.7 倍再取一次：抹刀的大起伏，5 米外 mip 以后细纹没了它还在）。电脑档才有。
-  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.32, patch: 0.14, sheen: 0.25, repaint: 1, broad: 0.5 },
+  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.32, patch: 0.16, sheen: 0.25, repaint: 1, broad: 0.5 },
   ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.1, sheen: 0.16, broad: 0.35 },
   // 吊顶板、清水混凝土的模板缝是规则的格子：转个角度再取一次会出斜缝，不做防重复（antiTile: false）。
   // panels：贴图一格里有几块板（水渍按整块板来，停在板缝上）
@@ -82,12 +82,12 @@ export const DETAIL_SURFACES = Object.freeze({
  * 自带 UV 的面层（materials.js 的 plaster / concrete 批次：楼梯间的墙、踏步、平台、梯段底板，地下室的清水混凝土墙）：
  * 贴图照旧按批次投的米制 UV 取，这里再叠 uvDetail（见下）。
  * tread：朝上的面（踏步、平台、楼面）换成水泥地面的纹理（墙上的抹灰 / 木模板纹铺在踏步上是一片平的）；
- * panel / contrast：清水混凝土墙按 panel 米一块模板错开贴图（板缝、对拉螺栓孔不再在每面墙同一高度连成一线），
- * 墙上的板缝深浅压到 contrast（原样太深，像刷了漆的木挂板）。
+ * panel / contrast / scale：清水混凝土墙按 panel 米一块模板错开贴图（板缝、对拉螺栓孔不再在每面墙同一高度连成一线），
+ * 墙上的板缝深浅压到 contrast、贴图放大 1/scale 倍（原样 37 厘米一道深缝，像刷了漆的木挂板；放大后 75 厘米一道，是大模板的拼缝）。
  */
 export const UV_SURFACES = Object.freeze({
-  plaster: { id: 'painted_plaster', patch: 0.12, sheen: 0.22, repaint: 1, broad: 0.45, tread: 'garage_concrete' },
-  concrete: { id: 'formed_concrete', patch: 0.1, sheen: 0.16, panel: 2.4, contrast: 0.5, tread: 'garage_concrete' },
+  plaster: { id: 'painted_plaster', patch: 0.16, sheen: 0.22, repaint: 1, broad: 0.2, tread: 'garage_concrete' },
+  concrete: { id: 'formed_concrete', patch: 0.1, sheen: 0.16, panel: 2.4, contrast: 0.5, scale: 0.5, tread: 'garage_concrete' },
 });
 /** 踏步、平台上的水泥纹理：铺多大（米）、多深、法线多深 */
 export const TREAD = Object.freeze({ meters: 1.6, strength: 0.6, normal: 0.55 });
@@ -371,10 +371,10 @@ function facesChunk(v) {
     vec2 wdOff = vec2(wdHash(vec2(wdPn, 3.1)), wdHash(vec2(wdPn, 8.7))) * step(0.5, wdWall);` : ''}`;
 }
 
-/** 清水混凝土墙：错开后的 UV 取颜色，墙上的板缝深浅压一压（朝上、朝下的面不动） */
+/** 清水混凝土墙：放大、错开后的 UV 取颜色，墙上的板缝深浅压一压（朝上、朝下的面不动） */
 function panelMapChunk(v) {
   return `#ifdef USE_MAP
-    vec4 sampledDiffuseColor = texture2D( map, vMapUv + wdOff );
+    vec4 sampledDiffuseColor = texture2D( map, vMapUv * ${f3(v.scale)} + wdOff );
     sampledDiffuseColor.rgb = mix(${v3(v.meanLin)}, sampledDiffuseColor.rgb, mix(1.0, ${f3(v.contrast)}, step(0.5, wdWall)));
     diffuseColor *= sampledDiffuseColor;
   #endif`;
@@ -423,27 +423,27 @@ const GRIME = `
     // 只算脚下这一层的墙根（往下 0.4 米以外是楼下那层、中庭里看到的下面几层，不算）
     float wdIn = smoothstep(-0.4, -0.05, wdH);
     // 脏的那一圈高低不齐：拖把水、鞋踢、靠墙堆过东西——高度按大块噪声在 0.18–0.78 米之间起伏，上沿是一团一团的
-    float wdBand = 0.18 + 0.6 * wdM.g * (0.35 + 0.65 * wdM.r);
+    float wdBand = 0.2 + 0.6 * wdM.g * (0.35 + 0.65 * wdM.r);
     float wdLow = (1.0 - smoothstep(0.0, wdBand, wdH)) * wdIn;
-    float wdHaze = (1.0 - smoothstep(0.0, 1.4, wdH)) * wdIn;
-    // 墙和地面交接的那一线积灰最深（10 厘米内）
-    float wdContact = (1.0 - smoothstep(0.0, 0.1, wdH)) * wdIn;
+    float wdHaze = (1.0 - smoothstep(0.0, 1.5, wdH)) * wdIn;
+    // 墙和地面交接的那一线积灰最深（12 厘米内）
+    float wdContact = (1.0 - smoothstep(0.0, 0.12, wdH)) * wdIn;
     float wdBlot = smoothstep(0.45, 0.95, wdM.g);
     // 流痕：高处的浓（从窗台、管井、楼板缝漏下来），往下淡；矮处留一点（溅上去的泥水）
-    float wdStreak = wdM.b * (0.14 + 0.3 * smoothstep(0.2, 2.0, wdH));
-    wdDirt = wdWall * (wdLow * (0.3 + 0.25 * wdBlot) + wdHaze * 0.12 + wdContact * 0.3 + wdStreak + wdBlot * 0.12)
-      + wdDown * (wdStain * 0.2 + wdBlot * 0.12 + 0.06);
-    wdDirt = min(wdDirt, 0.75) * wdGrime;
+    float wdStreak = wdM.b * (0.22 + 0.4 * smoothstep(0.2, 2.0, wdH));
+    wdDirt = wdWall * (wdLow * (0.45 + 0.3 * wdBlot) + wdHaze * 0.16 + wdContact * 0.4 + wdStreak + wdBlot * 0.18)
+      + wdDown * (wdStain * 0.25 + wdBlot * 0.15 + 0.08);
+    wdDirt = min(wdDirt, 0.85) * wdGrime;
     // 地面的灰：一片一片（R 高的地方），常走的路上（A 低）干净；整片只有薄薄一层
     float wdDrift = smoothstep(0.5, 0.92, wdM.r) * (0.55 + 0.45 * wdBlot) * smoothstep(0.2, 0.55, wdM.a);
-    wdDust = wdUp * wdGrime * (0.03 + 0.34 * wdDrift + 0.06 * wdBlot);
-    wdMul *= mix(vec3(1.0), vec3(0.93, 0.9, 0.84), wdGrime);
+    wdDust = wdUp * wdGrime * (0.04 + 0.42 * wdDrift + 0.08 * wdBlot);
+    wdMul *= mix(vec3(1.0), vec3(0.9, 0.86, 0.78), wdGrime);
     wdRough += wdDirt * 0.45 + wdDust * 0.6 + wdGrime * 0.05;`;
 
 /** 最后上色：细纹理 / 大块变化（wdMul），污垢往棕灰色上混（深色面也变色，不只是更黑），地面的灰往灰褐色上混 */
 const APPLY = `
     vec3 wdCol = diffuseColor.rgb * wdMul;
-    wdCol = mix(wdCol, wdCol * vec3(0.5, 0.44, 0.36) + vec3(0.03, 0.025, 0.018), wdDirt);
+    wdCol = mix(wdCol, wdCol * vec3(0.42, 0.36, 0.28) + vec3(0.035, 0.028, 0.018), wdDirt);
     diffuseColor.rgb = mix(wdCol, vec3(0.3, 0.28, 0.25), wdDust);`;
 
 /**
@@ -601,7 +601,7 @@ function hookDetail(mat, variant, textures, key) {
     const early = frag.includes('#include <map_fragment>');
     if (early) frag = frag.replace('#include <map_fragment>', `${chunks.faces}\n${chunks.map || '#include <map_fragment>'}`);
     // 法线贴图也按错开后的 UV 取（切线框架仍按原 UV 的导数算，错开只是平移，方向不变）
-    const maps = chunks.normalMap ? THREE.ShaderChunk.normal_fragment_maps.replace('texture2D( normalMap, vNormalMapUv )', 'texture2D( normalMap, vNormalMapUv + wdOff )') : '#include <normal_fragment_maps>';
+    const maps = chunks.normalMap ? THREE.ShaderChunk.normal_fragment_maps.replace('texture2D( normalMap, vNormalMapUv )', `texture2D( normalMap, vNormalMapUv * ${f3(variant.scale)} + wdOff )`) : '#include <normal_fragment_maps>';
     shader.fragmentShader = frag
       .replace('#include <color_fragment>', `#include <color_fragment>\n${early ? '' : chunks.faces}${chunks.color}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${chunks.rough}`)
@@ -652,7 +652,7 @@ export function uvVariant(def, base, tread, mem = MEM) {
     broad: full && all && def.broad && base?.maps?.normal ? def.broad : 0,
     tread: !!tread?.maps?.color, treadNormal: !!(full && all && tread?.maps?.normal),
     gainT: (tread?.mean || [128, 128, 128]).map((v) => 1 / Math.max(0.05, srgbToLinear(v))),
-    panel: def.panel && base?.maps?.color ? def.panel : 0, contrast: def.contrast ?? 1,
+    panel: def.panel && base?.maps?.color ? def.panel : 0, contrast: def.contrast ?? 1, scale: def.scale ?? 1,
     meanLin: mean.map(srgbToLinear),
   };
 }
@@ -709,7 +709,7 @@ export function uvDetail(mat, surfaces, kind) {
   const textures = {};
   if (v.tread) textures.wdTreadMap = tread.maps.color;
   if (v.treadNormal) textures.wdTreadNormal = tread.maps.normal;
-  const key = `uv-${kind}-${v.tier}-${v.tread ? 't' : ''}${v.treadNormal ? 'n' : ''}${v.broad ? `b${v.broad}` : ''}${v.panel ? `p${v.panel}-${v.contrast}` : ''}-${v.patch}-${v.sheen}-${v.repaint}`;
+  const key = `uv-${kind}-${v.tier}-${v.tread ? 't' : ''}${v.treadNormal ? 'n' : ''}${v.broad ? `b${v.broad}` : ''}${v.panel ? `p${v.panel}-${v.contrast}-${v.scale}` : ''}-${v.patch}-${v.sheen}-${v.repaint}`;
   hookDetail(mat, v, textures, key);
   mat.userData.wear = true; mat.userData.uvDetail = kind;
   return mat;
