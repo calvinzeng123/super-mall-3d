@@ -20,6 +20,17 @@
 //   - 细流少而长、顺着褶子拐、粗细起伏；喷溅、溅点是转过角度又互相切掉的细点子（单张噪声取高阈值是一个个方块）；
 //   - 抓痕连皮划开：口子里是暗红的肉、周围的布吸了血；正面的口子、细流不再画到转过去的侧面上（以前会拉成一个方框）；
 //   - 嘴边那一片的噪声跟着细，下巴上不再挂一个方块；特殊感染者的血在皮肤上也往暗褐里收。
+// 第三轮（美术审查第二轮的意见）：
+//   - 伤按外观「定额」：每套正面、背后各一大片（咬伤、胸口的伤一路洇到下摆，前襟三四成），不再有干干净净的一套；
+//   - 嘴边先糊开一片（比嘴唇宽、唇线最暗、嘴角新鲜），再挂下一到三道「随机游走」的血（mkRun：粗细起伏、越往下越细、
+//     末端一滴、长短不一，最长的淌到领口积成一片）——以前是几道等宽的直竖线，像条形码、像山羊胡；伤口往下挂的细流也换成这样；
+//   - 皮肤：三档低频斑驳（灰绿 ↔ 灰紫）、下颌太阳穴指节的淤青、更清楚的血管、快黑的眼窝；原肤色几乎不留（脸颊不再泛暖）；
+//   - 破口大三五倍、边是扯开的毛边、里面透出皮或黑洞，模型固定的几处（bodyTears）压进共用法线图；
+//   - 血分新旧：靠伤口的上半截是湿亮的深红（粗糙度 0.3 左右），往外、往下是哑光的干褐，干透的边上一圈深的水线；
+//   - 手上的脏和血、腿上的土按竖道子的噪声软过渡十几二十厘米（以前是一道手套似的齐边），脚下 40 厘米蒙土、溅泥点；
+//   - 扑袭者一身黑、胳膊上一道道发亮的油泥；喷酸者酸液往下淌着烧（焦黑的芯、焦黄的边、烧穿的洞、皮上起泡）；
+//     巨尸暗红褐、大块露肉的烂疮和撑裂的皮；胖尸病黄发绿、鼓起的青紫血管、衣服上渗出的脓水和撑裂的侧缝；
+//   - 遮罩的边一律用平滑过渡 + 噪声（第二轮扑袭者肩上的灰按身体网格硬切，成了一级级台阶）；头发亮度压进一条窄带、法线几乎抹平。
 // 颜色图每种外观一张；法线和粗糙度每个模型一张、各外观共用（只放布料、皮肤、头发这些「底子」）。
 // 每种外观自己的湿血、伤口、涎水、油泥的光泽写在颜色图的透明通道里（见 encodeWet），zombie-skin.js 的着色器读出来
 // 改粗糙度、把布纹法线抹平——伤口各外观不同，共用的粗糙度图装不下，又不想多做十几张图。
@@ -244,7 +255,7 @@ export const LOOKS = Object.freeze({
   // 喷酸者：蜡黄发灰的黄疸，有斑驳；绿只在血管、眼窝和嘴边；嘴角淌黄绿的涎水；酸液从嘴里、胸口往下淌着烧
   spitter: Object.freeze({ skinA: [152, 148, 96], skinB: [130, 126, 90], chroma: 0.03, contrast: 1.25, veins: 1, veinCol: [0.6, 0.72, 0.5], bruise: 0.4, sock: [0.48, 0.54, 0.26], lips: [70, 80, 40], blood: 0.6, grime: 0.8, rips: 2, claws: 0, mouth: 1.2, spray: 0, shins: 0.4, wounds: [1, 1], front: 0, back: 1, pool: ['gut', 'flank', 'thigh'], fluid: [0.62, 0.7, 0.36], spots: 'acid' }),
   // 巨尸：暗红褐、生肉似的皮，大块露出肌肉的烂疮（发黑的芯、湿亮的肉、发黄的边）在前臂、上臂、脖子、脸和小腿上，皮撑裂几道
-  brute: Object.freeze({ skinA: [98, 46, 38], skinB: [76, 36, 36], chroma: 0.02, contrast: 1.2, veins: 0.7, veinCol: [0.55, 0.4, 0.5], bruise: 0.5, sock: [0.36, 0.2, 0.2], lips: [40, 16, 16], blood: 1.4, grime: 0.9, rips: 5, claws: 0.8, mouth: 1.3, spray: 2, shins: 1, wounds: [1, 2], spots: 'lesion', bloodMul: [0.42, 0.06, 0.05] }),
+  brute: Object.freeze({ skinA: [92, 47, 40], skinB: [70, 37, 36], chroma: 0.02, contrast: 1.2, veins: 0.7, veinCol: [0.55, 0.4, 0.5], bruise: 0.5, sock: [0.36, 0.2, 0.2], lips: [40, 16, 16], blood: 1.4, grime: 0.9, rips: 5, claws: 0.8, mouth: 1.3, spray: 2, shins: 1, wounds: [1, 2], spots: 'lesion', bloodMul: [0.42, 0.06, 0.05] }),
   // 胖尸：病黄发绿、大块发紫的斑，鼓起来的青紫血管，一身脓疱；腋下、肚子渗出的脓水把衣服洇湿一大片，侧缝撑裂
   bloater: Object.freeze({ skinA: [148, 152, 90], skinB: [118, 98, 124], chroma: 0.03, contrast: 1.2, veins: 1.8, veinCol: [0.48, 0.42, 0.78], bruise: 1, sock: [0.4, 0.34, 0.44], lips: [62, 46, 70], blood: 0.85, grime: 0.9, rips: 3, claws: 0, mouth: 0.8, spray: 1, shins: 0.6, wounds: [0, 1], spots: 'pustule', ooze: [0.84, 0.72, 0.4] }),
 });
@@ -449,8 +460,8 @@ export function mkRun(rnd, x, y, z, nx, nz, lat0, len, w0, w1, wander = 0.0014, 
  * jag：这一点的噪声（-0.5–0.5 左右），把边缘揉得参差。纯函数
  */
 export function runAt(R, px, py, pz, nx, nz, jag = 0) {
+  const dy = R.y - py; if (dy < -R.top * 2 || dy > R.len + R.drop * 1.2) return 9; // 先比高度（大多数像素在这一步就出去了）
   if (nx * R.nx + nz * R.nz < 0.15) return 9;
-  const dy = R.y - py; if (dy < -R.top * 2 || dy > R.len + R.drop * 1.2) return 9;
   const dx = px - R.x, dz = pz - R.z, lat = dx * -R.nz + dz * R.nx; if (lat < R.latLo || lat > R.latHi || dx * R.nx + dz * R.nz < -0.12) return 9;
   const f = Math.min(R.n - 1, Math.max(0, dy / R.step)), i = Math.floor(f), t = f - i, j = Math.min(R.n - 1, i + 1);
   const c = R.off[i] + (R.off[j] - R.off[i]) * t, w = (R.wid[i] + (R.wid[j] - R.wid[i]) * t) * (1 + jag);

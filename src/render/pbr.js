@@ -322,7 +322,7 @@ export function worldDetailChunks(v) {
     wdDirt *= wdGrime;
     // 地面：一层灰（往灰褐色上混，深色地面发灰、浅色地面发暗），成片的地方厚一些
     wdDust = wdUp * wdGrime * (0.1 + 0.18 * wdBlot + 0.08 * smoothstep(0.5, 0.9, wdM.r));
-    wdMul *= mix(vec3(1.0), vec3(0.94, 0.9, 0.83), wdGrime);
+    wdMul *= mix(vec3(1.0), vec3(0.96, 0.94, 0.9), wdGrime);
     wdMul *= 1.0 - min(wdDirt, 0.62);
     wdRough += wdDirt * 0.45 + wdDust * 0.6 + wdGrime * 0.04;`;
   const faces = `
