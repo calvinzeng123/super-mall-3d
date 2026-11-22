@@ -423,6 +423,11 @@ export function worldDetailChunks(v) {
 const DETAIL_VERTEX = `#include <project_vertex>
       vec4 detailWorld = vec4(transformed, 1.0);
       vec3 detailN = objectNormal;
+      // 顺序和 three 的 project_vertex 一样：先批次矩阵，再实例矩阵，最后模型矩阵
+      #ifdef USE_BATCHING
+        detailWorld = batchingMatrix * detailWorld;
+        detailN = mat3(batchingMatrix) * detailN;
+      #endif
       #ifdef USE_INSTANCING
         detailWorld = instanceMatrix * detailWorld;
         detailN = mat3(instanceMatrix) * detailN;
@@ -430,7 +435,6 @@ const DETAIL_VERTEX = `#include <project_vertex>
       vDetailPos = (modelMatrix * detailWorld).xyz;
       vDetailNormal = mat3(modelMatrix) * detailN;`;
 
-/** 给材质挂上着色器补丁：前面已有的补丁（夜间自发光、楼面米制坐标……）照样先跑；克隆出来的材质（各栋楼带剖切面那份）也对 */
 /** 短字符串哈希（FNV-1a），只用来区分缓存键 */
 export function hashText(text) {
   let h = 0x811c9dc5;
@@ -438,6 +442,7 @@ export function hashText(text) {
   return (h >>> 0).toString(36);
 }
 
+/** 给材质挂上着色器补丁：前面已有的补丁（夜间自发光、楼面米制坐标……）照样先跑；克隆出来的材质（各栋楼带剖切面那份）也对 */
 function hookDetail(mat, variant, textures, key) {
   // 材质上原来的补丁和缓存键：只认自己挂上去的（原型上的默认缓存键是整段 onBeforeCompile 的源码，不串进来）
   const own = (k) => Object.prototype.hasOwnProperty.call(mat, k) ? mat[k] : null;
