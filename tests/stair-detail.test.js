@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { L } from './helpers.js';
+import { BatchSet } from '../src/render/batch.js';
 import { towerStairPlan } from '../src/layout/tower-stairs.js';
 import { buildTowerStairGeometry, buildTowerStairInstances, stairDetailSpec, stairDetailKey, STAIR_PAINT } from '../src/render/build/tower-stairs.js';
 
@@ -12,25 +13,41 @@ const tower = (id) => L.buildings.find((b) => b.id === id);
 const stairsOf = (b) => L.stairs.filter((s) => s.building === b.id);
 const levelsOf = (b) => (b.community ? (b.stairLevelIds || b.levels).map((id) => byId.get(id)).filter(Boolean) : L.levels.filter((l) => l.building === b.id)).sort((a, z) => a.elev - z.elev);
 
-test('做法分组：社区塔楼自己楼层墙内皮 0.1、宿主楼层与公寓 0.2；穿越层没有门；门外消火栓 / 表箱只挂在候梯厅里', () => {
+test('做法分组：社区塔楼自己楼层墙内皮 0.1、宿主楼层与公寓 0.2；穿越层没有门；消火栓 / 表箱挂在出楼梯门迎面的电梯墙垛上', () => {
   const T1 = tower('T1'), A = tower('A');
-  const t11 = stairDetailSpec(T1, byId.get('T1-11F'), stairsOf(T1));
-  assert.equal(t11.inset, .1); assert.equal(t11.head, 2.3); assert.ok(t11.wellGuard);
-  assert.deepEqual(Object.values(t11.stairs).map((s) => s.lobby?.kind), ['hydrant', 'meter']);
+  const t11 = stairDetailSpec(T1, byId.get('T1-11F'), stairsOf(T1), L.elevators);
+  assert.equal(t11.inset, .1); assert.equal(t11.head, 2.3); assert.ok(t11.wellGuard); assert.ok(!t11.lining);
+  const lob = t11.lobby;
+  assert.ok(lob, 'T1 自己的楼层应有候梯厅细部');
+  assert.deepEqual(lob.boxes.map((q) => q.kind), ['hydrant', 'meter']);
+  // 迎面电梯（消防电梯 LF）在两樘楼梯门之间；箱子在它两侧的墙垛上，不压任何电梯门洞、召唤盒（门边 0.25 m），不出候梯厅
+  assert.ok(lob.face && lob.face.x0 < 0 && lob.face.x1 > 0);
+  for (const q of lob.boxes) {
+    for (const [a, b] of lob.gaps) assert.ok(q.x + q.w / 2 < a - .1 || q.x - q.w / 2 > b + .1, `${q.kind} 压电梯门 ${a}..${b}`);
+    assert.ok(q.x + q.w / 2 < lob.face.x0 - .31 || q.x - q.w / 2 > lob.face.x1 + .31, `${q.kind} 压召唤盒`);
+    assert.ok(q.x - q.w / 2 > lob.x0 && q.x + q.w / 2 < lob.x1);
+    // 出楼梯门迎面看得到：箱子中心离某一樘楼梯门中心不到 1.3 m
+    assert.ok(stairsOf(T1).some((s) => Math.abs((s.door.x0 + s.door.x1) / 2 - q.x) < 1.3), `${q.kind} 不在楼梯门正对面`);
+  }
+  // 电梯墙面在候梯厅一侧、楼梯门墙面在另一侧，间距就是候梯厅进深（3.2 m 减两道半墙）
+  assert.ok(Math.abs(Math.abs(lob.z1 - lob.z0) - (3.2 - .06 - .1)) < 1e-6);
+  // 隔层停靠的电梯不分组：15F（W 不停）和 16F（E 不停）是同一个签名
+  const k15 = stairDetailKey(byId.get('T1-15F'), stairDetailSpec(T1, byId.get('T1-15F'), stairsOf(T1), L.elevators));
+  const k16 = stairDetailKey(byId.get('T1-16F'), stairDetailSpec(T1, byId.get('T1-16F'), stairsOf(T1), L.elevators));
+  assert.equal(k15, k16);
   for (const [id, s] of Object.entries(t11.stairs)) {
-    const st = L.stairs.find((q) => q.id === id), { x, w } = s.lobby;
-    // 箱子在门旁边的墙上，不压门洞，也不出楼梯外框
-    assert.ok(x + w / 2 < st.door.x0 || x - w / 2 > st.door.x1, id);
-    assert.ok(x - w / 2 > st.rect.x0 && x + w / 2 < st.rect.x1, id);
+    const st = L.stairs.find((q) => q.id === id);
+    assert.ok(s.alarm, `${id} 门边缺报警按钮`);
+    assert.ok(s.alarm.x < st.door.x0 - .2 || s.alarm.x > st.door.x1 + .2, id);
   }
   const b1 = stairDetailSpec(T1, byId.get('P1-B1'), stairsOf(T1));
   assert.equal(b1.inset, .2); assert.equal(b1.head, 2.2);
-  assert.ok(Object.values(b1.stairs).every((s) => s.doors.length === 1 && !s.lobby));
+  assert.ok(Object.values(b1.stairs).every((s) => s.doors.length === 1) && !b1.lobby && b1.lining);
   const pass = stairDetailSpec(T1, byId.get('P1-3F'), stairsOf(T1));
   assert.ok(Object.values(pass.stairs).every((s) => s.doors.length === 0), '穿越层不该有门框');
   const a6 = stairDetailSpec(A, byId.get('A-6F'), stairsOf(A));
   assert.equal(a6.inset, .2); assert.equal(a6.head, 2.35); assert.ok(!a6.wellGuard);
-  assert.ok(Object.values(a6.stairs).every((s) => !s.lobby && s.doors.length === 1));
+  assert.ok(Object.values(a6.stairs).every((s) => s.doors.length === 1) && !a6.lobby && a6.lining);
   // 公寓：消火栓箱挂在楼梯间门口平台的侧墙上，离门 0.74–1.46 m，在第一跑起步（2 m）之前
   for (const [id, s] of Object.entries(a6.stairs)) {
     assert.equal(s.inner?.kind, 'hydrant', id);
@@ -41,34 +58,57 @@ test('做法分组：社区塔楼自己楼层墙内皮 0.1、宿主楼层与公�
   // 典型楼层共用一组：A 的 2F–19F（3.4 m）一个签名，T1 的 8F–24F 按层高最多三组
   const keysA = new Set(L.levels.filter((l) => l.building === 'A' && l.height === 3.4).map((l) => stairDetailKey(l, stairDetailSpec(A, l, stairsOf(A)))));
   assert.equal(keysA.size, 1);
-  const keysT = new Set(L.levels.filter((l) => l.building === 'T1' && /^T1-(8|9|1\d|2[0-4])F$/.test(l.id)).map((l) => stairDetailKey(l, stairDetailSpec(T1, l, stairsOf(T1)))));
+  const keysT = new Set(L.levels.filter((l) => l.building === 'T1' && /^T1-(8|9|1\d|2[0-4])F$/.test(l.id)).map((l) => stairDetailKey(l, stairDetailSpec(T1, l, stairsOf(T1), L.elevators))));
   assert.ok(keysT.size <= 3, `${keysT.size} 组`);
 });
 
-test('实例化模板只用 concrete / extMetal 两个批次（绘制调用 +0），每层恰好一个实例，模板顶点有上限', () => {
-  for (const id of ['T1', 'A', 'H', 'W1']) {
-    const b = tower(id), levels = levelsOf(b), materials = Object.fromEntries(['concrete', 'extMetal'].map((k) => [k, new THREE.MeshStandardMaterial()]));
-    const group = new THREE.Group(), ctx = { dynamic: [] };
+test('实例化模板只用两个批次（绘制调用 +0）：有 plaster 时刷漆面走 plaster，没有时退回 concrete；每层恰好一个实例，模板三角形有上限', () => {
+  for (const keys of [['plaster', 'extMetal'], ['concrete', 'extMetal']]) for (const id of ['T1', 'A', 'H', 'W1']) {
+    const b = tower(id), levels = levelsOf(b), materials = Object.fromEntries(keys.map((k) => [k, new THREE.MeshStandardMaterial()]));
+    const group = new THREE.Group(), ctx = { dynamic: [], layout: L };
     // 只给两种材质：用到别的批次 flush 会抛 missing material
     buildTowerStairInstances(ctx, b, levels, stairsOf(b), materials, group);
     const withFlights = levels.filter((l) => b.access.flights.some((f) => f.parentFloor === l.id));
+    // 每组模板按 [刷漆面, 金属] 的顺序建网格：遇到刷漆面就是新的一组（同一层高可能有好几组，名字相同）
     const records = new Map();
+    let bucket = -1;
     for (const m of group.children) {
-      assert.ok(['concrete', 'extMetal'].includes(m.sourceMesh.name), m.name);
-      const key = m.name.replace(/-(concrete|extMetal)$/, '');
-      records.set(key, (records.get(key) || 0) + m.geometry.attributes.position.count);
-      assert.ok(m.geometry.attributes.color, `${m.name} 缺顶点色`);
+      assert.ok(keys.includes(m.sourceMesh.name), m.name);
+      if (m.sourceMesh.name === keys[0]) bucket++;
+      const key = `${m.name.replace(/-(plaster|concrete|extMetal)$/, '')}#${bucket}`, g = m.geometry;
+      records.set(key, (records.get(key) || 0) + (g.index ? g.index.count : g.attributes.position.count) / 3);
+      assert.ok(g.attributes.color, `${m.name} 缺顶点色`);
+      // 去重成带索引的几何：顶点数明显少于三角形数 × 3
+      assert.ok(g.index && g.attributes.position.count < g.index.count * .8, `${m.name} 没有去重`);
     }
-    // 一份模板（两部楼梯、一层）不超过 6000 个三角形
-    for (const [k, v] of records) assert.ok(v / 3 < 6000, `${k}: ${v / 3} 三角形`);
+    // 一份模板（两部楼梯、一层）：常规层高（≤ 3.6 m）不超过 6000 个三角形，更高的楼层梯段长、栏杆多，不超过 9000
+    for (const [k, v] of records) { const h = +/-stairs-([\d.]+)#/.exec(k)[1]; assert.ok(v < (h <= 3.6 ? 6000 : 9000), `${k}: ${v} 三角形`); }
+    const paintMat = materials[keys[0]];
     for (const lv of withFlights) {
       ctx.dynamic[0].update(0, 0, { state: { building: b.id, explore: { building: b.id, level: lv.id } } });
       const ys = [];
-      for (const m of group.children.filter((q) => q.material === materials.concrete && q.visible)) for (let i = 0; i < m.count; i++) { const mx = new THREE.Matrix4(); m.getMatrixAt(i, mx); ys.push(mx.elements[13]); }
+      for (const m of group.children.filter((q) => q.material === paintMat && q.visible)) for (let i = 0; i < m.count; i++) { const mx = new THREE.Matrix4(); m.getMatrixAt(i, mx); ys.push(mx.elements[13]); }
       assert.equal(ys.filter((y) => Math.abs(y - lv.elev) < 1e-5).length, 1, `${id} ${lv.id} 应该恰好一个实例`);
     }
     for (const m of group.children) m.geometry.dispose();
     for (const m of Object.values(materials)) m.dispose();
+  }
+});
+
+test('去重不改画面：带索引的模板展开后和合批原样的三角形逐个相同', () => {
+  const b = tower('A'), lv = byId.get('A-12F'), stairs = stairsOf(b), spec = stairDetailSpec(b, lv, stairs), off = lv.elev;
+  const flights = b.access.flights.filter((f) => f.parentFloor === lv.id).map((f) => ({ ...f, bottom: { ...f.bottom, y: f.bottom.y - off }, top: { ...f.top, y: f.top.y - off } }));
+  const surfaces = b.access.surfaces.filter((s) => s.parentFloor === lv.id).map((s) => ({ ...s, elev: s.elev - off }));
+  const materials = Object.fromEntries(['plaster', 'extMetal'].map((k) => [k, new THREE.MeshStandardMaterial()]));
+  const raw = new BatchSet(materials), g0 = new THREE.Group();
+  buildTowerStairGeometry(raw, { ...b, access: { protected: true, flights, surfaces } }, [], stairs, { enclosures: false, detail: spec, paint: 'plaster' });
+  raw.flush(g0);
+  const group = new THREE.Group(), ctx = { dynamic: [] };
+  buildTowerStairInstances(ctx, b, [byId.get('A-11F'), lv], stairs, materials, group);
+  for (const m of g0.children) {
+    const inst = group.children.find((q) => q.sourceMesh.name === m.name), a = m.geometry.attributes.position, g = inst.geometry, idx = g.index.array, p = g.attributes.position;
+    assert.equal(idx.length, a.count);
+    for (let i = 0; i < a.count; i += 7) for (let k = 0; k < 3; k++) assert.equal(p.array[idx[i] * 3 + k], a.array[i * 3 + k]);
   }
 });
 

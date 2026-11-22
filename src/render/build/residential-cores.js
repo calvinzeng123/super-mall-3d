@@ -8,6 +8,8 @@ import { NORTH_SITE } from '../../layout/community-sites.js';
 import { distToPolyEdge } from '../../layout/geom.js';
 import { landingAt } from '../../layout/elevator-shafts.js';
 import { clearHeight } from './shell.js';
+import * as THREE from 'three';
+import { lobbyBox } from './tower-stairs.js';
 
 const STONE = '#cfc6b8', CONCRETE = '#c3c8cc', FLOOR = '#ddd5c7', TRIM = '#3a332b', BRONZE = '#8a7a5c';
 const r = (x0, z0, x1, z1) => ({ x0, z0, x1, z1 });
@@ -52,7 +54,10 @@ export function buildResidentialCores(ctx) {
 
 /** Count boxes written (used by the mobile-cost test). */
 function counted(B, stats) {
-  return { frame: (F, fn) => B.frame(F, fn), get: (k) => { const g = B.get(k); return { box: (...a) => { stats.boxes++; g.box(...a); } }; } };
+  return { frame: (F, fn) => B.frame(F, fn), get: (k) => { const g = B.get(k); return {
+    box: (...a) => { stats.boxes++; g.box(...a); },
+    shape: g.shape ? (...a) => { stats.boxes++; g.shape(...a); } : undefined,
+  }; } };
 }
 
 function core(B, lv, { door, garage, H, y0, stairs, lifts, K }) {
@@ -140,31 +145,30 @@ function lobbyFittings(B, { band, lifts, stairs, landing, half, y0, h, K, garage
   run(zN, 1, liftGaps);
   run(zS, -1, stairGaps);
   // 消火栓箱在西边那部楼梯门的外侧，表箱在东边那部的外侧（两部楼梯门挨着中间，两头墙面够宽）。
-  const sorted = [...stairs].sort((a, b) => a.door.x0 - b.door.x0), w = .72, zf = zS - .015;
+  // 和楼梯间、塔楼候梯厅同一套做法（tower-stairs.js lobbyBox）：不锈钢包边、上下两樘红门、窗里的水带卷盘、白字。
+  const sorted = [...stairs].sort((a, b) => a.door.x0 - b.door.x0), w = .72;
   if (sorted.length) {
     const xH = sorted[0].door.x0 - .3 - w / 2, xM = sorted.at(-1).door.x1 + .3 + w / 2;
-    if (xH - w / 2 > x0 + .2) {
-      B.get('satin').box(xH, y0 + .9, zf, w, 1.8, .03, '#8a2620');
-      B.get('metal').box(xH, y0 + 1.24, zf - .017, w - .08, .012, .006, '#4c524e');
-      B.get('glass').box(xH + .06, y0 + 1.62, zf - .018, w - .3, .38, .006, 0xffffff);
-      B.get('satin').box(xH, y0 + 1.37, zf - .017, w - .26, .07, .006, '#e6e1d3');
-      B.get('satin').box(xH, y0 + .95, zf - .017, w - .3, .06, .006, '#e6e1d3');
-      for (const y of [1.5, .7]) B.get('metal').box(xH + w / 2 - .07, y0 + y, zf - .03, .03, .13, .03, '#5f6662');
-    }
-    if (xM + w / 2 < x1 - .3) for (const [y, hh] of [[1.55, .72], [.82, .58]]) {
-      B.get('satin').box(xM, y0 + y, zS - .012, w, hh, .024, '#8a918b');
-      for (const e of [-1, 1]) B.get('metal').box(xM, y0 + y + e * (hh / 2 - .012), zS - .026, w, .01, .006, '#4c524e');
-      B.get('metal').box(xM + w / 2 - .08, y0 + y, zS - .03, .025, .07, .02, '#5f6662');
-    }
+    if (xH - w / 2 > x0 + .2) lobbyBox(B, { kind: 'hydrant', w }, (u, o) => [xH + u, zS - o], true, 'satin', 'metal', y0);
+    if (xM + w / 2 < x1 - .3) lobbyBox(B, { kind: 'meter', w }, (u, o) => [xM + u, zS - o], true, 'satin', 'metal', y0);
   }
-  // 吸顶灯两盏（glow 随供电变暗，停电时不亮）和一块 0.6 m 见方的检修口。
+  // 吸顶灯两盏：36 cm 圆形，深色边框 + 乳白灯罩（matte：手电照得亮，停电时也看得出是盏灯，不像以前的发光方片
+  // 一停电就和吊顶混成一片），灯罩中间一小块 glow 是灯珠（来电时亮）；一块 0.6 m 见方的检修口。
   const ceil = y0 + h - .01, cz = (zN + zS) / 2;
   for (const x of [-2.2, 2.2]) {
-    B.get('metal').box(x, ceil - .025, cz, .42, .05, .42, '#a9adb0');
-    B.get('glow').box(x, ceil - .052, cz, .34, .006, .34, '#f3ead6');
+    disc(B, 'metal', x, ceil, cz, .18, .035, '#3f4345');
+    disc(B, 'matte', x, ceil - .035, cz, .145, .014, '#efe9da');
+    disc(B, 'glow', x, ceil - .049, cz, .075, .002, '#f3ead6');
   }
   B.get('metal').box(0, ceil - .004, cz, .62, .008, .62, '#7d8286');
   B.get('matte').box(0, ceil - .009, cz, .56, .004, .56, garage ? '#b9bcbd' : '#d6d0c4');
+}
+
+/** 吸顶的扁圆柱（顶面贴在 y 处的吊顶上，往下 depth）；记录器没有 shape 时退回方盒。 */
+function disc(B, key, x, y, z, r, depth, color) {
+  const g = B.get(key);
+  if (g.shape) g.shape('cyl8', new THREE.Vector3(x, y - depth, z), new THREE.Quaternion(), new THREE.Vector3(2 * r, depth, 2 * r), color);
+  else g.box(x, y - depth / 2, z, 2 * r, depth, 2 * r, color);
 }
 
 function residents(ctx, L, lv, b, B, { garage, H, y0, K }) {
