@@ -395,7 +395,7 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
       // 而它和下面的楼层共用一份模板（分出去要多存一份模板）。
       const lz = Z((vE + vEnd) / 2), ly = mid + Math.min(2.2, h - .7), top = mid + h - .25;
       bulkhead(C, M, [xl, lz], [1, 0], ly);
-      M.box(xl + .025, (ly + .13 + top) / 2, lz, .022, Math.max(.05, top - ly - .13), .022, STAIR_PAINT.conduit);
+      M.box(xl + .025, (ly + .15 + top) / 2, lz, .022, Math.max(.05, top - ly - .15), .022, STAIR_PAINT.conduit);
       // 红色消防立管：半层平台外沿再往里 15 cm，贴左墙，整层高（上下层接成一根），两道管卡。
       const pv = Math.min(vEnd + .16, p.depth - inset - .1), px = xl + .09;
       tube(M, { x: px, y: 0, z: Z(pv) }, { x: px, y: h, z: Z(pv) }, .055, STAIR_PAINT.pipe);
@@ -403,7 +403,8 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
     }
     // ---- 门口平台：水泥面层（楼层地砖停在门口，楼梯间里是水泥地），门洞下一条门槛石 ----
     if (doors.length) {
-      const vEdge = f1 ? Math.min(V(f1.localBottom[1]), 2) : 1.8;
+      // 一直铺到楼板开洞处（梯井洞口从 2 m 起，towerStairPlan.shaftRect），第一级踏步下面那一小条也盖住
+      const vEdge = 2;
       upface(C, (xl + xr) / 2, .008, Z((vf + vEdge) / 2), xr - xl, vEdge - vf, STAIR_PAINT.landing);
       for (const q of doors) C.box((q.x0 + q.x1) / 2, .007, Z((vf + vo) / 2), q.x1 - q.x0, .014, vf - vo + .04, STAIR_PAINT.threshold);
     }
@@ -429,6 +430,11 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
         for (const jx of [q.x0 - .03, q.x1 + .03]) M.box(jx, headY / 2, z, .06, headY, .024, STAIR_PAINT.frame);
         M.box(cx, headY + .03, z, w + .12, .06, .024, STAIR_PAINT.frame);
       }
+      // 门洞的侧壁和顶面包一圈门框（墙厚那一段），不然门洞里露出白色墙芯，看着像墙上挖了个洞而不是装了樘门；
+      // 只贴 4 mm，不进门洞净宽。
+      const vm = (vf + vo) / 2, dv = vf - vo;
+      for (const [jx, s] of [[q.x0, 1], [q.x1, -1]]) M.box(jx + s * .001, headY / 2, Z(vm), .006, headY, dv, STAIR_PAINT.frame);
+      M.box(cx, headY - .003, Z(vm), w, .006, dv, STAIR_PAINT.frame);
       const hinge = d.partition != null && cx > d.partition ? q.x1 : q.x0;
       const cz = Z(vf + .045), sx = hinge === q.x0 ? 1 : -1;
       M.box(hinge + sx * .3, headY + .14, cz, .3, .07, .06, STAIR_PAINT.closer);
@@ -436,7 +442,7 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
       if (h && h - headY > .75) {
         const ly = headY + .4, ceilY = h - .3;
         bulkhead(C, M, [cx, Z(vf)], nIn, ly);
-        M.box(cx, (ly + .13 + ceilY) / 2, Z(vf + .022), .022, Math.max(.05, ceilY - ly - .13), .022, STAIR_PAINT.conduit);
+        M.box(cx, (ly + .15 + ceilY) / 2, Z(vf + .022), .022, Math.max(.05, ceilY - ly - .15), .022, STAIR_PAINT.conduit);
       }
     }
     // 门口平台临梯井的一侧：社区塔楼没有围护墙那边画的护栏，这里补一段短栏杆。
@@ -458,27 +464,27 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
 }
 
 /**
- * 防潮吸顶灯（楼梯间常见的那种圆形壁灯，不亮）：深灰铸铝底座（8 边形，直径 26 cm）、
- * 5 cm 厚的乳白灯罩（比墙面暖、亮一点，手电一扫就看得出是盏灯）、一横一竖两道黑色护栏。
+ * 防潮吸顶灯（楼梯间常见的那种圆形壁灯，不亮）：深灰铸铝底座（8 边形，直径 30 cm）、
+ * 5.5 cm 厚的乳白灯罩（比墙面暖、亮一点，手电一扫就看得出是盏灯）、一横一竖两道黑色护栏。
  * at：墙面上的点 [x, z]；n：墙面朝外的法线 [nx, nz]，y：灯中心高度；n 为 null 时吸顶，y 是板底标高。
  */
 function bulkhead(C, M, at, n, y) {
   const [x, z] = at;
   if (!n) {
     // 吸顶：y 是板底，灯往下挂
-    ceilingDisc(M, x, y, z, .13, .022, STAIR_PAINT.lampBase);
-    ceilingDisc(C, x, y - .02, z, .1, .05, STAIR_PAINT.lamp);
-    M.box(x, y - .076, z, .22, .012, .014, STAIR_PAINT.cage);
-    M.box(x, y - .076, z, .014, .012, .22, STAIR_PAINT.cage);
+    ceilingDisc(M, x, y, z, .15, .024, STAIR_PAINT.lampBase);
+    ceilingDisc(C, x, y - .022, z, .12, .055, STAIR_PAINT.lamp);
+    M.box(x, y - .083, z, .26, .012, .014, STAIR_PAINT.cage);
+    M.box(x, y - .083, z, .014, .012, .26, STAIR_PAINT.cage);
     return;
   }
   const [nx, nz] = n, P = (o) => [x + nx * o, z + nz * o];
-  puck(M, P(0), n, y, .13, .022, STAIR_PAINT.lampBase);
-  puck(C, P(.02), n, y, .1, .05, STAIR_PAINT.lamp);
-  const [cx, cz] = P(.073);
+  puck(M, P(0), n, y, .15, .024, STAIR_PAINT.lampBase);
+  puck(C, P(.022), n, y, .12, .055, STAIR_PAINT.lamp);
+  const [cx, cz] = P(.083);
   const across = Math.abs(nx) > .5;
-  M.box(cx, y, cz, across ? .012 : .22, .014, across ? .22 : .012, STAIR_PAINT.cage);
-  M.box(cx, y, cz, across ? .012 : .014, .22, across ? .014 : .012, STAIR_PAINT.cage);
+  M.box(cx, y, cz, across ? .012 : .26, .014, across ? .26 : .012, STAIR_PAINT.cage);
+  M.box(cx, y, cz, across ? .012 : .014, .26, across ? .014 : .012, STAIR_PAINT.cage);
 }
 /** 贴墙的扁圆柱（底面在墙上，轴线沿法线 n）；没有 shape 的批次（测试记录器）退回盒子。 */
 function puck(g, at, n, y, r, depth, color) {
@@ -509,8 +515,9 @@ function lobbyDetails(B, L, paint) {
   skirt(z1, -nz, [[L.x0, Math.min(...doorWall.map((q) => q[1])) + .05], [Math.max(...doorWall.map((q) => q[0])) - .05, L.x1]], doorWall.map(([a, b]) => [a - .07, b + .07]));
   if (L.face) {
     const { x0, x1 } = L.face, w = x1 - x0, zf = z0 + nz * .015;
-    for (const jx of [x0 - .035, x1 + .035]) M.box(jx, 1.17, zf, .065, 2.34, .03, STAIR_PAINT.steel);
-    M.box((x0 + x1) / 2, 2.37, zf, w + .135, .07, .03, STAIR_PAINT.steel);
+    // 门套同理走刷漆批次（浅钢灰），手电照上去是一圈亮边
+    for (const jx of [x0 - .035, x1 + .035]) C.box(jx, 1.17, zf, .065, 2.34, .03, STAIR_PAINT.steel);
+    C.box((x0 + x1) / 2, 2.37, zf, w + .135, .07, .03, STAIR_PAINT.steel);
   }
   for (const b of L.boxes) lobbyBox(B, b, (u, o) => [b.x + u, z0 + nz * o], true, paint);
   // 手动报警按钮 + 消防电话插孔：两部楼梯门之间那道墙垛上（1.4 m / 1.25 m 高）
@@ -565,7 +572,8 @@ export function lobbyBox(B, lobby, at, alongX, paint = 'concrete', metal = 'extM
     // 上樘消火栓门：大玻璃窗（门高六成，退进 1 cm），后面是深色箱膛和红色水带卷盘，玻璃上白字「消火栓」；
     // 下樘灭火器门：白字「灭火器」。两樘门都有一个深色拉手槽（离门轴远的一边）。
     const H0 = .1, H1 = 1.9, hu = .02, split = .78, f = .035;
-    ring(M, 0, (H0 + H1) / 2, .018, w, H1 - H0, f, .036, P.hydrantFrame);
+    // 包边用刷漆批次的浅灰：金属批次在停电的暗处没有东西可反射，会变成一圈发蓝的黑框，读不出是不锈钢
+    ring(C, 0, (H0 + H1) / 2, .018, w, H1 - H0, f, .036, P.hydrantFrame);
     put(C, 0, (H0 + H1) / 2, .006, w - 2 * f + .004, H1 - H0 - 2 * f + .004, .012, P.hydrantInside);   // 箱膛（门缝里看得到）
     const iw = w - 2 * f - .006, upper = [split + hu / 2, H1 - f - .003], lower = [H0 + f + .003, split - hu / 2];
     // 下樘门
