@@ -17,7 +17,7 @@ import { doorOutside } from './guide.js';
 import { createPacing } from './pacing.js';
 import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
-import { propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR } from './siege-props.js';
+import { propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR, FIRE, nosingY, propTop, beaconMesh, pickGlow, faceYaw } from './siege-props.js';
 
 export const SIEGE = Object.freeze({
   building: 'A', roof: 'A-RF', power: 'A-B1',
@@ -243,8 +243,8 @@ function mats() {
 }
 const box = (g, w, h, d, x, y, z, m, ry = 0, rz = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.rotation.set(0, ry, rz); b.castShadow = true; g.add(b); return b; };
 const cyl = (g, r, h, x, y, z, m, rx = 0, rz = 0) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 10), m); b.position.set(x, y, z); b.rotation.set(rx, 0, rz); b.castShadow = true; g.add(b); return b; };
-/** 物件上方一根细光柱 + 一圈光环：隔着半个大厅也看得见该去哪 */
-function beacon(g, color = 'glow', h = 2.6) { const m = mats(); const b = box(g, 0.05, h, 0.05, 0, h / 2 + 0.2, 0, m[color]); b.castShadow = false; b.userData.beacon = true; return b; }
+/** 物件上方一道细光柱：隔着半个大厅也看得见该去哪。从物件最高处往上一点起（不穿过物件本身），顶到离地 h + 0.2 米（至少 0.7 米长） */
+function beacon(g, color = 'glow', h = 2.6, r = 0.05) { const y0 = propTop(g, r) + 0.1, b = beaconMesh(y0, Math.max(y0 + 0.7, h + 0.2), mats()[color].color.getHex()); g.add(b); return b; }
 function setState(g, on) { g.traverse((o) => { if (o.userData.beacon) o.visible = on !== 'cut'; if (o.userData.cutHide) o.visible = on !== 'cut'; if (o.userData.cutShow) o.visible = on === 'cut'; }); }
 
 // 物件本身怎么搭见 siege-props.js（按材质合并、共用图集）；这里只管各自的状态：cutHide / cutShow、灯的颜色、关卡解决时的动画。
@@ -276,8 +276,9 @@ export function toolModel(tool) {
   const floor = tool === '灭火器';
   if (!floor) buildTable(g);
   const item = new THREE.Group(); item.position.set(floor ? 0.22 : 0, floor ? 0 : 0.7175, 0); item.userData.cutHide = true; g.add(item);
-  buildTool(item, tool);
-  beacon(g); g.userData.setState = (s) => setState(g, s); return g;
+  buildTool(item, tool); item.add(pickGlow(floor ? 0.7 : 0.5)); // 底下一小片光：拿走了跟着没
+  beacon(g, 'glow', 2.6, floor ? 0.3 : 0.05); // 灭火器立在交互点旁边：光柱从瓶顶往上起，不从地面起
+  g.userData.setState = (s) => setState(g, s); return g;
 }
 /** 关卡挡在那儿的东西：type 是 GATES 的键。交互点上只放小件（真正的大件摆在楼梯口，见 gateBlock）：
  * 跳闸 → 电梯厅里一个落地的分区配电箱（门敞着，熔断器座空着）；反锁 → 读卡器在防火门的门框上，交互点只留光柱 */
@@ -288,29 +289,46 @@ export function gateModel(type) {
   beacon(g, 'glow', 2.2); g.userData.setState = (s) => { setState(g, s); led?.(s); }; return g;
 }
 /** 堵在楼梯口的大件：杂物 / 火 / 落下的卷帘栅门 / 关死的防火门。clear() 以后：杂物推到一边（+x）、火灭（烟再飘一会儿、地上留下干粉）、栅门收上去、门朝人这边转开。
- * 第一个子节点一直是会动的那一组（junk）。 */
+ * 第一个子节点一直是会动的那一组（junk）。update(dt, G)：G 给了的话，火会照亮周围——人走近时借游戏灯池里的一盏灯（那四盏灯本来就一直在场景里、
+ * 每个像素都在算，借一盏不多花一分钱；新加一盏灯则全场的着色器都要重编、每个像素多算一遍），走远了、火灭了还回去；dispose() 也还。 */
 export function gateBlock(type) {
   const g = new THREE.Group(); g.name = `${GATES[type].name}（挡路）`;
   const junk = new THREE.Group(); g.add(junk);
-  let fire = [], powder = null, led = null;
+  let fire = [], powder = null, led = null, coals = null, lamp = null, fade = 1;
   if (type === 'debris') buildDebris(junk);
-  else if (type === 'fire') { fire = buildFire(junk); buildFireStatic(g); powder = powderSheet(); powder.visible = false; g.add(powder); }
+  else if (type === 'fire') { fire = buildFire(junk); coals = junk.getObjectByName('coals'); buildFireStatic(g); powder = powderSheet(); powder.visible = false; g.add(powder); }
   else if (type === 'fuse') { buildShutterFrame(g); junk.position.y = SHUTTER.top; buildShutterCurtain(junk); }
   else { buildDoorFrame(g); junk.position.set(-DOOR.half, 0, DOOR.z); buildDoorLeaf(junk); led = lamps(g, [DOOR.half + 0.04, DOOR.bottom + 1.405, DOOR.z - 0.11]); led('in'); }
-  const base = junk.position.clone();
+  const base = junk.position.clone(), at = new THREE.Vector3();
   let cleared = false, t = 0;
-  g.userData.update = (dt) => {
+  const drop = () => { lamp?.release?.(); lamp = null; };
+  /** 火光：借灯、摆到火堆上方、跟火苗一起闪；烟的亮度跟着停电 / 手电走 */
+  function fireLight(G) {
+    const L = FIRE.light, me = G?.player?.pos, B = G?.blackout;
+    for (const m of fire) if (m.uniforms.uTorch) { const lv = B ? B.level : 0; m.uniforms.uTorch.value = lv * Math.min(1, (B?.gain ?? 1) * 1.6); m.uniforms.uDay.value = 1 - lv; }
+    at.set(0, nosingY(L.z) + L.y, L.z); if (g.parent) { g.updateWorldMatrix(true, false); at.applyMatrix4(g.matrixWorld); }
+    const want = !!(G?.render?.lightPool && me && g.parent && junk.visible && fade > 0.02 && Math.abs(me.y - at.y) < 3.5 && Math.hypot(me.x - at.x, me.z - at.z) < L.near);
+    if (want && !lamp) lamp = G.render.lightPool.acquire?.() || null; // 池里没空的灯就算了，火照样烧
+    if (!want) { drop(); return; }
+    if (!lamp?.light) return;
+    const flick = 0.78 + 0.12 * Math.sin(t * 9.7) + 0.06 * Math.sin(t * 23.3 + 1.1) + 0.04 * Math.sin(t * 41.0);
+    lamp.light.color.set(L.color); lamp.light.distance = L.distance; lamp.light.position.copy(at);
+    lamp.light.intensity = L.intensity * fade * flick;
+  }
+  g.userData.update = (dt, G = null) => {
     t += dt;
     if (type === 'fire' && junk.visible) fireStep(fire, t, cleared ? (m) => (m.name === 'siege-smoke' ? 1 - Math.min(1, g.userData.clearT / 6) : 1 - Math.min(1, g.userData.clearT / 1.2)) : null);
+    if (type === 'fire') { fade = cleared ? 1 - Math.min(1, g.userData.clearT / 1.2) : 1; fireLight(G); }
     if (!cleared || !junk.visible) return;
     const c = (g.userData.clearT += dt), k = Math.min(1, c / 0.8), e = 1 - (1 - k) ** 3;
     if (type === 'debris') { junk.position.x = 1.6 * k; junk.rotation.z = -0.5 * k; }
-    else if (type === 'fire') { if (c > 0.4) powder.visible = true; if (c >= 6) junk.visible = false; }
+    else if (type === 'fire') { if (c > 0.4) powder.visible = true; if (c > 0.7) coals.visible = false; if (c >= 6) junk.visible = false; }
     else if (type === 'fuse') junk.scale.y = 1 - 0.96 * Math.min(1, c / 1.6); // 卷帘慢慢收进卷筒箱
     else junk.rotation.y = 1.7 * e;
   };
   g.userData.clear = () => { cleared = true; g.userData.clearT = 0; led?.('cut'); };
-  g.userData.reset = () => { cleared = false; t = 0; junk.visible = true; junk.position.copy(base); junk.rotation.set(0, 0, 0); junk.scale.setScalar(1); if (powder) powder.visible = false; if (fire.length) fireStep(fire, 0, 1); led?.('in'); };
+  g.userData.reset = () => { cleared = false; t = 0; fade = 1; junk.visible = true; junk.position.copy(base); junk.rotation.set(0, 0, 0); junk.scale.setScalar(1); if (powder) powder.visible = false; if (coals) coals.visible = true; if (fire.length) fireStep(fire, 0, 1); led?.('in'); };
+  g.userData.dispose = drop;
   return g;
 }
 export function flareModel() {
@@ -392,6 +410,15 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const spawn = (pos, opts = {}) => { try { return G.enemies.spawn('zombie', pos instanceof THREE.Vector3 ? pos : new THREE.Vector3(pos.x, pos.y, pos.z), opts); } catch { return null; } };
   const say = (t, s = 3) => G.hud?.message?.(t, s);
 
+  /** 物件转个向（见 faceYaw）：背靠墙、或者正面朝开阔的一边。在交互点离地 1 米处往一圈方向打物理射线量能走多远；没有物理（节点测试）就不转 */
+  const _o = new THREE.Vector3(), _d = new THREE.Vector3();
+  function orient(g, site) {
+    const P = G.physics;
+    if (!P?.raycast || !site) return g;
+    _o.set(site.x, (site.y ?? 0) + 1.0, site.z);
+    g.rotation.y = faceYaw((dx, dz) => { const h = P.raycast(_o, _d.set(dx, 0, dz), 4); return h && Number.isFinite(h.dist) ? h.dist : 4; });
+    return g;
+  }
   /** 任务系统每局来要一次 */
   function mission(r = rng) {
     const T = pickTower(r(), forceTower), plan = siegePlan(r, layout, nav, runs, T), pad = plan.pad;
@@ -399,7 +426,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const flight = siegeFlight(pad, padY(), { R: T.R });
     const door = rideLocalToWorld(pad, 0, RIDE_SPECS.helicopter.doorOut);
     const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: st.kind === 'tool' ? 'item' : 'relay', site: st.site, locked: i > 0,
-      model: () => (st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel()) }));
+      model: () => orient(st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel(), st.site) }));
     const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan,
       extraction: { id: 'heli', label: '直升机', where: T.roofName, floor: T.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
@@ -440,7 +467,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     try { if (G.rifle) { G.rifle.ammo = 0; G.rifle.reserve = 0; } G.weapon?.select?.('pistol'); } catch { /* 步枪的弹药改不了就算了 */ }
   }
   function reset() {
-    for (const b of blocks.splice(0)) b.removeFromParent();
+    for (const b of blocks.splice(0)) { b.userData.dispose?.(); b.removeFromParent(); }
     for (const b of balconies.splice(0)) b.g.removeFromParent();
     for (const a of acids.splice(0)) a.dispose();
     pacing.reset();
@@ -723,7 +750,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     mission, reset, state: S, addNoise, horde, pacing, spawnSpecial, spawnBrute, supplies,
     get plan() { return S.plan; },
     update(dt) {
-      for (const b of blocks) b.userData.update?.(dt);
+      for (const b of blocks) b.userData.update?.(dt, G);
       if (enabled && S.loadout && director.state.mission === S.mission && (G.game?.state === 'playing' || G.game?.state === 'intro')) loadout();
       if (enabled && S.kit && G.game?.state === 'playing') { supplies?.restore?.(S.kit); S.kit = null; }
       // 步枪弹药也照存档时的来（原游戏重置时给的是满的；至少留两个弹匣，不至于回来就没子弹）

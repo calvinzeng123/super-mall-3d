@@ -33,6 +33,39 @@ export const BLACKOUT = Object.freeze({
   flicker: Object.freeze({ every: [7, 19], dip: 0.45, time: 0.5 }),
 });
 
+/**
+ * 手电照到玻璃、亮面百叶上，镜面高光是一个很小、很亮的点（光滑表面把整支手电的光反回镜头），亮度远超泛光阈值，
+ * 被泛光放大成屏幕正中一个大白圆，看着像一盏灯，不像手电的反光。这里把「挂了光罩的聚光灯」（只有手电挂光罩）的镜面项软压一下：
+ * d / (1 + d / cap)——小的高光（墙、皮肤、血）几乎不变，大的压到 cap 附近。改的是 three 的公共着色器片段，但只在
+ * NUM_SPOT_LIGHT_MAPS > 0 时生效：漫游模式、零点突围里没有挂光罩的聚光灯，编出来的着色器跟原来一样。
+ * 返回是否打上了（three 换版本、片段对不上就不打，什么都不变）。
+ */
+export const TORCH_SPEC_CAP = 0.85;
+export function patchTorchSpecular(chunks = THREE.ShaderChunk, cap = TORCH_SPEC_CAP) {
+  const key = 'lights_fragment_begin', src = chunks?.[key];
+  if (typeof src !== 'string') return false;
+  if (src.includes('siegeTorchSpec')) return true;
+  const a = src.indexOf('#if ( NUM_SPOT_LIGHTS > 0 )'), b = a >= 0 ? src.indexOf('#pragma unroll_loop_end', a) : -1;
+  const call = 'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+  const decl = 'bool inSpotLightMap;';
+  if (a < 0 || b < 0) return false;
+  const block = src.slice(a, b), i = block.indexOf(call), j = block.indexOf(decl);
+  if (i < 0 || j < 0) return false;
+  const c = cap.toFixed(3);
+  const wrapped = `#if NUM_SPOT_LIGHT_MAPS > 0
+		siegeTorchSpec = reflectedLight.directSpecular;
+		${call}
+		siegeTorchSpec = reflectedLight.directSpecular - siegeTorchSpec;
+		reflectedLight.directSpecular += siegeTorchSpec / ( 1.0 + siegeTorchSpec / ${c} ) - siegeTorchSpec;
+		#else
+		${call}
+		#endif`;
+  const out = block.slice(0, j) + decl + '\n\tvec3 siegeTorchSpec;' + block.slice(j + decl.length, i) + wrapped + block.slice(i + call.length);
+  chunks[key] = src.slice(0, a) + out + src.slice(b);
+  return true;
+}
+patchTorchSpecular();
+
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { buildNav, landAt, supported } from '../src/layout/nav.js';
+import { pointInPoly } from '../src/layout/geom.js';
 import { findPath } from '../src/fps/pathfinding.js';
 import { stairRuns } from '../src/jimao/stairs.js';
 import { siegePlan, TOWERS } from '../src/jimao/siege.js';
@@ -69,7 +70,7 @@ test('没有 document（node）：不建东西，update / dispose 都不出错',
   assert.equal(d.mesh, null); assert.equal(d.ready, false);
   // 画图集要画布：拿一个什么都不做的假上下文也能一格一格走完，不碰 document
   const calls = new Proxy({}, { get: (t, k) => (k === 'canvas' ? null : k === 'measureText' ? () => ({ width: 10 }) : k === 'createRadialGradient' || k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {}), set: () => true });
-  const names = [...paintAtlas(calls, 256, 1)];
+  const names = [...paintAtlas(calls, 256, 1)].filter(Boolean);
   assert.equal(names.length, Object.keys(ATLAS_CELLS).length);
 });
 
@@ -83,7 +84,7 @@ function onTread([x, y, z]) {
     const dx = f.top.x - f.bottom.x, dz = f.top.z - f.bottom.z, L2 = Math.hypot(dx, dz), u = ((x - f.bottom.x) * dx + (z - f.bottom.z) * dz) / L2, v = Math.abs((x - f.bottom.x) * dz - (z - f.bottom.z) * dx) / L2;
     if (u < 0 || u > L2 || v > f.width / 2) return false;
     const i = Math.min(f.steps - 1, Math.floor((u / L2) * f.steps)), top = f.bottom.y + (f.top.y - f.bottom.y) * (i + 1) / f.steps;
-    return Math.abs(top + ROUTE_DRESS.floorLift - y) < 0.01;
+    return Math.abs(top + ROUTE_DRESS.treadLift - y) < 0.01;
   });
 }
 function dress(tower, seed, density = 1) {
@@ -122,7 +123,7 @@ test('落点：地面贴花平放在楼面上（不浮、不在洞口）、不�
         const st = landAt(nav, it.p[0], it.p[2], it.p[1] + 0.3);
         // 踏步上的血滴：导航里梯段是一道斜坡，踏步面比斜坡高出不到一级
         if (it.cell === 'drops' && onTread(it.p)) continue;
-        assert.ok(st && Math.abs(st.y + ROUTE_DRESS.floorLift - it.p[1]) < 0.02, `${it.cell} @ ${it.p.map((v) => v.toFixed(2))} 在楼面上`);
+        assert.ok(st && it.p[1] - st.y > 0.02 && it.p[1] - st.y < 0.065, `${it.cell} @ ${it.p.map((v) => v.toFixed(2))} 在楼面上（面层之上一点）`);
         for (const g of plan.gates) if (Math.abs(g.model.y - st.y) < 0.5 && it.cell !== 'drops') assert.ok(Math.hypot(g.model.x - it.p[0], g.model.z - it.p[2]) > 1.0, `${it.cell} 没压在 ${g.type} 上`);
       } else if (Math.abs(it.n[1]) < 1e-6) { // 墙面
         if (it.cell === 'tape') continue;
@@ -130,7 +131,13 @@ test('落点：地面贴花平放在楼面上（不浮、不在洞口）、不�
         if (it.until >= 0) { const g = plan.gates.find((q) => q.stage === it.until); assert.ok(g && Math.hypot(g.model.x - it.p[0], g.model.z - it.p[2]) < 1, `${it.cell} 在门扇上`); continue; }
         // 贴花前面那块楼面：贴花中心以下最近的一层（户内的东西贴得低，不能按 1.5 米高去猜）
         const F = [...nav.floors.values()].filter((f) => f.y <= it.p[1] && it.p[1] - f.y < 2.6 && supported(f, it.p[0] + it.n[0] * 0.3, it.p[2] + it.n[2] * 0.3)).sort((a, b) => b.y - a.y)[0];
-        assert.ok(F, `${it.cell} 前面是能走的楼面`);
+        // 梯段边上的墙：前面是梯段（导航里的斜坡），不是楼面
+        // 楼梯连接（一按就上下楼）的梯段不在导航里：落在楼梯间框里也算
+        if (!F) {
+          const fx = it.p[0] + it.n[0] * 0.45, fz = it.p[2] + it.n[2] * 0.45, st = landAt(nav, fx, fz, it.p[1] + 1);
+          const inCore = L.stairs.some((s) => s.poly?.length && pointInPoly([fx, fz], s.poly));
+          assert.ok(inCore || (st && st.slope && it.p[1] - st.y < 2.4 && it.p[1] - st.y > -1.6), `${it.cell} 前面是能走的楼面或梯段`); continue;
+        }
         const top = it.p[1] + Math.abs(it.u[1]) * it.h / 2 - F.y;
         assert.ok(top < 2.45, `${it.cell} 上沿 ${top.toFixed(2)} 米没碰天花板`);
         assert.ok(it.p[1] - F.y - it.h / 2 > 0.05 || it.cell === 'scorch', `${it.cell} 下沿在地面以上`);

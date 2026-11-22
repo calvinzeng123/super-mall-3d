@@ -163,3 +163,21 @@ test('内存档：省内存档不挂光罩（光锥边缘改软），其余档 1
     b.dispose();
   } finally { configureMemory(keep === 'full' ? 'ultra' : keep === 'compact' ? 'low' : 'balanced', { mobile: keep !== 'full', lost: 0 }); }
 });
+
+test('手电在玻璃、亮面上的镜面高光软压一下：只改挂了光罩的聚光灯那一段，重复打补丁不叠加，片段对不上就什么都不动', async () => {
+  const { patchTorchSpecular, TORCH_SPEC_CAP } = await import('../src/jimao/blackout.js');
+  const src = THREE.ShaderChunk.lights_fragment_begin;
+  assert.ok(src.includes('siegeTorchSpec'), '导入 blackout.js 时就打上了');
+  const spot = src.slice(src.indexOf('#if ( NUM_SPOT_LIGHTS > 0 )'), src.indexOf('#pragma unroll_loop_end', src.indexOf('#if ( NUM_SPOT_LIGHTS > 0 )')));
+  assert.ok(spot.includes('#if NUM_SPOT_LIGHT_MAPS > 0') && spot.includes('siegeTorchSpec / ( 1.0 + siegeTorchSpec /'), '压在聚光灯循环里、只在有光罩时生效');
+  assert.equal(src.split('vec3 siegeTorchSpec;').length - 1, 1, '变量在循环外声明一次（循环会被展开，声明在里面会重复定义）');
+  const pointPart = src.slice(0, src.indexOf('#if ( NUM_SPOT_LIGHTS > 0 )'));
+  assert.ok(!pointPart.includes('siegeTorchSpec'), '点光、平行光不动');
+  const fake = { lights_fragment_begin: src };
+  assert.equal(patchTorchSpecular(fake), true); assert.equal(fake.lights_fragment_begin, src, '已经打过：不再改');
+  const other = { lights_fragment_begin: '// 别的版本，对不上' };
+  assert.equal(patchTorchSpecular(other), false); assert.equal(other.lights_fragment_begin, '// 别的版本，对不上');
+  // 压法：d / (1 + d / cap)，小的几乎不变，大的不超过 cap
+  const soft = (d) => d / (1 + d / TORCH_SPEC_CAP);
+  assert.ok(soft(0.05) > 0.047 && soft(50) < TORCH_SPEC_CAP && soft(3) < soft(50));
+});

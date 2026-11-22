@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { ATLAS, atlasRect, atlasSize, nosingY, STAIR, flameLayout, propStats, propMats, fireStep, flameMaterial, Kit, SHUTTER, DOOR } from '../src/jimao/siege-props.js';
+import { ATLAS, atlasRect, atlasSize, nosingY, STAIR, flameLayout, propStats, propMats, fireStep, flameMaterial, Kit, SHUTTER, DOOR, FIRE, faceYaw, propTop, softSlab, switchLever } from '../src/jimao/siege-props.js';
 import { lockerModel, switchModel, toolModel, gateModel, gateBlock, flareModel, GATES } from '../src/jimao/siege.js';
 import { MEMORY_PROFILES } from '../src/render/device.js';
 
@@ -118,4 +118,78 @@ test('火苗卡片大致横着摆（不顺着梯段斜穿踏步）；火、烟�
   const fa = flareModel(), fb = flareModel(), lit = (g) => g.children.find((c) => c.userData.cutShow);
   const ga = []; lit(fa).traverse((o) => o.isMesh && ga.push(o.geometry)); const gb = []; lit(fb).traverse((o) => o.isMesh && gb.push(o.geometry));
   assert.deepEqual(ga, gb, '信号弹点着以后的火苗、烟、红光几何体共用');
+});
+
+/** 物件里不透明、看得见的网格的所有三角形（物件自己的坐标系） */
+function solidTris(g) {
+  g.updateMatrixWorld(true);
+  const shown = (o) => { for (let p = o; p && p !== g.parent; p = p.parent) if (p.visible === false) return false; return true; };
+  const out = [];
+  g.traverse((o) => {
+    if (!o.isMesh || o.userData.beacon || o.material?.isShaderMaterial || o.material?.transparent || !shown(o)) return;
+    const P = o.geometry.attributes.position, I = o.geometry.index, n = I ? I.count : P.count;
+    const v = (k) => new THREE.Vector3().fromBufferAttribute(P, I ? I.getX(k) : k).applyMatrix4(o.matrixWorld);
+    for (let k = 0; k < n; k += 3) out.push(new THREE.Triangle(v(k), v(k + 1), v(k + 2)));
+  });
+  return out;
+}
+test('目标光柱不穿过物件：光柱那一截（芯 6 厘米宽）跟物件的任何一个三角形都不相交，而且从物件顶上不远处起', () => {
+  const all = { 武器柜: lockerModel(), 配电柜: switchModel(), 信号弹: flareModel(), ...Object.fromEntries(['撬棍', '保险丝', '灭火器', '门禁卡'].map((t) => [t, toolModel(t)])), ...Object.fromEntries(Object.keys(GATES).map((t) => [`${t} 交互点`, gateModel(t)])) };
+  for (const [name, g] of Object.entries(all)) {
+    let b = null; g.traverse((o) => { if (o.userData.beacon) b = o; });
+    assert.ok(b, `${name} 有光柱`); assert.equal(b.material.blending, THREE.AdditiveBlending, `${name}：光柱是加色的光，不是实心棍子`);
+    const y0 = b.position.y, y1 = y0 + b.scale.y, box = new THREE.Box3(new THREE.Vector3(b.position.x - 0.03, y0, b.position.z - 0.03), new THREE.Vector3(b.position.x + 0.03, y1, b.position.z + 0.03));
+    const hit = solidTris(g).find((t) => box.intersectsTriangle(t));
+    assert.ok(!hit, `${name}：光柱 ${y0.toFixed(2)}–${y1.toFixed(2)} 米穿过了物件`);
+    assert.ok(y1 - y0 >= 0.69 && y1 >= 2.3, `${name}：光柱 ${y0.toFixed(2)}–${y1.toFixed(2)} 米，太短`);
+    const top = Math.max(propTop(g), propTop(g, 0.3)); assert.ok(y0 - 0.1 <= top + 1e-6, `${name}：光柱离物件顶（${top.toFixed(2)}）太远，起在 ${y0.toFixed(2)}`);
+  }
+  // 桌上的工具：光柱从工具上面起（以前从离地 0.2 米起，正好穿过桌面和门禁卡）
+  let b = null; toolModel('门禁卡').traverse((o) => { if (o.userData.beacon) b = o; }); assert.ok(b.position.y > 0.72, `门禁卡的光柱起在 ${b.position.y.toFixed(2)}`);
+});
+
+test('物件朝向：近处有墙就背靠墙；四面空就正面朝最开阔的一边；量不出来不转', () => {
+  const dir = (yaw) => [Math.sin(yaw), Math.cos(yaw)];
+  // 墙在 -x 方向 0.6 米：正面（本地 +z）转到朝 +x
+  let y = faceYaw((dx) => (dx < -0.7 ? 0.6 / -dx : 4)); let [fx, fz] = dir(y); assert.ok(fx > 0.95 && Math.abs(fz) < 0.3, `朝 ${fx.toFixed(2)}, ${fz.toFixed(2)}`);
+  // 四面都离墙 2 米以上，+z 方向一条 4 米长的走廊：朝 +z
+  y = faceYaw((dx, dz) => (dz > 0.9 ? 4 : 2)); [fx, fz] = dir(y); assert.ok(fz > 0.9, `朝 ${fx.toFixed(2)}, ${fz.toFixed(2)}`);
+  assert.equal(faceYaw(() => 3), 0, '四面一样：不转');
+  assert.equal(faceYaw(() => NaN), 0, '量不出来：不转');
+});
+
+test('着火：人走近时从灯池借一盏灯照亮四周（暖色、随火苗闪），走远了、火灭了、关卡拆掉时都还回去', () => {
+  let lent = 0; const lights = [];
+  const pool = { acquire() { lent++; const light = new THREE.PointLight(0xffffff, 0, 12, 2); lights.push(light); return { light, release() { lent--; light.intensity = 0; } }; } };
+  const G = { render: { lightPool: pool }, player: { pos: new THREE.Vector3(0, 0, -3) }, blackout: { level: 1, gain: 0.6 } };
+  const root = new THREE.Group(), fire = gateBlock('fire'); root.add(fire);
+  fire.userData.update(1 / 30, G); assert.equal(lent, 1, '人在 3 米外：借了一盏');
+  const L = lights[0]; assert.ok(L.intensity > 0.5 * FIRE.light.intensity && L.intensity < 1.3 * FIRE.light.intensity, `亮度 ${L.intensity}`);
+  assert.ok(L.color.r > L.color.b * 3, '暖色'); assert.ok(L.position.y > 0.5 && L.position.y < 2, `灯在火堆上方 ${L.position.y.toFixed(2)}`);
+  const seen = new Set(); for (let i = 0; i < 10; i++) { fire.userData.update(1 / 30, G); seen.add(L.intensity.toFixed(3)); } assert.ok(seen.size > 3, '一闪一闪');
+  const smoke = fire.children[0].children.find((c) => c.name === 'smoke-ceiling'); assert.ok(smoke, '顶上积了一层烟'); assert.equal(smoke.material.uniforms.uDay.value, 0, '停电：烟不是灰白的');
+  G.player.pos.set(40, 0, 0); fire.userData.update(1 / 30, G); assert.equal(lent, 0, '走远了：还回去');
+  G.player.pos.set(0, 0, -2); fire.userData.update(1 / 30, G); assert.equal(lent, 1);
+  fire.userData.clear(); for (let i = 0; i < 60; i++) fire.userData.update(1 / 30, G); assert.equal(lent, 0, '火灭了：还回去');
+  fire.userData.reset(); fire.userData.update(1 / 30, G); assert.equal(lent, 1, '重来：火又亮');
+  fire.userData.dispose(); assert.equal(lent, 0, '关卡拆掉：还回去');
+  const lone = gateBlock('fire'); root.add(lone); lone.userData.update(1 / 30, { render: {}, player: G.player }); lone.userData.update(1 / 30); assert.equal(lent, 0, '没有灯池：火照样烧、不报错');
+});
+
+test('软垫（床垫）：圆角、往下弯，顶点和法线都是有限数、法线是单位长；不弯的时候也不出 NaN', () => {
+  for (const geo of [softSlab(0.8, 0.17, 1.9, { r: 0.06, bendAt: -0.45, R: 0.28, sag: 0.03 }), softSlab(0.5, 0.13, 0.32, { r: 0.025, seg: [4, 2, 4] })]) {
+    const P = geo.attributes.position, N = geo.attributes.normal, v = new THREE.Vector3();
+    for (let i = 0; i < P.count; i++) { assert.ok(Number.isFinite(P.getX(i) + P.getY(i) + P.getZ(i))); v.fromBufferAttribute(N, i); assert.ok(Math.abs(v.length() - 1) < 1e-3); }
+  }
+  const bent = softSlab(0.8, 0.17, 1.9, { bendAt: -0.45, R: 0.28 }); bent.computeBoundingBox();
+  assert.ok(bent.boundingBox.min.y < -0.3, `弯下去的那一截垂到 ${bent.boundingBox.min.y.toFixed(2)}`);
+});
+
+test('配电柜的闸刀：分闸、合闸两个状态的红握把都在柜门外面（以前转反了，整根扎进柜子里）', () => {
+  for (const up of [false, true]) {
+    const lev = switchLever(up); lev.updateMatrixWorld(true);
+    const box = new THREE.Box3(); lev.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
+    assert.ok(box.min.z > 0.226, `${up ? '合闸' : '分闸'}：最里到 z = ${box.min.z.toFixed(3)}（柜门在 0.226）`);
+    const mid = (box.min.y + box.max.y) / 2; assert.ok(up ? box.max.y > 1.05 : box.min.y < 0.67, `${up ? '朝上' : '朝下'}：${box.min.y.toFixed(2)}–${box.max.y.toFixed(2)}，中 ${mid.toFixed(2)}`);
+  }
 });
