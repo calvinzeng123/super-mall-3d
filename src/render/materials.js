@@ -1,7 +1,7 @@
 // 共享材质库。室内材质在夜间按自身颜色自发光（模拟室内照明），室外材质不发光。
 import * as THREE from 'three';
 import { floorTexture, stepTexture, chevronTexture } from './textures.js';
-import { FLOOR_SURFACES, pbrOptions, metricFloor, detailFor, worldWear, setWorldGrime } from './pbr.js';
+import { FLOOR_SURFACES, pbrOptions, metricFloor, detailFor, worldWear, uvDetail, setWorldGrime } from './pbr.js';
 import { createFacadeMaterials } from './facade-materials.js';
 
 /** 让 emissive 乘以顶点色：夜间每个表面按自身颜色"亮起来" */
@@ -154,7 +154,8 @@ export class MaterialLib {
     for (const [key, id, strength, roughness = 0.86, metalness = 0] of [
       ['wood', 'oak_wood_planks', 0.32], ['stone', 'marble_01', 0.22, 0.48],
       // 混凝土墙、梯段、挡墙：清水混凝土（以前借用地面铺装的贴图，墙上是一格格发棕的地砖）
-      ['concrete', 'formed_concrete', 0.45, 0.88], ['brick', 'brick_wall_09', 0.55],
+      // 法线 0.35：模板缝的凹凸再深就像木挂板（墙上的板缝深浅在 pbr.js 的 uvDetail 里也压了一半）
+      ['concrete', 'formed_concrete', 0.35, 0.88], ['brick', 'brick_wall_09', 0.55],
       // 室内墙面：抹灰、木格栅、洞石墙板、拉丝铜饰面（CC0 扫描贴图只有颜色和法线，粗糙度是这里的数）
       ['plaster', 'painted_plaster', 0.35, 0.86], ['slat', 'timber_slats', 0.7, 0.7],
       ['travertine', 'travertine_cladding', 0.5, 0.62], ['bronze', 'brushed_metal', 0.3, 0.38, 0.7],
@@ -165,8 +166,8 @@ export class MaterialLib {
         ...(asset ? pbrOptions(asset, strength) : {}) }, 0.14);
       this.base[key].name = `CC0 ${key}`;
     }
-    // 楼梯间的清水混凝土、抹灰墙（自带 UV 贴图）：停电时也一起变脏、变旧
-    for (const key of ['concrete', 'plaster']) worldWear(this.base[key]);
+    // 楼梯间的清水混凝土、抹灰墙、踏步（自带 UV 贴图）：大块深浅、补漆、踏步的水泥纹理、模板块错开，停电时也一起变脏、变旧
+    for (const key of ['concrete', 'plaster']) uvDetail(this.base[key], surfaces, key);
     for (const [key, roughness] of Object.entries(HDR_FINISH.base)) this.finish(this.base[key], roughness);
     for (const key of ['ext', 'extSatin', 'extMetal', 'foliage', 'glassTint', 'water', 'mirror']) this.outdoor(this.base[key], SKY_GAIN[key]);
     // 外立面材质（地铁站厅的两种墙面虽然也在那张表里，但在地下，不反射天空）

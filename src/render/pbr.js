@@ -66,14 +66,31 @@ export const FLOOR_SURFACES = {
  */
 export const DETAIL_SURFACES = Object.freeze({
   // normal：法线细节的深浅（贴图有法线、档位载入了法线才有）；patch：大块深浅（补过的漆、晒褪的一片）；
-  // sheen：大块的粗糙度起伏（手电扫过去，有的地方哑、有的地方泛一点光）
-  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.32, patch: 0.07, sheen: 0.2 },
-  ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.08, sheen: 0.12 },
-  // 吊顶板、清水混凝土的模板缝是规则的格子：转个角度再取一次会出斜缝，不做防重复（antiTile: false）
-  ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.05, sheen: 0.1, antiTile: false },
-  garageSoffit: { id: 'formed_concrete', strength: 1, meters: 2.4, normal: 0.6, patch: 0.08, sheen: 0.12, antiTile: false },
+  // sheen：大块的粗糙度起伏（±sheen：应急灯、手电扫过去，有的地方哑、有的地方泛一点光）；
+  // repaint：补漆的方块（硬边、略冷或略暖几个百分点——3–8 米外平涂的墙就靠它和 patch 读出「刷过好几遍」）；
+  // broad：低频法线（同一张法线贴图放大约 3.7 倍再取一次：抹刀的大起伏，5 米外 mip 以后细纹没了它还在）。电脑档才有。
+  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.32, patch: 0.14, sheen: 0.25, repaint: 1, broad: 0.5 },
+  ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.1, sheen: 0.16, broad: 0.35 },
+  // 吊顶板、清水混凝土的模板缝是规则的格子：转个角度再取一次会出斜缝，不做防重复（antiTile: false）。
+  // panels：贴图一格里有几块板（水渍按整块板来，停在板缝上）
+  ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.06, sheen: 0.12, antiTile: false, panels: 2 },
+  garageSoffit: { id: 'formed_concrete', strength: 1, meters: 2.4, normal: 0.6, patch: 0.1, sheen: 0.16, antiTile: false },
   floorPaint: { id: 'garage_concrete', strength: 0.8, meters: 4, normal: 0.45, patch: 0.06, sheen: 0.22 },
 });
+
+/**
+ * 自带 UV 的面层（materials.js 的 plaster / concrete 批次：楼梯间的墙、踏步、平台、梯段底板，地下室的清水混凝土墙）：
+ * 贴图照旧按批次投的米制 UV 取，这里再叠 uvDetail（见下）。
+ * tread：朝上的面（踏步、平台、楼面）换成水泥地面的纹理（墙上的抹灰 / 木模板纹铺在踏步上是一片平的）；
+ * panel / contrast：清水混凝土墙按 panel 米一块模板错开贴图（板缝、对拉螺栓孔不再在每面墙同一高度连成一线），
+ * 墙上的板缝深浅压到 contrast（原样太深，像刷了漆的木挂板）。
+ */
+export const UV_SURFACES = Object.freeze({
+  plaster: { id: 'painted_plaster', patch: 0.12, sheen: 0.22, repaint: 1, broad: 0.45, tread: 'garage_concrete' },
+  concrete: { id: 'formed_concrete', patch: 0.1, sheen: 0.16, panel: 2.4, contrast: 0.5, tread: 'garage_concrete' },
+});
+/** 踏步、平台上的水泥纹理：铺多大（米）、多深、法线多深 */
+export const TREAD = Object.freeze({ meters: 1.6, strength: 0.6, normal: 0.55 });
 
 export function pbrOptions(asset, normalStrength = 0.35) {
   // 省内存档没有法线、粗糙度贴图（只有颜色）
@@ -122,7 +139,10 @@ const srgbToLinear = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92
 //   · 大块变化：一张程序生成的 256² 低频噪声图（macroNoise），通道分别是 补漆斑块 / 水渍与污斑 / 竖向流痕 / 防重复权重。
 //   · 停电污垢（只在丧尸围城）：materials.js 按供电（power）设 wdGrime。墙根一圈脏（离脚下地面越近越脏）、竖向流痕、
 //     天花上的水渍圈、地面的灰；整体旧一点、黄一点、哑一点。漫游、白天 wdGrime 是 0，画面和以前一样干净。
-// 每像素多取样几次（基线是 1 次颜色）：compact 不做；standard / rich（手机）+2（法线、大块噪声）；full（电脑）+4（颜色、法线各两次、大块噪声）。
+// 每像素多取样几次（基线是 1 次颜色）：compact 不做；standard / rich（手机）+2（法线、大块噪声）；
+// full（电脑）+4（颜色两次、细法线 + 低频法线、大块噪声；贴图有粗糙度时再 +1）。
+// 自带 UV 的楼梯间 / 混凝土面（uvDetail）：手机 +2（大块噪声；朝上的面再取一次水泥颜色），电脑墙面 +2（大块噪声、低频法线）、
+// 朝上的面 +3（大块噪声、水泥颜色和法线）。数一数见 detailFetches()。
 // ---------------------------------------------------------------------------------------------------------
 
 /** 大块噪声图铺多大（米）。256 像素铺 16 米：一格 6 厘米，流痕一条 15 厘米宽左右 */
@@ -324,100 +344,215 @@ export function detailFrame([x, y, z]) {
 }
 
 const f3 = (v) => (+v).toFixed(4);
+const v3 = (a) => `vec3(${a.map(f3).join(', ')})`;
 const ROT = [Math.cos(0.66), Math.sin(0.66)]; // 防重复的第二次取样转过的角度（约 38°）
+/** 低频法线：同一张法线贴图铺大约 3.7 倍（抹灰 2 米一格 → 7.4 米），5 米外细纹 mip 掉了，这层大起伏还在 */
+export const BROAD_SCALE = 0.27;
+
+/** 着色器里的小工具：按格子取一个 0–1 的随机数（格子编号是整数，sin 的精度够用，不闪） */
+const HASH = 'float wdHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }';
+
+/** 投影轴、切线、朝向（朝上 / 朝下 / 墙）：放在 <map_fragment> 前面（清水混凝土按模板块错开贴图要先知道是哪面墙） */
+function facesChunk(v) {
+  return `
+    vec3 wdN = normalize(vDetailNormal);
+    vec3 wdA = abs(wdN);
+    vec2 wdP; vec3 wdT; vec3 wdB; float wdAxis;
+    // 投影的 u 按面朝向翻个号，让 (切线, 副切线, 法线) 在六个面上都是右手系、切线正好是 dP/du：
+    // 不翻的话一半的面（朝 +x、+y、-z）法线贴图的凹凸是反的，手电从一边照过来，坑看着像鼓包
+    if (wdA.y > max(wdA.x, wdA.z)) { float s = wdN.y >= 0.0 ? -1.0 : 1.0; wdP = vec2(vDetailPos.x * s, vDetailPos.z); wdT = vec3(s, 0.0, 0.0); wdB = vec3(0.0, 0.0, 1.0); wdAxis = 0.0; }
+    else if (wdA.x > wdA.z) { float s = wdN.x >= 0.0 ? -1.0 : 1.0; wdP = vec2(vDetailPos.z * s, vDetailPos.y); wdT = vec3(0.0, 0.0, s); wdB = vec3(0.0, 1.0, 0.0); wdAxis = 1.0 + step(0.0, wdN.x); }
+    else { float s = wdN.z >= 0.0 ? 1.0 : -1.0; wdP = vec2(vDetailPos.x * s, vDetailPos.y); wdT = vec3(s, 0.0, 0.0); wdB = vec3(0.0, 1.0, 0.0); wdAxis = 3.0 + step(0.0, wdN.z); }
+    float wdUp = smoothstep(0.6, 0.8, wdN.y), wdDown = smoothstep(0.6, 0.8, -wdN.y), wdWall = 1.0 - wdUp - wdDown;
+    float wdDist = distance(vDetailPos, cameraPosition);${v.panel ? `
+    // 清水混凝土：每 ${v.panel} 米一块模板，各块的贴图上下左右错开——板缝、螺栓孔不再在每面墙的同一高度连成一线；
+    // 错开的地方是一道竖缝，正好是模板块之间的拼缝
+    float wdPn = floor(wdP.x / ${f3(v.panel)} + 0.37) + wdAxis * 37.0;
+    vec2 wdOff = vec2(wdHash(vec2(wdPn, 3.1)), wdHash(vec2(wdPn, 8.7))) * step(0.5, wdWall);` : ''}`;
+}
+
+/** 清水混凝土墙：错开后的 UV 取颜色，墙上的板缝深浅压一压（朝上、朝下的面不动） */
+function panelMapChunk(v) {
+  return `#ifdef USE_MAP
+    vec4 sampledDiffuseColor = texture2D( map, vMapUv + wdOff );
+    sampledDiffuseColor.rgb = mix(${v3(v.meanLin)}, sampledDiffuseColor.rgb, mix(1.0, ${f3(v.contrast)}, step(0.5, wdWall)));
+    diffuseColor *= sampledDiffuseColor;
+  #endif`;
+}
+
+/** 补漆的方块：墙面按 1.7 × 1.15 米分格（各面墙错开），约六分之一的格子里有一块随机大小的补漆——硬边、略冷或略暖、漆面新一点 */
+function repaintChunk(amount) {
+  return `{
+      vec2 wdQ = wdP / vec2(1.7, 1.15) + vec2(wdAxis * 0.37, wdAxis * 0.61);
+      vec2 wdCell = floor(wdQ), wdF = fract(wdQ);
+      float wdR1 = wdHash(wdCell), wdR2 = wdHash(wdCell + 17.3), wdR3 = wdHash(wdCell + 41.9);
+      vec2 wdLo = vec2(0.04 + 0.3 * wdR2, 0.06 + 0.3 * wdR3), wdHi = min(wdLo + vec2(0.35 + 0.55 * wdR3, 0.3 + 0.6 * wdR2), vec2(0.97));
+      vec2 wdIn2 = step(wdLo, wdF) * step(wdF, wdHi);
+      float wdRep = wdIn2.x * wdIn2.y * step(0.84, wdR1) * wdWall * ${f3(amount)};
+      wdMul *= mix(vec3(1.0), wdR2 > 0.5 ? vec3(1.045, 1.025, 0.985) : vec3(0.98, 1.0, 1.035), wdRep);
+      wdRough -= 0.1 * wdRep;
+    }`;
+}
+
+/** 大块深浅：补漆斑块（R）带一点色相（深的一片略暖、浅的一片略冷），粗糙度按另一个通道（A）上下浮动 ±sheen */
+const patchChunk = (v) => `
+    wdMul *= (1.0 + (wdM.r - 0.5) * ${f3(v.patch * 2)}) * mix(vec3(1.0), vec3(0.985, 1.0, 1.02), smoothstep(0.6, 0.95, wdM.r)) * mix(vec3(1.0), vec3(1.02, 1.0, 0.975), 1.0 - smoothstep(0.05, 0.4, wdM.r));
+    wdRough += (wdM.a - 0.5) * ${f3(v.sheen * 2)};`;
+
+/** 吊顶板的水渍：按整块板来（停在板缝上），一块板里一团淡黄褐、边上一圈深一点的水线。平时淡，停电时深 */
+const panelStainChunk = (v) => `{
+      vec2 wdTq = wdUv * ${f3(v.panels)}; vec2 wdTc = floor(wdTq), wdTf = fract(wdTq);
+      vec2 wdSc = vec2(0.3) + 0.4 * vec2(wdHash(wdTc + 9.1), wdHash(wdTc + 5.3));
+      float wdSr = 0.2 + 0.28 * wdHash(wdTc + 12.7);
+      float wdSd = length(wdTf - wdSc) + (wdM.g - 0.5) * 0.32;
+      float wdSin = (1.0 - smoothstep(wdSr - 0.012, wdSr, wdSd)) * step(0.86, wdHash(wdTc + 3.7)) * wdDown;
+      float wdTide = smoothstep(wdSr - 0.055, wdSr - 0.01, wdSd) * wdSin;
+      float wdSk = 0.3 + 0.7 * wdGrime;
+      wdMul *= mix(vec3(1.0), vec3(0.94, 0.9, 0.8), wdSin * wdSk);
+      wdMul *= mix(vec3(1.0), vec3(0.8, 0.71, 0.58), wdTide * wdSk);
+      wdRough -= 0.06 * wdSin;
+    }`;
 
 /**
- * 着色器片段（纯函数，测试直接看）。v：{ map, normal, roughMap, antiTile, wearOnly, strength, inv, gain, ns, patch, sheen }。
- * 返回 { pars, color, rough, normal }：分别插在 <common>、<color_fragment>、<roughnessmap_fragment>、<normal_fragment_maps> 后面。
+ * 停电污垢：墙根一圈脏（离脚下地面 0–0.8 米，高低不齐，带棕灰色——深绿的墙裙、深色地砖上也看得出来），
+ * 墙地交接处最深；竖向流痕（高处浓、往下淡，矮处也有一点）；成片的污斑；天花水渍、整体发灰；
+ * 地面的灰积成一片一片（大块噪声高的地方），常走的地方（大块噪声低）干净些。
  */
-export function worldDetailChunks(v) {
-  const [c, s] = ROT;
-  const pars = ['varying vec3 vDetailPos;', 'varying vec3 vDetailNormal;', 'uniform sampler2D wdMacro;', 'uniform float wdGrime;', 'uniform float wdFloorY;',
-    v.map ? 'uniform sampler2D wdMap;' : '', v.normal ? 'uniform sampler2D wdNormalMap;' : '', v.roughMap ? 'uniform sampler2D wdRoughMap;' : ''].filter(Boolean).join('\n');
-  // 停电污垢：墙根（离脚下地面 0–1.1 米，往下 0.4 米以外——楼下那层的墙——不算）、竖向流痕、成片的污斑；天花的水渍圈；地面的灰
-  const grime = `
+const GRIME = `
     float wdH = vDetailPos.y - wdFloorY;
     // 只算脚下这一层的墙根（往下 0.4 米以外是楼下那层、中庭里看到的下面几层，不算）
     float wdIn = smoothstep(-0.4, -0.05, wdH);
-    // 脏的那一圈高低不齐：拖把水、鞋踢、靠墙堆过东西——高度按大块噪声在 0.12–0.75 米之间起伏，上沿是一团一团的
-    float wdBand = 0.12 + 0.63 * wdM.g * (0.35 + 0.65 * wdM.r);
+    // 脏的那一圈高低不齐：拖把水、鞋踢、靠墙堆过东西——高度按大块噪声在 0.18–0.78 米之间起伏，上沿是一团一团的
+    float wdBand = 0.18 + 0.6 * wdM.g * (0.35 + 0.65 * wdM.r);
     float wdLow = (1.0 - smoothstep(0.0, wdBand, wdH)) * wdIn;
-    float wdHaze = (1.0 - smoothstep(0.0, 1.3, wdH)) * wdIn;
-    // 墙和地面交接的那一线积灰最深（6 厘米内）
-    float wdContact = (1.0 - smoothstep(0.0, 0.06, wdH)) * wdIn;
+    float wdHaze = (1.0 - smoothstep(0.0, 1.4, wdH)) * wdIn;
+    // 墙和地面交接的那一线积灰最深（10 厘米内）
+    float wdContact = (1.0 - smoothstep(0.0, 0.1, wdH)) * wdIn;
     float wdBlot = smoothstep(0.45, 0.95, wdM.g);
-    float wdDirt = wdWall * (wdLow * (0.28 + 0.25 * wdBlot) + wdHaze * 0.1 + wdContact * 0.22
-        + wdM.b * (0.04 + 0.14 * smoothstep(1.0, 2.6, wdH)) + wdBlot * 0.1)
-      + wdDown * (wdStain * 0.16 + wdBlot * 0.1);
-    wdDirt *= wdGrime;
-    // 地面：一层灰（往灰褐色上混，深色地面发灰、浅色地面发暗），成片的地方厚一些
-    wdDust = wdUp * wdGrime * (0.1 + 0.18 * wdBlot + 0.08 * smoothstep(0.5, 0.9, wdM.r));
-    wdMul *= mix(vec3(1.0), vec3(0.96, 0.94, 0.9), wdGrime);
-    wdMul *= 1.0 - min(wdDirt, 0.62);
-    wdRough += wdDirt * 0.45 + wdDust * 0.6 + wdGrime * 0.04;`;
-  const faces = `
-    vec3 wdN = normalize(vDetailNormal);
-    vec3 wdA = abs(wdN);
-    vec2 wdP; vec3 wdT; vec3 wdB;
-    // 投影的 u 按面朝向翻个号，让 (切线, 副切线, 法线) 在六个面上都是右手系、切线正好是 dP/du：
-    // 不翻的话一半的面（朝 +x、+y、-z）法线贴图的凹凸是反的，手电从一边照过来，坑看着像鼓包
-    if (wdA.y > max(wdA.x, wdA.z)) { float s = wdN.y >= 0.0 ? -1.0 : 1.0; wdP = vec2(vDetailPos.x * s, vDetailPos.z); wdT = vec3(s, 0.0, 0.0); wdB = vec3(0.0, 0.0, 1.0); }
-    else if (wdA.x > wdA.z) { float s = wdN.x >= 0.0 ? -1.0 : 1.0; wdP = vec2(vDetailPos.z * s, vDetailPos.y); wdT = vec3(0.0, 0.0, s); wdB = vec3(0.0, 1.0, 0.0); }
-    else { float s = wdN.z >= 0.0 ? 1.0 : -1.0; wdP = vec2(vDetailPos.x * s, vDetailPos.y); wdT = vec3(s, 0.0, 0.0); wdB = vec3(0.0, 1.0, 0.0); }
-    float wdUp = smoothstep(0.6, 0.8, wdN.y), wdDown = smoothstep(0.6, 0.8, -wdN.y), wdWall = 1.0 - wdUp - wdDown;`;
+    // 流痕：高处的浓（从窗台、管井、楼板缝漏下来），往下淡；矮处留一点（溅上去的泥水）
+    float wdStreak = wdM.b * (0.14 + 0.3 * smoothstep(0.2, 2.0, wdH));
+    wdDirt = wdWall * (wdLow * (0.3 + 0.25 * wdBlot) + wdHaze * 0.12 + wdContact * 0.3 + wdStreak + wdBlot * 0.12)
+      + wdDown * (wdStain * 0.2 + wdBlot * 0.12 + 0.06);
+    wdDirt = min(wdDirt, 0.75) * wdGrime;
+    // 地面的灰：一片一片（R 高的地方），常走的路上（A 低）干净；整片只有薄薄一层
+    float wdDrift = smoothstep(0.5, 0.92, wdM.r) * (0.55 + 0.45 * wdBlot) * smoothstep(0.2, 0.55, wdM.a);
+    wdDust = wdUp * wdGrime * (0.03 + 0.34 * wdDrift + 0.06 * wdBlot);
+    wdMul *= mix(vec3(1.0), vec3(0.93, 0.9, 0.84), wdGrime);
+    wdRough += wdDirt * 0.45 + wdDust * 0.6 + wdGrime * 0.05;`;
+
+/** 最后上色：细纹理 / 大块变化（wdMul），污垢往棕灰色上混（深色面也变色，不只是更黑），地面的灰往灰褐色上混 */
+const APPLY = `
+    vec3 wdCol = diffuseColor.rgb * wdMul;
+    wdCol = mix(wdCol, wdCol * vec3(0.5, 0.44, 0.36) + vec3(0.03, 0.025, 0.018), wdDirt);
+    diffuseColor.rgb = mix(wdCol, vec3(0.3, 0.28, 0.25), wdDust);`;
+
+/**
+ * 着色器片段（纯函数，测试直接看）。三种：
+ *   detail（纯色材质，worldDetail）：v = { map, normal, roughMap, antiTile, broad, strength, inv, gain, ns, patch, sheen, repaint, panels, cavity }；
+ *   wear（自带贴图的楼面、住宅墙，worldWear）：v = { wearOnly: true }；
+ *   uv（楼梯间的抹灰 / 清水混凝土批次，uvDetail）：v = { uv: true, patch, sheen, repaint, broad, tread, treadNormal, gainT, panel, contrast, meanLin }。
+ * 返回 { pars, faces, map, color, rough, normal, normalMap }：pars 插在 <common> 后；faces 插在 <map_fragment> 前（没有就并进 color）；
+ * map 非空时替换 <map_fragment>；color、rough、normal 分别插在 <color_fragment>、<roughnessmap_fragment>、<normal_fragment_maps> 后；
+ * normalMap 为真时 <normal_fragment_maps> 本身也换掉（法线贴图按错开后的 UV 取）。
+ */
+export function worldDetailChunks(v) {
+  const [c, s] = ROT;
+  const pars = ['varying vec3 vDetailPos;', 'varying vec3 vDetailNormal;', 'uniform sampler2D wdMacro;', 'uniform float wdGrime;', 'uniform float wdFloorY;', HASH,
+    v.map ? 'uniform sampler2D wdMap;' : '', v.normal ? 'uniform sampler2D wdNormalMap;' : '', v.roughMap ? 'uniform sampler2D wdRoughMap;' : '',
+    v.tread ? 'uniform sampler2D wdTreadMap;' : '', v.treadNormal ? 'uniform sampler2D wdTreadNormal;' : ''].filter(Boolean).join('\n');
+  const faces = facesChunk(v);
   const macro = `vec4 wdM = texture2D(wdMacro, wdP * ${f3(1 / MACRO_METERS)} + vec2(0.13, 0.41));
     float wdStain = smoothstep(0.83, 0.9, wdM.g) * (1.0 - 0.55 * smoothstep(0.9, 0.98, wdM.g));`;
-  let color;
+  const head = 'float wdRough = 0.0, wdDust = 0.0, wdDirt = 0.0;';
+  let color, normal = '';
   if (v.wearOnly) {
-    // 自带贴图的材质（清水混凝土、抹灰、楼面）：只在停电时叠污垢，平时不多取样（按 uniform 分支，整批像素走同一边）
-    color = `${faces}
-    float wdRough = 0.0, wdDust = 0.0;
+    // 自带贴图的材质（楼面、住宅墙）：只在停电时叠污垢，平时不多取样（按 uniform 分支跳过，整批像素走同一边）
+    color = `
+    ${head}
     vec3 wdMul = vec3(1.0);
     if (wdGrime > 0.001) {
       ${macro}
-      ${grime}
-    }
-    diffuseColor.rgb = mix(diffuseColor.rgb * wdMul, vec3(0.3, 0.28, 0.25), wdDust);`;
-  } else {
-    color = `${faces}
+      ${GRIME}
+    }${APPLY}`;
+  } else if (v.uv) {
+    // 楼梯间的抹灰、清水混凝土（批次投好的米制 UV，贴图在 <map_fragment> 里已经取了）：叠大块变化、补漆、踏步的水泥纹理、低频法线、停电污垢
+    color = `
     ${macro}
-    float wdRough = 0.0, wdDust = 0.0;
+    ${head}
+    vec3 wdMul = vec3(1.0);${patchChunk(v)}
+    ${v.repaint ? repaintChunk(v.repaint) : ''}
+    vec2 wdTn = vec2(0.0), wdNb = vec2(0.0);
+    ${v.tread ? `// 朝上的面（踏步、平台、楼面）：水泥地面的深浅和抹痕（只有朝上的像素取样）
+    if (wdUp > 0.01) {
+      vec2 wdTuv = wdP * ${f3(1 / TREAD.meters)} + vec2(0.21, 0.63);
+      vec3 wdTc = texture2D(wdTreadMap, wdTuv).rgb * ${v3(v.gainT)};
+      wdMul *= mix(vec3(1.0), wdTc, ${f3(TREAD.strength)} * wdUp * (0.75 + 0.5 * wdM.r));
+      wdRough += (0.5 - 0.5 * dot(wdTc, vec3(0.2126, 0.7152, 0.0722))) * 0.3 * wdUp;
+      ${v.treadNormal ? 'wdTn = (texture2D(wdTreadNormal, wdTuv).xy * 2.0 - 1.0) * wdUp;' : ''}
+    }` : ''}
+    ${v.broad ? `#ifdef USE_NORMALMAP
+    // 低频法线：墙上的抹灰按 ${f3(1 / BROAD_SCALE)} 倍再取一次（远处还看得出抹刀的大起伏）
+    if (wdWall > 0.5 && wdDist < 45.0) wdNb = texture2D(normalMap, wdP * ${f3(BROAD_SCALE * v.inv)} + vec2(0.37, 0.71)).xy * 2.0 - 1.0;
+    #endif` : ''}
+    if (wdGrime > 0.001) {
+      ${GRIME}
+    }${APPLY}`;
+    if (v.treadNormal || v.broad) normal = `{
+      vec2 wdXY = wdTn * ${f3(TREAD.normal)} + wdNb * ${f3(v.broad || 0)} * (1.0 - smoothstep(25.0, 45.0, wdDist));
+      vec3 wdTt = normalize(wdT - wdN * dot(wdN, wdT)), wdBt = normalize(wdB - wdN * dot(wdN, wdB));
+      normal = normalize(normal + faceDirection * (viewMatrix * vec4(wdTt * wdXY.x + wdBt * wdXY.y, 0.0)).xyz);
+    }`;
+  } else {
+    color = `
+    ${macro}
+    ${head}
     vec2 wdUv = wdP * ${f3(v.inv)};
     vec3 wdC = texture2D(wdMap, wdUv).rgb;
     ${v.antiTile ? `vec2 wdUv2 = mat2(${f3(c)}, ${f3(s)}, ${f3(-s)}, ${f3(c)}) * wdUv * 0.73 + vec2(0.31, 0.57);
     float wdW = smoothstep(0.4, 0.6, wdM.a);
     wdC = mix(wdC, texture2D(wdMap, wdUv2).rgb, wdW);` : ''}
-    wdC *= vec3(${v.gain.map(f3).join(', ')});
+    wdC *= ${v3(v.gain)};
     float wdLum = dot(wdC, vec3(0.2126, 0.7152, 0.0722));
-    ${v.normal ? `// 法线贴图在这里就取（下面法线那段接着用，不多取样）：抹灰、混凝土的颜色贴图几乎是平的（白漆墙标准差不到 2%），
+    vec2 wdNb = vec2(0.0);
+    ${v.normal ? `// 法线贴图在这里就取（下面法线那段接着用）：抹灰、混凝土的颜色贴图几乎是平的（白漆墙标准差不到 2%），
     // 起伏全在法线里——坡度大的地方（坑边、刮痕、抹刀印）压暗一点、粗一点，手电正对着照也看得出质感
     vec3 wdNm = texture2D(wdNormalMap, wdUv).xyz * 2.0 - 1.0;
-    ${v.antiTile ? `vec3 wdNm2 = texture2D(wdNormalMap, wdUv2).xyz * 2.0 - 1.0;
-    wdNm2.xy = mat2(${f3(c)}, ${f3(-s)}, ${f3(s)}, ${f3(c)}) * wdNm2.xy;
-    wdNm = mix(wdNm, wdNm2, wdW);` : ''}
-    float wdSlope = smoothstep(0.04, 0.4, length(wdNm.xy)) * (1.0 - smoothstep(10.0, 30.0, distance(vDetailPos, cameraPosition)));
+    ${v.broad ? `// 低频法线：同一张法线贴图铺大 ${f3(1 / BROAD_SCALE)} 倍（墙上的大起伏、抹刀的波浪，5 米外还在；也顺带把重复打散）
+    if (wdDist < 45.0) wdNb = texture2D(wdNormalMap, wdUv * ${f3(BROAD_SCALE)} + vec2(0.37, 0.71)).xy * 2.0 - 1.0;` : ''}
+    float wdSlope = smoothstep(0.04, 0.4, length(wdNm.xy)) * (1.0 - smoothstep(10.0, 30.0, wdDist));
     float wdCav = wdSlope * ${f3(v.cavity ?? 0)};` : 'float wdCav = 0.0;'}
     // 细纹理本身的深浅也成片起伏：有的地方抹得平、有的地方糙
-    vec3 wdMul = mix(vec3(1.0), wdC, ${f3(v.strength)} * (0.7 + 0.6 * wdM.r));
-    wdMul *= (1.0 + (wdM.r - 0.5) * ${f3(v.patch * 2)}) * (1.0 - wdCav);
-    // 天花上淡淡的水渍圈（漫游里几乎看不出，停电时深一些）
+    vec3 wdMul = mix(vec3(1.0), wdC, ${f3(v.strength)} * (0.7 + 0.6 * wdM.r));${patchChunk(v)}
+    ${v.repaint ? repaintChunk(v.repaint) : ''}
+    wdMul *= 1.0 - wdCav;
+    ${v.panels ? panelStainChunk(v) : `// 天花上淡淡的水渍圈（漫游里几乎看不出，停电时深一些）
     wdMul *= mix(vec3(1.0), vec3(0.93, 0.88, 0.78), wdStain * wdDown * (0.45 + 0.55 * wdGrime));
-    wdRough += (1.0 - wdLum) * 0.18 + (wdM.r - 0.5) * ${f3(v.sheen * 2)} - wdStain * wdDown * 0.08 + wdCav * 1.5;
+    wdRough -= wdStain * wdDown * 0.08;`}
+    wdRough += (1.0 - wdLum) * 0.18 + wdCav * 1.5;
     ${v.roughMap ? `wdRough += (texture2D(wdRoughMap, wdUv).g - 0.5) * 0.3;` : ''}
     if (wdGrime > 0.001) {
-      ${grime}
-    }
-    diffuseColor.rgb = mix(diffuseColor.rgb * wdMul, vec3(0.3, 0.28, 0.25), wdDust);`;
+      ${GRIME}
+    }${APPLY}`;
+    // 法线：切线、副切线先投到这个面上（斜墙也对）；细纹离相机远了逐渐收掉（远处 mip 之后只剩闪烁），低频的留到 25–45 米
+    if (v.normal) normal = `{
+      float wdNs = ${f3(v.ns)} * (1.0 - smoothstep(14.0, 40.0, wdDist));
+      vec3 wdTt = normalize(wdT - wdN * dot(wdN, wdT)), wdBt = normalize(wdB - wdN * dot(wdN, wdB));
+      vec2 wdXY = wdNm.xy * wdNs + wdNb * ${f3((v.broad || 0) * v.ns)} * (1.0 - smoothstep(25.0, 45.0, wdDist));
+      vec3 wdBump = wdTt * wdXY.x + wdBt * wdXY.y;
+      normal = normalize(normal + faceDirection * (viewMatrix * vec4(wdBump, 0.0)).xyz);
+    }`;
   }
   const rough = `roughnessFactor = clamp(roughnessFactor + wdRough, 0.05, 1.0);`;
-  // 法线：切线、副切线先投到这个面上（斜墙也对），离相机远了逐渐收掉（远处 mip 之后只剩闪烁）
-  const normal = v.normal ? `{
-      float wdNs = ${f3(v.ns)} * (1.0 - smoothstep(14.0, 40.0, distance(vDetailPos, cameraPosition)));
-      vec3 wdTt = normalize(wdT - wdN * dot(wdN, wdT)), wdBt = normalize(wdB - wdN * dot(wdN, wdB));
-      vec3 wdBump = (wdTt * wdNm.x + wdBt * wdNm.y) * wdNs;
-      normal = normalize(normal + faceDirection * (viewMatrix * vec4(wdBump, 0.0)).xyz);
-    }` : '';
-  return { pars, color, rough, normal };
+  return { pars, faces, map: v.panel ? panelMapChunk(v) : '', color, rough, normal, normalMap: !!v.panel };
+}
+
+/** 一个变体每像素多取样几次（朝上的面 / 墙面分开数；不含材质自己原来就取的贴图）。报告和测试用 */
+export function detailFetches(v) {
+  if (!v) return { wall: 0, up: 0 };
+  if (v.wearOnly) return { wall: 0, up: 0, blackout: 1 };
+  if (v.uv) return { wall: 1 + (v.broad ? 1 : 0), up: 1 + (v.tread ? 1 : 0) + (v.treadNormal ? 1 : 0) };
+  const n = (v.antiTile ? 2 : 1) - 1 + 1 + (v.normal ? 1 + (v.broad ? 1 : 0) : 0) + (v.roughMap ? 1 : 0);
+  return { wall: n, up: n };
 }
 
 /** 世界坐标和世界法线传给像素着色器（实例化、批次坐标压缩都已经算进 modelMatrix / instanceMatrix 里） */
@@ -461,11 +596,16 @@ function hookDetail(mat, variant, textures, key) {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vDetailPos;\nvarying vec3 vDetailNormal;')
       .replace('#include <project_vertex>', DETAIL_VERTEX);
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${chunks.pars}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${chunks.color}`)
+    let frag = shader.fragmentShader.replace('#include <common>', `#include <common>\n${chunks.pars}`);
+    // 投影轴、朝向放在 <map_fragment> 前（清水混凝土按模板块错开 UV 取颜色要用）；没有这一段（测试里的假着色器）就并进颜色那段
+    const early = frag.includes('#include <map_fragment>');
+    if (early) frag = frag.replace('#include <map_fragment>', `${chunks.faces}\n${chunks.map || '#include <map_fragment>'}`);
+    // 法线贴图也按错开后的 UV 取（切线框架仍按原 UV 的导数算，错开只是平移，方向不变）
+    const maps = chunks.normalMap ? THREE.ShaderChunk.normal_fragment_maps.replace('texture2D( normalMap, vNormalMapUv )', 'texture2D( normalMap, vNormalMapUv + wdOff )') : '#include <normal_fragment_maps>';
+    shader.fragmentShader = frag
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${early ? '' : chunks.faces}${chunks.color}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${chunks.rough}`)
-      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${chunks.normal}`);
+      .replace('#include <normal_fragment_maps>', `${maps}\n${chunks.normal}`);
     // 这份材质（也可能是克隆）画之前更新脚下地面的高度；材质自己原来的 onBeforeRender 照样调
     if (this && this.onBeforeRender !== detailBeforeRender && !this.userData?.detailBeforeRender) {
       const own = this.onBeforeRender;
@@ -480,17 +620,40 @@ function hookDetail(mat, variant, textures, key) {
 function detailBeforeRender(renderer, scene, camera) { updateFloor(renderer, scene, camera); }
 
 /** 这种材质在当前档位下的变体（哪些贴图、几次取样）。纯函数（mem 可以传进来测）。 */
-export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0] || 2, normal = 0, patch = 0.06, sheen = 0.15, cavity = 0.06, antiTile = true } = {}, mem = MEM) {
+export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0] || 2, normal = 0, patch = 0.06, sheen = 0.15, cavity = 0.06, antiTile = true,
+  repaint = 0, broad = 0, panels = 0 } = {}, mem = MEM) {
   const tier = worldDetailTier(mem);
   if (tier === 'off' || !asset?.maps?.color) return null;
   const mean = asset.mean || [255, 255, 255];
-  const all = mem.pbrMaps === 'all';
+  const all = mem.pbrMaps === 'all', hasNormal = !!(all && normal > 0 && asset.maps.normal);
   return {
-    tier, map: true, strength, inv: 1 / meters, patch, sheen,
+    tier, map: true, strength, inv: 1 / meters, patch, sheen, repaint, panels,
     gain: mean.map((v) => 1 / Math.max(0.05, srgbToLinear(v))),
-    normal: !!(all && normal > 0 && asset.maps.normal), ns: normal, cavity,
+    normal: hasNormal, ns: normal, cavity,
+    // 低频法线多一次取样：只给电脑档（手机档守 +2）
+    broad: hasNormal && tier === 'full' ? broad : 0,
     roughMap: !!(all && tier === 'full' && asset.maps.roughness),
     antiTile: tier === 'full' && antiTile !== false,
+  };
+}
+
+/**
+ * 自带 UV 的面层（UV_SURFACES）在当前档位下的变体。base：材质自己的贴图（painted_plaster / formed_concrete）；
+ * tread：踏步用的水泥贴图。纯函数。
+ */
+export function uvVariant(def, base, tread, mem = MEM) {
+  const tier = worldDetailTier(mem);
+  if (tier === 'off' || !def) return null;
+  const all = mem.pbrMaps === 'all', full = tier === 'full';
+  const mean = base?.mean || [255, 255, 255];
+  return {
+    uv: true, tier, patch: def.patch, sheen: def.sheen, repaint: def.repaint || 0,
+    inv: 1 / (base?.meters?.[0] || 2),
+    broad: full && all && def.broad && base?.maps?.normal ? def.broad : 0,
+    tread: !!tread?.maps?.color, treadNormal: !!(full && all && tread?.maps?.normal),
+    gainT: (tread?.mean || [128, 128, 128]).map((v) => 1 / Math.max(0.05, srgbToLinear(v))),
+    panel: def.panel && base?.maps?.color ? def.panel : 0, contrast: def.contrast ?? 1,
+    meanLin: mean.map(srgbToLinear),
   };
 }
 
@@ -512,7 +675,8 @@ export function worldDetail(mat, asset, opts = {}) {
   const textures = { wdMap: asset.maps.color };
   if (v.normal) textures.wdNormalMap = asset.maps.normal;
   if (v.roughMap) textures.wdRoughMap = asset.maps.roughness;
-  const key = `detail-${asset.id}-${v.strength}-${(1 / v.inv).toFixed(3)}-${v.tier}-${v.normal ? `n${v.ns}` : 'c'}${v.roughMap ? 'r' : ''}${v.antiTile ? 'a' : ''}-${v.patch}-${v.sheen}${v.normal ? `-c${v.cavity}` : ''}`;
+  const key = `detail-${asset.id}-${v.strength}-${(1 / v.inv).toFixed(3)}-${v.tier}-${v.normal ? `n${v.ns}` : 'c'}${v.roughMap ? 'r' : ''}${v.antiTile ? 'a' : ''}`
+    + `${v.broad ? `b${v.broad}` : ''}-${v.patch}-${v.sheen}${v.normal ? `-c${v.cavity}` : ''}${v.repaint ? `-p${v.repaint}` : ''}${v.panels ? `-t${v.panels}` : ''}`;
   hookDetail(mat, v, textures, key);
   mat.userData.detail = asset.id;
   return mat;
@@ -527,6 +691,27 @@ export function worldWear(mat) {
   macroTexture();
   hookDetail(mat, { wearOnly: true }, {}, 'wear');
   mat.userData.wear = true;
+  return mat;
+}
+
+/**
+ * 自带 UV 的面层（materials.js 的 plaster / concrete）：大块深浅和粗糙度、补漆、踏步和平台的水泥纹理、低频法线、
+ * 清水混凝土按模板块错开，再加停电污垢（见 UV_SURFACES）。平时手机 +1–2 次取样、电脑 +2–3 次；省内存档不叠。
+ * kind 是 UV_SURFACES 里的一项，surfaces 是 loadSurfaceTextures 的结果。
+ */
+export function uvDetail(mat, surfaces, kind) {
+  const def = UV_SURFACES[kind];
+  if (!def || !MEM.decor || !mat?.isMeshStandardMaterial || mat.userData?.wear || mat.userData?.detail) return mat;
+  const base = surfaces?.[def.id], tread = surfaces?.[def.tread];
+  const v = uvVariant(def, base, tread);
+  if (!v) return mat;
+  macroTexture();
+  const textures = {};
+  if (v.tread) textures.wdTreadMap = tread.maps.color;
+  if (v.treadNormal) textures.wdTreadNormal = tread.maps.normal;
+  const key = `uv-${kind}-${v.tier}-${v.tread ? 't' : ''}${v.treadNormal ? 'n' : ''}${v.broad ? `b${v.broad}` : ''}${v.panel ? `p${v.panel}-${v.contrast}` : ''}-${v.patch}-${v.sheen}-${v.repaint}`;
+  hookDetail(mat, v, textures, key);
+  mat.userData.wear = true; mat.userData.uvDetail = kind;
   return mat;
 }
 

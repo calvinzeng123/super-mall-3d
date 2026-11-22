@@ -69,7 +69,7 @@ test('着色器补丁：串在前面的补丁后面，各处都插上，缓存�
   for (const k of ['wdMap', 'wdNormalMap', 'wdMacro', 'wdGrime', 'wdFloorY']) assert.ok(k in sh.uniforms, `少了 uniform ${k}`);
   assert.match(sh.vertexShader, /vDetailPos = \(modelMatrix \* detailWorld\)\.xyz/);
   assert.match(sh.vertexShader, /USE_INSTANCING/);
-  assert.match(sh.fragmentShader, /mix\(diffuseColor\.rgb \* wdMul/);
+  assert.match(sh.fragmentShader, /vec3 wdCol = diffuseColor\.rgb \* wdMul/);
   assert.match(sh.fragmentShader, /roughnessFactor = clamp\(roughnessFactor \+ wdRough/);
   assert.match(sh.fragmentShader, /normal = normalize\(normal \+ faceDirection/);
   assert.ok(sh.fragmentShader.indexOf('wdMul') > sh.fragmentShader.indexOf('#include <color_fragment>'));
@@ -234,7 +234,7 @@ test('三向投影的切线：六个面都是右手系（T × B = 面法线）�
     const axis = { x: 0, y: 1, z: 2 }[f.axis];
     assert.equal(c[axis], Math.sign(n[axis]), `法线 ${n}：T×B = ${c}`);
   }
-  const { color } = worldDetailChunks(detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.full));
+  const { faces: color } = worldDetailChunks(detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.full));
   assert.match(color, /wdN\.y >= 0\.0 \? -1\.0 : 1\.0/);
   assert.match(color, /wdN\.x >= 0\.0 \? -1\.0 : 1\.0/);
   assert.match(color, /wdN\.z >= 0\.0 \? 1\.0 : -1\.0/);
