@@ -916,7 +916,9 @@ export function powderSheet() {
   const grp = new THREE.Group(); grp.name = '干粉'; meshes(grp, geos, { shadow: false }); return grp;
 }
 /** 火的配置：烟柱、顶上积的烟层、火光、炭火。灯：借游戏灯池里的一盏（见 siege.js gateBlock），这里只给亮度和位置 */
-export const FIRE = Object.freeze({ light: Object.freeze({ intensity: 1.5, distance: 6.5, color: 0xff7426, y: 0.75, z: 0.1, near: 15 }), ceiling: 2.15 });
+// 火光：原来 1.5 / 6.5 m / 0xff7426，停电里别的光都压得很低，整个楼梯间被染成一片暗红（评审：「像酱紫色的墙」）；
+// 压低、偏黄、照得近一点——火边上暖，回头看墙还是墙的颜色
+export const FIRE = Object.freeze({ light: Object.freeze({ intensity: 0.85, distance: 5.5, color: 0xff9a4c, y: 0.75, z: 0.1, near: 15 }), ceiling: 2.15 });
 /** 火本身（junk 组里：灭火时缩没）：火苗（几朵高的 + 底下一层贴着燃料的矮火）、火星、烟柱、顶上积的一层烟、地上的火光、炭火。返回要推进时间、淡出的材质 */
 export function buildFire(junk) {
   const bed = [[-0.42, -0.25], [-0.12, -0.05], [0.2, 0.0], [0.45, 0.2], [-0.3, 0.35], [0.1, 0.45]].map(([x, z], i) => ({ x, z, w: 0.7, h: 0.38, turn: (i % 2 ? 0.2 : -0.2), seed: 0.13 + i * 0.17 }));
