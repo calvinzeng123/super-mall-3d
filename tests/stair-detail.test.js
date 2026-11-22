@@ -31,6 +31,13 @@ test('做法分组：社区塔楼自己楼层墙内皮 0.1、宿主楼层与公�
   const a6 = stairDetailSpec(A, byId.get('A-6F'), stairsOf(A));
   assert.equal(a6.inset, .2); assert.equal(a6.head, 2.35); assert.ok(!a6.wellGuard);
   assert.ok(Object.values(a6.stairs).every((s) => !s.lobby && s.doors.length === 1));
+  // 公寓：消火栓箱挂在楼梯间门口平台的侧墙上，离门 0.74–1.46 m，在第一跑起步（2 m）之前
+  for (const [id, s] of Object.entries(a6.stairs)) {
+    assert.equal(s.inner?.kind, 'hydrant', id);
+    assert.ok(s.inner.v - s.inner.w / 2 > a6.inset + .3 && s.inner.v + s.inner.w / 2 < 2 - .3, id);
+  }
+  assert.ok(Object.values(t11.stairs).every((s) => !s.inner), '社区塔楼的箱子挂在门外，楼梯间里不再挂');
+  assert.ok(Object.values(b1.stairs).every((s) => !s.inner));
   // 典型楼层共用一组：A 的 2F–19F（3.4 m）一个签名，T1 的 8F–24F 按层高最多三组
   const keysA = new Set(L.levels.filter((l) => l.building === 'A' && l.height === 3.4).map((l) => stairDetailKey(l, stairDetailSpec(A, l, stairsOf(A)))));
   assert.equal(keysA.size, 1);

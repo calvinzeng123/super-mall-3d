@@ -67,7 +67,7 @@ export const FLOOR_SURFACES = {
 export const DETAIL_SURFACES = Object.freeze({
   // normal：法线细节的深浅（贴图有法线、档位载入了法线才有）；patch：大块深浅（补过的漆、晒褪的一片）；
   // sheen：大块的粗糙度起伏（手电扫过去，有的地方哑、有的地方泛一点光）
-  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.55, patch: 0.07, sheen: 0.2 },
+  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.42, patch: 0.07, sheen: 0.2 },
   ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.08, sheen: 0.12 },
   // 吊顶板、清水混凝土的模板缝是规则的格子：转个角度再取一次会出斜缝，不做防重复（antiTile: false）
   ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.05, sheen: 0.1, antiTile: false },
@@ -350,12 +350,20 @@ export function worldDetailChunks(v) {
     wdC = mix(wdC, texture2D(wdMap, wdUv2).rgb, wdW);` : ''}
     wdC *= vec3(${v.gain.map(f3).join(', ')});
     float wdLum = dot(wdC, vec3(0.2126, 0.7152, 0.0722));
+    ${v.normal ? `// 法线贴图在这里就取（下面法线那段接着用，不多取样）：抹灰、混凝土的颜色贴图几乎是平的（白漆墙标准差不到 2%），
+    // 起伏全在法线里——坡度大的地方（坑边、刮痕、抹刀印）压暗一点、粗一点，手电正对着照也看得出质感
+    vec3 wdNm = texture2D(wdNormalMap, wdUv).xyz * 2.0 - 1.0;
+    ${v.antiTile ? `vec3 wdNm2 = texture2D(wdNormalMap, wdUv2).xyz * 2.0 - 1.0;
+    wdNm2.xy = mat2(${f3(c)}, ${f3(-s)}, ${f3(s)}, ${f3(c)}) * wdNm2.xy;
+    wdNm = mix(wdNm, wdNm2, wdW);` : ''}
+    float wdSlope = smoothstep(0.04, 0.4, length(wdNm.xy)) * (1.0 - smoothstep(10.0, 30.0, distance(vDetailPos, cameraPosition)));
+    float wdCav = wdSlope * ${f3(v.cavity ?? 0)};` : 'float wdCav = 0.0;'}
     // 细纹理本身的深浅也成片起伏：有的地方抹得平、有的地方糙
     vec3 wdMul = mix(vec3(1.0), wdC, ${f3(v.strength)} * (0.7 + 0.6 * wdM.r));
-    wdMul *= 1.0 + (wdM.r - 0.5) * ${f3(v.patch * 2)};
+    wdMul *= (1.0 + (wdM.r - 0.5) * ${f3(v.patch * 2)}) * (1.0 - wdCav);
     // 天花上淡淡的水渍圈（漫游里几乎看不出，停电时深一些）
     wdMul *= mix(vec3(1.0), vec3(0.93, 0.88, 0.78), wdStain * wdDown * (0.45 + 0.55 * wdGrime));
-    wdRough += (1.0 - wdLum) * 0.18 + (wdM.r - 0.5) * ${f3(v.sheen * 2)} - wdStain * wdDown * 0.08;
+    wdRough += (1.0 - wdLum) * 0.18 + (wdM.r - 0.5) * ${f3(v.sheen * 2)} - wdStain * wdDown * 0.08 + wdCav * 1.5;
     ${v.roughMap ? `wdRough += (texture2D(wdRoughMap, wdUv).g - 0.5) * 0.3;` : ''}
     if (wdGrime > 0.001) {
       ${grime}
@@ -365,10 +373,6 @@ export function worldDetailChunks(v) {
   const rough = `roughnessFactor = clamp(roughnessFactor + wdRough, 0.05, 1.0);`;
   // 法线：切线、副切线先投到这个面上（斜墙也对），离相机远了逐渐收掉（远处 mip 之后只剩闪烁）
   const normal = v.normal ? `{
-      vec3 wdNm = texture2D(wdNormalMap, wdUv).xyz * 2.0 - 1.0;
-      ${v.antiTile ? `vec3 wdNm2 = texture2D(wdNormalMap, wdUv2).xyz * 2.0 - 1.0;
-      wdNm2.xy = mat2(${f3(c)}, ${f3(-s)}, ${f3(s)}, ${f3(c)}) * wdNm2.xy;
-      wdNm = mix(wdNm, wdNm2, wdW);` : ''}
       float wdNs = ${f3(v.ns)} * (1.0 - smoothstep(14.0, 40.0, distance(vDetailPos, cameraPosition)));
       vec3 wdTt = normalize(wdT - wdN * dot(wdN, wdT)), wdBt = normalize(wdB - wdN * dot(wdN, wdB));
       vec3 wdBump = (wdTt * wdNm.x + wdBt * wdNm.y) * wdNs;
@@ -432,7 +436,7 @@ function hookDetail(mat, variant, textures, key) {
 function detailBeforeRender(renderer, scene, camera) { updateFloor(renderer, scene, camera); }
 
 /** 这种材质在当前档位下的变体（哪些贴图、几次取样）。纯函数（mem 可以传进来测）。 */
-export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0] || 2, normal = 0, patch = 0.06, sheen = 0.15, antiTile = true } = {}, mem = MEM) {
+export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0] || 2, normal = 0, patch = 0.06, sheen = 0.15, cavity = 0.06, antiTile = true } = {}, mem = MEM) {
   const tier = worldDetailTier(mem);
   if (tier === 'off' || !asset?.maps?.color) return null;
   const mean = asset.mean || [255, 255, 255];
@@ -440,7 +444,7 @@ export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0]
   return {
     tier, map: true, strength, inv: 1 / meters, patch, sheen,
     gain: mean.map((v) => 1 / Math.max(0.05, srgbToLinear(v))),
-    normal: !!(all && normal > 0 && asset.maps.normal), ns: normal,
+    normal: !!(all && normal > 0 && asset.maps.normal), ns: normal, cavity,
     roughMap: !!(all && tier === 'full' && asset.maps.roughness),
     antiTile: tier === 'full' && antiTile !== false,
   };
@@ -464,7 +468,7 @@ export function worldDetail(mat, asset, opts = {}) {
   const textures = { wdMap: asset.maps.color };
   if (v.normal) textures.wdNormalMap = asset.maps.normal;
   if (v.roughMap) textures.wdRoughMap = asset.maps.roughness;
-  const key = `detail-${asset.id}-${v.strength}-${(1 / v.inv).toFixed(3)}-${v.tier}-${v.normal ? `n${v.ns}` : 'c'}${v.roughMap ? 'r' : ''}${v.antiTile ? 'a' : ''}-${v.patch}-${v.sheen}`;
+  const key = `detail-${asset.id}-${v.strength}-${(1 / v.inv).toFixed(3)}-${v.tier}-${v.normal ? `n${v.ns}` : 'c'}${v.roughMap ? 'r' : ''}${v.antiTile ? 'a' : ''}-${v.patch}-${v.sheen}${v.normal ? `-c${v.cavity}` : ''}`;
   hookDetail(mat, v, textures, key);
   mat.userData.detail = asset.id;
   return mat;

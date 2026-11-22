@@ -104,14 +104,17 @@ export function stairDetailSpec(building, lv, stairs) {
     const passes = (s.passLevels || []).includes(lv.id) || !(s.serves || [lv.id]).includes(lv.id);
     const brk = passes ? null : stairBreak(s, null, lv.id);
     const doors = passes ? [] : brk ? brk.doors.map((d) => ({ x0: d.x0, x1: d.x1 })) : [{ x0: s.door.x0, x1: s.door.x1 }];
-    let lobby = null;
+    let lobby = null, inner = null;
+    // 酒店 / 公寓的楼梯门外是走廊或住户门面，没有可挂箱子的整片墙：消火栓箱挂在楼梯间里门口平台的侧墙上
+    // （门口平台 2 m 深，第一跑从 2 m 处起步，箱子占 0.74–1.46 m，凸出墙面 4.5 cm，不进梯段也不挡门）。
+    if (!building.community && doors.length === 1 && !brk) inner = { kind: 'hydrant', side: k % 2 ? 'R' : 'L', v: 1.1, w: .72 };
     if (own && doors.length === 1 && rooms.length) {
       const d = doors[0], dir = s.door.side === 'S' ? -1 : 1, z = s.door.z0 - dir * (.2 - inset) - dir * .3;
       const left = d.x0 - (s.rect.x0 + inset), right = (s.rect.x1 - inset) - d.x1, w = .72;
       const x = left >= right ? d.x0 - .16 - w / 2 : d.x1 + .16 + w / 2;
       if (Math.max(left, right) >= w + .3 && inside(x - w / 2, x + w / 2, z)) lobby = { kind: k % 2 ? 'meter' : 'hydrant', x, w };
     }
-    out.stairs[s.id] = { doors, partition: brk ? brk.partition.x0 : null, lobby };
+    out.stairs[s.id] = { doors, partition: brk ? brk.partition.x0 : null, lobby, inner };
   });
   return out;
 }
@@ -161,8 +164,11 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
       const q=p.point(cx,1.05);
       B.get('glowSoft').box(q[0],y+h-.13,q[1],1.2,.055,.3,'#f5ebd6');
       const frontEdge=p.point(0,2);
-      rail(B,{x:p.centers[0]+p.width/2,y:y+1.05,z:frontEdge[1]},
-        {x:p.centers[1]-p.width/2,y:y+1.05,z:frontEdge[1]});
+      // 门口平台临梯井的护栏：和梯段栏杆同一做法（深色方钢立杆 + 木色扶手），不再是另一种绿色的管栏。
+      const ga={x:p.centers[0]+p.width/2,y:y+1.05,z:frontEdge[1]},gb={x:p.centers[1]-p.width/2,y:y+1.05,z:frontEdge[1]};
+      B.get('extMetal').bar(ga,gb,.05,STAIR_PAINT.rail);
+      const gn=Math.max(1,Math.round(Math.abs(gb.x-ga.x)/.2));
+      for(let i=0;i<=gn;i++){const gx=ga.x+(gb.x-ga.x)*i/gn;B.get('extMetal').bar({x:gx,y:y,z:ga.z},{x:gx,y:y+1.03,z:ga.z},.018,STAIR_PAINT.baluster);}
       if(lv.kind==='roof') box(B,'concrete',r,y+h,.18,'#b2bbae');
     }
   }
@@ -187,7 +193,7 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
         B.get('concrete').box(tx,y-.07,z,tw,.14,f.run/f.steps+.006,tread);
         // 踢面盖住踏步板的前脸（踏步前脸比 edgeZ 外凸 3 mm），整级踢面一个颜色。
         vface(B.get('concrete'), tx, y - rise / 2, edgeZ - sz * .0045, tw, rise, -sz, riser);
-        upface(B.get('concrete'), x, y + .002, edgeZ + sz * .045, f.width - .12, .05, STAIR_PAINT.nosing);
+        upface(B.get('concrete'), x, y + .002, edgeZ + sz * .035, f.width - .12, .045, STAIR_PAINT.nosing);
       } else {
         B.get('concrete').box(x,y-.07,z,f.width,.14,f.run/f.steps+.006,STEP);
         B.get('concrete').box(x,y-dy/f.steps/2,edgeZ,f.width,dy/f.steps,.035,STEP);
@@ -342,30 +348,40 @@ function stairDetails(B, building, stairs, detail, flights) {
       }
     }
     // ---- 门外：前室墙上的消火栓箱 / 表箱，嵌墙只凸出 3 cm ----
-    if (d.lobby) lobbyBox(B, d.lobby, Z(vo), -dir);
+    if (d.lobby) { const zf = Z(vo); lobbyBox(B, d.lobby, (u, o) => [d.lobby.x + u, zf - dir * o], true); }
+    // ---- 门口平台侧墙上的消火栓箱（酒店 / 公寓）：盖在墙裙外面（墙裙、腰线、踢脚最外 1.2 cm） ----
+    if (d.inner) {
+      const n = d.inner.side === 'L' ? 1 : -1, wx = (n > 0 ? xl : xr) + n * .014;
+      // u 沿墙朝里（离门越来越远）；箱子把手在离门远的一边。
+      lobbyBox(B, d.inner, (u, o) => [wx + n * o, Z(d.inner.v + u)], false);
+    }
   }
 }
 
-/** 嵌墙箱子：外皮在 zf（墙外皮），面朝 nz（±1）。 */
-function lobbyBox(B, lobby, zf, nz) {
-  const C = B.get('concrete'), M = B.get('extMetal'), { x, w } = lobby, Z = (o) => zf + nz * o;
+/**
+ * 嵌墙箱子。坐标按墙走：u 沿墙（箱子中心 0），o 离墙面往外；at(u, o) 换成模板的 [x, z]，
+ * alongX 表示墙沿 x 走（门所在的墙）还是沿 z 走（楼梯间侧墙）。
+ */
+function lobbyBox(B, lobby, at, alongX) {
+  const C = B.get('concrete'), M = B.get('extMetal'), w = lobby.w;
+  const put = (g, u, y, o, su, sy, so, color) => { const [x, z] = at(u, o); g.box(x, y, z, alongX ? su : so, sy, alongX ? so : su, color); };
   if (lobby.kind === 'hydrant') {
     // 消火栓 + 灭火器组合箱：红色箱门，上格是带玻璃观察窗的消火栓门，下格灭火器门，各一条白色标识条。
-    C.box(x, .9, Z(.015), w, 1.8, .03, STAIR_PAINT.hydrant);
-    M.box(x, 1.24, Z(.032), w - .08, .012, .006, STAIR_PAINT.meterSeam);   // 上下两格的分缝
-    C.box(x + .06, 1.62, Z(.033), w - .3, .38, .006, STAIR_PAINT.hydrantGlass);
-    C.box(x, 1.37, Z(.033), w - .26, .07, .006, STAIR_PAINT.hydrantLabel);
-    C.box(x, .95, Z(.033), w - .3, .06, .006, STAIR_PAINT.hydrantLabel);
-    M.box(x + w / 2 - .07, 1.5, Z(.045), .03, .14, .03, STAIR_PAINT.bracket);  // 把手
-    M.box(x + w / 2 - .07, .7, Z(.045), .03, .12, .03, STAIR_PAINT.bracket);
+    put(C, 0, .9, .015, w, 1.8, .03, STAIR_PAINT.hydrant);
+    put(M, 0, 1.24, .032, w - .08, .012, .006, STAIR_PAINT.meterSeam);   // 上下两格的分缝
+    put(C, .06, 1.62, .033, w - .3, .38, .006, STAIR_PAINT.hydrantGlass);
+    put(C, 0, 1.37, .033, w - .26, .07, .006, STAIR_PAINT.hydrantLabel);
+    put(C, 0, .95, .033, w - .3, .06, .006, STAIR_PAINT.hydrantLabel);
+    put(M, w / 2 - .07, 1.5, .045, .03, .14, .03, STAIR_PAINT.bracket);  // 把手
+    put(M, w / 2 - .07, .7, .045, .03, .12, .03, STAIR_PAINT.bracket);
   } else {
     // 电表箱 + 弱电箱：灰色钢门，上大下小两樘，一圈分缝，门锁和百叶。
     for (const [y, h] of [[1.55, .72], [.82, .58]]) {
-      C.box(x, y, Z(.012), w, h, .024, STAIR_PAINT.meter);
-      M.box(x, y + h / 2 - .012, Z(.026), w, .01, .006, STAIR_PAINT.meterSeam);
-      M.box(x, y - h / 2 + .012, Z(.026), w, .01, .006, STAIR_PAINT.meterSeam);
-      M.box(x + w / 2 - .08, y, Z(.03), .025, .07, .02, STAIR_PAINT.bracket);
-      for (let k = 0; k < 4; k++) M.box(x - .1, y - h / 2 + .1 + k * .035, Z(.026), w * .4, .012, .006, STAIR_PAINT.meterSeam);
+      put(C, 0, y, .012, w, h, .024, STAIR_PAINT.meter);
+      put(M, 0, y + h / 2 - .012, .026, w, .01, .006, STAIR_PAINT.meterSeam);
+      put(M, 0, y - h / 2 + .012, .026, w, .01, .006, STAIR_PAINT.meterSeam);
+      put(M, w / 2 - .08, y, .03, .025, .07, .02, STAIR_PAINT.bracket);
+      for (let k = 0; k < 4; k++) put(M, -.1, y - h / 2 + .1 + k * .035, .026, w * .4, .012, .006, STAIR_PAINT.meterSeam);
     }
   }
 }

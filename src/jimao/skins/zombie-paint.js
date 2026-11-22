@@ -14,6 +14,12 @@
 //   - 抓痕、破口画成了闭合的圈和钩（像字），现在是张开的裂口：里面暗、透出皮肉，一边是翻起的浅色毛边，一边压出阴影；
 //   - 嘴上一块口红似的红、脸上几道胡须似的线、一圈熊猫眼——现在嘴唇发暗发紫干裂，嘴血从唇线往下淌，
 //     血管是太阳穴、下颌、脖子上分叉的细青纹，眼窝是往颧骨散开的软阴影。
+// 第二轮又改的：
+//   - 血斑外面加一圈半透的淡渍（血水顺着纱走了一截），浸透的那片里有厚有薄，边按三档噪声碎开——不再是贴上去的一块平涂；
+//   - 脖子咬伤往下洇成一大片、左右扭着走，不是一根竖杠；裤腰上只在上面真淌到的地方积（以前会单独冒出两截横杠，整块成倒 T）；
+//   - 细流少而长、顺着褶子拐、粗细起伏；喷溅、溅点是转过角度又互相切掉的细点子（单张噪声取高阈值是一个个方块）；
+//   - 抓痕连皮划开：口子里是暗红的肉、周围的布吸了血；正面的口子、细流不再画到转过去的侧面上（以前会拉成一个方框）；
+//   - 嘴边那一片的噪声跟着细，下巴上不再挂一个方块；特殊感染者的血在皮肤上也往暗褐里收。
 // 颜色图每种外观一张；法线和粗糙度每个模型一张、各外观共用（只放布料、皮肤、头发这些「底子」）。
 // 每种外观自己的湿血、伤口、涎水、油泥的光泽写在颜色图的透明通道里（见 encodeWet），zombie-skin.js 的着色器读出来
 // 改粗糙度、把布纹法线抹平——伤口各外观不同，共用的粗糙度图装不下，又不想多做十几张图。
@@ -264,11 +270,11 @@ export function planLook(body, frame, face, seed, look, key = 0, part = null, ro
   const and = (...fs) => (k) => fs.every((f) => f(k));
   const wounds = [], scale = Math.max(0.6, look.blood || 1);
   // 一处伤口：at 落点，len 往下淌多远，spread 越往下越宽多少，open 皮肉翻开多大，wet 源头多湿
-  const wound = (p, r, len, spread, open, wet, slot = 0.013) => wounds.push(mkWound(p.x, p.y, p.z, p.nx, p.nz, r * (0.8 + rnd() * 0.45), len * (0.75 + rnd() * 0.5) * Math.sqrt(scale), spread * (0.8 + rnd() * 0.4), open, wet, (rnd() - 0.5) * 2.4, (rnd() * 1e6) | 0, slot, 0.5 + rnd() * 0.2, 0.0042, len * (0.3 + rnd() * 0.4), false));
+  const wound = (p, r, len, spread, open, wet, slot = 0.013) => wounds.push(mkWound(p.x, p.y, p.z, p.nx, p.nz, r * (0.8 + rnd() * 0.45), len * (0.75 + rnd() * 0.5) * Math.sqrt(scale), spread * (0.8 + rnd() * 0.4), open, wet, (rnd() - 0.5) * 2.4, (rnd() * 1e6) | 0, slot, 0.36 + rnd() * 0.16, 0.0042, len * (0.35 + rnd() * 0.4), false));
   const site = {
     // 脖子侧面咬了一口：伤口在颈侧，血从锁骨往前胸（或后背）一路洇下去
-    neckF: (s) => { neckBite(s); wound(snapPoint(body, [cx + s * (0.065 + J(0.012)), T * (0.79 + J(0.012)), frame.front], and(facing(0, 1, 0.3), torso)), 0.068, 0.42, 0.3, 0, 0.45); },
-    neckB: (s) => { neckBite(s); wound(snapPoint(body, [cx + s * (0.06 + J(0.015)), T * (0.79 + J(0.012)), frame.back], and(facing(0, -1, 0.3), torso)), 0.064, 0.44, 0.28, 0, 0.4); },
+    neckF: (s) => { neckBite(s); wound(snapPoint(body, [cx + s * (0.065 + J(0.012)), T * (0.79 + J(0.012)), frame.front], and(facing(0, 1, 0.3), torso)), 0.074, 0.42, 0.42, 0, 0.45); }, // 往下洇成一大片（领口、胸前整片浸透），不是一根竖条
+    neckB: (s) => { neckBite(s); wound(snapPoint(body, [cx + s * (0.06 + J(0.015)), T * (0.79 + J(0.012)), frame.back], and(facing(0, -1, 0.3), torso)), 0.07, 0.44, 0.38, 0, 0.4); },
     upperBack: (s) => wound(snapPoint(body, [cx + s * (0.07 + J(0.02)), T * (0.74 + J(0.02)), frame.back], and(facing(0, -1, 0.35), torso)), 0.045, 0.36, 0.17, 0.9, 0.9),
     gut: (s) => wound(snapPoint(body, [cx + s * (0.025 + rnd() * 0.04), T * (0.6 + J(0.025)), frame.front], and(facing(0, 1, 0.35), torso)), 0.04, 0.24, 0.28, 1, 1),
     flank: (s) => wound(snapPoint(body, [cx + s * 0.15, T * (0.6 + J(0.03)), cz + J(0.03)], and(facing(s, 0, 0.45), torso)), 0.04, 0.26, 0.24, 1, 0.95),
@@ -330,7 +336,7 @@ export function planLook(body, frame, face, seed, look, key = 0, part = null, ro
   if (look.mouth > 0) {
     const m = face.mouth, s = rnd() < 0.5 ? -1 : 1, amt = look.mouth;
     // 涎水比血稠：从嘴角挂下一两道粗的，不是一排细线
-    mouth = mkWound(m.x + s * 0.006, m.y - 0.007, m.z, 0, 1, 0.01 * Math.sqrt(amt), 0.022 + 0.014 * amt, 0.3, 0, 0.9, 0, (rnd() * 1e6) | 0, look.fluid ? 0.012 : 0.0075, look.fluid ? 0.35 : 0.62, look.fluid ? 0.0042 : 0.0028, 0.12 + 0.12 * amt + rnd() * 0.06, !!look.fluid);
+    mouth = mkWound(m.x + s * 0.006, m.y - 0.007, m.z, 0, 1, 0.012 * Math.sqrt(amt), 0.028 + 0.016 * amt, 0.3, 0, 0.9, 0, (rnd() * 1e6) | 0, look.fluid ? 0.012 : 0.0085, look.fluid ? 0.35 : 0.45, look.fluid ? 0.0042 : 0.003, 0.08 + 0.1 * amt + rnd() * 0.06, !!look.fluid); // 两三道、长短不一（一排一样长的细线像画上去的条纹）
     mouth.sw = 0.022;
   }
   // 往下淌的细流：每处伤口按水平位置分成一条条（这几个数在画的时候逐像素用）
@@ -343,7 +349,7 @@ export function planLook(body, frame, face, seed, look, key = 0, part = null, ro
  * slot / dens / width / slen：往下淌的细流每条占多宽、几成有、多粗、多长；sw：细流分布的半宽；fluid：嘴里淌的是涎水不是血
  */
 function mkWound(x, y, z, nx, nz, r, len, spread, open, wet, ang, seed, slot, dens, width, slen, fluid) {
-  return { x, y, z, nx, nz, r, len, spread, open, wet, amt: 1, ang, seed, slot, dens, width, slen, sw: r * 0.8 + len * 0.55 * spread, sy0: 0, sy1: 0, fluid };
+  return { x, y, z, nx, nz, r, len, spread, open, wet, amt: 1, ang, seed, slot, dens, width, slen, sw: r * 0.75 + len * 0.38 * spread, sy0: 0, sy1: 0, fluid };
 }
 
 /** 一道裂口（n = 1）或一组抓痕（n = 3–4）：在 p 点的切平面里转 ang 弧度，每一道长短、位置、粗细略有不同 */
@@ -369,13 +375,14 @@ export function woundAt(W, px, py, pz, nx, nz, na, nb, frame, out, nc = 0.5) {
   let soakV = 0;
   if (dy > 0) {
     // 往下洇开：越往下越宽、越淡，底边参差（按水平位置的噪声，一条条舌头往下伸）；过了裤腰就少了（血积在裤腰上）
-    const lenE = W.len * (0.35 + 1.1 * nb * nb + 0.2 * nb), t = dy / lenE, hw = W.r * 0.9 + dy * W.spread, q = hd / hw;
+    const lenE = W.len * (0.55 + 0.7 * nb * nb + 0.15 * nb), t = dy / lenE, hw = W.r * 0.9 + dy * W.spread, q = hd / hw; // 底边按水平位置参差（舌头），但不让某一条独自伸得老长——那样远看是一根竖杠
     soakV = Math.exp(-q * q * 1.5) * (1 - smooth(0.1, 1, t)) * 1.2;
     if (W.y > frame.waist + 0.03) {
       // 裤腰：淌到这里的血往两边洇开积成一圈（上下边都是软的、参差的），再往下裤子上只透过去一部分
       const band = py - frame.waist + (nb - 0.5) * 0.02, reach = 1 - smooth(0.7, 1.15, (W.y - frame.waist) / lenE);
       soakV *= 0.4 + 0.6 * smooth(-0.09, -0.01, band);
-      if (reach > 0 && band < 0.05 && band > -0.05) { const q2 = hd / ((W.r * 0.9 + (W.y - frame.waist) * W.spread) * 1.45); soakV = Math.max(soakV, Math.exp(-q2 * q2 * 1.3 - (band / 0.02) * (band / 0.02)) * 1.15 * reach); }
+      // 只在上面那片真淌到裤腰的水平位置上积（按同一个宽度、同一个参差的底边算到裤腰那一高度）：不然裤腰上会单独冒出两截横杠，整块成了一个倒 T
+      if (reach > 0 && band < 0.05 && band > -0.05) { const dw = W.y - frame.waist, qw = hd / ((W.r * 0.9 + dw * W.spread) * 1.15), above = Math.exp(-qw * qw * 1.5) * (1 - smooth(0.1, 1, dw / lenE)); soakV = Math.max(soakV, Math.exp(-(band / 0.02) * (band / 0.02)) * Math.min(1.15, above * 1.6) * reach); }
     }
   }
   const s = Math.max(src, soakV);
@@ -408,7 +415,9 @@ export function* bloodField(body, plan, frame) {
         const ddx = px - W.x, ddz = pz - W.z, wmax = W.r * 1.8 + Math.max(0, dy) * W.spread * 1.5 + 0.03;
         if (ddx * ddx + ddz * ddz > wmax * wmax || nx * W.nx + nz * W.nz < -0.25) continue;
         // 噪声各伤口各取一份（种子不同），同一模型的几套外观边缘也不一样
-        const na = fbm3(px * 15, py * 15, pz * 15, W.seed & 1023, 2) * 0.6 + vnoise3(px * 36, py * 36, pz * 36, (W.seed + 5) & 1023) * 0.4, nb = vnoise3(px * 20 + 3, 0.5, pz * 20, (W.seed >> 10) & 1023); // 噪声不能比网格还细（每格一厘米多），不然等值线成了一格格的台阶
+        // 嘴边那一片只有两三厘米宽：噪声跟着细四倍，不然边是两条直的竖线（下巴上挂一个方块）
+        const fq = W === plan.mouth ? 4 : 1;
+        const na = fbm3(px * 15 * fq, py * 15 * fq, pz * 15 * fq, W.seed & 1023, 2) * 0.6 + vnoise3(px * 36 * fq, py * 36 * fq, pz * 36 * fq, (W.seed + 5) & 1023) * 0.4, nb = vnoise3(px * 20 * fq + 3, 0.5, pz * 20 * fq, (W.seed >> 10) & 1023); // 噪声不能比网格还细（每格一厘米多），不然等值线成了一格格的台阶
         woundAt(W, px, py, pz, nx, nz, na, nb, frame, tmp, vnoise3(0.5, py * 5.5, 0.5, (W.seed >> 4) & 1023)); // 往下一路左右扭（低频：一扭十几厘米，不是一根直筒）
         if (W === plan.mouth) { if (tmp[0] > mouth[q]) mouth[q] = tmp[0]; }
         else { pot[q] = 1 - (1 - pot[q]) * (1 - Math.min(1, tmp[0])) + Math.max(0, tmp[0] - 1); if (tmp[1] > wet[q]) wet[q] = tmp[1]; if (tmp[2] > open[q]) open[q] = tmp[2]; }
@@ -440,10 +449,10 @@ export function streamAt(W, px, py, pz, g) {
     const h1 = hash2(s, W.seed); if (h1 > W.dens) continue;
     const h2 = hash2(s, W.seed + 1), h3 = hash2(s, W.seed + 2), h4 = hash2(s, W.seed + 3);
     const c = (s + 0.2 + 0.6 * h2) * slot; if (c < -W.sw || c > W.sw) continue;
-    const edge = Math.abs(c) / W.sw, y0 = W.len * (0.25 + 0.5 * h3) * (1 - 0.4 * edge), len = W.slen * (0.2 + 0.8 * h4) * (1 - 0.5 * edge);
+    const edge = Math.abs(c) / W.sw, y0 = W.len * (0.3 + 0.5 * h3) * (1 - 0.35 * edge), len = W.slen * (0.45 + 0.55 * h4) * (1 - 0.4 * edge); // 太短的一截像一道划痕（远看一排短杠），宁可少几条、每条长一点
     const t = (dy - y0) / len; if (t < 0 || t > 1.08) continue;
-    const m = Math.sin(dy * 52 + h2 * 20) * 0.0013 + Math.sin(dy * 17 + h3 * 20) * 0.0024, ax = Math.abs(lat - c - m);
-    const wd = W.width * (0.55 + 0.9 * h1 / W.dens) * (1 - 0.45 * t);
+    const m = Math.sin(dy * 21 + h2 * 20) * 0.0042 * smooth(0, 0.05, dy - y0) + Math.sin(dy * 63 + h3 * 20) * 0.0012, ax = Math.abs(lat - c - m); // 顺着褶子左右拐（一根尺子画的直线最假）
+    const wd = W.width * (0.55 + 0.9 * h1 / W.dens) * (1 - 0.5 * t) * (0.8 + 0.35 * Math.sin(dy * 90 + h4 * 30) * Math.sin(dy * 37 + h2 * 9)); // 粗细一路起伏（挂着的血珠）
     // 细流从血斑里慢慢细出来，往下越来越细；末端是一滴圆的（不是平头）
     let v = (1 - smooth(wd * 0.5, wd, ax)) * smooth(0, 0.12, t) * (t > 1 ? 0 : 1);
     const dr = wd * 1.45, ey = (dy - (y0 + len - dr * 0.6)) / dr, ex = ax / dr, dd = Math.sqrt(ex * ex + ey * ey);
@@ -456,7 +465,7 @@ export function streamAt(W, px, py, pz, g) {
 
 /** 裂口 / 抓痕（逐像素）：写进 out [洞, 上边的毛边, 下边的阴影]；rag：这一点的细噪声（0–1），把边撕毛。纯函数 */
 export function slashAt(C, px, py, pz, nx, nz, rag, out) {
-  const f = nx * C.nx + nz * C.nz; if (f < 0.15) return out;
+  const f = nx * C.nx + nz * C.nz; if (f < 0.5) return out; // 转过去的侧面不画：投到切平面上那一面的横向位置几乎不变，一道口子会被拉成一个方框
   const vy = py - C.y; if (vy > C.reach || vy < -C.reach) return out;
   const dx = px - C.x, dz = pz - C.z, lat = dx * -C.nz + dz * C.nx, depth = dx * C.nx + dz * C.nz;
   if (lat > C.reach || lat < -C.reach || depth < -0.06) return out;
@@ -642,11 +651,11 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
   const { d1, d2, d3, part, skin: skinL, grime: gr, eye, lips, shade, vein, mottle, bruise, hand, low } = layers;
   const { pot: fPot, wet: fWet, open: fOpen, mouth: fMouth } = field;
   const wounds = plan.wounds, mouthW = plan.mouth, claws = plan.claws, rips = plan.rips, sprays = plan.sprays, spots = plan.spots, spotKind = plan.spotKind;
-  const allW = mouthW ? [...wounds, mouthW] : wounds, sl = [0, 0, 0], kp = keep;
-  const rows = (j0, step) => { // 同 prepareLayers：逐行的活放进普通函数，行隔着取
+  const allW = mouthW ? [...wounds, mouthW] : wounds, sl = [0, 0, 0], sc = [0, 0, 0], kp = keep;
+  const rows = (j0, step, i0, i1) => { // 同 prepareLayers：逐行的活放进普通函数，行隔着取
   for (let j = j0; j < S; j += step) {
     const fy = (j + 0.5) * k - 0.5, yy = Math.floor(fy), y0 = Math.max(0, Math.min(L - 1, yy)), y1 = Math.min(L - 1, Math.max(0, yy + 1)), ty = fy - yy;
-    for (let i = 0; i < S; i++) {
+    for (let i = i0; i < i1; i++) {
       const o = j * S + i, si = o * 4, p = part[o];
       let r = src[si], g = src[si + 1], b = src[si + 2]; const al = src[si + 3];
       if (p === PART.none || (j >= S / 2 && al === 255 && r > 235 && g > 235 && b > 235)) {
@@ -667,7 +676,7 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
       const n1 = d1[o] / 255, n2 = d2[o] / 255, n3 = d3[o] / 255, u = i * ts, v = j * ts;
       const l0 = lum(r, g, b), lowL = bil(low, q00, q10, q01, q11, w00, w10, w01, w11) * 255, grime = gr[o] / 255;
       const isSkin = p === PART.skin || (skinL[o] > 90 && p !== PART.hair && p < PART.eye), hair = p === PART.hair, shoe = p === PART.shoe;
-      let wetA = 0, lr = r, lg = g, lb = b; // lr/lg/lb：同一处去掉条纹以后的颜色（血洇透了的地方用）
+      let wetA = 0, bleed = 0, lr = r, lg = g, lb = b; // lr/lg/lb：同一处去掉条纹以后的颜色（血洇透了的地方用）
       if (p === PART.eye) { // 眼球：混浊发灰，缩在眼窝的暗里（发光的那一点在 zombie-skin.js）
         const m = l0 * 0.38; r = m * SC[0] * 1.6; g = m * SC[1] * 1.6; b = m * SC[2] * 1.6; wetA = 0.7;
       } else if (p === PART.mouth) { // 口腔：暗红褐，湿
@@ -728,7 +737,11 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
           // 破口和抓痕：张开的裂口——里面暗、透出皮肉（或里面那件），一边翻起浅色的毛边，另一边压出一道影子
           sl[0] = sl[1] = sl[2] = 0; const rag = n3 * 0.6 + n2 * 0.4;
           for (let c = 0; c < rips.length; c++) slashAt(rips[c], px, py, pz, nx, nz, rag, sl);
-          for (let c = 0; c < claws.length; c++) slashAt(claws[c], px, py, pz, nx, nz, rag, sl);
+          sc[0] = sc[1] = sc[2] = 0;
+          for (let c = 0; c < claws.length; c++) slashAt(claws[c], px, py, pz, nx, nz, rag, sc);
+          // 抓痕连皮一起划开了：口子里是暗红的肉，周围的布吸了血（下面按血画，边是软的）；破口只是布撕开，里面是皮
+          const clawK = sc[0] > sl[0] ? 1 : 0; bleed = sc[0] * 0.55 + sc[2] * 0.3;
+          sl[0] = Math.max(sl[0], sc[0]); sl[1] = Math.max(sl[1], sc[1] * 0.6); sl[2] = Math.max(sl[2], sc[2]);
           if (sl[0] + sl[1] + sl[2] > 0) {
             const fib = smooth(0.4, 0.7, tap(tB, NT, u * 30, v * 30)) * 0.5 + 0.5;
             const hiE = sl[1] * fib * 0.75, loE = sl[2] * 0.6;
@@ -736,7 +749,7 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
             r *= 1 - loE * 0.55; g *= 1 - loE * 0.55; b *= 1 - loE * 0.55;
             // 洞里：深处发黑，透出来的皮是暗灰绿的，沾着土和干血
             const sk = smooth(0.35, 0.7, n2 + (n1 - 0.5) * 0.4), h = sl[0];
-            const ir = mix(26, A[0] * 0.55, sk), ig = mix(18, A[1] * 0.5, sk), ib = mix(18, A[2] * 0.5, sk);
+            const ir = mix(mix(26, A[0] * 0.55, sk), 62 + 24 * n3, clawK), ig = mix(mix(18, A[1] * 0.5, sk), 18 + 6 * n3, clawK), ib = mix(mix(18, A[2] * 0.5, sk), 16 + 5 * n3, clawK);
             r = mix(r, ir * (0.7 + 0.5 * n3), h); g = mix(g, ig * (0.7 + 0.5 * n3), h); b = mix(b, ib * (0.7 + 0.5 * n3), h);
             lr = r; lg = g; lb = b;
           }
@@ -758,16 +771,17 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
       // —— 血 ——（乘上去：外沿干了发褐、一圈更深的水线、往里饱和发暗、源头湿的发红）
       const hairK = hair ? 0.65 : 1;
       let pt = bil(fPot, q00, q10, q01, q11, w00, w10, w01, w11) * spread, wt = bil(fWet, q00, q10, q01, q11, w00, w10, w01, w11), op = bil(fOpen, q00, q10, q01, q11, w00, w10, w01, w11), mp = mouthW ? bil(fMouth, q00, q10, q01, q11, w00, w10, w01, w11) : 0;
+      if (bleed > 0) pt = Math.max(pt, 0.22 + bleed * 0.45);
       // 逐像素的细节：淌痕、喷溅的血点、小腿上的血点
       if (!hair) {
         for (let w = 0; w < allW.length; w++) {
-          const W = allW[w]; const st = streamAt(W, px, py, pz, smooth(W === mouthW ? -0.75 : -0.2, W === mouthW ? 0.0 : 0.35, nx * W.nx + nz * W.nz));
-          if (st > 0) { if (W === mouthW) mp = Math.max(mp, st * 0.85); else { pt = Math.max(pt, 0.42 + st * 0.5); wt = Math.max(wt, st * 0.35 * W.wet); } }
+          const W = allW[w]; const st = streamAt(W, px, py, pz, smooth(W === mouthW ? -0.75 : 0.15, W === mouthW ? 0.0 : 0.55, nx * W.nx + nz * W.nz));
+          if (st > 0) { if (W === mouthW) mp = Math.max(mp, st * 0.85); else { pt = Math.max(pt, Math.min(1, st * 1.6) * (0.42 + st * 0.5)); wt = Math.max(wt, st * 0.35 * W.wet); } } // 不能有底数：转到侧面那一点点的细流（朝向权重很小）会整块染成一个方框
         }
         for (let c = 0; c < sprays.length; c++) {
           const P = sprays[c], ex = px - P.x, ey = py - P.y, ez = pz - P.z, dd = Math.sqrt(ex * ex + ey * ey + ez * ez); if (dd > P.r * 1.8 || nx * P.nx + nz * P.nz < 0) continue;
           const dens = Math.exp(-(dd / P.r) * (dd / P.r) * 1.5), th = 0.8 - 0.14 * dens; // 噪声表 99% 的值在 0.84 以下
-          pt = Math.max(pt, dropAt(tA, tB, NT, u, v, 4.6, P.u, P.v, th) * 0.75);
+          pt = Math.max(pt, dropAt(tA, tB, NT, u, v, 7.5, P.u, P.v, th) * 0.75); // 喷上去的是细点子（一两毫米到一厘米），不是一块块
         }
         if (shins && py < 0.52 && py > 0.06 && nz > 0.1) {
           const th = 0.79 - 0.06 * shins * (1 - smooth(0.2, 0.52, py));
@@ -793,6 +807,7 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
           r = mix(r, lr, flat); g = mix(g, lg, flat); b = mix(b, lb, flat);
           const dC = isSkin && !bm ? DRY_SKIN : dryC, cC = isSkin && !bm ? CORE_SKIN : coreC;
           let mr = mix(dC[0], cC[0], sat), mg = mix(dC[1], cC[1], sat), mb = mix(dC[2], cC[2], sat);
+          if (isSkin && bm) { mr = mix(mr, CORE_SKIN[0], 0.5); mg = mix(mg, CORE_SKIN[1], 0.5); mb = mix(mb, CORE_SKIN[2], 0.5); } // 特殊感染者的血色在皮肤上也往暗褐里收（巨尸本来就红的皮上乘一层红，下巴上成了一块鲜红）
           mr = mix(mr, freshC[0], fr); mg = mix(mg, freshC[1], fr); mb = mix(mb, freshC[2], fr);
           const rk = 1 - ring * 0.45, pool = smooth(1, 1.5, P0) * 0.3; // 外沿那圈水线更深（干了的血渍边上一圈深色）；积在裤腰的更暗
           mr *= rk * (1 - pool); mg *= rk * (1 - pool); mb *= rk * (1 - pool);
@@ -836,7 +851,9 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
   }
   };
   const chunks = Math.ceil(S / every);
-  for (let c = 0; c < chunks; c++) { rows(c, chunks); yield; }
+  // 一段画半行：某种外观头一回走到自己的分支（烂疮、酸蚀、灰烬）时 V8 会退回解释执行，那一段慢几十倍；段小一半，最长的一段也短一半
+  const half = S >= 1024 ? S >> 1 : S;
+  for (let c = 0; c < chunks; c++) for (let i0 = 0; i0 < S; i0 += half) { rows(c, chunks, i0, i0 + half); yield; }
 }
 
 /**

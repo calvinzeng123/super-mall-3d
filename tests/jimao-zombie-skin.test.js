@@ -187,3 +187,17 @@ test('没有 document（测试环境）：载入失败走 reject，不在导入�
   assert.equal(typeof document, 'undefined');
   await assert.rejects(() => loadZombieKit());
 });
+
+test('第二轮：细血点是零星不规则的小点；侧面不画正面的口子（不会拉成方框）；转到侧面的细流几乎不染色', () => {
+  const tA = Z.noiseTable(256, 5), tB = Z.noiseTable(256, 6, 4, 16);
+  let on = 0, n = 0, hi = 0;
+  for (let y = 0; y < 256; y += 0.5) for (let x = 0; x < 256; x += 0.5) { const d = Z.dropAt(tA, tB, 256, x, y, 7.5, 3, 4, 0.76); assert.ok(d >= 0 && d <= 1); n++; if (d > 0.5) on++; if (d > hi) hi = d; }
+  assert.ok(hi > 0.9 && on / n > 0.001 && on / n < 0.08, `血点占 ${(on / n * 100).toFixed(2)}%`);
+  // 正面的一道口子，侧面（法线转了 90 度）上同一横向位置不画
+  const C = { x: 0, y: 1.2, z: 0.15, nx: 0, nz: 1, ca: 1, sa: 0, curv: 0, reach: 0.1, cuts: [{ off: 0, len: 0.1, shift: 0, w: 0.006 }] }, out = [0, 0, 0];
+  Z.slashAt(C, 0.0, 1.2, 0.1, 1, 0.2, 0.5, out); assert.deepEqual(out, [0, 0, 0], '侧面');
+  // 细流：朝向权重很小（g = 0.01）时贡献也很小
+  const S = { x: 0, y: 1.2, z: 0.15, nx: 0, nz: 1, len: 0.4, seed: 7, slot: 0.013, dens: 0.6, width: 0.004, slen: 0.2, sw: 0.1, sy0: 0.1, sy1: 0.52 };
+  let mx = 0; for (let x = -0.08; x <= 0.08; x += 0.001) mx = Math.max(mx, Z.streamAt(S, x, 0.95, 0.15, 0.01));
+  assert.ok(mx <= 0.01 + 1e-9);
+});

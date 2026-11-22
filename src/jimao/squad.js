@@ -29,17 +29,19 @@ export const SQUAD = Object.freeze({
       // 阿哲：藏青保安制服 + 荧光黄的贴身网布背心（V 领、拉链、包边；银灰反光条手电一照就亮，背后印「保安」）、黄色安全帽带帽灯、
       // 黑皮手套和工装靴；寸头、胡茬。打了两个钟头：裤腿和靴子一层灰；右手套抹过血、右袖口溅上一道、左大腿蹭了一道、背心前面淌下来一道
       look: Object.freeze({ face: 'zhe', skin: 0xa8765a, lip: 0x8a5446, hair: 0x17130f, iris: 0x24170f, shirt: 0x222a3b, pants: 0x1d2129, vest: 0xa9b434, strap: 0x9aa0a8, pouch: 0x262c3c, helmet: 0xc9a22c, mask: 0x23262b, glove: 0x1d1b1a, boot: 0x1b1a19, pad: 0x262b3a,
-        tape: 0xb4b8bb, bind: 0x8d962c, nameTape: 0x232a3a, patch: 0x3a4660, shirtSurf: SURF.CLOTH, vestSurf: SURF.HIVIS, pads: false, heavy: false, who: 0, grime: 0.8,
-        blood: Object.freeze([Object.freeze({ c: [-0.1, 1.33, 0.22], r: 0.045, k: 0.95, e: 2.2, a: 0.5 }), Object.freeze({ c: [-0.17, 1.27, 0.14], r: 0.035, k: 0.8, e: 2.5, a: 0.2 }), Object.freeze({ c: [0.08, 0.8, 0.09], r: 0.045, k: 0.7, e: 3, a: -0.1 }), Object.freeze({ c: [-0.06, 1.24, 0.13], r: 0.035, k: 0.75, e: 3.2, a: 0.08 })]) }) }),
+        tape: 0xb4b8bb, bind: 0x8d962c, nameTape: 0x232a3a, patch: 0x3a4660, cuffButton: true, gloveCuff: 0x121212, shirtSurf: SURF.CLOTH, vestSurf: SURF.HIVIS, pads: false, heavy: false, who: 0, grime: 0.85,
+        blood: Object.freeze([Object.freeze({ c: [-0.1, 1.35, 0.29], r: 0.045, k: 0.95, e: 2.2, a: 0.5 }), Object.freeze({ c: [-0.19, 1.3, 0.17], r: 0.035, k: 0.8, e: 2.5, a: 0.2 }), Object.freeze({ c: [0.11, 0.95, 0.12], r: 0.03, k: 0.6, e: 2.5, a: -0.1 }),
+          Object.freeze({ c: [-0.06, 1.24, 0.13], r: 0.035, k: 0.75, e: 3.2, a: 0.08 }), Object.freeze({ c: [0.15, 1.15, 0.1], r: 0.03, k: 0.6, e: 3, a: 0.05 }), Object.freeze({ c: [0.09, 0.05, 0.15], r: 0.035, k: 0.7, e: 1.4, a: 0 })]) }) }),
     Object.freeze({ id: 'lin', name: '林医生', role: '急诊科医生', hp: 90, side: 1, back: 4, trait: 'medic',
       gun: Object.freeze({ name: '手枪', interval: 0.5, burst: [1, 3], rest: [0.35, 0.7], damage: 24, hit: 0.9, falloff: 0.008, head: 0.3, range: 26 }),
       heal: Object.freeze({ below: 45, amount: 35, cooldown: 55, reach: 2.2, time: 1.4, range: 16 }),
       // 林医生：墨绿刷手服（短袖露小臂）、灰白的贴身急救背心（绿十字、红色止血带包、急救包，挂着工作证）、蓝色丁腈手套、
       // 白护士鞋（早就不白了）；头发往后挽成低髻，外科口罩拉在下巴底下，脖子上挂着听诊器。
       // 两只手套上全是别人的血（一抹一抹的），背心前襟往下淌了一道，右膝跪在血里
-      look: Object.freeze({ face: 'lin', skin: 0xc99a7c, lip: 0xa0605a, hair: 0x1f1714, iris: 0x2b1d14, shirt: 0x2c6764, pants: 0x295a58, vest: 0xb4b6ae, bind: 0x46524e, strap: 0x5e7d72, pouch: 0xa9aca4, helmet: 0xf1f1ec, mask: 0x9ad6d0, glove: 0x6f8fb2, boot: 0xa4a49d, pad: 0x8fc9c4,
-        sole: 0x8a8a86, nameTape: 0x3a5a56, shirtSurf: SURF.SCRUBS, pantsSurf: SURF.SCRUBS, gloveSurf: SURF.RUBBER, sleeve: 'short', pads: false, heavy: false, who: 1, grime: 0.85,
-        blood: Object.freeze([Object.freeze({ c: [-0.1, 1.34, 0.21], r: 0.055, k: 1, e: 1.8, a: 0.4 }), Object.freeze({ c: [-0.07, 1.38, 0.44], r: 0.055, k: 1, e: 1.6, a: -0.3 }), Object.freeze({ c: [0.035, 1.2, 0.135], r: 0.04, k: 0.85, e: 3.4, a: 0.06 }), Object.freeze({ c: [-0.09, 0.5, 0.09], r: 0.06, k: 0.7, e: 1.3, a: 0 })]) }) }),
+      look: Object.freeze({ face: 'lin', skin: 0xc99a7c, lip: 0xa0605a, hair: 0x1f1714, iris: 0x2b1d14, shirt: 0x2c6764, pants: 0x295a58, vest: 0xb4b6ae, bind: 0x46524e, strap: 0x5e7d72, pouch: 0xa9aca4, helmet: 0xf1f1ec, mask: 0x9ad6d0, glove: 0x6283a8, gloveCuff: 0x58789c, boot: 0xa4a49d, pad: 0x8fc9c4,
+        sole: 0x8a8a86, nameTape: 0x3a5a56, shirtSurf: SURF.SCRUBS, pantsSurf: SURF.SCRUBS, gloveSurf: SURF.RUBBER, sleeve: 'short', pads: false, heavy: false, who: 1, grime: 1,
+        blood: Object.freeze([Object.freeze({ c: [-0.1, 1.35, 0.29], r: 0.055, k: 1, e: 1.8, a: 0.4 }), Object.freeze({ c: [-0.07, 1.38, 0.44], r: 0.055, k: 1, e: 1.6, a: -0.3 }), Object.freeze({ c: [0.035, 1.2, 0.135], r: 0.04, k: 0.85, e: 3.4, a: 0.06 }),
+          Object.freeze({ c: [-0.02, 0.5, 0.09], r: 0.045, k: 0.65, e: 1.3, a: 0 }), Object.freeze({ c: [0.17, 1.45, 0.07], r: 0.022, k: 0.8, e: 2.2, a: -0.2 }), Object.freeze({ c: [-0.08, 0.06, 0.14], r: 0.03, k: 0.8, e: 1.6, a: 0 })]) }) }),
   ]),
 });
 

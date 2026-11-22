@@ -10,7 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {
   SURF, DECAL, FACES, paint, paintGeo, ensureRig, mergeFlat, weather, humanHead, hairShell, sculpt, createRigMaterial,
-  decalGeo, grimeGeo, setDecalBox, rigDecalsOn, torsoSurface, shellPatch, edgeTube, shoulderArch, lathe,
+  decalGeo, grimeGeo, setDecalBox, rigDecalsOn, torsoSurface, shellPatch, edgeTube, shoulderArch, lathe, surgicalMask,
 } from './skins/rig-skin.js';
 
 export const SOLDIER = {
@@ -77,6 +77,8 @@ function rboxGeo(w, h, d, seg, r) {
 }
 const rbox = (w, h, d, x, y, z, hex, r = 0.04, rx = 0, seg = 2) => { const g = rboxGeo(w, h, d, seg, Math.min(r, w / 2, h / 2, d / 2) * 0.999); if (rx) g.rotateX(rx); g.translate(x, y, z); return colored(g, hex); };
 const ball = (r, x, y, z, hex, sx = 1, sy = 1, sz = 1) => { const g = new THREE.SphereGeometry(r, 14, 10); g.scale(sx, sy, sz); g.translate(x, y, z); return colored(g, hex); };
+/** 小圆点（按扣、扣子、铆钉）：几毫米的东西用不着 14×10 的球 */
+const dot = (r, x, y, z, hex) => colored(new THREE.SphereGeometry(r, 6, 4).scale(1, 1, 0.6).translate(x, y, z), hex);
 function limb(a, b, r0, r1, hex, seg = 10) {
   const d = new THREE.Vector3().subVectors(b, a), len = d.length();
   const g = new THREE.CylinderGeometry(r1, r0, len, seg);
@@ -125,14 +127,23 @@ function buildParts(look) {
   const rot = (g, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz); return g; };
   const ell = (r, at, c, seg = 12, ring = 8) => { const g = new THREE.SphereGeometry(1, seg, ring); g.scale(r[0], r[1], r[2]); g.translate(at[0], at[1], at[2]); return colored(g, c); };
 
+  // 腰带：一条 4.5 厘米宽的织带，顺着胯的轮廓绕一圈（不再是一块比腰还宽的厚板），上下两道包边；
+  // 卡扣是金属的（有倒角、有一点金属光），腰包有包盖、盖缝和一颗按扣
+  const hipT = torsoSurface({ hw: 0.17, hd: 0.115, rc: 0.07, yb: -0.3, yt: 0.3, off: 0.007 }), bY0 = 0.062, bY1 = 0.107;
+  const beltBand = shellPatch(hipT, { y0: bY0, y1: bY1, cols: 48, rows: 1, hex: STRAP, surf: S.CORDURA, wrap: true });
+  const beltEdge = (y) => edgeTube(Array.from({ length: 36 }, (_, i) => hipT.point(i / 36, y)), 0.0042, dk(STRAP, 1.25), S.CORDURA, { inset: 0.002, sides: 4 });
+  const bz = hipT.point(0, 0.08).p[2];
+  const hipPouch = (x, z, c, w = 0.07) => [
+    rbox(w, 0.085, 0.055, x, 0.035, z, c, 0.014), rbox(w + 0.004, 0.03, 0.06, x, 0.078, z + 0.002, c, 0.01), // 包身 + 包盖
+    rbox(w * 0.86, 0.004, 0.003, x, 0.063, z + 0.032, P(dk(c.hex, 0.62), c.surf), 0.001), dot(0.0045, x, 0.07, z + 0.033, buckle), // 盖缝 + 按扣
+  ];
   const pelvis = wear(mergeRig([
     rbox(0.34, 0.22, 0.23, 0, -0.01, 0, pants, 0.07),
-    rbox(0.36, 0.055, 0.245, 0, 0.085, 0, belt, 0.02), // 腰带
-    rbox(0.05, 0.04, 0.012, 0, 0.085, 0.124, buckle, 0.006), // 皮带扣
+    beltBand, beltEdge(bY0), beltEdge(bY1),
+    rbox(0.048, 0.036, 0.008, 0, 0.0845, bz + 0.004, buckle, 0.004), rbox(0.03, 0.02, 0.004, 0, 0.0845, bz + 0.009, P(STRAP, S.CORDURA), 0.002), // 卡扣（外框 + 中间压着的带子）
     rbox(0.012, 0.09, 0.006, 0.02, -0.03, 0.116, P(dk(L.pants, 0.7), L.pantsSurf ?? S.CLOTH), 0.003), // 门襟
     rbox(0.09, 0.08, 0.008, 0.08, -0.02, -0.115, pants, 0.01), rbox(0.09, 0.08, 0.008, -0.08, -0.02, -0.115, pants, 0.01), // 后兜
-    rbox(0.07, 0.09, 0.06, 0.15, 0.04, 0.09, pouch, 0.015), rbox(0.07, 0.09, 0.06, -0.16, 0.04, -0.06, pouch, 0.015),
-    rbox(0.074, 0.03, 0.064, 0.15, 0.08, 0.09, pouch, 0.01), rbox(0.074, 0.03, 0.064, -0.16, 0.08, -0.06, pouch, 0.01), // 包盖
+    hipPouch(0.15, 0.09, lin ? P(0x5e2a27, S.CORDURA) : pouch, lin ? 0.055 : 0.07), hipPouch(-0.16, -0.06, pouch), // 林医生：左胯红色止血带包、右后急救包
     L.heavy ? rbox(0.18, 0.16, 0.04, 0, -0.07, 0.125, vest, 0.02) : [],
   ]), AT.pelvis);
 
@@ -179,14 +190,12 @@ function buildParts(look) {
       torsoParts.push(limb(v(0.11, 0.43, 0.125), v(0.125, 0.465, 0.05), 0.0035, 0.0035, P(0x1a1b1c, S.RUBBER), 5), limb(v(0.125, 0.465, 0.05), v(0.13, 0.455, -0.06), 0.0035, 0.0035, P(0x1a1b1c, S.RUBBER), 5));
       // 衬衫领子和门襟（V 领里看得见）：两个领尖、一条门襟、两颗扣子
       for (const s of [-1, 1]) torsoParts.push(colored(rot(rboxGeo(0.045, 0.026, 0.05, 1, 0.006), -0.5, s * 0.5, s * 0.25).translate(s * 0.045, 0.462, 0.065), shirt));
-      torsoParts.push(rbox(0.016, 0.13, 0.004, 0, 0.395, 0.111, P(dk(L.shirt, 0.82), L.shirtSurf ?? S.CLOTH), 0.002), ...[0.36, 0.41].map((y) => ball(0.0045, 0, y, 0.114, P(0x8c8f8a, S.POLYMER), 1, 1, 0.5)));
+      torsoParts.push(rbox(0.016, 0.13, 0.004, 0, 0.395, 0.111, P(dk(L.shirt, 0.82), L.shirtSurf ?? S.CLOTH), 0.002), ...[0.36, 0.41].map((y) => dot(0.0045, 0, y, 0.114, P(0x8c8f8a, S.POLYMER))));
     } else {
       // 林医生：刷手服的 V 领滚边；左胸绿十字急救标；下面两个包（红色止血带包、急救包）；背后急救背包
       for (const s of [-1, 1]) torsoParts.push(limb(v(s * 0.052, 0.458, 0.085), v(0, 0.392, 0.111), 0.0042, 0.0042, P(dk(L.shirt, 0.72), L.shirtSurf ?? S.CLOTH), 5));
       torsoParts.push(rbox(0.065, 0.065, 0.006, -0.1, 0.39, zf + 0.002, P(0xc9cbc4, S.CORDURA), 0.008), rbox(0.045, 0.014, 0.004, -0.1, 0.39, zf + 0.0055, P(0x2f7a4e, S.CORDURA), 0.002), rbox(0.014, 0.045, 0.004, -0.1, 0.39, zf + 0.0055, P(0x2f7a4e, S.CORDURA), 0.002));
-      const red = P(0x5e2a27, S.CORDURA);
-      torsoParts.push(rbox(0.05, 0.1, 0.034, -0.115, 0.17, zf + 0.017, red, 0.012), rbox(0.054, 0.03, 0.038, -0.115, 0.215, zf + 0.019, red, 0.01), rbox(0.016, 0.026, 0.005, -0.115, 0.2, zf + 0.039, buckle, 0.003));
-      torsoParts.push(rbox(0.1, 0.085, 0.042, 0.045, 0.165, zf + 0.021, pouch, 0.014), rbox(0.104, 0.028, 0.046, 0.045, 0.205, zf + 0.023, pouch, 0.01), rbox(0.018, 0.024, 0.005, 0.045, 0.19, zf + 0.046, buckle, 0.003));
+      // 红色止血带包、急救包挂在腰带上（见 pelvis）：背心正面腰上那一截空着——低持枪时右手和枪就在那里
       // 听诊器挂在脖子上，听头垂在右胸
       const tube = P(0x2e3133, S.RUBBER), path = (pts) => pts.slice(1).map((q, i) => limb(v(...pts[i]), v(...q), 0.0055, 0.0055, tube, 6));
       torsoParts.push(path([[-0.045, 0.33, zf + 0.006], [-0.058, 0.4, zf + 0.002], [-0.072, 0.452, 0.075], [-0.06, 0.49, 0.0], [-0.03, 0.495, -0.06], [0.03, 0.495, -0.06], [0.06, 0.49, 0.0], [0.07, 0.452, 0.075], [0.058, 0.4, zf + 0.003], [0.052, 0.375, zf + 0.008]]));
@@ -259,22 +268,8 @@ function buildParts(look) {
       // 林医生：头发往后梳，脑后低低地挽一个髻，扎一根头绳（侧面、背面都看得出）
       headParts.push(ell([0.037, 0.032, 0.03], [0, 0.068, -0.118], P(L.hair, S.HAIR), 14, 10), ell([0.026, 0.02, 0.018], [0, 0.074, -0.142], P(L.hair, S.HAIR), 10, 8));
       const tie = new THREE.TorusGeometry(0.022, 0.0065, 6, 16); tie.scale(1, 0.9, 1); tie.translate(0, 0.07, -0.096); headParts.push(colored(tie, P(0x5a2632, S.RUBBER)));
-      // 外科口罩拉到下巴底下：贴着下巴、下颌的一片（三道褶），耳挂绕到耳朵后面
-      const head = { c: hc, r: hr, k: F.k }, th0 = 2.2, thL = 0.74, ph0 = Math.PI / 2 - 1.2, phL = 2.4;
-      const mg = new THREE.SphereGeometry(1, 22, 9, ph0, phL, th0, thL), mp = mg.attributes.position;
-      for (let i = 0; i < mp.count; i++) {
-        const nx = mp.getX(i), ny = mp.getY(i), nz = mp.getZ(i), [x, y, z] = sculpt(nx, ny, nz, F.k), t = (Math.acos(Math.max(-1, Math.min(1, ny))) - th0) / thL;
-        const k = 1.045 + 0.012 * ((t * 3) % 1) + 0.01 * smooth01(1 - Math.abs(nx) * 1.3);
-        mp.setXYZ(i, hc[0] + x * hr[0] * k, hc[1] + y * hr[1] * k, hc[2] + z * hr[2] * k);
-      }
-      mg.computeVertexNormals(); headParts.push(grimeGeo(colored(mg, P(0x9db6bf, S.SCRUBS)), () => 0.5));
-      const corner = (s, th) => { const ph = Math.PI / 2 + s * 1.15, nx = -Math.cos(ph) * Math.sin(th), ny = Math.cos(th), nz = Math.sin(ph) * Math.sin(th), [x, y, z] = sculpt(nx, ny, nz, F.k); return v(hc[0] + x * hr[0] * 1.05, hc[1] + y * hr[1] * 1.05, hc[2] + z * hr[2] * 1.05); };
-      const loopC = P(0xcfd6da, S.SCRUBS);
-      for (const s of [-1, 1]) {
-        const ex = hc[0] + s * hr[0] * 0.93, ey = hc[1] - 0.008, ez = hc[2] - 0.014;
-        const up = [corner(s, 2.3), v(ex + s * 0.004, ey + 0.024, ez + 0.004), v(ex + s * 0.002, ey + 0.012, ez - 0.02)], dn = [corner(s, 2.78), v(ex + s * 0.003, ey - 0.024, ez - 0.004), v(ex + s * 0.002, ey + 0.012, ez - 0.02)];
-        for (const q of [up, dn]) for (let i = 1; i < q.length; i++) headParts.push(limb(q[i - 1], q[i], 0.0013, 0.0013, loopC, 4));
-      }
+      // 外科口罩拉到下巴底下：一片带三道褶的长方形垂在下巴底下，四根耳挂绕到耳朵后面（rig-skin.js surgicalMask）
+      headParts.push(surgicalMask({ c: hc, hex: 0x86a9bd, loop: 0xd6dcdf, ear: [hc[0] + hr[0] * 0.95, hc[1] - 0.012, hc[2] - 0.012] }));
     }
     visor = new THREE.BufferGeometry().copy(LENS_STUB);
   } else {
@@ -292,58 +287,67 @@ function buildParts(look) {
     );
     // 护目镜：一整片弧形的深色镜片（单独的网格，用镜片材质），一圈橡胶镜框，两侧的扣、绕到脑后的松紧带
     const G = gogglesFor(mh);
-    headParts.push(...G.frame.map((g) => colored(g, P(0x1d1e20, S.RUBBER))), colored(G.strap, belt));
+    headParts.push(...G.frame, G.strap);
+    // 面罩嘴前一块透气的网布（略鼓、深一点），后脑勺识别贴（反光的方块，手电一照就亮）、两侧导轨上的金属卡座
+    const mouth = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2); mouth.rotateX(Math.PI / 2); mouth.scale(0.032, 0.024, 0.009);
+    const mf = (() => { const q = mh.attributes.position; let z = 0; for (let i = 0; i < q.count; i++) if (Math.abs(q.getY(i) - 0.034) < 0.015 && Math.abs(q.getX(i)) < 0.012) z = Math.max(z, q.getZ(i)); return z; })();
+    mouth.translate(0, 0.034, mf - 0.002); headParts.push(colored(mouth, P(dk(L.mask, 0.75), S.CORDURA)));
+    headParts.push(rbox(0.036, 0.036, 0.006, 0, 0.175, -0.148, P(0x8e9294, S.RETRO), 0.004, 0.25));
+    for (const s of [-1, 1]) headParts.push(rbox(0.012, 0.022, 0.03, s * 0.157, 0.15, 0.05, buckle, 0.003));
     visor = G.lens;
   }
   const head = wear(mergeRig(headParts), AT.head);
 
   // ---- 双臂和步枪一起，绕肩线转（抬枪、压枪、后坐）----
-  const rs = v(-0.2, 0, 0), re = v(-0.25, -0.22, 0.07), rh = v(-0.1, -0.16, 0.19);
+  // 枪是一支紧凑的短枪（伸缩托收着）：枪口还在原处（squad.js / 这里的 muzzle 在 z 0.78），机匣、握把、弹匣、枪托往前挪了 8 厘米——
+  // 低持枪时整组绕胸口转下去，原来的握把、右手、弹匣正好扎进背心（胸前一块碎的黑三角、手从包里穿出来），挪出来就在背心前面了
+  const rs = v(-0.2, 0, 0), re = v(-0.245, -0.215, 0.1), rh = v(-0.1, -0.155, 0.26);
   const ls = v(0.2, 0, 0), le = v(0.17, -0.2, 0.24), lh = v(-0.07, -0.12, 0.42);
-  const cuffC = P(dk(L.shirt, 0.8), L.shirtSurf ?? S.CLOTH);
+  const cuffC = P(dk(L.shirt, 0.8), L.shirtSurf ?? S.CLOTH), gloveCuff = P(L.gloveCuff ?? dk(L.glove, 0.7), L.gloveSurf ?? S.LEATHER);
+  const ring = (at, dir, r, tube, c, seg = 14) => { const g = new THREE.TorusGeometry(r, tube, 5, seg); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir)); g.translate(at.x, at.y, at.z); return colored(g, c); };
   const arm = (s, e, h) => {
-    const out = [];
+    const out = [], ua = e.clone().sub(s).normalize(), fa = h.clone().sub(e).normalize();
     if (L.sleeve === 'short') {
-      // 短袖：袖口在上臂一半，下面露出胳膊（上臂、小臂按肌肉粗细车出来，手腕收细），袖口一圈略粗
-      const m = s.clone().lerp(e, 0.5);
-      out.push(lathe(s, m, [[0, 0.066], [0.4, 0.064], [1, 0.061]], L.shirt, L.shirtSurf ?? S.CLOTH), lathe(m.clone().lerp(s, 0.1), m, [[0, 0.063], [1, 0.063]], dk(L.shirt, 0.85), L.shirtSurf ?? S.CLOTH, 14));
-      out.push(lathe(m, e, [[0, 0.05], [0.4, 0.049], [1, 0.044]], L.skin, S.SKIN), ball(0.044, e.x, e.y, e.z, skin, 1, 1, 1));
-      out.push(lathe(e, h, [[0, 0.044], [0.22, 0.046], [0.6, 0.039], [0.86, 0.031], [1, 0.03]], L.skin, S.SKIN));
-      out.push(lathe(h.clone().lerp(e, 0.22), h, [[0, 0.033], [0.3, 0.032], [1, 0.032]], L.glove, L.gloveSurf ?? S.LEATHER)); // 手套口卷边
+      // 短袖：袖子到上臂一半，袖口卷一道边（一圈略粗、颜色深一点的边）；下面露胳膊——上臂、小臂同一个肤色，
+      // 小臂按肌肉粗细车出来（肘下最粗，往手腕收细），手腕细
+      const m = s.clone().lerp(e, 0.52);
+      out.push(lathe(s, m, [[0, 0.056], [0.4, 0.055], [1, 0.052]], L.shirt, L.shirtSurf ?? S.CLOTH, 14), ring(m.clone().lerp(s, 0.02), ua, 0.051, 0.0042, P(dk(L.shirt, 0.8), L.shirtSurf ?? S.CLOTH)));
+      out.push(lathe(s.clone().lerp(e, 0.4), e, [[0, 0.043], [0.5, 0.041], [1, 0.037]], L.skin, S.SKIN, 12), ball(0.037, e.x, e.y, e.z, skin, 1, 1, 1));
+      out.push(lathe(e, h, [[0, 0.037], [0.2, 0.04], [0.55, 0.035], [0.84, 0.028], [1, 0.026]], L.skin, S.SKIN, 12));
     } else {
-      // 长袖：三角肌处最粗，二头肌、肘、小臂往手腕收；袖口一圈深一点的收口
-      out.push(lathe(s, e, [[0, 0.066], [0.15, 0.067], [0.42, 0.061], [0.78, 0.053], [1, 0.05]], L.shirt, L.shirtSurf ?? S.CLOTH));
-      out.push(ball(0.05, e.x, e.y, e.z, shirt), lathe(e, h, [[0, 0.05], [0.22, 0.052], [0.6, 0.045], [0.82, 0.041], [1, 0.04]], L.shirt, L.shirtSurf ?? S.CLOTH));
-      out.push(lathe(h.clone().lerp(e, 0.2), h.clone().lerp(e, 0.07), [[0, 0.044], [1, 0.044]], cuffC.hex, cuffC.surf, 12));
-      out.push(lathe(h.clone().lerp(e, 0.1), h, [[0, 0.04], [1, 0.039]], L.glove, L.gloveSurf ?? S.LEATHER, 12)); // 手套口
+      // 长袖：三角肌往下收成上臂，肘、小臂（肘下最粗）往手腕收；袖口一圈收口 + 一颗扣子
+      out.push(lathe(s, e, [[0, 0.058], [0.15, 0.058], [0.45, 0.053], [0.8, 0.047], [1, 0.045]], L.shirt, L.shirtSurf ?? S.CLOTH, 14));
+      out.push(ball(0.045, e.x, e.y, e.z, shirt), lathe(e, h, [[0, 0.045], [0.22, 0.047], [0.6, 0.041], [0.85, 0.037], [1, 0.036]], L.shirt, L.shirtSurf ?? S.CLOTH, 12));
+      const c0 = h.clone().lerp(e, 0.2), c1 = h.clone().lerp(e, 0.07);
+      out.push(lathe(c0, c1, [[0, 0.04], [0.1, 0.042], [0.9, 0.042], [1, 0.04]], cuffC.hex, cuffC.surf, 12));
+      if (L.cuffButton) { const up = new THREE.Vector3().crossVectors(fa, Y).normalize(), q = c0.clone().lerp(c1, 0.5).addScaledVector(up, s.x < 0 ? -0.042 : 0.042); out.push(dot(0.0042, q.x, q.y, q.z, P(0x8c8f8a, S.POLYMER))); }
     }
-    out.push(hand(e, h, glove));
+    out.push(hand(e, h, glove, gloveCuff, s.x < 0 ? 1 : -1));
     if (pads) {
       // 护肘：包在肘尖外侧的一块软壳（不再是一个灰球）
       const ax = h.clone().sub(s).normalize(), outv = e.clone().sub(s.clone().lerp(h, 0.5)), side = new THREE.Vector3().crossVectors(ax, outv).normalize();
       outv.addScaledVector(ax, -ax.dot(outv)).normalize(); side.crossVectors(ax, outv).normalize();
-      const g = new THREE.SphereGeometry(1, 12, 8); g.scale(0.05, 0.064, 0.04);
-      g.applyMatrix4(new THREE.Matrix4().makeBasis(side, ax, outv)); g.translate(e.x + outv.x * 0.022, e.y + outv.y * 0.022, e.z + outv.z * 0.022);
+      const g = new THREE.SphereGeometry(1, 12, 8); g.scale(0.046, 0.06, 0.036);
+      g.applyMatrix4(new THREE.Matrix4().makeBasis(side, ax, outv)); g.translate(e.x + outv.x * 0.02, e.y + outv.y * 0.02, e.z + outv.z * 0.02);
       out.push(colored(g, pad));
     }
     return out;
   };
+  // 肩：小一圈的三角肌（压扁的椭球，顺着上臂往下斜），不再是比头还宽的大球
+  const delt = (x) => { const g = new THREE.SphereGeometry(1, 14, 10); g.scale(0.056, 0.06, 0.06); g.rotateZ(x < 0 ? 0.35 : -0.35); g.translate(x, -0.012, 0); return colored(g, shirt); };
   const aimParts = [
-    arm(rs, re, rh), arm(ls, le, lh),
-    ball(0.069, -0.2, -0.012, 0, shirt, 1, 0.94, 1), ball(0.069, 0.2, -0.012, 0, shirt, 1, 0.94, 1), // 肩
-    rbox(0.055, 0.1, 0.4, -0.1, -0.1, 0.25, gun, 0.012), // 机匣
+    arm(rs, re, rh), arm(ls, le, lh), delt(-0.19), delt(0.19),
+    rbox(0.055, 0.1, 0.32, -0.1, -0.1, 0.29, gun, 0.012), // 机匣
     rbox(0.06, 0.075, 0.22, -0.1, -0.085, 0.47, gun2, 0.015), // 护木
-    rbox(0.012, 0.012, 0.36, -0.1, -0.043, 0.3, gun, 0.003), // 顶上导轨
+    rbox(0.012, 0.012, 0.32, -0.1, -0.043, 0.32, gun, 0.003), // 顶上导轨
     limb(v(-0.1, -0.08, 0.57), v(-0.1, -0.08, 0.76), 0.013, 0.013, gun, 8), // 枪管
     limb(v(-0.1, -0.08, 0.74), v(-0.1, -0.08, 0.8), 0.02, 0.02, gun, 8), // 消焰器
-    rbox(0.04, 0.16, 0.07, -0.1, -0.21, 0.21, gun, 0.01, 0.2), // 弹匣
-    rbox(0.045, 0.1, 0.06, -0.1, -0.19, 0.12, gun2, 0.01, -0.3), // 握把
-    rbox(0.05, 0.11, 0.22, -0.1, -0.1, -0.02, gun2, 0.02), // 枪托
-    rbox(0.04, 0.05, 0.09, -0.1, -0.02, 0.26, gun, 0.01), // 瞄具
-    limb(v(-0.1, -0.135, 0.38), v(-0.1, -0.135, 0.5), 0.012, 0.012, belt, 5), // 枪带
+    rbox(0.036, 0.12, 0.06, -0.1, -0.19, 0.3, gun, 0.01, 0.32), // 弹匣（短，往前斜）
+    rbox(0.04, 0.09, 0.05, -0.1, -0.185, 0.2, gun2, 0.01, -0.3), // 握把
+    rbox(0.045, 0.085, 0.15, -0.1, -0.105, 0.07, gun2, 0.018), rbox(0.05, 0.1, 0.02, -0.1, -0.11, -0.005, P(0x161718, S.RUBBER), 0.008), // 伸缩托 + 托底板
+    rbox(0.04, 0.05, 0.09, -0.1, -0.02, 0.3, gun, 0.01), // 瞄具
+    limb(v(-0.1, -0.135, 0.4), v(-0.1, -0.135, 0.52), 0.012, 0.012, belt, 5), // 枪带
   ];
-  // 上臂外侧的魔术贴臂章（劫持者、阿哲的保安制服）
-  if (L.sleeve !== 'short') for (const s of [-1, 1]) { const g = new RoundedBoxGeometry(0.012, 0.065, 0.055, 2, 0.005); g.rotateZ(s * 0.22); g.translate(s * 0.27, -0.085, 0.02); aimParts.push(colored(g, P(L.patch ?? L.strap, S.CORDURA))); }
   const aim = wear(mergeRig(aimParts), AT.aim);
 
   // ---- 腿 ----
@@ -367,16 +371,27 @@ const smooth01 = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * 
 // 队友没有护目镜：visor 给一个空的几何体（接口不变）
 const LENS_STUB = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
 /**
- * 戴手套的手（握着枪）：沿小臂方向的一块拳头（掌、四指卷着，指节一道棱），拇指压在旁边。
- * 不再是一个圆球（「连指手套」）。
+ * 戴手套的手（握着枪）：手背一块、四根手指（两节，指根往前、第二节往下卷着握住）、拇指压在旁边，手腕一圈深色的手套口。
+ * 不再是一块扁板（「连指手套」）。e→h 是小臂方向；th：拇指在哪一侧（右手 1，左手 -1）。
  */
-function hand(e, h, c) {
+function hand(e, h, c, cuff, th = 1) {
   const f = h.clone().sub(e).normalize(), side = new THREE.Vector3().crossVectors(f, Y).normalize(), up = new THREE.Vector3().crossVectors(side, f);
   const m = new THREE.Matrix4().makeBasis(side, up, f).setPosition(h);
-  const parts = [rboxGeo(0.07, 0.05, 0.085, 2, 0.02).translate(0, -0.004, 0.032)];
-  const kn = new THREE.CylinderGeometry(0.018, 0.018, 0.068, 10); kn.rotateZ(Math.PI / 2); kn.translate(0, -0.012, 0.074); parts.push(kn);
-  const th = new THREE.CylinderGeometry(0.0105, 0.0115, 0.048, 8); th.rotateX(Math.PI / 2); th.rotateY(-0.25); th.translate(0.03, 0.01, 0.04); parts.push(th); // 拇指顺着拳头往前压
-  return parts.map((g) => colored(g.applyMatrix4(m), c));
+  const parts = [rboxGeo(0.07, 0.032, 0.066, 1, 0.012).translate(0, 0.003, 0.026)];
+  // 四根手指：各一块小圆角方块，第一节往前、第二节往下卷（并拢，侧面挨着侧面——指缝就是圆角留下的那道暗线），小指短一点
+  [-0.0255, -0.0085, 0.0085, 0.0255].forEach((x, i) => {
+    const l = i === 3 ? 0.85 : i === 1 ? 1.06 : 1, w = i === 3 ? 0.0145 : 0.0165;
+    parts.push(rboxGeo(w, 0.022, 0.03 * l, 1, 0.0055).translate(x, 0.004, 0.066 + 0.006 * l));
+    parts.push(rboxGeo(w * 0.96, 0.03 * l, 0.02, 1, 0.0055).rotateX(-0.25).translate(x, -0.016 * l, 0.077 + 0.004 * l));
+  });
+  // 拇指：两节，顺着拳头往前压
+  const seg = (a, b, r) => { const d = new THREE.Vector3().subVectors(b, a), len = d.length(); const g = new THREE.CylinderGeometry(r * 0.92, r, len, 8, 1, true); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, d.normalize())); g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2); return g; };
+  const t0 = v(-th * 0.03, -0.004, 0.01), t1 = v(-th * 0.038, -0.01, 0.046), t2 = v(-th * 0.03, -0.016, 0.07);
+  parts.push(seg(t0, t1, 0.0115), new THREE.SphereGeometry(0.0106, 8, 6).translate(t1.x, t1.y, t1.z), seg(t1, t2, 0.0105), new THREE.SphereGeometry(0.0095, 8, 6).translate(t2.x, t2.y, t2.z));
+  const out = parts.map((g) => colored(g.applyMatrix4(m), c));
+  // 手套口：手腕一圈深色的收口
+  const cg = new THREE.CylinderGeometry(0.037, 0.036, 0.026, 12, 1, true); cg.rotateX(Math.PI / 2); cg.translate(0, 0, -0.006); out.push(colored(cg.applyMatrix4(m), cuff || c));
+  return out;
 }
 // 面罩里的头：雕过的头型（力度 0.75），和原来的球一样大
 function sculptHeadMask() {
@@ -385,19 +400,32 @@ function sculptHeadMask() {
   g.computeVertexNormals();
   return g;
 }
-/** 护目镜：按面罩头在眼睛那一截最靠前的位置定镜片的弧（一整片弧形镜片、上下两道镜框、两侧的扣、脑后的松紧带） */
+/**
+ * 护目镜：两片往外鼓的椭圆镜片（单独的网格，用镜片材质：低粗糙度、有反光，手电一照就有一点高光），
+ * 每片一圈橡胶镜框、中间一道鼻梁、两侧的扣；松紧带从两侧扣上去，绕过耳罩、勒在头盔后半圈上（不是一条横贯的「焊工面罩」缝）
+ */
 function gogglesFor(mh) {
-  const p = mh.attributes.position, yc = 0.106, hh = 0.021;
-  let R = 0;
-  for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (Math.abs(y - yc) < hh + 0.006 && p.getZ(i) > 0) R = Math.max(R, Math.hypot(p.getX(i), p.getZ(i))); }
-  R += 0.006;
-  const a0 = -0.78, aL = 1.56;
-  const lens = new THREE.CylinderGeometry(R, R, hh * 2, 16, 1, true, a0, aL); lens.translate(0, yc, 0);
-  const rim = (y, h) => { const g = new THREE.CylinderGeometry(R + 0.0035, R + 0.0035, h, 16, 1, true, a0 - 0.02, aL + 0.04); g.translate(0, y, 0); return g; };
-  const frame = [rim(yc + hh, 0.008), rim(yc - hh, 0.008)];
-  for (const s of [-1, 1]) { const a = s * aL / 2; const g = rboxGeo(0.012, 0.05, 0.02, 1, 0.004); g.rotateY(a); g.translate(Math.sin(a) * (R + 0.002), yc, Math.cos(a) * (R + 0.002)); frame.push(g); }
-  const strap = new THREE.CylinderGeometry(0.127, 0.127, 0.016, 20, 1, true, aL / 2, Math.PI * 2 - aL); strap.scale(1, 1, 1.06); strap.translate(0, yc, -0.004);
-  return { lens: lens.toNonIndexed(), frame, strap };
+  const p = mh.attributes.position, yc = 0.106;
+  // 眼睛那一截面罩最靠前的弧（按 x 取：镜片贴着脸）
+  const front = (x) => { let z = 0; for (let i = 0; i < p.count; i++) if (Math.abs(p.getY(i) - yc) < 0.018 && Math.abs(p.getX(i) - x) < 0.02 && p.getZ(i) > z) z = p.getZ(i); return z; };
+  const lens = [], frame = [];
+  for (const s of [-1, 1]) {
+    const cx = s * 0.034, cz = front(cx) + 0.007, turn = s * 0.32;
+    const cap = new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2); cap.rotateX(Math.PI / 2); cap.scale(0.025, 0.0175, 0.011); cap.rotateY(turn); cap.translate(cx, yc, cz);
+    lens.push(cap.toNonIndexed());
+    const rim = Array.from({ length: 16 }, (_, k) => { const a = k / 16 * Math.PI * 2, q = new THREE.Vector3(Math.cos(a) * 0.0265, Math.sin(a) * 0.019, 0.0015).applyAxisAngle(Y, turn); return { p: [cx + q.x, yc + q.y, cz + q.z], n: [Math.sin(turn), 0, Math.cos(turn)] }; });
+    frame.push(edgeTube(rim, 0.0055, 0x1d1e20, SURF.RUBBER, { sides: 5, inset: 0.002 }));
+    const clip = rboxGeo(0.014, 0.03, 0.018, 1, 0.004); clip.rotateY(s * 0.9); clip.translate(s * 0.07, yc, front(s * 0.062) - 0.002); frame.push(paintGeo(clip, 0x26272a, SURF.POLYMER));
+  }
+  const bridge = rboxGeo(0.018, 0.012, 0.012, 1, 0.004); bridge.translate(0, yc + 0.004, front(0) + 0.008); frame.push(paintGeo(bridge, 0x1d1e20, SURF.RUBBER));
+  // 松紧带：两侧扣子 → 绕过耳罩外面 → 斜着勒到头盔后半圈
+  const sp = [];
+  for (let k = 0; k <= 16; k++) {
+    const t = k / 16, a = -1.25 - (Math.PI * 2 - 2.5) * t, lift = 0.045 * Math.sin(Math.PI * t) ** 0.6, rx = 0.142 + 0.012 * Math.sin(Math.PI * t), rz = 0.148 + 0.012 * Math.sin(Math.PI * t);
+    sp.push({ p: [Math.sin(a) * rx, yc + 0.004 + lift, Math.cos(a) * rz], n: [Math.sin(a), 0.2, Math.cos(a)] });
+  }
+  const strap = edgeTube(sp, 0.0075, 0x26282a, SURF.CORDURA, { closed: false, sides: 4, inset: 0 });
+  return { lens: mergeFlat(lens.map((g) => { g.deleteAttribute('uv'); return g; })), frame, strap };
 }
 
 // ---- 射线和人体部件求交 ----
@@ -445,7 +473,8 @@ export function addSoldiers(G, enemies, { count = SOLDIER.pool, patrolLines = []
   function makeSoldier(index, lookIndex) {
     const look = LOOKS[lookIndex], P = parts[lookIndex];
     const mesh = (geo, mat = bodyMat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; return m; };
-    const lensMat = new THREE.MeshStandardMaterial({ color: 0x0b0c0d, roughness: 0.12, metalness: 0.7, emissive: new THREE.Color(...LENS_CALM) });
+    // 镜片：茶色、很光、带一点金属反射（环境光里是一片琥珀色的反光，手电照过去有一个亮点）
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0x6a4818, roughness: 0.07, metalness: 0.55, emissive: new THREE.Color(...LENS_CALM) });
     const root = new THREE.Group(); root.name = 'soldier-' + index; root.visible = false;
     const body = new THREE.Group(); root.add(body); // 倒地时绕脚下转
     const hips = new THREE.Group(); hips.position.y = HIP_Y; body.add(hips); hips.add(mesh(P.pelvis));
