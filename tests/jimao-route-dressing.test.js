@@ -126,6 +126,8 @@ test('落点：地面贴花平放在楼面上（不浮、不在洞口）、不�
         for (const g of plan.gates) if (Math.abs(g.model.y - st.y) < 0.5 && it.cell !== 'drops') assert.ok(Math.hypot(g.model.x - it.p[0], g.model.z - it.p[2]) > 1.0, `${it.cell} 没压在 ${g.type} 上`);
       } else if (Math.abs(it.n[1]) < 1e-6) { // 墙面
         if (it.cell === 'tape') continue;
+        // 贴在关卡大件（反锁的防火门门扇）上的：门开了就不画；贴在门扇那一面上（离大件不到一米）
+        if (it.until >= 0) { const g = plan.gates.find((q) => q.stage === it.until); assert.ok(g && Math.hypot(g.model.x - it.p[0], g.model.z - it.p[2]) < 1, `${it.cell} 在门扇上`); continue; }
         // 贴花前面那块楼面：贴花中心以下最近的一层（户内的东西贴得低，不能按 1.5 米高去猜）
         const F = [...nav.floors.values()].filter((f) => f.y <= it.p[1] && it.p[1] - f.y < 2.6 && supported(f, it.p[0] + it.n[0] * 0.3, it.p[2] + it.n[2] * 0.3)).sort((a, b) => b.y - a.y)[0];
         assert.ok(F, `${it.cell} 前面是能走的楼面`);
@@ -160,4 +162,36 @@ test('楼梯：关卡上下那两段多滴血，关卡之间、最后一道关�
     const lo = yOf(plan.gates[0].floor), hi = yOf(plan.tower.roof);
     for (const f of light) assert.ok(f.bottom.y >= lo - 0.2 && f.bottom.y < hi, `${f.id} 在第一道关和屋顶之间`);
   }
+});
+
+test('关卡跟前：每道关 3 米内至少 4 个墙上的痕迹、一大滩血；放工具的那户里也有东西（同一层的分组里）', () => {
+  for (const T of ['T1', 'A']) for (const seed of [7, 21, 99]) {
+    const { plan, items } = dress(T, seed);
+    const lvOf = (f) => nav.floors.get(f)?.parentFloor || nav.floors.get(f)?.level?.id || f;
+    for (const g of plan.gates) {
+      const st = plan.stages[g.stage], near = (it, p, r = 3) => Math.abs(it.p[1] - p.y) < 2.6 && Math.hypot(it.p[0] - p.x, it.p[2] - p.z) < r;
+      // 配电箱那道关：人在电梯厅的配电箱前，栅门在楼梯口——墙上的算两处的
+      const walls = items.filter((it) => Math.abs(it.n[1]) < 0.5 && (near(it, st.site) || (g.type === 'fuse' && near(it, g.model))));
+      assert.ok(walls.length >= 4, `${T}/${seed} ${g.floor} ${g.type}：墙上 ${walls.length} 个`);
+      const pools = items.filter((it) => /^pool/.test(it.cell) && it.w >= 1.1 && near(it, st.site, 3.2));
+      assert.ok(pools.length >= 1, `${T}/${seed} ${g.floor} ${g.type}：门前一大滩血`);
+      if (g.type === 'fire') assert.ok(items.some((it) => it.cell === 'scorch' && near(it, g.model, 3) && it.h > 2), `${T}/${seed} 火背后熏到天花板的烟`);
+      if (g.type === 'lock') assert.ok(items.filter((it) => it.until === g.stage).length >= 3, `${T}/${seed} 门扇上的手印`);
+    }
+    for (const st of plan.stages.filter((s) => s.kind === 'tool')) {
+      const inUnit = items.filter((it) => it.lv === lvOf(st.floor) && Math.abs(it.p[1] - st.site.y) < 2.6 && Math.hypot(it.p[0] - st.site.x, it.p[2] - st.site.z) < 4);
+      assert.ok(inUnit.length >= 6 && inUnit.some((it) => /^pool/.test(it.cell)), `${T}/${seed} ${st.id} 那户里 ${inUnit.length} 个`);
+    }
+  }
+});
+
+test('墙上的手印一半是往下滑的；地上的血点有顺着走的方向拉长的一串', () => {
+  const { items } = dress('A', 7);
+  const hands = items.filter((it) => /^hand/.test(it.cell));
+  const drag = hands.filter((it) => it.cell === 'handDrag').length;
+  assert.ok(drag >= hands.length * 0.3 && drag <= hands.length * 0.75, `往下滑的 ${drag} / ${hands.length}`);
+  assert.ok(items.filter((it) => it.cell === 'trail').length >= 8);
+  // 血的深浅逐个不同
+  const tones = new Set(items.filter((it) => it.mode === 1).map((it) => (it.tone ?? 1).toFixed(2)));
+  assert.ok(tones.size > 20);
 });
