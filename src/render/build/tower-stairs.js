@@ -2,6 +2,7 @@ import { towerStairPlan, GOING } from '../../layout/tower-stairs.js';
 import { landingAt } from '../../layout/elevator-shafts.js';
 import * as THREE from 'three';
 import { BatchSet, frameMatrix, instanceMatrix, tpl } from '../batch.js';
+import { FONT_CN } from '../textures.js';
 
 const WALL = '#dce1d8', STEP = '#c8cec3', METAL = '#607967';
 // 收在门洞两边的防火门扇：钢质防火门常见的暗红褐色烤漆（和关卡里那樘反锁的防火门同一类颜色），不再是栏杆的绿色
@@ -14,20 +15,75 @@ const FIRE_DOOR = '#6f3a30';
  * 停电时只有手电照明，颜色压在中灰附近：太白的面在手电光斑里会过曝，太黑的又什么都看不见。
  */
 export const STAIR_PAINT = Object.freeze({
-  tread: '#b4b1a7', riser: '#9d9e97', landing: '#aba99f', nosing: '#2b2e2c', soffit: '#c4c6bf',
+  // 踏步和平台同一种水泥面（原来踏步偏黄，往下看一跑像换了一种材料）；踢面冷一点、深一点，一级级分得开
+  tread: '#aba99f', riser: '#8a8c86', landing: '#aba99f', nosing: '#2b2e2c', soffit: '#c4c6bf', soffitEdge: '#8d918b',
   // 墙裙是油漆：和上面墙面的反差留给那道深色腰线，整片色块不要压得太深（太深像贴了一层茶色玻璃）
   dado: '#9aa49a', dadoLine: '#47524b', skirting: '#4a4f4b', wall: '#cfd0c7', threshold: '#8f8c85',
   rail: '#5b4130', baluster: '#3a433e', bracket: '#5f6662',
   pipe: '#952c24', conduit: '#7d827c', lamp: '#ebe3cc', lampBase: '#3f4341', cage: '#2c2f2e',
-  frame: '#4b524e', closer: '#6d726e',
+  // 钢门框是中灰色的烤漆（原来近黑，像一圈描边）
+  frame: '#5d625e', closer: '#6d726e',
+  // 防火门扇上的五金：执手、合页、观察窗（夹丝玻璃）、「常闭式防火门」标牌
+  lever: '#b8bcbc', hingeKnuckle: '#45403b', wiredGlass: '#3c4547', plate: '#e8e4da', plateText: '#8d231c',
   // 消火栓箱：不锈钢包边、红色烤漆门、玻璃后面是深色箱膛和卷盘；白字
   hydrant: '#a12a22', hydrantFrame: '#b9bebf', hydrantInside: '#2b2d2c', hydrantGlass: '#5e6d72', hoseReel: '#7d241d',
-  hydrantLabel: '#ece7da', meter: '#8a918b', meterSeam: '#4c524e',
+  hydrantLabel: '#ece7da', meter: '#8a918b', meterSeam: '#4c524e', hoseCoil: '#922d25', nozzle: '#9a8452', chrome: '#c4c9cb',
   // 候梯厅：拉丝不锈钢门套和召唤盒、黑色按钮、红色手动报警按钮
   steel: '#a3a9ac', button: '#2c3032', alarm: '#b02a22', lobbySkirting: '#4b4c48', lampRim: '#3b3e3d', panel: '#8f8d86',
 });
 /** 墙裙（梯段处沿踏步前缘斜着走）、踢脚线的高度。 */
 export const DADO_HEIGHT = 1.2, SKIRTING_HEIGHT = .16;
+
+/**
+ * 一行短字（「消火栓」「常闭式防火门」）栅格化成若干矩形，好用顶点色的小面片拼出真字：
+ * 箱门、门扇上的字都在合批 / 实例化模板里，单独为几个字开一张贴图要多一次绘制调用。
+ * 画布上写一次字（几十像素高），逐行找出不透明的横段，上下相同的横段并成一个矩形——一个字二三十块。
+ * 返回 { aspect（宽 / 高）, rects: [[x0, y0, x1, y1]…] }，坐标归一化到 0–1、y 向上；同一行字只算一次。
+ * 没有 document（node 测试）返回 null，调用方退回一条素色的标签条（空白条也比假字强）。
+ */
+const RUNS = new Map();
+export function textRuns(text, px = 22) {
+  const key = `${text}|${px}`;
+  if (RUNS.has(key)) return RUNS.get(key);
+  let out = null;
+  if (typeof document !== 'undefined') {
+    try {
+      const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true });
+      const font = `bold ${px}px ${FONT_CN}`;
+      g.font = font;
+      const w = Math.ceil(g.measureText(text).width) + 2, h = Math.ceil(px * 1.2);
+      c.width = w; c.height = h;
+      g.font = font; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(text, 1, h / 2 + px * .04);
+      const a = g.getImageData(0, 0, w, h).data, rects = [], open = new Map();
+      // 每行的横段；和上一行完全相同的横段接着往下长，不同的就收口成一个矩形
+      for (let y = 0; y <= h; y++) {
+        const runs = new Set();
+        if (y < h) for (let x = 0; x < w;) {
+          if (a[(y * w + x) * 4 + 3] < 120) { x++; continue; }
+          let e = x; while (e < w && a[(y * w + e) * 4 + 3] >= 120) e++;
+          runs.add(`${x},${e}`); x = e;
+        }
+        for (const [k, y0] of open) if (!runs.has(k)) { const [x0, x1] = k.split(',').map(Number); rects.push([x0 / w, 1 - y / h, x1 / w, 1 - y0 / h]); open.delete(k); }
+        for (const k of runs) if (!open.has(k)) open.set(k, y);
+      }
+      out = rects.length ? { aspect: w / h, rects } : null;
+    } catch { out = null; }
+  }
+  RUNS.set(key, out);
+  return out;
+}
+
+/**
+ * 一行字铺在某个面上：face(cu, cy, su, sy) 在面上画一块小面片（cu 以观察者的右手为正、cy 向上，都从字的中心量）。
+ * 字高 height、整行不超过 maxW；没有字形（node）时 strip 为真就画一条字高一半的素色条。
+ */
+function writeText(face, text, height, maxW, px, strip = true) {
+  const t = textRuns(text, px);
+  if (!t) { if (strip) face(0, 0, Math.min(maxW, height * text.length * .95), height * .5); return; }
+  let hh = height, ww = hh * t.aspect;
+  if (ww > maxW) { ww = maxW; hh = ww / t.aspect; }
+  for (const [x0, y0, x1, y1] of t.rects) face((x0 + x1 - 1) / 2 * ww, (y0 + y1 - 1) / 2 * hh, (x1 - x0) * ww, (y1 - y0) * hh);
+}
 
 const box = (B, key, r, y, height, color) => B.get(key).box((r.x0+r.x1)/2,y+height/2,(r.z0+r.z1)/2,r.x1-r.x0,height,r.z1-r.z0,color);
 const rail = (B, a, b) => {
@@ -579,43 +635,48 @@ export function lobbyBox(B, lobby, at, alongX, paint = 'concrete', metal = 'extM
     const [x, z] = at(u, o); g.shape('plane', _p.set(x, y0 + y, z), faceQ, _s.set(su, sy, 1), color);
   };
   const P = STAIR_PAINT;
+  // 面朝箱子的人，右手是 +u 还是 −u（at 的 u 轴可能和观察者的右手反向）：字从左往右写，不能写成镜像
+  const [ux, uz] = at(1, 0), right = Math.sign((ux - ox) * out.z - (uz - oz) * out.x) || 1;
+  const write = (g, text, u, y, o, height, maxW, color, px, strip = true) =>
+    writeText((cu, cy, su, sy) => face(g, u + right * cu, y + cy, o, su, sy, color), text, height, maxW, px, strip);
   if (lobby.kind === 'hydrant') {
-    // 消火栓 + 灭火器组合箱（嵌墙，凸出 3.6 cm）：一圈 3.5 cm 不锈钢包边，红色烤漆门分上下两樘（中间 2 cm 缝）。
-    // 上樘消火栓门：大玻璃窗（门高六成，退进 1 cm），后面是深色箱膛和红色水带卷盘，玻璃上白字「消火栓」；
-    // 下樘灭火器门：白字「灭火器」。两樘门都有一个深色拉手槽（离门轴远的一边）。
+    // 消火栓 + 灭火器组合箱（嵌墙，凸出不到 4 cm）：一圈 3.5 cm 不锈钢包边，红色烤漆门分上下两樘（中间 2 cm 缝）。
+    // 上樘消火栓门：玻璃窗（退进 6 mm），窗里是深色箱膛和盘好的水带卷盘（一圈深红的水带、浅色盘心），
+    // 窗上方红门板上白字「消火栓」；下樘灭火器门：白字「灭火器」。两樘门离门轴远的一边各一个镀铬拉手。
+    // 原来的字是几个方块拼的假字（像「壬壬壬」），卷盘是一块八边形红板加个黑点（像停车标志），现在都换成真的。
     const H0 = .1, H1 = 1.9, hu = .02, split = .78, f = .035;
     // 包边用刷漆批次的浅灰：金属批次在停电的暗处没有东西可反射，会变成一圈发蓝的黑框，读不出是不锈钢
     ring(C, 0, (H0 + H1) / 2, .018, w, H1 - H0, f, .036, P.hydrantFrame);
-    put(C, 0, (H0 + H1) / 2, .006, w - 2 * f + .004, H1 - H0 - 2 * f + .004, .012, P.hydrantInside);   // 箱膛（门缝里看得到）
+    put(C, 0, (H0 + H1) / 2, .004, w - 2 * f + .004, H1 - H0 - 2 * f + .004, .008, P.hydrantInside);   // 箱膛（门缝里看得到）
     const iw = w - 2 * f - .006, upper = [split + hu / 2, H1 - f - .003], lower = [H0 + f + .003, split - hu / 2];
-    // 下樘门
-    put(C, 0, (lower[0] + lower[1]) / 2, .024, iw, lower[1] - lower[0], .02, P.hydrant);
-    // 上樘门：窗框四边是门板，中间开窗
-    const gy0 = upper[0] + .22, gy1 = upper[1] - .09, gw = iw - .14;
-    put(C, 0, (upper[0] + gy0) / 2, .024, iw, gy0 - upper[0], .02, P.hydrant);
-    put(C, 0, (gy1 + upper[1]) / 2, .024, iw, upper[1] - gy1, .02, P.hydrant);
-    for (const s of [-1, 1]) put(C, s * (gw / 2 + (iw - gw) / 4), (gy0 + gy1) / 2, .024, (iw - gw) / 2, gy1 - gy0, .02, P.hydrant);
-    // 窗里：箱膛上挂着水带卷盘（深红圆盘 + 银色盘心）；玻璃退进 1 cm，只画一圈压条（玻璃本身不画，免得挡住卷盘）
-    const ry = (gy0 + gy1) / 2 - .02;
-    if (C.shape && M.shape) {
+    // 门板：正面在 3.6 cm
+    put(C, 0, (lower[0] + lower[1]) / 2, .028, iw, lower[1] - lower[0], .016, P.hydrant);
+    // 上樘门：窗框四边是门板，中间开窗；窗上沿留 11 cm 写字
+    const gy0 = upper[0] + .2, gy1 = upper[1] - .12, gw = iw - .12;
+    put(C, 0, (upper[0] + gy0) / 2, .028, iw, gy0 - upper[0], .016, P.hydrant);
+    put(C, 0, (gy1 + upper[1]) / 2, .028, iw, upper[1] - gy1, .016, P.hydrant);
+    for (const s of [-1, 1]) put(C, s * (gw / 2 + (iw - gw) / 4), (gy0 + gy1) / 2, .028, (iw - gw) / 2, gy1 - gy0, .016, P.hydrant);
+    // 窗里的卷盘：深色圆底板、一圈盘好的水带（圆环）、浅色盘心，再斜挂一支铜色水枪。卷盘只有 2 cm 进深，圆环压扁了画
+    const ry = (gy0 + gy1) / 2 + .01, rr = Math.min(.15, gw / 2 - .05, (gy1 - gy0) / 2 - .04), ru = -right * .02;
+    if (C.shape) {
+      const [rx, rz] = at(ru, .009), [tx, tz] = at(ru, .017), [hx, hz] = at(ru, .012);
       _q.setFromUnitVectors(UP, out);
-      const [rx, rz] = at(-.04, .012), [hx, hz] = at(-.04, .026);
-      C.shape('cyl8', _p.set(rx, y0 + ry, rz), _q, _s.set(.36, .014, .36), P.hoseReel);
-      M.shape('cyl8', _p.set(hx, y0 + ry, hz), _q, _s.set(.1, .005, .1), P.hydrantFrame);
-    } else put(C, -.04, ry, .019, .36, .36, .014, P.hoseReel);
-    ring(M, 0, (gy0 + gy1) / 2, .025, gw, gy1 - gy0, .012, .006, P.hydrantGlass);
-    // 白字：玻璃上沿「消火栓」三个字块，下樘门「灭火器」三个字块（顶点色字块，近看是字的轮廓，远看是一行白字）
-    // 每个字：左边一竖（偏旁）、右边上中下三横和一竖，远看就是一行方块字（不是哪个具体的字，免得笔画糊成怪符号）
-    const glyphs = (y, o, size) => { for (const k of [-1, 0, 1]) {
-      const u = k * size * 1.3, t = size * .13;
-      face(C, u - size * .36, y, o, t, size * .85, P.hydrantLabel);
-      for (const [dy, w] of [[.36, .62], [0, .5], [-.36, .66]]) face(C, u + size * .1, y + dy * size, o, size * w, t, P.hydrantLabel);
-      face(C, u + size * .12, y, o, t, size * .78, P.hydrantLabel);
-    } };
-    glyphs(gy1 - .05, .0325, .075);
-    glyphs((lower[0] + lower[1]) / 2 + .1, .037, .07);
-    // 拉手槽
-    for (const yc of [(upper[0] + upper[1]) / 2, (lower[0] + lower[1]) / 2]) put(M, iw / 2 - .05, yc, .0345, .022, .13, .004, P.hydrantInside);
+      C.shape('cyl16', _p.set(rx, y0 + ry, rz), _q, _s.set(2 * rr + .03, .004, 2 * rr + .03), P.hydrantInside);
+      C.shape('torus', _p.set(tx, y0 + ry, tz), faceQ, _s.set(2 * rr * .86, 2 * rr * .86, .12), P.hoseReel);
+      C.shape('torus', _p.set(tx, y0 + ry, tz), faceQ, _s.set(2 * rr * .62, 2 * rr * .62, .1), P.hoseCoil);
+      C.shape('cyl12', _p.set(hx, y0 + ry, hz), _q, _s.set(.085, .012, .085), P.hydrantFrame);
+      face(C, ru + right * rr * .9, ry - rr * .75, .0215, .022, .12, P.nozzle);
+    } else put(C, ru, ry, .017, 2 * rr, 2 * rr, .014, P.hoseReel);
+    ring(C, 0, (gy0 + gy1) / 2, .028, gw, gy1 - gy0, .01, .006, P.hydrantGlass);
+    // 白字：上樘窗上方「消火栓」，下樘门上部「灭火器」（画布栅格化的真字；没有画布时是一条白色标签条）
+    write(C, '消火栓', 0, (gy1 + upper[1]) / 2, .0365, .072, iw - .1, P.hydrantLabel, 24);
+    write(C, '灭火器', 0, lower[1] - .14, .0365, .072, iw - .1, P.hydrantLabel, 24);
+    // 镀铬拉手：离门轴远的一边（站在箱前的右手），一根竖条两个脚
+    for (const yc of [(upper[0] + upper[1]) / 2, (lower[0] + lower[1]) / 2 + .05]) {
+      const hu2 = right * (iw / 2 - .045);
+      put(C, hu2, yc, .041, .016, .14, .006, P.chrome);
+      for (const dy of [-.06, .06]) put(C, hu2, yc + dy, .038, .014, .014, .006, P.chrome);
+    }
   } else {
     // 电表箱 + 弱电箱：灰色钢门，上大下小两樘，一圈分缝，门锁和百叶。
     for (const [y, h] of [[1.55, .72], [.82, .58]]) {
