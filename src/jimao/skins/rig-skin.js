@@ -32,13 +32,14 @@ export const SURF = Object.freeze({ CLOTH: 0, SCRUBS: 1, CORDURA: 2, HIVIS: 3, R
  * metal：金属度；bump：织纹起伏深度（米）；retro：逆反射强度（只有反光条）；glow：荧光布的自发光（黑里也看得出荧光黄）；
  * grime：这种表面沾脏的倾向；blood：沾不沾血（皮肤、头发、镜片不画）；scuff：硬壳上的磨痕（安全帽、头盔、枪）；
  * kind：1 = 针织（面罩：按头一圈的竖罗纹）；2 = 头发（顺着梳的方向一缕缕）；3 = 硬壳（安全帽、头盔：细的划痕）。
- * 织纹周期：细图 R 每块 48 道斜纹、G 每块 64 格编织、A 每块 12 道防撕格——按 s 换算，布料 1–2 毫米、防撕格 5–6 毫米。
+ * 织纹周期：细图 R 每块 48 道斜纹、G 每块 64 格编织、A 每块 12 道防撕格——按 s 换算，布料 2.4–3.7 毫米、防撕格 1.3 厘米。
+ * 比真布粗一倍：真实的 1–2 毫米在一两米外、720p 下不到一个像素，mipmap 一平均就成了光板（上一版评审：「看不出织纹」）。
  */
 export const SURF_PARAMS = Object.freeze([
-  /* CLOTH   */ Object.freeze({ w: [1, 0.15, 0.15, 0.45], s: 8.5, fold: 0.0024, rough: 0.86, rv: 0.07, av: 0.22, metal: 0, bump: 0.00045, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0, kind: 0 }),
-  /* SCRUBS  */ Object.freeze({ w: [0.25, 1, 0.1, 0], s: 9, fold: 0.0022, rough: 0.85, rv: 0.05, av: 0.16, metal: 0, bump: 0.00035, retro: 0, glow: 0, grime: 0.9, blood: 1, scuff: 0, kind: 0 }),
-  /* CORDURA */ Object.freeze({ w: [0, 1, 0.25, 0.3], s: 7, fold: 0.0006, rough: 0.75, rv: 0.06, av: 0.26, metal: 0, bump: 0.0006, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0, kind: 0 }),
-  /* HIVIS   */ Object.freeze({ w: [0, 1, 0.1, 0], s: 6, fold: 0.0013, rough: 0.66, rv: 0.06, av: 0.2, metal: 0, bump: 0.0005, retro: 0, glow: 0.035, grime: 0.8, blood: 1, scuff: 0, kind: 0 }),
+  /* CLOTH   */ Object.freeze({ w: [1, 0.15, 0.15, 0.25], s: 6.5, fold: 0.0024, rough: 0.86, rv: 0.07, av: 0.3, metal: 0, bump: 0.00045, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0, kind: 0 }),
+  /* SCRUBS  */ Object.freeze({ w: [0.25, 1, 0.1, 0], s: 6.5, fold: 0.0022, rough: 0.85, rv: 0.05, av: 0.22, metal: 0, bump: 0.00035, retro: 0, glow: 0, grime: 0.9, blood: 1, scuff: 0, kind: 0 }),
+  /* CORDURA */ Object.freeze({ w: [0, 1, 0.25, 0.2], s: 4.5, fold: 0.0006, rough: 0.75, rv: 0.06, av: 0.35, metal: 0, bump: 0.0006, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0, kind: 0 }),
+  /* HIVIS   */ Object.freeze({ w: [0, 1, 0.1, 0], s: 4.2, fold: 0.0013, rough: 0.66, rv: 0.06, av: 0.3, metal: 0, bump: 0.0005, retro: 0, glow: 0.035, grime: 0.8, blood: 1, scuff: 0, kind: 0 }),
   /* RETRO   */ Object.freeze({ w: [0, 0.15, 1, 0], s: 30, fold: 0.0006, rough: 0.26, rv: 0.08, av: 0.08, metal: 0.6, bump: 0.00004, retro: 1.1, glow: 0, grime: 0.5, blood: 1, scuff: 0, kind: 0 }),
   /* LEATHER */ Object.freeze({ w: [0, 0, 1, 0], s: 10, fold: 0.0012, rough: 0.58, rv: 0.14, av: 0.2, metal: 0, bump: 0.0003, retro: 0, glow: 0, grime: 0.75, blood: 1, scuff: 0.3, kind: 0 }),
   /* RUBBER  */ Object.freeze({ w: [0, 0, 1, 0], s: 20, fold: 0, rough: 0.7, rv: 0.06, av: 0.08, metal: 0, bump: 0.0001, retro: 0, glow: 0, grime: 1, blood: 1, scuff: 0, kind: 0 }),
@@ -47,7 +48,7 @@ export const SURF_PARAMS = Object.freeze([
   /* HAIR    */ Object.freeze({ w: [0, 0, 0.35, 0], s: 40, fold: 0, rough: 0.55, rv: 0.12, av: 0.45, metal: 0, bump: 0.00016, retro: 0, glow: 0, grime: 0.1, blood: 0, scuff: 0, kind: 2 }),
   /* METAL   */ Object.freeze({ w: [0, 0, 1, 0], s: 10, fold: 0, rough: 0.36, rv: 0.14, av: 0.08, metal: 0.6, bump: 0.00002, retro: 0, glow: 0, grime: 0.3, blood: 0, scuff: 1, kind: 0 }),
   /* GLOSS   */ Object.freeze({ w: [0, 0, 0, 0], s: 1, fold: 0, rough: 0.15, rv: 0, av: 0, metal: 0, bump: 0, retro: 0, glow: 0, grime: 0, blood: 0, scuff: 0, kind: 0 }),
-  /* KNIT    */ Object.freeze({ w: [0, 0.6, 0.4, 0], s: 12, fold: 0.0009, rough: 0.95, rv: 0.04, av: 0.24, metal: 0, bump: 0.0004, retro: 0, glow: 0, grime: 0.7, blood: 1, scuff: 0, kind: 1 }),
+  /* KNIT    */ Object.freeze({ w: [0, 0.6, 0.4, 0], s: 8, fold: 0.0009, rough: 0.95, rv: 0.04, av: 0.24, metal: 0, bump: 0.0004, retro: 0, glow: 0, grime: 0.7, blood: 1, scuff: 0, kind: 1 }),
   /* POLYMER */ Object.freeze({ w: [0, 0, 1, 0], s: 14, fold: 0, rough: 0.55, rv: 0.1, av: 0.08, metal: 0, bump: 0.00004, retro: 0, glow: 0, grime: 0.4, blood: 0, scuff: 0.5, kind: 0 }),
 ]);
 
@@ -532,15 +533,16 @@ const FRAG_SURF = `
   float fold = 0.0;
   if (rx.x > 0.0) {
     fold = (md.g - 0.5) * 0.65 + (md.r - 0.5) * 0.35;
-    float jk = exp(-pow((rp.y - 0.48) / 0.05, 2.0)) * (0.3 + 0.7 * smoothstep(0.03, -0.04, rp.z));
+    float jk = exp(-pow((rp.y - 0.48) / 0.045, 2.0)) * smoothstep(0.02, -0.05, rp.z);
     float je = max(exp(-dot(rp - vec3(-0.25, 1.28, 0.09), rp - vec3(-0.25, 1.28, 0.09)) / 0.0036), exp(-dot(rp - vec3(0.17, 1.3, 0.26), rp - vec3(0.17, 1.3, 0.26)) / 0.0036));
-    fold += (0.16 * jk * sin(rp.y * 230.0 + md.b * 9.0 + rp.x * 30.0) + 0.3 * je * sin(length(rp - vec3(0.0, 1.29, 0.17)) * 280.0 + md.r * 7.0)) * (0.4 + md.g);
+    fold += (0.16 * jk * sin(rp.y * 230.0 + md.b * 9.0) + 0.3 * je * sin(length(rp - vec3(0.0, 1.29, 0.17)) * 280.0 + md.r * 7.0)) * (0.4 + md.g);
   }
   rigH = (hn - 0.5) * rb.y + fold * rx.x;
   // 织纹凹处暗一点；大块褪色让布料不那么匀（很轻）
   rigTint = diffuseColor.rgb;
   diffuseColor.rgb *= 1.0 + ra.w * (hn - 0.5) * 1.3;
-  diffuseColor.rgb *= 1.0 + 0.14 * ra.w * (md.a - 0.5) + fold * 0.3;
+  // 纱线的深浅不匀（一厘米上下的斑驳）：一两米外看不清一根根经纬了，布还是「花」的，不是一块塑料
+  diffuseColor.rgb *= 1.0 + 0.14 * ra.w * (md.a - 0.5) + 0.4 * ra.w * (md.b - 0.5) * step(0.5, rx.x * 1000.0) + fold * 0.3;
   float rough = ra.y + ra.z * (md.a - 0.5) * 2.0 + (hn - 0.5) * 0.08;
   // 夹角里的暗（AO）：腋下、裆部、膝盖后面、背心下摆底下、腰带底下、下巴底下——按站姿位置算，跟着部件走
   float ao = 0.0;
@@ -587,7 +589,7 @@ const FRAG_SURF = `
   float brk = (md.b - 0.5) * 0.7 + (fd.b - 0.5) * 0.5;
   float bm = smoothstep(0.4, 0.48, bl + brk * 0.5);
   bm = max(bm, spr * smoothstep(0.76, 0.82, fd.b + (md.b - 0.5) * 0.4)) * rx.y;
-  vec3 bc = mix(vec3(0.1, 0.009, 0.006), vec3(0.042, 0.006, 0.004), smoothstep(0.55, 0.95, bl));
+  vec3 bc = mix(vec3(0.062, 0.011, 0.007), vec3(0.03, 0.006, 0.004), smoothstep(0.55, 0.95, bl));
   diffuseColor.rgb = mix(diffuseColor.rgb, bc, bm * 0.92);
   rough = mix(rough, 0.28 + 0.35 * (1.0 - bl), bm);
   rigRough = clamp(rough, 0.05, 1.0);

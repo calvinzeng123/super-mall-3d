@@ -22,8 +22,8 @@ test('表面种类和参数表一一对应，GLSL 查表按表生成', () => {
     assert.equal(p.w.length, 4);
     assert.ok(p.rough > 0 && p.rough <= 1 && p.metal >= 0 && p.metal <= 1 && p.bump >= 0 && p.bump < 0.001 && p.fold >= 0 && p.fold < 0.004, '粗糙度 / 金属度 / 起伏在合理范围');
   }
-  // 织纹周期：细图 R 每块 48 道、G 64 格——布料的织纹在 1–2.5 毫米（上一版的科迪拉方格有 1 厘米）
-  for (const k of ['CLOTH', 'SCRUBS', 'CORDURA']) { const p = SURF_PARAMS[SURF[k]], mm = 1000 / p.s / (p.w[0] >= p.w[1] ? 48 : 64); assert.ok(mm > 0.7 && mm < 2.5, `${k} 织纹 ${mm.toFixed(2)} 毫米`); }
+  // 织纹周期：细图 R 每块 48 道、G 64 格——布料的织纹在 2–4 毫米（比真布粗一些，一两米外 720p 下还看得出；上一版 1–2 毫米被 mipmap 平均成光板）
+  for (const k of ['CLOTH', 'SCRUBS', 'CORDURA', 'HIVIS']) { const p = SURF_PARAMS[SURF[k]], mm = 1000 / p.s / (p.w[0] >= p.w[1] ? 48 : 64); assert.ok(mm > 2 && mm < 4.2, `${k} 织纹 ${mm.toFixed(2)} 毫米`); }
   assert.equal(SURF_PARAMS[SURF.PLASTIC].fold, 0, '硬壳（安全帽、头盔）不起衣褶');
   assert.ok(SURF_PARAMS[SURF.RETRO].rough <= 0.3 && SURF_PARAMS[SURF.RETRO].metal >= 0.5, '反光条：低粗糙度、有金属感（银灰）');
   assert.ok(SURF_PARAMS[SURF.RETRO].retro > 0 && SURF_PARAMS.filter((p) => p.retro > 0).length === 1, '只有反光条逆反射');
@@ -210,4 +210,43 @@ test('buildParts：部件和轴心不变，三角形不超过原来的两倍左�
   assert.ok(surfs(lin.head).has(SURF.SCRUBS) && surfs(lin.head).has(SURF.RUBBER), '林医生：口罩、头绳');
   // 头的包围球大致不变（命中判定按骨架算，模型不能大出一圈）
   for (const P of [zhe, lin]) { P.head.computeBoundingBox(); assert.ok(P.head.boundingBox.max.y < 0.3 && P.head.boundingBox.min.y > -0.06); }
+});
+
+test('第三轮：雕过的头（下颌线、颧骨、眉骨）、脸前网格密、口罩是垂在下巴底下的一片、手有手指、低持枪时握把不扎进背心', async () => {
+  const { faceSphere, weldNormals, surgicalMask } = await import('../src/jimao/skins/rig-skin.js');
+  // 下颌线：下巴底下是往上斜的一个面（同一高度，下颌线以下的点比球面高）
+  const under = sculpt(0, -0.95, Math.sqrt(1 - 0.9025), 1), side = sculpt(0.75, -0.3, Math.sqrt(1 - 0.5625 - 0.09), 1);
+  assert.ok(under[1] > -0.9, `下巴底下压上去 ${under[1].toFixed(2)}`);
+  assert.ok(side[0] < 0.75, '两颊收进去一个面');
+  const brow = sculpt(0.2, 0.25, Math.sqrt(1 - 0.04 - 0.0625), 1), sock = sculpt(0.34, 0.08, Math.sqrt(1 - 0.1156 - 0.0064), 1);
+  assert.ok(brow[2] - sock[2] > 0.08, '眉骨比眼窝往前');
+  // 脸朝前的球：极点在脸前偏下，脸上那一圈网格比后脑密；接缝处法线一致
+  const g = faceSphere(32, 24); g.computeVertexNormals(); weldNormals(g);
+  const p = g.attributes.position, n = g.attributes.normal;
+  assert.ok(p.getZ(0) > 0.95 && p.getY(0) < 0, '极点在脸前、往下偏');
+  const seen = new Map(); let bad = 0;
+  for (let i = 0; i < p.count; i++) { const k = [p.getX(i), p.getY(i), p.getZ(i)].map((q) => Math.round(q * 1e4)).join(); const m = seen.get(k); if (m && Math.hypot(n.getX(i) - n.getX(m), n.getY(i) - n.getY(m), n.getZ(i) - n.getZ(m)) > 1e-4) bad++; else if (!m) seen.set(k, i); }
+  assert.equal(bad, 0, '接缝、极点上的法线取了平均');
+  // 口罩：两面、垂在下巴底下（不绕到下颌角成一圈护颈），四根耳挂
+  const mask = surgicalMask({ c: [0, 0.09, 0.004], hex: 0x86a9bd, loop: 0xd6dcdf, ear: [0.073, 0.078, -0.008] });
+  const box = new THREE.Box3(); for (const q of mask.slice(0, 2)) { q.computeBoundingBox(); box.union(q.boundingBox); }
+  assert.ok(box.min.y > -0.06 && box.max.y < 0.03 && box.max.x < 0.065 && box.min.z > 0.0, `口罩的范围 ${JSON.stringify(box)}`);
+  assert.equal(mask.length, 2 + 2 + 4, '两面 + 上下包边 + 四根耳挂');
+  // 低持枪（squad.js / 这里的姿势：aim 转 (0.55, 0.35, 0)）时，右手和握把在背心前面
+  const zhe = buildParts(SQUAD.members[0].look), ap = zhe.aim.attributes.position;
+  const m = new THREE.Matrix4().compose(new THREE.Vector3(0, 0.42, 0.02), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.55, 0.35, 0)), new THREE.Vector3(1, 1, 1));
+  const q = new THREE.Vector3(), a = new THREE.Vector3(); let inside = 0, near = 0;
+  for (let i = 0; i < ap.count; i++) {
+    a.fromBufferAttribute(ap, i); if (Math.hypot(a.x + 0.1, a.y + 0.155, a.z - 0.26) > 0.05) continue; // 右手那一团
+    near++; q.copy(a).applyMatrix4(m); if (Math.abs(q.x) < 0.16 && q.y > 0.05 && q.y < 0.42 && q.z < 0.12) inside++;
+  }
+  assert.ok(near > 50 && inside / near < 0.1, `右手扎进躯干的顶点 ${inside}/${near}`);
+  // 枪口还在原处（muzzle 在 z 0.78，枪管末端 0.8）
+  let maxZ = 0; for (let i = 0; i < ap.count; i++) maxZ = Math.max(maxZ, ap.getZ(i)); assert.ok(maxZ > 0.79 && maxZ < 0.82);
+  // 劫持者：两片镜片（左右各一）
+  const sold = buildParts({ shirt: 0x4a4f3e, pants: 0x434737, vest: 0x6b6247, strap: 0x55503b, pouch: 0x5d5740, helmet: 0x545a45, mask: 0x2b2c2e, glove: 0x2a2826, boot: 0x2b2722, pad: 0x3a3b35, heavy: false, who: 0 });
+  const vp = sold.visor.attributes.position; let L = 0, R = 0, mid = 0;
+  for (let i = 0; i < vp.count; i++) { const x = vp.getX(i); if (x > 0.012) L++; else if (x < -0.012) R++; else mid++; }
+  assert.ok(L > 50 && R > 50 && mid < (L + R) * 0.1, '两片分开的镜片，中间是鼻梁');
+  assert.ok(sold.head.attributes.rig.array.some((v, i) => i % 4 === 0 && v === SURF.RETRO), '头盔后面一块反光识别贴');
 });

@@ -275,7 +275,7 @@ function buildParts(look) {
   } else {
     // 面罩里的头：同一个雕过的头型（力度 0.75）——面罩底下看得出鼻梁、眉骨和下巴；面罩是针织的（竖罗纹）
     const mh = sculptHeadMask();
-    headParts.push(colored(mh, mask), ball(0.012, 0, 0.068, 0.114, mask, 1, 1.6, 1), box(0.11, 0.03, 0.02, 0, 0.107, 0.083, skin)); // 镜框边上露出一点皮肤
+    headParts.push(colored(mh, mask), ball(0.0095, 0, 0.07, 0.112, mask, 1, 1.7, 1), box(0.11, 0.03, 0.02, 0, 0.107, 0.083, skin)); // 镜框边上露出一点皮肤
     const helmetTop = new THREE.SphereGeometry(0.138, 16, 9, 0, Math.PI * 2, 0, Math.PI / 2); helmetTop.scale(1, 0.95, 1.1); helmetTop.translate(0, 0.12, -0.005);
     headParts.push(
       colored(helmetTop, helmet),
@@ -289,9 +289,9 @@ function buildParts(look) {
     const G = gogglesFor(mh);
     headParts.push(...G.frame, G.strap);
     // 面罩嘴前一块透气的网布（略鼓、深一点），后脑勺识别贴（反光的方块，手电一照就亮）、两侧导轨上的金属卡座
-    const mouth = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2); mouth.rotateX(Math.PI / 2); mouth.scale(0.032, 0.024, 0.009);
+    const mouth = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2); mouth.rotateX(Math.PI / 2); mouth.scale(0.026, 0.018, 0.005);
     const mf = (() => { const q = mh.attributes.position; let z = 0; for (let i = 0; i < q.count; i++) if (Math.abs(q.getY(i) - 0.034) < 0.015 && Math.abs(q.getX(i)) < 0.012) z = Math.max(z, q.getZ(i)); return z; })();
-    mouth.translate(0, 0.034, mf - 0.002); headParts.push(colored(mouth, P(dk(L.mask, 0.75), S.CORDURA)));
+    mouth.translate(0, 0.034, mf - 0.002); headParts.push(colored(mouth, P(dk(L.mask, 0.82), S.CORDURA)));
     headParts.push(rbox(0.036, 0.036, 0.006, 0, 0.175, -0.148, P(0x8e9294, S.RETRO), 0.004, 0.25));
     for (const s of [-1, 1]) headParts.push(rbox(0.012, 0.022, 0.03, s * 0.157, 0.15, 0.05, buckle, 0.003));
     visor = G.lens;
@@ -352,13 +352,25 @@ function buildParts(look) {
 
   // ---- 腿 ----
   const pocket = P(lin ? L.pants : L.pouch, lin ? (L.pantsSurf ?? S.CLOTH) : S.CORDURA);
+  // 裤子的缝：两侧的侧缝（外侧缝、内侧缝——两条腿共用一个网格，两边都有）、前面的烫线，作战裤 / 工装裤膝盖上两道立体裁剪的拼缝，
+  // 裤脚一圈卷边——真的缝线，不是贴图里一排排的人字纹
+  const thighProf = [[0, 0.098], [0.3, 0.092], [0.75, 0.08], [1, 0.074]], shinProf = [[0, 0.07], [0.3, 0.068], [0.75, 0.058], [1, 0.056]];
+  const rAt = (prof, t) => { for (let i = 1; i < prof.length; i++) if (t <= prof[i][0]) { const [t0, r0] = prof[i - 1], [t1, r1] = prof[i]; return r0 + (r1 - r0) * (t - t0) / (t1 - t0); } return prof[prof.length - 1][1]; };
+  const seamC = dk(L.pants, 0.7), pSurf = L.pantsSurf ?? S.CLOTH;
+  const seamLine = (prof, len, a, t0 = 0, t1 = 1) => edgeTube(Array.from({ length: 7 }, (_, k) => { const t = t0 + (t1 - t0) * k / 6, r = rAt(prof, t) + 0.0008; return { p: [Math.sin(a) * r, -t * len, Math.cos(a) * r], n: [Math.sin(a), 0, Math.cos(a)] }; }), 0.0022, seamC, pSurf, { closed: false, sides: 3, inset: 0 });
+  const arcSeam = (prof, len, t, a0, a1, n = 9) => edgeTube(Array.from({ length: n }, (_, k) => { const a = a0 + (a1 - a0) * k / (n - 1), r = rAt(prof, t) + 0.0008; return { p: [Math.sin(a) * r, -t * len, Math.cos(a) * r], n: [Math.sin(a), 0, Math.cos(a)] }; }), 0.0022, seamC, pSurf, { closed: false, sides: 3, inset: 0 });
   const thigh = wear(mergeRig([
-    lathe(v(0, 0, 0), v(0, -THIGH, 0), [[0, 0.098], [0.3, 0.092], [0.75, 0.08], [1, 0.074]], L.pants, L.pantsSurf ?? S.CLOTH, 14), ball(0.098, 0, 0, 0, pants), ball(0.074, 0, -THIGH, 0, pants),
+    lathe(v(0, 0, 0), v(0, -THIGH, 0), thighProf, L.pants, pSurf, 14), ball(0.098, 0, 0, 0, pants), ball(0.074, 0, -THIGH, 0, pants),
     rbox(0.05, 0.14, 0.13, 0.085, -0.2, 0.01, pocket, 0.015), rbox(0.056, 0.035, 0.136, 0.087, -0.13, 0.01, pocket, 0.012), // 侧兜 + 兜盖
-    rbox(0.01, 0.3, 0.012, 0, -0.2, 0.088, P(dk(L.pants, 0.75), L.pantsSurf ?? S.CLOTH), 0.004), // 裤子前面的缝线
+    rbox(0.004, 0.003, 0.12, 0.111, -0.149, 0.01, P(dk(pocket.hex, 0.6), pocket.surf), 0.001), // 兜盖底下的缝
+    seamLine(thighProf, THIGH, Math.PI / 2, 0.08), seamLine(thighProf, THIGH, -Math.PI / 2, 0.08), seamLine(thighProf, THIGH, 0, 0.12, 0.92), // 侧缝、烫线
   ]), AT.thigh);
+  const shinLen = SHIN - 0.06;
   const shin = wear(mergeRig([
-    lathe(v(0, 0, 0), v(0, -SHIN + 0.06, 0), [[0, 0.07], [0.3, 0.068], [0.75, 0.058], [1, 0.056]], L.pants, L.pantsSurf ?? S.CLOTH, 14),
+    lathe(v(0, 0, 0), v(0, -shinLen, 0), shinProf, L.pants, pSurf, 14),
+    seamLine(shinProf, shinLen, Math.PI / 2), seamLine(shinProf, shinLen, -Math.PI / 2),
+    lin ? [] : [arcSeam(shinProf, shinLen, 0.02, -1.3, 1.3), arcSeam(shinProf, shinLen, 0.24, -1.3, 1.3)], // 膝盖的拼缝（作战裤、工装裤）
+    colored(new THREE.TorusGeometry(0.0565, 0.004, 4, 16).rotateX(Math.PI / 2).translate(0, -shinLen + 0.004, 0), P(dk(L.pants, 0.82), pSurf)), // 裤脚卷边
     pads ? rbox(0.1, 0.11, 0.06, 0, -0.02, 0.06, pad, 0.025) : [], // 护膝
     pads ? rbox(0.104, 0.02, 0.04, 0, -0.02, 0.02, belt, 0.006) : [], // 护膝的绑带
     rbox(0.115, 0.13, 0.27, 0, -SHIN - 0.025, 0.04, boot, 0.035),
