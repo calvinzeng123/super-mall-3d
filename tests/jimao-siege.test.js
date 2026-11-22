@@ -57,7 +57,7 @@ test('封锁：合闸前公寓电梯不动；之后电梯只到眼前这道关�
   const plan = siegePlan(seq(7), L, nav, runs), [g0, g1, g2] = plan.gates;
   const up = (g) => runs.find((r) => r.id === g.runs[0]), f = (n) => `A-${n}F`;
   assert.match(liftRule(plan, 0, nav, 'A-ST1', 'A-1F', 'A-2F'), /停电/); assert.match(liftRule(plan, 2, nav, 'A-ST1', 'A-B1', 'A-1F'), /停电/, '捡了手枪、开了武器柜都还没电');
-  assert.equal(liftRule(plan, 0, nav, 'P1-L3', 'P1-1F', 'P1-4F'), null);
+  assert.match(liftRule(plan, 0, nav, 'P1-L3', 'P1-1F', 'P1-4F'), /停电/, '商场的电梯一律不走');
   assert.equal(liftRule(plan, 3, nav, 'A-ST1', 'A-B1', f(g0.n)), null, '合闸后能到第一道关那层');
   assert.match(liftRule(plan, 3, nav, 'A-ST2', 'A-1F', f(g0.n + 1)), new RegExp(`只能到 ${g0.n}F`));
   assert.equal(activeGate(plan, 3), g0); assert.equal(activeGate(plan, g0.stage), g0); assert.equal(activeGate(plan, g0.stage + 1), g1);
@@ -352,7 +352,7 @@ test('抽楼：公寓多、北区 1 号楼少，可以指定；北区那一局�
     }
     const roofLob = lobbySpot(nav, lift, 'T1-RF'); assert.ok(roofLob && findPath(nav, { ...roofLob, slope: null }, at(plan.stages.at(-1).site)), '屋顶：出电梯走得到信号弹');
     if (seed === 5) assert.ok(findPath(nav, start, at(plan.stages[2].site)), '从商场走得到北区 1 号楼的地下电梯厅');
-    assert.match(liftRule(plan, 1, nav, 'T1-LF', 'P1-B1', 'T1-9F'), /北区 1 号楼停电/); assert.equal(liftRule(plan, 1, nav, 'A-ST1', 'A-1F', 'A-3F'), null, '这一局不管公寓的电梯');
+    assert.match(liftRule(plan, 1, nav, 'T1-LF', 'P1-B1', 'T1-9F'), /北区 1 号楼停电/); assert.match(liftRule(plan, 1, nav, 'A-ST1', 'A-1F', 'A-3F'), /停电/, '别的楼的电梯一律不走');
     assert.equal(liftRule(plan, 3, nav, 'T1-ST-A', 'P1-B1', plan.gates[0].floor), null); assert.ok(liftRule(plan, 3, nav, 'T1-ST-A', 'P1-B1', `T1-${plan.gates[0].n + 1}F`));
   }
 });
@@ -372,7 +372,7 @@ test('北区那一局接到游戏上：撤离点在北区 1 号楼楼顶，电�
   const { G, siege, begin } = sworld({ tower: 'T1' });
   const m = begin();
   assert.equal(m.plan.tower, TOWERS.T1); assert.equal(m.extraction.floor, 'T1-RF'); assert.equal(m.extraction.where, '北区 1 号楼楼顶'); assert.equal(m.extraction.vehicle, TOWERS.T1.pad);
-  assert.match(m.radio.intro, /北区 1 号楼楼顶/); assert.match(G.liftAllow({ id: 'T1-LE' }, 'P1-1F', 'T1-8F'), /停电/); assert.equal(G.liftAllow({ id: 'A-ST1' }, 'A-1F', 'A-8F'), null);
+  assert.match(m.radio.intro, /北区 1 号楼楼顶/); assert.match(G.liftAllow({ id: 'T1-LE' }, 'P1-1F', 'T1-8F'), /停电/); assert.match(G.liftAllow({ id: 'A-ST1' }, 'A-1F', 'A-8F'), /停电/);
   const cam = m.extraction.ride.outroCam({ x: -200, y: 60, z: -232 }), B = L.buildings.find((b) => b.id === 'T1');
   assert.ok(pointInPoly([cam.x, cam.z], B.outline) && Math.abs(cam.y - elev('T1-RF') - 2.5) < 1e-6);
   assert.equal(m.extraction.ride.ground({ x: TOWERS.T1.pad.x, y: 120, z: TOWERS.T1.pad.z }), elev('T1-RF')); { const q = groundSpots(nav, L, 1, seq(9), TOWERS.T1)[0]; assert.equal(m.extraction.ride.ground({ x: q.x, y: 60, z: q.z }), elev('P1-RF'), '掉在商场屋面上'); }

@@ -17,6 +17,7 @@ import { doorOutside } from './guide.js';
 import { createPacing } from './pacing.js';
 import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
+import { DEFENSE, DEFENSE_CSS, sealSegments, buildSeals, createBarricades } from './siege-defense.js';
 import { propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR, FIRE, nosingY, propTop, beaconMesh, pickGlow, faceYaw, warmProps } from './siege-props.js';
 
 export const SIEGE = Object.freeze({
@@ -164,7 +165,7 @@ export function activeGate(plan, stage) { return plan.gates.find((g) => stage <=
 /** 电梯能不能从 from 层到 to 层（只管这一局那栋楼的电梯）。返回一句原因或 null */
 export function liftRule(plan, stage, nav, linkId, from, to) {
   const tower = plan.tower || TOWERS.A;
-  if (!String(linkId).startsWith(`${tower.id}-`)) return null;
+  if (!String(linkId).startsWith(`${tower.id}-`)) return '全楼停电，这部电梯不动'; // 商场和别的楼的电梯一律不走（只能沿路线走）
   if (stage <= (plan.powerStage ?? 1)) return `${tower.name}停电了，电梯不动。先去${tower.powerName}合闸`;
   const g = activeGate(plan, stage), y = (f) => nav.floors.get(f)?.y ?? 0;
   if (g && Math.max(y(from), y(to)) > y(g.floor) + 0.1) return `电梯只能到 ${g.n}F：${GATES[g.type].lift}`;
@@ -367,7 +368,7 @@ export function balconyModel() {
   g.userData.pane = pane; return g;
 }
 
-export const SIEGE_CSS = `
+export const SIEGE_CSS = DEFENSE_CSS + `
 .jm-noise { position: absolute; left: 50%; top: calc(58px + env(safe-area-inset-top)); transform: translateX(-50%); width: 150px; z-index: 4; pointer-events: none; font: 600 10px/1 ui-monospace, 'PingFang SC', monospace; letter-spacing: .2em; color: rgba(232, 228, 218, .75); text-align: center; }
 .jm-noise.off { display: none; }
 .jm-noise i { display: block; height: 4px; margin-top: 4px; background: rgba(232, 228, 218, .18); border-radius: 2px; overflow: hidden; }
@@ -416,6 +417,9 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const root = new THREE.Group(); root.name = '丧尸围城'; scene?.add(root);
   const S = { plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, tellT: 0, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' };
   const blocks = [], balconies = [], acids = [];
+  // 路障（人自己摆的沙袋墙）和封门的卷帘（见 siege-defense.js）
+  const walls = createBarricades(G, { scene, zombies, ui });
+  let seals = null;
   // 尸潮的节奏（pacing.js）：平静 → 升温 → 尸潮 → 喘息；特殊感染者按名额放
   const pacing = createPacing(rng);
   let enabled = false, noiseEl = null, clockEl = null, savedFlow = null;
@@ -504,6 +508,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     for (const b of balconies.splice(0)) b.g.removeFromParent();
     for (const a of acids.splice(0)) a.dispose();
     pacing.reset();
+    walls.reset(); walls.enabled = enabled; seals?.dispose(); seals = null;
     // 血不会自己回（原游戏的缓慢回血只在零点突围里留着）；医疗包、止痛药、地上的补给只有这个模式有
     G.noRegen = enabled; G.speedMul = 1; if (!enabled) G.weapon?.lock?.([]);
     if (supplies) { supplies.enabled = enabled; supplies.reset(); }
@@ -526,6 +531,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     } : null);
     if (!enabled || !S.plan || director.state.mission !== S.mission) return;
     const heli = director.vehicles.heli; heli.root.visible = false;
+    // 范围往外的门口、扶梯口全部落闸
+    { const T = tower(), A = SIEGE.area; seals = buildSeals(root, sealSegments(nav, (f) => A.mall.includes(f) || f === T.power || String(f).startsWith(`${T.id}-`))); }
     // 关卡的大件摆到楼梯口
     for (const g of S.plan.gates) { const b = gateBlock(g.type); b.position.set(g.model.x, g.model.y, g.model.z); b.rotation.y = g.model.yaw; root.add(b); blocks.push(b); g.block = b; }
     // 开局只有手枪和刀：步枪没子弹，拿到武器柜才有。原游戏在这之后还会把武器重置一遍（装满子弹），所以等开打的第一帧再改（loadout）
@@ -745,6 +752,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function finishStage(i) {
     const st = S.plan.stages[i];
     if (st.kind === 'pistol') { G.weapon?.unlock?.('pistol'); say('拿到手枪', 2.6); }
+    { const n = DEFENSE.give[st.kind === 'gate' && st.gate === S.plan.gates.length - 1 ? 'flare' : st.kind] || 0; if (n && walls.give(n)) G.hud?.radio?.(`拿到 ${n} 个路障（按 B 摆在面前）：丧尸冲过来会被挡一阵。`, 4); }
     if (st.kind === 'locker') {
       try { G.rifle.ammo = SIEGE.ammo.rifle; G.rifle.reserve = SIEGE.ammo.reserve; } catch { /* 改不了就不改 */ }
       G.weapon?.unlock?.('pistol', { equip: false }); if (!G.weapon?.unlock?.('rifle')) G.weapon?.select?.('rifle'); say('拿到步枪 · 30 / 90', 3);
@@ -801,10 +809,11 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const api = {
     get enabled() { return enabled; },
     set enabled(v) { enabled = !!v; if (enabled) warmProps(); try { storage?.setItem?.('jimao-siege', enabled ? '1' : '0'); } catch { /* 存不了就不存 */ } },
-    mission, reset, state: S, addNoise, horde, pacing, spawnSpecial, spawnBrute, supplies, inArea,
+    mission, reset, state: S, walls, get seals() { return seals; }, addNoise, horde, pacing, spawnSpecial, spawnBrute, supplies, inArea,
     get plan() { return S.plan; },
     update(dt) {
       for (const b of blocks) b.userData.update?.(dt, G);
+      if (playing() && !director.riding) walls.update(dt);
       if (enabled && S.loadout && director.state.mission === S.mission && (G.game?.state === 'playing' || G.game?.state === 'intro')) loadout();
       if (enabled && S.kit && G.game?.state === 'playing') { supplies?.restore?.(S.kit); S.kit = null; }
       // 步枪弹药也照存档时的来（原游戏重置时给的是满的；至少留两个弹匣，不至于回来就没子弹）
@@ -832,7 +841,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       if (S.bruteT >= 0 && (S.bruteT -= dt) < 0) spawnBrute();
       if (noiseEl) { noiseEl.classList.remove('off'); noiseEl.classList.toggle('hot', S.noise > 70); noiseEl.querySelector('b').style.width = `${Math.min(100, S.noise)}%`; }
     },
-    dispose() { for (const a of acids.splice(0)) a.dispose(); acidMat.dispose(); acidBall.dispose(); acidDisc.dispose(); root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
+    dispose() { for (const a of acids.splice(0)) a.dispose(); acidMat.dispose(); acidBall.dispose(); acidDisc.dispose(); walls.dispose(); seals?.dispose(); root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
   };
   return api;
 }
