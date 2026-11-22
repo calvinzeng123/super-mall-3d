@@ -154,7 +154,7 @@ export function createAmmoSupply(G, { scene, layout, nav, rng = Math.random, isR
     }
     if (!playing) return;
     const t = total(), low = t < 120;
-    if (!lowSaid && t < AMMO.low && !isRiding()) { lowSaid = true; G.hud?.radio?.('弹药不多了！击倒的敌人会掉弹匣，地图上的绿色弹药箱也能补给。', 4.5); }
+    if (!lowSaid && t < AMMO.low && !isRiding() && !G.weapon?.locked?.includes('rifle')) { /* 丧尸围城开局还没拿到步枪：不提醒（本来就没有） */ lowSaid = true; G.hud?.radio?.('弹药不多了！击倒的敌人会掉弹匣，地图上的绿色弹药箱也能补给。', 4.5); }
     markerT -= dt;
     if (low !== lastLow || (low && markerT <= 0)) { lastLow = low; markerT = 3; G.game?.refreshObjective?.(); }
   }
