@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { MEMORY_PROFILES } from '../src/render/device.js';
 import {
   worldDetail, worldWear, detailFor, detailVariant, worldDetailTier, worldDetailChunks, trackFloor, setWorldGrime, worldGrime,
-  macroNoise, macroNoiseSteps, macroTexture, MACRO_NEUTRAL, DETAIL_SURFACES, DETAIL_EYE, metricFloor, disposeWorldDetail,
+  macroNoise, macroNoiseSteps, macroTexture, MACRO_NEUTRAL, DETAIL_SURFACES, DETAIL_EYE, metricFloor, disposeWorldDetail, detailFrame, hashText,
 } from '../src/render/pbr.js';
 import { MaterialLib } from '../src/render/materials.js';
 
@@ -194,4 +194,35 @@ test('没有 document（node）：贴图那一步什么都不做，材质照常�
   assert.equal(m.userData.detail, 'painted_plaster');
   assert.equal(detailFor(new THREE.MeshStandardMaterial(), {}, 'matte').userData.detail, undefined, '没有贴图：原样返回');
   assert.equal(detailFor(new THREE.MeshBasicMaterial(), { painted_plaster: asset() }, 'matte').userData.detail, undefined, '不是标准材质：原样返回');
+});
+
+test('三向投影的切线：六个面都是右手系（T × B = 面法线），着色器里也按同样的规则翻 u', () => {
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  for (const n of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0.3, 0.9, 0.1], [-0.8, 0.2, 0.5]]) {
+    const f = detailFrame(n), c = cross(f.T, f.B);
+    const axis = { x: 0, y: 1, z: 2 }[f.axis];
+    assert.equal(c[axis], Math.sign(n[axis]), `法线 ${n}：T×B = ${c}`);
+  }
+  const { color } = worldDetailChunks(detailVariant(asset(), DETAIL_SURFACES.matte, MEMORY_PROFILES.full));
+  assert.match(color, /wdN\.y >= 0\.0 \? -1\.0 : 1\.0/);
+  assert.match(color, /wdN\.x >= 0\.0 \? -1\.0 : 1\.0/);
+  assert.match(color, /wdN\.z >= 0\.0 \? 1\.0 : -1\.0/);
+});
+
+test('缓存键：前面的补丁没给缓存键时，按它的源码区分；同一份材质不叠两层', () => {
+  const a = new THREE.MeshStandardMaterial(), b = new THREE.MeshStandardMaterial();
+  a.onBeforeCompile = (s) => { s.fragmentShader += '//a'; };
+  b.onBeforeCompile = (s) => { s.fragmentShader += '//b'; };
+  worldDetail(a, asset(), DETAIL_SURFACES.matte); worldDetail(b, asset(), DETAIL_SURFACES.matte);
+  assert.notEqual(a.customProgramCacheKey(), b.customProgramCacheKey());
+  assert.equal(hashText('abc'), hashText('abc'));
+  assert.notEqual(hashText('abc'), hashText('abd'));
+  // 已经叠过细节的材质再叠污垢 / 再叠一次细节：原样返回，不重复声明变量
+  const key = a.customProgramCacheKey(), hook = a.onBeforeCompile;
+  worldWear(a); worldDetail(a, asset(), DETAIL_SURFACES.matte);
+  assert.equal(a.onBeforeCompile, hook);
+  assert.equal(a.customProgramCacheKey(), key);
+  const w = worldWear(new THREE.MeshStandardMaterial());
+  worldDetail(w, asset(), DETAIL_SURFACES.matte);
+  assert.equal(w.userData.detail, undefined);
 });

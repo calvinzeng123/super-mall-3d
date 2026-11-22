@@ -359,7 +359,7 @@ export function woundAt(W, px, py, pz, nx, nz, na, nb, frame, out, nc = 0.5) {
   const dy = W.y - py; // 正数 = 在伤口下方
   if (dy < -W.r * 3 || dy > W.len * 1.1 + W.r * 2) return out;
   // nc：沿高度变化的噪声，让往下洇的那一片左右扭着走（不是一根直筒）
-  const sway = (nc - 0.5) * 0.1 * smooth(0, 0.12, dy), dx = px - W.x + sway * -W.nz, dz = pz - W.z + sway * W.nx, hd2 = dx * dx + dz * dz, wmax = W.r * 1.8 + Math.max(0, dy) * W.spread * 1.5 + 0.03;
+  const sway = (nc - 0.5) * 0.22 * smooth(0, 0.16, dy), dx = px - W.x + sway * -W.nz, dz = pz - W.z + sway * W.nx, hd2 = dx * dx + dz * dz, wmax = W.r * 1.8 + Math.max(0, dy) * W.spread * 1.5 + 0.03;
   if (hd2 > wmax * wmax) return out;
   const g = smooth(-0.25, 0.35, nx * W.nx + nz * W.nz); // 只淌在和伤口朝同一边的那一面
   if (g <= 0) return out;
@@ -409,7 +409,7 @@ export function* bloodField(body, plan, frame) {
         if (ddx * ddx + ddz * ddz > wmax * wmax || nx * W.nx + nz * W.nz < -0.25) continue;
         // 噪声各伤口各取一份（种子不同），同一模型的几套外观边缘也不一样
         const na = fbm3(px * 15, py * 15, pz * 15, W.seed & 1023, 2) * 0.6 + vnoise3(px * 36, py * 36, pz * 36, (W.seed + 5) & 1023) * 0.4, nb = vnoise3(px * 20 + 3, 0.5, pz * 20, (W.seed >> 10) & 1023); // 噪声不能比网格还细（每格一厘米多），不然等值线成了一格格的台阶
-        woundAt(W, px, py, pz, nx, nz, na, nb, frame, tmp, vnoise3(0.5, py * 9, 0.5, (W.seed >> 4) & 1023));
+        woundAt(W, px, py, pz, nx, nz, na, nb, frame, tmp, vnoise3(0.5, py * 5.5, 0.5, (W.seed >> 4) & 1023)); // 往下一路左右扭（低频：一扭十几厘米，不是一根直筒）
         if (W === plan.mouth) { if (tmp[0] > mouth[q]) mouth[q] = tmp[0]; }
         else { pot[q] = 1 - (1 - pot[q]) * (1 - Math.min(1, tmp[0])) + Math.max(0, tmp[0] - 1); if (tmp[1] > wet[q]) wet[q] = tmp[1]; if (tmp[2] > open[q]) open[q] = tmp[2]; }
       }
@@ -417,6 +417,17 @@ export function* bloodField(body, plan, frame) {
     yield;
   }
   return { pot, wet, open, mouth };
+}
+
+/**
+ * 一片细血点的遮罩（0–1）：两张噪声表各转一个角度取、取交集——单张值噪声取高阈值出来的是一个个顺着格子的方块，
+ * 转过角度再互相切掉一部分，点子才是大小不一、形状不规则的。f：密度（越大点越小），ou / ov：错开，th：阈值（越低点越多）。纯函数
+ */
+export function dropAt(tA, tB, NT, u, v, f, ou, ov, th) {
+  const a = tap(tB, NT, (u * 0.8 + v * 0.6) * f + ou, (v * 0.8 - u * 0.6) * f + ov);
+  if (a < th) return 0;
+  const b = tap(tA, NT, (u * 0.5 - v * 0.87) * f * 1.4 + ov, (v * 0.5 + u * 0.87) * f * 1.4 + ou);
+  return smooth(th, th + 0.025, a) * smooth(0.42, 0.52, b);
 }
 
 /** 往下淌的一道道细流（逐像素）：伤口正下方按水平位置分条，每条长短、粗细、弯曲不同，末端一滴。返回 0–1。纯函数 */
@@ -755,12 +766,12 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
         }
         for (let c = 0; c < sprays.length; c++) {
           const P = sprays[c], ex = px - P.x, ey = py - P.y, ez = pz - P.z, dd = Math.sqrt(ex * ex + ey * ey + ez * ez); if (dd > P.r * 1.8 || nx * P.nx + nz * P.nz < 0) continue;
-          const dens = Math.exp(-(dd / P.r) * (dd / P.r) * 1.5), th = 0.84 - 0.13 * dens, nf = tap(tB, NT, u * 3.2 + P.u, v * 3.2 + P.v); // 噪声表 99% 的值在 0.84 以下
-          pt = Math.max(pt, smooth(th, th + 0.02, nf) * 0.75);
+          const dens = Math.exp(-(dd / P.r) * (dd / P.r) * 1.5), th = 0.8 - 0.14 * dens; // 噪声表 99% 的值在 0.84 以下
+          pt = Math.max(pt, dropAt(tA, tB, NT, u, v, 4.6, P.u, P.v, th) * 0.75);
         }
         if (shins && py < 0.52 && py > 0.06 && nz > 0.1) {
-          const nf = tap(tA, NT, u * 3.6 + shinU, v * 3.6 + 11), th = 0.81 - 0.05 * shins * (1 - smooth(0.2, 0.52, py));
-          pt = Math.max(pt, smooth(th, th + 0.02, nf) * 0.7);
+          const th = 0.79 - 0.06 * shins * (1 - smooth(0.2, 0.52, py));
+          pt = Math.max(pt, dropAt(tA, tB, NT, u, v, 4.2, shinU, 11, th) * 0.7);
         }
       }
       if (mp > 0 && fluid) { // 喷酸者嘴里淌的是黄绿的涎水：亮、发黏
@@ -769,11 +780,14 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
         mp = 0;
       }
       const P0 = Math.max(pt, mp);
-      if (P0 > 0.12) {
-        // 边缘：横向拉长的噪声（顺着布纹洇）+ 条纹深浅（深色的纱吸得多）+ 细噪声把边撕碎
-        const an = tap(tB, NT, u * 5, v * 1.1 + 31), wick = isSkin ? 0 : (l0 - lowL) / 255 * 0.07;
-        const en = (an - 0.5) * 0.24 + wick + (n3 - 0.5) * 0.1 + (n2 - 0.5) * 0.08;
-        const cov = smooth(0.27, 0.44, P0 + en) * hairK, sat = smooth(0.36, 0.8, P0 + en * 0.5 + (n1 - 0.5) * 0.3), ring = smooth(0.3, 0.36, P0 + en) * (1 - smooth(0.37, 0.46, P0 + en));
+      if (P0 > 0.08) {
+        // 边缘：三档噪声叠起来——顺着布纹横向拉长的、几厘米一块的、细碎的——再加条纹深浅（深色的纱吸得多），等值线又碎又顺着布走
+        const an = tap(tB, NT, u * 5, v * 1.1 + 31), am = tap(tA, NT, u * 1.3 + 71, v * 1.3 + 19), wick = isSkin ? 0 : (l0 - lowL) / 255 * 0.08;
+        const en = (an - 0.5) * 0.3 + (am - 0.5) * 0.24 + wick + (n3 - 0.5) * 0.12 + (n2 - 0.5) * 0.1;
+        const cov = smooth(0.29, 0.43, P0 + en) * hairK, sat = smooth(0.38, 1.05, P0 + en * 0.6 + (n1 - 0.5) * 0.35), ring = smooth(0.29, 0.35, P0 + en) * (1 - smooth(0.36, 0.47, P0 + en));
+        // 浸透的那片外面一圈淡渍：血水顺着纱往外走了一截，浅褐、半透（布上才有；没有这一圈，血斑就是贴上去的一块）
+        const halo = isSkin ? 0 : smooth(0.1, 0.3, P0 + en * 1.4) * (1 - cov) * hairK;
+        if (halo > 0) { r *= 1 - halo * 0.2; g *= 1 - halo * 0.36; b *= 1 - halo * 0.44; lr *= 1 - halo * 0.2; lg *= 1 - halo * 0.36; lb *= 1 - halo * 0.44; }
         if (cov > 0) {
           const fr = Math.max(Math.min(1, wt * 1.2), mp > pt ? smooth(0.75, 1.05, mp) * 0.75 : 0), flat = Math.min(1, cov * 0.45 + sat * 0.75); // 洇透了：条纹压平；嘴边最厚的那一点还是湿的
           r = mix(r, lr, flat); g = mix(g, lg, flat); b = mix(b, lb, flat);
@@ -783,13 +797,16 @@ export function* paintColour(src, layers, look, tone, plan, field, body, tables,
           const rk = 1 - ring * 0.45, pool = smooth(1, 1.5, P0) * 0.3; // 外沿那圈水线更深（干了的血渍边上一圈深色）；积在裤腰的更暗
           mr *= rk * (1 - pool); mg *= rk * (1 - pool); mb *= rk * (1 - pool);
           const fl = isSkin ? 9 : 4; // 皮肤上的血不至于乘成死黑
-          r = mix(r, r * mr + fl, cov); g = mix(g, g * mg + fl * 0.2, cov); b = mix(b, b * mb + fl * 0.2, cov);
+          // 浸透的一片里也有厚有薄（几厘米一块的起伏）：不是一块平涂的色，远看才是「渗」出来的
+          const dens = cov * (0.8 + 0.2 * smooth(0.3, 0.7, am + (n1 - 0.5) * 0.4) + 0.2 * sat) ;
+          const kd = Math.min(1, dens);
+          r = mix(r, r * mr + fl, kd); g = mix(g, g * mg + fl * 0.2, kd); b = mix(b, b * mb + fl * 0.2, kd);
           wetA = Math.max(wetA, cov * (0.12 + 0.6 * fr * fr)); // 湿血是缎面的亮，不是镜面（整片镜面在手电下成一圈白光，像一只眼睛）
         }
       }
       // 血斑外面零星的溅点（离血斑越近越多）
       if (P0 > 0.1 && P0 < 0.42 && !hair) {
-        const fl = smooth(0.1, 0.3, P0) * smooth(0.79, 0.82, tap(tB, NT, u * 3.3 + 50, v * 3.3 + 20));
+        const fl = smooth(0.1, 0.3, P0) * dropAt(tA, tB, NT, u, v, 5.2, 50, 20, 0.76);
         if (fl > 0) { r = mix(r, r * coreC[0] + 6, fl * 0.9); g = mix(g, g * coreC[1] + 2, fl * 0.9); b = mix(b, b * coreC[2] + 2, fl * 0.9); wetA = Math.max(wetA, fl * 0.12); }
       }
       if (op > 0.02 && !hair) {

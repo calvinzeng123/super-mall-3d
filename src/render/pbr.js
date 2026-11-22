@@ -281,6 +281,18 @@ export function worldDetailTier(mem = MEM) {
   return mem.lite ? 'lite' : 'full';
 }
 
+/**
+ * 世界法线 n 对应的投影：取哪根轴（'x' / 'y' / 'z'）、u 翻不翻号（s）、切线 T、副切线 B。
+ * 和着色器里 faces 那段一一对应（测试用它验证六个面都是右手系：T × B = 面的法线）。
+ */
+export function detailFrame([x, y, z]) {
+  const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+  if (ay > Math.max(ax, az)) { const s = y >= 0 ? -1 : 1; return { axis: 'y', s, T: [s, 0, 0], B: [0, 0, 1] }; }
+  if (ax > az) { const s = x >= 0 ? -1 : 1; return { axis: 'x', s, T: [0, 0, s], B: [0, 1, 0] }; }
+  const s = z >= 0 ? 1 : -1;
+  return { axis: 'z', s, T: [s, 0, 0], B: [0, 1, 0] };
+}
+
 const f3 = (v) => (+v).toFixed(4);
 const ROT = [Math.cos(0.66), Math.sin(0.66)]; // 防重复的第二次取样转过的角度（约 38°）
 
@@ -308,9 +320,11 @@ export function worldDetailChunks(v) {
     vec3 wdN = normalize(vDetailNormal);
     vec3 wdA = abs(wdN);
     vec2 wdP; vec3 wdT; vec3 wdB;
-    if (wdA.y > max(wdA.x, wdA.z)) { wdP = vDetailPos.xz; wdT = vec3(1.0, 0.0, 0.0); wdB = vec3(0.0, 0.0, 1.0); }
-    else if (wdA.x > wdA.z) { wdP = vDetailPos.zy; wdT = vec3(0.0, 0.0, 1.0); wdB = vec3(0.0, 1.0, 0.0); }
-    else { wdP = vDetailPos.xy; wdT = vec3(1.0, 0.0, 0.0); wdB = vec3(0.0, 1.0, 0.0); }
+    // 投影的 u 按面朝向翻个号，让 (切线, 副切线, 法线) 在六个面上都是右手系、切线正好是 dP/du：
+    // 不翻的话一半的面（朝 +x、+y、-z）法线贴图的凹凸是反的，手电从一边照过来，坑看着像鼓包
+    if (wdA.y > max(wdA.x, wdA.z)) { float s = wdN.y >= 0.0 ? -1.0 : 1.0; wdP = vec2(vDetailPos.x * s, vDetailPos.z); wdT = vec3(s, 0.0, 0.0); wdB = vec3(0.0, 0.0, 1.0); }
+    else if (wdA.x > wdA.z) { float s = wdN.x >= 0.0 ? -1.0 : 1.0; wdP = vec2(vDetailPos.z * s, vDetailPos.y); wdT = vec3(0.0, 0.0, s); wdB = vec3(0.0, 1.0, 0.0); }
+    else { float s = wdN.z >= 0.0 ? 1.0 : -1.0; wdP = vec2(vDetailPos.x * s, vDetailPos.y); wdT = vec3(s, 0.0, 0.0); wdB = vec3(0.0, 1.0, 0.0); }
     float wdUp = smoothstep(0.6, 0.8, wdN.y), wdDown = smoothstep(0.6, 0.8, -wdN.y), wdWall = 1.0 - wdUp - wdDown;`;
   const macro = `vec4 wdM = texture2D(wdMacro, wdP * ${f3(1 / MACRO_METERS)} + vec2(0.13, 0.41));
     float wdStain = smoothstep(0.83, 0.9, wdM.g) * (1.0 - 0.55 * smoothstep(0.9, 0.98, wdM.g));`;
@@ -375,10 +389,20 @@ const DETAIL_VERTEX = `#include <project_vertex>
       vDetailNormal = mat3(modelMatrix) * detailN;`;
 
 /** 给材质挂上着色器补丁：前面已有的补丁（夜间自发光、楼面米制坐标……）照样先跑；克隆出来的材质（各栋楼带剖切面那份）也对 */
+/** 短字符串哈希（FNV-1a），只用来区分缓存键 */
+export function hashText(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+
 function hookDetail(mat, variant, textures, key) {
   // 材质上原来的补丁和缓存键：只认自己挂上去的（原型上的默认缓存键是整段 onBeforeCompile 的源码，不串进来）
   const own = (k) => Object.prototype.hasOwnProperty.call(mat, k) ? mat[k] : null;
-  const prev = own('onBeforeCompile'), prevKey = own('customProgramCacheKey');
+  const prev = own('onBeforeCompile'), ownKey = own('customProgramCacheKey');
+  // 前面的补丁没给自己的缓存键（three 默认拿 onBeforeCompile 的源码当键）：把它的源码折成短哈希串进来，
+  // 不然两种不同补丁的材质叠上同一种细节，会被当成同一个着色器程序
+  const prevKey = ownKey || (prev ? ((h) => () => h)(`p${hashText(String(prev))}`) : null);
   mat.onBeforeCompile = function (shader, renderer) {
     prev?.call(this, shader, renderer);
     if (typeof shader.fragmentShader !== 'string' || typeof shader.vertexShader !== 'string') return;
@@ -432,6 +456,8 @@ export function detailVariant(asset, { strength = 1, meters = asset?.meters?.[0]
 export function worldDetail(mat, asset, opts = {}) {
   if (!MEM.decor) return mat;
   if (!asset?.maps?.color || !mat?.isMeshStandardMaterial) return mat;
+  // 同一份材质只叠一层（两层会重复声明 wdN 这些变量，着色器编译失败、整批不画）
+  if (mat.userData?.detail || mat.userData?.wear) return mat;
   const v = detailVariant(asset, opts);
   if (!v) return mat;
   macroTexture();
@@ -449,7 +475,7 @@ export function worldDetail(mat, asset, opts = {}) {
  * 丧尸围城断电时 +1 次（大块噪声图）。省内存档不叠。
  */
 export function worldWear(mat) {
-  if (!MEM.decor || !mat?.isMeshStandardMaterial || mat.userData?.wear) return mat;
+  if (!MEM.decor || !mat?.isMeshStandardMaterial || mat.userData?.wear || mat.userData?.detail) return mat;
   macroTexture();
   hookDetail(mat, { wearOnly: true }, {}, 'wear');
   mat.userData.wear = true;
