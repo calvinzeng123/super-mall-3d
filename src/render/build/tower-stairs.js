@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { BatchSet, frameMatrix, instanceMatrix, tpl } from '../batch.js';
 
 const WALL = '#dce1d8', STEP = '#c8cec3', METAL = '#607967';
+// 收在门洞两边的防火门扇：钢质防火门常见的暗红褐色烤漆（和关卡里那樘反锁的防火门同一类颜色），不再是栏杆的绿色
+const FIRE_DOOR = '#6f3a30';
 /**
  * 楼梯间细部的顶点色。实例化模板只有两个批次（不加绘制调用）：
  * 刷漆、水泥踏步、木扶手这些不该反光的面走「抹灰」批次（plaster：无缝的细抹灰，没有清水混凝土那种一道道模板缝——
@@ -22,7 +24,7 @@ export const STAIR_PAINT = Object.freeze({
   hydrant: '#a12a22', hydrantFrame: '#b9bebf', hydrantInside: '#2b2d2c', hydrantGlass: '#5e6d72', hoseReel: '#7d241d',
   hydrantLabel: '#ece7da', meter: '#8a918b', meterSeam: '#4c524e',
   // 候梯厅：拉丝不锈钢门套和召唤盒、黑色按钮、红色手动报警按钮
-  steel: '#bcc1c3', button: '#2c3032', alarm: '#b02a22', lobbySkirting: '#4b4c48', lampRim: '#3b3e3d', panel: '#8f8d86',
+  steel: '#a3a9ac', button: '#2c3032', alarm: '#b02a22', lobbySkirting: '#4b4c48', lampRim: '#3b3e3d', panel: '#8f8d86',
 });
 /** 墙裙（梯段处沿踏步前缘斜着走）、踢脚线的高度。 */
 export const DADO_HEIGHT = 1.2, SKIRTING_HEIGHT = .16;
@@ -124,7 +126,8 @@ export function stairDetailSpec(building, lv, stairs, elevators = null) {
   // 门洞上沿：社区塔楼自己楼层 2.3（community.js 的过梁），一期宿主楼层 2.2（residential-cores 的门头），其余 2.35。
   const head = own ? 2.3 : building.community ? 2.2 : 2.35;
   // lining：楼梯间的墙不是社区塔楼自己的抹灰墙（酒店 / 公寓、一期宿主楼层是清水混凝土或石材），模板里贴一层抹灰面
-  const out = { inset, head, wellGuard: !!building.community, lining: !own, stairs: {} };
+  // outer：门墙朝走廊的一面也贴抹灰（酒店 / 公寓的走廊、车库）；一期宿主楼层的候梯厅是石材墙面，不贴
+  const out = { inset, head, wellGuard: !!building.community, lining: !own, outer: !building.community, stairs: {} };
   // 社区塔楼自己的楼层：楼梯门正对的候梯厅（lobbySpec）。消火栓箱、表箱挂在出楼梯门迎面那道电梯墙的墙垛上；
   // 楼梯门这道墙上只留手动报警按钮（门边 1.4 m）。
   const lobby = own ? lobbySpec(lv, sorted, elevators) : null;
@@ -217,8 +220,8 @@ export function buildTowerStairGeometry(B, building, levels, stairs, { enclosure
         // Open door leaves are parked against the entry wall, not through the
         // 1.8m clear landing or the route between the two stair flights.
         const leaf=Math.min(.65,(d.x1-d.x0)*.6);
-        if(!brk){B.get('extMetal').box(d.x0-.35,y+1.09,entryZ,.65,2.18,.055,METAL);B.get('extMetal').box(d.x1+.35,y+1.09,entryZ,.65,2.18,.055,METAL);}
-        else {const out=(d.x0+d.x1)/2<brk.partition.x0?-1:1;B.get('extMetal').box(out<0?d.x0-leaf/2-.03:d.x1+leaf/2+.03,y+1.09,entryZ,leaf,2.18,.055,METAL);}
+        if(!brk){B.get('extMetal').box(d.x0-.35,y+1.09,entryZ,.65,2.18,.055,FIRE_DOOR);B.get('extMetal').box(d.x1+.35,y+1.09,entryZ,.65,2.18,.055,FIRE_DOOR);}
+        else {const out=(d.x0+d.x1)/2<brk.partition.x0?-1:1;B.get('extMetal').box(out<0?d.x0-leaf/2-.03:d.x1+leaf/2+.03,y+1.09,entryZ,leaf,2.18,.055,FIRE_DOOR);}
         B.get('glowSoft').box((d.x0+d.x1)/2,y+2.55,entryZ,Math.min(.85,d.x1-d.x0),.23,.07,'#78b98b');
       }
       if(brk) {
@@ -363,6 +366,15 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
         x = q.x1;
       }
       if (xr - x > .02) wallStrip(C, [x, Z(vf + .003)], [xr, Z(vf + .003)], 0, 0, h, nIn, W);
+      // 门墙朝走廊的一面也贴（走廊、车库里看过来是这一面），左右到楼梯间外框为止
+      const nOut = [0, -dir], zo = Z(vo - .003);
+      x = r.x0;
+      if (detail.outer) for (const q of doors) {
+        if (q.x0 - x > .02) wallStrip(C, [x, zo], [q.x0, zo], 0, 0, h, nOut, W);
+        wallStrip(C, [q.x0, zo], [q.x1, zo], detail.head, detail.head, h - detail.head, nOut, W);
+        x = q.x1;
+      }
+      if (detail.outer && r.x1 - x > .02) wallStrip(C, [x, zo], [r.x1, zo], 0, 0, h, nOut, W);
     }
     // ---- 两侧墙：沿行走面（门口平台 0、梯段前缘线、半层平台）的折线画墙裙 / 腰线 / 踢脚 ----
     let vE = null, vEnd = null, mid = null;
