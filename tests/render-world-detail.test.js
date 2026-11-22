@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { MEMORY_PROFILES } from '../src/render/device.js';
 import {
-  worldDetail, worldWear, detailFor, detailVariant, worldDetailTier, worldDetailChunks, trackFloor, setWorldGrime, worldGrime,
+  worldDetail, worldWear, detailFor, detailVariant, worldDetailTier, worldDetailChunks, trackFloor, stepFloor, setWorldGrime, worldGrime, FLOOR_STILL,
   macroNoise, macroNoiseSteps, macroTexture, MACRO_NEUTRAL, DETAIL_SURFACES, DETAIL_EYE, metricFloor, disposeWorldDetail, detailFrame, hashText,
 } from '../src/render/pbr.js';
 import { MaterialLib } from '../src/render/materials.js';
@@ -146,6 +146,37 @@ test('脚下地面高度：第一次直接取，跳一下只动一点，坐电�
   assert.ok(Math.abs(trackFloor(10, 13.4 + DETAIL_EYE, 1 / 60) - 13.4) < 1e-9);
   // 卡了一帧（dt 很大）也不会冲过头
   assert.ok(trackFloor(10, 11 + DETAIL_EYE, 5) <= 11);
+});
+
+test('脚下地面（真正用的那个）：爬楼梯一路不动、停稳才挪过去；跳、蹲不动；传送直接跳过去', () => {
+  const run = (s, ys, dt = 1 / 60) => { for (const y of ys) s = stepFloor(s, y, dt); return s; };
+  const eye = DETAIL_EYE, still = (y, n) => Array(n).fill(y + eye);
+  let s = stepFloor(null, 20 + eye, 1 / 60);
+  assert.equal(s.y, 20);
+  // 一口气爬一跑楼梯（2 秒升 1.5 米）：估计一直留在出发那层
+  s = run(s, Array.from({ length: 120 }, (_, i) => 20 + eye + 1.5 * (i + 1) / 120));
+  assert.ok(Math.abs(s.y - 20) < 1e-9, `爬楼梯时挪了：${s.y}`);
+  // 到了平台站住：停稳 FLOOR_STILL 秒以后再过两秒，到了平台的高度
+  s = run(s, still(21.5, Math.ceil(FLOOR_STILL * 60) + 120));
+  assert.ok(Math.abs(s.y - 21.5) < 0.05, `平台 ${s.y}`);
+  // 跳一下（0.6 秒）：不动
+  const y0 = s.y;
+  s = run(s, Array.from({ length: 36 }, (_, i) => 21.5 + eye + 0.9 * Math.sin(Math.PI * i / 36)));
+  assert.ok(Math.abs(s.y - y0) < 1e-3, '跳起来不该挪');
+  // 蹲下停住三秒（眼睛低 0.72 米）：不认
+  s = run(s, still(21.5 - 0.72, 180));
+  assert.ok(Math.abs(s.y - 21.5) < 0.05, `蹲下挪了 ${s.y}`);
+  // 传送到别的楼层（一帧差 30 米）：直接跳过去
+  s = stepFloor(s, 51.5 + eye, 1 / 60);
+  assert.equal(s.y, 51.5);
+  // 坐电梯下 3 层（连续移动）：路上不动，停稳以后挪过去，不冲过头
+  s = run(s, Array.from({ length: 240 }, (_, i) => 51.5 + eye - 9 * (i + 1) / 240));
+  assert.equal(s.y, 51.5);
+  s = run(s, still(42.5, 400));
+  assert.ok(s.y >= 42.5 - 1e-9 && s.y - 42.5 < 0.06, `电梯 ${s.y}`);
+  // 卡了一帧（dt 很大）也不出错；NaN 原样返回
+  assert.ok(Number.isFinite(stepFloor(s, 42.5 + eye, 50).y));
+  assert.equal(stepFloor(s, NaN, 1 / 60), s);
 });
 
 test('大块噪声图：大小对、首尾能接上、各通道分布合理；分步算和一次算结果一样', () => {

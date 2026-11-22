@@ -172,8 +172,10 @@ export function zombieTexSizes(mem = MEM) {
  * stats：画贴图花了多久（ms，总计 / 最长的一段）、几张图、显存大约多少。
  * budget：一段最多画多少毫秒（之后隔一帧）；trace：给一个数组就把每一段 [开始, 时长, 在干什么] 记进去（量切片用）。
  * 中途出错时已经建好的贴图、材质、几何都释放掉再往外抛（调用的地方接住、继续用方块人）。
+ * budget 取 10：一段画完要隔一帧，总共要多少帧 ≈ 总活 / budget，机器不忙时整个生成是按帧数算时间的。
+ * 试过 8：最长的一段只短几毫秒（主线程上十三四毫秒 vs 十七到二十来毫秒，离 50 都远），段数却多了两三成，丧尸换上贴图晚一两秒。
  */
-export async function loadZombieKit({ seed = 20261120, budget = 8, trace = null } = {}) {
+export async function loadZombieKit({ seed = 20261120, budget = 10, trace = null } = {}) {
   // 没有 document（node 测试）就画不了贴图：直接拒绝，调用的地方（run.js）会接住、继续用方块人
   if (typeof document === 'undefined') throw new Error('没有 document，画不了丧尸贴图');
   const t0 = now(), clock = { t: now(), budget, slices: 0, worst: [0, ''], trace };

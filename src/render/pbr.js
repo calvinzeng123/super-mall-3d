@@ -132,14 +132,19 @@ export const DETAIL_EYE = 1.62;
 /** 估地面高度时的平滑时间（秒）：跳一下、蹲一下，墙根那圈脏不跟着上下跳 */
 export const FLOOR_TAU = 0.45;
 
+/** 相机竖直方向要「停稳」多久（秒）才认新的地面：一路走楼梯、跳起来的时候墙根那圈脏不跟着人往上爬 */
+export const FLOOR_STILL = 0.3;
+/** 比当前估计低这么多以内（米）的下沉不认：蹲下（眼睛低 0.72 米）、滑铲，脏的那一圈不该跟着往下掉 */
+export const FLOOR_DIP = 0.8;
+
 /** 所有细节材质共用的几个 uniform：停电污垢的强度、玩家脚下地面的高度（世界 y）、大块噪声图 */
 const WD = { grime: { value: 0 }, floorY: { value: 0 }, macro: { value: null } };
-const floorTrack = { y: null, t: 0, frame: -1 };
+const floorTrack = { y: null, cam: null, still: 0, chase: false, t: 0, frame: -1 };
 
 /** 停电污垢的强度（0 = 干净，1 = 断电的楼）。materials.js 按供电设。 */
 export function setWorldGrime(v) {
   WD.grime.value = Math.max(0, Math.min(1, +v || 0));
-  if (!(WD.grime.value > 0)) floorTrack.y = null;
+  if (!(WD.grime.value > 0)) floorTrack.y = floorTrack.cam = null;
   return WD.grime.value;
 }
 export const worldGrime = () => WD.grime.value;
@@ -147,13 +152,36 @@ export const worldGrime = () => WD.grime.value;
 export const worldDetailState = () => ({ grime: WD.grime.value, floorY: WD.floorY.value, tracked: floorTrack.y });
 
 /**
- * 按相机高度估玩家脚下地面的高度：目标 = 相机 y − 站姿眼高，指数平滑（跳、蹲、上楼梯不会让墙根的脏忽上忽下）；
- * 一下差出 2.5 米以上（坐电梯、传送、过场镜头）直接跳过去。纯函数，返回新的估计值。
+ * 指数平滑一步：目标 = 相机 y − 站姿眼高。一下差出 2.5 米以上直接跳过去。纯函数，返回新的估计值。
  */
 export function trackFloor(prev, cameraY, dt, tau = FLOOR_TAU, eye = DETAIL_EYE) {
   const target = cameraY - eye;
   if (prev == null || !Number.isFinite(prev) || Math.abs(target - prev) > 2.5) return target;
   return prev + (target - prev) * (1 - Math.exp(-Math.max(0, Math.min(0.1, dt)) / tau));
+}
+
+/**
+ * 按相机高度估玩家脚下的地面（墙根那圈停电污垢按它画）。只在相机竖直方向停稳 FLOOR_STILL 秒以后才慢慢挪过去：
+ * 爬楼梯的一路上，脏的那一圈留在出发那层的墙根，不会顺着梯段的墙跟人一起往上滑；跳起来、落地也不动。
+ * 比估计低一点点（蹲下、滑铲）不认。一帧里差出 1.2 米以上（传送、过场镜头切回）直接跳过去；
+ * 坐电梯是连续移动，停稳后慢慢挪过去——差得远的时候新楼层墙根的脏是从无到有淡入的，不会一条线扫过墙面。
+ * 纯函数：s = { y, cam, still, chase }（第一次传 null），返回新的状态。
+ */
+export function stepFloor(s, cameraY, dt, eye = DETAIL_EYE) {
+  const target = cameraY - eye;
+  if (!Number.isFinite(target)) return s;
+  if (!s || s.y == null || !Number.isFinite(s.y) || s.cam == null) return { y: target, cam: cameraY, still: 0, chase: false };
+  const step = Math.max(0, Math.min(0.1, +dt || 0));
+  const dy = cameraY - s.cam;
+  if (Math.abs(dy) > 1.2) return { y: target, cam: cameraY, still: 0, chase: false };
+  const still = Math.abs(dy) <= 0.3 * Math.max(step, 1e-3) ? s.still + step : 0;
+  let y = s.y, chase = !!s.chase;
+  // chase：已经认了新地面、正在挪过去——从上往下挪到最后那 0.8 米也要挪完（不然坐电梯下楼会停在半空）
+  if (still >= FLOOR_STILL && (chase || target > y || y - target >= FLOOR_DIP)) {
+    y += (target - y) * (1 - Math.exp(-step / FLOOR_TAU));
+    chase = Math.abs(target - y) > 0.05;
+  }
+  return { y, cam: cameraY, still, chase };
 }
 
 /** 画每个细节材质之前（每帧只算一次）：停电时更新脚下地面的高度。不停电什么都不做。 */
@@ -163,7 +191,8 @@ function updateFloor(renderer, scene, camera) {
   if (frame === floorTrack.frame && floorTrack.y != null) return;
   floorTrack.frame = frame;
   const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  floorTrack.y = trackFloor(floorTrack.y, camera.matrixWorld.elements[13], (now - floorTrack.t) / 1000);
+  const next = stepFloor(floorTrack, camera.matrixWorld.elements[13], (now - floorTrack.t) / 1000);
+  floorTrack.y = next.y; floorTrack.cam = next.cam; floorTrack.still = next.still; floorTrack.chase = next.chase;
   floorTrack.t = now;
   WD.floorY.value = floorTrack.y;
 }
