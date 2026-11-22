@@ -64,7 +64,7 @@ test('伤口按外观各挑各的：同一个模型的几套外观主伤口不�
     assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) > 0.05, `外观 ${i}、${j} 的主伤口离得太近`);
   }
   for (const p of plans) {
-    assert.ok(p.wounds.length >= 1 && p.wounds.length <= 4, `${p.wounds.length} 处`);
+    assert.ok(p.wounds.length >= 2 && p.wounds.length <= 7, `${p.wounds.length} 处`);
     for (const w of p.wounds) assert.ok(Math.abs(Math.abs(w.x) - 0.15) < 0.03 || Math.abs(Math.abs(w.z) - 0.15) < 0.03, `伤口在柱子表面 ${w.x},${w.z}`);
     assert.ok(p.mouth && p.mouth.y < fp.eyeY, '嘴在眼睛下面');
   }
@@ -81,11 +81,9 @@ test('血往下淌：伤口下方的血远多于上方，越往下越宽，过�
   assert.equal(pot(0, 1.1, -1), 0, '背面不沾');
   assert.ok(pot(0.07, 1.0) > pot(0.07, 1.18), '往下洇得更宽');
   assert.ok(Z.woundAt(W, 0, 1.2, 0.15, 0, 1, 0.5, 0.5, frame, o)[2] > 0.5 && Z.woundAt(W, 0.06, 1.2, 0.15, 0, 1, 0.5, 0.5, frame, o)[2] === 0, '皮肉只在伤口那一小处翻开');
-  // 细流：伤口上方没有，下方某些水平位置有
-  const S = { ...W, seed: 7, slot: 0.013, dens: 0.6, width: 0.004, slen: 0.2, sw: 0.1, sy0: 0.1, sy1: 0.52 };
-  assert.equal(Z.streamAt(S, 0, 1.25, 0.15, 1), 0);
-  let hit = 0; for (let x = -0.08; x <= 0.08; x += 0.001) if (Z.streamAt(S, x, 0.95, 0.15, 1) > 0.5) hit++;
-  assert.ok(hit > 0 && hit < 120, `细流是一条条的（${hit} / 161）`);
+  // 靠伤口的上半截是新血（湿），往下淌远了是干的
+  const wetNear = Z.woundAt(W, 0, 1.14, 0.15, 0, 1, 0.5, 0.5, frame, o)[1], wetFar = Z.woundAt(W, 0, 0.95, 0.15, 0, 1, 0.5, 0.5, frame, o)[1];
+  assert.ok(wetNear > 0.3 && wetNear > wetFar + 0.2, `新血 ${wetNear} 干血 ${wetFar}`);
 });
 
 test('裂口和抓痕：中间是洞，边上一边毛边一边阴影，离远了没有', () => {
@@ -188,7 +186,7 @@ test('没有 document（测试环境）：载入失败走 reject，不在导入�
   await assert.rejects(() => loadZombieKit());
 });
 
-test('第二轮：细血点是零星不规则的小点；侧面不画正面的口子（不会拉成方框）；转到侧面的细流几乎不染色', () => {
+test('第二轮：细血点是零星不规则的小点；侧面不画正面的口子（不会拉成方框）', () => {
   const tA = Z.noiseTable(256, 5), tB = Z.noiseTable(256, 6, 4, 16);
   let on = 0, n = 0, hi = 0;
   for (let y = 0; y < 256; y += 0.5) for (let x = 0; x < 256; x += 0.5) { const d = Z.dropAt(tA, tB, 256, x, y, 7.5, 3, 4, 0.76); assert.ok(d >= 0 && d <= 1); n++; if (d > 0.5) on++; if (d > hi) hi = d; }
@@ -196,8 +194,64 @@ test('第二轮：细血点是零星不规则的小点；侧面不画正面的�
   // 正面的一道口子，侧面（法线转了 90 度）上同一横向位置不画
   const C = { x: 0, y: 1.2, z: 0.15, nx: 0, nz: 1, ca: 1, sa: 0, curv: 0, reach: 0.1, cuts: [{ off: 0, len: 0.1, shift: 0, w: 0.006 }] }, out = [0, 0, 0];
   Z.slashAt(C, 0.0, 1.2, 0.1, 1, 0.2, 0.5, out); assert.deepEqual(out, [0, 0, 0], '侧面');
-  // 细流：朝向权重很小（g = 0.01）时贡献也很小
-  const S = { x: 0, y: 1.2, z: 0.15, nx: 0, nz: 1, len: 0.4, seed: 7, slot: 0.013, dens: 0.6, width: 0.004, slen: 0.2, sw: 0.1, sy0: 0.1, sy1: 0.52 };
-  let mx = 0; for (let x = -0.08; x <= 0.08; x += 0.001) mx = Math.max(mx, Z.streamAt(S, x, 0.95, 0.15, 0.01));
-  assert.ok(mx <= 0.01 + 1e-9);
+});
+
+test('第三轮：往下淌的一道（嘴角、伤口挂下来的）——随机游走、越往下越细、末端一滴，只画在朝着它的那面', () => {
+  const R = Z.mkRun(Z.makeRng(5), 0, 1.5, 0.1, 0, 1, 0, 0.15, 0.006, 0.0015, 0.0025);
+  assert.ok(R.len >= 0.149 && R.len <= 0.16 && R.n === R.off.length);
+  // 中线不是一根尺子画的直线：横向偏移有起伏
+  let lo = Infinity, hi = -Infinity; for (const o of R.off) { lo = Math.min(lo, o); hi = Math.max(hi, o); }
+  assert.ok(hi - lo > 0.002, `横向游走 ${(hi - lo).toFixed(4)} 米`);
+  const at = (dy, lat = null) => { const i = Math.min(R.n - 1, Math.round(dy / R.step)), c = lat ?? R.off[i]; return Z.runAt(R, -c, 1.5 - dy, 0.1, 0, 1); };
+  assert.ok(at(0.02) < 0.3 && at(0.12) < 0.3, '中线上');
+  assert.equal(Z.runAt(R, 0, 1.5 - 0.06, 0.1, 0, -1), 9, '背面不画');
+  assert.equal(Z.runAt(R, 0.05, 1.5 - 0.06, 0.1, 0, 1), 9, '离得远');
+  assert.equal(Z.runAt(R, 0, 1.2, 0.1, 0, 1), 9, '淌完了');
+  // 越往下越细：同样偏出 3 毫米，上头还在里面、下头已经出去了
+  const top = Z.runAt(R, -(R.off[4] + 0.003), 1.5 - 4 * R.step, 0.1, 0, 1), low = Z.runAt(R, -(R.off[R.n - 6] + 0.003), 1.5 - (R.n - 6) * R.step, 0.1, 0, 1);
+  assert.ok(top < low, `上 ${top.toFixed(2)} 下 ${low.toFixed(2)}`);
+  // 末端一滴：末端中心在里面
+  assert.ok(Z.runAt(R, -R.off[R.n - 1], 1.5 - R.len + R.drop * 0.3, 0.1, 0, 1) < 0.5);
+});
+
+test('第三轮：每套普通外观正面、背后各一大片血（前襟、后背都洇开一两成以上），不靠运气', () => {
+  const { body, frame, fp } = setup(96);
+  const L = 96;
+  for (const rot of [0, 2]) for (let k = 0; k < 3; k++) {
+    const plan = Z.planLook(body, frame, fp, 77 + k * 131 + rot, Z.LOOKS.walker[k], k, null, rot);
+    const field = Z.finish(Z.bloodField(body, plan, frame)), c = { f: [0, 0], b: [0, 0] };
+    for (let q = 0; q < L * L; q++) {
+      if (body.used[q] !== 1) continue;
+      const y = body.pos[q * 3 + 1], nz = body.nrm[q * 3 + 2]; if (y < frame.waist || y > frame.top * 0.8) continue;
+      const side = nz > 0.5 ? 'f' : nz < -0.5 ? 'b' : null; if (!side) continue;
+      c[side][1]++; if (field.pot[q] * Z.LOOKS.walker[k].blood > 0.36) c[side][0]++;
+    }
+    const f = c.f[0] / c.f[1], b = c.b[0] / c.b[1];
+    assert.ok(f > 0.15 && f < 0.6, `外观 ${k}（rot ${rot}）前襟 ${(f * 100).toFixed(0)}%`);
+    assert.ok(b > 0.1 && b < 0.6, `外观 ${k}（rot ${rot}）后背 ${(b * 100).toFixed(0)}%`);
+  }
+});
+
+test('第三轮：模型固定的几处破口压进共用法线图（口子边上有坡），没有破口的地方法线不变', () => {
+  const { body, frame, fp } = setup();
+  const S = 128, src = new Uint8ClampedArray(S * S * 4); for (let i = 0; i < S * S; i++) src.set([170, 160, 150, 255], i * 4); // 一块不透明的布
+  const tables = { n: 64, a: Z.noiseTable(64, 1), b: Z.noiseTable(64, 2, 4, 16) };
+  const layers = Z.finish(Z.prepareLayers(src, S, body, fp, tables));
+  const tears = Z.bodyTears(body, frame, fp, null, 3);
+  assert.ok(tears.length >= 4, `${tears.length} 处破口`);
+  for (const t of tears) assert.ok(t.cuts[0].len > 0.05 && t.cuts[0].w > 0.006, '口子够大（几厘米长、一两厘米宽）');
+  const H = S / 2, a = new Uint8ClampedArray(H * H * 4), b = new Uint8ClampedArray(H * H * 4), r = new Uint8ClampedArray(H * H * 4);
+  Z.finish(Z.paintSurface(src, layers, tables, a, r, body, null));
+  Z.finish(Z.paintSurface(src, layers, tables, b, r, body, tears));
+  let diff = 0, changed = 0; for (let i = 0; i < a.length; i += 4) { const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]); diff = Math.max(diff, d); if (d > 1) changed++; }
+  assert.ok(diff > 6, `破口处法线变了 ${diff}`);
+  assert.ok(changed < (H * H) / 8, `只改了破口那几处（${changed} / ${H * H}）`);
+});
+
+test('第三轮：特殊感染者光看颜色就分得开——扑袭者发黑、巨尸暗红褐、胖尸病黄发绿、尖叫者灰白', () => {
+  const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  assert.ok(lum(Z.LOOKS.lunger.skinA) < 64 && Z.LOOKS.lunger.soot >= 0.8, '扑袭者皮、衣服都压到一两成亮');
+  const [br, bg, bb] = Z.LOOKS.brute.skinA; assert.ok(br > bg * 1.8 && br < 130 && bb < bg * 1.1, '巨尸暗红褐（不是晒红的粉）');
+  const [gr, gg, gb] = Z.LOOKS.bloater.skinA; assert.ok(gg > gb * 1.4 && gr > gb * 1.4 && Z.LOOKS.bloater.ooze, '胖尸病黄发绿、衣服上渗脓水');
+  for (const w of Z.LOOKS.walker) assert.ok(w.chroma <= 0.06, '原肤色几乎不留（脸颊不泛暖）');
 });

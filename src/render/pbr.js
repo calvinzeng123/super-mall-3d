@@ -317,7 +317,7 @@ export function worldDetailChunks(v) {
     float wdContact = (1.0 - smoothstep(0.0, 0.06, wdH)) * wdIn;
     float wdBlot = smoothstep(0.45, 0.95, wdM.g);
     float wdDirt = wdWall * (wdLow * (0.28 + 0.25 * wdBlot) + wdHaze * 0.1 + wdContact * 0.22
-        + wdM.b * (0.05 + 0.2 * smoothstep(1.0, 2.6, wdH)) + wdBlot * 0.1)
+        + wdM.b * (0.04 + 0.14 * smoothstep(1.0, 2.6, wdH)) + wdBlot * 0.1)
       + wdDown * (wdStain * 0.16 + wdBlot * 0.1);
     wdDirt *= wdGrime;
     // 地面：一层灰（往灰褐色上混，深色地面发灰、浅色地面发暗），成片的地方厚一些
