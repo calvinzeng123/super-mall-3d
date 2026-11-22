@@ -40,7 +40,7 @@ export const BLACKOUT = Object.freeze({
  * NUM_SPOT_LIGHT_MAPS > 0 时生效：漫游模式、零点突围里没有挂光罩的聚光灯，编出来的着色器跟原来一样。
  * 返回是否打上了（three 换版本、片段对不上就不打，什么都不变）。
  */
-export const TORCH_SPEC_CAP = 0.85;
+export const TORCH_SPEC_CAP = 0.5;
 export function patchTorchSpecular(chunks = THREE.ShaderChunk, cap = TORCH_SPEC_CAP) {
   const key = 'lights_fragment_begin', src = chunks?.[key];
   if (typeof src !== 'string') return false;

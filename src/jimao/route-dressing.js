@@ -267,7 +267,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1, la
         const side = i % 2 ? 1 : -1, d = 0.3 + i * step + range(-0.04, 0.04);
         const x = ax + fx * d - fz * side * 0.11, z = az + fz * d + fx * side * 0.11;
         const st = landAt(nav, x, z, y + 0.6);
-        if (!st || st.floor !== floorId || Math.abs(st.y - y) > 0.05 || inObstacle(x, z) || wallGap(x, z) < 0.16) continue;
+        if (!st || st.floor !== floorId || Math.abs(st.y - y) > 0.05 || inObstacle(x, z) || wallGap(x, z) < 0.16 || near(x, z, 0.05)) continue;
         const a = Math.atan2(fx, fz) + range(-0.12, 0.12);
         addFloor(side < 0 ? 'footL' : 'footR', x, z, size, { a, mode: BLOOD, alpha: fade ? Math.max(0.25, 0.95 - i * 0.09) : Math.max(0.3, 0.9 - i * 0.025) * range(0.8, 1) });
         put++;
@@ -275,7 +275,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1, la
       return put;
     }
     /** 一段直线上每个点都踩得住、离墙够远、不进家具 */
-    const lineOk = (pts, gap) => pts.every(([px, pz]) => { const st = landAt(nav, px, pz, y + 0.6); return st && st.floor === floorId && Math.abs(st.y - y) < 0.05 && !inObstacle(px, pz) && wallGap(px, pz) > gap; });
+    const lineOk = (pts, gap) => pts.every(([px, pz]) => { const st = landAt(nav, px, pz, y + 0.6); return st && st.floor === floorId && Math.abs(st.y - y) < 0.05 && !inObstacle(px, pz) && wallGap(px, pz) > gap && !near(px, pz, 0.05); });
     /**
      * 拖痕：从 (x, z) 往 a 方向拖 len 米，一段 2.1 米、接着下一段。前面撞墙、进家具就拐个弯（左右各试两个角度）——
      * 拖着人绕过墙角、拐进门里本来就是这样；实在拐不过去就停

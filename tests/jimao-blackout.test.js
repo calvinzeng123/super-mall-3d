@@ -179,5 +179,5 @@ test('手电在玻璃、亮面上的镜面高光软压一下：只改挂了光�
   assert.equal(patchTorchSpecular(other), false); assert.equal(other.lights_fragment_begin, '// 别的版本，对不上');
   // 压法：d / (1 + d / cap)，小的几乎不变，大的不超过 cap
   const soft = (d) => d / (1 + d / TORCH_SPEC_CAP);
-  assert.ok(soft(0.05) > 0.047 && soft(50) < TORCH_SPEC_CAP && soft(3) < soft(50));
+  assert.ok(soft(0.05) > 0.05 * 0.9 && soft(50) < TORCH_SPEC_CAP && soft(3) < soft(50));
 });
