@@ -28,7 +28,7 @@ test('抽一局：武器柜 → 合闸 → 三道关（各一件工具、一处�
   const seen = new Set();
   for (const seed of [3, 7, 21, 99, 1234, 4321, 777, 2024]) {
     const plan = siegePlan(seq(seed), L, nav, runs);
-    assert.deepEqual(plan.stages.map((s) => s.kind), ['locker', 'switch', 'tool', 'gate', 'tool', 'gate', 'tool', 'gate', 'flare']);
+    assert.deepEqual(plan.stages.map((s) => s.kind), ['pistol', 'locker', 'switch', 'tool', 'gate', 'tool', 'gate', 'tool', 'gate', 'flare']);
     assert.equal(new Set(plan.gates.map((g) => g.type)).size, 3, '三道关种类不同');
     plan.gates.forEach((g, i) => { const [lo, hi] = SIEGE.gates[i]; assert.ok(g.n >= lo && g.n <= hi, `第 ${i + 1} 道关在 ${g.n}F`); assert.equal(g.runs.length, 2, '两部楼梯都拦着'); assert.equal(plan.stages[g.stage].kind, 'gate'); seen.add(g.type); });
     for (const st of plan.stages) {
@@ -46,9 +46,9 @@ test('抽一局：武器柜 → 合闸 → 三道关（各一件工具、一处�
 test('走得到：开局点 → 武器柜 → 公寓地下配电间；公寓各层的楼梯口、电梯厅互相连着；屋顶停机位 7.5 米内是空地', () => {
   const plan = siegePlan(seq(7), L, nav, runs), s = FPS_MISSION.spawn, start = { floor: s.floor, x: s.x, z: s.z, y: elev(s.floor), slope: null };
   const at = (st) => ({ floor: st.floor, x: st.site.x, z: st.site.z, y: st.site.y, slope: null });
-  assert.ok(findPath(nav, start, at(plan.stages[0])), '武器柜走得到');
-  assert.ok(findPath(nav, start, at(plan.stages[1])), '配电间走得到');
-  for (const g of plan.gates) if (GATES[g.type].at === 'stair') assert.ok(findPath(nav, { ...at(plan.stages[1]) }, at(plan.stages[g.stage])), `${g.n}F 的关卡走得到`);
+  assert.ok(findPath(nav, start, at(plan.stages[1])), '武器柜走得到');
+  assert.ok(findPath(nav, start, at(plan.stages[2])), '配电间走得到');
+  for (const g of plan.gates) if (GATES[g.type].at === 'stair') assert.ok(findPath(nav, { ...at(plan.stages[2]) }, at(plan.stages[g.stage])), `${g.n}F 的关卡走得到`);
   assert.ok(findPath(nav, start, at(plan.stages.at(-1))), '屋顶信号弹走得到');
   for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2, q = landAt(nav, SIEGE.pad.x + Math.cos(a) * 7.5, SIEGE.pad.z + Math.sin(a) * 7.5, elev(SIEGE.roof) + 0.6); assert.ok(q && q.floor === SIEGE.roof && clear(nav, q)); }
 });
@@ -56,13 +56,13 @@ test('走得到：开局点 → 武器柜 → 公寓地下配电间；公寓各�
 test('封锁：合闸前公寓电梯不动；之后电梯只到眼前这道关所在的层、这一层往上的两部楼梯都不通；解决一道放开一段；商场的电梯不管', () => {
   const plan = siegePlan(seq(7), L, nav, runs), [g0, g1, g2] = plan.gates;
   const up = (g) => runs.find((r) => r.id === g.runs[0]), f = (n) => `A-${n}F`;
-  assert.match(liftRule(plan, 0, nav, 'A-ST1', 'A-1F', 'A-2F'), /停电/); assert.match(liftRule(plan, 1, nav, 'A-ST1', 'A-B1', 'A-1F'), /停电/);
+  assert.match(liftRule(plan, 0, nav, 'A-ST1', 'A-1F', 'A-2F'), /停电/); assert.match(liftRule(plan, 2, nav, 'A-ST1', 'A-B1', 'A-1F'), /停电/, '捡了手枪、开了武器柜都还没电');
   assert.equal(liftRule(plan, 0, nav, 'P1-L3', 'P1-1F', 'P1-4F'), null);
-  assert.equal(liftRule(plan, 2, nav, 'A-ST1', 'A-B1', f(g0.n)), null, '合闸后能到第一道关那层');
-  assert.match(liftRule(plan, 2, nav, 'A-ST2', 'A-1F', f(g0.n + 1)), new RegExp(`只能到 ${g0.n}F`));
-  assert.equal(activeGate(plan, 2), g0); assert.equal(activeGate(plan, g0.stage), g0); assert.equal(activeGate(plan, g0.stage + 1), g1);
-  assert.match(stairRule(plan, 2, up(g0)), /先找/); assert.match(stairRule(plan, g0.stage, up(g0)), /用/, '工具到手以后提示改成「用」');
-  assert.equal(stairRule(plan, 2, up(g1)), null, '后面的关还没轮到');
+  assert.equal(liftRule(plan, 3, nav, 'A-ST1', 'A-B1', f(g0.n)), null, '合闸后能到第一道关那层');
+  assert.match(liftRule(plan, 3, nav, 'A-ST2', 'A-1F', f(g0.n + 1)), new RegExp(`只能到 ${g0.n}F`));
+  assert.equal(activeGate(plan, 3), g0); assert.equal(activeGate(plan, g0.stage), g0); assert.equal(activeGate(plan, g0.stage + 1), g1);
+  assert.match(stairRule(plan, 3, up(g0)), /先找/); assert.match(stairRule(plan, g0.stage, up(g0)), /用/, '工具到手以后提示改成「用」');
+  assert.equal(stairRule(plan, 3, up(g1)), null, '后面的关还没轮到');
   assert.equal(stairRule(plan, g0.stage + 1, up(g0)), null, '解决了就通');
   assert.equal(liftRule(plan, g0.stage + 1, nav, 'A-ST1', f(g0.n), f(g1.n)), null); assert.ok(liftRule(plan, g0.stage + 1, nav, 'A-ST1', f(g0.n), f(g1.n + 1)));
   assert.equal(liftRule(plan, g2.stage + 1, nav, 'A-ST1', 'A-1F', 'A-RF'), null, '三道都解决：直达屋顶');
@@ -205,7 +205,7 @@ function sworld({ enabled = true, tower = 'A' } = {}) {
   const heli = { root: new THREE.Group(), poses: [], setPose(p) { this.poses.push(p); }, reset() { this.parked = true; }, moveTo() {} };
   const director = { state: { mission: null, restore: false, checkpoint: null }, vehicles: { heli }, riding: false, opened: 0, openExtraction() { this.opened++; }, dead: [], deadActions(...a) { this.dead.push(a); } };
   const flow = { patrol: { soldier: 8 }, waves: [{ soldier: 5 }, { soldier: 6 }], pursuitExtra: 5 };
-  Object.assign(G, { game: { state: 'playing', run: { relays: [] }, refreshObjective() {} }, hud: { message: (t) => msgs.push(t), radio: (t) => msgs.push('R:' + t) }, rifle: { ammo: 30, reserve: 150 }, weapon: { picked: null, select(s) { this.picked = s; } } });
+  Object.assign(G, { game: { state: 'playing', run: { relays: [] }, refreshObjective() {} }, hud: { message: (t) => msgs.push(t), radio: (t) => msgs.push('R:' + t) }, rifle: { ammo: 30, reserve: 150 }, weapon: { picked: null, locked: [], select(s) { this.picked = s; }, lock(l) { this.locked = [...l]; if (l.length) this.picked = 'knife'; }, unlock(s, { equip = true } = {}) { const i = this.locked.indexOf(s); if (i < 0) return false; this.locked.splice(i, 1); if (equip) this.picked = s; return true; } } });
   G.physics.stateOf = (p) => landAt(nav, p.x, p.z, p.y + 0.6); G.physics.forget = () => {};
   const thrown = { frag: 2, fire: 0, lure: 0 };
   const actions = { countOf: (k) => thrown[k] || 0, give(n, k = 'frag') { const b = thrown[k]; thrown[k] = Math.min(k === 'frag' ? 3 : 2, b + n); return thrown[k] - b; } };
@@ -221,17 +221,17 @@ test('任务的样子：九个目标一个一个放（后面的锁着）；撤�
   const { G, siege, director, flow, begin, store } = sworld();
   assert.equal(siege.enabled, true);
   const m = begin();
-  assert.equal(m.type, 'siege'); assert.equal(m.objectives.length, 9); assert.deepEqual(m.objectives.map((o) => !!o.locked), [false, true, true, true, true, true, true, true, true]);
+  assert.equal(m.type, 'siege'); assert.equal(m.objectives.length, 10); assert.deepEqual(m.objectives.map((o) => !!o.locked), [false, true, true, true, true, true, true, true, true, true]);
   const x = m.extraction; assert.equal(x.id, 'heli'); assert.equal(x.floor, 'A-RF'); assert.equal(x.closed, true); assert.equal(x.vehicle, SIEGE.pad);
   assert.ok(Math.hypot(x.x - SIEGE.pad.x, x.z - SIEGE.pad.z) < 6 && Math.hypot(x.x - SIEGE.pad.x, x.z - SIEGE.pad.z) > 1, '登机门在机身旁边');
   assert.ok(x.flight.poseAt && x.ride.spawns && x.ride.targets && x.ride.onBoard && x.orbit.center);
   assert.equal(G.rifle.ammo, 30, '原游戏重置武器在后面，这时还没改'); siege.update(1 / 30);
-  assert.equal(G.rifle.ammo, 0); assert.equal(G.rifle.reserve, 0); assert.equal(G.weapon.picked, 'pistol');
+  assert.equal(G.rifle.ammo, 0); assert.equal(G.rifle.reserve, 0); assert.equal(G.weapon.picked, 'knife', '开局只有刀'); assert.deepEqual(G.weapon.locked, ['pistol', 'rifle']);
   assert.equal(director.vehicles.heli.root.visible, false, '直升机还没来');
   assert.deepEqual(flow.patrol, { gull: 0, hound: 0, soldier: 0 }); assert.equal(flow.pursuitExtra, 0);
   assert.match(G.liftAllow({ id: 'A-ST1' }, 'A-1F', 'A-3F'), /停电/); assert.equal(typeof G.stairBlock, 'function');
-  assert.equal(m.text({ allCut: false }), m.plan.stages[0].text); assert.ok(m.plan.stages[2].site.unit, '住户房间带着户号（路线指引靠它找门）');
-  assert.equal(m.radio.cut.length, 8);
+  assert.equal(m.text({ allCut: false }), m.plan.stages[0].hud); assert.ok(m.plan.stages[3].site.unit, '住户房间带着户号（路线指引靠它找门）');
+  assert.equal(m.radio.cut.length, 9);
   // 关掉
   siege.enabled = false; assert.equal(store.get('jimao-siege'), '0'); siege.reset();
   assert.deepEqual(flow.patrol, { soldier: 8 }); assert.equal(flow.pursuitExtra, 5); assert.equal(G.liftAllow, null); assert.equal(G.stairBlock, null);
@@ -241,21 +241,22 @@ test('一步步来：开了武器柜步枪才有子弹；每完成一步放出�
   const { G, siege, begin, cut, run } = sworld();
   const m = begin(), S = siege.state;
   run(0.1); assert.equal(S.stage, 0);
+  cut(1); run(0.1); assert.equal(S.stage, 1); assert.equal(G.weapon.picked, 'pistol', '半路捡到手枪'); assert.equal(G.rifle.ammo, 0); assert.deepEqual(G.weapon.locked, ['rifle']);
   cut(1); run(0.1);
-  assert.equal(S.stage, 1); assert.equal(G.rifle.ammo, SIEGE.ammo.rifle); assert.equal(G.rifle.reserve, SIEGE.ammo.reserve); assert.equal(G.weapon.picked, 'rifle');
-  assert.deepEqual(m.objectives.map((o) => !!o.locked), [true, false, true, true, true, true, true, true, true]);
-  cut(1); run(0.1); assert.equal(S.stage, 2); assert.ok(S.noise > 60, '拉闸动静很大'); assert.equal(G.liftAllow({ id: 'A-ST1' }, 'A-B1', `A-${m.plan.gates[0].n}F`), null);
+  assert.equal(S.stage, 2); assert.equal(G.rifle.ammo, SIEGE.ammo.rifle); assert.equal(G.rifle.reserve, SIEGE.ammo.reserve); assert.equal(G.weapon.picked, 'rifle');
+  assert.deepEqual(m.objectives.map((o) => !!o.locked), [true, true, false, true, true, true, true, true, true, true]);
+  cut(1); run(0.1); assert.equal(S.stage, 3); assert.ok(S.noise > 60, '拉闸动静很大'); assert.equal(G.liftAllow({ id: 'A-ST1' }, 'A-B1', `A-${m.plan.gates[0].n}F`), null);
   const g0 = m.plan.gates[0]; assert.match(G.stairBlock(runs.find((r) => r.id === g0.runs[1]), 'up'), /先找/); assert.equal(G.stairBlock(runs.find((r) => r.id === g0.runs[1]), 'down'), null);
-  cut(2); run(1); assert.equal(S.stage, 4); assert.ok(g0.block.children[0].position.lengthSq() > 0.5 || g0.block.children[0].scale.x < 0.5 || !g0.block.children[0].visible, '第一道关的大件挪开了');
+  cut(2); run(1); assert.equal(S.stage, 5); assert.ok(g0.block.children[0].position.lengthSq() > 0.5 || g0.block.children[0].scale.x < 0.5 || !g0.block.children[0].visible, '第一道关的大件挪开了');
   assert.equal(G.stairBlock(runs.find((r) => r.id === g0.runs[0]), 'up'), null);
-  cut(4); run(0.1); assert.equal(S.stage, 8); assert.equal(S.hold, -1);
-  cut(1); run(0.1); assert.equal(S.stage, 9); assert.ok(S.hold >= 0, '信号弹点着了，开始守');
+  cut(4); run(0.1); assert.equal(S.stage, 9); assert.equal(S.hold, -1);
+  cut(1); run(0.1); assert.equal(S.stage, 10); assert.ok(S.hold >= 0, '信号弹点着了，开始守');
   assert.equal(m.text({ allCut: true }), '守住屋顶，等直升机');
 });
 
 test('被堵的楼梯走不上去：人踏进那一段就退回原地、给一句提示；解决以后能走', () => {
   const { G, siege, player, msgs, begin, cut, run } = sworld();
-  const m = begin(); cut(2); run(0.1);
+  const m = begin(); cut(3); run(0.1);
   const g0 = m.plan.gates[0], r = runs.find((x) => x.id === g0.runs[0]);
   player.pos.set(r.a.x, r.a.y, r.a.z); run(0.1); const safe = player.pos.clone();
   player.pos.set(r.ea.x + r.da.x * 1.2, r.ea.y + 0.5, r.ea.z + r.da.z * 1.2); // 走上第一段梯
@@ -269,7 +270,7 @@ test('被堵的楼梯走不上去：人踏进那一段就退回原地、给一�
 
 test('响动：开枪攒响动（手枪比步枪小），攒满来一波尸群（认定了人、不会跟丢），之后有冷却；安静下来慢慢回落；附近的丧尸听见枪声围过来', () => {
   const { G, siege, zombies, enemies, player, msgs, begin, run, ahead } = sworld();
-  begin(); const S = siege.state; run(0.1);
+  begin(); const S = siege.state; S.stage = S.plan.armsStage + 1; run(0.1); // 拿到步枪以后才有尸潮
   const z = enemies.spawn('zombie', ahead(20), { kind: 'walker', passive: true });
   G.events.emit('weapon:fire', { kind: 'pistol' }); assert.equal(S.noise, SIEGE.noise.pistol); assert.equal(z.zs, 'chase', '20 米内听见了');
   G.events.emit('weapon:fire', {}); assert.equal(S.noise, SIEGE.noise.pistol + SIEGE.noise.rifle);
@@ -292,7 +293,7 @@ test('响动：开枪攒响动（手枪比步枪小），攒满来一波尸群�
 
 test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天上降到停机位，落稳了才开放登机；登机后清扫——屋顶、阳台、楼下三处都出齐，全清掉就定下返航', () => {
   const { G, siege, zombies, director, heli, player, begin, cut, run } = sworld();
-  const m = begin(); cut(9); run(0.1);
+  const m = begin(); cut(10); run(0.1);
   for (const z of zombies.alive()) z._deactivate(); // 前面几步招来的先清掉，只看屋顶上的
   const S = siege.state, roof = elev(SIEGE.roof); player.pos.set(SIEGE.pad.x + 8, roof, SIEGE.pad.z + 3);
   run(4); const wave = zombies.alive().filter((z) => z.hunt);
@@ -336,9 +337,9 @@ test('抽楼：公寓多、北区 1 号楼少，可以指定；北区那一局�
   const T = TOWERS.T1, lift = nav.links.find((l) => l.id === T.lift), s = FPS_MISSION.spawn, start = { floor: s.floor, x: s.x, z: s.z, y: elev(s.floor), slope: null };
   for (const seed of [5, 77, 4321]) {
     const plan = siegePlan(seq(seed), L, nav, runs, T);
-    assert.equal(plan.tower, T); assert.deepEqual(plan.stages.map((q) => q.kind), ['locker', 'switch', 'tool', 'gate', 'tool', 'gate', 'tool', 'gate', 'flare']);
+    assert.equal(plan.tower, T); assert.deepEqual(plan.stages.map((q) => q.kind), ['pistol', 'locker', 'switch', 'tool', 'gate', 'tool', 'gate', 'tool', 'gate', 'flare']);
     for (const st of plan.stages) { const q = landAt(nav, st.site.x, st.site.z, st.site.y + 0.6); assert.ok(q && q.floor === st.floor && clear(nav, q), `${st.id}（${st.label}）站得住`); }
-    assert.equal(plan.stages[1].floor, 'P1-B1'); assert.match(plan.stages[1].text, /北区 1 号楼停电/); assert.equal(plan.stages.at(-1).floor, 'T1-RF');
+    assert.equal(plan.stages[2].floor, 'P1-B1'); assert.match(plan.stages[2].text, /北区 1 号楼停电/); assert.equal(plan.stages.at(-1).floor, 'T1-RF');
     plan.gates.forEach((g, i) => { const [lo, hi] = T.gates[i]; assert.ok(g.n >= lo && g.n <= hi && g.floor === `T1-${g.n}F` && g.runs.length === 2, `第 ${i + 1} 道关在 ${g.n}F`); });
     // 同一层里走得通
     const at = (site) => ({ floor: site.floor, x: site.x, z: site.z, y: site.y, slope: null });
@@ -350,9 +351,9 @@ test('抽楼：公寓多、北区 1 号楼少，可以指定；北区那一局�
       assert.ok(up && findPath(nav, { floor: run.to, x: run.b.x, z: run.b.z, y: run.b.y, slope: null }, { ...up, slope: null }), `${g.n + 1}F：楼梯口走得到电梯厅`);
     }
     const roofLob = lobbySpot(nav, lift, 'T1-RF'); assert.ok(roofLob && findPath(nav, { ...roofLob, slope: null }, at(plan.stages.at(-1).site)), '屋顶：出电梯走得到信号弹');
-    if (seed === 5) assert.ok(findPath(nav, start, at(plan.stages[1].site)), '从商场走得到北区 1 号楼的地下电梯厅');
+    if (seed === 5) assert.ok(findPath(nav, start, at(plan.stages[2].site)), '从商场走得到北区 1 号楼的地下电梯厅');
     assert.match(liftRule(plan, 1, nav, 'T1-LF', 'P1-B1', 'T1-9F'), /北区 1 号楼停电/); assert.equal(liftRule(plan, 1, nav, 'A-ST1', 'A-1F', 'A-3F'), null, '这一局不管公寓的电梯');
-    assert.equal(liftRule(plan, 2, nav, 'T1-ST-A', 'P1-B1', plan.gates[0].floor), null); assert.ok(liftRule(plan, 2, nav, 'T1-ST-A', 'P1-B1', `T1-${plan.gates[0].n + 1}F`));
+    assert.equal(liftRule(plan, 3, nav, 'T1-ST-A', 'P1-B1', plan.gates[0].floor), null); assert.ok(liftRule(plan, 3, nav, 'T1-ST-A', 'P1-B1', `T1-${plan.gates[0].n + 1}F`));
   }
 });
 
@@ -384,7 +385,7 @@ test('路线指引认得被锁的电梯：平时从公寓一层到十二层的�
   const free = pf.findNow(S(a), S(b), { lifts: true });
   assert.ok(free && free.some((q) => q.via === 'lift'), '没锁的时候坐电梯');
   // 第 2 步（已合闸）：电梯只能到第一道关那一层，12F 在它上面
-  pf.setBlocked((c) => c.kind === 'lift' && !!liftRule(plan, 2, nav, c.link, c.from, c.to));
+  pf.setBlocked((c) => c.kind === 'lift' && !!liftRule(plan, 3, nav, c.link, c.from, c.to));
   const locked = pf.findNow(S(a), S(b), { lifts: true });
   if (locked) for (const q of locked.filter((x) => x.via === 'lift')) assert.ok(elev(q.to) <= elev(plan.gates[0].floor) + 0.1 || !String(q.to).startsWith('A-'), `路线里的电梯只到 ${q.to}`);
   const near = pf.findNow(S(a), S(lobbySpot(nav, lift, plan.gates[0].floor)), { lifts: true });
@@ -539,7 +540,7 @@ test('特殊感染者：扑袭者蹲下再扑、扑中把人按住撕咬（打�
 
 test('围城里的特殊感染者：按节奏的名额放（不连着来同一种、不超名额）；被按住时人钉在原地；酸液落地成一滩、站在里面掉血、过一阵消失；第二道关清掉后来一只巨尸', () => {
   const { G, siege, zombies, player, hurt, msgs, begin, cut, run } = sworld();
-  begin(); const S = siege.state; run(0.1);
+  begin(); const S = siege.state; S.stage = S.plan.armsStage + 1; run(0.1);
   // 名额：平静时 0
   assert.equal(siege.spawnSpecial(), null, '平静时不放');
   siege.pacing.state.phase = 'build';
@@ -562,7 +563,7 @@ test('围城里的特殊感染者：按节奏的名额放（不连着来同一�
   player.pos.x -= 8; run(6); const m = acid(); run(2); assert.equal(acid(), m, '过一阵酸液消失');
   // 巨尸：第二道关（第 5 步）清掉后几秒出现
   for (const z of zombies.alive()) z._deactivate();
-  cut(6); run(0.1);
+  cut(7); run(0.1);
   assert.ok(S.bruteT > 0, `bruteT ${S.bruteT}`); run(8);
   assert.equal(zombies.alive().filter((z) => z.kind === 'brute').length, 1); assert.ok(msgs.some((t) => /巨尸/.test(t)));
 });
@@ -604,8 +605,8 @@ test('围城里的补给和安全点：不回血；武器柜、工具间、楼�
   assert.equal(G.noRegen, true); assert.equal(supplies.enabled, true);
   const plan = siege.plan, kinds = () => supplies.drops.map((d) => d.kind).sort().join(',');
   // 开局：武器柜 1 样 + 三间工具间各 2 样 + 楼顶 2 样；合闸、清关的补给还没出来
-  assert.equal(supplies.drops.length, LOOT.locker.length + 6 + LOOT.flare.length);
-  assert.ok(!supplies.drops.some((d) => d.kind === 'medkit' && Math.abs(d.pos.y - plan.stages[1].site.y) < 0.5 && Math.hypot(d.pos.x - plan.stages[1].site.x, d.pos.z - plan.stages[1].site.z) < 3));
+  assert.equal(supplies.drops.length, LOOT.pistol.length + LOOT.locker.length + 6 + LOOT.flare.length);
+  assert.ok(!supplies.drops.some((d) => d.kind === 'medkit' && Math.abs(d.pos.y - plan.stages[2].site.y) < 0.5 && Math.hypot(d.pos.x - plan.stages[2].site.x, d.pos.z - plan.stages[2].site.z) < 3));
   for (let i = 0; i < plan.stages.length; i++) {
     const list = lootOf(plan, i), st = plan.stages[i]; assert.ok(list.length >= 1 && list.length <= 3, st.id);
     const spots = lootSpots(nav, st.site, list.length); assert.equal(spots.length, list.length);
@@ -614,12 +615,12 @@ test('围城里的补给和安全点：不回血；武器柜、工具间、楼�
   for (const i of plan.gates.map((g) => g.stage)) assert.ok(lootOf(plan, i).includes('medkit'), '每个安全点都有医疗包');
   // 拿枪、合闸：出补给、记安全点
   const before = supplies.drops.length;
-  cut(1); run(0.1); assert.equal(director.state.checkpoint, null, '拿枪不算安全点');
-  player.pos.set(plan.stages[1].site.x, plan.stages[1].site.y, plan.stages[1].site.z); player.yaw = 1.2;
+  cut(2); run(0.1); assert.equal(director.state.checkpoint, null, '拿枪不算安全点');
+  player.pos.set(plan.stages[2].site.x, plan.stages[2].site.y, plan.stages[2].site.z); player.yaw = 1.2;
   supplies.give('pills', 1); thrown.lure = 1; player.health = 64;
   cut(1); run(0.1);
   const c = director.state.checkpoint;
-  assert.ok(c && c.kind === 'safe' && c.stage === 2 && c.label === '配电室' && c.start.yaw === 1.2 && c.start.pos.distanceTo(player.pos) < 1e-6);
+  assert.ok(c && c.kind === 'safe' && c.stage === 3 && c.label === '配电室' && c.start.yaw === 1.2 && c.start.pos.distanceTo(player.pos) < 1e-6);
   assert.deepEqual({ ...c.kit }, { medkit: 0, pills: 1, frag: 2, fire: 0, lure: 1, hp: 64, smg: false, shells: -1 });
   assert.ok(supplies.drops.length >= before + LOOT.switch.length - 2, kinds());
   // 倒下：阵亡页换成「回到配电室重来」
@@ -629,19 +630,19 @@ test('围城里的补给和安全点：不回血；武器柜、工具间、楼�
   director.state.restore = c; director.state.checkpoint = null; G.game.run.relays.forEach((r) => { r.cut = false; });
   supplies.give('medkit'); thrown.lure = 0; thrown.fire = 2; player.health = 100; G.rifle.ammo = 30; G.rifle.reserve = 150; // 原游戏重置：满弹
   siege.reset();
-  assert.equal(siege.state.stage, 2); assert.equal(siege.state.noise, 0); assert.ok(noise0 >= 0);
+  assert.equal(siege.state.stage, 3); assert.equal(siege.state.noise, 0); assert.ok(noise0 >= 0);
   assert.equal(supplies.inv.medkit, 0, '重来先清空');
-  assert.ok(supplies.drops.some((d) => d.kind === 'medkit'), '安全点的医疗包重新摆出来'); assert.ok(!supplies.drops.some((d) => Math.hypot(d.pos.x - plan.stages[0].site.x, d.pos.z - plan.stages[0].site.z) < 2 && Math.abs(d.pos.y - plan.stages[0].site.y) < 1), '武器柜旁的不再摆');
+  assert.ok(supplies.drops.some((d) => d.kind === 'medkit'), '安全点的医疗包重新摆出来'); assert.ok(!supplies.drops.some((d) => Math.hypot(d.pos.x - plan.stages[1].site.x, d.pos.z - plan.stages[1].site.z) < 2 && Math.abs(d.pos.y - plan.stages[1].site.y) < 1), '武器柜旁的不再摆');
   const zs0 = siege.state.bruteT; thrown.fire = 0;
-  run(0.1); assert.equal(siege.state.stage, 2, '目标还没补上：不倒退');
-  cut(2); director.state.restore = false; run(0.2);
-  assert.equal(siege.state.stage, 2); assert.equal(siege.state.noise, 0, '不再触发合闸那一下的响动和尸潮'); assert.equal(siege.state.bruteT, zs0);
+  run(0.1); assert.equal(siege.state.stage, 3, '目标还没补上：不倒退');
+  cut(3); director.state.restore = false; run(0.2);
+  assert.equal(siege.state.stage, 3); assert.equal(siege.state.noise, 0, '不再触发合闸那一下的响动和尸潮'); assert.equal(siege.state.bruteT, zs0);
   assert.equal(director.state.checkpoint, null, '没有重复记（任务系统自己把存档点续上）');
   assert.equal(supplies.inv.pills, 1); assert.equal(thrown.lure, 1); assert.equal(player.health, 64, '身上的东西照存档时的来');
   assert.deepEqual([G.rifle.ammo, G.rifle.reserve], [SIEGE.ammo.rifle, Math.max(60, c.rifle[1])], '步枪弹药不白送');
   // 第一道关：再记一个新的安全点
   cut(2); run(0.1);
-  const c2 = director.state.checkpoint; assert.ok(c2 && c2.stage === 4 && /F 安全点/.test(c2.label));
+  const c2 = director.state.checkpoint; assert.ok(c2 && c2.stage === 5 && /F 安全点/.test(c2.label));
   // 关掉模式：恢复回血、补给收起来
   siege.enabled = false; siege.reset(); assert.equal(G.noRegen, false); assert.equal(supplies.enabled, false); assert.equal(supplies.drops.length, 0);
 });
@@ -841,4 +842,31 @@ test('队友被巨尸拍飞：掉 28 血、往后滑出去几米、躺一秒多�
   run(0.2); assert.ok(events.some(([n, e]) => n === 'squad:fling' && e.mate === zhe)); assert.equal(zhe.hp, hp0 - SQUAD.fling.damage); assert.ok(zhe.stun > 0.8);
   run(0.8); assert.ok(zhe.pos.distanceTo(at) > 1.5, `滑出去 ${zhe.pos.distanceTo(at).toFixed(1)} 米`); assert.ok(zhe.fallK > 0.9, '摔在地上');
   run(1.2); assert.ok(zhe.stun <= 0 && !zhe.down); assert.equal(events.filter(([n]) => n === 'squad:fling').length, 1, '冷却里不挨第二下');
+});
+
+test('新开局：只有刀 → 半路捡手枪 → 武器柜拿步枪才来尸潮；拿刀跑得最快、手枪其次；出了路线范围退回来', () => {
+  const { G, siege, zombies, begin, cut, run, player } = sworld();
+  const m = begin(), S = siege.state, plan = m.plan;
+  // 开局点在商场一层的另一头，离保安室、离手枪都有一段路
+  assert.equal(SIEGE.start.floor, 'P1-1F'); assert.ok(m.start.pos.distanceTo(new THREE.Vector3(SIEGE.arms.x, m.start.pos.y, SIEGE.arms.z)) > 60, '开局离保安室够远');
+  assert.equal(plan.stages[0].id, 'pistol'); assert.equal(plan.armsStage, 1); assert.equal(plan.powerStage, 2);
+  run(0.2); assert.deepEqual(G.weapon.locked, ['pistol', 'rifle']);
+  // 拿什么跑多快
+  G.weapon.current = 'knife'; run(0.05); assert.equal(G.speedMul, SIEGE.speed.knife);
+  G.weapon.current = 'pistol'; run(0.05); assert.equal(G.speedMul, SIEGE.speed.pistol);
+  G.weapon.current = 'rifle'; run(0.05); assert.equal(G.speedMul, 1);
+  assert.ok(SIEGE.speed.knife > SIEGE.speed.pistol && SIEGE.speed.pistol > 1);
+  // 拿到步枪之前：响动再大也没有尸潮，周围只有零星的行尸
+  for (let i = 0; i < 40; i++) G.events.emit('weapon:fire', {}); S.hordeCool = 0; run(8);
+  assert.equal(zombies.alive().filter((z) => z.hunt).length, 0, '没有尸潮'); assert.ok(zombies.alive().length <= SIEGE.quiet + 1); assert.ok(zombies.alive().every((z) => z.kind === 'walker'), '只有行尸');
+  // 开武器柜：警报，第一波
+  cut(2); run(0.2);
+  assert.deepEqual(G.weapon.locked, []); assert.equal(G.weapon.picked, 'rifle'); assert.ok(zombies.alive().filter((z) => z.hunt).length >= 4, '警报招来第一波');
+  // 范围：商场那几层和这栋楼算里面，商场二层、街上不算；楼梯口 / 电梯口旁边算
+  assert.equal(siege.inArea({ floor: 'P1-1F', x: 0, z: 0 }), true); assert.equal(siege.inArea({ floor: 'P1-B1', x: 0, z: 0 }), true); assert.equal(siege.inArea({ floor: 'A-12F', x: 0, z: 0 }), true);
+  assert.equal(siege.inArea({ floor: 'P1-2F', x: -150, z: -120 }), false); assert.equal(siege.inArea({ floor: 'G', x: 0, z: 0 }), false);
+  // 人走到商场二层：被退回刚才站的地方
+  const home = player.pos.clone(); run(0.1);
+  const up = landAt(nav, -150, -120, elev('P1-2F') + 0.6);
+  if (up && up.floor === 'P1-2F') { player.pos.set(-150, elev('P1-2F'), -120); run(0.1); assert.ok(player.pos.distanceTo(home) < 0.5, '退回来了'); }
 });

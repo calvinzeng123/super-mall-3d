@@ -400,7 +400,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       bombT: keep ? state.bombT : (mission.bomb?.time || 0), bombDone: false, boss: keep ? state.boss : null, bossT: 0,
       checkpoint: null, restore: keep ? (keep.kind === 'safe' ? keep : true) : false });
     // 存档点两种：坐载具失败回登机点（目标全算完成）；丧尸围城的安全屋（kind: 'safe'，只算到存档那一步，人回到安全屋）
-    if (G.level) G.level.playerStart = keep ? (keep.kind === 'safe' ? keep.start : checkpointStart(mission.extraction)) : home;
+    if (G.level) G.level.playerStart = keep ? (keep.kind === 'safe' ? keep.start : checkpointStart(mission.extraction)) : (mission.start || home); // 丧尸围城有自己的开局点（mission.start）
     vhud.show(false); deadTitle(null, null); deadActions(false);
     if (G.player) G.player.mounted = false;
     doorGun.reset(); roofGun.reset();

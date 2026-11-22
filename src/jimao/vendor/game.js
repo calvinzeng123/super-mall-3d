@@ -6897,7 +6897,7 @@ function x_(i) {
       let ue = re ? X.move.x : 0, me = re ? X.move.y : 0, ee = ue * ue + me * me > 0.01, B = re && X.sprint && me > 0.55 && Math.abs(ue) < 0.6 && !C.crouching && C.ads < 0.35 && !X.fire;
       C.sprinting = B && C.onGround && C.speed > Mt.walk * 0.6 || B && !C.onGround && C.sprinting;
       let P = Mt.walk;
-      C.crouching ? P = Mt.crouch : B && (P = Mt.sprint), P = bi(P, Math.min(P, Mt.ads), C.ads), me < 0 && (P *= bi(1, 0.82, -me));
+      C.crouching ? P = Mt.crouch : B && (P = Mt.sprint), P = bi(P, Math.min(P, Mt.ads), C.ads), me < 0 && (P *= bi(1, 0.82, -me)), P *= i.speedMul || 1;
       let V = Math.sin(C.yaw), Y = Math.cos(C.yaw);
       U.set(ue * Y - me * V, 0, -ue * V - me * Y).multiplyScalar(P);
       let L = C.onGround ? ee ? Mt.accelGround : Mt.decelGround : ee ? Mt.accelAir : 0.6, Z = U.x - C.vel.x, J = U.z - C.vel.z;

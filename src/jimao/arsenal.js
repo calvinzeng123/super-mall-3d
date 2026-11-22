@@ -331,7 +331,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   // 榴弹枪（launcher.js）：手搭的模型，步枪上的两只手原样搬过去
   const gl = createLauncher(G, { camera, layer, cloneHand, defer: true }), L = gl.state; later.add(() => gl.prepare());
   let hasSmg = false, hasGl = false;
-  const slots = () => (hasGl ? SLOTS_ALL.filter((s) => s !== 'smg' || (hasSmg && smg.ready)) : hasSmg && smg.ready ? SLOTS_SMG : SLOTS);
+  // 这一局还没拿到的枪（丧尸围城开局只有刀：手枪要捡、步枪在武器柜里）。lock(['rifle', 'pistol']) 以后换不过去，unlock 了才行
+  const denied = new Set();
+  const slots = () => (hasGl ? SLOTS_ALL.filter((s) => s !== 'smg' || (hasSmg && smg.ready)) : hasSmg && smg.ready ? SLOTS_SMG : SLOTS).filter((s) => !denied.has(s));
   const rootOf = (slot) => (slot === 'pistol' ? pistolRoot : slot === 'knife' ? knifeRoot : slot === 'smg' ? smg.root : slot === 'launcher' ? gl.root : rifleVm);
   const rand = () => (G.rng?.fork ? Math.random() : Math.random());
 
@@ -612,6 +614,10 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       if (slot !== 'smg' || !smg.ready) return false; const fresh = !hasSmg; hasSmg = true; if (fresh) smg.reset(); else smg.addAmmo(SMG.mag * 2); if (equip && fresh) select('smg'); paintBtn(); return true;
     },
     get owns() { return { smg: hasSmg && smg.ready, launcher: hasGl }; }, get slots() { return slots(); },
+    /** 这一局先不给的枪：lock(['rifle', 'pistol'])；手里正拿着被锁的就换成刀。unlock(slot, { equip }) 拿到了 */
+    lock(list = []) { denied.clear(); for (const s of list) if (s !== 'knife') denied.add(s); if (denied.has(S.next || S.cur)) { S.next = null; select('knife', { plain: true }); } paintBtn(); },
+    unlock(slot, { equip = true } = {}) { if (!denied.delete(slot)) return false; if (equip) select(slot); paintBtn(); return true; },
+    get locked() { return [...denied]; },
     /** 近战键：手里不是刀就先换成刀刺一下、刺完换回来 */
     quickKnife() { if (S.cur === 'knife' && !S.next) return slash(); if (S.next === 'knife') return false; return select('knife', { quick: true }); },
     update(dt) {
