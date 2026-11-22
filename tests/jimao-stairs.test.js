@@ -43,7 +43,7 @@ test('楼层牌：每段楼梯的两头各能看到一块写着本层的牌子�
   const built = buildStairSigns(nav, { runs, doc: null });
   assert.equal(built.signs.length, signs.length);
   assert.ok(built.root.children.length > 20 && built.root.children.length < signs.length / 3, `分成 ${built.root.children.length} 组`);
-  assert.equal(built.root.children.reduce((n, m) => n + m.geometry.index.count / 6, 0), signs.length, '每块牌子一个四边形');
+  assert.equal(built.root.children.reduce((n, m) => n + m.geometry.index.count / 6, 0), signs.length * 2, '每块牌子背靠背两片（两面的字都是正的）');
   // 只画人附近的
   built.update({ x: -29.8, z: -248.8 });
   const shown = built.root.children.filter((m) => m.visible).length;

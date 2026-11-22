@@ -95,19 +95,23 @@ export function buildStairSigns(nav, { runs = stairRuns(nav), doc = typeof docum
   }
   // 按楼梯间分组（同一个平面位置 6 米一格）：离人远的整组不画
   const groups = new Map(), root = new THREE.Group(); root.name = 'jm-stair-signs';
-  const mat = new THREE.MeshBasicMaterial({ map, color: map ? 0xffffff : 0x0f6b3c, side: THREE.DoubleSide, toneMapped: false });
+  const mat = new THREE.MeshBasicMaterial({ map, color: map ? 0xffffff : 0x0f6b3c, side: THREE.FrontSide, toneMapped: false });
   for (const s of signs) { const key = `${Math.round(s.x / 6)},${Math.round(s.z / 6)}`; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(s); }
   const cells = [];
   for (const list of groups.values()) {
     const pos = [], uv = [], idx = [];
-    list.forEach((s, k) => {
+    list.forEach((s) => {
       const i = labels.indexOf(s.label), u0 = (i % cols) / cols, v1 = 1 - Math.floor(i / cols) / rows, u1 = u0 + 1 / cols, v0 = v1 - 1 / rows;
-      // 牌面的「右」方向：面朝 (nx, nz) 时，观察者看过去的右手边
+      // r：站在牌面法线 (nx, nz) 那一侧、面朝牌子的人的右手方向
       const rx = s.nz, rz = -s.nx, hw = STAIR.signW / 2, hh = STAIR.signH / 2;
-      // 观察者站在牌面法线那一侧看，左边是 +r 还是 −r 要对：文字从左到右 = 从 +r 到 −r
-      pos.push(s.x + rx * hw, s.y - hh, s.z + rz * hw, s.x - rx * hw, s.y - hh, s.z - rz * hw, s.x - rx * hw, s.y + hh, s.z - rz * hw, s.x + rx * hw, s.y + hh, s.z + rz * hw);
-      uv.push(u0, v0, u1, v0, u1, v1, u0, v1);
-      idx.push(k * 4, k * 4 + 1, k * 4 + 2, k * 4, k * 4 + 2, k * 4 + 3);
+      // 背靠背两片、各自只画正面：一片朝 +n（文字从 −r 读到 +r），一片朝 −n（从 +r 读到 −r）。
+      // 原来是一片双面显示的：只有一面字是正的，从楼梯另一头过来看到的是镜像字（「F22」）。
+      for (const side of [1, -1]) {
+        const ax = rx * side, az = rz * side, b = pos.length / 3;
+        pos.push(s.x - ax * hw, s.y - hh, s.z - az * hw, s.x + ax * hw, s.y - hh, s.z + az * hw, s.x + ax * hw, s.y + hh, s.z + az * hw, s.x - ax * hw, s.y + hh, s.z - az * hw);
+        uv.push(u0, v0, u1, v0, u1, v1, u0, v1);
+        idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+      }
     });
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
