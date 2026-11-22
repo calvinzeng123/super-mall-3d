@@ -134,7 +134,7 @@ export function buildHospitalityTower(ctx,b,records) {
   });
   B.flush(group);
   buildTowerStairInstances(ctx,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),materials,group);
-  // 酒店 / 公寓的公共走廊：踢脚、户门门套和门槛石、两头的消火栓箱和表箱、烟感（逐层实例化，只在当前楼层上下显示）
+  // 酒店 / 公寓的公共走廊：户门墙的踢脚、两头的消火栓箱和表箱、吊顶烟感（逐层实例化，只在当前楼层上下显示）
   if(b.usage!=='residential')buildCorridorInstances(ctx,b,levels,materials,group);
   const residentialShells=b.usage==='residential'?buildResidentialLevelShells(ctx,b,levels,materials,group):null;
   ctx.buildings[b.id].group.add(group);
