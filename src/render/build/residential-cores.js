@@ -9,7 +9,7 @@ import { distToPolyEdge } from '../../layout/geom.js';
 import { landingAt } from '../../layout/elevator-shafts.js';
 import { clearHeight } from './shell.js';
 import * as THREE from 'three';
-import { lobbyBox } from './tower-stairs.js';
+import { lobbyBox, exitSign } from './tower-stairs.js';
 
 const STONE = '#cfc6b8', CONCRETE = '#c3c8cc', FLOOR = '#ddd5c7', TRIM = '#3a332b', BRONZE = '#8a7a5c';
 const r = (x0, z0, x1, z1) => ({ x0, z0, x1, z1 });
@@ -120,7 +120,8 @@ function core(B, lv, { door, garage, H, y0, stairs, lifts, K }) {
     if (h > 2.25) B.get(K).box(m, y0 + (2.2 + h) / 2, band.z1 + .1, w, h - 2.2, .2, clad);
     B.get('metal').box(m, y0 + 2.15, band.z1 + .05, w + .12, .1, .26, TRIM);
     B.get('satin').box(s.door.x1 - .03, y0 + 1.05, band.z1 + .02 + w / 2, .05, 2.1, w, '#9aa3a8');   // fire door parked open
-    B.get('glow').box(m, y0 + 2.42, band.z1 - .02, .42, .16, .03, '#18c26a');                        // 安全出口
+    // 安全出口灯：和塔楼楼梯门外同一块牌子（30 × 15 cm 绿底、白边、奔跑的小人和门），原来是一块空白的绿色发光片
+    exitSign(B.get('glow'), m, y0 + 2.42, band.z1, 1);
   }
   // Stair enclosures behind the doors: side walls and the rear wall to the shaft.
   // （不在外框边上的那一侧上面已经补过，这里只画贴外框的，免得两层墙重叠闪烁。）

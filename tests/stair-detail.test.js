@@ -155,3 +155,129 @@ test('没有 document（node）时照常构建，颜色是合法的十六进制'
   assert.ok(group.children.length >= 2);
   for (const m of group.children) m.geometry.dispose();
 });
+
+// ---------- 第二轮：走廊、防火门扇、安全出口灯、楼层牌朝向、踏步防滑条 ----------
+import { corridorSpec, corridorDetails, buildCorridorInstances, exitSign, textRuns, CORRIDOR_PAINT } from '../src/render/build/tower-stairs.js';
+import { buildPlayableLayout } from '../src/layout/playable.js';
+import { buildNav } from '../src/layout/nav.js';
+import { buildStairSigns } from '../src/jimao/stairs.js';
+
+test('酒店 / 公寓走廊：两侧户门墙的门洞都认出来；消火栓箱、表箱不压门洞、门套，留在户门墙以内；地下室、首层大堂不画', () => {
+  for (const id of ['A', 'H']) {
+    const b = tower(id);
+    for (const lv of L.levels.filter((l) => l.building === id)) {
+      const spec = corridorSpec(b, lv), suites = lv.units?.filter((u) => u.residence?.suitePlan).length || 0;
+      if (!suites) { assert.equal(spec, null, `${lv.id} 没有套房，不该有走廊细部`); continue; }
+      assert.ok(spec, `${lv.id} 缺走廊细部`);
+      assert.equal(spec.sides.reduce((n, s) => n + s.doors.length, 0), suites, `${lv.id} 户门数`);
+      for (const s of spec.sides) for (const [a, b2] of s.doors) assert.ok(b2 - a > .8 && b2 - a < 1.2 && a > s.x0 && b2 < s.x1);
+      assert.deepEqual(spec.boxes.map((q) => q.kind).sort(), ['hydrant', 'hydrant', 'meter', 'meter'], lv.id);
+      for (const q of spec.boxes) {
+        const s = spec.sides[q.side];
+        assert.ok(q.x - q.w / 2 > s.x0 && q.x + q.w / 2 < s.x1, `${lv.id} ${q.kind} 出了户门墙`);
+        for (const [a, b2] of s.doors) assert.ok(q.x + q.w / 2 < a - .15 || q.x - q.w / 2 > b2 + .15, `${lv.id} ${q.kind} 压门洞`);
+        for (const o of spec.boxes) if (o !== q && o.side === q.side) assert.ok(Math.abs(o.x - q.x) > (o.w + q.w) / 2, '箱子叠在一起');
+      }
+    }
+  }
+  // 典型楼层（3.4 m）共用一份模板
+  const A = tower('A'), keys = new Set(L.levels.filter((l) => l.building === 'A' && l.height === 3.4).map((l) => JSON.stringify(corridorSpec(A, l))));
+  assert.equal(keys.size, 1);
+});
+
+test('走廊细部不进行走身体：凸出户门墙不到 4 cm，门洞净宽里 0.1 m 以上没有东西；只用一个批次（+1 个绘制调用，只在当前楼层上下显示）', () => {
+  const A = tower('A'), lv = byId.get('A-12F'), spec = corridorSpec(A, lv), solids = [];
+  const rec = { get: () => ({ box: (x, y, z, w, h, d) => solids.push({ x, y, z, w, h, d }) }) };
+  corridorDetails(rec, spec, 'plaster');
+  assert.ok(solids.length > 60, `走廊细部太少：${solids.length}`);
+  for (const o of solids) {
+    if (o.y - o.h / 2 > 2.9) continue;   // 吊顶上的烟感
+    const s = spec.sides.reduce((p, q) => (Math.abs(q.z - o.z) < Math.abs(p.z - o.z) ? q : p));
+    const out = (s.n > 0 ? o.z + o.d / 2 - s.z : s.z - (o.z - o.d / 2));
+    assert.ok(out < .045, `凸出墙面 ${out.toFixed(3)} m：x ${o.x.toFixed(2)} y ${o.y.toFixed(2)}`);
+    if (o.y + o.h / 2 > .1 && o.y - o.h / 2 < 2.15) for (const [a, b2] of s.doors) assert.ok(o.x + o.w / 2 <= a + .002 || o.x - o.w / 2 >= b2 - .002 || out < -.01, `门洞里有东西 x ${o.x.toFixed(2)}`);
+  }
+  const materials = Object.fromEntries(['plaster', 'extMetal'].map((k) => [k, new THREE.MeshStandardMaterial()]));
+  const group = new THREE.Group(), ctx = { dynamic: [] };
+  buildCorridorInstances(ctx, A, L.levels.filter((l) => l.building === 'A').sort((a, z) => a.elev - z.elev), materials, group);
+  assert.equal(group.children.length, 0, 'lazy：没去过的楼层不建模板');
+  ctx.dynamic[0].update(0, 0, { state: { building: 'A', explore: { building: 'A', level: 'A-12F' } } });
+  assert.ok(group.children.length >= 1 && group.children.every((m) => m.material === materials.plaster), '走廊只用刷漆一个批次');
+  const shown = group.children.filter((m) => m.visible), tris = shown.reduce((n, m) => n + m.geometry.index.count / 3, 0);
+  assert.equal(shown.reduce((n, m) => n + m.count, 0), 3, '当前层和上下各一层');
+  assert.ok(tris < 2500, `走廊模板 ${tris} 三角形`);
+  for (const m of group.children) m.geometry.dispose();
+});
+
+test('防火门扇五金、门头安全出口灯：朝走廊、贴在门扇 / 墙面上，不进门洞；安全出口灯是真实尺寸（≤ 0.32 × 0.16 m）', () => {
+  const A = tower('A'), stairs = stairsOf(A), lv = byId.get('A-12F'), spec = stairDetailSpec(A, lv, stairs);
+  assert.ok(spec.leaves && !stairDetailSpec(tower('T1'), byId.get('T1-11F'), stairsOf(tower('T1')), L.elevators).leaves, '只有酒店 / 公寓的门扇贴在门外墙上');
+  // 门头的安全出口灯
+  const signs = [];
+  exitSign({ box: (x, y, z, w, h, d, c) => signs.push({ x, y, z, w, h, d, c }) }, 0, 2.53, 4, 1);
+  assert.equal(signs.length, 1);
+  assert.ok(signs[0].w <= .32 && signs[0].h <= .16 && signs[0].z < 4 && signs[0].z + signs[0].d / 2 <= 4 - .001 + .03, '牌子在墙面外、不厚');
+  let quads = 0;
+  exitSign({ box: () => {}, shape: (name, p, q, s) => { quads++; const nrm = new THREE.Vector3(0, 0, 1).applyQuaternion(q); assert.ok(nrm.z < -.99, '小人朝走廊'); assert.ok(p.z < 4 - .02); } }, 0, 2.53, 4, 1);
+  assert.ok(quads >= 12, `小人和门 ${quads} 片`);
+  // 门扇五金都在门扇外面（走廊一侧），离门洞边 2 cm 以外
+  const off = lv.elev, flights = A.access.flights.filter((f) => f.parentFloor === lv.id).map((f) => ({ ...f, bottom: { ...f.bottom, y: f.bottom.y - off }, top: { ...f.top, y: f.top.y - off } }));
+  const surfaces = A.access.surfaces.filter((s) => s.parentFloor === lv.id).map((s) => ({ ...s, elev: s.elev - off }));
+  const solids = [], rec = { get: () => ({ box: (x, y, z, w, h, d, c) => solids.push({ x, y, z, w, h, d, c }), bar: () => {} }) };
+  buildTowerStairGeometry(rec, { ...A, access: { protected: true, flights, surfaces } }, [], stairs, { enclosures: false, detail: spec });
+  const hw = solids.filter((o) => [STAIR_PAINT.lever, STAIR_PAINT.hingeKnuckle, STAIR_PAINT.wiredGlass, STAIR_PAINT.plate].includes(o.c));
+  assert.ok(hw.length >= 4 * stairs.length * 2, `门扇五金 ${hw.length}`);
+  for (const s of stairs) {
+    const dir = towerStairPlan(s).direction, mine = hw.filter((o) => o.x > s.rect.x0 - 1 && o.x < s.rect.x1 + 1 && Math.abs(o.z - s.door.z0) < .2);
+    assert.ok(mine.length >= 8, s.id);
+    for (const o of mine) {
+      assert.ok((o.z - s.door.z0) * dir < -.07, `${s.id} 五金不在门扇外面：z ${o.z.toFixed(3)}`);
+      assert.ok(o.x + o.w / 2 <= s.door.x0 - .02 || o.x - o.w / 2 >= s.door.x1 + .02, `${s.id} 五金进了门洞 x ${o.x.toFixed(2)}`);
+    }
+  }
+});
+
+test('踏步：L 形防滑条（踏面一条、踢面上沿一条），踢面比踏面深、偏冷；踏步和平台同一种水泥色', () => {
+  const lum = (h) => { const c = new THREE.Color(h); return .2126 * c.r + .7152 * c.g + .0722 * c.b; };
+  assert.equal(STAIR_PAINT.tread, STAIR_PAINT.landing);
+  assert.ok(lum(STAIR_PAINT.riser) < lum(STAIR_PAINT.tread) - .05);
+  const r = new THREE.Color(STAIR_PAINT.riser);
+  assert.ok(r.b >= r.r - .01, '踢面偏冷');
+  const A = tower('A'), lv = byId.get('A-12F'), stairs = stairsOf(A), spec = stairDetailSpec(A, lv, stairs), off = lv.elev;
+  const flights = A.access.flights.filter((f) => f.parentFloor === lv.id).map((f) => ({ ...f, bottom: { ...f.bottom, y: f.bottom.y - off }, top: { ...f.top, y: f.top.y - off } }));
+  const nos = [], rec = { get: () => ({ box: (x, y, z, w, h, d, c) => { if (c === STAIR_PAINT.nosing) nos.push({ h, d }); }, bar: () => {} }) };
+  buildTowerStairGeometry(rec, { ...A, access: { protected: true, flights, surfaces: [] } }, [], stairs, { enclosures: false, detail: spec });
+  const steps = flights.reduce((n, f) => n + f.steps, 0);
+  // 每级一条朝上（薄、5.5 cm 深）、一条朝前（2.7 cm 高、薄）
+  assert.equal(nos.filter((o) => Math.abs(o.d - .055) < 1e-6).length, steps);
+  assert.equal(nos.filter((o) => Math.abs(o.h - .027) < 1e-6).length, steps);
+});
+
+test('楼层牌：T1、A 每个楼梯口的牌子背靠背两片，每片都是正面朝外、字不镜像；朝着来人的那片法线和牌子朝向一致', () => {
+  const nav = buildNav(buildPlayableLayout({ mode: 'arcade' })), built = buildStairSigns(nav, { doc: null });
+  const mine = built.signs.filter((s) => /^(T1|A)-/.test(s.floor));
+  assert.ok(mine.length > 60, `${mine.length} 块`);
+  const quads = [];
+  for (const m of built.root.children) {
+    const p = m.geometry.attributes.position.array, uv = m.geometry.attributes.uv.array, idx = m.geometry.index.array;
+    for (let k = 0; k < idx.length; k += 6) {
+      const v = (i) => new THREE.Vector3(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]), [i0, i1, i2] = [idx[k], idx[k + 1], idx[k + 2]];
+      const n = new THREE.Vector3().crossVectors(v(i1).sub(v(i0)), v(i2).sub(v(i0))).normalize();
+      const du = uv[i1 * 2] - uv[i0 * 2], U = v(i1).sub(v(i0)).multiplyScalar(Math.sign(du));
+      quads.push({ c: v(i0).add(v(i2)).multiplyScalar(.5), n, U });
+    }
+  }
+  for (const s of mine) {
+    const at = quads.filter((q) => Math.hypot(q.c.x - s.x, q.c.z - s.z) < .01 && Math.abs(q.c.y - s.y) < .01);
+    assert.equal(at.length, 2, `${s.floor} 的牌子应该两片`);
+    // 面朝牌子的人（站在法线那一侧）右手方向 = (nz, 0, −nx)：u 从左到右
+    for (const q of at) assert.ok(q.U.dot(new THREE.Vector3(q.n.z, 0, -q.n.x)) > 0, `${s.floor} ${s.label} 镜像`);
+    assert.ok(at.some((q) => q.n.x * s.nx + q.n.z * s.nz > .99), `${s.floor} 没有朝着来人的那一片`);
+  }
+  for (const m of built.root.children) m.geometry.dispose();
+});
+
+test('没有 document 时字形是空的（只画素色标签条），不抛错', () => {
+  assert.equal(textRuns('消火栓'), null);
+  for (const c of Object.values(CORRIDOR_PAINT)) assert.match(c, /^#[0-9a-f]{6}$/);
+});
