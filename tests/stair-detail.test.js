@@ -19,27 +19,26 @@ test('做法分组：社区塔楼自己楼层墙内皮 0.1、宿主楼层与公�
   assert.equal(t11.inset, .1); assert.equal(t11.head, 2.3); assert.ok(t11.wellGuard); assert.ok(!t11.lining);
   const lob = t11.lobby;
   assert.ok(lob, 'T1 自己的楼层应有候梯厅细部');
-  assert.deepEqual(lob.boxes.map((q) => q.kind), ['hydrant', 'meter']);
-  // 迎面电梯（消防电梯 LF）在两樘楼梯门之间；箱子在它两侧的墙垛上，不压任何电梯门洞、召唤盒（门边 0.25 m），不出候梯厅
+  assert.deepEqual(lob.boxes.map((q) => q.kind), ['hydrant']);
+  // 迎面电梯（消防电梯 LF）在两樘楼梯门之间；箱子在它西侧的墙垛上：不压任何电梯门洞和门套，
+  // 不出前室（两侧候梯厅隔层封死，封死的那块是实心核心筒）
   assert.ok(lob.face && lob.face.x0 < 0 && lob.face.x1 > 0);
+  assert.deepEqual(lob.fire, [-1.4, 1.4]);
   for (const q of lob.boxes) {
-    for (const [a, b] of lob.gaps) assert.ok(q.x + q.w / 2 < a - .1 || q.x - q.w / 2 > b + .1, `${q.kind} 压电梯门 ${a}..${b}`);
-    assert.ok(q.x + q.w / 2 < lob.face.x0 - .31 || q.x - q.w / 2 > lob.face.x1 + .31, `${q.kind} 压召唤盒`);
-    assert.ok(q.x - q.w / 2 > lob.x0 && q.x + q.w / 2 < lob.x1);
+    for (const [a, b] of lob.gaps) assert.ok(q.x + q.w / 2 < a - .07 || q.x - q.w / 2 > b + .07, `${q.kind} 压电梯门 ${a}..${b}`);
+    assert.ok(q.x - q.w / 2 > lob.fire[0] && q.x + q.w / 2 < lob.fire[1], `${q.kind} 出了前室`);
     // 出楼梯门迎面看得到：箱子中心离某一樘楼梯门中心不到 1.3 m
     assert.ok(stairsOf(T1).some((s) => Math.abs((s.door.x0 + s.door.x1) / 2 - q.x) < 1.3), `${q.kind} 不在楼梯门正对面`);
   }
+  // 报警按钮在两樘楼梯门之间
+  const [da, db] = stairsOf(T1).map((s) => s.door).sort((a, b) => a.x0 - b.x0);
+  assert.ok(lob.alarm > da.x1 && lob.alarm < db.x0);
   // 电梯墙面在候梯厅一侧、楼梯门墙面在另一侧，间距就是候梯厅进深（3.2 m 减两道半墙）
   assert.ok(Math.abs(Math.abs(lob.z1 - lob.z0) - (3.2 - .06 - .1)) < 1e-6);
   // 隔层停靠的电梯不分组：15F（W 不停）和 16F（E 不停）是同一个签名
   const k15 = stairDetailKey(byId.get('T1-15F'), stairDetailSpec(T1, byId.get('T1-15F'), stairsOf(T1), L.elevators));
   const k16 = stairDetailKey(byId.get('T1-16F'), stairDetailSpec(T1, byId.get('T1-16F'), stairsOf(T1), L.elevators));
   assert.equal(k15, k16);
-  for (const [id, s] of Object.entries(t11.stairs)) {
-    const st = L.stairs.find((q) => q.id === id);
-    assert.ok(s.alarm, `${id} 门边缺报警按钮`);
-    assert.ok(s.alarm.x < st.door.x0 - .2 || s.alarm.x > st.door.x1 + .2, id);
-  }
   const b1 = stairDetailSpec(T1, byId.get('P1-B1'), stairsOf(T1));
   assert.equal(b1.inset, .2); assert.equal(b1.head, 2.2);
   assert.ok(Object.values(b1.stairs).every((s) => s.doors.length === 1) && !b1.lobby && b1.lining);

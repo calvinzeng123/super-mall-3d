@@ -22,7 +22,7 @@ export const STAIR_PAINT = Object.freeze({
   hydrant: '#a12a22', hydrantFrame: '#b9bebf', hydrantInside: '#2b2d2c', hydrantGlass: '#5e6d72', hoseReel: '#7d241d',
   hydrantLabel: '#ece7da', meter: '#8a918b', meterSeam: '#4c524e',
   // 候梯厅：拉丝不锈钢门套和召唤盒、黑色按钮、红色手动报警按钮
-  steel: '#bcc1c3', button: '#2c3032', alarm: '#b02a22', lobbySkirting: '#4b4c48', lampRim: '#3b3e3d', panel: '#c9c6bc',
+  steel: '#bcc1c3', button: '#2c3032', alarm: '#b02a22', lobbySkirting: '#4b4c48', lampRim: '#3b3e3d', panel: '#8f8d86',
 });
 /** 墙裙（梯段处沿踏步前缘斜着走）、踢脚线的高度。 */
 export const DADO_HEIGHT = 1.2, SKIRTING_HEIGHT = .16;
@@ -132,16 +132,11 @@ export function stairDetailSpec(building, lv, stairs, elevators = null) {
     const passes = (s.passLevels || []).includes(lv.id) || !(s.serves || [lv.id]).includes(lv.id);
     const brk = passes ? null : stairBreak(s, null, lv.id);
     const doors = passes ? [] : brk ? brk.doors.map((d) => ({ x0: d.x0, x1: d.x1 })) : [{ x0: s.door.x0, x1: s.door.x1 }];
-    let inner = null, alarm = null;
+    let inner = null;
     // 酒店 / 公寓的楼梯门外是走廊或住户门面，没有可挂箱子的整片墙：消火栓箱挂在楼梯间里门口平台的侧墙上
     // （门口平台 2 m 深，第一跑从 2 m 处起步，箱子占 0.74–1.46 m，凸出墙面 4.5 cm，不进梯段也不挡门）。
     if (!building.community && doors.length === 1 && !brk) inner = { kind: 'hydrant', side: k % 2 ? 'R' : 'L', v: 1.1, w: .72 };
-    if (own && doors.length === 1 && rooms.length) {
-      // 报警按钮挂在门外、离门框 0.25 m、离另一部楼梯远的那一侧
-      const d = doors[0], dir = s.door.side === 'S' ? -1 : 1, z = s.door.z0 - dir * .4, x = k % 2 ? d.x1 + .3 : d.x0 - .3;
-      if (inside(x - .1, x + .1, z)) alarm = { x: Math.round(x * 1000) / 1000 };
-    }
-    out.stairs[s.id] = { doors, partition: brk ? brk.partition.x0 : null, lobby: null, inner, alarm };
+    out.stairs[s.id] = { doors, partition: brk ? brk.partition.x0 : null, lobby: null, inner };
   });
   out.lobby = lobby;
   return out;
@@ -153,8 +148,8 @@ export function stairDetailSpec(building, lv, stairs, elevators = null) {
  *   z0 / z1   电梯墙面 / 楼梯门墙面（候梯厅一侧）的 z；nz 从电梯墙指向楼梯门墙（+1：z 增大）
  *   x0 / x1   候梯厅两头
  *   gaps      全部电梯门洞（踢脚线按它让开；停不停靠都让，免得隔层停靠的电梯把模板分成两组）
- *   face      正对楼梯门的那部电梯（门中心落在两樘楼梯门之间、这一层停靠）：门套、两侧召唤盒
- *   boxes     迎面墙垛上的消火栓箱（西）和电表箱（东）
+ *   face      正对楼梯门的那部电梯（门中心落在两樘楼梯门之间、这一层停靠）：拉丝不锈钢门套
+ *   boxes     迎面西侧墙垛上的消火栓箱；alarm 两樘楼梯门之间的手动报警按钮
  * 这些都只是外观（导航、碰撞照旧），按「同一层高 + 同一做法」进实例化模板。
  */
 function lobbySpec(lv, stairs, elevators) {
@@ -173,16 +168,21 @@ function lobbySpec(lv, stairs, elevators) {
   const sx0 = Math.min(...stairs.map((s) => s.door.x0)), sx1 = Math.max(...stairs.map((s) => s.door.x1));
   const faced = lifts.find((L) => mid(L) > sx0 && mid(L) < sx1 && kind(L));
   const face = faced ? { x0: r3(mid(faced) - half(faced)), x1: r3(mid(faced) + half(faced)) } : null;
-  // 迎面电梯两侧的墙垛（到相邻电梯门洞为止）：召唤盒在靠门的一侧（门边 0.25 m），箱子在墙垛余下部分的中间
+  // 前室：迎面电梯所在、每层都开着的那块（北苑 x −1.4..1.4）。两边的候梯厅隔层封死（封死的一块是实心核心筒），
+  // 所以箱子、召唤盒、报警按钮都只挂在前室里，不然隔一层就有一半埋进墙里。
+  const fl = face && cp.landings.find((q) => q.open && q.rect.x0 < (face.x0 + face.x1) / 2 && q.rect.x1 > (face.x0 + face.x1) / 2)?.rect;
+  // 西侧墙垛挂消火栓箱（宽 0.66，两边各留 5 cm）。东侧墙垛留给住户楼层自己的呼梯面板（residence-interiors 在每部电梯
+  // 门右手 w/2 − 0.18 处画，带楼层指示），这里不再画第二个。
   const boxes = [];
-  if (face) for (const [k, sx] of [['hydrant', -1], ['meter', 1]]) {
-    const edge = sx < 0 ? face.x0 : face.x1;
-    const next = gaps.map((g) => (sx < 0 ? g[1] : g[0])).filter((v) => sx * (v - edge) > .05).sort((a, b) => sx * (a - b))[0] ?? (sx < 0 ? x0 : x1);
-    const from = edge + sx * .4, room = Math.abs(next - from) - .12;
-    if (room >= .8) boxes.push({ kind: k, x: r3(from + sx * (room / 2)), w: .72 });
+  if (face && fl) {
+    const a = fl.x0 + .05, b = face.x0 - .07;
+    if (b - a >= .62) { const w = r3(Math.min(.66, b - a - .08)); boxes.push({ kind: 'hydrant', x: r3((a + b) / 2), w }); }
   }
-  return { z0: r3(line + nz * .06), z1: r3(doorLine - nz * .1), nz, x0, x1, gaps, face, boxes,
-    stairDoors: stairs.map((s) => [s.door.x0, s.door.x1]), ceiling: r3(lv.height - .31) };
+  // 两部楼梯门之间的墙垛（比门两侧的墙退进 10 cm）上一个手动报警按钮 + 消防电话插孔
+  const between = stairs.length === 2 ? [stairs[0].door.x1, stairs[1].door.x0].sort((a, b) => a - b) : null;
+  const alarm = between && between[1] - between[0] >= .2 ? r3((between[0] + between[1]) / 2) : null;
+  return { z0: r3(line + nz * .06), z1: r3(doorLine - nz * .1), nz, x0, x1, gaps, face, boxes, alarm,
+    fire: fl ? [fl.x0, fl.x1] : null, stairDoors: stairs.map((s) => [s.door.x0, s.door.x1]), doorLine, ceiling: r3(lv.height - .31) };
 }
 /** 分组用的签名：层高 + 做法。 */
 export const stairDetailKey = (lv, spec) => `${lv.height.toFixed(4)}|${JSON.stringify(spec)}`;
@@ -390,10 +390,11 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
       paintWall(xr, -1, rightOwn);
       paintWall(xr, -1, rightRun);
       paintWall(xr, -1, rightLand);
-      // 半层平台上方的防潮吸顶灯：贴左墙、平台中间，离平台 2.2 m；一根穿线管从灯顶上到上一层平台底。
-      const lz = Z((vE + vEnd) / 2), ly = mid + Math.min(2.2, h - .7);
+      // 半层平台上方的防潮吸顶灯：贴左墙、平台中间，离平台 2.2 m（第一跑往上走时在前方左手边，转身上第二跑时在身后）；
+      // 一根穿线管从灯顶上到上一层平台底。不吸在上一层半层平台的板底：最顶上一层往上是屋面，板底不存在，
+      // 而它和下面的楼层共用一份模板（分出去要多存一份模板）。
+      const lz = Z((vE + vEnd) / 2), ly = mid + Math.min(2.2, h - .7), top = mid + h - .25;
       bulkhead(C, M, [xl, lz], [1, 0], ly);
-      const top = mid + h - .27;
       M.box(xl + .025, (ly + .13 + top) / 2, lz, .022, Math.max(.05, top - ly - .13), .022, STAIR_PAINT.conduit);
       // 红色消防立管：半层平台外沿再往里 15 cm，贴左墙，整层高（上下层接成一根），两道管卡。
       const pv = Math.min(vEnd + .16, p.depth - inset - .1), px = xl + .09;
@@ -447,12 +448,6 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
         for (let k = 0; k <= n; k++) post(M, gx0 + (gx1 - gx0) * k / n, .53, gz, .015, 1.06, .015, STAIR_PAINT.baluster);
       }
     }
-    // ---- 门外：手动报警按钮（红色小盒，1.4 m 高）----
-    if (d.alarm) {
-      const zf = Z(vo) - dir * .012;
-      C.box(d.alarm.x, 1.4, zf, .1, .1, .024, STAIR_PAINT.alarm);
-      M.box(d.alarm.x, 1.4, zf - dir * .013, .05, .05, .004, STAIR_PAINT.hydrantLabel);
-    }
     // ---- 门口平台侧墙上的消火栓箱（酒店 / 公寓）：盖在墙裙外面（墙裙、腰线、踢脚最外 1.2 cm） ----
     if (d.inner) {
       const n = d.inner.side === 'L' ? 1 : -1, wx = (n > 0 ? xl : xr) + n * .014;
@@ -465,10 +460,19 @@ function stairDetails(B, building, stairs, detail, flights, paint) {
 /**
  * 防潮吸顶灯（楼梯间常见的那种圆形壁灯，不亮）：深灰铸铝底座（8 边形，直径 26 cm）、
  * 5 cm 厚的乳白灯罩（比墙面暖、亮一点，手电一扫就看得出是盏灯）、一横一竖两道黑色护栏。
- * at：墙面上的点 [x, z]；n：墙面朝外的法线 [nx, nz]；y：灯中心高度。
+ * at：墙面上的点 [x, z]；n：墙面朝外的法线 [nx, nz]，y：灯中心高度；n 为 null 时吸顶，y 是板底标高。
  */
 function bulkhead(C, M, at, n, y) {
-  const [x, z] = at, [nx, nz] = n, P = (o) => [x + nx * o, z + nz * o];
+  const [x, z] = at;
+  if (!n) {
+    // 吸顶：y 是板底，灯往下挂
+    ceilingDisc(M, x, y, z, .13, .022, STAIR_PAINT.lampBase);
+    ceilingDisc(C, x, y - .02, z, .1, .05, STAIR_PAINT.lamp);
+    M.box(x, y - .076, z, .22, .012, .014, STAIR_PAINT.cage);
+    M.box(x, y - .076, z, .014, .012, .22, STAIR_PAINT.cage);
+    return;
+  }
+  const [nx, nz] = n, P = (o) => [x + nx * o, z + nz * o];
   puck(M, P(0), n, y, .13, .022, STAIR_PAINT.lampBase);
   puck(C, P(.02), n, y, .1, .05, STAIR_PAINT.lamp);
   const [cx, cz] = P(.073);
@@ -485,8 +489,8 @@ function puck(g, at, n, y, r, depth, color) {
 
 /**
  * 候梯厅（社区塔楼自己的楼层，lobbySpec 的结果）：
- *   迎面电梯：拉丝不锈钢门套（6 cm 宽，压在原来的门头上）、门两侧召唤盒（12 × 30 cm，1.1 m 高，两个黑色按钮）；
- *   电梯墙垛：消火栓箱（西）、电表箱（东），出楼梯门迎面就看得到；
+ *   迎面电梯：拉丝不锈钢门套（6.5 cm 宽，压在原来的门头上）；呼梯面板是 residence-interiors 画的，不重复；
+ *   电梯墙垛：消火栓箱（西侧），出楼梯门迎面就看得到；两樘楼梯门之间：手动报警按钮和消防电话插孔；
  *   踢脚：电梯墙、楼梯门墙沿墙一圈（让开电梯门洞和楼梯门）；
  *   吊顶：两盏 36 cm 圆形吸顶灯（深色边框 + 乳白灯罩，停电时手电照得出来）和一块 60 cm 检修口。
  */
@@ -507,24 +511,26 @@ function lobbyDetails(B, L, paint) {
     const { x0, x1 } = L.face, w = x1 - x0, zf = z0 + nz * .015;
     for (const jx of [x0 - .035, x1 + .035]) M.box(jx, 1.17, zf, .065, 2.34, .03, STAIR_PAINT.steel);
     M.box((x0 + x1) / 2, 2.37, zf, w + .135, .07, .03, STAIR_PAINT.steel);
-    // 召唤盒：门两边各一个（同一组电梯从哪边都能按）
-    for (const cx of [x0 - .25, x1 + .25]) {
-      M.box(cx, 1.1, z0 + nz * .008, .12, .3, .016, STAIR_PAINT.steel);
-      for (const dy of [.045, -.045]) C.box(cx, 1.1 + dy, z0 + nz * .019, .034, .034, .008, STAIR_PAINT.button);
-      C.box(cx, 1.21, z0 + nz * .018, .07, .028, .006, STAIR_PAINT.cage);
-    }
   }
   for (const b of L.boxes) lobbyBox(B, b, (u, o) => [b.x + u, z0 + nz * o], true, paint);
+  // 手动报警按钮 + 消防电话插孔：两部楼梯门之间那道墙垛上（1.4 m / 1.25 m 高）
+  if (L.alarm != null) {
+    const zf = L.doorLine - nz * .012;
+    C.box(L.alarm, 1.4, zf, .1, .1, .024, STAIR_PAINT.alarm);
+    M.box(L.alarm, 1.4, zf - nz * .013, .05, .05, .004, STAIR_PAINT.hydrantLabel);
+    C.box(L.alarm, 1.25, zf, .07, .07, .02, STAIR_PAINT.alarm);
+  }
   // 吊顶：灯在候梯厅中线、迎面电梯两侧（让开 community 那三条灯带），检修口在两灯之间靠楼梯门一侧
-  const cy = L.ceiling, zc = (z0 + z1) / 2, lampX = L.face ? [L.face.x0 - .55, L.face.x1 + .55] : [];
+  const cy = L.ceiling, zc = (z0 + z1) / 2, lampX = L.face && L.fire ? [(L.fire[0] + L.face.x0) / 2, (L.face.x1 + L.fire[1]) / 2] : [];
   for (const x of lampX) {
     ceilingDisc(M, x, cy, zc, .18, .03, STAIR_PAINT.lampRim);
     ceilingDisc(C, x, cy - .03, zc, .145, .018, STAIR_PAINT.lamp);
   }
   if (L.face) {
     const px = (L.face.x0 + L.face.x1) / 2, pz = z1 - nz * .55;
+    // 检修口：和吊顶差不多的灰，只有一圈深色缝看得出来（抹灰批次夜里有一点自发光，太浅会像一块灯片）
     C.box(px, cy - .004, pz, .62, .008, .62, STAIR_PAINT.lampRim);
-    C.box(px, cy - .009, pz, .56, .004, .56, STAIR_PAINT.panel);
+    C.box(px, cy - .009, pz, .58, .004, .58, STAIR_PAINT.panel);
   }
 }
 /** 吸顶的扁圆柱（顶面贴在 y 处的吊顶上，往下 depth）；没有 shape 的批次退回盒子。 */
@@ -579,9 +585,15 @@ export function lobbyBox(B, lobby, at, alongX, paint = 'concrete', metal = 'extM
     } else put(C, -.04, ry, .019, .36, .36, .014, P.hoseReel);
     ring(M, 0, (gy0 + gy1) / 2, .025, gw, gy1 - gy0, .012, .006, P.hydrantGlass);
     // 白字：玻璃上沿「消火栓」三个字块，下樘门「灭火器」三个字块（顶点色字块，近看是字的轮廓，远看是一行白字）
-    const glyphs = (y, o, s, size) => { for (const k of [-1, 0, 1]) { const u = k * size * 1.35; face(C, u, y, o, size, size * .16, P.hydrantLabel); face(C, u, y - size * .38, o, size * .16, size * .7, P.hydrantLabel); face(C, u + s * size * .3, y - size * .42, o, size * .55, size * .14, P.hydrantLabel); } };
-    glyphs(gy1 - .035, .0325, 1, .075);
-    glyphs((lower[0] + lower[1]) / 2 + .1, .037, -1, .07);
+    // 每个字：左边一竖（偏旁）、右边上中下三横和一竖，远看就是一行方块字（不是哪个具体的字，免得笔画糊成怪符号）
+    const glyphs = (y, o, size) => { for (const k of [-1, 0, 1]) {
+      const u = k * size * 1.3, t = size * .13;
+      face(C, u - size * .36, y, o, t, size * .85, P.hydrantLabel);
+      for (const [dy, w] of [[.36, .62], [0, .5], [-.36, .66]]) face(C, u + size * .1, y + dy * size, o, size * w, t, P.hydrantLabel);
+      face(C, u + size * .12, y, o, t, size * .78, P.hydrantLabel);
+    } };
+    glyphs(gy1 - .05, .0325, .075);
+    glyphs((lower[0] + lower[1]) / 2 + .1, .037, .07);
     // 拉手槽
     for (const yc of [(upper[0] + upper[1]) / 2, (lower[0] + lower[1]) / 2]) put(M, iw / 2 - .05, yc, .0345, .022, .13, .004, P.hydrantInside);
   } else {
