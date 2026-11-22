@@ -67,7 +67,7 @@ export const FLOOR_SURFACES = {
 export const DETAIL_SURFACES = Object.freeze({
   // normal：法线细节的深浅（贴图有法线、档位载入了法线才有）；patch：大块深浅（补过的漆、晒褪的一片）；
   // sheen：大块的粗糙度起伏（手电扫过去，有的地方哑、有的地方泛一点光）
-  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.8, patch: 0.07, sheen: 0.2 },
+  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.55, patch: 0.07, sheen: 0.2 },
   ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.08, sheen: 0.12 },
   // 吊顶板、清水混凝土的模板缝是规则的格子：转个角度再取一次会出斜缝，不做防重复（antiTile: false）
   ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.05, sheen: 0.1, antiTile: false },
