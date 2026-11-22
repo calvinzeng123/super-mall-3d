@@ -69,7 +69,7 @@ test('着色器补丁：串在前面的补丁后面，各处都插上，缓存�
   for (const k of ['wdMap', 'wdNormalMap', 'wdMacro', 'wdGrime', 'wdFloorY']) assert.ok(k in sh.uniforms, `少了 uniform ${k}`);
   assert.match(sh.vertexShader, /vDetailPos = \(modelMatrix \* detailWorld\)\.xyz/);
   assert.match(sh.vertexShader, /USE_INSTANCING/);
-  assert.match(sh.fragmentShader, /diffuseColor\.rgb \*= wdMul/);
+  assert.match(sh.fragmentShader, /mix\(diffuseColor\.rgb \* wdMul/);
   assert.match(sh.fragmentShader, /roughnessFactor = clamp\(roughnessFactor \+ wdRough/);
   assert.match(sh.fragmentShader, /normal = normalize\(normal \+ faceDirection/);
   assert.ok(sh.fragmentShader.indexOf('wdMul') > sh.fragmentShader.indexOf('#include <color_fragment>'));
@@ -94,7 +94,7 @@ test('克隆出来的材质（各栋楼带剖切面那份）照样有细节，�
   assert.notEqual(m.onBeforeRender, THREE.Material.prototype.onBeforeRender, '克隆自己也挂上了 onBeforeRender');
   // 停电时：画一次就按相机高度估出地面
   setWorldGrime(1);
-  const cam = new THREE.PerspectiveCamera(); cam.position.set(0, 31.68, 0); cam.updateMatrixWorld();
+  const cam = new THREE.PerspectiveCamera(); cam.position.set(0, 30 + DETAIL_EYE, 0); cam.updateMatrixWorld();
   m.onBeforeRender({ info: { render: { frame: 77 } } }, null, cam);
   assert.ok(Math.abs(sh.uniforms.wdFloorY.value - 30) < 1e-6, `地面估计 ${sh.uniforms.wdFloorY.value}`);
   setWorldGrime(0);
@@ -109,7 +109,7 @@ test('自带贴图的面只叠停电污垢：平时不多取样（取样在 unif
   assert.equal((f.match(/wdMul/g) || []).length > 0, true);
   const branch = f.indexOf('if (wdGrime > 0.001)'), fetch = f.indexOf('texture2D(wdMacro');
   assert.ok(branch > 0 && fetch > branch, '大块噪声只在停电时取');
-  assert.equal((f.match(/float wdRough = 0\.0;/g) || []).length, 1, '只叠了一次');
+  assert.equal((f.match(/float wdRough = 0\.0, wdDust/g) || []).length, 1, '只叠了一次');
   assert.equal(m.customProgramCacheKey(), '|wear', '材质原来没有自定义缓存键：不把默认的（整段函数源码）串进来');
 });
 
@@ -134,7 +134,7 @@ test('停电污垢跟着材质库的供电走：停电（blackout.js 的写法�
 });
 
 test('脚下地面高度：第一次直接取，跳一下只动一点，坐电梯一下差很多就直接跳过去', () => {
-  assert.equal(trackFloor(null, 10 + DETAIL_EYE, 0.016), 10);
+  assert.ok(Math.abs(trackFloor(null, 10 + DETAIL_EYE, 0.016) - 10) < 1e-9);
   // 起跳 0.3 秒（相机抬高 0.8 米）：估计只抬一点点
   let y = 10;
   for (let i = 0; i < 18; i++) y = trackFloor(y, 10 + DETAIL_EYE + 0.8 * Math.sin(Math.PI * i / 36), 1 / 60);
@@ -143,7 +143,7 @@ test('脚下地面高度：第一次直接取，跳一下只动一点，坐电�
   for (let i = 0; i < 120; i++) y = trackFloor(y, 10 + DETAIL_EYE, 1 / 60);
   assert.ok(Math.abs(y - 10) < 0.02);
   // 一下高出 3.4 米（一层）：直接到
-  assert.equal(trackFloor(10, 13.4 + DETAIL_EYE, 1 / 60), 13.4);
+  assert.ok(Math.abs(trackFloor(10, 13.4 + DETAIL_EYE, 1 / 60) - 13.4) < 1e-9);
   // 卡了一帧（dt 很大）也不会冲过头
   assert.ok(trackFloor(10, 11 + DETAIL_EYE, 5) <= 11);
 });

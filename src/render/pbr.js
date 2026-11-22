@@ -67,7 +67,7 @@ export const FLOOR_SURFACES = {
 export const DETAIL_SURFACES = Object.freeze({
   // normal：法线细节的深浅（贴图有法线、档位载入了法线才有）；patch：大块深浅（补过的漆、晒褪的一片）；
   // sheen：大块的粗糙度起伏（手电扫过去，有的地方哑、有的地方泛一点光）
-  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.42, patch: 0.07, sheen: 0.2 },
+  matte: { id: 'painted_plaster', strength: 0.9, normal: 0.32, patch: 0.07, sheen: 0.2 },
   ext: { id: 'tunnel_concrete', strength: 0.75, normal: 0.6, patch: 0.08, sheen: 0.12 },
   // 吊顶板、清水混凝土的模板缝是规则的格子：转个角度再取一次会出斜缝，不做防重复（antiTile: false）
   ceiling: { id: 'ceiling_panels', strength: 1, patch: 0.05, sheen: 0.1, antiTile: false },
@@ -127,8 +127,8 @@ const srgbToLinear = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92
 
 /** 大块噪声图铺多大（米）。256 像素铺 16 米：一格 6 厘米，流痕一条 15 厘米宽左右 */
 export const MACRO_METERS = 16;
-/** 玩家站着时眼睛离地多高（和游戏里的站姿眼高一致）：用相机高度估脚下地面，墙根的脏按这个算 */
-export const DETAIL_EYE = 1.68;
+/** 玩家站着时眼睛离地多高（和 layout/nav.js 的 NAV.eye 一致）：用相机高度估脚下地面，墙根的脏按这个算 */
+export const DETAIL_EYE = 1.62;
 /** 估地面高度时的平滑时间（秒）：跳一下、蹲一下，墙根那圈脏不跟着上下跳 */
 export const FLOOR_TAU = 0.45;
 
@@ -307,15 +307,24 @@ export function worldDetailChunks(v) {
   // 停电污垢：墙根（离脚下地面 0–1.1 米，往下 0.4 米以外——楼下那层的墙——不算）、竖向流痕、成片的污斑；天花的水渍圈；地面的灰
   const grime = `
     float wdH = vDetailPos.y - wdFloorY;
-    float wdLow = (1.0 - smoothstep(0.0, 1.1, wdH)) * smoothstep(-0.4, -0.05, wdH);
+    // 只算脚下这一层的墙根（往下 0.4 米以外是楼下那层、中庭里看到的下面几层，不算）
+    float wdIn = smoothstep(-0.4, -0.05, wdH);
+    // 脏的那一圈高低不齐：拖把水、鞋踢、靠墙堆过东西——高度按大块噪声在 0.12–0.75 米之间起伏，上沿是一团一团的
+    float wdBand = 0.12 + 0.63 * wdM.g * (0.35 + 0.65 * wdM.r);
+    float wdLow = (1.0 - smoothstep(0.0, wdBand, wdH)) * wdIn;
+    float wdHaze = (1.0 - smoothstep(0.0, 1.3, wdH)) * wdIn;
+    // 墙和地面交接的那一线积灰最深（6 厘米内）
+    float wdContact = (1.0 - smoothstep(0.0, 0.06, wdH)) * wdIn;
     float wdBlot = smoothstep(0.45, 0.95, wdM.g);
-    float wdDirt = wdWall * (wdLow * wdLow * (0.3 + 0.45 * wdBlot) + wdM.b * (0.06 + 0.2 * smoothstep(1.0, 2.6, wdH)) + wdBlot * 0.12)
-      + wdDown * (wdStain * 0.16 + wdBlot * 0.1)
-      + wdUp * (wdBlot * 0.22 + smoothstep(0.5, 0.9, wdM.r) * 0.1);
+    float wdDirt = wdWall * (wdLow * (0.28 + 0.25 * wdBlot) + wdHaze * 0.1 + wdContact * 0.22
+        + wdM.b * (0.05 + 0.2 * smoothstep(1.0, 2.6, wdH)) + wdBlot * 0.1)
+      + wdDown * (wdStain * 0.16 + wdBlot * 0.1);
     wdDirt *= wdGrime;
-    wdMul *= mix(vec3(1.0), vec3(0.93, 0.89, 0.81), wdGrime);
+    // 地面：一层灰（往灰褐色上混，深色地面发灰、浅色地面发暗），成片的地方厚一些
+    wdDust = wdUp * wdGrime * (0.1 + 0.18 * wdBlot + 0.08 * smoothstep(0.5, 0.9, wdM.r));
+    wdMul *= mix(vec3(1.0), vec3(0.94, 0.9, 0.83), wdGrime);
     wdMul *= 1.0 - min(wdDirt, 0.62);
-    wdRough += wdDirt * 0.45 + wdGrime * 0.04;`;
+    wdRough += wdDirt * 0.45 + wdDust * 0.6 + wdGrime * 0.04;`;
   const faces = `
     vec3 wdN = normalize(vDetailNormal);
     vec3 wdA = abs(wdN);
@@ -332,17 +341,17 @@ export function worldDetailChunks(v) {
   if (v.wearOnly) {
     // 自带贴图的材质（清水混凝土、抹灰、楼面）：只在停电时叠污垢，平时不多取样（按 uniform 分支，整批像素走同一边）
     color = `${faces}
-    float wdRough = 0.0;
+    float wdRough = 0.0, wdDust = 0.0;
     vec3 wdMul = vec3(1.0);
     if (wdGrime > 0.001) {
       ${macro}
       ${grime}
     }
-    diffuseColor.rgb *= wdMul;`;
+    diffuseColor.rgb = mix(diffuseColor.rgb * wdMul, vec3(0.3, 0.28, 0.25), wdDust);`;
   } else {
     color = `${faces}
     ${macro}
-    float wdRough = 0.0;
+    float wdRough = 0.0, wdDust = 0.0;
     vec2 wdUv = wdP * ${f3(v.inv)};
     vec3 wdC = texture2D(wdMap, wdUv).rgb;
     ${v.antiTile ? `vec2 wdUv2 = mat2(${f3(c)}, ${f3(s)}, ${f3(-s)}, ${f3(c)}) * wdUv * 0.73 + vec2(0.31, 0.57);
@@ -368,7 +377,7 @@ export function worldDetailChunks(v) {
     if (wdGrime > 0.001) {
       ${grime}
     }
-    diffuseColor.rgb *= wdMul;`;
+    diffuseColor.rgb = mix(diffuseColor.rgb * wdMul, vec3(0.3, 0.28, 0.25), wdDust);`;
   }
   const rough = `roughnessFactor = clamp(roughnessFactor + wdRough, 0.05, 1.0);`;
   // 法线：切线、副切线先投到这个面上（斜墙也对），离相机远了逐渐收掉（远处 mip 之后只剩闪烁）
