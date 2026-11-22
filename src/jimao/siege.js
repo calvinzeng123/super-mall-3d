@@ -17,6 +17,8 @@ import { doorOutside } from './guide.js';
 import { createPacing } from './pacing.js';
 import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
+import { MALL, mallStages, inMallZone } from './siege-mall.js';
+import { pointInPoly } from '../layout/geom.js';
 import { DEFENSE, DEFENSE_CSS, sealSegments, buildSeals, createBarricades } from './siege-defense.js';
 import { propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR, FIRE, nosingY, propTop, beaconMesh, pickGlow, faceYaw, warmProps } from './siege-props.js';
 
@@ -24,9 +26,7 @@ export const SIEGE = Object.freeze({
   building: 'A', roof: 'A-RF', power: 'A-B1',
   pad: Object.freeze({ kind: 'helicopter', x: -35, z: -214, yaw: Math.PI }), // 公寓屋顶正中（屋面 38 × 74 米）
   arms: Object.freeze({ floor: 'P1-1F', x: -169, z: -90, where: '商场西翼保安室' }),
-  // 开局：商场一层的另一头，离保安室走路 115 米左右——手里只有刀，摸过去。半路服装店的收银台上有一把手枪
-  start: Object.freeze({ floor: 'P1-1F', x: -130, z: -190, yaw: 0 }),
-  pistol: Object.freeze({ floor: 'P1-1F', x: -157.6, z: -125.6, where: '一层服装店的收银台' }),
+  // 开局在商场三层的一家店里（见 siege-mall.js）：先逃出店、三层找撬棍、二层拿手枪和门禁卡、发电，再下一层开武器柜
   // 手里拿什么跑多快（步枪、冲锋枪、榴弹枪是原速）；拿到步枪之前没有尸潮和特殊感染者，只有零星的行尸（quiet：同时最多几只）
   speed: Object.freeze({ knife: 1.16, pistol: 1.08 }), quiet: 5, alarm: 8,
   // 能走的范围：商场只有这几层，加上这一局那栋楼；别的地方走不出去（楼梯间 / 电梯厅经过别的楼层时，离这栋楼的楼梯口、电梯口 core 米以内不算）
@@ -128,9 +128,9 @@ export function lobbySpot(nav, link, floor, dist = 2.2) {
 export function siegePlan(rng, layout, nav, runs, tower = TOWERS.A) {
   const lift = nav.links.find((l) => l.id === tower.lift), yOf = (f) => nav.floors.get(f)?.y ?? 0;
   const stages = [], gates = [];
-  const a = SIEGE.arms, h = SIEGE.pistol;
-  stages.push({ id: 'pistol', kind: 'pistol', floor: h.floor, site: { floor: h.floor, x: h.x, y: yOf(h.floor), z: h.z }, label: `手枪 · ${h.where}`, verb: '捡起手枪', text: `手里只有刀：先到${h.where}捡那把手枪`, hud: `到${h.where}捡手枪`, noise: 0 });
-  stages.push({ id: 'arms', kind: 'locker', floor: a.floor, site: { floor: a.floor, x: a.x, y: yOf(a.floor), z: a.z }, label: `武器柜 · ${a.where}`, verb: '打开武器柜', text: `去${a.where}拿步枪`, noise: 0 });
+  const a = SIEGE.arms, mall = mallStages(layout, nav, rng);
+  stages.push(...mall.stages);
+  stages.push({ id: 'arms', kind: 'locker', floor: a.floor, site: { floor: a.floor, x: a.x, y: yOf(a.floor), z: a.z }, label: `武器柜 · ${a.where}`, verb: '打开武器柜', text: `门禁卡到手。下到一层，去${a.where}开武器柜拿步枪`, hud: `到${a.where}开武器柜`, noise: 0 });
   const stop = lift.stops.find((q) => q.floor === tower.power) || lift.stops[0];
   const power = lobbySpot(nav, lift, tower.power, 3) || { floor: tower.power, x: stop.x, y: yOf(tower.power), z: stop.z };
   stages.push({ id: 'power', kind: 'switch', floor: tower.power, site: power, label: `配电柜 · ${tower.powerName}`, verb: '合上电闸', text: `${tower.name}停电了：到${tower.powerName}合闸，电梯才能用`, noise: SIEGE.noise.switch });
@@ -157,7 +157,7 @@ export function siegePlan(rng, layout, nav, runs, tower = TOWERS.A) {
   flare ||= { floor: tower.roof, x: pad.x, y: ry, z: pad.z + 6 };
   stages.push({ id: 'flare', kind: 'flare', floor: tower.roof, site: flare, label: `信号弹 · ${tower.roofName}`, verb: '点燃信号弹', text: `上到${tower.roofName}，点信号弹叫直升机`, noise: SIEGE.noise.flare });
   const at = (id) => stages.findIndex((q) => q.id === id);
-  return { tower, stages, gates, pad, flare, armsStage: at('arms'), powerStage: at('power') };
+  return { tower, stages, gates, pad, flare, mall, armsStage: at('arms'), powerStage: at('power'), stageOf: at };
 }
 
 /** 现在走到第 stage 步（已经完成了 stage 步）时，哪一道关还拦着：没有了返回 null */
@@ -292,6 +292,50 @@ export function pistolModel() {
   item.add(pickGlow(0.5)); beacon(g, 'glow', 2.6, 0.05);
   g.userData.setState = (st) => setState(g, st); return g;
 }
+/** 商场段那些小物件：桌上一件东西 / 墙边一个盒子 / 一个储物柜。只求看得出是什么，都带一道光柱（柜子除外：三个里哪个是对的不能让光柱说出来） */
+const _pm = {};
+const pm = (hex, o = {}) => (_pm[hex + JSON.stringify(o)] ||= new THREE.MeshStandardMaterial({ color: hex, roughness: 0.6, metalness: 0.3, ...o }));
+const pbox = (g, w, h, d, x, y, z, m, ry = 0, rz = 0) => { const q = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); q.position.set(x, y, z); q.rotation.set(0, ry, rz); g.add(q); return q; };
+export function mallModel(kind, st = null, plan = null) {
+  const g = new THREE.Group(); g.name = st?.label || kind;
+  const item = new THREE.Group(); item.userData.cutHide = true; g.add(item);
+  const steel = pm(0x8b9299, { metalness: 0.7, roughness: 0.4 }), dark = pm(0x1e2024), red = pm(0xb3261e), yellow = pm(0xd9a521), paper = pm(0xe9e4d4, { metalness: 0 });
+  if (kind === 'crank') { // 手摇柄：一根 Z 形的曲柄，搁在小桌上
+    buildTable(g); item.position.y = 0.7175;
+    pbox(item, 0.3, 0.022, 0.022, 0, 0.012, 0, steel); pbox(item, 0.022, 0.022, 0.14, 0.15, 0.012, 0.06, steel); pbox(item, 0.12, 0.03, 0.03, 0.2, 0.014, 0.13, dark); pbox(item, 0.04, 0.03, 0.04, -0.15, 0.014, 0, dark);
+  } else if (kind === 'shutter' || kind === 'open') { // 门边墙上的一个盒子：卷帘的摇把座 / 按钮盒
+    const box = pbox(g, 0.2, 0.26, 0.1, 0, 1.2, 0, kind === 'open' ? yellow : steel);
+    box.userData.keep = true; pbox(g, 0.05, 1.1, 0.05, 0, 0.55, 0, dark);
+    pbox(item, 0.06, 0.06, 0.03, 0, 1.24, 0.06, kind === 'open' ? red : dark); const on = pbox(g, 0.06, 0.06, 0.03, 0, 1.24, 0.06, pm(0x35d07f, { emissive: 0x1c8a4c })); on.userData.cutShow = true; on.visible = false;
+  } else if (kind === 'pry') { // 防火卷帘的锁座：地上一个挂锁盒
+    pbox(g, 0.3, 0.14, 0.18, 0, 0.07, 0, dark); pbox(item, 0.12, 0.1, 0.05, 0, 0.19, 0, yellow);
+  } else if (kind === 'note') { // 收银台上的值班表：一块写字板
+    buildTable(g); item.position.y = 0.7175;
+    pbox(item, 0.24, 0.012, 0.32, 0, 0.008, 0, pm(0x5b3d24, { metalness: 0 })); pbox(item, 0.2, 0.004, 0.27, 0, 0.017, 0.005, paper); pbox(item, 0.08, 0.02, 0.03, 0, 0.022, -0.14, steel);
+  } else if (kind === 'gen') { // 备用发电机：一个带把手的机箱，启动以后顶上的灯亮
+    pbox(g, 0.9, 0.55, 0.55, 0, 0.36, 0, yellow); pbox(g, 0.96, 0.08, 0.6, 0, 0.05, 0, dark); pbox(g, 0.5, 0.2, 0.4, -0.1, 0.72, 0, dark); pbox(g, 0.06, 0.3, 0.06, 0.34, 0.78, 0.15, steel);
+    pbox(item, 0.08, 0.05, 0.02, 0.2, 0.45, 0.285, red); const on = pbox(g, 0.1, 0.06, 0.1, 0.34, 0.96, 0.15, pm(0x35d07f, { emissive: 0x1c8a4c })); on.userData.cutShow = true; on.visible = false;
+  }
+  if (kind === 'card') return lockersModel(plan, g);
+  beacon(g, 'glow', 2.6, 0.05);
+  g.userData.setState = (q) => setState(g, q); return g;
+}
+/** 三个储物柜：模型的原点在对的那个柜子上（它是这一步的交互点），另外两个按 plan.mall.lockers 摆在旁边。柜门上各有一块号牌 */
+function lockersModel(plan, g) {
+  const L = plan?.mall?.lockers || [{ x: 0, z: 0, n: 1, right: true }], win = L.find((q) => q.right) || L[0];
+  const body = pm(0x4f6b7a), door = pm(0x5f8194), plate = pm(0xf2efe6, { metalness: 0 });
+  g.userData.lockers = [];
+  for (const q of L) {
+    const one = new THREE.Group(); one.position.set(q.x - win.x, 0, q.z - win.z); g.add(one);
+    pbox(one, 0.5, 1.8, 0.45, 0, 0.9, 0, body); const d = pbox(one, 0.44, 1.7, 0.03, 0, 0.9, 0.235, door); pbox(one, 0.03, 0.12, 0.03, 0.16, 0.95, 0.26, pm(0x1e2024));
+    // 号牌：几个小点（1、2、3 号各 1、2、3 个点；没有贴图也认得出）
+    pbox(one, 0.2, 0.11, 0.01, 0, 1.5, 0.255, plate); for (let i = 0; i < q.n; i++) pbox(one, 0.03, 0.05, 0.012, (i - (q.n - 1) / 2) * 0.05, 1.5, 0.262, pm(0x1e2024));
+    if (q.right) d.userData.cutHide = true; // 对的那个：拿了卡柜门开着
+    g.userData.lockers.push({ group: one, door: d, n: q.n, right: q.right });
+  }
+  g.userData.plain = true; // 不转向（三个柜子的相对位置是按世界坐标摆的）
+  g.userData.setState = (q) => setState(g, q); return g;
+}
 export function toolModel(tool) {
   const g = new THREE.Group(); g.name = tool;
   // 灭火器立在地上（放桌上反而假）；别的工具搁在小边桌上
@@ -419,7 +463,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const blocks = [], balconies = [], acids = [];
   // 路障（人自己摆的沙袋墙）和封门的卷帘（见 siege-defense.js）
   const walls = createBarricades(G, { scene, zombies, ui });
-  let seals = null;
+  let seals = null, steps = [];
   // 尸潮的节奏（pacing.js）：平静 → 升温 → 尸潮 → 喘息；特殊感染者按名额放
   const pacing = createPacing(rng);
   let enabled = false, noiseEl = null, clockEl = null, savedFlow = null;
@@ -459,21 +503,21 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     S.plan = plan;
     const flight = siegeFlight(pad, padY(), { R: T.R });
     const door = rideLocalToWorld(pad, 0, RIDE_SPECS.helicopter.doorOut);
-    const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: st.kind === 'tool' || st.kind === 'pistol' ? 'item' : 'relay', site: st.site, locked: i > 0,
-      model: () => orient(st.kind === 'pistol' ? pistolModel() : st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel(), st.site, cameFrom(plan, st)) }));
-    const s0 = SIEGE.start;
-    const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan, start: { pos: new THREE.Vector3(s0.x, nav.floors.get(s0.floor)?.y ?? 0, s0.z), yaw: s0.yaw },
+    const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: (st.obj || (st.kind === 'tool' ? 'item' : 'relay')) === 'item' ? 'item' : 'relay', site: st.site, locked: i > 0,
+      model: () => (st.kind === 'card' ? mallModel('card', st, plan) : ['crank', 'shutter', 'open', 'pry', 'note', 'gen'].includes(st.kind) ? orient(mallModel(st.kind, st, plan), st.site, cameFrom(plan, st)) : st.kind === 'crowbar' ? orient(toolModel('撬棍'), st.site, cameFrom(plan, st)) : null) || orient(st.kind === 'pistol' ? pistolModel() : st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel(), st.site, cameFrom(plan, st)) }));
+    const s0 = plan.mall.start;
+    const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan, start: { pos: new THREE.Vector3(s0.x, s0.y, s0.z), yaw: Math.atan2(-(plan.stages[1].site.x - s0.x), -(plan.stages[1].site.z - s0.z)) },
       extraction: { id: 'heli', label: '直升机', where: T.roofName, floor: T.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
         ride: { boardRadio: '上机！机枪交给你：屋顶追上来的、阳台玻璃后面的、楼下冲出来的，全部清掉。先打尖叫的，它们会伤到飞机。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, outroCam: (pose) => roofEdge(pose),
           ground: (s0) => landAt(nav, s0.x, s0.z, s0.y)?.y ?? 0 } }, // 坠机落在哪：正下方最高的那层楼面（楼顶 / 商场屋面 / 街上）
       text: (c, ride) => textNow(c, ride), markers: () => [],
-      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你手上只有一把刀——拿刀跑得快，别恋战。服装店的收银台上有把手枪，再去保安室拿步枪，然后想办法上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName) + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
+      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你们被困在三层的店里，手上只有刀。先想办法出去，一层一层往下摸到保安室拿枪，再上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName) + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
         contact: '它们发现你了！', cut: plan.stages.slice(0, -1).map((st, i) => cutLine(plan, i)), all: `信号弹点着了！直升机 ${SIEGE.hold} 秒后到，守住屋顶！`, low: '你被咬伤了，拉开距离。', done: '指挥中心收到。幸存者已撤离云澜汇——干得漂亮。' } };
     S.plan = plan; S.mission = m; S.flight = flight;
     return m;
   }
-  const cutLine = (plan, i) => { const st = plan.stages[i], next = plan.stages[i + 1]; return `${st.kind === 'pistol' ? '手枪到手，跑得比拿刀慢一点。' : st.kind === 'locker' ? '步枪到手——柜子的警报响了，它们全过来了！守住！' : st.kind === 'switch' ? '电来了，电梯能用了——动静不小，它们过来了。' : st.kind === 'tool' ? `${st.tool}到手。` : `${GATES[st.type].name}解决了。`}${next ? next.text + '。' : ''}`; };
+  const cutLine = (plan, i) => { const st = plan.stages[i], next = plan.stages[i + 1]; return `${({ crank: '手摇柄找到了。', shutter: '卷帘起来了——它们进来了！', crowbar: '撬棍到手。', pry: '撬开了，下二层。', note: '值班表找到了。', card: '门禁卡到手。', gen: `发电机打着了，动静不小——守住 ${MALL.gen.seconds} 秒，等它带起来！`, open: '卷帘开了。' })[st.kind] || ''}${st.kind === 'pistol' ? '手枪到手，跑得比拿刀慢一点。' : st.kind === 'locker' ? '步枪到手——柜子的警报响了，它们全过来了！守住！' : st.kind === 'switch' ? '电来了，电梯能用了——动静不小，它们过来了。' : st.kind === 'tool' ? `${st.tool}到手。` : st.kind === 'gate' ? `${GATES[st.type].name}解决了。` : ''}${next ? next.text + '。' : ''}`; };
   function textNow(c, ride) {
     if (ride?.over) return '清扫完毕 · 返航';
     if (ride && S.sweep) { const w = S.sweep; return `清扫 · 屋顶 ${w.kill.roof}/${w.total.roof} · 阳台 ${w.kill.window}/${w.total.window} · 楼下 ${w.kill.ground}/${w.total.ground}`; }
@@ -508,11 +552,11 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     for (const b of balconies.splice(0)) b.g.removeFromParent();
     for (const a of acids.splice(0)) a.dispose();
     pacing.reset();
-    walls.reset(); walls.enabled = enabled; seals?.dispose(); seals = null;
+    walls.reset(); walls.enabled = enabled; seals?.dispose(); seals = null; for (const q of steps.splice(0)) q.seal.dispose();
     // 血不会自己回（原游戏的缓慢回血只在零点突围里留着）；医疗包、止痛药、地上的补给只有这个模式有
     G.noRegen = enabled; G.speedMul = 1; if (!enabled) G.weapon?.lock?.([]);
     if (supplies) { supplies.enabled = enabled; supplies.reset(); }
-    Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, hasInside: false, cores: null, tellT: 0, loadout: false, pin: null, fling: null, bruteT: -1, brutes: 0, lastSpecial: '' });
+    Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, hasInside: false, cores: null, genT: 0, genSpawn: 0, popped: null, tellT: 0, loadout: false, pin: null, fling: null, bruteT: -1, brutes: 0, lastSpecial: '' });
     noiseEl?.classList.toggle('off', !enabled); clockEl?.classList.add('off'); copy();
     if (flow) {
       // 原游戏自己的巡逻、增援、追兵全停（丧尸由这里放）；换回零点突围时还原
@@ -532,7 +576,19 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if (!enabled || !S.plan || director.state.mission !== S.mission) return;
     const heli = director.vehicles.heli; heli.root.visible = false;
     // 范围往外的门口、扶梯口全部落闸
-    { const T = tower(), A = SIEGE.area; seals = buildSeals(root, sealSegments(nav, (f) => A.mall.includes(f) || f === T.power || String(f).startsWith(`${T.id}-`))); }
+    {
+      const T = tower(), A = SIEGE.area, F = MALL.floors, M = S.plan.mall;
+      const all = (f) => A.mall.includes(f) || f === F.top || f === F.mid || f === T.power || String(f).startsWith(`${T.id}-`);
+      seals = buildSeals(root, sealSegments(nav, all));
+      // 一步步放开的三处：开局那家店的店面；三层下二层的扶梯口；二层下一层的扶梯口
+      const slopesAt = (lo, hi) => sealSegments({ floors: nav.floors, portals: [], slopes: nav.slopes.filter((q) => q.low === lo && q.high === hi) }, (f) => f === hi);
+      const y3 = nav.floors.get(F.top)?.y ?? 0;
+      steps = [
+        { until: 'exit', seal: buildSeals(root, M.shop.fronts.map((f) => ({ x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, y: y3, h: DEFENSE.seal.height, kind: 'door' }))) },
+        { until: 'pry', seal: buildSeals(root, slopesAt(F.mid, F.top)) },
+        { until: 'open', seal: buildSeals(root, slopesAt(F.ground, F.mid)) },
+      ];
+    }
     // 关卡的大件摆到楼梯口
     for (const g of S.plan.gates) { const b = gateBlock(g.type); b.position.set(g.model.x, g.model.y, g.model.z); b.rotation.y = g.model.yaw; root.add(b); blocks.push(b); g.block = b; }
     // 开局只有手枪和刀：步枪没子弹，拿到武器柜才有。原游戏在这之后还会把武器重置一遍（装满子弹），所以等开打的第一帧再改（loadout）
@@ -587,7 +643,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const p = G.player.pos, st = G.physics.stateOf?.(p), floor = st?.floor || '', A = SIEGE.ambient;
     const base = floor === tower().roof ? (S.hold >= 0 ? 0 : A.roof) : floor.startsWith(`${tower().id}-`) ? A.tower + Math.min(3, S.stage >> 1) : A.mall + Math.min(4, S.stage);
     const calm = S.stage <= S.plan.armsStage; // 还没拿到步枪：只有零星的行尸
-    const target = calm ? SIEGE.quiet : Math.round(base * pacing.ambient); // 平静时少、升温时多、喘息时不补
+    const target = calm ? (phase() === 0 ? 0 : SIEGE.quiet) : Math.round(base * pacing.ambient); // 平静时少、升温时多、喘息时不补
     let near = 0;
     for (const z of zalive()) {
       const d = Math.hypot(z.pos.x - p.x, z.pos.z - p.z), dy = Math.abs(z.pos.y - p.y);
@@ -743,7 +799,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function syncStage() {
     const relays = G.game?.run?.relays; if (!relays || !S.mission) return;
     const done = relays.filter((r) => r.cut).length;
-    S.mission.objectives.forEach((o, i) => { o.locked = i !== done; if (o.object) o.object.visible = i <= done || o.kind === 'relay' && false; });
+    S.mission.objectives.forEach((o, i) => { o.locked = i !== done || (S.genT > 0 && S.plan.stages[i]?.kind === 'open'); if (o.object) o.object.visible = i <= done || S.plan.stages[i]?.kind === 'card'; }); // 三个储物柜一直看得见（没看值班表也能去开——开错了后果自负）
     if (done <= S.stage) return; // 少了：还没来得及把存档点之前的目标补上（missions.js 的 restoreCheckpoint），等它
     for (let i = S.stage; i < done; i++) finishStage(i);
     S.stage = done;
@@ -752,6 +808,14 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function finishStage(i) {
     const st = S.plan.stages[i];
     if (st.kind === 'pistol') { G.weapon?.unlock?.('pistol'); say('拿到手枪', 2.6); }
+    // 分阶段的卷帘：这一步做完，对应的那一道收起来
+    for (const q of steps) if (q.until === st.id && q.seal.mesh) q.seal.mesh.visible = false;
+    if (st.kind === 'shutter') { // 门外拍门的那几只进来了
+      const sh = S.plan.mall.shop, f = sh.fronts[0];
+      if (f) for (let i = 0; i < MALL.out; i++) { const t = (i + 1) / (MALL.out + 1); spawn({ x: f.x0 + (f.x1 - f.x0) * t + f.nx * (2.5 + i * 0.6), y: st.site.y, z: f.z0 + (f.z1 - f.z0) * t + f.nz * (2.5 + i * 0.6) }, { kind: 'walker', hunt: true, state: 'alert' }); }
+      say('它们进来了！', 2.2);
+    }
+    if (st.kind === 'gen') { S.genT = MALL.gen.seconds; S.genSpawn = 1.5; }
     { const n = DEFENSE.give[st.kind === 'gate' && st.gate === S.plan.gates.length - 1 ? 'flare' : st.kind] || 0; if (n && walls.give(n)) G.hud?.radio?.(`拿到 ${n} 个路障（按 B 摆在面前）：丧尸冲过来会被挡一阵。`, 4); }
     if (st.kind === 'locker') {
       try { G.rifle.ammo = SIEGE.ammo.rifle; G.rifle.reserve = SIEGE.ammo.reserve; } catch { /* 改不了就不改 */ }
@@ -767,9 +831,15 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   }
   /** 只能在路线上走：商场那几层和这一局的那栋楼。走出去了（上了商场二层、出了大门、进了别的楼）就退回刚才站的地方 */
   const cores = () => (S.cores ||= [...nav.links.filter((l) => String(l.id).startsWith(`${tower().id}-`)).flatMap((l) => l.stops), ...runs.filter((r) => r.id.startsWith(tower().stair)).flatMap((r) => [{ floor: r.from, x: r.a.x, z: r.a.z }, { floor: r.to, x: r.b.x, z: r.b.z }])]);
-  function inArea(st) {
+  /** 走到哪一步，能去哪儿：还没摇开卷帘——只在那家店里；没撬开扶梯口——只在三层那一片；没按开二层的卷帘——二、三层；之后加上商场一层往下和这栋楼 */
+  const phase = () => { const P = S.plan, at = P.stageOf; return S.stage <= at('exit') ? 0 : S.stage <= at('pry') ? 1 : S.stage <= at('open') ? 2 : 3; };
+  function inArea(st, ph = phase()) {
     const f = st?.floor; if (!f) return true; // 在坡道 / 楼梯上：算
-    const T = tower(), A = SIEGE.area;
+    const T = tower(), A = SIEGE.area, M = S.plan.mall, F = MALL.floors;
+    if (ph === 0) return f === F.top && (!M.shop.poly || pointInPoly([st.x, st.z], M.shop.poly));
+    if (f === F.top && inMallZone(S.plan.stages, f, st.x, st.z)) return true;
+    if (f === F.mid && ph >= 2 && inMallZone(S.plan.stages, f, st.x, st.z)) return true;
+    if (ph < 3) return false;
     if (A.mall.includes(f) || f === T.power || f.startsWith(`${T.id}-`)) return true;
     return cores().some((c) => c.floor === f && Math.hypot(c.x - st.x, c.z - st.z) < A.core);
   }
@@ -777,7 +847,27 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const p = G.player.pos, st = G.physics.stateOf?.(p); if (!st) return;
     if (inArea({ floor: st.floor, x: p.x, z: p.z })) { (S.inside ||= new THREE.Vector3()).copy(p); S.hasInside = true; return; }
     if (S.hasInside) { p.copy(S.inside); G.player.vel?.set?.(0, 0, 0); G.physics.forget?.(p); }
-    if (S.tellT <= 0) { S.tellT = 2.5; say('这边出不去——照着路线走', 2.4); }
+    if (S.tellT <= 0) { S.tellT = 2.5; say(phase() === 0 ? '卷帘落着，出不去——先找手摇柄' : '这边出不去——照着路线走', 2.4); }
+  }
+  /** 发电机带起来之前：轰隆隆地响，隔几秒从看不见的地方来几只；倒计时走完才能去按卷帘 */
+  function genTick(dt) {
+    if (!(S.genT > 0)) return;
+    S.genT -= dt;
+    if (clockEl) { clockEl.classList.remove('off'); clockEl.textContent = `发电机 00:${String(Math.max(0, Math.ceil(S.genT))).padStart(2, '0')}`; }
+    if ((S.genSpawn -= dt) <= 0) { S.genSpawn = MALL.gen.every; for (let i = 0; i < MALL.gen.each; i++) { const q = hidden(10, 26); if (q) spawn(q, { kind: i ? 'walker' : 'runner', hunt: true, state: 'alert' }); } }
+    if (S.genT <= 0) { S.genT = 0; clockEl?.classList.add('off'); G.hud?.radio?.('发电机带起来了！回扶梯口按开卷帘。', 4); G.game?.refreshObjective?.(); }
+  }
+  /** 三个储物柜：走到不对的那个跟前（值班表看没看都一样），柜门弹开、里面扑出来一只 */
+  function lockersTick() {
+    const P = S.plan, i = P.stageOf('card'); if (S.stage > i) return;
+    const p = G.player.pos, obj = S.mission?.objectives[i]?.object;
+    for (const q of P.mall.lockers) {
+      if (q.right || (S.popped ||= new Set()).has(q.n) || Math.abs(p.y - q.y) > 1.5 || Math.hypot(p.x - q.x, p.z - q.z) > 1.0) continue;
+      S.popped.add(q.n);
+      const L = obj?.userData?.lockers?.find((k) => k.n === q.n); if (L) L.door.visible = false;
+      spawn({ x: q.x, y: q.y, z: q.z }, { kind: 'runner', hunt: true, state: 'alert' }); addNoise(20, q);
+      say(S.stage < i ? '柜子里扑出来一只！先看值班表再开' : `不是这个——是 ${P.mall.lockers.find((k) => k.right).n} 号`, 2.6); G.player.addShake?.(0.2);
+    }
   }
   /** 被堵的那段楼梯走不上去：人一踏进去就退回来 */
   function wall() {
@@ -823,7 +913,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       S.tellT -= dt;
       syncStage();
       if (director.riding) { clockEl?.classList.add('off'); return; }
-      wall(); leash(); pinTick(); flingTick(dt); acidTick(dt); ambient(dt); holdTick(dt);
+      wall(); leash(); genTick(dt); lockersTick(); pinTick(); flingTick(dt); acidTick(dt); ambient(dt); holdTick(dt);
       // 响动：安静一会儿才开始往下掉；攒满会把下一波尸潮催来
       S.hordeCool -= dt;
       if ((S.quietT += dt) > SIEGE.noise.quiet) S.noise = Math.max(0, S.noise - SIEGE.noise.decay * dt);
@@ -841,7 +931,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       if (S.bruteT >= 0 && (S.bruteT -= dt) < 0) spawnBrute();
       if (noiseEl) { noiseEl.classList.remove('off'); noiseEl.classList.toggle('hot', S.noise > 70); noiseEl.querySelector('b').style.width = `${Math.min(100, S.noise)}%`; }
     },
-    dispose() { for (const a of acids.splice(0)) a.dispose(); acidMat.dispose(); acidBall.dispose(); acidDisc.dispose(); walls.dispose(); seals?.dispose(); root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
+    dispose() { for (const a of acids.splice(0)) a.dispose(); acidMat.dispose(); acidBall.dispose(); acidDisc.dispose(); walls.dispose(); seals?.dispose(); for (const q of steps.splice(0)) q.seal.dispose(); root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
   };
   return api;
 }
