@@ -422,8 +422,12 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     g.rotation.y = faceYaw((x, z) => { const h = P.raycast(_o, _d.set(x, 0, z), 4); return h && Number.isFinite(h.dist) ? h.dist : 4; }, { toward });
     return g;
   }
-  /** 人多半从哪边走到这个目标：武器柜——开局点；工具和关卡——同一层的另一个（到了这层先经过关卡处，再进屋找工具，拿了再回来） */
-  const cameFrom = (plan, st) => (st.kind === 'locker' ? (G.level?.playerStart?.pos || null) : plan.stages.find((q) => q !== st && q.floor === st.floor && (q.kind === 'tool' || q.kind === 'gate'))?.site || null);
+  /** 人多半从哪边走到这个目标：武器柜——开局点；配电柜——这层的电梯口；工具和关卡——同一层的另一个（到了这层先经过关卡处，再进屋找工具，拿了再回来） */
+  const cameFrom = (plan, st) => {
+    if (st.kind === 'locker') return G.level?.playerStart?.pos || null;
+    if (st.kind === 'switch') return nav?.links?.find((l) => l.id === plan.tower?.lift)?.stops?.find((q) => q.floor === st.floor) || null; // 配电柜：人从这层的电梯口过来
+    return plan.stages.find((q) => q !== st && q.floor === st.floor && (q.kind === 'tool' || q.kind === 'gate'))?.site || null;
+  };
   /** 任务系统每局来要一次 */
   function mission(r = rng) {
     const T = pickTower(r(), forceTower), plan = siegePlan(r, layout, nav, runs, T), pad = plan.pad;

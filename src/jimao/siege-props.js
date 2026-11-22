@@ -317,14 +317,14 @@ export function propTop(g, r = 0.05) {
   return top;
 }
 const BEAM = { geo: null, mats: new Map() };
-/** 光柱：一张始终侧过来对着镜头的竖条（绕竖轴转，顶点着色器里做），中间一道细亮线、两边柔光，底下 0.3 米淡入、顶上淡出。加色，不吃光照 */
+/** 光柱：一张始终侧过来对着镜头的竖条（绕竖轴转，顶点着色器里做），中间一道细亮线、两边柔光，底下 0.3 米淡入、顶上淡出。不吃光照 */
 export function beaconMesh(y0, y1, color = 0xffb347, width = 0.16) {
   BEAM.geo ||= new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
   let mat = BEAM.mats.get(color);
   if (!mat) {
     const c = new THREE.Color(color);
     mat = new THREE.ShaderMaterial({
-      name: 'siege-beacon', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false,
+      name: 'siege-beacon', transparent: true, depthWrite: false, toneMapped: false, fog: false,
       uniforms: { uColor: { value: new THREE.Vector3(c.r, c.g, c.b) }, uWidth: { value: width } },
       vertexShader: /* glsl */`
         uniform float uWidth; varying vec2 vUv; varying float vLen;
@@ -339,8 +339,9 @@ export function beaconMesh(y0, y1, color = 0xffb347, width = 0.16) {
         uniform vec3 uColor; varying vec2 vUv; varying float vLen;
         void main() { float x = abs(vUv.x - 0.5) * 2.0, y = vUv.y * vLen; // y：离光柱底端几米
           float core = exp(-x * x * 60.0) * 0.9 + exp(-x * x * 7.0) * 0.28;
-          float a = core * smoothstep(0.0, 0.3, y) * (1.0 - smoothstep(vLen - 0.45, vLen, y));
-          gl_FragColor = vec4(uColor * a, 1.0);
+          float a = min(1.0, core) * smoothstep(0.0, 0.3, y) * (1.0 - smoothstep(vLen - 0.45, vLen, y));
+          // 普通混合、不是加色：白天亮墙前面加色的光会被冲没，普通混合两种场景下都看得见；颜色略超 1（夜里带一点泛光）
+          gl_FragColor = vec4(uColor * (1.15 + 0.5 * exp(-x * x * 60.0)), a);
           #include <colorspace_fragment>
         }`,
     });

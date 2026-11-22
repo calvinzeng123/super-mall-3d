@@ -137,7 +137,7 @@ test('目标光柱不穿过物件：光柱那一截（芯 6 厘米宽）跟物�
   const all = { 武器柜: lockerModel(), 配电柜: switchModel(), 信号弹: flareModel(), ...Object.fromEntries(['撬棍', '保险丝', '灭火器', '门禁卡'].map((t) => [t, toolModel(t)])), ...Object.fromEntries(Object.keys(GATES).map((t) => [`${t} 交互点`, gateModel(t)])) };
   for (const [name, g] of Object.entries(all)) {
     let b = null; g.traverse((o) => { if (o.userData.beacon) b = o; });
-    assert.ok(b, `${name} 有光柱`); assert.equal(b.material.blending, THREE.AdditiveBlending, `${name}：光柱是加色的光，不是实心棍子`);
+    assert.ok(b, `${name} 有光柱`); assert.ok(b.material.isShaderMaterial && b.material.transparent && !b.material.depthWrite, `${name}：光柱是半透明的光，不是实心棍子`);
     const y0 = b.position.y, y1 = y0 + b.scale.y, box = new THREE.Box3(new THREE.Vector3(b.position.x - 0.03, y0, b.position.z - 0.03), new THREE.Vector3(b.position.x + 0.03, y1, b.position.z + 0.03));
     const hit = solidTris(g).find((t) => box.intersectsTriangle(t));
     assert.ok(!hit, `${name}：光柱 ${y0.toFixed(2)}–${y1.toFixed(2)} 米穿过了物件`);
