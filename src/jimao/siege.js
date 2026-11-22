@@ -23,9 +23,9 @@ export const SIEGE = Object.freeze({
   building: 'A', roof: 'A-RF', power: 'A-B1',
   pad: Object.freeze({ kind: 'helicopter', x: -35, z: -214, yaw: Math.PI }), // 公寓屋顶正中（屋面 38 × 74 米）
   arms: Object.freeze({ floor: 'P1-1F', x: -169, z: -90, where: '商场西翼保安室' }),
-  // 开局：商场一层的另一头，离保安室走路 115 米左右——手里只有刀，摸过去。半路的服务台边上有一把手枪
+  // 开局：商场一层的另一头，离保安室走路 115 米左右——手里只有刀，摸过去。半路服装店的收银台上有一把手枪
   start: Object.freeze({ floor: 'P1-1F', x: -130, z: -190, yaw: 0 }),
-  pistol: Object.freeze({ floor: 'P1-1F', x: -157.6, z: -125.6, where: '一层服务台' }),
+  pistol: Object.freeze({ floor: 'P1-1F', x: -157.6, z: -125.6, where: '一层服装店的收银台' }),
   // 手里拿什么跑多快（步枪、冲锋枪、榴弹枪是原速）；拿到步枪之前没有尸潮和特殊感染者，只有零星的行尸（quiet：同时最多几只）
   speed: Object.freeze({ knife: 1.16, pistol: 1.08 }), quiet: 5, alarm: 8,
   // 能走的范围：商场只有这几层，加上这一局那栋楼；别的地方走不出去（楼梯间 / 电梯厅经过别的楼层时，离这栋楼的楼梯口、电梯口 core 米以内不算）
@@ -464,7 +464,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
         ride: { boardRadio: '上机！机枪交给你：屋顶追上来的、阳台玻璃后面的、楼下冲出来的，全部清掉。先打尖叫的，它们会伤到飞机。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, outroCam: (pose) => roofEdge(pose),
           ground: (s0) => landAt(nav, s0.x, s0.z, s0.y)?.y ?? 0 } }, // 坠机落在哪：正下方最高的那层楼面（楼顶 / 商场屋面 / 街上）
       text: (c, ride) => textNow(c, ride), markers: () => [],
-      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你手上只有一把刀——拿刀跑得快，别恋战。服务台那儿有把手枪，再去保安室拿步枪，然后想办法上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName) + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
+      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你手上只有一把刀——拿刀跑得快，别恋战。服装店的收银台上有把手枪，再去保安室拿步枪，然后想办法上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName) + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
         contact: '它们发现你了！', cut: plan.stages.slice(0, -1).map((st, i) => cutLine(plan, i)), all: `信号弹点着了！直升机 ${SIEGE.hold} 秒后到，守住屋顶！`, low: '你被咬伤了，拉开距离。', done: '指挥中心收到。幸存者已撤离云澜汇——干得漂亮。' } };
     S.plan = plan; S.mission = m; S.flight = flight;
     return m;
