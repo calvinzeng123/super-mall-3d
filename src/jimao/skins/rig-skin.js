@@ -820,7 +820,7 @@ export function humanHead(o) {
       out.push(ellip(o.iris ?? 0x2a1c14, SURF.GLOSS, [0.0058, 0.006, 0.003], [e[0] - s * 0.0005, e[1] - 0.0004, e[2] + 0.0025]));
       out.push(rod(o.skin, SURF.SKIN, [e[0] - 0.0125, e[1] + 0.0058, e[2] - 0.0028], [e[0] + 0.0125, e[1] + 0.0058, e[2] - 0.0028], 0.0038, 6));
       out.push(rod(o.brow, SURF.HAIR, [e[0] - 0.0118, e[1] + 0.003, e[2] - 0.0004], [e[0] + 0.0118, e[1] + 0.0034, e[2] - 0.0011], 0.0013, 4));
-      const b0 = facePoint(head, s * 0.13, 0.26), b1 = facePoint(head, s * 0.35, 0.31), b2 = facePoint(head, s * 0.54, 0.25);
+      const b0 = facePoint(head, s * 0.13, 0.285), b1 = facePoint(head, s * 0.35, 0.315), b2 = facePoint(head, s * 0.55, 0.26); // 眉头不压低（压低就是皱眉）
       out.push(rod(o.brow, SURF.HAIR, [b0[0], b0[1], b0[2] - 0.001], [b1[0], b1[1], b1[2] - 0.001], 0.0022, 5), rod(o.brow, SURF.HAIR, [b1[0], b1[1], b1[2] - 0.001], [b2[0], b2[1], b2[2] - 0.0025], 0.0018, 5));
     }
   }

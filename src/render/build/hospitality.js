@@ -438,12 +438,6 @@ function liftEnclosures(ctx,B,b,levels,pal) {
       sideBox(B,front,'extMetal',m-doorW/2-0.06,m+doorW/2+0.06,lv.elev+2.7,lv.elev+2.8,0.025,0.12,pal.metal);
       sideBox(B,front,'glass',0,front.len,lv.elev+2.8,Math.min(top,lv.elev+lv.height-0.12),0,0.035,'#ffffff');
       sideBox(B,front,'glowSoft',m-0.12,m+0.12,lv.elev+2.76,lv.elev+2.82,0.1,0.045,'#b8e4cd');
-      // 门右侧的不锈钢召梯盒（贴在侧边玻璃外，凸出 5 cm 以内）和上下两个按钮；门边放不下就不装。
-      const c0=m+doorW/2+0.11;
-      if(c0+0.2<front.len) {
-        sideBox(B,front,'extMetal',c0,c0+0.14,lv.elev+1.02,lv.elev+1.34,0.033,0.03,'#a7adae');
-        for(const y of [1.13,1.23])sideBox(B,front,'glowSoft',c0+0.052,c0+0.088,lv.elev+y,lv.elev+y+0.036,0.05,0.004,'#c9d2cf');
-      }
     }
   }
 }
@@ -455,11 +449,12 @@ function corridorLights(B,b,lv) {
   for(let x=b.footprint.x0+3;x<b.footprint.x1-1;x+=5) {
     B.get('extMetal').box(x,y,0,1.4,0.07,0.23,'#5d6567');
     B.get('glowSoft').box(x,y-0.047,0,1.25,0.022,0.15,'#f8edce');
-    // 两盏灯之间一块 0.6 m 见方的吊顶检修口：一圈铝框，中间盖板比顶棚略灰（手电扫上去才看得出接缝）。
+    // 两盏灯之间一块 0.6 m 见方的吊顶检修口：一圈深一点的框，中间盖板比顶棚略灰（手电扫上去才看得出接缝）。
     const xp=x+2.5;
     // 两片朝下的面（4 个三角形），整栋楼逐层合进外立面批次也只多几千个三角形。
     if(xp<b.footprint.x1-1.5&&lv.elev>0) {
-      B.get('extMetal').shape('plane',new THREE.Vector3(xp,ceil-0.004,0),FACE_DOWN,new THREE.Vector3(0.62,0.62,1),'#868c8d');
+      // 框也走 stone（金属在停电的暗环境里没有东西可反射，会成一圈黑框）。
+      B.get('stone').shape('plane',new THREE.Vector3(xp,ceil-0.004,0),FACE_DOWN,new THREE.Vector3(0.62,0.62,1),'#aaa69d');
       B.get('stone').shape('plane',new THREE.Vector3(xp,ceil-0.007,0),FACE_DOWN,new THREE.Vector3(0.56,0.56,1),'#d3cfc5');
     }
   }

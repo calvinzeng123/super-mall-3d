@@ -13,7 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PEOPLE_ASSETS } from '../render/people-data.js';
 import { fetchBinary } from '../render/fetch-binary.js';
 import { MEM } from '../render/device.js';
-import { LOOKS, PAINT, noiseTableSteps, rasterBodySteps, bodyFrame, planFace, planLook, bloodField, prepareLayers, paintColour, paintSurface } from './skins/zombie-paint.js';
+import { LOOKS, PAINT, noiseTableSteps, rasterBodySteps, bodyFrame, planFace, planLook, bodyTears, bloodField, prepareLayers, paintColour, paintSurface } from './skins/zombie-paint.js';
 
 /**
  * tones：几套色调 [衣服去色后乘上的 R, G, B, 保留多少原来的颜色]（皮肤、伤、血、脏怎么画见 zombie-paint.js 的 LOOKS.walker，一一对应）；
@@ -125,13 +125,14 @@ function toTexture(pixels, size, srgb) {
 
 /**
  * 着色器补丁：颜色图的透明通道 → 湿度（zombie-paint.js 的 encodeWet：0.5 以下是头发的半透明，0.5 往上越大越湿）。
- * 湿处粗糙度降下来（干血痂 0.8 左右、油泥 0.55、刚淌的血 0.4、伤口正中 0.2），越湿越把共用法线图里的布纹抹平（血把布纹填平了，伤口里也不会透出条纹的高光）。
+ * 湿处粗糙度按湿度直线降下来（干血痂 0.75 左右、油泥 0.45、新血 0.3、伤口正中 0.24——第二轮新血还有 0.45，手电下看不出湿，
+ * 像一块深色的染渍），越湿越把共用法线图里的布纹抹平（血把布纹填平了，伤口里也不会透出条纹的高光）。
  * 透明通道读完以后改回 1：材质不透明，输出的透明度不能跟着变。
  */
 function wetShader(shader) {
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\n\tfloat zWet = clamp( diffuseColor.a * 2.0 - 1.0, 0.0, 1.0 );\n\tdiffuseColor.a = 1.0;')
-    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor, mix( 0.82, 0.2, zWet * zWet ), smoothstep( 0.0, 0.1, zWet ) );')
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor, mix( 0.8, 0.24, zWet ), smoothstep( 0.0, 0.1, zWet ) );')
     .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = normalize( mix( normal, nonPerturbedNormal, smoothstep( 0.35, 0.9, zWet ) * 0.85 ) );');
 }
 
@@ -171,18 +172,21 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
     const layers = await drain(prepareLayers(src, size, body, fp, tables), clock, 'layers');
     // 网格第 k 格是身体哪部分（伤口、破口挑落点用：破口只开在衣服上，烂疮只长在皮上）
     const L = body.L, partAt = (k) => layers.part[Math.min(size - 1, Math.floor(((Math.floor(k / L) + 0.5) * size) / L)) * size + Math.min(size - 1, Math.floor((((k % L) + 0.5) * size) / L))];
+    // 这个模型固定的几处破口：各外观从里面挑，共用的法线图里全压出来
+    const tears = bodyTears(body, frame, fp, partAt, seed + bi);
+    await pause(clock, 'plan');
     // 法线和粗糙度：每个模型一张，各外观共用
     let normalMap = null, roughnessMap = null;
     if (surface) {
       const nPix = new Uint8ClampedArray(surface * surface * 4), rPix = new Uint8ClampedArray(surface * surface * 4);
-      await drain(paintSurface(src, layers, tables, nPix, rPix, body), clock, 'surface');
+      await drain(paintSurface(src, layers, tables, nPix, rPix, body, tears), clock, 'surface');
       await pause(clock, 'surface');
       normalMap = toTexture(nPix, surface, false); await pause(clock, 'upload'); roughnessMap = toTexture(rPix, surface, false); count(surface); count(surface);
       shared.push(normalMap, roughnessMap);
     }
     // 一种外观：伤按 (模型, 外观) 定——同一个模型的几套色调伤口各不相同，主伤口按外观轮换（rot 让男女两个模型错开）
     const paint = async (look, tone, key, env = ZOMBIE_SKIN.envMapIntensity) => {
-      const plan = planLook(body, frame, fp, seed + bi * 101 + key * 131, look, key, partAt, bi * 2);
+      const plan = planLook(body, frame, fp, seed + bi * 101 + key * 131, look, key, partAt, bi * 2, tears);
       await pause(clock, 'plan');
       const field = await drain(bloodField(body, plan, frame), clock, 'blood');
       const pix = new Uint8ClampedArray(size * size * 4);
@@ -190,7 +194,7 @@ export async function loadZombieKit({ seed = 20261120, budget = 10 } = {}) {
       await pause(clock, 'colour');
       const map = toTexture(pix, size, true); count(size);
       const m = new THREE.MeshStandardMaterial({ map, normalMap, roughnessMap, roughness: roughnessMap ? 1 : 0.86, alphaTest: 0.225, side: THREE.DoubleSide, metalness: 0, envMapIntensity: env, name: 'zombie-skin' });
-      m.onBeforeCompile = wetShader; m.customProgramCacheKey = () => 'zombie-wet-1';
+      m.onBeforeCompile = wetShader; m.customProgramCacheKey = () => 'zombie-wet-2';
       shared.push(map, m);
       await pause(clock, 'upload');
       return m;
