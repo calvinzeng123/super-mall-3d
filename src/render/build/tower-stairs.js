@@ -22,8 +22,8 @@ export const STAIR_PAINT = Object.freeze({
   dado: '#9aa49a', dadoLine: '#47524b', skirting: '#4a4f4b', wall: '#cfd0c7', threshold: '#8f8c85',
   rail: '#5b4130', baluster: '#3a433e', bracket: '#5f6662',
   pipe: '#952c24', conduit: '#7d827c', lamp: '#ebe3cc', lampBase: '#3f4341', cage: '#2c2f2e',
-  // 钢门框是中灰色的烤漆（原来近黑，像一圈描边）
-  frame: '#5d625e', closer: '#6d726e',
+  // 钢门框是中灰色的烤漆（原来近黑，像一圈描边；#5d625e 在手电下仍然读成黑框，再提亮一档）
+  frame: '#787d78', closer: '#6d726e',
   // 防火门扇上的五金：执手、合页、观察窗（夹丝玻璃）、「常闭式防火门」标牌
   lever: '#b8bcbc', hingeKnuckle: '#45403b', wiredGlass: '#3c4547', plate: '#e8e4da', plateText: '#8d231c',
   // 消火栓箱：不锈钢包边、红色烤漆门、玻璃后面是深色箱膛和卷盘；白字
@@ -775,7 +775,7 @@ export function lobbyBox(B, lobby, at, alongX, paint = 'concrete', metal = 'extM
     ring(C, 0, (gy0 + gy1) / 2, .028, gw, gy1 - gy0, .01, .006, P.hydrantGlass);
     // 白字：上樘窗上方「消火栓」，下樘门上部「灭火器」（画布栅格化的真字；没有画布时是一条白色标签条）
     write(C, '消火栓', 0, (gy1 + upper[1]) / 2, .0365, .072, iw - .1, P.hydrantLabel, 20);
-    write(C, '灭火器', 0, lower[1] - .14, .0365, .072, iw - .1, P.hydrantLabel, 20);
+    write(C, '灭火器', 0, lower[1] - .15, .0365, .085, iw - .1, P.hydrantLabel, 20);
     // 镀铬拉手：离门轴远的一边（站在箱前的右手），一根竖条
     for (const yc of [(upper[0] + upper[1]) / 2, (lower[0] + lower[1]) / 2 + .05]) put(C, right * (iw / 2 - .045), yc, .0385, .018, .14, .006, P.chrome);
   } else {
@@ -914,15 +914,15 @@ function levelInstances(ctx, building, levels, buckets, materials, exterior, { n
 }
 
 // ---------- 酒店 / 公寓的公共走廊（双面走廊，两侧是套房的户门墙；墙和门洞是逐层加载的套房模型） ----------
-/** 走廊细部的顶点色：踢脚、门套、门槛石、烟感 */
+/** 走廊细部的顶点色：踢脚、烟感 */
 export const CORRIDOR_PAINT = Object.freeze({
-  skirting: '#4d4a45', skirtingTop: '#5d5a54', casing: '#5b544b', threshold: '#9b958b', smoke: '#e6e3dc', smokeRing: '#b9b6ae',
+  skirting: '#4d4a45', skirtingTop: '#5d5a54', smoke: '#e6e3dc', smokeRing: '#b9b6ae',
 });
 /** 户门墙墙面相对走廊净宽线（walk 的 corridor 矩形边）的位置：套房模型的前墙面正好落在线上（实测） */
 export const CORRIDOR_FACE = 0;
 /**
  * 一层走廊的细部做法（纯数据；同一层高、同一做法的楼层共用一份实例化模板）：
- *   sides   两侧户门墙：{ z（墙面）, n（朝走廊的法线 z 分量）, x0 / x1（户门墙从哪到哪）, doors: [[a, b]…]（入户门洞） }
+ *   sides   两侧户门墙：{ z（墙面）, n（朝走廊的法线 z 分量）, x0 / x1（户门墙从哪到哪）, doors: [[a, b]…]（入户门洞，踢脚在这里断开） }
  *   boxes   嵌墙的箱子：{ kind: 'hydrant' | 'meter', side（sides 的下标）, x, w }——一头一个消火栓箱，旁边一对表箱
  *   smoke   吊顶上烟感的 x；ceiling 吊顶标高（相对楼面）
  * 只认套房（suitePlan）的户门正好开在走廊两条长边上的做法，别的楼层返回 null（不画）。
@@ -980,12 +980,12 @@ export function buildCorridorInstances(ctx, building, levels, materials, exterio
 /**
  * 走廊两侧（y 以楼面为 0，楼栋坐标）：
  *   踢脚：10 cm 深灰，户门墙全长、在门洞和箱子处断开，上口一条 1 cm 的小平台（侧面看得出是贴上去的一条）；
- *   户门：深色门套（两侧 7 cm、门头 7 cm，贴在墙面上，不进门洞）、门洞下一条门槛石（露出墙面 3 cm）；
+ *   户门的门套、门牌套房模型里本来就有（浅色门套凸出墙面），这里不再叠一圈（叠上去也被挡住，还白占顶点）；
  *   嵌墙箱子：消火栓箱（lobbyBox 同一做法）、表箱；吊顶：每 10 m 一个烟感。
  * 全是朝外的面片和薄盒子，不进行走身体（凸出墙面不到 4 cm）。
  */
 export function corridorDetails(B, spec, paint = 'plaster') {
-  const C = B.get(paint), P = CORRIDOR_PAINT, H = 2.2;
+  const C = B.get(paint), P = CORRIDOR_PAINT;
   spec.sides.forEach((s, k) => {
     const n = s.n, z = (o) => s.z + n * o, nn = [0, n];
     const gaps = [...s.doors.map(([a, b]) => [a - .075, b + .075]), ...spec.boxes.filter((q) => q.side === k).map((q) => [q.x - q.w / 2 - .01, q.x + q.w / 2 + .01])];
@@ -994,12 +994,6 @@ export function corridorDetails(B, spec, paint = 'plaster') {
     for (const [a, b] of ivs) {
       wface(C, (a + b) / 2, .05, z(.012), b - a, .1, nn, P.skirting);
       if (C.flat) C.flat((a + b) / 2, .1, z(.006), b - a, .012, P.skirtingTop); else C.box((a + b) / 2, .1, z(.006), b - a, .004, .012, P.skirtingTop);
-    }
-    for (const [a, b] of s.doors) {
-      for (const x of [a - .035, b + .035]) wface(C, x, H / 2 + .02, z(.006), .07, H + .04, nn, P.casing);
-      wface(C, (a + b) / 2, H + .04, z(.006), b - a + .14, .07, nn, P.casing);
-      // 门槛石：从门洞里一直伸到墙面外 3 cm
-      if (C.flat) C.flat((a + b) / 2, .008, z(-.07), b - a + .02, .2, P.threshold); else C.box((a + b) / 2, .004, z(-.07), b - a + .02, .008, .2, P.threshold);
     }
   });
   for (const q of spec.boxes) {
