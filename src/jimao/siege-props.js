@@ -275,12 +275,18 @@ export function propStats(root) {
 // ---------- 物件朝向 ----------
 /**
  * 任务物件转多少（rotation.y，物件本地 +z 是正面）：free(dx, dz) 返回从交互点往 (dx, dz) 方向能走多远（米，最多 max）。
- * 离墙近（wall 米内）：背靠最近的墙，正面朝外（柜子、配电柜贴墙站才像真的）；四面都空：正面朝最空的那一边（人多半从开阔的那边走过来，
- * 以前不管朝哪都是 yaw 0，有一半的机会人先看到一块空白的背板）。都量不出来（free 全一样）：0，不转。纯函数
+ * toward（弧度，同一个约定：方向 (sin, cos)）：人大概从哪边过来（开局点、同一层的另一个目标）——正面朝那边，但只在前面 open 米以内没有挡着的方向里挑
+ * （以前不管朝哪都是 yaw 0，武器柜在大厅当中，人先看到的是一块空白的侧板 / 背板）。
+ * 不给 toward：离墙近（wall 米内）就背靠最近的墙、正面朝外；四面都空就正面朝最开阔的一边。都量不出来（free 全一样）：0，不转。纯函数
  */
-export function faceYaw(free, { n = 16, wall = 1.3, max = 4 } = {}) {
+export function faceYaw(free, { n = 16, wall = 1.3, max = 4, toward = null, open = 1.0 } = {}) {
   const a = (i) => (i / n) * Math.PI * 2, d = [];
   for (let i = 0; i < n; i++) d.push(Math.min(max, Math.max(0, +free(Math.sin(a(i)), Math.cos(a(i))) || 0)));
+  if (Number.isFinite(toward)) {
+    let best = -1, gap = Infinity;
+    for (let i = 0; i < n; i++) { if (d[i] < open) continue; const g = Math.abs(Math.atan2(Math.sin(a(i) - toward), Math.cos(a(i) - toward))); if (g < gap - 1e-9) { gap = g; best = i; } }
+    if (best >= 0) return a(best);
+  }
   let lo = 0, hi = 0;
   for (let i = 1; i < n; i++) { if (d[i] < d[lo] - 1e-6) lo = i; }
   if (d[lo] >= Math.max(...d) - 1e-6) return 0;
@@ -410,7 +416,7 @@ export function smokeMaterial({ color = [0.09, 0.085, 0.08], fire = [0.5, 0.2, 0
         vec4 mv = modelViewMatrix * vec4(c, 1.0);
         float size = (uBase + uGrow * life) * (0.8 + fract(seed * 7.3) * 0.4);
         // 手电（跟着镜头、朝正前方）：烟团离视线中心越近、越近处，被照得越亮
-        float d = length(mv.xyz); vTorch = smoothstep(0.86, 0.99, -mv.z / max(d, 1e-3)) * 2.2 / max(1.0, d * 0.6);
+        float d = length(mv.xyz); vTorch = smoothstep(0.86, 0.99, -mv.z / max(d, 1e-3)) * 1.1 / max(1.0, d * 0.6);
         mv.xy += (uv - 0.5) * size;
         gl_Position = projectionMatrix * mv; }`,
     fragmentShader: /* glsl */`
@@ -425,7 +431,7 @@ export function smokeMaterial({ color = [0.09, 0.085, 0.08], fire = [0.5, 0.2, 0
         float flick = 0.8 + 0.12 * sin(uTime * 11.0 + vSeed * 5.0) + 0.08 * sin(uTime * 23.0);
         col += uFire * uLit * flick * smoothstep(0.75, 0.0, vUv.y) * (0.6 + n * 0.6); // 下半边被火映红
         col = mix(col, vec3(0.3, 0.29, 0.28) * (0.75 + n * 0.5), uDay * 0.85);
-        col += vec3(0.62, 0.64, 0.68) * vTorch * uTorch * (0.7 + n * 0.5);
+        col += vec3(0.4, 0.41, 0.43) * vTorch * uTorch * (0.7 + n * 0.5); // 烟本身很暗：手电只照出一点灰，不是一团白
         gl_FragColor = vec4(col, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -558,6 +564,8 @@ export function buildLocker(g) {
     k.plane('paint', 0.62, 0.155, { region: 'lockerSign', label: true, color: C.cream, p: [0, 1.73, 0.262] });
     // 背面（柜子摆在大厅里，背面也会被看到）：两道固定到墙上的角钢支架和螺栓、两侧一排铆钉、喷漆的资产编号、电子锁的进线（线卡、一根电缆走到地面的线盒）
     const back = -0.252;
+    // 两侧板：上下各一组冲压百叶（侧面看过来不再是一整块平板）
+    for (const x of [-0.522, 0.522]) for (const y0 of [1.52, 0.3]) for (let i = 0; i < 5; i++) k.box('paint', 0.008, 0.012, 0.26, { color: 0x3f4a44, p: [x, y0 + i * 0.04, 0.02] });
     for (const y of [0.42, 1.62]) { k.box('metal', 0.96, 0.05, 0.025, { color: 0x6c7470, region: 'metal', p: [0, y, back - 0.012] }); for (const x of [-0.36, 0.36]) k.cyl('metal', 0.014, 0.014, 0.02, 6, { color: C.steel, p: [x, y, back - 0.03], r: [Math.PI / 2, 0, 0] }); }
     for (const x of [-0.49, 0.49]) for (let y = 0.18; y < 1.9; y += 0.21) k.box('paint', 0.012, 0.012, 0.008, { color: 0x4c5852, p: [x, y, back - 0.004] });
     k.plane('paint', 0.4, 0.2, { region: 'stencil', label: true, color: C.cream, p: [0.08, 1.08, back - 0.002], r: [0, Math.PI, 0] });
@@ -850,7 +858,7 @@ export function buildDebris(junk) {
     });
     // 床垫：搭在衣柜左半边、从衣柜下端软软地耷拉下来，搭到梯段口的地上
     k.at([0.05, 0.88, 0.29], [-ang, 0.14, 0.07], () => {
-      k.add('paint', softSlab(0.8, 0.17, 1.9, { r: 0.06, bendAt: -0.45, R: 0.28, sag: 0.03 }), { color: 0xd8d4ca, region: 'mattress', p: [-0.24, 0.4, 0.28], r: [0, 0.14, -0.12] });
+      k.add('paint', softSlab(0.8, 0.17, 1.9, { r: 0.06, bendAt: -0.45, R: 0.28, sag: 0.03 }), { color: 0xc9bfac, region: 'mattress', p: [-0.24, 0.4, 0.28], r: [0, 0.14, -0.12] });
     });
     // 一把椅子翻过来四脚朝天压在衣柜上（椅子腿戳在堆顶上），一把侧倒在梯段口
     k.at([0.4, 1.62, 0.78], [Math.PI - 0.35, 0.75, 0.25], () => chair(k));
@@ -907,7 +915,7 @@ export function powderSheet() {
   const grp = new THREE.Group(); grp.name = '干粉'; meshes(grp, geos, { shadow: false }); return grp;
 }
 /** 火的配置：烟柱、顶上积的烟层、火光、炭火。灯：借游戏灯池里的一盏（见 siege.js gateBlock），这里只给亮度和位置 */
-export const FIRE = Object.freeze({ light: Object.freeze({ intensity: 1.8, distance: 6.5, color: 0xff7426, y: 0.75, z: 0.1, near: 15 }), ceiling: 2.15 });
+export const FIRE = Object.freeze({ light: Object.freeze({ intensity: 1.5, distance: 6.5, color: 0xff7426, y: 0.75, z: 0.1, near: 15 }), ceiling: 2.15 });
 /** 火本身（junk 组里：灭火时缩没）：火苗（几朵高的 + 底下一层贴着燃料的矮火）、火星、烟柱、顶上积的一层烟、地上的火光、炭火。返回要推进时间、淡出的材质 */
 export function buildFire(junk) {
   const bed = [[-0.42, -0.25], [-0.12, -0.05], [0.2, 0.0], [0.45, 0.2], [-0.3, 0.35], [0.1, 0.45]].map(([x, z], i) => ({ x, z, w: 0.7, h: 0.38, turn: (i % 2 ? 0.2 : -0.2), seed: 0.13 + i * 0.17 }));
@@ -982,4 +990,21 @@ export function buildDoorLeaf(pivot) {
     k.plane('paint', 0.36, 0.09, { region: 'doorSign', label: true, color: 0x0f7a43, p: [w / 2, D.bottom + 1.2, f + 0.004], r: [0, Math.PI, 0] });
   });
   return meshes(pivot, geos);
+}
+
+// ---------- 预热 ----------
+let WARM = false;
+/**
+ * 丧尸围城开着的时候，提前把各种物件的几何体建好（每帧只建一件）：一局开始时武器柜、配电柜、三件工具、三道关、信号弹一下子全建，
+ * 合起来要几十毫秒，手机上会卡一下；建好的几何体全局缓存（cached），开局时只剩挂网格。没有 requestAnimationFrame（节点测试）就不做。
+ */
+export function warmProps() {
+  if (WARM || typeof requestAnimationFrame !== 'function') return false;
+  WARM = true;
+  const q = slices(), grp = () => new THREE.Group();
+  const jobs = [() => buildLocker(grp()), () => lockerDoors(), () => buildSwitchCabinet(grp()), () => switchLever(false), () => buildTable(grp()),
+    ...['撬棍', '保险丝', '灭火器', '门禁卡'].map((t) => () => buildTool(grp(), t)), () => buildFuseBox(grp()), () => fuseInserts(), () => buildFlareKit(grp()), () => litFlare(),
+    () => buildDebris(grp()), () => buildFire(grp()), () => buildFireStatic(grp()), () => powderSheet(), () => buildShutterFrame(grp()), () => buildShutterCurtain(grp()), () => buildDoorFrame(grp()), () => buildDoorLeaf(grp())];
+  for (const j of jobs) q.add(j);
+  return true;
 }

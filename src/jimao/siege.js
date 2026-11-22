@@ -17,7 +17,7 @@ import { doorOutside } from './guide.js';
 import { createPacing } from './pacing.js';
 import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
-import { propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR, FIRE, nosingY, propTop, beaconMesh, pickGlow, faceYaw } from './siege-props.js';
+import { propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR, FIRE, nosingY, propTop, beaconMesh, pickGlow, faceYaw, warmProps } from './siege-props.js';
 
 export const SIEGE = Object.freeze({
   building: 'A', roof: 'A-RF', power: 'A-B1',
@@ -399,6 +399,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const pacing = createPacing(rng);
   let enabled = false, noiseEl = null, clockEl = null, savedFlow = null;
   try { enabled = storage?.getItem?.('jimao-siege') === '1'; } catch { enabled = false; }
+  if (enabled) warmProps(); // 物件的几何体趁加载时分帧建好（见 siege-props.js warmProps）
   if (ui && typeof document !== 'undefined') {
     noiseEl = document.createElement('div'); noiseEl.className = 'jm-noise off'; noiseEl.innerHTML = '响动<i><b></b></i>'; ui.append(noiseEl);
     clockEl = document.createElement('div'); clockEl.className = 'jm-siege-clock off'; ui.append(clockEl);
@@ -410,15 +411,19 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const spawn = (pos, opts = {}) => { try { return G.enemies.spawn('zombie', pos instanceof THREE.Vector3 ? pos : new THREE.Vector3(pos.x, pos.y, pos.z), opts); } catch { return null; } };
   const say = (t, s = 3) => G.hud?.message?.(t, s);
 
-  /** 物件转个向（见 faceYaw）：背靠墙、或者正面朝开阔的一边。在交互点离地 1 米处往一圈方向打物理射线量能走多远；没有物理（节点测试）就不转 */
+  /** 物件转个向（见 faceYaw）：正面朝人过来的那边（from：开局点 / 同一层的另一个目标），量不出来就背靠墙、或者朝开阔的一边。
+   * 在交互点离地 1 米处往一圈方向打物理射线量能走多远；没有物理（节点测试）就不转 */
   const _o = new THREE.Vector3(), _d = new THREE.Vector3();
-  function orient(g, site) {
+  function orient(g, site, from = null) {
     const P = G.physics;
     if (!P?.raycast || !site) return g;
     _o.set(site.x, (site.y ?? 0) + 1.0, site.z);
-    g.rotation.y = faceYaw((dx, dz) => { const h = P.raycast(_o, _d.set(dx, 0, dz), 4); return h && Number.isFinite(h.dist) ? h.dist : 4; });
+    const dx = from ? from.x - site.x : 0, dz = from ? from.z - site.z : 0, toward = from && Math.hypot(dx, dz) > 1 && Math.hypot(dx, dz) < 60 ? Math.atan2(dx, dz) : null;
+    g.rotation.y = faceYaw((x, z) => { const h = P.raycast(_o, _d.set(x, 0, z), 4); return h && Number.isFinite(h.dist) ? h.dist : 4; }, { toward });
     return g;
   }
+  /** 人多半从哪边走到这个目标：武器柜——开局点；工具和关卡——同一层的另一个（到了这层先经过关卡处，再进屋找工具，拿了再回来） */
+  const cameFrom = (plan, st) => (st.kind === 'locker' ? (G.level?.playerStart?.pos || null) : plan.stages.find((q) => q !== st && q.floor === st.floor && (q.kind === 'tool' || q.kind === 'gate'))?.site || null);
   /** 任务系统每局来要一次 */
   function mission(r = rng) {
     const T = pickTower(r(), forceTower), plan = siegePlan(r, layout, nav, runs, T), pad = plan.pad;
@@ -426,7 +431,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const flight = siegeFlight(pad, padY(), { R: T.R });
     const door = rideLocalToWorld(pad, 0, RIDE_SPECS.helicopter.doorOut);
     const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: st.kind === 'tool' ? 'item' : 'relay', site: st.site, locked: i > 0,
-      model: () => orient(st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel(), st.site) }));
+      model: () => orient(st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel(), st.site, cameFrom(plan, st)) }));
     const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan,
       extraction: { id: 'heli', label: '直升机', where: T.roofName, floor: T.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
@@ -746,7 +751,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
 
   const api = {
     get enabled() { return enabled; },
-    set enabled(v) { enabled = !!v; try { storage?.setItem?.('jimao-siege', enabled ? '1' : '0'); } catch { /* 存不了就不存 */ } },
+    set enabled(v) { enabled = !!v; if (enabled) warmProps(); try { storage?.setItem?.('jimao-siege', enabled ? '1' : '0'); } catch { /* 存不了就不存 */ } },
     mission, reset, state: S, addNoise, horde, pacing, spawnSpecial, spawnBrute, supplies,
     get plan() { return S.plan; },
     update(dt) {

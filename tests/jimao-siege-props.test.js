@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { ATLAS, atlasRect, atlasSize, nosingY, STAIR, flameLayout, propStats, propMats, fireStep, flameMaterial, Kit, SHUTTER, DOOR, FIRE, faceYaw, propTop, softSlab, switchLever } from '../src/jimao/siege-props.js';
+import { ATLAS, atlasRect, atlasSize, nosingY, STAIR, flameLayout, propStats, propMats, fireStep, flameMaterial, Kit, SHUTTER, DOOR, FIRE, faceYaw, propTop, softSlab, switchLever, warmProps } from '../src/jimao/siege-props.js';
 import { lockerModel, switchModel, toolModel, gateModel, gateBlock, flareModel, GATES } from '../src/jimao/siege.js';
 import { MEMORY_PROFILES } from '../src/render/device.js';
 
@@ -156,6 +156,9 @@ test('物件朝向：近处有墙就背靠墙；四面空就正面朝最开阔�
   y = faceYaw((dx, dz) => (dz > 0.9 ? 4 : 2)); [fx, fz] = dir(y); assert.ok(fz > 0.9, `朝 ${fx.toFixed(2)}, ${fz.toFixed(2)}`);
   assert.equal(faceYaw(() => 3), 0, '四面一样：不转');
   assert.equal(faceYaw(() => NaN), 0, '量不出来：不转');
+  // 知道人从 +x 那边来：正面朝 +x；可 +x 方向 0.5 米就是墙：在没挡着的方向里挑离 +x 最近的
+  y = faceYaw(() => 3, { toward: Math.PI / 2 }); [fx, fz] = dir(y); assert.ok(fx > 0.99, `朝 ${fx.toFixed(2)}`);
+  y = faceYaw((dx) => (dx > 0.95 ? 0.5 : 3), { toward: Math.PI / 2 }); [fx, fz] = dir(y); assert.ok(fx > 0.85 && fx < 0.99, `朝 ${fx.toFixed(2)}, ${fz.toFixed(2)}`);
 });
 
 test('着火：人走近时从灯池借一盏灯照亮四周（暖色、随火苗闪），走远了、火灭了、关卡拆掉时都还回去', () => {
@@ -192,4 +195,8 @@ test('配电柜的闸刀：分闸、合闸两个状态的红握把都在柜门�
     assert.ok(box.min.z > 0.226, `${up ? '合闸' : '分闸'}：最里到 z = ${box.min.z.toFixed(3)}（柜门在 0.226）`);
     const mid = (box.min.y + box.max.y) / 2; assert.ok(up ? box.max.y > 1.05 : box.min.y < 0.67, `${up ? '朝上' : '朝下'}：${box.min.y.toFixed(2)}–${box.max.y.toFixed(2)}，中 ${mid.toFixed(2)}`);
   }
+});
+
+test('预热：节点测试里没有 requestAnimationFrame，什么都不做、不抛错', () => {
+  assert.equal(typeof requestAnimationFrame, 'undefined'); assert.equal(warmProps(), false);
 });

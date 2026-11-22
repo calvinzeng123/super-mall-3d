@@ -6,8 +6,10 @@
 //   1. 每局的关卡计划（siege.plan）一定下来，按导航数据找落点：地面用 landAt / clear（站得住、离墙够远、和热点在同一个房间里），
 //      墙面用导航里的墙段（家具、门扇这些障碍物的边不算墙；墙前 0.2 米有家具的也不贴）。
 //      场景几何体上传显卡以后顶点数组就释放了（app.js 的 releaseGeometryAfterUpload），没法对着模型打射线，所以落点全靠导航。
-//      导航的墙线有的在墙中线、有的在墙的外皮（楼梯间的墙往里收 0.2 米），贴花放在墙线外 0.1 米，
-//      着色器里再把深度朝镜头挪一点（屏幕上的位置不变）：真墙面在墙线前后 0.1 米以内都能盖住，不会被墙吞掉。
+//      导航的墙线有的在墙中线、有的在楼梯间外框上（楼梯间的墙内皮在框里 0.1 / 0.2 米，见 wallSkin），贴花按算出来的墙皮放，
+//      着色器里再把深度朝镜头挪 3 厘米（屏幕上的位置不变）：墙皮估得差一点也盖得住，又不会盖到墙上凸出来的消火栓箱上。
+//      地面贴花按面层高度抬起来（公共区 3 厘米、住户里 5.6 厘米：套房的木地板和地毯）。
+//      关卡跟前的招牌痕迹挂在关卡大件上：反锁的防火门门扇上的手印（门开了就撤掉）、火背后熏到天花板的烟、杂物堆背后的弹孔。
 //   2. 全部贴花共用一张程序画的图集（血泊、溅血、拖痕、抹痕、手印、鞋印、弹孔、烟熏、碎玻璃、碎石灰、纸、手机、鞋、背包、弹壳、警戒线、涂鸦），
 //      一个 InstancedMesh 画完（1 次绘制调用）。图集每格的 UV、透明度、光泽、深度偏移都是逐实例的属性。
 //      新鲜的血（暗红、几乎不含绿）在着色器里变光滑，干了的褐色边缘是粗糙的——同一张图，不用另画一张粗糙度图。
@@ -26,10 +28,10 @@ export const ROUTE_DRESS = Object.freeze({
   grid: 16,              // 图集按 16 × 16 小格排（1024 图集一格 64 像素）
   budget: 4,             // 每帧最多算几毫秒
   wallOff: 0.1,          // 墙面贴花离导航墙线多远（墙线在墙中线时正好贴在 0.2 米厚墙的表面）
-  wallPull: 0.07,        // 墙面贴花的深度朝镜头挪多少米（屏幕位置不变）：墙皮位置估得差几厘米也盖得住；挪多了会盖到墙前的扶手、箱子上
+  wallPull: 0.03,        // 墙面贴花的深度朝镜头挪多少米（屏幕位置不变）：墙皮位置估得差几厘米也盖得住；挪多了会盖到墙上的消火栓箱（凸出 4.5 厘米）、扶手上
   floorLift: 0.03,       // 地面贴花离楼面多高（公共区的地面面层比楼面高 1~3 厘米；以前 6 毫米，斜着看远一点就被面层吃掉）
-  homeLift: 0.056,
-  treadLift: 0.012,      // 楼梯踏步上（踏步是实打实的块，没有面层）       // 住户里：套房地板在楼面上 3.5 厘米、地毯再高 1.4 厘米
+  homeLift: 0.056,       // 住户里：套房地板在楼面上 3.5 厘米、地毯再高 1.4 厘米
+  treadLift: 0.012,      // 楼梯踏步上（踏步是实打实的块，没有面层）
   floorPull: 0.035,      // 地面贴花的深度挪多少（地板面层比楼面高 1~3 厘米）
   margin: 0.4,           // 墙面贴花离墙段两头（门洞、转角）至少多远
   pathWait: 8,           // 走廊路线等寻路最多几秒，等不到就按直线
@@ -163,17 +165,17 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1, la
    * （0.2 厚，内皮在框内 0.1），酒店 / 公寓的围护墙整个在框里（内皮在框内 0.2、外皮就在框线上）；别的墙按中线算（0.1）。
    * 以前一律 0.1：公寓楼梯间里贴花比墙面还靠后 0.1 米，斜着看就被墙吞掉了
    */
-  const stairsOf = new Map();
+  // 楼梯间不只在自己那栋楼的楼层上：北区塔楼的楼梯一直下到商场的地下一层（宿主楼层），所以不按楼号筛，按位置找
+  let stairPolys = null;
+  const stairsNear = () => (stairPolys ||= (layout?.stairs || []).filter((q) => q.poly?.length));
   const onPoly = (x, z, P) => { let d = Infinity; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; d = Math.min(d, segDist(x, z, { x0: a[0], z0: a[1], x1: b[0], z1: b[1] })); } return d; };
-  const inStair = (F, x, z) => { const bid = F.building || F.level?.building; if (!layout?.stairs || !bid) return false; if (!stairsOf.has(bid)) stairsOf.set(bid, layout.stairs.filter((q) => q.building === bid && q.poly?.length)); return stairsOf.get(bid).some((st) => pointInPoly([x, z], st.poly)); };
+  const inStair = (x, z) => stairsNear().some((st) => pointInPoly([x, z], st.poly));
   function wallSkin(F, w, nx, nz) {
-    const bid = F.building || F.level?.building;
-    if (!layout?.stairs || !bid) return ROUTE_DRESS.wallOff;
-    if (!stairsOf.has(bid)) stairsOf.set(bid, layout.stairs.filter((q) => q.building === bid && q.poly?.length));
-    for (const st of stairsOf.get(bid)) {
+    for (const st of stairsNear()) {
       if (onPoly(w.x0, w.z0, st.poly) > 0.08 || onPoly(w.x1, w.z1, st.poly) > 0.08) continue;
       const mx = (w.x0 + w.x1) / 2, mz = (w.z0 + w.z1) / 2, inward = pointInPoly([mx + nx * 0.3, mz + nz * 0.3], st.poly);
-      const b = layout.buildings?.find((q) => q.id === bid), own = !!b?.community && (F.level?.building ?? bid) === bid;
+      // 社区塔楼自己的楼层：墙骑在框线上；别的（酒店、公寓、商场里的宿主楼层）：墙整个在框里
+      const b = layout.buildings?.find((q) => q.id === st.building), own = !!b?.community && (F.level?.building ?? F.building) === st.building;
       return inward ? (own ? 0.1 : 0.2) : (own ? 0.1 : 0.0);
     }
     return ROUTE_DRESS.wallOff;
@@ -193,6 +195,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1, la
   const pick = (list) => list[Math.floor(rng() * list.length) % list.length];
   const range = (a, b) => a + (b - a) * rng();
   const count = (n) => { const v = n * density; return Math.floor(v) + (rng() < v - Math.floor(v) ? 1 : 0); };
+  const wallRects = []; // 墙上已经贴了的（各热点共用：两个热点挨着时也不叠在一起）
   // 血一处一处深浅不一（有的干透发暗、有的还新）：逐实例乘一个明度
   const toneFor = (mode) => (mode === BLOOD ? 0.72 + rng() * 0.36 : 1);
 
@@ -315,7 +318,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1, la
      */
     /** 人能到的地方：这层的楼板，或者从这层往上两米以内的楼面 / 梯段（梯段两边的墙也能贴） */
     // 公寓、北区塔楼的消防楼梯在导航里是「楼梯连接」（一按就上下楼），梯段那块地方不在导航里：落在楼梯间框里也算
-    const reach = (sx, sz) => { if (supported(F, sx, sz) || inStair(F, sx, sz)) return true; const st = landAt(nav, sx, sz, y + 2.2); return !!st && st.y > y - 0.3 && st.y < y + 2.2; };
+    const reach = (sx, sz) => { if (supported(F, sx, sz) || inStair(sx, sz)) return true; const st = landAt(nav, sx, sz, y + 2.2); return !!st && st.y > y - 0.3 && st.y < y + 2.2; };
     function spanFree(q, width) {
       const cx0 = q.x + q.nx * 0.12, cz0 = q.z + q.nz * 0.12;
       for (const s of [-1, 1]) {
@@ -354,7 +357,7 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1, la
         if (!behind) for (const s of [-0.5, 0, 0.5]) for (const d of [0.2, 0.42]) if (inObstacle(px + dx * s * width + nx * d, pz + dz * s * width + nz * d)) free = false;
         if (free && !spanFree({ x: px, z: pz, nx, nz, dx, dz, w }, width)) free = false;
         if (!free) { miss(w); continue; }
-        return { x: px, z: pz, nx, nz, w, t, len, dx, dz, off: wallSkin(F, w, nx, nz) + 0.012 };
+        return { x: px, z: pz, nx, nz, w, t, len, dx, dz, off: wallSkin(F, w, nx, nz) + 0.008 };
       }
       return null;
     }
@@ -364,16 +367,26 @@ export function createPlacer({ nav, rng, items = [], avoid = [], density = 1, la
       return items[items.length - 1];
     }
     /** 墙上贴 n 个：高度 yc = [低, 高]（贴花中心离地） */
+    /** 这一处和已经贴在墙上的东西压得太多（左右、上下都挨着一半以上） */
+    const crowded = (q, w, h, c) => wallRects.some((r) => Math.abs(r.y - (y + c)) < (r.h + h) * 0.42 && Math.hypot(r.x - q.x, r.z - q.z) < (r.w + w) * 0.42);
     function wall(cells, n, { size = [0.25, 0.4], yc = [0.9, 1.5], mode = MATTE, alpha = [0.85, 1], tilt = 0.25, r1 = R, keep = false, prefer = null, inner = false, toward = null, spread = 0.6, until = -1, behind = false } = {}) {
       let put = 0;
       for (let i = 0, want = keep ? n : count(n); i < want; i++) {
         const cell = Array.isArray(cells) ? pick(cells) : cells, s = range(size[0], size[1]) * (SIZE_K[cell] || 1), hgt = s * cellAspect(cell);
-        let q = wallPoint(s, { r1, prefer, inner, toward, spread, behind }), k = 1;
-        // 一定要放的（关卡的招牌痕迹、留言）：整面墙放不下就缩小一点再找
-        if (!q && keep) { k = 0.72; q = wallPoint(s * k, { r1: r1 + 1.5, prefer, inner, toward, spread, behind }); }
+        // 墙上的东西不叠成一坨：和已经贴了的离得太近就换个地方（试几次；一定要放的最后一次不管）
+        let q = null, k = 1, c = 0;
+        for (let t = 0; t < 5; t++) {
+          k = 1; q = wallPoint(s, { r1, prefer, inner, toward, spread: spread + t * 0.25, behind });
+          // 一定要放的（关卡的招牌痕迹、留言）：整面墙放不下就缩小一点再找
+          if (!q && keep) { k = 0.72; q = wallPoint(s * k, { r1: r1 + 1.5, prefer, inner, toward, spread: spread + t * 0.25, behind }); }
+          if (!q) break;
+          // 贴花上沿不过 2.3 米（天花板 2.6~2.9），下沿不进踢脚线
+          c = Math.min(2.3 - hgt * k / 2, Math.max(0.14 + hgt * k / 2, range(yc[0], yc[1])));
+          if (!crowded(q, s * k, hgt * k, c) || (keep && t === 4)) break;
+          q = null;
+        }
         if (!q) continue;
-        // 贴花上沿不过 2.3 米（天花板 2.6~2.9），下沿不进踢脚线
-        const c = Math.min(2.3 - hgt * k / 2, Math.max(0.14 + hgt * k / 2, range(yc[0], yc[1])));
+        wallRects.push({ x: q.x, z: q.z, y: y + c, w: s * k, h: hgt * k });
         // 往下滑的手印不歪（是顺着重力滑下去的）
         addWall(cell, q, s * k, c, { phi: cell === 'handDrag' ? range(-0.1, 0.1) : range(-tilt, tilt), mode, alpha: range(alpha[0], alpha[1]), until }); put++;
       }
@@ -743,7 +756,8 @@ function leafPrints(S, M, ax, az, until, rng) {
   const D = { half: 0.64, bottom: 0.17, leaf: 0.86, ...DOOR }, f = -0.04, x0 = -D.half;
   const at = (lx) => ({ x: M.x + ax[0] * lx + az[0] * f, z: M.z + ax[1] * lx + az[1] * f, nx: -az[0], nz: -az[1] });
   const r = (a, b) => a + (b - a) * rng();
-  const put = (cell, lx, ly, size, phi = 0) => S.addWall(cell, at(lx + r(-0.03, 0.03)), size * (SIZE_K[cell] || 1), D.bottom + ly + r(-0.04, 0.04), { phi, mode: BLOOD, alpha: r(0.8, 0.95), off: 0, pull: 0.008, until });
+  // 门扇是深红褐色的漆：血印照常的颜色贴上去几乎看不出来，这里提亮（更红、更湿），手电一照还有反光
+  const put = (cell, lx, ly, size, phi = 0) => S.addWall(cell, at(lx + r(-0.03, 0.03)), size * (SIZE_K[cell] || 1), D.bottom + ly + r(-0.04, 0.04), { phi, mode: BLOOD, alpha: r(0.85, 0.98), off: 0, pull: 0.008, until, tone: r(1.45, 1.75) });
   // 观察窗在门扇正中 1.27~1.83 米高、推杠在 1 米高：手印让开它们
   put(rng() < 0.5 ? 'handL' : 'handR', x0 + 0.17, 1.62, r(0.2, 0.23), r(-0.4, 0.2));
   put('handDrag', x0 + 0.17, 1.22, r(0.21, 0.24));
@@ -1094,14 +1108,15 @@ function paintScorch(g, W0, H0, rng) {
   const d = img.data, N = valueNoise(Math.floor(rng() * 1e6)), lean = (rng() - 0.5) * 0.12;
   for (let y = 0; y < H; y++) {
     const t = 1 - y / H; // 0 = 墙根（火在这儿），1 = 顶
-    const half = 0.13 + 0.4 * Math.pow(t, 0.7); // 烟柱半宽：墙根窄、往上张开
+    const half = 0.1 + 0.3 * Math.pow(t, 0.7); // 烟柱半宽：墙根窄、往上张开（到顶也不碰格子两边，不然看得出一条竖直的边）
     for (let x = 0; x < W; x++) {
       const u = x / W - 0.5 - lean * t * t;
       const tongue = N(x / W * 3.2, y / H * 2.2 + 3, 3), fine = N(x / W * 9 + 11, y / H * 9, 2);
       const edge = 1 - Math.abs(u) / (half * (0.72 + 0.55 * tongue));
       let a = smooth(0, 0.4, edge) * (0.35 + 0.8 * tongue) * (1 - 0.45 * smooth(0.3, 1, t)) * (0.85 + 0.3 * fine);
       a += smooth(0.22, 0, t) * smooth(-0.1, 0.5, edge) * 0.55; // 墙根最黑的那一段
-      a *= smooth(0, 0.015, y / H) * smooth(1, 0.985, y / H) * smooth(0, 0.06, x / W) * smooth(1, 0.94, x / W);
+      // 顶上一截慢慢淡掉（顶着天花板散开的烟本来就是一层灰，不是一刀切齐的边），边缘按噪声进退
+      a *= smooth(0, 0.15 + 0.1 * fine, y / H) * smooth(1, 0.985, y / H) * smooth(0, 0.1, x / W) * smooth(1, 0.9, x / W);
       a = Math.max(0, Math.min(0.94, a));
       const i = (y * W + x) * 4, c = 6 + 22 * fine * (1 - a);
       d[i] = c + 4; d[i + 1] = c + 3; d[i + 2] = c; d[i + 3] = a * 255;
