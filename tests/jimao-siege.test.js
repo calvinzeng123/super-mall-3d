@@ -66,8 +66,9 @@ test('封锁：合闸前公寓电梯不动；之后电梯只到眼前这道关�
   assert.match(stairRule(plan, plan.powerStage + 1, up(g0)), /先找/); assert.match(stairRule(plan, g0.stage, up(g0)), /用/, '工具到手以后提示改成「用」');
   assert.equal(stairRule(plan, plan.powerStage + 1, up(g1)), null, '后面的关还没轮到');
   assert.equal(stairRule(plan, g0.stage + 1, up(g0)), null, '解决了就通');
-  assert.equal(liftRule(plan, g0.stage + 1, nav, 'A-ST1', f(g0.n), f(g1.n)), null); assert.ok(liftRule(plan, g0.stage + 1, nav, 'A-ST1', f(g0.n), f(g1.n + 1)));
-  assert.equal(liftRule(plan, g2.stage + 1, nav, 'A-ST1', 'A-1F', 'A-RF'), null, '三道都解决：直达屋顶');
+  // 电梯只坐到第一道关那一层：清了关以后往上一律走楼梯（一层层破楼）
+  assert.match(liftRule(plan, g0.stage + 1, nav, 'A-ST1', f(g0.n), f(g1.n)), /走楼梯/); assert.equal(liftRule(plan, g0.stage + 1, nav, 'A-ST1', 'A-1F', f(g0.n)), null);
+  assert.match(liftRule(plan, g2.stage + 1, nav, 'A-ST1', 'A-1F', 'A-RF'), /走楼梯/, '三道都解决了也不直达屋顶');
   assert.equal(activeGate(plan, g2.stage + 1), null);
   // 被拦的那两段楼梯都记着自己经过的梯段和平台
   for (const id of g0.runs) { const r = runs.find((x) => x.id === id); assert.ok(r.slopes.length >= 2 && r.landings.length >= 1 && r.from === f(g0.n)); }

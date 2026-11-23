@@ -180,8 +180,10 @@ export function liftRule(plan, stage, nav, linkId, from, to) {
   const tower = plan.tower || TOWERS.A;
   if (!String(linkId).startsWith(`${tower.id}-`)) return '全楼停电，这部电梯不动'; // 商场和别的楼的电梯一律不走（只能沿路线走）
   if (stage <= (plan.powerStage ?? 1)) return `${tower.name}停电了，电梯不动。先去${tower.powerName}合闸`;
-  const g = activeGate(plan, stage), y = (f) => nav.floors.get(f)?.y ?? 0;
-  if (g && Math.max(y(from), y(to)) > y(g.floor) + 0.1) return `电梯只能到 ${g.n}F：${GATES[g.type].lift}`;
+  const g = activeGate(plan, stage), y = (f) => nav.floors.get(f)?.y ?? 0, g0 = plan.gates?.[0];
+  if (g && g === g0 && Math.max(y(from), y(to)) > y(g.floor) + 0.1) return `电梯只能到 ${g.n}F：${GATES[g.type].lift}`;
+  // 电梯只坐到第一道关那一层：再往上的电梯井被堵死了，一层层走楼梯上去（每层都有丧尸）
+  if (g0 && Math.max(y(from), y(to)) > y(g0.floor) + 0.1) return `电梯只能到 ${g0.n}F——再往上井道堵死了，走楼梯一层层上去`;
   return null;
 }
 /** 这一段楼梯（往上）走不走得通。返回一句原因或 null */
