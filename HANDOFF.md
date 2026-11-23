@@ -1,6 +1,6 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-22（线上仍是部署 `6b004b871553778c6cc14eb6`，提交 `424bb67`。**之后的「丧尸围城卡关」修复（`295a937`）没能发布**：2026-11-20 用户说「部署」，Netlify 返回 403「Account credit usage exceeded - new deploys are blocked until credits are added」——账户额度用完，要用户去 Netlify 后台加额度或等额度重置后再部署一次。**再往后的「丧尸围城升级：合作生存」（停电、贴图丧尸、节奏和特殊感染者、医疗物品和安全点、冲锋枪、两名队友）也都没部署**，用户说做完再部署；换 Cloudflare 的话要用户把令牌加到环境的网络密钥里，`scripts/prepare-cloudflare.mjs` 已备好）。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `0447f14a`，提交 `0184d3a` 的代码重新打包，109 文件 65.31 MiB，入口 `main.NXLUNVJ4.js`）。丧尸围城卡关修复和「合作生存」升级都在这一版。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
 ## 2026-11-15 最新交接（十一）：漫游「显示资源被回收」修复 + 零点突围换园区地图、随机任务、载具撤离
 
