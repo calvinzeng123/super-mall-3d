@@ -43,8 +43,10 @@ export const DEMOLISH_CSS = `
 .jm-demo { position: absolute; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 6; pointer-events: none; padding: 9px 16px; border: 1px solid rgba(255, 94, 58, .75); background: rgba(22, 8, 6, .72); color: #ffd9c9; font: 700 15px/1.35 ui-monospace, 'PingFang SC', monospace; letter-spacing: .08em; text-align: center; white-space: nowrap; }
 .jm-demo b { color: #ff6a3d; }
 .jm-demo.off { display: none; }
-.t-demo { width: 62px; height: 62px; right: calc(150px + var(--sar)); bottom: calc(210px + var(--sab)); border-color: #ff6a3d; color: #ffd9c9; font-weight: 700; pointer-events: auto; }
-.t-demo.off { display: none; }
+.jm-demo.tap { pointer-events: auto; cursor: pointer; white-space: normal; max-width: calc(100vw - 48px); }
+.jm-demo-btn { position: absolute; z-index: 7; right: calc(24px + env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); width: 84px; height: 84px; border-radius: 50%; border: 2px solid #ff6a3d; background: rgba(120, 24, 10, .82); color: #ffe6dc; font: 800 20px/1 'PingFang SC', ui-sans-serif, sans-serif; letter-spacing: .1em; pointer-events: auto; touch-action: none; box-shadow: 0 0 18px rgba(255, 90, 50, .55); animation: jm-demo-pulse 1s ease-in-out infinite; }
+.jm-demo-btn.off { display: none; }
+@keyframes jm-demo-pulse { 50% { box-shadow: 0 0 30px rgba(255, 90, 50, .95); transform: translateY(-50%) scale(1.06); } }
 `;
 
 /**
@@ -79,19 +81,19 @@ export function createDemolition(G, { scene, layout = null, ui = null }) {
   }
 
   // ---- 提示 ----
+  // 手机上：提示条本身就是按钮，旁边再放一个大的「炸楼」按钮。都直接挂在界面根上——触屏操作层（.touch）是第一次碰屏幕才建的，
+  // 以前挂在它上面，建这个模块的时候它还不存在，手机上就没有按钮
   if (ui && typeof document !== 'undefined') {
+    const down = (e) => { e.preventDefault(); e.stopPropagation(); accept(); };
     el = document.createElement('div'); el.className = 'jm-demo off'; ui.append(el);
-    const touch = ui.querySelector?.('.touch');
-    if (touch) {
-      btn = document.createElement('button'); btn.className = 't-btn t-demo off'; btn.textContent = '炸楼'; btn.setAttribute('aria-label', '呼叫空袭炸毁大楼');
-      const down = (e) => { e.preventDefault(); e.stopPropagation(); accept(); };
-      btn.addEventListener('touchstart', down, { passive: false }); btn.addEventListener('click', down);
-      touch.append(btn);
-    }
+    btn = document.createElement('button'); btn.type = 'button'; btn.className = 'jm-demo-btn off'; btn.textContent = '炸楼'; btn.setAttribute('aria-label', '呼叫空袭炸毁大楼');
+    for (const n of [el, btn]) { n.addEventListener('touchstart', down, { passive: false }); n.addEventListener('pointerdown', down); n.addEventListener('click', down); }
+    ui.append(btn);
   }
   const onKey = (e) => { if (e.code === DEMOLISH.key && S.offerT > 0) accept(); };
   if (typeof window !== 'undefined') window.addEventListener('keydown', onKey);
-  const show = (on) => { el?.classList.toggle('off', !on); btn?.classList.toggle('off', !on); };
+  const touchy = () => !!(G.input?.touch || (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches));
+  const show = (on) => { el?.classList.toggle('off', !on); btn?.classList.toggle('off', !on || !touchy()); el?.classList.toggle('tap', on && touchy()); };
 
   function offer(seconds = DEMOLISH.offer) { if (S.chosen || S.offerT >= 0) return; S.offerT = seconds; show(true); }
   function accept() { if (!(S.offerT > 0) || S.chosen) return false; S.chosen = true; S.offerT = 0; show(false); return true; }
@@ -135,7 +137,7 @@ export function createDemolition(G, { scene, layout = null, ui = null }) {
   function tick(dt) {
     if (S.offerT > 0) {
       S.offerT -= dt;
-      if (el) el.innerHTML = `丧尸清光了。按 <b>F</b> 呼叫空袭，<b>炸毁大楼</b> · ${Math.max(0, Math.ceil(S.offerT))} 秒后直接返航`;
+      if (el) el.innerHTML = `丧尸清光了。${touchy() ? '点这里' : '按 <b>F</b> '}呼叫空袭，<b>炸毁大楼</b> · ${Math.max(0, Math.ceil(S.offerT))} 秒后直接返航`;
       if (S.offerT <= 0) show(false);
     }
     if (S.t < 0) return;
