@@ -206,7 +206,7 @@ export function createMapPhysics(nav) {
     requestPath(from, to, cb, opts) {
       const a = locate(from.x, from.y ?? 0, from.z), b = locate(to.x, to.y ?? 0, to.z);
       const done = (path) => cb(path ? path.map((p) => { const v = new THREE.Vector3(p.x, p.y ?? 0, p.z); if (p.via) v.via = p; return v; }) : null);
-      if (!a || !b) { cb(null); return { cancel() {} }; }
+      if (!a || !b) { cb(null, a ? 'goal' : 'start'); return { cancel() {} }; } // 'goal'：目标那一点找不着楼面（人在半空 / 楼梯缝里），不怪走路的
       if (!physics.pathfinder) { done(findPath(nav, a, b, { maxNodes: 12000, cellSize: 0.8 })); return { cancel() {} }; }
       return physics.pathfinder.request(a, b, done, opts);
     },

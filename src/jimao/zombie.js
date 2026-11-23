@@ -162,7 +162,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         lookI = Math.floor(rng() * 97); walk = rng();
         if (skin) { skin.setLook(lookI, lookOf(kind)); skin.group.scale.set(K.girth || 1, 1, K.girth || 1); }
         m.special = SPECIALS.includes(kind); m.pounceT = K.pounce ? 0.25 + rng() * 0.45 : 0; m.spitT = K.spit ? K.spit.first + rng() : 0; m.pinT = 0; m.leap = null;
-        m.active = true; m.alive = true; m.passive = !!opts.passive; m.sink = 0; m.hunt = !!opts.hunt; m.target = opts.targetPos || null;
+        m.active = true; m.alive = true; m.passive = !!opts.passive; m.sink = 0; m.hunt = !!opts.hunt; m.target = opts.targetPos || null; m.noPath = 0;
         m.lureT = 0; m.pushT = 0;
         m.fixed = !!opts.fixed; m.sweep = null; m.bit = false; // fixed：钉在原地（阳台玻璃后面拍玻璃的那几只），不走、不追
         m.pos.copy(at);
@@ -215,10 +215,13 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       m.pathJob?.cancel?.();
       const req = G.physics.nav?.requestPath;
       if (!req) { m.path = null; return; }
-      m.pathJob = req(m.pos, goal, (path) => {
+      const aimed = m.zs !== 'idle' && !(m.lureT > 0); // 朝人去的路（被诱饵引着的不算）
+      m.pathJob = req(m.pos, goal, (path, why) => {
         m.pathJob = null;
         if (!m.active || !m.alive) return;
         m.path = path && path.length ? path : null; m.wp = 0;
+        // 连着几次找不到去人那儿的路（困在屋里、卡在墙角）：siege.js 等人看不见时收回池子。人在坐电梯 / 载具、人站的地方找不着时不算
+        if (m.path) m.noPath = 0; else if (aimed && why !== 'goal' && !G.missions?.riding && !G.lift?.riding) m.noPath = (m.noPath || 0) + 1;
         if (m.path) { let best = Infinity; for (let i = 0; i < Math.min(m.path.length, 6); i++) { const d = Math.hypot(m.path[i].x - m.pos.x, m.path[i].z - m.pos.z) + Math.abs(m.path[i].y - m.pos.y) * 2; if (d < best) { best = d; m.wp = i; } } }
       });
     }
@@ -476,10 +479,10 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
     useSkin(k) { if (kit === k) return; kit = k; for (const z of pool) z._skin(k ? k.create() : null); },
     get skinned() { return !!kit; },
     alive: () => pool.filter((z) => z.active && z.alive),
-    /** at 这一点有动静（枪声、拉闸、尖叫）：radius 米内同一层上下的丧尸都扑过来；hunt 表示认定了人，不会跟丢 */
-    alert(at, radius, hunt = false) {
+    /** at 这一点有动静（枪声、拉闸、尖叫）：radius 米内、高度差 dy 米内（默认上下一层）的丧尸都扑过来；hunt 表示认定了人，不会跟丢 */
+    alert(at, radius, hunt = false, dy = 7) {
       let n = 0;
-      for (const z of pool) if (z.active && z.alive && Math.abs(z.pos.y - at.y) < 7 && Math.hypot(z.pos.x - at.x, z.pos.z - at.z) < radius) { z.alert(at, hunt); n++; }
+      for (const z of pool) if (z.active && z.alive && Math.abs(z.pos.y - at.y) < dy && Math.hypot(z.pos.x - at.x, z.pos.z - at.z) < radius) { z.alert(at, hunt); n++; }
       return n;
     },
     dispose() { kit?.dispose?.(); kit = null; group.removeFromParent(); for (const set of Object.values(sets)) for (const p of set) { p.body.dispose(); p.arm.dispose(); p.leg.dispose(); } mat.dispose(); delete ctx.pools.zombie; },
