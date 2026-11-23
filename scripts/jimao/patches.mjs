@@ -8,7 +8,7 @@ export const PATCHES = [
   // ---- 丧尸围城：目标一个一个放出来（o.locked 的先不能交互、不标在 HUD 上） ----
   ['锁着的目标不能交互',
     'for (let Y of c.relays) {\n        if (Y.cut) continue;\n        let L = Y.o.pos.x - n.pos.x',
-    'for (let Y of c.relays) {\n        if (Y.cut || Y.o.locked) continue;\n        let L = Y.o.pos.x - n.pos.x'],
+    'for (let Y of c.relays) {\n        if (Y.cut || Y.o.locked || Y.o.ghost) continue;\n        let L = Y.o.pos.x - n.pos.x'], // ghost：标在 HUD 上，但不能按（护送、潜行到了自动完成）
   ['锁着的目标不标在 HUD 上',
     'let P = c.relays.filter((V) => !V.cut).map((V) => ({ id: V.id, short: V.short,',
     'let P = c.relays.filter((V) => !V.cut && !V.o.locked).map((V) => ({ id: V.id, short: V.short,'],

@@ -42,6 +42,12 @@ export const SQUAD = Object.freeze({
         sole: 0x8a8a86, nameTape: 0x3a5a56, shirtSurf: SURF.SCRUBS, pantsSurf: SURF.SCRUBS, gloveSurf: SURF.RUBBER, sleeve: 'short', pads: false, heavy: false, who: 1, grime: 1,
         blood: Object.freeze([Object.freeze({ c: [-0.1, 1.35, 0.29], r: 0.055, k: 1, e: 1.8, a: 0.4 }), Object.freeze({ c: [-0.07, 1.38, 0.44], r: 0.055, k: 1, e: 1.6, a: -0.3 }), Object.freeze({ c: [0.035, 1.2, 0.135], r: 0.04, k: 0.85, e: 3.4, a: 0.06 }),
           Object.freeze({ c: [-0.02, 0.5, 0.09], r: 0.045, k: 0.65, e: 1.3, a: 0 }), Object.freeze({ c: [0.17, 1.45, 0.07], r: 0.022, k: 0.8, e: 2.2, a: -0.2 }), Object.freeze({ c: [-0.08, 0.06, 0.14], r: 0.03, k: 0.8, e: 1.6, a: 0 })]) }) }),
+    // 小许：三层奶茶店的店员，被锁在店里，救出来以后跟着你走一段（护送）。不开枪（射程 0 就不找目标），丧尸会优先扑他。guest：救出来之前不出现、不算队友
+    Object.freeze({ id: 'xu', name: '小许', role: '奶茶店店员', hp: 80, side: 1, back: 1.8, trait: 'guest', guest: true,
+      gun: Object.freeze({ name: '', interval: 1, burst: [0, 0], rest: [1, 1], damage: 0, hit: 0, falloff: 0, head: 0, range: 0 }),
+      look: Object.freeze({ face: 'zhe', skin: 0xc59a7a, lip: 0x9a6052, hair: 0x241a12, iris: 0x2a1c12, shirt: 0xd9d4c8, pants: 0x2e3036, vest: 0x8a4a2c, strap: 0x6b3a22, pouch: 0x7a4428, helmet: 0x241a12, mask: 0x2a2a2e, glove: 0xc59a7a, boot: 0x3a3632, pad: 0x2e3036,
+        tape: 0xd9d4c8, bind: 0x6b3a22, nameTape: 0x8a4a2c, patch: 0x8a4a2c, sleeve: 'short', pads: false, heavy: false, who: 2, grime: 0.7,
+        blood: Object.freeze([Object.freeze({ c: [0.1, 1.2, 0.15], r: 0.04, k: 0.8, e: 2.4, a: 0.1 })]) }) }),
   ]),
 });
 
@@ -351,15 +357,18 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     return m;
   }
 
-  const mates = P.members.map(make);
-  const show = (v) => { for (const m of mates) { m.root.visible = v; m.active = v; } hud?.classList.toggle('off', !v); };
+  // 队友（mates）和救出来的人（guests：小许）分开放：队友的血条、站位、击杀统计只管队友
+  const everyone = P.members.map(make), mates = everyone.filter((m) => !m.member.guest), guests = everyone.filter((m) => m.member.guest);
+  const on = (m) => (m.member.guest ? !!m.joined : enabled); // 小许救出来才算；两个队友看设置
+  const show = (v) => { for (const m of everyone) { m.root.visible = v && on(m); m.active = v && on(m); } hud?.classList.toggle('off', !v); };
 
   function paint() {
     // 结算 / 阵亡页上多一行：队友各打倒了几只
     for (const row of statRows) { row.hidden = !enabled; row.querySelector('dd').textContent = mates.map((m) => `${m.name} ${m.kills}`).join(' · '); }
     if (!hud) return;
-    mates.forEach((m, i) => {
+    everyone.forEach((m, i) => {
       const row = hud.children[i]; if (!row) return;
+      row.hidden = !on(m);
       row.classList.toggle('down', m.down); row.classList.toggle('hurt', !m.down && m.hp < m.maxHp * 0.5);
       row.querySelector('b').style.width = `${m.down ? Math.round(m.reviveT * 100) : Math.round(m.hp / m.maxHp * 100)}%`;
       row.querySelector('span').textContent = m.down ? (m.reviveT > 0.02 ? '正在扶起…' : '倒地 · 去扶') : m.healing > 0 ? '包扎中' : '';
@@ -374,7 +383,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     /** 每局开始 / 重来：站到你身后，血回满 */
     reset() {
       enabled = wanted && !!siege?.enabled; sayT = 0;
-      for (const m of mates) { m.hp = m.maxHp; m.down = false; m.fallK = 0; m.target = null; m.reviveT = 0; m.kills = 0; m.shots = 0; m.cool = 1; m.healT = 12; m.healing = 0; m.pathJob?.cancel?.(); m.pathJob = null; m.path = null; }
+      for (const m of everyone) { m.joined = false; m.hp = m.maxHp; m.down = false; m.fallK = 0; m.target = null; m.reviveT = 0; m.kills = 0; m.shots = 0; m.cool = 1; m.healT = 12; m.healing = 0; m.pathJob?.cancel?.(); m.pathJob = null; m.path = null; }
       show(false); api.spawned = false; trail.ready = false;
       paint();
     },
@@ -382,26 +391,31 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     rally() { if (!enabled) return; for (const m of mates) { if (m.down) { m.getUp(P.down.hp, true); if (api.spawned) m.warp(); } m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.4); } paint(); },
     /** 尸潮规模的倍数：有站着的队友才加 */
     get hordeScale() { return enabled && api.spawned && mates.some((m) => !m.down) ? P.horde : 1; },
+    /** 救出来的人（小许）：从 at 出来，跟着你 */
+    join(id, at) { const m = guests.find((q) => q.id === id); if (!m) return null; m.joined = true; m.hp = m.maxHp; m.down = false; m.reviveT = 0; m.fallK = 0; m.place(at, 0); if (api.spawned || !enabled) { m.root.visible = true; m.active = true; } m.pose(0.016); paint(); return m; },
+    leave(id) { const m = guests.find((q) => q.id === id); if (!m || !m.joined) return; m.joined = false; m.root.visible = false; m.active = false; m.pathJob?.cancel?.(); paint(); },
+    get guest() { return guests.find((m) => m.joined) || null; },
     update(dt) {
       sayT -= dt;
-      if (!enabled) { if (api.spawned) { show(false); api.spawned = false; } return; }
+      const joined = guests.filter((m) => m.joined);
+      if (!enabled && !joined.length) { if (api.spawned) { show(false); api.spawned = false; } return; }
       const playing = G.game?.state === 'playing' && G.player?.alive !== false, riding = !!director?.riding;
       if (!playing || riding) { if (api.spawned && riding) show(false); if (riding) api.spawned = false; return; }
-      if (!api.spawned) { api.spawned = true; show(true); for (const m of mates) { m.warp(); m.pose(0.016); } }
+      if (!api.spawned) { api.spawned = true; show(true); for (const m of mates) if (on(m)) { m.warp(); m.pose(0.016); } }
       track();
-      for (const m of mates) { try { m.update(Math.min(dt, 0.05), mates); } catch (e) { console.error('[零点突围] 队友出错', e); } }
+      for (const m of everyone) { if (!on(m)) continue; try { m.update(Math.min(dt, 0.05), everyone.filter(on)); } catch (e) { console.error('[零点突围] 队友出错', e); } }
       paint();
     },
     buildUi() {
       if (!ui || typeof document === 'undefined' || hud) return;
       hud = document.createElement('div'); hud.className = 'jm-squad off';
-      hud.innerHTML = mates.map((m) => `<div class="m"><em style="font-style:normal">${m.name}</em><i><b></b></i><span></span></div>`).join('');
+      hud.innerHTML = everyone.map((m) => `<div class="m"><em style="font-style:normal">${m.name}</em><i><b></b></i><span></span></div>`).join('');
       (ui.querySelector('.hud') || ui).appendChild(hud);
       for (const dl of ui.querySelectorAll('.m-stats')) { const row = document.createElement('div'); row.hidden = true; row.innerHTML = '<dt>队友击倒</dt><dd></dd>'; dl.appendChild(row); statRows.push(row); }
     },
     dispose() {
       group.removeFromParent(); mat.dispose(); lampMat.dispose(); lampGeo.dispose(); hud?.remove(); for (const row of statRows) row.remove();
-      for (const m of mates) { m.pathJob?.cancel?.(); for (const g of Object.values(m.parts)) g.dispose?.(); m.root.traverse((o) => { if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } }); }
+      for (const m of everyone) { m.pathJob?.cancel?.(); for (const g of Object.values(m.parts)) g.dispose?.(); m.root.traverse((o) => { if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } }); }
     },
   };
   return api;

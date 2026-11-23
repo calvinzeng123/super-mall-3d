@@ -9786,7 +9786,7 @@ function mM(i) {
     function $() {
       let P = null, V = Yi.interactRange;
       for (let Y of c.relays) {
-        if (Y.cut || Y.o.locked) continue;
+        if (Y.cut || Y.o.locked || Y.o.ghost) continue;
         let L = Y.o.pos.x - n.pos.x, Z = Y.o.pos.z - n.pos.z, J = Math.hypot(L, Z);
         J > V || Math.abs((Y.o.pos.y || 0) - n.pos.y) > 2.5 || J > 0.9 && (L * n.forward.x + Z * n.forward.z) / (J * Math.max(0.2, Math.hypot(n.forward.x, n.forward.z))) < Yi.interactFacing || (P = Y, V = J);
       }
