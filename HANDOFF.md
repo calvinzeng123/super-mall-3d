@@ -1,12 +1,12 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `0447f14a`，提交 `0184d3a` 的代码重新打包，109 文件 65.31 MiB，入口 `main.NXLUNVJ4.js`）。丧尸围城卡关修复和「合作生存」升级都在这一版。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `1db5385d`，提交 `d42125c` 的代码重新打包，109 文件 65.32 MiB，入口 `main.PGESJXD7.js`）。这一版包含丧尸围城的商场段重做、结尾三处改动（楼顶尸潮、沿楼绕飞的清扫航线、可选的炸楼结局）。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
 ## 2026-11-15 最新交接（十一）：漫游「显示资源被回收」修复 + 零点突围换园区地图、随机任务、载具撤离
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
-### 丧尸围城结尾三处改动：楼顶尸潮、直升机清扫、炸楼结局（2026-11-23，**没有部署**）
+### 丧尸围城结尾三处改动：楼顶尸潮、直升机清扫、炸楼结局（2026-11-23，已部署 `1db5385d`）
 用户实测后提的：楼顶那波不够多不够凶；飞机扫楼的角度不对、穿墙；丧尸要在露天 / 窗边，而且要会攻击；结尾加一个炸毁大楼的选项。
 - **楼顶死守**（`SIEGE.waves / waveSize / rim / brutes`，`siege.js` 的 `holdTick`）：5 波 × 5–7 只 → 9 波 × 8–11 只，越往后奔尸越多；每波一半从楼梯口上来、一半翻女儿墙上来（`roofRim()`）；第 4、8 波各一只巨尸，单数波加一只特殊感染者。丧尸池 34 → 48（`ZOMBIE.pool`）。实机：9 波都来，同时在场到 48 只（原来 34）。
 - **清扫航线**（`siegeFlight`）：原来是绕停机位的固定半径圆——离公寓楼角只有 4.4 米、北区那条下降时离 2 号楼东墙 5 米，旋翼会扫进楼里。现在是「楼外轮廓往外推 24 米的圆角矩形」（`flightBox()`；北区 1 号楼 `around: 'T2'` 连 2 号楼一起绕），匀速 7.5 米 / 秒。量过：两栋楼全程没有任何一栋楼同时在水平 14 米内、且顶面高于机身下方 8 米。`TOWERS.*.R` 没有了。
