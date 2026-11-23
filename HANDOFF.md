@@ -1,12 +1,17 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `1db5385d`，提交 `d42125c` 的代码重新打包，109 文件 65.32 MiB，入口 `main.PGESJXD7.js`）。这一版包含丧尸围城的商场段重做、结尾三处改动（楼顶尸潮、沿楼绕飞的清扫航线、可选的炸楼结局）。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `e89e7da7`，提交 `b6b8e6c` 的代码重新打包，109 文件 65.33 MiB，入口 `main.DRBWHKPI.js`）。这一版包含丧尸围城的商场段重做、结尾三处改动（楼顶尸潮、沿楼绕飞的清扫航线、可选的炸楼结局）。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
 ## 2026-11-15 最新交接（十一）：漫游「显示资源被回收」修复 + 零点突围换园区地图、随机任务、载具撤离
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
-### 鼠标转视角「不跟手、有拖拽感」（2026-11-23，**没有部署**）
+### 手机上没有「炸楼」按钮（2026-11-23，已部署 `e89e7da7`）
+- 原因：按钮挂在触屏操作层 `.touch` 上，而这一层是第一次碰屏幕才建的；炸楼模块在开局就建好了，那时 `.touch` 还不存在，按钮从来没挂上。
+- 改成直接挂在界面根上（`.jm-demo-btn`，右侧中间一个会呼吸发光的大圆按钮），提示条在触屏上也能点（`.jm-demo.tap`），文字换成「点这里呼叫空袭」。
+- 验证：模拟手机（844 × 390、触屏）上清光后按钮出现、在最上层没被挡住，点一下就选上炸楼；真手机没试。
+
+### 鼠标转视角「不跟手、有拖拽感」（2026-11-23，已部署 `e89e7da7`）
 - 查过：视角本身没有平滑（鼠标位移当帧直接加到 yaw / pitch，相机直接跟），瞄准辅助只在触屏 / 手柄开。拖的感觉来自两处：
   1. **帧率封顶**：零点突围 / 丧尸围城默认封 60 帧，漫游画质「低 / 中」档封 30 / 45 帧；120 Hz 的屏（MacBook Pro 等）上封 60 就是每两次刷新才画一次，鼠标一快就拖。
   2. **系统鼠标加速**：普通指针锁定拿到的是系统加过速的位移，Mac 上尤其明显，转起来发飘。
