@@ -1,12 +1,12 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `e0468083`，提交 `8435246` 的代码重新打包，109 文件 65.33 MiB，入口 `main.OK7D5ZS4.js`）。这一版包含丧尸围城的商场段重做、结尾三处改动（楼顶尸潮、沿楼绕飞的清扫航线、可选的炸楼结局）。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `7d234a66`，提交 `c42a339` 的代码重新打包，109 文件 65.34 MiB，入口 `main.4MKKZ46B.js`）。这一版包含丧尸围城的商场段重做、结尾三处改动（楼顶尸潮、沿楼绕飞的清扫航线、可选的炸楼结局）。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
 ## 2026-11-15 最新交接（十一）：漫游「显示资源被回收」修复 + 零点突围换园区地图、随机任务、载具撤离
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
-### 商场段加四种玩法；没用上的店卷帘拉下；楼顶尸潮成群（2026-11-23，**没有部署**）
+### 商场段加四种玩法；没用上的店卷帘拉下；楼顶尸潮成群（2026-11-23，已部署 `7d234a66`）
 用户反馈：楼顶还是没有「一堆」丧尸冲过来；商场里能穿进店铺；任务无聊（大多是走到标记按一下）。用户选了四种新玩法全要。
 - **新的一局是 23 步**（`siege-mall.js` + `siegePlan`）：crank → exit → crowbar → **rescue**（撬开一家店的卷帘，里面是店员小许）→ **escort**（护送小许到扶梯口）→ pry → **sneak**（二层一路站着 14 只发呆的行尸，摸到手枪那家店门口）→ pistol → note → card → **fuel**（去另一家店抬油桶）→ gen（抬着油桶到发电机）→ open → arms → **holdout**（保安室后门卷帘撬 40 秒，三个方向轮流来）→ power → 三道关 → flare。步骤位置一律用 `plan.stageOf(id)` 取，测试也改成这样了。
 - **救人护送**：小许是 `squad.js` 里的第三个成员（`guest: true`，`api.join / leave / guest`），救出来才出现，不开枪，跟着你；附近追人的丧尸会先扑他；他倒了要过去扶。护送这一步是 `ghost`（HUD 上标着但按不了，vendor 补丁让 ghost 的目标不能交互），小许（单人模式下是你自己）走到扶梯口 4.5 米内自动完成；撬开扶梯口以后他留下等直升机。
