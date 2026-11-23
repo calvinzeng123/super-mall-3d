@@ -186,7 +186,7 @@ export function stairRule(plan, stage, run) {
  * 左舷（舱门机枪那一侧）始终朝着楼。返回 { poseAt(t), duration(), setLeave(t), phaseAt(t), R, center }
  */
 export function siegeFlight(pad, padY, { box = { x0: pad.x - 19, x1: pad.x + 19, z0: pad.z - 37, z1: pad.z + 37 }, off = 24, speed = 7.5, lift = 4.5, out = 9, high = 12, low = 48, descend = 30, leave = 6, cap = SIEGE.sweep.cap } = {}) {
-  let leaveAt = null;
+  let leaveAt = null, watch = null;
   const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
   // 航线：楼的外轮廓（box）往外推 off 米的圆角矩形——离每一面墙、每一个角都是 off 米，不会擦着楼角过去。
   // 从东面正中出发往 −z 走（俯视顺时针），左舷一直朝楼
@@ -213,7 +213,19 @@ export function siegeFlight(pad, padY, { box = { x0: pad.x - 19, x1: pad.x + 19,
     return { x: pad.x + (q.x - pad.x) * k0, y, z: pad.z + (q.z - pad.z) * k0, yaw: Math.atan2(q.tx, q.tz), pitch: 0.05, roll: -0.14 * Math.min(1, tau / 3), tx: q.tx, tz: q.tz, tau };
   };
   const yaw0 = Math.atan2(pathAt(s0).tx, pathAt(s0).tz), near = (a, b) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  // 炸楼时的观看圈：从 t0 那一刻的位置先拉高（ky），再往外飞到绕着整片楼慢慢转的大圈上（kx）；左舷（人坐的那一侧）一直朝着圈心
+  const watchAt = (t) => {
+    const W = watch, p0 = W.p0, u = t - W.t0, a = W.a0 - W.omega * u, tx = W.cx + W.R * Math.cos(a), tz = W.cz + W.R * Math.sin(a);
+    const ky = smooth(u / W.climb), kx = smooth((u - W.climb * 0.6) / W.out), x = p0.x + (tx - p0.x) * kx, z = p0.z + (tz - p0.z) * kx;
+    const yawT = Math.atan2(-(W.cz - z), W.cx - x);
+    return { x, y: p0.y + (W.y - p0.y) * ky, z, yaw: p0.yaw + (near(p0.yaw, yawT) - p0.yaw) * smooth(u / (W.climb + W.out * 0.5)), pitch: 0.04, roll: -0.1, tx: Math.sin(a), tz: -Math.cos(a), phase: 'watch' };
+  };
   const poseAt = (t) => {
+    if (watch && t >= watch.t0) {
+      if (leaveAt === null || t <= leaveAt) return watchAt(t);
+      const p = watchAt(leaveAt), u = t - leaveAt, d = 12 * u + 4 * u * u;
+      return { x: p.x + p.tx * d, y: p.y + 2 * u + 1.8 * u * u, z: p.z + p.tz * d, yaw: p.yaw, pitch: 0.14 * smooth(u / 1.5), roll: -0.1 * (1 - smooth(u / 2)), phase: 'leave' };
+    }
     if (t < lift) { const k = smooth(t / lift); return { x: pad.x, y: padY + high * k, z: pad.z, yaw: pad.yaw + (near(pad.yaw, yaw0) - pad.yaw) * smooth((t - 0.8) / (lift - 0.8)), pitch: 0, roll: 0, phase: 'lift' }; }
     const end = leaveAt ?? cap;
     if (t <= end) { const p = orbitAt(t); return { x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, roll: p.roll, phase: p.tau < turn * 0.75 ? 'roof' : p.tau < turn * 0.75 + descend ? 'windows' : 'ground' }; }
@@ -222,7 +234,15 @@ export function siegeFlight(pad, padY, { box = { x0: pad.x - 19, x1: pad.x + 19,
   };
   return { poseAt, center: { x: cx, z: cz }, box, off, lap, padY,
     duration: () => (leaveAt ?? cap) + leave,
-    setLeave(t) { if (leaveAt === null) leaveAt = Math.min(cap, t); return leaveAt; },
+    setLeave(t) { if (leaveAt === null) leaveAt = watch ? t : Math.min(cap, t); return leaveAt; },
+    /** 炸楼：从 t0 起改飞观看圈（绕 center 半径 R、高 y，转一圈 turn 秒）；climb 秒拉高、out 秒飞到圈上 */
+    setWatch(t0, { center, R = 260, y = 135, turn = 110, climb = 4, out = 12 } = {}) {
+      if (watch || leaveAt !== null) return false;
+      const p0 = poseAt(t0);
+      watch = { t0, p0, cx: center.x, cz: center.z, R, y, omega: (Math.PI * 2) / turn, climb, out, a0: Math.atan2(p0.z - center.z, p0.x - center.x) };
+      return true;
+    },
+    get watching() { return !!watch; },
     get leaving() { return leaveAt !== null; },
     phaseAt: (t) => poseAt(t).phase,
     times: { roof: lift, windows: lift + turn * 0.75, ground: lift + turn * 0.75 + descend } };
@@ -485,7 +505,7 @@ export function lootSpots(nav, site, n) {
 
 export function createSiege(G, { layout, nav, scene, ui = null, zombies, director, runs, flow = null, rng = Math.random, storage = null, tower: forceTower = null, supplies = null }) {
   const root = new THREE.Group(); root.name = '丧尸围城'; scene?.add(root);
-  const S = { plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, tellT: 0, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' };
+  const S = { bombAt: -1, plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, tellT: 0, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' };
   const blocks = [], balconies = [], acids = [];
   // 路障（人自己摆的沙袋墙）和封门的卷帘（见 siege-defense.js）
   const walls = createBarricades(G, { scene, zombies, ui });
@@ -537,9 +557,10 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan, start: { pos: new THREE.Vector3(s0.x, s0.y, s0.z), yaw: Math.atan2(-(plan.stages[1].site.x - s0.x), -(plan.stages[1].site.z - s0.z)) },
       extraction: { id: 'heli', label: '直升机', where: T.roofName, floor: T.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
-        ride: { boardRadio: '上机！机枪交给你：屋顶上的、阳台玻璃后面的、楼下冲出来的，全部清掉。它们会朝飞机扔东西，尖叫的伤得最重，先打。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, outroCam: (pose) => (demo.chosen ? demo.camera().pos : roofEdge(pose)),
+        ride: { boardRadio: '上机！机枪交给你：屋顶上的、阳台玻璃后面的、楼下冲出来的，全部清掉。它们会朝飞机扔东西，尖叫的伤得最重，先打。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : []), keep: () => true, outroCam: (pose) => (demo.chosen ? null : roofEdge(pose)),
           // 选了炸楼：机外镜头换到远处、时间拉长，看着楼垮完
-          outroStart: () => { if (demo.chosen) demo.start(); }, outroTick: (dt) => { if (demo.running) demo.tick(dt); }, outroSeconds: () => (demo.chosen ? DEMOLISH.seconds : null), outroLook: () => (demo.chosen ? demo.camera().look : null), outroFade: (t) => (demo.chosen ? demo.fade(t) : null), outroTitle: () => (demo.chosen ? '<b>空袭已批准</b>云澜汇、公寓和北区塔楼将被炸毁' : null),
+          // 炸楼是在飞机上看完的（观看圈）；最后离开那几秒照常切机外镜头（楼都垮了，不用再架在楼顶边上）
+          outroTick: (dt) => { if (demo.running) demo.tick(dt); }, outroTitle: () => (demo.chosen ? '<b>大楼已炸毁</b>直升机已离开云澜汇上空' : null),
           ground: (s0) => landAt(nav, s0.x, s0.z, s0.y)?.y ?? 0 } }, // 坠机落在哪：正下方最高的那层楼面（楼顶 / 商场屋面 / 街上）
       text: (c, ride) => textNow(c, ride), markers: () => [],
       radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你们被困在三层的店里，手上只有刀。先想办法出去，一层一层往下摸到保安室拿枪，再上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName) + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
@@ -588,7 +609,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 血不会自己回（原游戏的缓慢回血只在零点突围里留着）；医疗包、止痛药、地上的补给只有这个模式有
     G.noRegen = enabled; G.speedMul = 1; if (!enabled) G.weapon?.lock?.([]);
     if (supplies) { supplies.enabled = enabled; supplies.reset(); }
-    Object.assign(S, { stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, hasInside: false, cores: null, genT: 0, genSpawn: 0, popped: null, tellT: 0, loadout: false, pin: null, fling: null, bruteT: -1, brutes: 0, lastSpecial: '' });
+    Object.assign(S, { bombAt: -1, look: null, stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, hasInside: false, cores: null, genT: 0, genSpawn: 0, popped: null, tellT: 0, loadout: false, pin: null, fling: null, bruteT: -1, brutes: 0, lastSpecial: '' });
     noiseEl?.classList.toggle('off', !enabled); clockEl?.classList.add('off'); copy();
     if (flow) {
       // 原游戏自己的巡逻、增援、追兵全停（丧尸由这里放）；换回零点突围时还原
@@ -847,6 +868,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function sweepTick(dt, rideT) {
     const sw = S.sweep; if (!sw) return;
     sw.t = rideT; rocksTick(dt); demo.tick(dt);
+    if (S.bombAt >= 0 && rideT >= S.bombAt && !demo.running) { demo.start(); G.hud?.radio?.('炸弹投下！', 2.5); }
+    if (S.flight.watching) watchLook(dt);
     // 地面的分两批冲出来：起飞不久一批，降到低空再来一批（尖叫者混在里面）
     const W = SIEGE.sweep, want = rideT > S.flight.times.ground - 6 ? W.ground : rideT > 6 ? Math.ceil(W.ground / 2) : 0;
     if ((sw.tick -= dt) <= 0 && sw.made.ground < want) {
@@ -868,10 +891,26 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 清完了（该出来的都出来了、一个不剩）：先问要不要炸楼，不炸（或者时间到了）就返航；炸的话拉高飞走，机外镜头看着楼垮
     if (!S.flight.leaving && sw.made.ground >= W.ground && rideT > 12 && !live.length) {
       if (!sw.offered) { sw.offered = true; demo.offer(); G.hud?.radio?.('全部清掉了！指挥中心授权空袭——要不要把这几栋楼一起炸掉？', 4); }
-      else if (demo.chosen) { S.flight.setLeave(rideT + 0.6); G.hud?.radio?.('空袭批准，炸弹已投放。拉高，离开爆炸范围！', 3.5); }
+      else if (demo.chosen) { // 不切机外镜头：飞机拉高、绕着整片楼转一大圈，人坐在机舱门口自己转头看
+        const W = DEMOLISH.watch; S.flight.setWatch(rideT, { center: { x: W.center[0], z: W.center[1] }, R: W.R, y: W.y, turn: W.turn }); S.flight.setLeave(rideT + W.seconds); S.bombAt = rideT + W.delay;
+        G.hud?.radio?.('空袭批准！拉高，离开爆炸范围——从舱门往外看。', 4);
+      }
       else if (!demo.offered) { S.flight.setLeave(rideT + 1.2); G.hud?.radio?.('返航。', 3); }
     }
     else if (!S.flight.leaving && rideT > W.cap - 8) G.hud?.message?.('油不多了，准备返航', 2);
+  }
+  /** 炸楼时：视角慢慢转向正在垮的楼（人一动鼠标 / 手指就让开，停手 1.5 秒后再慢慢转回去） */
+  function watchLook(dt) {
+    const p = G.player, eye = G.camera?.position, W = DEMOLISH.watch; if (!p || !eye) return;
+    const L = S.look ||= { set: null, idle: 9 };
+    if (L.set && (Math.abs(p.yaw - L.set.yaw) > 1e-4 || Math.abs(p.pitch - L.set.pitch) > 1e-4)) L.idle = 0; // 自己转过头了
+    L.idle += dt;
+    if (L.idle > 1.5) {
+      const dx = W.center[0] - eye.x, dz = W.center[1] - eye.z, dy = 25 - eye.y, yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(dy, Math.hypot(dx, dz));
+      const k = 1 - Math.exp(-dt * 1.6 * Math.min(1, (L.idle - 1.5) / 1.5));
+      p.yaw += Math.atan2(Math.sin(yaw - p.yaw), Math.cos(yaw - p.yaw)) * k; p.pitch += (pitch - p.pitch) * k;
+    }
+    L.set = { yaw: p.yaw, pitch: p.pitch };
   }
   function breakPane(b) {
     b.broken = true; b.g.userData.pane.visible = false;

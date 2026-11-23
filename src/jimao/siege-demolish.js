@@ -15,6 +15,8 @@ export const DEMOLISH = Object.freeze({
   offer: 8, key: 'KeyF',
   bomb: Object.freeze({ height: 260, fall: 2.6 }),
   seconds: 15, fade: 1.2,
+  // 在飞机上看：观看圈的圈心（这几栋楼的中间）、半径、高度（比所有楼都高出 8 米以上）、转一圈多少秒；选了以后 delay 秒投弹、seconds 秒后离开
+  watch: Object.freeze({ center: Object.freeze([-150, -150]), R: 260, y: 135, turn: 110, delay: 4.5, seconds: 24 }),
   mall: Object.freeze(['P1', 'P1C', 'P1S', 'P1E', 'P1E2', 'P1W1', 'P1W2', 'P1W3', 'P1W4', 'arcade-massing']),
   towers: Object.freeze(['A', 'T1', 'T2']),
   cam: Object.freeze({ pos: [104, 118, -2], look: [-118, 26, -168] }),

@@ -632,7 +632,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     state.pose0 = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0, dir: { x: 0, z: -1 } }) };
     const t0 = state.rideT;
     // 机外镜头的机位：任务可以自己定（丧尸围城定在公寓楼顶边上——周围楼太密，按「航线外侧让开 17 米」会架到别的楼里去）
-    state.outCam = rideHooks()?.outroCam ? rideHooks().outroCam(state.pose0) : outroCamera(vv.kind, state.pose0, { poseAt: (d) => heliPose(t0 + d), away: orbit().center });
+    state.outCam = rideHooks()?.outroCam?.(state.pose0) || outroCamera(vv.kind, state.pose0, { poseAt: (d) => heliPose(t0 + d), away: orbit().center });
     state.outLook = vv.toWorld(VEHICLE_HP.center[vv.kind]);
     state.wasInv = !!G.player.invulnerable; G.player.invulnerable = true;
     G.hud?.clearRadio?.(); G.hud?.show?.(false);

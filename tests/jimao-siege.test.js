@@ -326,7 +326,7 @@ test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天�
   assert.match(m.text({ allCut: true }, { kills: 0 }), new RegExp(`屋顶 ${SIEGE.sweep.roof}/${SIEGE.sweep.roof} · 阳台 ${SIEGE.sweep.window}/${SIEGE.sweep.window}`));
   // 清完了：先问要不要炸楼（还不返航）；没选、时间到了才返航
   tick(0.2); assert.equal(siege.demo.offered, true, '清完先问炸不炸'); assert.equal(m.extraction.flight.leaving, false);
-  assert.equal(m.extraction.ride.outroSeconds(), null, '没选：机外镜头照旧');
+  assert.ok(m.extraction.ride.outroCam({ x: SIEGE.pad.x + 30, y: 90, z: SIEGE.pad.z }), '没选：机外镜头照旧架在楼顶边上');
   tick(DEMOLISH.offer + 0.5); assert.equal(siege.demo.offered, false); assert.equal(siege.demo.chosen, false);
   assert.equal(m.extraction.flight.leaving, true, '不炸：定下返航'); assert.ok(m.extraction.flight.duration() < t + 10);
   assert.equal(m.text({ allCut: true }, { kills: 0, over: true }), '清扫完毕 · 返航');
@@ -936,4 +936,24 @@ test('炸楼结局：清完选了以后机外镜头换到远处、拉长；炸�
   assert.ok(d.fade(DEMOLISH.seconds) > 0.99 && d.fade(DEMOLISH.seconds - DEMOLISH.fade - 0.1) === 0, '最后压黑');
   d.reset(); assert.ok(d.parts.every((p) => p.g.visible && p.g.position.y === 0 && p.g.scale.y === 1 && p.g.rotation.z === 0), '重开：楼回来了'); assert.equal(d.chosen, false);
   d.dispose();
+});
+
+test('炸楼时在飞机上看：航线改飞观看圈（先拉高、再飞到绕整片楼的大圈上），不撞楼、不跳；左舷对着圈心；之后照常离开', () => {
+  const W = DEMOLISH.watch, C = { x: W.center[0], z: W.center[1] };
+  const tops = L.buildings.filter((b) => b.outline?.length).map((b) => ({ id: b.id, outline: b.outline, top: Math.max(...L.levels.filter((l) => l.building === b.id).map((l) => l.elev + (l.kind === 'roof' ? 3 : l.height || 4))) }));
+  for (const id of ['A', 'T1']) for (const t0 of [40, 77, 120]) {
+    const T = TOWERS[id], f = siegeFlight(T.pad, elev(T.roof), { box: flightBox(L, T) });
+    assert.equal(f.watching, false);
+    assert.equal(f.setWatch(t0, { center: C, R: W.R, y: W.y, turn: W.turn }), true); f.setLeave(t0 + W.seconds);
+    assert.equal(f.watching, true); assert.equal(f.setWatch(t0 + 1, { center: C }), false, '只设一次');
+    let prev = f.poseAt(t0 - 0.05);
+    for (let t = t0; t < t0 + W.seconds; t += 0.05) {
+      const p = f.poseAt(t); assert.equal(p.phase, 'watch');
+      assert.ok(Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z) < 2.1, `${id} t=${(t - t0).toFixed(1)} 不跳`); prev = p;
+      for (const b of tops) if (pointInPoly([p.x, p.z], b.outline)) assert.ok(p.y > b.top + 8, `${id} 在 ${b.id} 上空只高出 ${(p.y - b.top).toFixed(0)} 米`);
+    }
+    const p = f.poseAt(t0 + 16), lx = Math.cos(p.yaw), lz = -Math.sin(p.yaw), cx = C.x - p.x, cz = C.z - p.z, d = Math.hypot(cx, cz);
+    assert.ok(Math.abs(d - W.R) < 1 && Math.abs(p.y - W.y) < 0.01, '到了观看圈上'); assert.ok((lx * cx + lz * cz) / d > 0.95, '左舷对着圈心');
+    assert.equal(f.poseAt(t0 + W.seconds + 1).phase, 'leave'); assert.equal(f.duration(), t0 + W.seconds + 6);
+  }
 });
