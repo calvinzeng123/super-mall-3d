@@ -15,6 +15,9 @@
   3. 第一次发布前项目还不存在，先运行 `npx wrangler pages project create yunlan-mall --production-branch main`（同样带上面那几个变量）。
   4. 上线地址应是 `https://yunlan-mall.pages.dev`，发完写回本文件第 3 行。
 - 线上包 110 个文件，最大的不到 20 MB，没超 Pages 单文件 25 MB 的上限。
+- **2026-11-23 实测**：账号 ID `9ddda46aa014ee9b580fc109f5713509`，Pages 项目 `yunlan-mall` 已经用接口建好（`yunlan-mall.pages.dev`，还没有内容）。账号里另有两个旧站 `yunlan-mall-3d-github`、`yunlan-mall-v5`，用户选了新建，旧站不动。
+- **上传卡住的原因**：环境的 Network secret 会把**所有**发往 api.cloudflare.com 的请求的 Authorization 头换成令牌。wrangler 上传文件时用的是项目的临时上传凭证（也放在 Authorization 头里），被换掉后报 `Authorization failed [code: 8000013]`。手动用 curl 带上传凭证也一样（已验证）。
+- **办法**：在环境设置里删掉 api.cloudflare.com 那条 Network secret，改加环境变量 `CLOUDFLARE_API_TOKEN`（值是令牌本身，不带 Bearer）；开新会话后 wrangler 自己处理两种凭证。发布命令从仓库**外面**的目录运行（在仓库里跑 `wrangler pages project create` 会被它当成 Workers 项目，自动改 package.json、.gitignore，还生成 wrangler.jsonc、.assetsignore，这次已撤销）。
 
 ### 丧尸围城新流程：锁在店里 → 商场三层、二层、一层 → 住宅楼 → 楼顶（2026-11-22）
 **没有部署**。提交 `651a392`（只有刀开局、移速、范围）→ `f1e06f5`（封门、路障）→ `0b16213`（商场段重做）→ 之后的收尾提交。用户定的：不限时长；住宅楼三道关和直升机机枪扫楼保持原样。
