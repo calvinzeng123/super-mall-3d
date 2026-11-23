@@ -1,4 +1,4 @@
-import { buildPlayableLayout } from './layout/playable.js';
+import { buildPlayableLayout, markSiegeRoofs } from './layout/playable.js';
 import { createApp } from './render/app.js';
 import { configureMemory } from './render/device.js';
 import { QUALITY_STORAGE_KEY } from './render/quality.js';
@@ -25,7 +25,7 @@ export async function startRuntime(mode,onProgress=()=>{}) {
   const tier=savedTier(mode);
   window.__memory={profile:configureMemory(tier),tier};
   const layout=buildPlayableLayout({mode:mode==='jimao'?'arcade':mode});
-  if(mode==='jimao')layout.game='jimao';
+  if(mode==='jimao')markSiegeRoofs(layout); // layout.game='jimao'，撤离那两栋楼的屋面不放机房（见 markSiegeRoofs）
   const app=await createApp(layout,document.getElementById('stage'),{
     onProgress:(label,p)=>onProgress(label,p*.76),game:layout.game,
   });

@@ -346,7 +346,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   }
   // 舱门机枪挂在直升机左舷，枪口默认朝舱门外（挂点 +z = 机身 +x）
   const gunMount = new THREE.Object3D();
-  gunMount.position.set(...RIDE_SPECS.helicopter.gunMount); gunMount.rotation.y = Math.PI / 2;
+  gunMount.position.set(...RIDE_SPECS.helicopter.gunMount); gunMount.rotation.y = RIDE_SPECS.helicopter.gunYaw;
   vehicles.heli.body.add(gunMount);
   const doorGun = createDoorGun(G, gunMount);
   // 装甲车的车顶机枪（同一挺 M134）：不用换弹、只会过热。环形枪架：圆心在射击口正中，枪挂在环上跟着视线绕人转一整圈
@@ -530,6 +530,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   G.events.on('enemy:fire', (e) => {
     const vv = veh();
     if (state.phase !== 'ride' || !vv || !e?.pos || !e?.dir || G.game?.state !== 'playing') return;
+    // 只有飞机上看得见、机枪够得着的才打得着飞机（丧尸围城的清扫：楼里、楼梯间里、射界外的不算，见 siege.js 的 canAttack）
+    const hook = rideHooks()?.canAttack;
+    if (e.enemy && hook && !hook(e.enemy, e)) return;
     const c = vv.toWorld(VEHICLE_HP.center[vv.kind]);
     if (rayMiss(e.pos, e.dir, c) > VEHICLE_HP.radius[vv.kind]) return;
     state.vhits++;
@@ -661,7 +664,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return roofSpots;
   }
   const alive = () => G.enemies?.list?.filter((e) => e.alive) || [];
-  const roofEnemies = () => (rideHooks()?.targets ? rideHooks().targets() : alive().filter((e) => Math.abs(e.pos.y - roofY()) < 4 && Math.hypot(e.pos.x - orbit().center.x, e.pos.z - orbit().center.z) < 100));
+  // HUD 红点、舱门机枪的辅助瞄准：任务自己给了「看得见的」（aimTargets：楼里、楼梯间里的不标、不吸）就用它
+  const roofEnemies = () => (rideHooks()?.aimTargets ? rideHooks().aimTargets() : rideHooks()?.targets ? rideHooks().targets() : alive().filter((e) => Math.abs(e.pos.y - roofY()) < 4 && Math.hypot(e.pos.x - orbit().center.x, e.pos.z - orbit().center.z) < 100));
   /** HUD 标记：坐直升机时楼顶上每个敌人一个红点（位置直接引用敌人坐标，跟着走） */
   function markers() {
     const m = state.mission;
@@ -939,6 +943,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     get phase() { return state.phase; }, get rideT() { return state.rideT; },
     /** 载具中心（坐着的时候）：尖叫者冲它叫 */
     vehicleCenter() { const vv = veh(); return vv && state.phase === 'ride' ? vv.toWorld(VEHICLE_HP.center[vv.kind]) : null; },
+    /** 坐着飞机时这只能不能打飞机（尖叫者叫之前问一声）：任务没管就是 true；fresh 为真时不看缓存，当场算 */
+    rideCanAttack(enemy, fresh = false) { const hook = rideHooks()?.canAttack; return hook ? !!hook(enemy, fresh) : true; },
     /** 开放撤离点（closed 的任务用）：从这一刻起走到登机门就能上 */
     openExtraction() { const x = state.mission?.extraction; if (!x || G.level.extraction) return; G.level.extraction = { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked }; G.game?.refreshObjective?.(); },
     dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); roofGun.dispose(); vhud.remove(); } };

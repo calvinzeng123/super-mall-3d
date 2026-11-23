@@ -362,7 +362,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (squad && G.game.state !== 'paused') { try { squad.update(dt); } catch (e) { fail('squad', e, '队友出错'); } }
       if (routeDress) { try { routeDress.update(rawDt); } catch (e) { fail('dress', e, '沿途痕迹出错'); } }
       if (bars) { try { bars.enabled = !!siege?.enabled && !director.riding; bars.update(dt); } catch (e) { fail('bars', e, '血条出错'); } }
-      blackout.enabled = !!siege?.enabled; blackout.open = director.riding ? 1 : 0; blackout.update(dt);
+      // 雾：坐上直升机全退远；站在撤离那栋楼的屋面上（露天，守屋顶等飞机）退远一大半——不然三十米外楼梯口涌出来的尸群糊在雾里
+      blackout.enabled = !!siege?.enabled; blackout.open = director.riding ? 1 : siege?.onRoof?.() ? 0.7 : 0; blackout.update(dt);
       // 丧尸围城里商场没有逛街的路人了（那些人就是丧尸）；切回零点突围把人群按画质设置放回来
       { const pq = app.ctx?.peopleQuality, want = siege?.enabled ? 0 : null;
         if (pq && want === 0 && pq.stats.density !== 0) { crowdWas = pq.stats.density; pq.setDensity(0); }

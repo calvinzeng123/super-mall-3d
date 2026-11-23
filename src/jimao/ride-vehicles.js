@@ -11,6 +11,7 @@ export const RIDE_SPECS = Object.freeze({
   helicopter: {
     doorOut: [1.75, 1.7, -0.25], doorIn: [0.75, 1.88, -0.35], seat: [0.6, 1.9, -0.22], seatYaw: Math.PI / 2,
     gunMount: [1.0, 1.3, -0.22], // 坐在舱门边、眼睛抬高（离舱底 1.1 米）：枪在视线下方 0.6 米，从枪身上面往下看楼顶，舱底不挡
+    gunYaw: Math.PI / 2, // 枪架在机身里转多少：枪口默认朝舱门外（枪架 +z = 机身 +x）
     footprint: { x0: -1.2, x1: 1.2, z0: -1.9, z1: 2.4 },
   },
   car: {

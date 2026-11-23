@@ -8,7 +8,8 @@ import { findPath } from '../src/fps/pathfinding.js';
 import { pointInPoly } from '../src/layout/geom.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
-import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, flightBox, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots, floorSpots, climbFloors } from '../src/jimao/siege.js';
+import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, flightBox, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots, floorSpots, climbFloors, heliGun } from '../src/jimao/siege.js';
+import { aimAngles, inGunArc, createDoorGun, DOOR_GUN } from '../src/jimao/door-gun.js';
 import { createSupplies, SUPPLY, healChoice, MEDIC_CSS } from '../src/jimao/supplies.js';
 import { createSquad, SQUAD, pickTarget, shotHits, slotOf, SQUAD_CSS } from '../src/jimao/squad.js';
 import { createHealthBars, BARS, barWidth, pickBars, BARS_CSS } from '../src/jimao/healthbars.js';
@@ -185,7 +186,9 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
   run(9); const d = s.pos.distanceTo(player.pos);
   assert.ok(events.some(([n]) => n === 'zombie:scream'), '叫了'); assert.ok(d > KINDS.screamer.keep - 3.5, `停在 ${d.toFixed(1)} 米`); assert.equal(hurt.length, 0, '尖叫者不咬人');
   // 直升机在飞：冲飞机叫，一声顶 6 发
-  G.missions = { rideKind: 'helicopter', vehicleCenter: () => new THREE.Vector3(player.pos.x + 20, player.pos.y + 45, player.pos.z) }; events.length = 0;
+  // 飞机在 heliRange（85 米）以内才冲它叫；这里飞机离尖叫者五十来米
+  const heliC = new THREE.Vector3(player.pos.x + 20, player.pos.y + 45, player.pos.z);
+  G.missions = { rideKind: 'helicopter', vehicleCenter: () => heliC.clone() }; events.length = 0;
   player.pos.y += 44; // 人在飞机上：离地四十多米，不在同一层
   // 上一声对人叫完最多再等 7.5 秒 + 叫的那 1.1 秒，所以给 10 秒
   const stand = s.pos.clone(); run(10); player.pos.y -= 44; const shot = events.find(([n, e]) => n === 'enemy:fire' && e.scream);
@@ -1133,4 +1136,142 @@ test('商场段的新玩法：救人以后护送到扶梯口才算完；潜行�
   assert.ok(S.holdT > SIEGE.holdout.seconds - 1); assert.equal(m.objectives[at('power')].locked, true, '后门没撬开：合闸锁着'); assert.ok(S.holdDirs.length >= 2, `${S.holdDirs.length} 个方向`);
   const h0 = zombies.alive().filter((z) => z.hunt).length; run(SIEGE.holdout.every + 1); assert.ok(zombies.alive().filter((z) => z.hunt).length > h0, '一拨来了');
   run(SIEGE.holdout.seconds); assert.equal(S.holdT, 0); assert.equal(m.objectives[at('power')].locked, false); assert.ok(msgs.some((t) => /卷帘撬开了/.test(t)));
+});
+
+// ---- 清扫：楼里、楼梯间里的看不见也打不着，也打不着飞机 ----
+test('跨楼层的视线：从楼外看楼顶楼梯间里面，原来的射线（只查起点那一层的墙）看得穿，sightAcross 挡住；隔着楼板也挡；露天的屋面看得见。舱门机枪的射界：左右 ±77°、上 26° 下 69°', () => {
+  const P = createMapPhysics(nav), roof = elev('A-RF'), run = runs.find((r) => r.to === 'A-RF'), inside = new THREE.Vector3(run.b.x, roof + 1.15, run.b.z);
+  const A = L.buildings.find((b) => b.id === 'A'), x1 = Math.max(...A.outline.map((p) => p[0]));
+  const eye = new THREE.Vector3(x1 + 24, roof + 2.5, run.b.z);
+  assert.equal(P.lineOfSight(eye, inside), true, '原来的射线：从楼外看进楼梯间不挡（楼里的丧尸隔着墙打得中）');
+  assert.equal(P.sightAcross(eye, inside), false, '跨楼层：楼梯间的墙挡住');
+  const hit = P.castAcross(eye, inside.clone().sub(eye).normalize(), 200); assert.ok(hit && hit.dist < eye.distanceTo(inside) - 1 && hit.point, '射程截到墙上');
+  assert.equal(P.sightAcross(new THREE.Vector3(SIEGE.pad.x + 2, roof + 12, SIEGE.pad.z), new THREE.Vector3(SIEGE.pad.x + 2, elev('A-15F') + 1.2, SIEGE.pad.z)), false, '隔着屋面的楼板');
+  assert.equal(P.sightAcross(new THREE.Vector3(x1 + 24, roof + 12, SIEGE.pad.z), new THREE.Vector3(SIEGE.pad.x + 8, roof + 1.15, SIEGE.pad.z)), true, '露天的屋面看得见');
+  // 射界：枪架朝世界 +x
+  const mount = new THREE.Object3D(); mount.rotation.y = Math.PI / 2; mount.updateMatrixWorld(true);
+  const gun = createDoorGun({}, mount), at = (x, y, z) => new THREE.Vector3(x, y, z);
+  assert.equal(gun.canAim(at(20, 0, 0)), true, '正前方'); assert.equal(gun.canAim(at(-20, 0, 0)), false, '背后');
+  assert.equal(gun.canAim(at(10, 10, 0)), false, '仰 45° 仰不上去'); assert.equal(gun.canAim(at(10, -10, 0)), true, '俯 45° 打得着');
+  assert.equal(gun.canAim(at(2, 0, 20)), false, '侧面 84° 转不过去'); assert.equal(gun.canAim(at(10, 0, 20)), true, '侧面 63°');
+  assert.equal(gun.canAim(at(200, 0, 0)), false, '太远');
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, 0)), a = aimAngles(q, at(0, 0, 0), at(10, -10, 0));
+  assert.ok(Math.abs(a.pitch - Math.PI / 4) < 1e-6 && Math.abs(a.yaw) < 1e-6 && inGunArc(a) && !inGunArc({ ...a, yaw: DOOR_GUN.yaw }));
+  gun.dispose();
+});
+
+/** 一趟假的清扫：直升机按航线飞（人眼、枪架按 heliGun 算），不开枪；返回推进的办法 */
+function fakeRide(tower) {
+  const w = sworld({ tower }), { G, siege, director, begin, cut, run, zombies, player } = w;
+  const m = begin(); cut(m.plan.stages.length); run(0.1); for (const z of zombies.alive()) z._deactivate();
+  siege.state.hold = SIEGE.hold - 0.2; run(SIEGE.land + 2); director.riding = true;
+  const F = m.extraction.flight, frame = heliGun(F.poseAt(0)), aa = { yaw: 0, pitch: 0, dist: 0 };
+  let t = 0;
+  G.missions = { rideKind: 'helicopter', vehicleCenter: () => { const p = F.poseAt(t); return new THREE.Vector3(p.x, p.y + 1.4, p.z); },
+    doorGun: { eye: (o) => o.copy(frame.eye), canAim: (p, from) => inGunArc(aimAngles(frame.q, from || frame.eye, p, aa)) }, rideCanAttack: (z, fresh) => m.extraction.ride.canAttack(z, fresh) };
+  m.extraction.ride.onBoard();
+  const step = (secs, each) => { for (let k = 0; k < secs * 30; k++) { t += 1 / 30; G.time.frame++; heliGun(F.poseAt(t), frame); player.pos.copy(frame.eye).y -= 1.62; m.extraction.ride.spawns(1 / 30, t); for (const q of [...w.ctx.list]) q._update(1 / 30); each?.(t); } };
+  return { ...w, m, F, frame, step, aa, sw: siege.state.sweep, time: () => t };
+}
+const inBox = (b, p, pad = 0) => p.x > b.x0 - pad && p.x < b.x1 + pad && p.z > b.z0 - pad && p.z < b.z1 + pad;
+
+test('清扫的屋顶：十四只全在露天的屋面上（不在楼梯间、电梯井里），屋顶那一段航线上大多看得见；守屋顶时尸群从楼梯间门外出来，那些点站得住、看得见停机位', () => {
+  for (const tower of ['A', 'T1']) {
+    const { siege, m, F, sw } = fakeRide(tower), T = TOWERS[tower], roof = elev(T.roof), boxes = siege.housings(), P = createMapPhysics(nav);
+    const lv = L.levels.find((l) => l.id === T.roof), stairs = lv.rooms.filter((r) => r.type === 'stair');
+    assert.ok(boxes.length >= stairs.length && stairs.every((r) => boxes.some((b) => r.polys[0].every(([x, z]) => x >= b.x0 - 1e-6 && x <= b.x1 + 1e-6 && z >= b.z0 - 1e-6 && z <= b.z1 + 1e-6))), `${tower} 楼梯间都算进去了`);
+    const top = sw.list.filter((z) => z.sweep === 'roof');
+    assert.equal(top.length, SIEGE.sweep.roof);
+    const frames = []; for (let t = F.times.roof + 1; t < F.times.windows; t += 2.5) frames.push(heliGun(F.poseAt(t)));
+    const shares = top.map((z) => {
+      const st = landAt(nav, z.pos.x, z.pos.z, z.pos.y + 0.6); assert.equal(st.floor, T.roof, `${tower} 在屋面上`); assert.ok(!boxes.some((b) => inBox(b, z.pos, 0.5)), `${tower} (${z.pos.x.toFixed(1)}, ${z.pos.z.toFixed(1)}) 在楼梯间外面`);
+      assert.equal(z.post && z.anchor, T.roof, '守在屋面上');
+      const c = new THREE.Vector3(z.pos.x, z.pos.y + 1.15, z.pos.z); let n = 0; for (const f of frames) if (P.sightAcross(f.eye, c) && inGunArc(aimAngles(f.q, f.eye, c))) n++;
+      return n / frames.length;
+    });
+    assert.ok(Math.min(...shares) >= 0.2 && shares.reduce((a, b) => a + b, 0) / shares.length >= 0.5, `${tower} 屋顶那一段看得见几成：${shares.map((x) => x.toFixed(2)).join(' ')}`);
+    // 楼梯间里面那一点（以前放尖叫者的地方）：看不见、打不着飞机
+    const z0 = top[1], r = runs.find((q) => q.to === T.roof); z0.pos.set(r.b.x, roof, r.b.z);
+    assert.equal(m.extraction.ride.canAttack(z0, true), false, `${tower} 楼梯间里的打不着飞机`);
+    // 守屋顶的出口：楼梯间门外，屋面上站得住、离楼梯间有一段、从信号弹那儿看得见
+    const ex = siege.roofExits(), eye = new THREE.Vector3(m.plan.flare.x, roof + 1.6, m.plan.flare.z);
+    assert.ok(ex.length >= 1 && ex.every((e) => e.spots.length >= 4), `${tower} 出口 ${ex.length} 个`);
+    for (const e of ex) for (const q of e.spots) {
+      const st = landAt(nav, q.x, q.z, q.y + 0.6); assert.ok(st && st.floor === T.roof && clear(nav, st));
+      assert.ok(!boxes.some((b) => inBox(b, q, 0.5)), `${tower} 出口 (${q.x.toFixed(1)}, ${q.z.toFixed(1)}) 在楼梯间外面`);
+      assert.ok(P.lineOfSight(eye, new THREE.Vector3(q.x, q.y + 1.5, q.z)), `${tower} 出口从信号弹那儿看得见`);
+    }
+    if (tower === 'T1') assert.ok(ex.every((e) => e.x > Math.max(...boxes.map((b) => b.x1)) - 0.5), '北区：出口在机房朝停机位那一头');
+    for (const q of siege.roofRim(8)) assert.ok(!boxes.some((b) => inBox(b, q, 0.5)) && P.nav.clearLine(q, { x: T.pad.x, y: roof, z: T.pad.z }), `${tower} 翻墙上来的点和停机位之间没墙`);
+  }
+});
+
+test('清扫时守点：八十秒假航线上屋顶、楼下的丧尸不往楼里钻（离开自己那一层的马上收回重放）；不开枪时打着飞机的每一下都是飞机上看得见、机枪转得过去的；HUD 只标看得见的', () => {
+  for (const tower of ['A', 'T1']) {
+    const { G, m, sw, step, frame, aa } = fakeRide(tower), P = createMapPhysics(nav);
+    const hits = [], bad = [];
+    G.events.on('enemy:fire', (e) => {
+      const z = e.enemy; if (!z?.zombie) return;
+      const at = e.from || new THREE.Vector3(z.pos.x, z.pos.y + 1.15 * (z.scale || 1), z.pos.z);
+      hits.push(e); if (!(P.sightAcross(frame.eye, at) && inGunArc(aimAngles(frame.q, frame.eye, at, aa)))) bad.push([e.type, z.sweep, at.toArray().map((v) => +v.toFixed(1))]);
+    });
+    let samples = 0, off = 0, maxOff = 0, marks = 0, markBad = 0;
+    step(80, (t) => {
+      for (const z of sw.list) if (z.alive && z.active && z.post) maxOff = Math.max(maxOff, z.offT || 0);
+      if (Math.round(t * 30) % 30) return;
+      for (const z of sw.list) {
+        if (!z.alive || !z.active || !z.post) continue;
+        const st = landAt(nav, z.pos.x, z.pos.z, z.pos.y + 0.6); samples++; if (!st || st.slope || st.floor !== z.anchor) off++;
+      }
+      const aim = m.extraction.ride.aimTargets(); marks += aim.length; markBad += aim.filter((z) => !z.exposeOn || !z.alive).length;
+      assert.ok(aim.length <= m.extraction.ride.targets().length);
+    });
+    assert.ok(samples > 1000 && off <= samples * 0.01, `${tower} 离开自己那一层 ${off} / ${samples}`);
+    assert.ok(maxOff <= SIEGE.sweep.post.off + 0.1, `${tower} 最久离开 ${maxOff.toFixed(2)} 秒`);
+    assert.ok(hits.length >= 10, `${tower} 八十秒打着飞机 ${hits.length} 下`);
+    assert.deepEqual(bad, [], `${tower} 看不见 / 射界外的打着了飞机`);
+    assert.ok(marks > 100 && markBad === 0, `${tower} HUD 标记 ${marks}`);
+    assert.ok(sw.list.filter((z) => z.sweep === 'roof').every((z) => !z.alive || z.anchor !== TOWERS[tower].roof), `${tower} 降到低空以后屋顶上剩下的都下到楼下了`);
+  }
+});
+
+test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那阵也出得来（尸体占着池子先收掉）；楼梯口那一份从门外排着队出来，全在露天的屋面上；点信号弹时楼里落在下面的收掉；没出来就不喊「第几波」', () => {
+  for (const tower of ['A', 'T1']) {
+    const { G, siege, zombies, enemies, player, begin, cut, run, msgs } = sworld({ tower });
+    const m = begin(), T = TOWERS[tower], roof = elev(T.roof), f = m.plan.flare;
+    cut(m.plan.stages.length - 1); run(0.1); for (const z of zombies.alive()) z._deactivate();
+    Object.assign(siege.state, { genT: 0, holdT: 0, bruteT: -1 }); // 一口气做完前面几步：商场段发电机、一层守点的倒计时别带到楼顶上来
+    // 楼里还有一群追上来的（落在十五层）
+    const deep = []; for (let k = 0; k < 40 && deep.length < 10; k++) { const q = G.physics.nav.randomPoint({ x: T.pad.x, y: elev(`${T.id}-15F`), z: T.pad.z }, 14); if (Math.abs(q.y - elev(`${T.id}-15F`)) < 0.3) { const z = enemies.spawn('zombie', q, { hunt: true, state: 'alert' }); if (z) deep.push(z); } }
+    assert.ok(deep.length >= 5);
+    const px = f.x + (m.plan.pad.x - f.x) * 0.15, pz = f.z + (m.plan.pad.z - f.z) * 0.15; player.pos.set(px, roof, pz);
+    const born = [], spawn0 = enemies.spawn.bind(enemies), S = siege.state;
+    enemies.spawn = (type, pos, opts) => { const z = spawn0(type, pos, opts); if (z) born.push({ t: S.hold, x: pos.x, y: pos.y, z: pos.z }); return z; };
+    cut(1); run(1 / 30); assert.ok(S.hold >= 0, '点着了');
+    assert.ok(deep.every((z) => !z.active), '楼里落在下面的收回池子');
+    const boxes = siege.housings(), eye = new THREE.Vector3(), chest = new THREE.Vector3(); let k = 0;
+    run(SIEGE.hold - 0.5, () => {
+      player.pos.set(px, roof, pz); eye.set(px, roof + 1.6, pz);
+      if (++k % 21) return; // 0.7 秒打死一只看得见的（最近的）
+      let best = null, bd = Infinity;
+      for (const z of zombies.alive()) { if (Math.abs(z.pos.y - roof) > 1) continue; chest.set(z.pos.x, z.pos.y + 1.2, z.pos.z); const d = eye.distanceTo(chest); if (d < bd && G.physics.lineOfSight(eye, chest)) { bd = d; best = z; } }
+      best?.damage(9999, null, null, 'body');
+    });
+    const inWin = (a, b) => born.filter((q) => q.t >= a && q.t < b).length;
+    SIEGE.waves.slice(0, 5).forEach((w, i) => assert.ok(inWin(w, w + 7) >= SIEGE.waveSize[0], `${tower} 第 ${i + 1} 波出来 ${inWin(w, w + 7)} 只`));
+    const surge = inWin(SIEGE.hold - SIEGE.surge.last, SIEGE.hold);
+    assert.ok(surge >= SIEGE.surge.each * 4, `${tower} 最后那阵出来 ${surge} 只`);
+    for (const q of born) {
+      const st = landAt(nav, q.x, q.z, q.y + 0.6);
+      assert.ok(st && st.floor === T.roof && Math.abs(q.y - roof) < 0.3, `${tower} 守屋顶时出来的都在屋面上`);
+      assert.ok(!boxes.some((b) => inBox(b, q)), `${tower} (${q.x.toFixed(1)}, ${q.z.toFixed(1)}) 不在楼梯间里`);
+    }
+    // 楼梯口那一份是一只只出来的：同一帧最多几只（翻墙的那几只是一起上来的）
+    const byT = {}; for (const q of born) { const key = Math.round(q.t * 30); byT[key] = (byT[key] || 0) + 1; }
+    assert.ok(Math.max(...Object.values(byT)) <= 8, `${tower} 同一帧出来 ${Math.max(...Object.values(byT))} 只`);
+    // 喊「第几波」要真出来了才喊（最后一两波池子里全是活着的、一只都出不来就不喊）
+    for (let i = 1; i <= 5; i++) assert.ok(msgs.some((t) => String(t).startsWith(`第 ${i} 波`)), `${tower} 喊了第 ${i} 波`);
+    SIEGE.waves.forEach((w, i) => { if (msgs.some((t) => String(t).startsWith(`第 ${i + 1} 波`))) assert.ok(born.some((q) => q.t >= w), `${tower} 第 ${i + 1} 波喊了就有出来的`); });
+    assert.ok(siege.onRoof(player.pos), '人在露天的屋面上（雾退远）');
+  }
 });
