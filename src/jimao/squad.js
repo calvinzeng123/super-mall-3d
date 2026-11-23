@@ -47,7 +47,7 @@ export const SQUAD = Object.freeze({
       gun: Object.freeze({ name: '', interval: 1, burst: [0, 0], rest: [1, 1], damage: 0, hit: 0, falloff: 0, head: 0, range: 0 }),
       look: Object.freeze({ face: 'zhe', skin: 0xc59a7a, lip: 0x9a6052, hair: 0x241a12, iris: 0x2a1c12, shirt: 0xd9d4c8, pants: 0x2e3036, vest: 0x8a4a2c, strap: 0x6b3a22, pouch: 0x7a4428, helmet: 0x241a12, mask: 0x2a2a2e, glove: 0xc59a7a, boot: 0x3a3632, pad: 0x2e3036,
         tape: 0xd9d4c8, bind: 0x6b3a22, nameTape: 0x8a4a2c, patch: 0x8a4a2c, sleeve: 'short', pads: false, heavy: false, who: 2, grime: 0.7,
-        blood: Object.freeze([Object.freeze({ c: [0.1, 1.2, 0.15], r: 0.04, k: 0.8, e: 2.4, a: 0.1 })]) }) }),
+        blood: Object.freeze([]) }) }), // 血迹的格子（12 个）已经被两个队友占满了：小许身上不加
   ]),
 });
 
