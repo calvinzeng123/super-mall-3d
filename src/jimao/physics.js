@@ -34,7 +34,7 @@ export function createMapPhysics(nav) {
     return s ? nav.floors.get(s.floor) : null;
   }
 
-  const ray = { o: new THREE.Vector3(), d: new THREE.Vector3() };
+  const ray = { o: new THREE.Vector3(), d: new THREE.Vector3() }, across = { o: new THREE.Vector3(), d: new THREE.Vector3(), maxH: 0 };
   /** 射线和二维线段（竖直的面，底 y0、高 h）求交，返回距离或 Infinity */
   function hitSegment(ax, az, bx, bz, y0, h, maxDist, out) {
     const { o, d } = ray, ex = bx - ax, ez = bz - az, den = d.x * ez - d.z * ex;
@@ -74,6 +74,15 @@ export function createMapPhysics(nav) {
       if (Math.min(tx, tz) > Math.min(maxDist, out.dist)) break;
       if (tx < tz) { gx += sx; tx += dx; } else { gz += sz; tz += dz; }
     }
+  }
+  /** (x, z) 这一点、高度 lo–hi 之间有没有实心楼板 */
+  function slabBetween(byY, lo, hi, x, z) {
+    for (let i = byY.first(hi); i < byY.floors.length; i++) {
+      const e = byY.floors[i];
+      if (e.F.y < lo) break;
+      if (x >= e.x0 && x <= e.x1 && z >= e.z0 && z <= e.z1 && supported(e.F, x, z)) return true;
+    }
+    return false;
   }
   /** 射线（水平投影）在 limit 距离内碰不到这个包围盒 */
   function missesBox(b, limit) {
@@ -154,6 +163,77 @@ export function createMapPhysics(nav) {
       const d = new THREE.Vector3().subVectors(b, a), len = d.length();
       if (len < 1e-4) return true;
       return !physics.raycast(a, d.multiplyScalar(1 / len), len - 0.05);
+    },
+    /**
+     * 跨楼层的射线（从直升机上往楼里、楼顶看）。raycast 只查起点那一层的墙——从天上打出去，起点那一层是「街上」或商场屋面，
+     * 塔楼的外墙、楼顶楼梯间的墙一概不查，只有楼板挡（用户：楼里的丧尸看不见也打不着，它们却一直在打飞机）。
+     * 这里查线段经过的每一层：墙高那一段和线段有交叠、包围盒和线段的水平包围盒有交叠的楼面（一千多层，不先筛掉太慢），
+     * 只走线段落在这一层墙高范围里的那一截；楼板、方盒照旧。返回 { dist, point } 或 null。不改 raycast（子弹、丧尸的视线照旧）
+     */
+    castAcross(origin, dir, maxDist = 500) {
+      const byY = floorsByHeight(nav);
+      if (!byY) return physics.raycast(origin, dir, maxDist); // 没建索引（小导航）：退回只查一层
+      const d = across.d.copy(dir).normalize(), o = across.o.copy(origin);
+      const out = { dist: Infinity, normal: new THREE.Vector3(), surface: 'concrete', box: null }, sub = { dist: Infinity, normal: out.normal, surface: 'concrete' };
+      const y1 = o.y + d.y * maxDist, lo = Math.min(o.y, y1), hi = Math.max(o.y, y1);
+      const ex = o.x + d.x * maxDist, ez = o.z + d.z * maxDist, bx0 = Math.min(o.x, ex) - 0.5, bx1 = Math.max(o.x, ex) + 0.5, bz0 = Math.min(o.z, ez) - 0.5, bz1 = Math.max(o.z, ez) + 0.5;
+      if (!(across.maxH > 0)) { across.maxH = 0; for (const F of nav.floors.values()) across.maxH = Math.max(across.maxH, floorHeight(F)); }
+      for (let i = byY.first(hi); i < byY.floors.length; i++) {
+        const e = byY.floors[i], F = e.F;
+        if (F.y < lo - across.maxH - 0.1) break;
+        if (e.x1 < bx0 || e.x0 > bx1 || e.z1 < bz0 || e.z0 > bz1) continue;
+        const h = floorHeight(F);
+        let ta = 0, tb = Math.min(maxDist, out.dist);
+        if (Math.abs(d.y) > 1e-9) { const t0 = (F.y - 0.02 - o.y) / d.y, t1 = (F.y + h - o.y) / d.y; ta = Math.max(0, Math.min(t0, t1)); tb = Math.min(tb, Math.max(t0, t1)); }
+        else if (o.y < F.y - 0.02 || o.y > F.y + h) continue;
+        if (ta >= tb) continue;
+        // 这一截从 ta 起：射线起点挪过去再查（hitSegment 按射线上的高度判断墙高，挪了起点照样对）。
+        // 墙高是按这一层的层高估的，夹层、顶层的墙会戳穿上面的楼板（公寓 20 层的夹层墙顶比屋面还高一截）：
+        // 打在楼板以上的那一截不算，从那儿往后接着查
+        for (let from = ta, guard = 0; guard < 6 && from < tb; guard++) {
+          ray.o.copy(o).addScaledVector(d, from); ray.d.copy(d); sub.dist = Infinity;
+          const len = tb - from;
+          wallsAlongRay(F, h, len, sub);
+          for (const ob of F.obstacles) {
+            const p = ob.outer, b = ob.bb;
+            if (!p || !b || missesBox(b, Math.min(len, sub.dist))) continue;
+            for (let k = 0; k < p.length; k++) { const a = p[k], c = p[(k + 1) % p.length]; hitSegment(a[0], a[1], c[0], c[1], F.y, OBSTACLE_HEIGHT, len, sub); }
+          }
+          if (!(sub.dist < Infinity)) break;
+          const t = from + sub.dist, y = o.y + d.y * t;
+          if (y - F.y > 2.4 && slabBetween(byY, F.y + 0.5, y, o.x + d.x * t, o.z + d.z * t)) { from = t + 0.02; continue; }
+          if (t < out.dist) out.dist = t;
+          break;
+        }
+      }
+      // 楼板：线段穿过某层楼面高度处、那里是实心楼板就挡（和 raycast 一样）
+      if (Math.abs(d.y) > 1e-6) {
+        const yEnd = o.y + d.y * Math.min(maxDist, out.dist), h2 = Math.max(o.y, yEnd), l2 = Math.min(o.y, yEnd);
+        for (let i = byY.first(h2); i < byY.floors.length; i++) {
+          const e = byY.floors[i], G = e.F;
+          if (G.y < l2 - 1e-6) break;
+          const t = (G.y - o.y) / d.y;
+          if (t <= 1e-4 || t >= out.dist || t > maxDist) continue;
+          const x = o.x + d.x * t, z = o.z + d.z * t;
+          if (x < e.x0 || x > e.x1 || z < e.z0 || z > e.z1 || !supported(G, x, z)) continue;
+          out.dist = t;
+        }
+      }
+      for (const b of physics.boxes) {
+        const p = new THREE.Ray(o, d).intersectBox(new THREE.Box3(b.min, b.max), new THREE.Vector3());
+        if (!p) continue;
+        const t = p.distanceTo(o);
+        if (t < out.dist && t <= maxDist) { out.dist = t; out.box = b; }
+      }
+      if (!Number.isFinite(out.dist)) return null;
+      out.point = o.clone().addScaledVector(d, out.dist);
+      return out;
+    },
+    /** a、b 之间跨楼层看得见（castAcross 没挡住） */
+    sightAcross(a, b) {
+      const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+      if (len < 1e-4) return true;
+      return !physics.castAcross(a, d.multiplyScalar(1 / len), len - 0.05);
     },
     groundHeight(x, z, yMax = 50) {
       const s = landAt(nav, x, z, yMax);

@@ -13,6 +13,20 @@ export const DOOR_GUN = Object.freeze({ rate: 20, damage: 55, range: 450, spread
   // 辅助瞄准：准星 9° 以内的敌人会把视角往它身上拉（开火时拉得更快，顺带抵消直升机在动）；4° 以内子弹直接朝它飞
   assistCone: 0.157, assistPull: 2.6, assistPullIdle: 1.1, bulletCone: 0.07 });
 
+const _iq = new THREE.Quaternion(), _ad = new THREE.Vector3();
+/** 从 from 看 point，换到枪架坐标里（q：枪架的世界朝向，枪口默认朝枪架 +z）：{ yaw 左右, pitch 往下为正, dist }，和 update 里转枪的算法一样 */
+export function aimAngles(q, from, point, out = { yaw: 0, pitch: 0, dist: 0 }) {
+  _ad.set(point.x - from.x, point.y - from.y, point.z - from.z); out.dist = _ad.length();
+  if (out.dist < 1e-6) { out.yaw = 0; out.pitch = 0; return out; }
+  _ad.multiplyScalar(1 / out.dist).applyQuaternion(_iq.copy(q).invert());
+  out.yaw = Math.atan2(_ad.x, _ad.z); out.pitch = -Math.asin(Math.max(-1, Math.min(1, _ad.y)));
+  return out;
+}
+/** 这个角度在射界里（左右 ±yaw、上 pitchUp 下 pitchDown，边上留 margin 弧度）、150 米以内（辅助瞄准也只管这么远） */
+export function inGunArc(a, margin = 0.03, range = 150) {
+  return a.dist <= range && Math.abs(a.yaw) <= DOOR_GUN.yaw - margin && a.pitch >= -DOOR_GUN.pitchUp + margin && a.pitch <= DOOR_GUN.pitchDown - margin;
+}
+
 function material(G, name, fallback) {
   try { const m = G?.mats?.get?.(name, { triplanar: true }); if (m) return m; } catch { /* 没有材质库（测试）就用后备 */ }
   return new THREE.MeshStandardMaterial(fallback);
@@ -174,8 +188,15 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
     P.yaw += dy; P.pitch += dp;
   }
 
+  let cam = null;
+  const mq = new THREE.Quaternion(), ma = { yaw: 0, pitch: 0, dist: 0 }, me = new THREE.Vector3();
+  /** 人眼在哪（最近一次 update 给的镜头；还没给过就用枪架） */
+  function eye(out = new THREE.Vector3()) { return cam ? cam.getWorldPosition(out) : mount.getWorldPosition(out); }
+  /** 这一点枪转得过去（在射界里）：HUD 标记、辅助瞄准、丧尸能不能打飞机都按这一条（siege.js 的 exposed） */
+  function canAim(point, from = null) { mount.getWorldQuaternion(mq); return inGunArc(aimAngles(mq, from || eye(me), point, ma)); }
+
   function update(dt, { active: on = false, firing = false, camera = null, targets = null } = {}) {
-    active = on; hud.show(on);
+    active = on; hud.show(on); if (camera) cam = camera;
     lock = on && camera ? pickTarget(camera, targets) : null;
     if (lock) pull(camera, lock.point, (firing ? DOOR_GUN.assistPull : DOOR_GUN.assistPullIdle) * (1 - 0.6 * lock.angle / DOOR_GUN.assistCone), dt);
     heat = Math.max(0, heat - DOOR_GUN.cool * dt * (firing && !overheated ? 0.15 : 1));
@@ -210,9 +231,12 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
     const up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(dir, up).normalize(), u2 = new THREE.Vector3().crossVectors(right, dir);
     dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(u2, Math.sin(a) * r).normalize();
     let hit = null;
-    try { hit = G.combat?.playerShot?.(from.clone(), dir.clone(), { damage: DOOR_GUN.damage, range: DOOR_GUN.range, impulse: 2 }); } catch { /* 打空 */ }
+    // 子弹穿不过楼：原游戏的射线只查起点那一层的墙（从天上打出去就只有楼板挡），楼的外墙、楼顶楼梯间挡不住，
+    // 楼里看不见的丧尸照样打得中。射程先按跨楼层的射线截到第一堵墙 / 楼板
+    const wall = G.physics?.castAcross?.(from, dir, DOOR_GUN.range) || null;
+    try { hit = G.combat?.playerShot?.(from.clone(), dir.clone(), { damage: DOOR_GUN.damage, range: wall ? wall.dist : DOOR_GUN.range, impulse: 2 }); } catch { /* 打空 */ }
     gun.muzzle.getWorldPosition(mz);
-    to.copy(hit?.point || from.clone().addScaledVector(dir, 320));
+    to.copy(hit?.point || wall?.point || from.clone().addScaledVector(dir, 320));
     G.fx?.tracer?.(mz.clone(), to.clone(), { color: 0xffb35a, speed: 720, width: 0.055 });
     G.fx?.muzzleFlash?.(mz.clone(), dir.clone(), { scale: flash });
     G.render?.lightPool?.flash?.(mz.clone(), 0xffb060, 30, 10, 0.05);
@@ -223,7 +247,7 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
     if (heat >= 1) { overheated = true; G.hud?.message?.('机枪过热！松开扳机冷却', 1.6); }
   }
 
-  return { gun, update, get heat() { return heat; }, get overheated() { return overheated; }, get active() { return active; },
+  return { gun, update, canAim, eye, get heat() { return heat; }, get overheated() { return overheated; }, get active() { return active; },
     reset() { heat = 0; overheated = false; spin = 0; cooldown = 0; gun.mats.hot.emissiveIntensity = 0; hud.show(false); },
     dispose() { gun.dispose(); hud.remove(); } };
 }

@@ -38,7 +38,7 @@ export const KINDS = Object.freeze({
   walker: Object.freeze({ name: '行尸', weight: 0.68 }),
   runner: Object.freeze({ name: '奔尸', weight: 0.16, speed: 4.7, hp: 36, bite: 10, windup: 0.26, cooldown: 0.7, scale: 0.96, lean: 0.4 }),
   bloater: Object.freeze({ name: '胖尸', weight: 0.09, speed: 0.95, hp: 190, bite: 22, windup: 0.6, scale: 1.2, girth: 1.45, burst: Object.freeze({ radius: 3.6, damage: 34, push: 9 }) }),
-  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 3, heliEvery: 8, heliFirst: 5 }), scale: 1.02 }),
+  screamer: Object.freeze({ name: '尖叫者', weight: 0.07, speed: 1.7, hp: 48, bite: 0, keep: 8.5, scream: Object.freeze({ every: 6.5, first: 1.6, range: 26, heli: 3, heliEvery: 8, heliFirst: 5, heliRange: 85 }), scale: 1.02 }),
   // 下面三种不参加平时的随机抽取（weight 0），由节奏器（pacing.js）点名放：
   // 扑袭者：远远蹲下、一个飞扑把人按住撕咬——被按住走不了，打死它或它咬够了才松开；飞扑能侧身躲开
   lunger: Object.freeze({ name: '扑袭者', weight: 0, speed: 5, hp: 70, bite: 7, windup: 0.22, cooldown: 0.55, scale: 0.98, lean: 0.5, look: 'lunger',
@@ -168,6 +168,9 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         m.pos.copy(at);
         const g = G.physics.groundHeight?.(at.x, at.z, at.y + 1);
         if (g > -40 && Math.abs(g - at.y) < 1.2) m.pos.y = g;
+        // post：守在这一点（直升机清扫时的丧尸，见 posted）；anchor：只在这一层走（楼面 id），离开了 siege.js 收回重放
+        m.post = opts.post ? (m._post ||= new THREE.Vector3()).copy(opts.post) : null; m.anchor = opts.post ? opts.anchor ?? null : null; m.anchorY = m.pos.y; m.lineT = 0; m.lineOk = false;
+        G.physics.forget?.(m.pos); // 池子里的位置向量是复用的：上一回的导航状态（别的楼层）别带过来
         m.home.copy(m.pos); m.yaw = opts.yaw ?? rng() * Math.PI * 2; m.speed = 0; vel.set(0, 0, 0);
         m.zs = 'idle'; m.zsT = 0; m.mode = 'patrol'; m.modeSeen = 'patrol'; m.los = false; m.cool = 0.3 + rng() * 0.5; m.senseT = rng() * 0.3; m.loseT = 0;
         m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.hasGoal = false; m.planT = 0; m.stuckT = 0; m.wanderT = 1 + rng() * 5;
@@ -202,6 +205,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
     };
 
     function notice(at, hunt) {
+      if (m.post) return; // 守点的不追人：人坐在飞机上，追过去就是往楼里钻（被打、听见响动都一样）
       if (at) m.lastKnown.copy(at);
       if (hunt) m.hunt = true;
       if (m.zs === 'idle') { m.zs = 'chase'; m.zsT = 0; m.planT = 0; m.loseT = 0; m.mode = 'engage'; }
@@ -218,7 +222,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       m.pathJob = req(m.pos, goal, (path) => {
         m.pathJob = null;
         if (!m.active || !m.alive) return;
-        m.path = path && path.length ? path : null; m.wp = 0;
+        m.path = path && path.length && (!m.post || path.every((p) => !p.via && Math.abs(p.y - m.anchorY) < 0.6)) ? path : null; m.wp = 0; // 守点的：路线离开这一层（楼梯、电梯）就不要
         if (m.path) { let best = Infinity; for (let i = 0; i < Math.min(m.path.length, 6); i++) { const d = Math.hypot(m.path[i].x - m.pos.x, m.path[i].z - m.pos.z) + Math.abs(m.path[i].y - m.pos.y) * 2; if (d < best) { best = d; m.wp = i; } } }
       });
     }
@@ -258,20 +262,21 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         if (m.zs === 'idle' && alivePl && !m.passive && Math.abs(dy) < 3.2 && (dist < ZOMBIE.senseBlind || (dist < ZOMBIE.sense && m.los))) notice(pl.pos, false);
       }
       const speed = C.speed * (m.stagger > 0 ? 0.35 : 1);
-      // 直升机在飞：尖叫者不管人在哪一层，站住冲着飞机叫（120 米内），每叫一声掉机体耐久
+      // 直升机在飞：尖叫者不管人在哪一层，站住冲着飞机叫（heliRange 米内、飞机上看得见它才叫），每叫一声掉机体耐久
       const heliAt = C.scream && G.missions?.rideKind === 'helicopter' ? G.missions.vehicleCenter?.() : null;
       if (m.lureT > 0 && (m.lureT -= dt) <= 0 && m.zs === 'idle') { m.home.copy(m.pos); m.hasGoal = false; }
-      if (m.lureT > 0 && (m.zs === 'idle' || m.zs === 'chase')) {
+      if (m.post) faceYaw = posted(dt, speed, heliAt);
+      else if (m.lureT > 0 && (m.zs === 'idle' || m.zs === 'chase')) {
         // 被诱饵弹引着：凑过去围着它抓挠，不看人
         m.mode = 'engage';
         const lx = m.lure.x - m.pos.x, lz = m.lure.z - m.pos.z, ld = Math.hypot(lx, lz);
         if (ld > 1.2) steer(dt, m.lure, speed, ld < ZOMBIE.direct && Math.abs(m.lure.y - m.pos.y) < 1.2);
         else { faceYaw = Math.atan2(lx, lz); m.lunge = Math.max(0, Math.sin(m.phase * 3.2)) * 0.6; }
         m.lastKnown.copy(m.lure); m.loseT = 0;
-      } else if (heliAt && Math.hypot(heliAt.x - m.pos.x, heliAt.y - m.pos.y, heliAt.z - m.pos.z) < 120) {
+      } else if (heliAt && Math.hypot(heliAt.x - m.pos.x, heliAt.y - m.pos.y, heliAt.z - m.pos.z) < C.scream.heliRange && G.missions?.rideCanAttack?.(m) !== false) {
         m.mode = 'engage'; faceYaw = Math.atan2(heliAt.x - m.pos.x, heliAt.z - m.pos.z);
         if (m.zs === 'scream') { if ((m.zsT += dt) > 1.1) m.zs = 'chase'; }
-        else if ((m.screamT -= dt) <= 0) { m.screamT = C.scream.heliEvery * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0; scream(heliAt); }
+        else if ((m.screamT -= dt) <= 0) { m.screamT = C.scream.heliEvery * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0; if (G.missions?.rideCanAttack?.(m, true) !== false) scream(heliAt); }
       } else if (m.zs === 'idle') {
         m.mode = 'patrol';
         // 游荡：隔一阵挪两步
@@ -381,6 +386,39 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       pose(dt);
     }
 
+    /**
+     * 守点（直升机清扫时屋顶、楼下的丧尸）：不管人在哪（人坐在飞机上，追过去就钻进楼里了），走到 post 那一点，到了就在旁边一两米里晃、
+     * 冲着飞机抡胳膊。只在 anchor 那一层走：直线走得过去就直着走，不然寻路、路线离开这一层就不要，原地等 siege.js 换一个点。
+     * 尖叫者：飞机在 heliRange 米内、飞机上看得见它（G.missions.rideCanAttack）才倒计时、冲飞机叫。返回该朝哪（null 跟着走的方向）
+     */
+    function posted(dt, speed, heliAt) {
+      m.mode = 'engage';
+      const face = heliAt ? Math.atan2(heliAt.x - m.pos.x, heliAt.z - m.pos.z) : null;
+      if (m.zs === 'scream') { if ((m.zsT += dt) > 1.1) m.zs = 'chase'; return face; } // 叫的时候站住
+      if (m.zs !== 'chase') m.zs = 'chase';
+      if (C.scream && heliAt && Math.hypot(heliAt.x - m.pos.x, heliAt.y - m.pos.y, heliAt.z - m.pos.z) < C.scream.heliRange && G.missions?.rideCanAttack?.(m) !== false && (m.screamT -= dt) <= 0) {
+        m.screamT = C.scream.heliEvery * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0;
+        if (G.missions?.rideCanAttack?.(m, true) !== false) scream(heliAt);
+        return face;
+      }
+      // 到了：隔几秒在 post 周围 1.8 米里挑一点慢慢挪过去（同一层、直线走得过去）
+      const pd = Math.hypot(m.post.x - m.pos.x, m.post.z - m.pos.z);
+      if (pd < 0.8 && !m.hasGoal && (m.wanderT -= dt) <= 0) {
+        m.wanderT = 2.5 + rng() * 3.5;
+        const q = G.physics.nav?.randomPoint?.(m.post, 1.8);
+        if (q && Math.abs(q.y - m.anchorY) < 0.5 && G.physics.nav?.clearLine?.(m.pos, q) !== false) { m.goal.copy(q); m.hasGoal = true; }
+      }
+      const tgt = m.hasGoal && pd < 2.6 ? m.goal : m.post, td = Math.hypot(tgt.x - m.pos.x, tgt.z - m.pos.z);
+      if (td < 0.45) { m.hasGoal = false; m.path = null; m.lunge = Math.max(0, Math.sin(m.phase * 2.6)) * 0.55; return face; }
+      if (tgt === m.post) m.hasGoal = false;
+      if ((m.lineT -= dt) <= 0) { m.lineT = 0.5 + rng() * 0.2; m.lineOk = G.physics.nav?.clearLine ? !!G.physics.nav.clearLine(m.pos, tgt) : true; }
+      const v = tgt === m.post ? speed : C.speed * 0.45;
+      if (m.lineOk) steer(dt, tgt, v, true);
+      else if (m.path) steer(dt, tgt, v, false);
+      else if ((m.planT -= dt) <= 0) plan(tgt);
+      return td < 1.5 ? face : null;
+    }
+
     function scream(at) {
       G.events.emit('zombie:scream', { enemy: m, pos: m.pos, target: at });
       G.events.emit('enemy:telegraph', { enemy: m, pos: m.pos, type: 'soldier', scream: true });
@@ -456,6 +494,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       m.stagger = Math.max(m.stagger, 0.9); m.cool = Math.max(m.cool, 0.9); m.pushT = 0.22; m.pushX = dx * power; m.pushZ = dz * power;
       return true;
     };
+    /** 守点的换一个点（siege.js 跟着直升机挪）：之前的路线、直线判断作废 */
+    m.repost = (p) => { if (!m.post) return false; m.post.copy(p); m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.planT = 0; m.lineT = 0; m.hasGoal = false; return true; };
     /** 被响动引过去（诱饵弹）：seconds 秒内不管人，朝 at 凑；巨尸不吃这一套 */
     m.distract = (at, seconds = 1.2) => {
       if (!m.alive || !m.active || m.fixed || C.sturdy) return false;
