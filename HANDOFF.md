@@ -1,12 +1,12 @@
 # 交接文档 · 云澜汇园区 3D
 
-> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `e89e7da7`，提交 `b6b8e6c` 的代码重新打包，109 文件 65.33 MiB，入口 `main.DRBWHKPI.js`）。这一版包含丧尸围城的商场段重做、结尾三处改动（楼顶尸潮、沿楼绕飞的清扫航线、可选的炸楼结局）。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
+> 最后更新：2026-11-23。**线上改到 Cloudflare Pages：https://yunlan-mall.pages.dev**（项目 `yunlan-mall`，部署 `e0468083`，提交 `8435246` 的代码重新打包，109 文件 65.33 MiB，入口 `main.OK7D5ZS4.js`）。这一版包含丧尸围城的商场段重做、结尾三处改动（楼顶尸潮、沿楼绕飞的清扫航线、可选的炸楼结局）。首页和入口 JS 的 SHA-256 与本地构建一致，`/assets/*` 缓存头生效，浏览器打开首页无报错（只看了封面，没进游戏实走）。Netlify 旧站 `yunlan-mall-calvin` 停在部署 `6b004b871553778c6cc14eb6`（额度用完），不再更新。以后发布照下面「发布到 Cloudflare Pages」一节：令牌已在环境变量 `CLOUDFLARE_API_TOKEN` 里，命令从仓库外的目录运行，用 `npx -y wrangler@3 pages deploy <仓库>/dist/netlify --project-name yunlan-mall --branch main --commit-dirty=true`，带 `CLOUDFLARE_ACCOUNT_ID=9ddda46aa014ee9b580fc109f5713509`；新环境先 `npm ci`。先读最新交接，再按需查历史规格。项目介绍见 [README.md](README.md)。
 
 ## 2026-11-15 最新交接（十一）：漫游「显示资源被回收」修复 + 零点突围换园区地图、随机任务、载具撤离
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
-### 炸楼改成在直升机上看（2026-11-23，**没有部署**）
+### 炸楼改成在直升机上看（2026-11-23，已部署 `e0468083`）
 用户要的：在飞机上看崩塌，能自己转头看，不要固定画面。
 - 选了炸楼以后不再切机外镜头：航线改飞「观看圈」（`siegeFlight().setWatch()`）——从当时的位置先 4 秒拉高到 135 米，再 12 秒飞到绕整片楼（圈心 −150, −150）半径 260 米的大圈上，慢慢转，左舷（人坐的那一侧）一直朝着圈心；4.5 秒后投弹，24 秒后照常离开、最后几秒切默认的机外镜头（楼都垮了，不再架在楼顶边上）。参数在 `DEMOLISH.watch`。
 - 视角：人坐在舱门口可以随便转；不动鼠标 / 手指 1.5 秒后，视角慢慢转回正在垮的楼（`siege.js` 的 `watchLook()`）。
