@@ -31,7 +31,7 @@ function capsule(a, b, r0, r1, hex) {
 export const ZOMBIE = Object.freeze({
   hp: 60, speed: 1.3, bite: 14, reach: 1.3, windup: 0.42, cooldown: 0.95,
   sense: 15, senseBlind: 5.5, hear: 36, lose: 30, loseSeconds: 9,
-  accel: 6, turnRate: 3.4, corpseSeconds: 6, pool: 34, replan: [1.4, 2.6], direct: 7,
+  accel: 6, turnRate: 3.4, corpseSeconds: 6, pool: 48, replan: [1.4, 2.6], direct: 7,
   farUpdate: 34, // 离人这么远以外的，隔帧才动一次（省 CPU）
 });
 export const KINDS = Object.freeze({

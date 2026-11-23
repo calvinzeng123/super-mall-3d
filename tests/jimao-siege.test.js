@@ -8,13 +8,14 @@ import { findPath } from '../src/fps/pathfinding.js';
 import { pointInPoly } from '../src/layout/geom.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
-import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots } from '../src/jimao/siege.js';
+import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, flightBox, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots } from '../src/jimao/siege.js';
 import { createSupplies, SUPPLY, healChoice, MEDIC_CSS } from '../src/jimao/supplies.js';
 import { createSquad, SQUAD, pickTarget, shotHits, slotOf, SQUAD_CSS } from '../src/jimao/squad.js';
 import { createHealthBars, BARS, barWidth, pickBars, BARS_CSS } from '../src/jimao/healthbars.js';
 import { doorOutside } from '../src/jimao/guide.js';
 import { PACING, createPacing } from '../src/jimao/pacing.js';
 import { MALL, inMallZone } from '../src/jimao/siege-mall.js';
+import { DEMOLISH, collapseAt, createDemolition } from '../src/jimao/siege-demolish.js';
 import { SPECIALS } from '../src/jimao/zombie.js';
 import { ZOMBIE, KINDS, pickKind, zombieParts, addZombies } from '../src/jimao/zombie.js';
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
@@ -85,9 +86,10 @@ test('清扫航线：从停机位垂直起飞，绕楼顶、边绕边降、再�
     if (p.phase !== 'lift') for (const b of tops) if (pointInPoly([p.x, p.z], b.outline)) assert.ok(p.y > b.top + 8, `t=${t.toFixed(0)} 在 ${b.id} 上空只高出 ${(p.y - b.top).toFixed(0)} 米`);
     if (p.phase === 'windows' || p.phase === 'ground') {
       // 左舷（机身 +x）朝着公寓：机头方向 f = (sin yaw, cos yaw)，左舷 = (cos yaw, −sin yaw)
-      const lx = Math.cos(p.yaw), lz = -Math.sin(p.yaw), cx = f.center.x - p.x, cz = f.center.z - p.z, d = Math.hypot(cx, cz);
+      // 航线是楼的外轮廓往外推 off 米的圆角矩形：离楼最近的那一点正好 off 米远，左舷正对着它
+      const lx = Math.cos(p.yaw), lz = -Math.sin(p.yaw), B = f.box, qx = Math.max(B.x0, Math.min(B.x1, p.x)), qz = Math.max(B.z0, Math.min(B.z1, p.z)), cx = qx - p.x, cz = qz - p.z, d = Math.hypot(cx, cz);
       assert.ok((lx * cx + lz * cz) / d > 0.95, '左舷朝楼');
-      assert.ok(Math.abs(d - f.R) < 0.5);
+      assert.ok(Math.abs(d - f.off) < 0.5, `离楼 ${d.toFixed(1)} 米`);
     }
   }
   assert.deepEqual(phases, ['lift', 'roof', 'windows', 'ground']);
@@ -316,13 +318,17 @@ test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天�
   t = m.extraction.flight.times.ground; tick(8); assert.equal(sw.made.ground, SIEGE.sweep.ground);
   assert.equal(sw.list.filter((z) => z.kind === 'screamer').length, SIEGE.sweep.screamers, '尖叫者一共三只');
   assert.equal(m.extraction.ride.targets().length, sw.list.filter((z) => z.alive).length);
-  assert.match(m.text({ allCut: true }, { kills: 0 }), /清扫 · 屋顶 0\/8 · 阳台 0\/6 · 楼下 0\/14/);
+  assert.match(m.text({ allCut: true }, { kills: 0 }), new RegExp(`清扫 · 屋顶 0/${SIEGE.sweep.roof} · 阳台 0/${SIEGE.sweep.window} · 楼下 0/${SIEGE.sweep.ground}`));
   // 打一只阳台上的：玻璃先碎
   const bz = sw.list.find((z) => z.sweep === 'window'); bz.damage(10, null, null, 'body');
   assert.equal(m.extraction.flight.leaving, false);
   for (const z of sw.list) if (z.alive) z.damage(9999, null, null, 'body');
-  assert.match(m.text({ allCut: true }, { kills: 0 }), /屋顶 8\/8 · 阳台 6\/6/);
-  tick(0.2); assert.equal(m.extraction.flight.leaving, true, '清完了：定下返航'); assert.ok(m.extraction.flight.duration() < t + 10);
+  assert.match(m.text({ allCut: true }, { kills: 0 }), new RegExp(`屋顶 ${SIEGE.sweep.roof}/${SIEGE.sweep.roof} · 阳台 ${SIEGE.sweep.window}/${SIEGE.sweep.window}`));
+  // 清完了：先问要不要炸楼（还不返航）；没选、时间到了才返航
+  tick(0.2); assert.equal(siege.demo.offered, true, '清完先问炸不炸'); assert.equal(m.extraction.flight.leaving, false);
+  assert.equal(m.extraction.ride.outroSeconds(), null, '没选：机外镜头照旧');
+  tick(DEMOLISH.offer + 0.5); assert.equal(siege.demo.offered, false); assert.equal(siege.demo.chosen, false);
+  assert.equal(m.extraction.flight.leaving, true, '不炸：定下返航'); assert.ok(m.extraction.flight.duration() < t + 10);
   assert.equal(m.text({ allCut: true }, { kills: 0, over: true }), '清扫完毕 · 返航');
   const cam = m.extraction.ride.outroCam({ x: SIEGE.pad.x + 46, y: 50, z: SIEGE.pad.z }), A = L.buildings.find((b) => b.id === 'A');
   assert.ok(pointInPoly([cam.x, cam.z], A.outline) && Math.abs(cam.y - roof - 2.5) < 1e-6, '机外镜头架在公寓楼顶边上、比女儿墙高');
@@ -361,7 +367,8 @@ test('抽楼：公寓多、北区 1 号楼少，可以指定；北区那一局�
 test('北区 1 号楼的停机位和航线：屋顶东头 6.5 米内是空地、登机门在屋面上；绕飞不撞楼（旁边 2 号楼隔着 14 米）；阳台挂在南北两面长墙外，楼下的全在商场屋面上', () => {
   const T = TOWERS.T1, y = elev(T.roof), pad = T.pad;
   for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2, q = landAt(nav, pad.x + Math.cos(a) * 6.5, pad.z + Math.sin(a) * 6.5, y + 0.6); assert.ok(q && q.floor === T.roof && clear(nav, q)); }
-  const f = siegeFlight(pad, y, { R: T.R });
+  const f = siegeFlight(pad, y, { box: flightBox(L, T) });
+  { const B = L.buildings.find((b) => b.id === 'T2'), x1 = Math.max(...B.outline.map((q) => q[0])); assert.ok(f.box.x1 >= x1, '连旁边的 2 号楼一起绕'); }
   const tops = L.buildings.filter((b) => b.outline?.length).map((b) => ({ id: b.id, outline: b.outline, top: Math.max(...L.levels.filter((l) => l.building === b.id).map((l) => l.elev + (l.kind === 'roof' ? 3 : l.height || 4))) }));
   for (let t = 0; t < 150; t += 0.25) { const p = f.poseAt(t); if (p.phase !== 'lift') for (const b of tops) if (pointInPoly([p.x, p.z], b.outline)) assert.ok(p.y > b.top + 8, `t=${t} 在 ${b.id} 上空只高出 ${(p.y - b.top).toFixed(0)} 米`); }
   const bal = balconySpots(L, nav, 6, seq(5), T), B = L.buildings.find((b) => b.id === 'T1'), z0 = Math.min(...B.outline.map((p) => p[1])), z1 = Math.max(...B.outline.map((p) => p[1]));
@@ -888,4 +895,45 @@ test('商场段：锁在三层的店里 → 手摇柄、摇开卷帘 → 撬棍�
   cut(1); run(0.2); assert.deepEqual(G.weapon.locked, []); assert.equal(G.weapon.picked, 'rifle'); assert.equal(S.stage, 10);
   // 拿什么跑多快
   G.weapon.current = 'knife'; run(0.05); assert.equal(G.speedMul, SIEGE.speed.knife); G.weapon.current = 'pistol'; run(0.05); assert.equal(G.speedMul, SIEGE.speed.pistol); G.weapon.current = 'rifle'; run(0.05); assert.equal(G.speedMul, 1);
+});
+
+test('清扫时丧尸会还手：轮流朝飞机扔东西，砸中了掉耐久；阳台里的扔之前先把玻璃砸了', () => {
+  const { G, siege, zombies, director, player, begin, cut, run } = sworld();
+  const m = begin(); cut(18); run(0.1); for (const z of zombies.alive()) z._deactivate();
+  siege.state.hold = SIEGE.hold - 0.2; run(SIEGE.land + 2); director.riding = true; m.extraction.ride.onBoard();
+  const fires = []; G.events.on('enemy:fire', (e) => fires.push(e));
+  // 飞机就在楼顶边上（都在 range 以内）
+  G.missions = { ...(G.missions || {}), vehicleCenter: () => new THREE.Vector3(SIEGE.pad.x + 20, elev(SIEGE.roof) + 12, SIEGE.pad.z), rideKind: 'helicopter' };
+  let t = 0; const tick = (secs) => { for (let k = 0; k < secs * 30; k++) { t += 1 / 30; m.extraction.ride.spawns(1 / 30, t); } };
+  tick(SIEGE.sweep.throw.first - 0.5); assert.equal(fires.filter((e) => e.type === 'zombie').length, 0, '头几秒不扔');
+  tick(30); const hits = fires.filter((e) => e.type === 'zombie');
+  assert.ok(hits.length >= 6, `半分钟砸中 ${hits.length} 次`); assert.ok(hits.every((e) => e.hits === SIEGE.sweep.throw.hits && e.enemy?.sweep));
+  // 全打死以后就没人扔了
+  for (const z of siege.state.sweep.list) if (z.alive) z.damage(9999, null, null, 'body');
+  tick(3); const n = fires.length; tick(6); assert.equal(fires.length, n, '死光了不再扔');
+  void player;
+});
+
+test('炸楼结局：清完选了以后机外镜头换到远处、拉长；炸弹落地后楼往下垮、压扁，垮完藏起来；重开一局原样放回去', () => {
+  // 时间线是纯函数
+  assert.deepEqual(collapseAt('tower', 0.2, { delay: 0.5, height: 70 }), { sink: 0, squash: 1, tilt: 0, shake: 0, gone: false });
+  let prev = 0; for (let u = 0; u < 12; u += 0.25) { const c = collapseAt('tower', u, { delay: 0.5, height: 70 }); assert.ok(c.sink >= prev - 1e-9, '只往下不回弹'); prev = c.sink; assert.ok(c.squash <= 1 && c.squash > 0.3); }
+  assert.equal(collapseAt('tower', 12, { delay: 0.5, height: 70 }).gone, true); assert.ok(prev > 55, `沉了 ${prev.toFixed(0)} 米`);
+  assert.equal(collapseAt('mall', 9, { delay: 0.6, height: 37 }).gone, true);
+  // 楼的模型：场景里按名字找
+  const scene = new THREE.Scene(), all = new THREE.Group(); scene.add(all);
+  for (const id of [...DEMOLISH.towers, ...DEMOLISH.mall, 'H']) { const g = new THREE.Group(); g.name = id; g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))); all.add(g); }
+  const G = { fx: {}, events: { emit() {} }, player: { addShake() {} } }, d = createDemolition(G, { scene, layout: L });
+  assert.equal(d.accept(), false, '没问之前按了没用');
+  d.offer(); assert.equal(d.offered, true); d.tick(1); assert.equal(d.accept(), true); assert.equal(d.chosen, true); assert.equal(d.offered, false);
+  d.start(); for (let k = 0; k < 30 * (DEMOLISH.bomb.fall - 0.1); k++) d.tick(1 / 30);
+  const A = d.parts.find((p) => p.id === 'A'); assert.equal(A.g.position.y, 0, '炸弹落地之前楼不动');
+  for (let k = 0; k < 30 * 3; k++) d.tick(1 / 30);
+  assert.ok(A.g.position.y < -3 && A.g.scale.y < 1, '开始往下垮'); assert.equal(scene.getObjectByName('H').position.y, 0, '酒店不在范围里');
+  for (let k = 0; k < 30 * 11; k++) d.tick(1 / 30);
+  assert.equal(d.done, true); assert.ok(d.parts.every((p) => !p.g.visible), '垮完都藏起来');
+  assert.equal(d.parts.length, DEMOLISH.towers.length + DEMOLISH.mall.length);
+  assert.ok(d.fade(DEMOLISH.seconds) > 0.99 && d.fade(DEMOLISH.seconds - DEMOLISH.fade - 0.1) === 0, '最后压黑');
+  d.reset(); assert.ok(d.parts.every((p) => p.g.visible && p.g.position.y === 0 && p.g.scale.y === 1 && p.g.rotation.z === 0), '重开：楼回来了'); assert.equal(d.chosen, false);
+  d.dispose();
 });

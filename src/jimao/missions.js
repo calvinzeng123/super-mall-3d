@@ -513,7 +513,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
         const o = carOutroPose(state.pose0, state.outT);
         state.speed = o.speed; vv.setPose(state.pose = o.pose, Math.sin(state.outT * 9) * 0.008);
       }
-      if (state.outT >= CUT.outro[vv.kind]) finishRide();
+      rideHooks()?.outroTick?.(dt);
+      if (state.outT >= (rideHooks()?.outroSeconds?.() ?? CUT.outro[vv.kind])) finishRide();
     } else if (state.phase === 'crash') {
       state.crashT += dt;
       const C = orbit().center, s0 = state.crashStart;
@@ -635,7 +636,8 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     state.outLook = vv.toWorld(VEHICLE_HP.center[vv.kind]);
     state.wasInv = !!G.player.invulnerable; G.player.invulnerable = true;
     G.hud?.clearRadio?.(); G.hud?.show?.(false);
-    letterbox?.(true, `<b>撤离成功</b>${vv.kind === 'helicopter' ? '直升机已离开云澜汇上空' : '接应车已驶离云澜汇'}`);
+    letterbox?.(true, rideHooks()?.outroTitle?.() || `<b>撤离成功</b>${vv.kind === 'helicopter' ? '直升机已离开云澜汇上空' : '接应车已驶离云澜汇'}`);
+    rideHooks()?.outroStart?.();
   }
 
   function finishRide() {
@@ -916,9 +918,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     }
     if (state.phase === 'outro') {
       // 机位不动，转头跟着载具（跟得稍微慢半拍，像真有人在摇镜头）
-      const target = vv.toWorld(VEHICLE_HP.center[vv.kind]);
+      const target = rideHooks()?.outroLook?.() || vv.toWorld(VEHICLE_HP.center[vv.kind]);
       state.outLook.lerp(target, 1 - Math.exp(-dt * 7));
-      return { position: state.outCam.clone(), lookAt: state.outLook.clone(), fade: outroFade(vv.kind, state.outT) };
+      return { position: state.outCam.clone(), lookAt: state.outLook.clone(), fade: rideHooks()?.outroFade?.(state.outT) ?? outroFade(vv.kind, state.outT) };
     }
     if (state.phase === 'end') {
       state.endT += dt;
