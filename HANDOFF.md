@@ -6,6 +6,16 @@
 
 - **发布（2026-11-16，用户确认）**：提交 `9482b15`，`npm run build:netlify`（105 文件、62 MiB）后用 Netlify CLI 发布到 `yunlan-mall-calvin-v2`，部署 `6afa563519042b65456eca9d` live；首页 200，入口 `main.ODCE5QHC.js` 和本地构建 SHA-256 一致。漫游显存修复、零点突围（园区地图、随机任务、登机 + 第一人称撤离）都在这一版。真机上是否还会被回收待用户反馈。
 
+### 发布到 Cloudflare Pages（2026-11-23 起，代替 Netlify）
+- 用户已在 Cloudflare 建好令牌「云澜汇」（只有 Account → Cloudflare Pages → Edit 一项权限，不限 IP、不过期）。
+- 这个会话太长，安全表单存不进去；用户要自己在**环境设置**里加：会话标题栏的云端环境菜单 → Edit → Network secrets，主机 `api.cloudflare.com`、头 `Authorization`、值是 `Bearer <令牌>`。**新开的会话才会带上。**
+- 新会话里用户说「部署」时：
+  1. 先请用户给 Account ID（不是密码，地址栏 `dash.cloudflare.com/` 后面 32 位那串）。
+  2. 依次运行：`npm run build:netlify`、`node scripts/prepare-cloudflare.mjs`，再运行 `CLOUDFLARE_ACCOUNT_ID=<ID> CLOUDFLARE_API_TOKEN=dummy WRANGLER_SEND_METRICS=false npx wrangler pages deploy dist/netlify --project-name yunlan-mall --branch main`。令牌由代理注入请求头，命令里只放占位值。
+  3. 第一次发布前项目还不存在，先运行 `npx wrangler pages project create yunlan-mall --production-branch main`（同样带上面那几个变量）。
+  4. 上线地址应是 `https://yunlan-mall.pages.dev`，发完写回本文件第 3 行。
+- 线上包 110 个文件，最大的不到 20 MB，没超 Pages 单文件 25 MB 的上限。
+
 ### 丧尸围城新流程：锁在店里 → 商场三层、二层、一层 → 住宅楼 → 楼顶（2026-11-22）
 **没有部署**。提交 `651a392`（只有刀开局、移速、范围）→ `f1e06f5`（封门、路障）→ `0b16213`（商场段重做）→ 之后的收尾提交。用户定的：不限时长；住宅楼三道关和直升机机枪扫楼保持原样。
 
