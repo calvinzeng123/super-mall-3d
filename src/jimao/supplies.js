@@ -2,7 +2,7 @@
 //   医疗包：包扎 2.6 秒，回 80 点；只带得下 1 个。包扎时开枪、被扑倒会打断（东西不扣）。
 //   止痛药：半秒吞下去，回 30 点；带 2 瓶。
 // 一个「治疗」键（H / 手机上的十字键）：伤得重先用医疗包，轻伤先吃药，没有合适的就用剩下的那种。
-// 地上的补给走到跟前自动捡（带满了就留在原地）：医疗包、止痛药、手雷、燃烧瓶、诱饵弹、弹匣。
+// 地上的补给走到跟前自动捡（带满了就留在原地）：医疗包、止痛药、手雷、燃烧瓶、诱饵弹、弹匣；还有枪和消防斧（近战从刀换成斧子）。
 // 放在哪儿由 siege.js 定（武器柜旁、每间放工具的屋里、清掉一道关以后的安全点）。
 import * as THREE from 'three';
 import { AMMO } from './ammo.js';
@@ -18,9 +18,10 @@ export const SUPPLY = Object.freeze({
   smg: Object.freeze({ name: '冲锋枪', color: 0xffffff }),
   launcher: Object.freeze({ name: '榴弹枪', color: 0xffc04a }),
   shell: Object.freeze({ name: '榴弹', give: 2, color: 0xffc04a }),
+  axe: Object.freeze({ name: '消防斧', color: 0xff7a4a }),
   light: 40, pickR: 1.3, restoreHp: 60,
 });
-export const SUPPLY_KINDS = Object.freeze(['medkit', 'pills', 'frag', 'fire', 'lure', 'ammo', 'smg', 'launcher', 'shell']);
+export const SUPPLY_KINDS = Object.freeze(['medkit', 'pills', 'frag', 'fire', 'lure', 'ammo', 'smg', 'launcher', 'shell', 'axe']);
 
 /** 这一下该用哪样：hp / max 是现在和满的血量，inv = { medkit, pills }。纯函数；不用治（或没东西）返回 null */
 export function healChoice(hp, max, inv, S = SUPPLY) {
@@ -56,6 +57,9 @@ function models() {
   const red = std('#2f7a46', { emissive: '#0c3a1a', emissiveIntensity: 0.6 }), // 医疗包：绿底白十字
      white = std('#f0ede6', { emissive: '#8a8780', emissiveIntensity: 0.5 }), dark = std('#22252a', { metalness: 0.5 });
   const amber = std('#c9892c', { emissive: '#6a3a08', emissiveIntensity: 0.7, roughness: 0.25 }), olive = std('#4c5a34', { emissive: '#1c240c', emissiveIntensity: 0.5 }), blue = std('#3a5878', { emissive: '#10283a', emissiveIntensity: 0.6 });
+  // 消防斧：木柄、黑色胶套握把、红漆斧身、磨亮的刃口、背后一根尖镐（暗场里也认得出来：漆面带一点自发光）
+  const wood = std('#8a5a32', { roughness: 0.7, metalness: 0, emissive: '#2a1608', emissiveIntensity: 0.4 }), axeRed = std('#b3261e', { roughness: 0.45, metalness: 0.3, emissive: '#4a0a06', emissiveIntensity: 0.6 }), steel = std('#b4b9be', { roughness: 0.28, metalness: 0.85 });
+  const spike = () => { const c = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.12, 6), axeRed); c.rotation.z = -Math.PI / 2; c.position.set(0.075, 0.56, 0); return c; };
   return {
     medkit: () => group(box(0.3, 0.2, 0.12, red, 0, 0.1, 0), box(0.12, 0.035, 0.125, white, 0, 0.1, 0), box(0.035, 0.12, 0.125, white, 0, 0.1, 0), box(0.12, 0.02, 0.03, dark, 0, 0.21, 0)),
     pills: () => group(cyl(0.035, 0.085, amber, 0, 0.045, 0), cyl(0.037, 0.022, white, 0, 0.098, 0), box(0.071, 0.035, 0.005, white, 0, 0.045, 0.034)),
@@ -65,6 +69,9 @@ function models() {
     launcher: () => group(cyl(0.034, 0.34, dark, 0, 0.13, -0.12).rotateX(Math.PI / 2), box(0.05, 0.07, 0.13, dark, 0, 0.12, 0.1), box(0.04, 0.06, 0.2, olive, 0, 0.11, 0.26), box(0.035, 0.1, 0.045, dark, 0, 0.04, 0.12)),
     shell: () => group(cyl(0.024, 0.09, std('#b8923c', { metalness: 0.8, roughness: 0.3, emissive: '#3a2a08', emissiveIntensity: 0.6 }), -0.03, 0.045, 0), cyl(0.024, 0.09, olive, 0.03, 0.045, 0), new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 6), olive).translateX(0.03).translateY(0.09)),
     smg: () => group(box(0.05, 0.07, 0.36, dark, 0, 0.12, 0), box(0.04, 0.13, 0.05, dark, 0, 0.04, 0.08), box(0.035, 0.16, 0.045, dark, 0, 0.02, -0.05), cyl(0.02, 0.16, dark, 0, 0.12, -0.26).rotateX(Math.PI / 2), box(0.03, 0.05, 0.14, dark, 0, 0.11, 0.24)),
+    // 原点在柄尾，柄朝 +y，刃朝 −x、尖镐朝 +x（挂在消火栓箱里时贴着箱膛）
+    axe: () => group(cyl(0.015, 0.6, wood, 0, 0.3, 0), cyl(0.018, 0.15, dark, 0, 0.085, 0), cyl(0.021, 0.02, dark, 0, 0.01, 0), box(0.07, 0.1, 0.036, axeRed, -0.01, 0.56, 0),
+      box(0.07, 0.15, 0.014, axeRed, -0.075, 0.56, 0), box(0.016, 0.17, 0.01, steel, -0.115, 0.56, 0), spike(), box(0.036, 0.02, 0.038, steel, 0, 0.615, 0)),
     ammo: () => group(box(0.07, 0.2, 0.045, blue, 0, 0.1, 0), box(0.07, 0.2, 0.045, blue, 0.085, 0.1, 0.01), box(0.05, 0.02, 0.03, std('#c8a24a', { metalness: 0.8, roughness: 0.3 }), 0, 0.21, 0)),
   };
 }
@@ -103,6 +110,7 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
     else if (kind === 'smg') got = G.weapon?.grant?.('smg') ? 1 : 0; // 第一次捡：换到手上；已经有了：当两个弹匣
     else if (kind === 'launcher') got = G.weapon?.grant?.('launcher') ? 1 : 0;
     else if (kind === 'shell') got = G.weapon?.owns?.launcher && G.weapon.launcher.addShells(P.shell.give * n) > 0 ? 1 : 0; // 没有榴弹枪的时候捡不了，留在原地
+    else if (kind === 'axe') { got = G.weapon?.setMelee && G.weapon.melee !== 'axe' ? 1 : 0; if (got) G.weapon.setMelee('axe'); } // 近战从刀换成斧子（已经是斧子了就不捡）
     else got = actions?.give?.(n, kind) || 0;
     paint();
     return got;
@@ -130,18 +138,24 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
     paint();
   }
 
-  /** 在 pos 放一样补给（pos 是地面上的点） */
-  function place(kind, pos) {
+  /**
+   * 在 pos 放一样补给（pos 是地面上的点）。hang：东西不放在地上转，而是挂在那儿不动（世界坐标 { x, y, z, yaw }——消火栓箱里的斧子）；
+   * 地上那圈光还在 pos（人站到那儿捡）
+   */
+  function place(kind, pos, { hang = null } = {}) {
     if (!P[kind] || !make[kind]) return null;
     const g = new THREE.Group(); g.position.set(pos.x, pos.y, pos.z);
     const model = make[kind](); model.scale.setScalar(1.25); model.position.y = 0.22; g.add(model);
+    if (hang) { model.scale.setScalar(1); model.position.set(hang.x - pos.x, hang.y - pos.y, hang.z - pos.z); model.rotation.set(0, hang.yaw || 0, 0); }
     const halo = new THREE.Mesh(haloGeo, haloOf(kind)); halo.position.y = 0.03; g.add(halo);
     root.add(g);
-    const d = { kind, pos: new THREE.Vector3(pos.x, pos.y, pos.z), g, model, halo, t: rng() * 6, fullT: 0 };
+    const d = { kind, pos: new THREE.Vector3(pos.x, pos.y, pos.z), g, model, halo, t: rng() * 6, fullT: 0, hang: !!hang };
     drops.push(d);
     return d;
   }
   const clearDrops = () => { for (const d of drops.splice(0)) d.g.removeFromParent(); };
+  /** 把地上某一种全收走（斧子另外给了：箱子里那把就不留了）。返回收走几个 */
+  function take(kind) { let n = 0; for (let i = drops.length - 1; i >= 0; i--) if (drops[i].kind === kind) { drops[i].g.removeFromParent(); drops.splice(i, 1); n++; } return n; }
 
   // 开枪打断包扎；被扑倒也打断
   G.events?.on?.('weapon:fire', () => { if (busy?.kind === 'medkit') cancel('包扎被打断'); });
@@ -150,11 +164,11 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
   if (typeof window !== 'undefined') window.addEventListener('keydown', onKey);
 
   const api = {
-    inv, give, heal, place, cancel,
+    inv, give, heal, place, cancel, take,
     get drops() { return drops; }, get busy() { return busy; },
     get enabled() { return enabled; }, set enabled(v) { v = !!v; if (v !== enabled) { enabled = v; if (!v) { busy = null; clearDrops(); } paint(); } },
-    /** 存档点记下身上的东西（投掷物、血量一起） */
-    snapshot() { return { medkit: inv.medkit, pills: inv.pills, frag: actions?.countOf?.('frag') ?? 0, fire: actions?.countOf?.('fire') ?? 0, lure: actions?.countOf?.('lure') ?? 0, hp: player()?.health ?? maxHp(), smg: !!G.weapon?.owns?.smg, shells: G.weapon?.owns?.launcher ? (G.weapon.launcher.state.ammo | 0) + (G.weapon.launcher.state.reserve | 0) : -1 }; },
+    /** 存档点记下身上的东西（投掷物、血量、近战用的是刀还是斧子一起） */
+    snapshot() { return { medkit: inv.medkit, pills: inv.pills, frag: actions?.countOf?.('frag') ?? 0, fire: actions?.countOf?.('fire') ?? 0, lure: actions?.countOf?.('lure') ?? 0, hp: player()?.health ?? maxHp(), smg: !!G.weapon?.owns?.smg, shells: G.weapon?.owns?.launcher ? (G.weapon.launcher.state.ammo | 0) + (G.weapon.launcher.state.reserve | 0) : -1, melee: G.weapon?.melee || 'knife' }; },
     /** 从存档点重来：身上的东西照存档时的来，血量至少 restoreHp */
     restore(snap) {
       if (!snap) return;
@@ -162,6 +176,7 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
       if (actions?.give) { for (const k of ['fire', 'lure']) if (snap[k] > 0) actions.give(snap[k], k); }
       if (snap.smg) G.weapon?.grant?.('smg', { equip: false });
       if (snap.shells >= 0 && G.weapon?.grant?.('launcher', { equip: false })) { const st = G.weapon.launcher.state; st.ammo = Math.min(1, snap.shells); st.reserve = Math.max(0, snap.shells - st.ammo); }
+      if (snap.melee && snap.melee !== 'knife') G.weapon?.setMelee?.(snap.melee); // 斧子只给不收
       const p = player(); if (p) p.health = Math.min(maxHp(), Math.max(P.restoreHp, snap.hp || 0));
       paint();
     },
@@ -179,15 +194,18 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
       }
       for (let i = drops.length - 1; i >= 0; i--) {
         const d = drops[i]; d.t += dt; d.fullT -= dt;
-        d.model.rotation.y = d.t * 1.4; d.model.position.y = 0.22 + Math.sin(d.t * 2.2) * 0.04;
+        if (!d.hang) { d.model.rotation.y = d.t * 1.4; d.model.position.y = 0.22 + Math.sin(d.t * 2.2) * 0.04; }
         d.halo.scale.setScalar(1 + Math.sin(d.t * 3) * 0.12);
         if (!playing || Math.abs(d.pos.y - p.pos.y) > 1.7 || Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) > P.pickR) continue;
+        const had = d.kind === 'launcher' && !!G.weapon?.owns?.launcher, touch = !!G.input?.touch; // 已经有榴弹枪：再捡一把只算两发榴弹
         if (give(d.kind, 1) > 0) {
           d.g.removeFromParent(); drops.splice(i, 1);
-          if (d.kind === 'smg') say('捡到冲锋枪 · 动静小，按 4 换', 3); else if (d.kind === 'launcher') say('捡到榴弹枪 · 一发一装，按 5 换', 3); else if (d.kind === 'shell') say(`榴弹 +${P.shell.give}`, 1.8); else if (d.kind !== 'ammo') say(`捡到${P[d.kind].name}`, 1.8);
+          if (d.kind === 'smg') say(`捡到冲锋枪 · 动静小，${touch ? '点换枪键切换' : '按 4 换'}`, 3); else if (d.kind === 'launcher') say(had ? `榴弹 +${P.shell.give}` : `捡到榴弹枪 · 一发一装，${touch ? '点换枪键切换' : '按 5 换'}`, had ? 1.8 : 3);
+          else if (d.kind === 'axe') say(`捡到消防斧 · 近战换成斧子：抡得开，一下能砍倒两只（${touch ? '近战键' : 'V / F'}）`, 3.2);
+          else if (d.kind === 'shell') say(`榴弹 +${P.shell.give}`, 1.8); else if (d.kind !== 'ammo') say(`捡到${P[d.kind].name}`, 1.8);
           G.audio?.play?.('reload', { gain: 0.4, pitch: 1.3 });
           G.events?.emit?.('supply:pickup', { kind: d.kind });
-        } else if (d.fullT <= 0) { d.fullT = 4; if (d.kind !== 'smg' && !(d.kind === 'shell' && !G.weapon?.owns?.launcher)) say(`${P[d.kind].name}带满了`, 1.5); } // 冲锋枪捡不起来只会是模型还没加载好：不吭声，等一下就能捡
+        } else if (d.fullT <= 0) { d.fullT = 4; if (d.kind !== 'smg' && d.kind !== 'axe' && !(d.kind === 'shell' && !G.weapon?.owns?.launcher)) say(`${P[d.kind].name}带满了`, 1.5); } // 冲锋枪捡不起来只会是模型还没加载好：不吭声，等一下就能捡
       }
     },
     buildUi() {

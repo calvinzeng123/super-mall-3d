@@ -3,9 +3,11 @@
 //   二层：保安的手枪 → 物业的值班表（上面写着门禁卡在几号储物柜）→ 三个储物柜里开对的那个（开错的蹦出一只丧尸）
 //        → 启动发电机给卷帘供电，它轰隆隆地响，守住一阵 → 按开下一层的卷帘；
 //   一层：保安室的武器柜（要门禁卡才开）。之后合闸、进住宅楼，和原来一样。
+// 开局手里只有刀：店门外墙上挂着一个消火栓箱，里面有把消防斧（axe：箱子挂在哪、站哪儿捡）。
 // 这里只管「哪一步在哪儿、叫什么」，是纯函数（测试直接用真地图跑）；怎么演在 siege.js。
 import { landAt, clear } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
+import { storeStyle, doorGaps } from '../layout/frontage.js';
 
 /**
  * shop：各步在哪家店（按店名找；找不到 / 站不住就退到同层别的店，见 pick）；
@@ -19,13 +21,54 @@ export const MALL = Object.freeze({
   stairs: Object.freeze({ down3: 'P1-K6', down2: 'P1-K3' }),
   zone: 46, lockers: 1.25,
   gen: Object.freeze({ seconds: 25, every: 4.5, each: 2 }), out: 3,
-  // 救人：被困的店离撬棍那家、扶梯口都至少 near 米；护送时隔 every 秒从看不见的地方来 each 只，小许走到扶梯口 arrive 米内算到
-  rescue: Object.freeze({ near: 8, every: 7, each: 2, arrive: 4.5 }),
+  // 救人：被困的店离撬棍那家、扶梯口都至少 near 米；护送时隔 every 秒从看不见的地方来 each 只，小许走到扶梯口 arrive 米内算到；
+  // 卷帘撬开以后小许先走到门洞外 out 米、往旁边挪 side 米的地方（不挡在撬门的人跟前）
+  rescue: Object.freeze({ near: 8, every: 7, each: 2, arrive: 4.5, out: 1.0, side: 1.4 }),
+  // 消防斧：开局那家店的门洞旁边、实墙上挂的消火栓箱（宽 w 米，离门洞 gap 米），站到箱子正前方 out 米捡
+  axe: Object.freeze({ w: 0.9, gap: 0.15, out: 0.55 }),
   // 潜行：一路站着 count 只发呆的行尸（离路线 band 米以内、彼此隔开 gap 米）；响动到 wake 全醒，人走到它跟前 close 米（蹲着 closeCrouch 米）这一只和旁边 group 米内的醒
   sneak: Object.freeze({ count: 14, band: 6, gap: 2.4, wake: 60, close: 2.4, closeCrouch: 1.3, group: 5, run: 22, walk: 7, arrive: 2.6 }),
   // 搬油桶：抬着跑多快、离发电机最好多远（取 lo–hi 米之间最接近 best 的那家）、隔几秒来几只
   fuel: Object.freeze({ speed: 0.62, lo: 16, hi: 40, best: 26, every: 6, each: 2, pick: 1.3 }),
 });
+
+/** 门面 f（世界坐标）上能走过去的门洞 [[a, b], ...]（从 f 的起点量，米）：和导航网格在门面上开的洞一样（nav.js） */
+function gapsOf(lv, u, f) {
+  const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0), e = u.residence?.entryDoor;
+  return { len, gaps: e ? [[e.at - e.width / 2, e.at + e.width / 2]] : doorGaps(storeStyle(lv, u), len) };
+}
+/**
+ * 店门外挂消火栓箱的那一点：门面上紧挨着门洞的一段实墙（够 w 宽）。toward：先试离它近的一边（出了门顺路）。
+ * 返回 { floor, x, y, z（箱子正前方、捡斧子站的地方）, wall: { x, z, yaw（箱子正面朝外：rotation.y） } }；都不行返回 null。
+ */
+export function cabinetSpot(nav, lv, u, f, toward = null, A = MALL.axe) {
+  if (!f) return null;
+  const { len, gaps } = gapsOf(lv, u, f), tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len, spots = [];
+  let at = 0;
+  for (const [a, b] of [...gaps].sort((p, q) => p[0] - q[0])) { if (a - at >= A.w + A.gap) { if (at > 0.01) spots.push(at + A.gap + A.w / 2); spots.push(a - A.gap - A.w / 2); } at = Math.max(at, b); }
+  if (len - at >= A.w + A.gap && at > 0.01) spots.push(at + A.gap + A.w / 2);
+  const mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2, side = toward ? Math.sign((toward.x - mx) * tx + (toward.z - mz) * tz) || 1 : 1;
+  spots.sort((p, q) => side * (q - p));
+  for (const c of spots) {
+    const wx = f.x0 + tx * c, wz = f.z0 + tz * c, x = wx + f.nx * A.out, z = wz + f.nz * A.out, st = landAt(nav, x, z, lv.elev + 0.6);
+    if (st && st.floor === lv.id && Math.abs(st.y - lv.elev) < 0.3 && clear(nav, st)) return { floor: lv.id, x: st.x, y: lv.elev, z: st.z, wall: { x: wx, z: wz, yaw: Math.atan2(f.nx, f.nz) } };
+  }
+  return null;
+}
+/**
+ * 被困的店撬开以后小许往哪儿走：门洞中间往外 out 米、再顺着门面往旁边挪 side 米（两边都试）。
+ * 撬门的人站在门面中点外面（q.out）对着门：这一点不能在他的视线上（偏开 30° 以上），也不能贴着他。返回 { floor, x, y, z } 或 null
+ */
+export function exitSpot(nav, lv, q, R = MALL.rescue) {
+  const f = q.front, { len, gaps } = gapsOf(lv, q.u, f), tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len;
+  for (const [a, b] of gaps) for (const s of [R.side, -R.side]) {
+    const c = (a + b) / 2, x = f.x0 + tx * c + f.nx * R.out + tx * s, z = f.z0 + tz * c + f.nz * R.out + tz * s, st = landAt(nav, x, z, lv.elev + 0.6);
+    const dx = x - q.out.x, dz = z - q.out.z, d = Math.hypot(dx, dz);
+    if (d < 0.8 || -(dx * f.nx + dz * f.nz) / d > 0.85) continue;
+    if (st && st.floor === lv.id && Math.abs(st.y - lv.elev) < 0.3 && clear(nav, st)) return { floor: lv.id, x: st.x, y: lv.elev, z: st.z };
+  }
+  return null;
+}
 
 const unitOf = (layout, floor, name) => layout.levels.find((l) => l.id === floor)?.units.find((u) => !u.residence && u.brand?.name === name) || null;
 /** 店里站得住的一点：矩形里 (fx, fz) 比例的位置（0.5, 0.5 是正中） */
@@ -43,7 +86,8 @@ function pick(layout, nav, floor, name, tries = [[0.5, 0.5]], skip = new Set()) 
 }
 
 /**
- * 商场段的每一步。返回 { stages, start, shop（开局那家店：{ id, name, poly, fronts }）, lockers（三个柜子：[{ x, y, z, n, right }]）, down3, down2（两处扶梯口的坡道 id） }。
+ * 商场段的每一步。返回 { stages, start, shop（开局那家店：{ id, name, poly, fronts }）, lockers（三个柜子：[{ x, y, z, n, right }]）, down3, down2（两处扶梯口的坡道 id），
+ *   rescue（被困的店：{ name, inside, exit（撬开以后小许先走到的门外一点）, front, unit }）, axe（店门外的消火栓箱：见 cabinetSpot） }。
  * stages 的每一项和 siege.js 的一样：{ id, kind, obj（'item' 捡 / 'relay' 操作）, floor, site, label, verb, text, hud, noise }。
  */
 export function mallStages(layout, nav, rng = Math.random, M = MALL) {
@@ -53,8 +97,8 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   const home = pick(layout, nav, F.top, M.shop.start), u = home.u, lv3 = layout.levels.find((l) => l.id === F.top);
   const crank = [[0.22, 0.75], [0.78, 0.75], [0.25, 0.3], [0.75, 0.3], [0.5, 0.8]].map(([a, b]) => spotIn(nav, lv3, u, a, b)).filter((q) => q && Math.hypot(q.x - home.x, q.z - home.z) > 2)[0] || home;
   const fronts = u.wfronts || [];
-  let door = null;
-  for (const f of fronts) { const mx = (f.x0 + f.x1) / 2 - f.nx * 1.1, mz = (f.z0 + f.z1) / 2 - f.nz * 1.1, q = landAt(nav, mx, mz, lv3.elev + 0.6); if (q && q.floor === F.top && clear(nav, q)) { door = { floor: F.top, x: mx, y: lv3.elev, z: mz, nx: f.nx, nz: f.nz }; break; } }
+  let door = null, doorF = fronts[0] || null;
+  for (const f of fronts) { const mx = (f.x0 + f.x1) / 2 - f.nx * 1.1, mz = (f.z0 + f.z1) / 2 - f.nz * 1.1, q = landAt(nav, mx, mz, lv3.elev + 0.6); if (q && q.floor === F.top && clear(nav, q)) { door = { floor: F.top, x: mx, y: lv3.elev, z: mz, nx: f.nx, nz: f.nz }; doorF = f; break; } }
   door ||= { ...home, nx: fronts[0]?.nx || 0, nz: fronts[0]?.nz || 1 };
   const used = new Set([u.id]);
   const take = (floor, name, tries) => { const q = pick(layout, nav, floor, name, tries, used); if (q) used.add(q.unit); return q; };
@@ -81,6 +125,7 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
     return pickQ;
   };
   const bike = take(F.top, M.shop.crowbar), gun = take(F.mid, M.shop.pistol), note = take(F.mid, M.shop.note), gen = take(F.mid, M.shop.gen);
+  const axe = cabinetSpot(nav, lv3, u, doorF, bike, M.axe);
   // 三个储物柜：在那家店里沿长边排开，抽一个是对的
   const cardShop = take(F.mid, M.shop.card), cu = cardShop.u, r = cu.rects[0], lv2 = layout.levels.find((l) => l.id === F.mid);
   const alongX = (r.x1 - r.x0) >= (r.z1 - r.z0), right = Math.floor(rng() * 3), lockers = [];
@@ -103,7 +148,7 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   const can = near(F.mid, gen, { best: M.fuel.best, lo: M.fuel.lo, hi: M.fuel.hi, avoid: [gun, note, gen], minAway: 6 });
   const stages = [
     st('crank', 'crank', 'item', crank, `手摇柄 · ${home.name}`, '拿手摇柄', `你们被锁在三层的「${home.name}」里，卷帘落着。先在店里把卷帘的手摇柄找出来`, '在店里找卷帘的手摇柄'),
-    st('exit', 'shutter', 'relay', door, `卷帘 · ${home.name}`, '摇开卷帘', '到门边把卷帘摇起来——外面有东西在拍门，手里只有刀', '到门边摇开卷帘', 12),
+    st('exit', 'shutter', 'relay', door, `卷帘 · ${home.name}`, '摇开卷帘', '到门边把卷帘摇起来——外面有东西在拍门，手里只有刀和两颗手雷', '到门边摇开卷帘', 12),
     st('crowbar', 'crowbar', 'item', bike, `撬棍 · 三层 ${bike.name}`, '拿撬棍', `下二层的扶梯口被防火卷帘挡着。去「${bike.name}」找根撬棍`, `到「${bike.name}」找撬棍`),
     ...(trap ? [
       st('rescue', 'rescue', 'relay', trap.out, `求救 · 三层 ${trap.name}`, '撬开卷帘', `「${trap.name}」的卷帘后面有人在拍门喊救命。用撬棍把卷帘撬开`, `撬开「${trap.name}」的卷帘救人`, 15),
@@ -120,7 +165,7 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   ];
   const shops = [...used]; // 这一局用到的店（别的店卷帘都拉下来）
   return { stages, start: { floor: F.top, x: home.x, y: home.y, z: home.z }, shop: { id: u.id, name: home.name, poly: u.polys?.[0] || null, fronts }, lockers, cardShop: cardShop.name, down3: d3?.id || null, down2: d2?.id || null,
-    rescue: trap ? { name: trap.name, inside: trap.inside, front: trap.front, unit: trap.u.id } : null,
+    rescue: trap ? { name: trap.name, inside: trap.inside, exit: exitSpot(nav, lv3, trap, M.rescue), front: trap.front, unit: trap.u.id } : null, axe,
     sneak: { from: { floor: F.mid, x: lx, y: yOf(F.mid), z: lz }, to: sneakTo },
     fuel: can ? { name: can.name, at: can.inside, unit: can.u.id } : null, shops };
 }

@@ -200,6 +200,10 @@ test('自动开火（触屏）：准星压在敌人身上一瞬就开火，移�
   for (let i = 0; i < 30; i++) { input.fire = false; actions.pre(1 / 60); if (input.fire) fired++; }
   const clear = G.physics.lineOfSight(player.eye, new THREE.Vector3(-135, 1.15, -150));
   if (!clear) assert.equal(fired, 0, '隔着墙不该开火');
+  // 拿着刀 / 斧子：够得着才自己出手（刀 2.4 米；斧子按它报的 meleeReach）
+  const near = () => { fired = 0; for (let i = 0; i < 30; i++) { input.fire = false; actions.pre(1 / 60); if (input.fire) fired++; } return fired; };
+  e.pos.set(-135, 0, -100.5); G.weapon.current = 'knife'; player.pitch = -Math.atan2(1.68 - 1.15, 2.5); // 准星压在它胸口
+  assert.equal(near(), 0, '刀够不着两米半外'); G.weapon.meleeReach = 2.7; assert.ok(near() > 0, '斧子够得着');
 });
 
 test('手机按键：蹲、近战、手雷三个键能在「键位布局」里调，样式里有它们的位置', () => {
@@ -636,6 +640,56 @@ test('刀：近战键随时出刀（先换成刀、刺完换回原来那把）�
   assert.deepEqual(heavy.hits, [A.KNIFE.damage]); assert.equal(heavy.alive, true);
   run(1 / 60, () => pressed.add('fire')); run(A.KNIFE.time + 0.2);
   assert.equal(heavy.alive, false); assert.equal(arsenal.current, 'knife', '自己切到刀的不会换回去');
+});
+
+test('消防斧：换进近战槽（当前武器还是 knife，名字、够多远跟着换）；一下劈中最近的两只（各 200）、推得更远更狠；远的、背后的不中；隔着墙的那只跳过、接着砍后面的；刀照旧只扎最近的、被挡住就不中', async () => {
+  const { A, G, arsenal, run, pressed, enemy, log } = await arsenalWorld();
+  assert.equal(arsenal.melee, 'knife'); assert.equal(arsenal.meleeReach, A.KNIFE.reach); assert.deepEqual(Object.keys(A.MELEE), ['knife', 'axe']);
+  assert.ok(A.AXE.damage >= 190 && A.AXE.hits === 2 && A.AXE.reach > A.KNIFE.reach && A.AXE.time > A.KNIFE.time && A.AXE.shove > A.SHOVE.power, '一斧砍倒胖尸；够得远、慢、推得狠');
+  // 人在 (-135, -98) 朝 −z 看：正前方 1.6 米、右前 35° 2.2 米、左前 40° 2.5 米、正前方 3.4 米（太远）、背后 1.5 米
+  const ahead = (d, deg, hp = 400) => { const a = deg * Math.PI / 180, e = enemy(-135 + d * Math.sin(a), -98 - d * Math.cos(a), hp); e.pushed = []; e.shove = (dx, dz, p) => { e.pushed.push(p); return true; }; return e; };
+  const crowd = () => { G.enemies.list.length = 0; return [ahead(1.6, 0), ahead(2.2, 35), ahead(2.5, -40), ahead(3.4, 0), ahead(1.5, 180)]; };
+  // 刀：只扎最近的那一只，推得近
+  let [c1, c2, c3, far, back] = crowd();
+  run(1 / 60, () => pressed.add('melee')); run(0.3 + A.KNIFE.time + 0.3);
+  assert.deepEqual([c1.hits, c2.hits, c3.hits, far.hits, back.hits], [[A.KNIFE.damage], [], [], [], []]); assert.deepEqual(c1.pushed, [A.SHOVE.power]); assert.equal(c3.pushed.length, 0, '刀推不到 2.5 米外');
+  // 换成斧子：近战键还是先换到 knife 那一格，劈完换回步枪
+  assert.equal(arsenal.setMelee('axe'), true); assert.equal(arsenal.setMelee('chainsaw'), false);
+  assert.equal(arsenal.melee, 'axe'); assert.equal(arsenal.meleeReach, A.AXE.reach); assert.equal(arsenal.parts.axe.visible, true); assert.equal(arsenal.parts.knife.visible, false);
+  [c1, c2, c3, far, back] = crowd(); log.length = 0;
+  run(1 / 60, () => pressed.add('melee')); run(0.3); assert.equal(arsenal.current, 'knife'); assert.equal(arsenal.name, '消防斧'); assert.equal(arsenal.slashing, true);
+  run(A.AXE.time + 0.3); assert.equal(arsenal.current, 'rifle', '劈完换回步枪');
+  assert.deepEqual([c1.hits, c2.hits, c3.hits, far.hits, back.hits], [[A.AXE.damage], [A.AXE.damage], [], [], []], '最近的两只各中一斧');
+  assert.deepEqual([c1.pushed, c2.pushed, c3.pushed, far.pushed, back.pushed], [[A.AXE.shove], [A.AXE.shove], [A.AXE.shove], [], []], '身前 2.6 米内的都推开');
+  assert.equal(log.filter(([n, e]) => n === 'player:hitEnemy' && e.melee && e.tool === 'axe').length, 2);
+  // 隔着墙：最近那只被挡住——斧子跳过它、砍后面两只；刀就什么都没扎到
+  [c1, c2, c3, far, back] = crowd();
+  G.physics.lineOfSight = (a, b) => Math.hypot(b.x - c1.pos.x, b.z - c1.pos.z) > 0.01;
+  arsenal.select('knife'); run(A.SWAP.lower + A.DRAW.quick + 0.05); assert.equal(arsenal.switching, false, '斧子不抛着玩：直接举起来'); assert.equal(arsenal.name, '消防斧');
+  run(1 / 60, () => pressed.add('fire')); run(A.AXE.time + 0.2);
+  assert.deepEqual([c1.hits, c2.hits, c3.hits], [[], [A.AXE.damage], [A.AXE.damage]]);
+  assert.equal(arsenal.setMelee('knife'), true); assert.equal(arsenal.name, A.KNIFE.name); assert.equal(arsenal.parts.knife.visible, true); assert.equal(arsenal.parts.axe.visible, false);
+  [c1, c2, c3, far, back] = crowd(); G.physics.lineOfSight = (a, b) => Math.hypot(b.x - c1.pos.x, b.z - c1.pos.z) > 0.01;
+  run(1 / 60, () => pressed.add('fire')); run(A.KNIFE.time + 0.2);
+  assert.deepEqual([c1.hits, c2.hits, c3.hits], [[], [], []], '刀：最近那只被挡住就算没扎到（和以前一样）');
+  arsenal.reset(); assert.equal(arsenal.melee, 'knife', '原游戏的武器重置不碰近战槽');
+  arsenal.dispose();
+});
+
+test('消防斧的模型：木柄、黑握把、红漆斧身和尖镐、磨亮的刃口——六七十厘米长；挂在刀那条前臂上、和刀一样画在枪那一层', async () => {
+  const A = await import('../src/jimao/arsenal.js');
+  const g = A.axeGeometry(); assert.deepEqual(Object.keys(g).sort(), ['grip', 'paint', 'steel', 'wood']);
+  const bb = new THREE.Box3(); for (const q of Object.values(g)) { q.computeBoundingBox(); bb.union(q.boundingBox); }
+  const len = Math.hypot(bb.max.y - bb.min.y, bb.max.z - bb.min.z); assert.ok(len > 0.6 && len < 0.85, `整把 ${len.toFixed(2)} 米`);
+  // 刃口离柄最远（斧身、尖镐都在它里面）；斧头整个在握把上方半米多
+  const axis = new THREE.Vector3(0, Math.cos(-0.3), Math.sin(-0.3)), off = (geo) => { const p = geo.attributes.position, v = new THREE.Vector3(); let m = 0; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); m = Math.max(m, v.clone().sub(axis.clone().multiplyScalar(v.dot(axis))).length()); } return m; };
+  assert.ok(off(g.steel) > off(g.paint) - 0.005 && off(g.steel) > 0.15, `刃口离柄 ${off(g.steel).toFixed(2)} 米`); assert.ok(off(g.wood) < 0.025 && off(g.grip) < 0.025, '柄和握把是细长的一根');
+  // 游戏里枪画在第 3 层：斧子的每个网格都要在那一层
+  const camera = new THREE.PerspectiveCamera(74, 1.6, 0.01, 10), G = { weapon: { update() {}, reset() {}, setVisible() {} }, player: { pos: new THREE.Vector3(), vel: new THREE.Vector3() }, enemies: { list: [] }, events: { emit() {} }, game: { state: 'playing' } };
+  const arsenal = A.createArsenal(G, { camera, layer: 3 }); let n = 0;
+  arsenal.parts.axe.traverse((o) => { if (o.isMesh) { n++; assert.equal(o.layers.mask, 1 << 3); } }); assert.equal(n, 4);
+  for (const s of [-0.4, 0, 0.3, 0.55, 1]) { const p = A.slashPose(s); assert.ok(Number.isFinite(p.back + p.thrust + p.sweep)); }
+  arsenal.dispose();
 });
 
 // ---- 过场镜头（src/jimao/cutscene.js）----

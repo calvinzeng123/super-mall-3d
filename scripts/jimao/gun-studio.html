@@ -3,9 +3,9 @@
   枪械预览台（开发工具，不进构建）：只加载枪和它的贴图，两三秒出图——调贴图、材质、摆位不用每次等整个商场加载。
   用法：在仓库根目录起一个静态服务器（python3 -m http.server 5174），打开
     /scripts/jimao/gun-studio.html?gun=smg&pose=hip&light=dark
-  gun   = rifle 以外的四把：smg（冲锋枪）| launcher（榴弹枪）| pistol（手枪）| knife（刀）
+  gun   = rifle 以外的四把：smg（冲锋枪）| launcher（榴弹枪）| pistol（手枪）| knife（刀）| axe（消防斧：近战槽换成斧子）
   pose  = hip（腰射）| ads（开镜）| reload（换弹到一半，t=0–1 指定进度）| left / right（枪的左、右侧面，整把入画）|
-          close（侧面贴近看机匣，查贴图细节）| top（从上往下）| q（四分之三侧）
+          close（侧面贴近看机匣，查贴图细节）| top（从上往下）| q（四分之三侧）| swing（刀 / 斧子挥到一半，t=0–1 指定进度）
   light = dark（停电：和游戏里丧尸围城的亮度相当）| day（白天）
   rig   = 0 关掉枪的专用打光（view-light.js），看没有它的时候什么样
   这里的环境光、太阳、半球光是按游戏里的数值近似的（真实效果以游戏里的截图为准）；枪走的是和游戏同一套代码
@@ -68,6 +68,7 @@ if (gun === 'smg') { arsenal.skinSmg(await load('smg45-mobile.glb')); arsenal.gr
 else if (gun === 'launcher') arsenal.grant('launcher');
 else if (gun === 'pistol') { arsenal.skinPistol((await load('desert-eagle-mobile.glb')).scene); arsenal.select('pistol', { plain: true }); }
 else if (gun === 'knife') arsenal.select('knife', { plain: true });
+else if (gun === 'axe') { arsenal.setMelee('axe'); arsenal.select('knife', { plain: true }); }
 step(2);
 if (pose === 'ads') { G.input.ads = true; step(0.9); }
 if (pose === 'reload') {
@@ -76,7 +77,8 @@ if (pose === 'reload') {
   else if (gun === 'launcher') { arsenal.launcher.state.ammo = 0; arsenal.reloadNow(); step(arsenal.launcher.spec.reload * t); }
   else if (gun === 'pistol') { arsenal.pistol.ammo = 5; arsenal.startReload(); step(1.45 * t); }
 }
-const root = arsenal.roots[gun];
+if (pose === 'swing') { arsenal.slash(); step((gun === 'axe' ? 0.8 : 0.5) * +(q.get('t') || 0.3)); }
+const root = arsenal.roots[gun === 'axe' ? 'knife' : gun];
 // 看侧面 / 俯视 / 特写：把枪从握姿里拿出来，摆到镜头正前方转一个角度
 const INSPECT = { left: [0, Math.PI / 2, 1], right: [0, -Math.PI / 2, 1], top: [Math.PI / 2, Math.PI / 2, 1], q: [0.18, Math.PI / 2 - 0.75, 1.05], close: [0, Math.PI / 2, 0.42] };
 if (INSPECT[pose]) {
