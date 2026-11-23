@@ -1,4 +1,5 @@
-// 丧尸围城的任务物件：武器柜、配电柜、工具（撬棍 / 保险丝 / 灭火器 / 门禁卡）、四种关卡（杂物 / 火 / 卷帘栅门 / 防火门）、信号弹。
+// 丧尸围城的任务物件：武器柜、配电柜、工具（撬棍 / 保险丝 / 灭火器 / 门禁卡）、四种关卡（杂物 / 火 / 卷帘栅门 / 防火门）、信号弹、
+// 开局那家店门外墙上的消火栓箱（里面挂着消防斧）。
 // 以前都是几个纯色方块；停电以后人拿手电去照，方块一眼就穿帮。这里按真东西的样子搭：
 //   · 几何体按材质合并：每个物件只有两三个网格（漆面、金属、亮面塑料 / 玻璃），动的部分（门扇、卷帘、拉杆）单独一个；
 //     同一种物件的几何体全局只建一次、各局复用（不随一局一局地漏显存）。
@@ -25,7 +26,7 @@ export const ATLAS = Object.freeze({
   breakers: [256, 384, 512, 128], card: [768, 384, 128, 80], gauge: [896, 384, 64, 64], reader: [960, 384, 64, 128],
   lockerSign: [256, 512, 512, 128], hazard: [768, 512, 256, 64], plate: [768, 576, 256, 64], fuseLabel: [768, 640, 256, 64], flareLabel: [768, 704, 256, 64],
   paint: [256, 640, 256, 128], stencil: [512, 640, 256, 128], metal: [0, 768, 256, 256], scorch: [256, 768, 256, 256], powder: [512, 768, 256, 256], charred: [768, 768, 256, 256],
-  shutterSign: [768, 464, 128, 48],
+  shutterSign: [768, 464, 128, 48], hydrant: [896, 448, 64, 64],
 });
 /** 分区 → UV 矩形 { u0, v0, u1, v1 }（画布 y 朝下，贴图 v 朝上）。纯函数 */
 export function atlasRect(name) {
@@ -189,6 +190,7 @@ const PAINT = {
     for (let i = 0; i < 160; i++) { g.strokeStyle = `rgba(0,0,0,${(0.3 + r() * 0.5).toFixed(2)})`; g.lineWidth = 1 + r() * 2; const x = r() * w, y = r() * h; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 6 + r() * 22, y + (r() - 0.5) * 4); g.stroke(); }
     speck(g, w, h, r, 200, 0.2, true, 2);
   },
+  hydrant: (g, w, h) => { g.fillStyle = '#b8231b'; g.fillRect(0, 0, w, h); g.strokeStyle = '#f4efe4'; g.lineWidth = 2; g.strokeRect(3, 3, w - 6, h - 6); text(g, '消火栓', w / 2, h * 0.4, 17, '#f6f2ea', 800); text(g, '119', w / 2, h * 0.74, 12, '#f6f2ea', 700); },
   shutterSign: (g, w, h) => { g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h); g.fillStyle = '#c4261c'; g.fillRect(0, 0, w, 18); text(g, '防火卷帘', w / 2, 9, 13, '#fff'); text(g, '下方禁止堆放', w / 2, h * 0.64, 16, '#c4261c'); },
 };
 
@@ -750,6 +752,50 @@ export function fuseInserts() {
   const grp = new THREE.Group(); meshes(grp, geos); return grp;
 }
 
+/**
+ * 消火栓箱（开局那家店门外、门洞旁边的实墙上）：一截石材壁柱上嵌一个红色钢箱——上格是消火栓（卷着的红水带、铜阀门和手轮、水枪头），
+ * 玻璃门开着（斧子被人取过的样子：右边两个空挂钩，斧子本身是 supplies.js 的捡拾物，挂在这两个钩上）；下格关着门，贴着灭火器的标签；
+ * 箱子上方一块「消火栓」牌子，旁边一个手动报警按钮。原点在墙线上的地面，本地 +z 朝外（走廊那边）。
+ * hang：斧子挂在哪（本地坐标，箱子正中、上格右边），siege.js 拿它摆捡拾物
+ */
+export const HOSE_BOX = Object.freeze({ w: 0.72, h: 1.6, d: 0.22, y0: 0.2, z0: 0.07, split: 0.62, hang: Object.freeze([0.19, 0.98, 0.135]) });
+export function buildHoseCabinet(g, B = HOSE_BOX) {
+  const geos = cached('hoseBox', (k) => {
+    const { w, h, d, y0, z0, split } = B, red = { color: C.red, region: 'paint' }, zf = z0 + d, top = y0 + h, mid = y0 + split;
+    k.box('paint', 1.02, 3.2, z0 - 0.012, { color: 0xd8d2c6, region: 'paint', p: [0, 1.6, z0 / 2 + 0.006] });      // 石材壁柱（背面离墙线一厘米多：不和店面玻璃抢同一个面）
+    k.box('paint', 1.06, 0.12, z0 + 0.008, { color: 0x8c877e, region: 'paint', p: [0, 0.06, z0 / 2 + 0.016] });   // 踢脚
+    k.box('paint', w, h, 0.012, { color: 0x2b2d2c, p: [0, y0 + h / 2, z0 + 0.006] });                      // 箱膛（深色）
+    for (const s of [-1, 1]) k.box('paint', 0.022, h, d, { ...red, p: [s * (w / 2 - 0.011), y0 + h / 2, z0 + d / 2] });
+    for (const y of [y0 + 0.011, top - 0.011, mid]) k.box('paint', w, 0.022, d, { ...red, p: [0, y, z0 + d / 2] });
+    k.box('metal', w + 0.03, 0.03, 0.02, { color: C.steel, region: 'metal', p: [0, top + 0.015, zf - 0.01] }); // 上沿的不锈钢压条
+    // 下格：关着的门、灭火器标签、拉手
+    k.box('paint', w - 0.03, split - 0.03, 0.014, { ...red, p: [0, y0 + split / 2, zf + 0.007] });
+    k.plane('paint', 0.17, 0.17, { region: 'extLabel', label: true, color: C.cream, p: [-0.08, y0 + split * 0.55, zf + 0.0145] });
+    k.box('metal', 0.022, 0.12, 0.022, { color: C.steel, region: 'metal', p: [w / 2 - 0.07, y0 + split * 0.55, zf + 0.025] });
+    // 上格：卷盘上的水带（一圈圈压扁的红管）、中间的转轴、铜阀门 + 手轮、水枪头挂在左下
+    const rc = [-0.1, y0 + split + 0.5, z0 + 0.1];
+    k.cyl('metal', 0.05, 0.05, 0.16, 12, { color: C.steel, region: 'metal', p: rc, r: [Math.PI / 2, 0, 0] });
+    for (const [R, r, dz] of [[0.2, 0.032, -0.05], [0.2, 0.032, 0.0], [0.2, 0.032, 0.05], [0.15, 0.03, 0.0]]) k.torus('gloss', R, r, 8, 28, Math.PI * 2, { color: 0x922d25, p: [rc[0], rc[1], rc[2] + dz] });
+    k.cyl('metal', 0.03, 0.03, 0.08, 12, { color: C.brass, region: 'metal', p: [-0.24, y0 + split + 0.12, z0 + 0.06], r: [Math.PI / 2, 0, 0] });
+    k.torus('paint', 0.045, 0.008, 6, 16, Math.PI * 2, { color: C.red, p: [-0.24, y0 + split + 0.12, z0 + 0.11] });
+    k.cyl('metal', 0.012, 0.026, 0.2, 10, { color: C.brass, region: 'metal', p: [-0.27, y0 + split + 0.34, z0 + 0.12], r: [0, 0, 0.12] });
+    // 挂斧子的两个钩（斧子拿走以后就剩这两个）
+    for (const y of [B.hang[1] + 0.1, B.hang[1] + 0.4]) { k.box('metal', 0.04, 0.012, 0.1, { color: C.steel, region: 'metal', p: [B.hang[0], y, z0 + 0.05] }); k.box('metal', 0.04, 0.035, 0.01, { color: C.steel, region: 'metal', p: [B.hang[0], y + 0.017, z0 + 0.095] }); }
+    // 上格的玻璃门：合页在左边，开着（往外转过一百多度，贴着壁柱）；不锈钢框、玻璃（深色亮面）、门上贴的字
+    k.at([-w / 2, mid + (h - split) / 2, zf + 0.008], [0, -1.95, 0], () => {
+      const dw = w - 0.02, dh = h - split - 0.03, o = { color: C.steel, region: 'metal' };
+      k.box('metal', dw, 0.03, 0.02, { ...o, p: [dw / 2, dh / 2 - 0.015, 0] }); k.box('metal', dw, 0.03, 0.02, { ...o, p: [dw / 2, -dh / 2 + 0.015, 0] });
+      k.box('metal', 0.03, dh, 0.02, { ...o, p: [0.015, 0, 0] }); k.box('metal', 0.03, dh, 0.02, { ...o, p: [dw - 0.015, 0, 0] });
+      k.box('gloss', dw - 0.05, dh - 0.05, 0.006, { color: 0x4e5c62, p: [dw / 2, 0, 0] });
+      k.plane('paint', 0.22, 0.22, { region: 'hydrant', label: true, color: C.red, p: [dw / 2, 0.1, 0.0045] });
+    });
+    // 箱子上方的牌子、旁边的手动报警按钮（红盒、白面、透明小盖）
+    k.plane('paint', 0.26, 0.26, { region: 'hydrant', label: true, color: C.red, p: [0, top + 0.28, z0 + 0.002] });
+    k.box('gloss', 0.09, 0.09, 0.035, { color: C.red, p: [0.4, 1.45, z0 + 0.0175] }); k.box('gloss', 0.05, 0.05, 0.006, { color: C.white, p: [0.4, 1.45, z0 + 0.038] });
+  });
+  return meshes(g, geos);
+}
+
 /** 信号弹：一个打开的橙色防水硬壳箱——圆角的箱体和箱盖、盖上几道加强筋、后面一根铰链轴、前面两个搭扣和一个提手、正面一张标签；
  * 里面一块黑色海绵内衬，挖了三道槽：两支红色信号弹躺在槽里，第三道空着（点着的那支在地上）。漆面带磨损（漆面图集） */
 export function buildFlareKit(g) {
@@ -1006,7 +1052,7 @@ export function warmProps() {
   WARM = true;
   const q = slices(), grp = () => new THREE.Group();
   const jobs = [() => buildLocker(grp()), () => lockerDoors(), () => buildSwitchCabinet(grp()), () => switchLever(false), () => buildTable(grp()),
-    ...['撬棍', '保险丝', '灭火器', '门禁卡'].map((t) => () => buildTool(grp(), t)), () => buildFuseBox(grp()), () => fuseInserts(), () => buildFlareKit(grp()), () => litFlare(),
+    ...['撬棍', '保险丝', '灭火器', '门禁卡'].map((t) => () => buildTool(grp(), t)), () => buildFuseBox(grp()), () => fuseInserts(), () => buildFlareKit(grp()), () => litFlare(), () => buildHoseCabinet(grp()),
     () => buildDebris(grp()), () => buildFire(grp()), () => buildFireStatic(grp()), () => powderSheet(), () => buildShutterFrame(grp()), () => buildShutterCurtain(grp()), () => buildDoorFrame(grp()), () => buildDoorLeaf(grp())];
   for (const j of jobs) q.add(j);
   return true;

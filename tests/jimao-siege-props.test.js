@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { ATLAS, atlasRect, atlasSize, nosingY, STAIR, flameLayout, propStats, propMats, fireStep, flameMaterial, Kit, SHUTTER, DOOR, FIRE, faceYaw, propTop, softSlab, switchLever, warmProps } from '../src/jimao/siege-props.js';
+import { ATLAS, atlasRect, atlasSize, nosingY, STAIR, flameLayout, propStats, propMats, fireStep, flameMaterial, Kit, SHUTTER, DOOR, FIRE, faceYaw, propTop, softSlab, switchLever, warmProps, buildHoseCabinet, HOSE_BOX } from '../src/jimao/siege-props.js';
 import { lockerModel, switchModel, toolModel, gateModel, gateBlock, flareModel, GATES } from '../src/jimao/siege.js';
 import { MEMORY_PROFILES } from '../src/render/device.js';
 
@@ -45,6 +45,9 @@ test('每个物件只有几次绘制：同材质的零件合并了', () => {
   check('武器柜', lockerModel(), budget.locker); check('配电柜', switchModel(), budget.switch); check('信号弹', flareModel(), budget.flare);
   for (const t of ['撬棍', '保险丝', '灭火器', '门禁卡']) check(t, toolModel(t), budget.tool);
   for (const t of Object.keys(GATES)) { check(`${t} 交互点`, gateModel(t), budget.sign); check(`${t} 大件`, gateBlock(t), budget.block); }
+  // 店门外的消火栓箱：几十个零件，按材质合成三四次绘制；挂斧子的地方在上格里（箱膛前面、箱子两侧之间）
+  const box = new THREE.Group(); buildHoseCabinet(box); check('消火栓箱', box, 4);
+  const [hx, hy, hz] = HOSE_BOX.hang; assert.ok(Math.abs(hx) < HOSE_BOX.w / 2 - 0.1 && hy > HOSE_BOX.y0 + HOSE_BOX.split && hy + 0.62 < HOSE_BOX.y0 + HOSE_BOX.h + 0.05 && hz > HOSE_BOX.z0 && hz < HOSE_BOX.z0 + HOSE_BOX.d);
   // 合并前后对比：杂物堆以前 4 个方块 4 次绘制，现在几十个零件也只有两三次
   const deb = propStats(gateBlock('debris')); assert.ok(deb.draws <= 3 && deb.tris > 300, JSON.stringify(deb));
 });

@@ -3,6 +3,8 @@
 //               换弹是倾枪 → 退弹匣 → 上新弹匣 →（打空时）释放套筒；
 //   战术刀：近战键（V / F，手机「近战」键）随时出刀——不管手里拿的是哪把枪，刺完自动换回来；也可以切到 3 号位一直拿着刀；
 //           2.3 米内、准星附近的敌人中刀掉 150 血（步枪手、突击手、狙击手一刀，重装兵两刀）。
+//   消防斧：丧尸围城开局店门外的消火栓箱里拿到（setMelee('axe')），换掉近战槽里的刀——同一个键、同一只手；比刀慢，
+//           够得远一点、一下抡倒两只（各自要看得见）、推得更狠。手搭的模型：木柄、黑胶套握把、红漆斧身和尖镐、磨亮的刃口。
 //   切枪：1 步枪 / 2 手枪 / 3 刀，Q 换回上一把，滚轮轮换；手机上多一个「切枪」键。切的时候先把手里的放下去、再把新的举起来。
 // 两个新模型都是照着原游戏步枪握把的位置搭的，手直接用步枪那双（克隆出来），所以握持对得上。
 // 手枪是单手持枪（用户要求）：平时只有右手，左手只在换弹和掏枪拉套筒时上来。
@@ -19,6 +21,22 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 export const PISTOL = Object.freeze({ name: 'P17 手枪', mag: 12, reserve: 48, reserveMax: 72, damage: 36, range: 90, interval: 0.115, holdInterval: 0.2,
   spreadHip: 0.022, spreadAds: 0.0035, reload: 1.45, reloadEmpty: 1.75, adsRate: 11, recoil: 0.011 });
 export const KNIFE = Object.freeze({ name: '战术刀', damage: 150, reach: 2.3, cone: 0.9, time: 0.5, hitAt: 0.14, cooldown: 0.08, lunge: 2.6 });
+/**
+ * 消防斧：hits 一下最多砍中几只（近的先，各自要看得见）；shove / shoveReach 这一下的推搡力道和距离（刀用 SHOVE 的）。
+ * 一斧 200：行尸、奔尸、扑袭者、喷酸者一下倒，胖尸（190）也一下；比刀慢（0.8 秒一下），拿着它还是跑得和拿刀一样快
+ */
+export const AXE = Object.freeze({ name: '消防斧', damage: 200, reach: 2.7, cone: 0.95, hits: 2, time: 0.8, hitAt: 0.3, cooldown: 0.15, lunge: 2.0, shove: 9, shoveReach: 2.6 });
+/** 近战槽里能放的东西（setMelee 换）；刀是默认的 */
+export const MELEE = Object.freeze({ knife: KNIFE, axe: AXE });
+/**
+ * 近战的握姿（整条前臂绕手肘转）：idle 平时的转角 [x, y, z]、elbow 这个姿势下手肘在镜头里的位置（再加上手肘到握把那一截转过去的位置）；
+ * 挥的时候 slashPose 的三段（back 往后收 / thrust 送出去 / sweep 扫过去）各加多少位置 p、转角 r。
+ * 刀：横着从右往左划；斧子：先举到右肩上方，再斜着往左下劈
+ */
+export const MELEE_POSE = Object.freeze({
+  knife: Object.freeze({ idle: [-0.42, 0.3, 0.38], elbow: [0.105, -0.085, -0.4], back: Object.freeze({ p: [0, 0, 0.05], r: [0, -0.3, -0.1] }), thrust: Object.freeze({ p: [0, 0.02, -0.12], r: [-0.16, 0, 0] }), sweep: Object.freeze({ p: [0.03, 0, -0.24], r: [0, 0.5, 0.3] }) }),
+  axe: Object.freeze({ idle: [-0.2, 0.53, -0.56], elbow: [0.25, -0.16, -0.55], back: Object.freeze({ p: [-0.02, 0.07, 0.09], r: [0.2, -0.1, 0.02] }), thrust: Object.freeze({ p: [0.3, 0.08, -0.25], r: [-0.16, 0.03, 0.32] }), sweep: Object.freeze({ p: [-0.25, 0.37, -0.21], r: [-1.02, -0.34, 1.27] }) }),
+});
 export const SWAP = Object.freeze({ lower: 0.17 });
 /** 推搡：出刀的同时把贴身的敌人推开。reach 米内、身前（夹角余弦 > cos）的都算；power 是推开的速度（米 / 秒，持续 0.22 秒） */
 export const SHOVE = Object.freeze({ reach: 2.1, cos: 0.3, power: 7 });
@@ -176,6 +194,43 @@ export function knifeGeometry() {
   return k;
 }
 
+/**
+ * 消防斧的几何：原点在握把中心（右手握的地方，靠近柄尾），柄朝 +y（顶上是斧头），刃朝 −z、尖镐朝 +z，x 是厚度方向；
+ * 再绕柄转 AXE_SPIN（刃转到左前方），和刀一样倾到握把的角度。
+ * 返回 { paint（红漆的斧身和尖镐）, steel（刃口、柄头的铁箍）, wood（木柄）, grip（黑胶套握把） }。
+ * 斧身、尖镐是把带分段的方块按一个函数捏出来的：越往刃口越薄、越高（下面长出一截斧胡），刃口是一道外凸的弧；尖镐越往外越细、略往下勾
+ */
+export const AXE_SPIN = 1.1; // 斧头绕着柄转过去这么多（弧度）：刃朝左前、红漆的那一面朝着镜头（不转的话拿在手里只看得到一条边）
+export function axeGeometry() {
+  const yc = 0.55, T = 0.028, H = 0.092, zEye = -0.03, zEdge = -0.152;
+  /** 斧身从 u0 到 u1（0 = 贴着斧眼，1 = 刃口）那一段 */
+  const blade = (u0, u1) => {
+    const z0 = zEye + (zEdge - zEye) * u0, z1 = zEye + (zEdge - zEye) * u1, g = new THREE.BoxGeometry(T, H, Math.abs(z1 - z0), 1, 6, 4).translate(0, yc, (z0 + z1) / 2), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), u = clamp01((z - zEye) / (zEdge - zEye)), v = (y - yc) / (H / 2);
+      p.setXYZ(i, x * (1 - 0.84 * Math.pow(u, 0.7)), yc + v * (H / 2) * (1 + 1.05 * Math.pow(u, 1.3)) - 0.026 * Math.pow(u, 1.5), z - 0.016 * u * u * (1 - v * v));
+    }
+    return g;
+  };
+  /** 尖镐：从斧眼后面往外伸 0.1 米，收成一个尖、略往下勾 */
+  const spike = () => {
+    const z0 = 0.03, len = 0.1, g = new THREE.BoxGeometry(0.026, 0.05, len, 1, 2, 5).translate(0, yc, z0 + len / 2), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), u = clamp01((z - z0) / len); p.setXYZ(i, x * (1 - 0.86 * u), yc + (y - yc) * (1 - 0.88 * u) - 0.014 * u * u, z); }
+    return g;
+  };
+  // 木柄：椭圆截面（前后厚、左右薄），柄尾一个鼓出来的柄头，靠斧头那一截粗一点
+  // 柄和握把是圆的：法线保持平滑（不走 merged 的按面算法线，不然一棱一棱的）
+  const handle = new THREE.LatheGeometry([[0, -0.088], [0.0165, -0.088], [0.019, -0.078], [0.0158, -0.062], [0.0146, 0], [0.0136, 0.3], [0.0152, 0.48], [0.0164, 0.6], [0, 0.6]].map(([r, y]) => new THREE.Vector2(r, y)), 16);
+  handle.scale(0.8, 1, 1);
+  const grip = [cyl(0.0168, 0.0168, 0.15, 0, 0.0225, 0, 12, 'y').scale(0.82, 1, 1)];
+  for (let i = 0; i < 4; i++) grip.push(new THREE.TorusGeometry(0.0168, 0.0022, 6, 14).rotateX(Math.PI / 2).scale(0.82, 1, 1).translate(0, -0.035 + i * 0.038, 0)); // 握把上几道防滑棱
+  const paint = [box(0.034, 0.106, 0.064, 0, yc, 0, 0.006), blade(0, 0.84), spike()];
+  const steel = [blade(0.84, 1), cyl(0.0182, 0.0182, 0.012, 0, yc - 0.058, 0, 12, 'y').scale(0.82, 1, 1), box(0.012, 0.004, 0.02, 0, yc + 0.054, 0)]; // 刃口、斧眼下面的铁箍、柄顶上的楔子
+  const out = { paint: merged(paint), steel: merged(steel), wood: handle, grip: mergeGeometries(grip) };
+  for (const g of Object.values(out)) { g.rotateY(AXE_SPIN); g.rotateX(GRIP_TILT); }
+  return out;
+}
+
 const ease = (k) => k * k * (3 - 2 * k);
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
@@ -315,8 +370,22 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   const KM = createKnifeMaterials({ defer: true }); later.add(() => KM.dress());
   mesh(kg.blade, KM.blade, kBody); mesh(kg.fuller, KM.blade, kBody); mesh(kg.handle, KM.handle, kBody); mesh(kg.guard, KM.steel, kBody);
   cloneHand(0, kArm);
-  // 平时的握姿（刀尖朝前上方、往里斜）和这个姿势下手肘在镜头里的位置
-  const K_IDLE = new THREE.Euler(-0.42, 0.3, 0.38), K_ELBOW = new THREE.Vector3(0.105, -0.085, -0.4).add(ELBOW.clone().applyEuler(K_IDLE));
+  // 消防斧：挂在同一条前臂上（同一只手握着），换上斧子时刀藏起来（setMelee）。网格要在下面设图层之前挂好——游戏里枪在第 3 层，不在那层的画不出来
+  const ag = axeGeometry();
+  const AM = {
+    paint: new THREE.MeshStandardMaterial({ color: 0xb0281e, metalness: 0.25, roughness: 0.42 }),
+    steel: new THREE.MeshStandardMaterial({ color: 0xaeb3b8, metalness: 0.9, roughness: 0.24 }),
+    wood: new THREE.MeshStandardMaterial({ color: 0x8c5a30, metalness: 0, roughness: 0.6 }),
+    grip: new THREE.MeshStandardMaterial({ color: 0x151515, metalness: 0, roughness: 0.85 }),
+  };
+  const aBody = new THREE.Group(); aBody.name = 'viewmodel-axe'; aBody.position.set(...GRIP); aBody.visible = false; kArm.add(aBody);
+  for (const k of Object.keys(ag)) mesh(ag[k], AM[k], aBody);
+  // 平时的握姿（刀尖朝前上方、往里斜；斧子竖着提在右边）和这个姿势下手肘在镜头里的位置（MELEE_POSE）
+  const POSE = {};
+  for (const [k, q] of Object.entries(MELEE_POSE)) { const idle = new THREE.Euler(...q.idle); POSE[k] = { ...q, idle, elbow: new THREE.Vector3(...q.elbow).add(ELBOW.clone().applyEuler(idle)) }; }
+  let MW = KNIFE, mKind = 'knife';
+  /** 近战槽里换成什么：'knife' / 'axe'。换了以后近战键、拿着刀时的开火键都用它 */
+  function setMelee(kind) { const w = MELEE[kind]; if (!w) return false; MW = w; mKind = kind; kBody.visible = w === KNIFE; aBody.visible = w !== KNIFE; return true; }
 
   for (const root of [pistolRoot, knifeRoot]) { root.visible = false; camera.add(root); root.traverse((o) => { if (layer) o.layers.set(layer); }); }
 
@@ -385,37 +454,40 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     return pose;
   }
 
-  /** 出刀：算一次命中（刺出去的那一刻） */
+  /**
+   * 出刀：算一次命中（刺出去 / 劈下去的那一刻）。够得着的按远近排：刀只扎最近的那一只（它被墙挡住就算没扎到）；
+   * 斧子一下最多砍中 hits 只，每只各自要看得见（挡住的那只跳过，接着砍后面的）
+   */
   function knifeHit() {
-    const eye = camera.getWorldPosition(v3), f = camera.getWorldDirection(v1);
-    let best = null, bd = Infinity;
-    for (const e of G.enemies?.list || []) {
-      if (!e.alive || !e.active || !knifeReaches(eye, f.x, f.y, f.z, e)) continue;
-      const d = Math.hypot(e.pos.x - eye.x, e.pos.z - eye.z);
-      if (d < bd) { bd = d; best = e; }
+    const eye = camera.getWorldPosition(new THREE.Vector3()), f = camera.getWorldDirection(new THREE.Vector3()), hits = MW.hits || 1, list = [];
+    for (const e of G.enemies?.list || []) if (e.alive && e.active && knifeReaches(eye, f.x, f.y, f.z, e, MW.reach, MW.cone)) list.push({ e, d: Math.hypot(e.pos.x - eye.x, e.pos.z - eye.z) });
+    list.sort((a, b) => a.d - b.d);
+    let n = 0;
+    for (const { e, d } of list) {
+      if (n >= hits) break;
+      const point = new THREE.Vector3(e.pos.x, e.pos.y + 1.15, e.pos.z), dir = f.clone();
+      if (d > 0.8 && G.physics?.lineOfSight && !G.physics.lineOfSight(eye, point)) { if (hits === 1) break; continue; }
+      let killed = false;
+      try { killed = e.damage(MW.damage, point, dir, 'body') === true; } catch (err) { console.error('[零点突围] 刀伤害出错', err); }
+      G.events?.emit?.('impact', { point, normal: dir.clone().negate(), dist: d, surface: 'enemy', enemy: e, part: 'body', dir, from: 'player', killed });
+      G.events?.emit?.('player:hitEnemy', { enemy: e, part: 'body', killed, weak: false, melee: true, tool: mKind });
+      n++;
     }
-    if (!best) return false;
-    const point = new THREE.Vector3(best.pos.x, best.pos.y + 1.15, best.pos.z), dir = f.clone();
-    if (bd > 0.8 && G.physics?.lineOfSight && !G.physics.lineOfSight(eye, point)) return false;
-    let killed = false;
-    try { killed = best.damage(KNIFE.damage, point, dir, 'body') === true; } catch (e) { console.error('[零点突围] 刀伤害出错', e); }
-    G.events?.emit?.('impact', { point, normal: dir.clone().negate(), dist: bd, surface: 'enemy', enemy: best, part: 'body', dir, from: 'player', killed });
-    G.events?.emit?.('player:hitEnemy', { enemy: best, part: 'body', killed, weak: false, melee: true });
-    G.player?.addShake?.(0.18);
-    return true;
+    if (n) G.player?.addShake?.(MW === KNIFE ? 0.18 : 0.26);
+    return n > 0;
   }
   function slash() {
     if (K.t >= 0 || K.cool > 0) return false;
     K.t = 0; K.hit = false;
     G.events?.emit?.('weapon:melee', {});
-    // 推搡：刀只扎得到一个，但这一下会把贴身的都推开一步、打个趔趄——被围住的时候腾出空来（丧尸才有 shove，劫持者不吃这一套）
+    // 推搡：刀只扎得到一个，但这一下会把贴身的都推开一步、打个趔趄——被围住的时候腾出空来（丧尸才有 shove，劫持者不吃这一套）；斧子推得更远更狠
     {
-      const eye = camera.getWorldPosition(v3), f = camera.getWorldDirection(v1), fl = Math.hypot(f.x, f.z) || 1; let n = 0;
+      const eye = camera.getWorldPosition(v3), f = camera.getWorldDirection(v1), fl = Math.hypot(f.x, f.z) || 1, reach = Math.max(SHOVE.reach, MW.shoveReach || 0), power = MW.shove || SHOVE.power; let n = 0;
       for (const e of G.enemies?.list || []) {
         if (!e.alive || !e.active || !e.shove) continue;
         const dx = e.pos.x - eye.x, dz = e.pos.z - eye.z, d = Math.hypot(dx, dz);
-        if (d > SHOVE.reach || Math.abs(e.pos.y + 1.6 - eye.y) > 1.5 || (d > 0.6 && (dx * f.x + dz * f.z) / (d * fl) < SHOVE.cos)) continue;
-        if (e.shove(d > 0.05 ? dx / d : f.x / fl, d > 0.05 ? dz / d : f.z / fl, SHOVE.power)) n++;
+        if (d > reach || Math.abs(e.pos.y + 1.6 - eye.y) > 1.5 || (d > 0.6 && (dx * f.x + dz * f.z) / (d * fl) < SHOVE.cos)) continue;
+        if (e.shove(d > 0.05 ? dx / d : f.x / fl, d > 0.05 ? dz / d : f.z / fl, power)) n++;
       }
       if (n) { G.events?.emit?.('weapon:shove', { count: n }); G.player?.addShake?.(0.1); }
     }
@@ -423,7 +495,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const p = G.player;
     if (p?.onGround && p.vel) {
       const eye = camera.getWorldPosition(v3), f = camera.getWorldDirection(v1);
-      if ((G.enemies?.list || []).some((e) => e.alive && e.active && knifeReaches(eye, f.x, f.y, f.z, e, KNIFE.reach + 1.2))) { p.vel.x += f.x * KNIFE.lunge; p.vel.z += f.z * KNIFE.lunge; }
+      if ((G.enemies?.list || []).some((e) => e.alive && e.active && knifeReaches(eye, f.x, f.y, f.z, e, MW.reach + 1.2))) { p.vel.x += f.x * MW.lunge; p.vel.z += f.z * MW.lunge; }
     }
     return true;
   }
@@ -439,6 +511,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   }
   function applySwitch() {
     S.prev = S.cur; S.cur = S.next; S.next = null; S.phase = 'draw'; S.t = 0; S.racked = false;
+    if (S.cur === 'knife' && MW !== KNIFE) S.plain = true; // 斧子不像刀那样抛起来翻一圈：直接举起来
     for (const s of SLOTS_ALL) { const r = rootOf(s); if (s === 'rifle') rifle?.setVisible?.(S.shown && S.cur === 'rifle'); else if (r) r.visible = S.shown && S.cur === s; }
     if (S.cur === 'rifle') rifle?.snap?.();
     ui?.classList?.toggle('jm-knife', S.cur === 'knife');
@@ -559,16 +632,19 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     let pose = { back: 0, thrust: 0, sweep: 0 };
     if (K.t >= 0) {
       K.t += dt;
-      if (!K.hit && K.t >= KNIFE.hitAt) { K.hit = true; knifeHit(); }
-      pose = slashPose(K.t / KNIFE.time);
-      if (K.t >= KNIFE.time) { K.t = -1; K.cool = KNIFE.cooldown; if (S.quick && S.cur === 'knife') { const back = S.quick; S.quick = null; select(back, { plain: true }); } }
+      if (!K.hit && K.t >= MW.hitAt) { K.hit = true; knifeHit(); }
+      pose = slashPose(K.t / MW.time);
+      if (K.t >= MW.time) { K.t = -1; K.cool = MW.cooldown; if (S.quick && S.cur === 'knife') { const back = S.quick; S.quick = null; select(back, { plain: true }); } }
     }
     const amt = sway(K, dt), bobX = Math.sin(K.bob) * 0.005 * amt, bobY = -Math.abs(Math.cos(K.bob)) * 0.0045 * amt;
     // 平时刀尖朝前上方斜着握在右下；出刀：先往右后收，再往前往左刺
     // 挥的时候手肘往前送（手臂伸出去），不然前臂绕过来会贴到镜头上
-    knifeRoot.position.set(K_ELBOW.x + bobX + K.swayX * 0.5 + 0.03 * pose.sweep, K_ELBOW.y + bobY - K.swayY * 0.4 - 0.04 * K.sprint + 0.02 * pose.thrust, K_ELBOW.z + 0.05 * pose.back - 0.12 * pose.thrust - 0.24 * pose.sweep);
+    // 斧子：平时竖着提在右边，劈的时候先举到右肩上方、再斜着往左下劈（各段的量见 MELEE_POSE）
+    const Q = POSE[mKind], E = Q.elbow, I = Q.idle, b = pose.back, th = pose.thrust, sw = pose.sweep;
+    const lin = (i) => b * Q.back.p[i] + th * Q.thrust.p[i] + sw * Q.sweep.p[i], ang = (i) => b * Q.back.r[i] + th * Q.thrust.r[i] + sw * Q.sweep.r[i];
+    knifeRoot.position.set(E.x + bobX + K.swayX * 0.5 + lin(0), E.y + bobY - K.swayY * 0.4 - 0.04 * K.sprint + lin(1), E.z + lin(2));
     // 横着从右往左划（绕手肘转）：刀先往右后摆，再扫到左前方、略往下压
-    e1.set(K_IDLE.x - 0.16 * pose.thrust + 0.3 * K.sprint, K_IDLE.y - 0.3 * pose.back + 0.5 * pose.sweep + K.swayX, K_IDLE.z + 0.3 * pose.sweep - 0.1 * pose.back);
+    e1.set(I.x + ang(0) + 0.3 * K.sprint, I.y + ang(1) + K.swayX, I.z + ang(2));
     knifeRoot.quaternion.setFromEuler(e1);
     // 掏刀：刀离手往上一抛、前后翻一整圈落回手里，接住以后手腕一抖
     const dr = active ? S.pose : null;
@@ -595,7 +671,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   }
   const proxy = {
     stub: false,
-    get name() { return S.cur === 'pistol' ? PISTOL.name : S.cur === 'knife' ? KNIFE.name : S.cur === 'smg' ? SMG.name : S.cur === 'launcher' ? LAUNCHER.name : rifle?.name; },
+    get name() { return S.cur === 'pistol' ? PISTOL.name : S.cur === 'knife' ? MW.name : S.cur === 'smg' ? SMG.name : S.cur === 'launcher' ? LAUNCHER.name : rifle?.name; },
     // 拿着刀时报满弹（HUD 上数字藏起来了）：报 0 的话原游戏会一直提示「弹药耗尽」「弹药不足」
     get ammo() { return S.cur === 'pistol' ? P.ammo : S.cur === 'knife' ? 30 : S.cur === 'smg' ? Q.ammo : S.cur === 'launcher' ? L.ammo : rifle?.ammo; },
     get magSize() { return S.cur === 'pistol' ? PISTOL.mag : S.cur === 'knife' ? 30 : S.cur === 'smg' ? SMG.mag : S.cur === 'launcher' ? LAUNCHER.mag : rifle?.magSize; },
@@ -604,7 +680,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     get ads() { return S.phase ? 0 : S.cur === 'pistol' ? P.ads : S.cur === 'knife' ? 0 : S.cur === 'smg' ? Q.ads : S.cur === 'launcher' ? L.ads : rifle?.ads; },
     get spread() { return S.cur === 'pistol' ? P.spread : S.cur === 'knife' ? 0.004 : S.cur === 'smg' ? Q.spread : S.cur === 'launcher' ? L.spread : rifle?.spread; },
     get current() { return S.cur; }, get switching() { return !!S.phase; }, get slashing() { return K.t >= 0; },
-    pistol: P, knife: K, smg, launcher: gl, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm, smg: smg.root, launcher: gl.root }, parts: { pistol: pBody, knife: kBody, left: pLeft }, get draw() { return S.pose; },
+    /** 近战槽里是什么（'knife' / 'axe'）、够多远；setMelee(kind) 换（不随 reset() 换回刀：一局开始时由丧尸围城自己定） */
+    get melee() { return mKind; }, get meleeReach() { return MW.reach; }, setMelee,
+    pistol: P, knife: K, smg, launcher: gl, roots: { pistol: pistolRoot, knife: knifeRoot, rifle: rifleVm, smg: smg.root, launcher: gl.root }, parts: { pistol: pBody, knife: kBody, axe: aBody, left: pLeft }, get draw() { return S.pose; },
     select, slash, startReload, buildUi,
     /** 冲锋枪：模型加载好了交进来（run.js）；grant() = 这一局捡到了（换过去）；owns = 现在换得到 */
     skinSmg(gltf) { const ok = smg.attach(gltf); if (ok) { smg.root.visible = false; paintBtn(); } return ok; },
@@ -746,8 +824,8 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     dispose() {
       if (typeof removeEventListener === 'function') { removeEventListener('keydown', onKey); removeEventListener('wheel', onWheel); }
       for (const r of [pistolRoot, knifeRoot]) r.removeFromParent(); smg.dispose(); gl.dispose();
-      for (const g of [pg.frame, pg.slide, pg.dark, pg.mag, pg.trigger, pg.dots, kg.blade, kg.fuller, kg.handle, kg.guard]) g.dispose();
-      M.flash.map?.dispose?.(); for (const m of Object.values(M)) m.dispose(); KM.dispose();
+      for (const g of [pg.frame, pg.slide, pg.dark, pg.mag, pg.trigger, pg.dots, kg.blade, kg.fuller, kg.handle, kg.guard, ...Object.values(ag)]) g.dispose();
+      M.flash.map?.dispose?.(); for (const m of [...Object.values(M), ...Object.values(AM)]) m.dispose(); KM.dispose();
       later.stop();
       if (skin) { freeSkin(skin); skin = null; }
       if (pending) { freeSkin(pending); pending = null; }

@@ -212,7 +212,8 @@ function sworld({ enabled = true, tower = 'A' } = {}) {
   const heli = { root: new THREE.Group(), poses: [], setPose(p) { this.poses.push(p); }, reset() { this.parked = true; }, moveTo() {} };
   const director = { state: { mission: null, restore: false, checkpoint: null }, vehicles: { heli }, riding: false, opened: 0, openExtraction() { this.opened++; }, dead: [], deadActions(...a) { this.dead.push(a); } };
   const flow = { patrol: { soldier: 8 }, waves: [{ soldier: 5 }, { soldier: 6 }], pursuitExtra: 5 };
-  Object.assign(G, { game: { state: 'playing', run: { relays: [] }, refreshObjective() {} }, hud: { message: (t) => msgs.push(t), radio: (t) => msgs.push('R:' + t) }, rifle: { ammo: 30, reserve: 150 }, weapon: { picked: null, locked: [], select(s) { this.picked = s; }, lock(l) { this.locked = [...l]; if (l.length) this.picked = 'knife'; }, unlock(s, { equip = true } = {}) { const i = this.locked.indexOf(s); if (i < 0) return false; this.locked.splice(i, 1); if (equip) this.picked = s; return true; } } });
+  Object.assign(G, { game: { state: 'playing', run: { relays: [] }, refreshObjective() {} }, hud: { message: (t) => msgs.push(t), radio: (t) => msgs.push('R:' + t) }, rifle: { ammo: 30, reserve: 150 }, weapon: { picked: null, locked: [], melee: 'knife', granted: [], select(s) { this.picked = s; }, lock(l) { this.locked = [...l]; if (l.length) this.picked = 'knife'; }, unlock(s, { equip = true } = {}) { const i = this.locked.indexOf(s); if (i < 0) return false; this.locked.splice(i, 1); if (equip) this.picked = s; return true; },
+    setMelee(k) { this.melee = k; return true; }, grant(slot, { equip = true } = {}) { this.granted.push([slot, equip]); return true; } } });
   G.physics.stateOf = (p) => landAt(nav, p.x, p.z, p.y + 0.6); G.physics.forget = () => {};
   const thrown = { frag: 2, fire: 0, lure: 0 };
   const actions = { countOf: (k) => thrown[k] || 0, give(n, k = 'frag') { const b = thrown[k]; thrown[k] = Math.min(k === 'frag' ? 3 : 2, b + n); return thrown[k] - b; } };
@@ -739,7 +740,7 @@ test('治疗：轻伤先吃药、重伤用医疗包；医疗包包扎 2.6 秒回
   step(0.1); assert.equal(supplies.inv.pills, 2); assert.equal(thrown.fire, 1); assert.equal(supplies.drops.length, 2, '远处的、楼上的没捡');
   assert.ok(supplies.drops.includes(kit) && supplies.drops.includes(up) && !supplies.drops.includes(pill) && !supplies.drops.includes(fire));
   supplies.place('pills', { x: p.x + 0.4, y: p.y, z: p.z }); step(0.2); assert.equal(supplies.drops.length, 3, '带满了：留在原地');
-  const snap = supplies.snapshot(); assert.deepEqual({ ...snap }, { medkit: 0, pills: 2, frag: 2, fire: 1, lure: 0, hp: 100, smg: false, shells: -1 });
+  const snap = supplies.snapshot(); assert.deepEqual({ ...snap }, { medkit: 0, pills: 2, frag: 2, fire: 1, lure: 0, hp: 100, smg: false, shells: -1, melee: 'knife' });
   supplies.reset(); assert.equal(supplies.drops.length, 0); assert.equal(supplies.inv.pills, 0);
   thrown.fire = 0; player.health = 20; supplies.restore(snap); assert.equal(supplies.inv.pills, 2); assert.equal(thrown.fire, 1); assert.equal(player.health, 100);
   player.health = 20; supplies.restore({ ...snap, hp: 12 }); assert.equal(player.health, SUPPLY.restoreHp, '重来时血量至少 60');
@@ -752,8 +753,8 @@ test('围城里的补给和安全点：不回血；武器柜、工具间、楼�
   begin(); siege.reset();
   assert.equal(G.noRegen, true); assert.equal(supplies.enabled, true);
   const plan = siege.plan, kinds = () => supplies.drops.map((d) => d.kind).sort().join(',');
-  // 开局：武器柜 1 样 + 三间工具间各 2 样 + 楼顶 2 样；合闸、清关的补给还没出来
-  assert.equal(supplies.drops.length, LOOT.pistol.length + LOOT.locker.length + LOOT.holdout.length + 6 + LOOT.flare.length);
+  // 开局：武器柜 1 样 + 三间工具间各 2 样 + 楼顶 2 样 + 店门外消火栓箱里的斧子；合闸、清关的补给还没出来
+  assert.equal(supplies.drops.length, LOOT.pistol.length + LOOT.locker.length + LOOT.holdout.length + 6 + LOOT.flare.length + 1);
   assert.ok(!supplies.drops.some((d) => d.kind === 'medkit' && Math.abs(d.pos.y - plan.stages[plan.powerStage].site.y) < 0.5 && Math.hypot(d.pos.x - plan.stages[plan.powerStage].site.x, d.pos.z - plan.stages[plan.powerStage].site.z) < 3));
   for (let i = 0; i < plan.stages.length; i++) {
     const list = lootOf(plan, i), st = plan.stages[i]; if (i < plan.armsStage && st.kind !== 'pistol') { assert.equal(list.length, 0, '商场段的小步骤不出补给'); continue; } assert.ok(list.length >= 1 && list.length <= 3, st.id);
@@ -769,7 +770,7 @@ test('围城里的补给和安全点：不回血；武器柜、工具间、楼�
   cut(1); run(0.1);
   const c = director.state.checkpoint;
   assert.ok(c && c.kind === 'safe' && c.stage === plan.powerStage + 1 && c.label === '配电室' && c.start.yaw === 1.2 && c.start.pos.distanceTo(player.pos) < 1e-6);
-  assert.deepEqual({ ...c.kit }, { medkit: 0, pills: 1, frag: 2, fire: 0, lure: 1, hp: 64, smg: false, shells: -1 });
+  assert.deepEqual({ ...c.kit }, { medkit: 0, pills: 1, frag: 2, fire: 0, lure: 1, hp: 64, smg: false, shells: -1, melee: 'axe' }, '没拿消火栓箱里的斧子：撬棍那一步给上了');
   assert.ok(supplies.drops.length >= before + LOOT.switch.length - 2, kinds());
   // 倒下：阵亡页换成「回到配电室重来」
   G.events.emit('player:dead', {}); assert.equal(director.dead.length, 1); assert.match(director.dead[0][1], /配电室/);
@@ -1274,4 +1275,144 @@ test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那
     SIEGE.waves.forEach((w, i) => { if (msgs.some((t) => String(t).startsWith(`第 ${i + 1} 波`))) assert.ok(born.some((q) => q.t >= w), `${tower} 第 ${i + 1} 波喊了就有出来的`); });
     assert.ok(siege.onRoof(player.pos), '人在露天的屋面上（雾退远）');
   }
+});
+
+// ---- 救人：小许出得来、跟得上 ----
+/** 被困的那家店：店面多边形、门面、开局 / 撬棍 / 救人 / 扶梯口几处地点 */
+function rescueScene() {
+  const plan = siegePlan(seq(7), L, nav, runs), M = plan.mall, R = M.rescue, at = plan.stageOf;
+  const poly = L.levels.find((l) => l.id === 'P1-3F').units.find((u) => u.id === R.unit).polys[0];
+  return { plan, M, R, poly, site: plan.stages[at('rescue')].site, bike: plan.stages[at('crowbar')].site, mark: plan.stages[at('escort')].site };
+}
+/** 玩家从 route 的起点按 4 米 / 秒走到终点（朝着走的方向），每帧都跑 tick */
+function walk(player, route, tick, speed = 4) {
+  player.pos.set(route[0].x, player.pos.y, route[0].z);
+  for (let wi = 1, i = 0; i < 30 * 60 && wi < route.length; i++) {
+    const w = route[wi], dx = w.x - player.pos.x, dz = w.z - player.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.05) { wi++; continue; }
+    const k = Math.min(1, speed / 30 / d); player.pos.x += dx * k; player.pos.z += dz * k; player.yaw = Math.atan2(-dx, -dz); tick();
+  }
+}
+
+test('救出来的小许从店里走出来跟着你：不给你让枪线、不隔着店面玻璃站住；从四个方向走到门口、他从店里正中或者玻璃后面出发，两秒内都出了店', () => {
+  const { R, poly, site, bike } = rescueScene(), f = R.front, len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0), tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len;
+  // 门外那一点：在店外、站得住、从里面走得到，不在撬门的人的视线上
+  assert.ok(R.exit && !pointInPoly([R.exit.x, R.exit.z], poly)); const ex = landAt(nav, R.exit.x, R.exit.z, R.exit.y + 0.6); assert.ok(ex && clear(nav, ex));
+  assert.ok(findPath(nav, landAt(nav, R.inside.x, R.inside.z, R.inside.y + 0.6), ex), '从店里走得到门外那一点');
+  { const dx = R.exit.x - site.x, dz = R.exit.z - site.z, d = Math.hypot(dx, dz); assert.ok(d > 0.8 && -(dx * f.nx + dz * f.nz) / d < 0.87, '不挡在撬门的人跟前'); }
+  const from = landAt(nav, bike.x, bike.z, bike.y + 0.6), to = landAt(nav, site.x, site.z, site.y + 0.6);
+  const routes = { bike: findPath(nav, from, to).map((p) => ({ x: p.x, z: p.z })), front: [{ x: site.x + f.nx * 7, z: site.z + f.nz * 7 }, site], sideA: [{ x: site.x + tx * 7, z: site.z + tz * 7 }, site], sideB: [{ x: site.x - tx * 7, z: site.z - tz * 7 }, site] };
+  const { squad, player, run } = qworld(); squad.wanted = false;
+  const cases = [];
+  for (const name of Object.keys(routes)) for (const start of ['inside', 'glass', 'exit']) cases.push([name, start]);
+  cases.push(['bike', 'mates']);
+  for (const [name, start] of cases) {
+    squad.wanted = start === 'mates'; squad.reset(); player.pos.set(site.x, site.y, site.z);
+    const tick = () => squad.update(1 / 30);
+    walk(player, routes[name], tick);
+    // 撬卷帘：对着店门站两秒多
+    player.yaw = Math.atan2(-(R.inside.x - player.pos.x), -(R.inside.z - player.pos.z)); run(2.4);
+    const at = start === 'glass' ? { x: -132.13, y: R.inside.y, z: -112.15 } : R.inside; // glass：贴着店面玻璃里侧（以前就在这儿站住不动了）
+    assert.ok(pointInPoly([at.x, at.z], poly));
+    const xu = squad.join('xu', at, start === 'exit' || start === 'mates' ? { exit: R.exit } : {});
+    let out = null;
+    for (let t = 0; t < 4; t += 1 / 30) { run(1 / 30); if (out === null && !pointInPoly([xu.pos.x, xu.pos.z], poly)) out = t; }
+    const d = Math.hypot(xu.pos.x - player.pos.x, xu.pos.z - player.pos.z);
+    assert.ok(out !== null && out < 2, `${name}/${start}：${out === null ? '一直没出店' : `${out.toFixed(1)} 秒出店`}`);
+    assert.ok(!pointInPoly([xu.pos.x, xu.pos.z], poly) && d < SQUAD.follow.far + 1, `${name}/${start}：四秒后离你 ${d.toFixed(1)} 米、${pointInPoly([xu.pos.x, xu.pos.z], poly) ? '在店里' : '在店外'}`);
+    assert.ok(xu.holdT <= 0, '小许不会为了让枪线站住');
+    squad.leave('xu');
+  }
+});
+
+test('小许卡在你看不见、他自己又走不出来的地方（店里玻璃后面）：两秒多以后直接跟到你身后；救人那家店撬开以后人进得去（单人也能进去扶他），丧尸照样不从里面冒', () => {
+  const { R, poly, site, mark } = rescueScene();
+  const { G, squad, player, run } = qworld(); squad.wanted = false; squad.reset();
+  player.pos.set(site.x, site.y, site.z); player.yaw = Math.atan2(-(site.x - mark.x), -(site.z - mark.z)); run(0.2);
+  // 店里一处你看不见的地方（隔着玻璃），而且寻路不给他路（模拟走不出来）
+  const eye = new THREE.Vector3(site.x, site.y + 1.4, site.z), c = poly.reduce((a, q) => [a[0] + q[0] / poly.length, a[1] + q[1] / poly.length], [0, 0]);
+  let hide = null;
+  for (let i = 0; i < 400 && !hide; i++) {
+    const a = (i * 2.39996) % (Math.PI * 2), r = 0.3 + (i % 20) * 0.25, x = c[0] + Math.cos(a) * r, z = c[1] + Math.sin(a) * r, st = landAt(nav, x, z, site.y + 0.6);
+    if (st && clear(nav, st) && pointInPoly([x, z], poly) && !G.physics.lineOfSight(eye, new THREE.Vector3(x, site.y + 1.4, z))) hide = { x, y: site.y, z };
+  }
+  assert.ok(hide, '店里有你看不见的地方');
+  G.physics.nav.requestPath = (a, b, cb) => { cb(null); return { cancel() {} }; };
+  const xu = squad.join('xu', hide);
+  run(1.5); assert.ok(pointInPoly([xu.pos.x, xu.pos.z], poly), '刚看不见一会儿：先不动他');
+  run(SQUAD.follow.lost);
+  const d = Math.hypot(xu.pos.x - player.pos.x, xu.pos.z - player.pos.z);
+  assert.ok(!pointInPoly([xu.pos.x, xu.pos.z], poly) && d < SQUAD.follow.far + 1, `跟到你身后了（离你 ${d.toFixed(1)} 米）`);
+  squad.leave('xu');
+  // 单人：救人那家店撬开以前进不去，撬开以后进得去；不管撬没撬开，尸潮都不从店里冒
+  const { siege, begin, cut, run: srun, player: p2, zombies } = sworld();
+  const m = begin(), at = m.plan.stageOf, inside = m.plan.mall.rescue.inside;
+  srun(0.1); cut(at('crowbar') + 1); srun(0.1);
+  assert.equal(siege.inArea({ floor: 'P1-3F', x: inside.x, z: inside.z }), false, '还没撬开：进不去');
+  cut(1); srun(0.1); assert.equal(siege.state.stage, at('escort'));
+  assert.equal(siege.inArea({ floor: 'P1-3F', x: inside.x, z: inside.z }), true, '撬开了：人进得去');
+  p2.pos.set(mark.x, mark.y, mark.z);
+  for (let k = 0; k < 3; k++) { for (const z of zombies.alive()) z._deactivate(); siege.horde(40); assert.ok(!zombies.alive().some((z) => Math.abs(z.pos.y - inside.y) < 2 && pointInPoly([z.pos.x, z.pos.z], poly)), '尸潮不从救人那家店里冒'); }
+});
+
+test('护送：你走到扶梯口差一步（1.5 米）没踩到点上，小许跟在你身后也算到；没有队友模块时按你自己算', () => {
+  const { G, siege, begin, cut, run, player, zombies } = sworld();
+  const squad = createSquad(G, { scene: G.scene, nav, zombies, siege, director: { riding: false }, rng: seq(5) }); G.squad = squad; squad.wanted = false; squad.reset();
+  G.game.debugCut = () => { const r = G.game.run.relays.find((q) => !q.cut); if (r) r.cut = true; };
+  const m = begin(), at = m.plan.stageOf, S = siege.state, site = m.plan.stages[at('rescue')].site, mark = m.plan.stages[at('escort')].site, R = m.plan.mall.rescue;
+  const calm = () => { for (const z of zombies.alive()) z._deactivate(); squad.update(1 / 30); };
+  run(0.1, calm); cut(at('crowbar') + 1); run(0.1, calm);
+  player.pos.set(site.x, site.y, site.z); player.yaw = Math.atan2(-(R.inside.x - site.x), -(R.inside.z - site.z)); run(0.5, calm);
+  cut(1); run(0.2, calm); assert.equal(S.stage, at('escort')); const xu = squad.guest; assert.ok(xu, '小许出来了');
+  // 走到离扶梯口那一点 1.5 米的地方（从救人那边过来）
+  const dx = site.x - mark.x, dz = site.z - mark.z, dl = Math.hypot(dx, dz), short = { x: mark.x + dx / dl * 1.5, z: mark.z + dz / dl * 1.5 };
+  const route = findPath(nav, landAt(nav, site.x, site.z, site.y + 0.6), landAt(nav, short.x, short.z, site.y + 0.6)).map((q) => ({ x: q.x, z: q.z }));
+  walk(player, route, () => { G.time.frame++; siege.update(1 / 30); calm(); }, 3);
+  run(6, calm);
+  assert.equal(S.stage, at('pry'), `护送完成（小许离扶梯口 ${Math.hypot(xu.pos.x - mark.x, xu.pos.z - mark.z).toFixed(1)} 米、离你 ${Math.hypot(xu.pos.x - player.pos.x, xu.pos.z - player.pos.z).toFixed(1)} 米）`);
+  squad.dispose();
+});
+
+test('消防斧：开局店门外墙上挂着消火栓箱（门一开就在旁边、走得到），站过去就把近战换成斧子；没拿的话撬棍那一步顺手给上；斧子砍中有一点动静（刀没有）；新开一局又只有刀，从存档点回来斧子还在', () => {
+  const { G, siege, begin, cut, run, player, supplies, msgs, director } = sworld();
+  const m = begin(), at = m.plan.stageOf, M = m.plan.mall, A = M.axe, S = siege.state;
+  run(0.1); assert.equal(G.weapon.melee, 'knife', '开局只有刀');
+  assert.ok(A && A.wall && G.scene.getObjectByName('消火栓箱'), '箱子挂上了');
+  assert.ok(!pointInPoly([A.x, A.z], M.shop.poly), '在店门外'); assert.ok(Math.hypot(A.x - m.plan.stages[at('exit')].site.x, A.z - m.plan.stages[at('exit')].site.z) < 4, '就在门边');
+  const door = m.plan.stages[at('exit')].site, ds = landAt(nav, door.x, door.z, door.y + 0.6), as = landAt(nav, A.x, A.z, A.y + 0.6);
+  assert.ok(as && clear(nav, as) && findPath(nav, ds, as), '从门口走得到');
+  const drop = supplies.drops.find((d) => d.kind === 'axe'); assert.ok(drop, '斧子挂在箱子里');
+  assert.ok(Math.hypot(drop.pos.x - A.x, drop.pos.z - A.z) < 1e-6 && drop.model.position.y > 0.8, '人站在箱子跟前捡，斧子挂在箱子里（离地一米上下）');
+  // 卷帘没开：人出不了店，捡不到；开了以后无线电提醒，走过去就拿到
+  cut(2); run(0.1); assert.ok(msgs.some((t) => /消防箱里有把消防斧/.test(t)), '卷帘一开就提醒');
+  player.pos.set(A.x, A.y, A.z); run(0.2, () => supplies.update(1 / 30));
+  assert.equal(G.weapon.melee, 'axe'); assert.ok(!supplies.drops.some((d) => d.kind === 'axe')); assert.ok(msgs.some((t) => /捡到消防斧/.test(t)));
+  // 斧子砍中有动静，刀没有
+  S.noise = 0; G.events.emit('player:hitEnemy', { enemy: { pos: player.pos.clone() }, melee: true, tool: 'knife' }); assert.equal(S.noise, 0);
+  G.events.emit('player:hitEnemy', { enemy: { pos: player.pos.clone() }, melee: true, tool: 'axe' }); assert.equal(S.noise, SIEGE.noise.axe);
+  const n0 = msgs.length; cut(1); run(0.1); assert.equal(S.stage, at('crowbar') + 1); assert.ok(!msgs.slice(n0).some((t) => /顺手带上/.test(t)), '已经有了：不再给');
+  // 新开一局：又只有刀，斧子挂回箱子里；这回不去拿——撬棍那一步给上，箱子里那把收走
+  begin(); run(0.1); assert.equal(G.weapon.melee, 'knife'); assert.equal(supplies.drops.filter((d) => d.kind === 'axe').length, 1);
+  cut(at('crowbar') + 1); run(0.1); assert.equal(G.weapon.melee, 'axe', '没拿也不会错过'); assert.equal(supplies.drops.filter((d) => d.kind === 'axe').length, 0); assert.ok(msgs.some((t) => /顺手带上/.test(t)));
+  // 从合闸那个存档点回来（原游戏重置了武器、近战换回了刀）：开打第一帧斧子还给你
+  director.state.restore = { kind: 'safe', stage: m.plan.powerStage + 1, kit: null }; G.weapon.melee = 'knife'; siege.reset(); run(0.1);
+  assert.equal(G.weapon.melee, 'axe', '存档点在撬棍之后：斧子还在'); assert.ok(!supplies.drops.some((d) => d.kind === 'axe'), '不再挂一把');
+  director.state.restore = false; siege.enabled = false; siege.reset(); assert.equal(G.weapon.melee, 'knife', '零点突围里还是刀');
+});
+
+test('榴弹枪提前：一层武器柜一开就给（不换到手上，告诉人按什么换）；第二道关那把还在，已经有了再捡只算两发榴弹', () => {
+  const { G, siege, begin, cut, run, msgs, supplies, player } = sworld();
+  const m = begin(), at = m.plan.stageOf;
+  cut(at('arms')); run(0.1); assert.equal(G.weapon.granted.length, 0, '武器柜之前没有');
+  cut(1); run(0.1); assert.deepEqual(G.weapon.granted, [['launcher', false]], '和步枪一起给，不换到手上'); assert.equal(G.weapon.picked, 'rifle');
+  assert.ok(msgs.some((t) => /榴弹枪.*按 5 换/.test(t)), msgs.filter((t) => /榴弹/.test(t)).join(' | '));
+  assert.ok(lootOf(m.plan, m.plan.gates[1].stage).includes('launcher'), '第二道关的保底还在');
+  // 换成手机：说「点换枪键」
+  const { G: G2, begin: b2, cut: c2, run: r2, msgs: m2 } = sworld(); const mm = b2(); G2.input = { touch: true }; c2(mm.plan.stageOf('arms') + 1); r2(0.1); assert.ok(m2.some((t) => /榴弹枪.*点换枪键切换/.test(t)));
+  // 第二把：已经有了 → 「榴弹 +2」；没有 → 「捡到榴弹枪」
+  supplies.enabled = true; const p = player.pos;
+  G.weapon.owns = { launcher: true }; supplies.place('launcher', { x: p.x + 0.3, y: p.y, z: p.z }); for (let k = 0; k < 6; k++) supplies.update(1 / 30);
+  assert.ok(msgs.includes('榴弹 +2') && !msgs.some((t) => /捡到榴弹枪/.test(t)), msgs.slice(-3).join(' | '));
+  G.weapon.owns = { launcher: false }; supplies.place('launcher', { x: p.x + 0.3, y: p.y, z: p.z }); for (let k = 0; k < 6; k++) supplies.update(1 / 30);
+  assert.ok(msgs.some((t) => /捡到榴弹枪 · 一发一装，按 5 换/.test(t)));
 });
