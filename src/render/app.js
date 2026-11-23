@@ -975,8 +975,9 @@ export async function createApp(layout, canvas, { onProgress = () => {}, game = 
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
-    const interval = 1000 / ctx.quality.maxFps;
-    if (now - lastFrame < interval - 1) return;
+    // 帧率上限 0 = 不限：每次屏幕刷新都画（120 Hz 的屏就是 120 帧）。封顶时按刷新间隔的一半留余量，免得刚好差一点被跳过、帧间隔忽长忽短
+    const interval = ctx.quality.maxFps > 0 ? 1000 / ctx.quality.maxFps : 0;
+    if (interval && now - lastFrame < interval - 4) return;
     lastFrame = now - ((now - lastFrame) % interval || 0);
     if (!Number.isFinite(lastFrame)) lastFrame = now;
     const dt = Math.min(clock.getDelta(), 0.1);

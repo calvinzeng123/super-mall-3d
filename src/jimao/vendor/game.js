@@ -6712,8 +6712,9 @@ function v_(i) {
         }
         try {
           l = performance.now();
-          let P = e.requestPointerLock();
-          P && P.catch && P.catch(() => m());
+          let P;
+          try { P = e.requestPointerLock({ unadjustedMovement: true }); } catch { P = e.requestPointerLock(); }
+          P && P.catch && P.catch(() => { try { let Q = e.requestPointerLock(); Q && Q.catch && Q.catch(() => m()); } catch { m(); } });
         } catch {
           m();
         }

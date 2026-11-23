@@ -399,9 +399,9 @@ test('封面：七种任务都列出来、和任务表一一对应；文案里�
 test('性能微调：存的值会清洗；只把调过的项交给画质管理器；换一档画面质量回到默认（帧率上限 60）；敌人数、抗锯齿跟着变', async () => {
   const { normalizeTuning, tuningPatch, createTuning, TUNING_DEFAULT, TUNING_KEY, FPS_CAPS, ENEMY_CAPS } = await import('../src/jimao/tuning.js');
   assert.deepEqual(normalizeTuning(null), { ...TUNING_DEFAULT });
-  assert.equal(TUNING_DEFAULT.maxFps, 60, '默认不再封 30 帧');
+  assert.equal(TUNING_DEFAULT.maxFps, 0, '电脑上默认不封帧（跟屏幕刷新率），鼠标转视角才跟手');
   assert.deepEqual(normalizeTuning({ maxFps: 999, resolution: 0.1, shadows: 'yes', crowd: 7, enemies: 3 }), { ...TUNING_DEFAULT, resolution: 0.5, crowd: 1 });
-  assert.deepEqual(tuningPatch(normalizeTuning(null)), { maxFps: 60 }, '没调过的项不覆盖档位');
+  assert.deepEqual(tuningPatch(normalizeTuning(null)), { maxFps: 0 }, '没调过的项不覆盖档位');
   assert.deepEqual(tuningPatch(normalizeTuning({ maxFps: 30, resolution: 0.7, shadows: false, fx: false, crowd: 0 })), { maxFps: 30, resolution: 0.7, shadows: false, hdr: false, bloom: false, crowdDensity: 0 });
   assert.ok(FPS_CAPS.includes(30) && FPS_CAPS.includes(60) && ENEMY_CAPS.length === 3);
   // 接到假的画质管理器上
@@ -414,8 +414,13 @@ test('性能微调：存的值会清洗；只把调过的项交给画质管理�
   assert.deepEqual(calls.at(-1), [{ maxFps: 45 }, { persist: false }], '只改这一局，不动漫游存的画质');
   assert.equal(grade.n, 0); assert.equal(flow.maxAlive, 8); assert.ok(Math.abs(tuning.enemyScale() - 8 / 14) < 1e-9);
   tuning.resetToTier();
-  assert.deepEqual(calls.at(-1)[0], { maxFps: 60 }); assert.equal(grade.n, 4); assert.equal(flow.maxAlive, 14); assert.equal(tuning.enemyScale(), 1);
+  assert.deepEqual(calls.at(-1)[0], { maxFps: 0 }); assert.equal(grade.n, 4); assert.equal(flow.maxAlive, 14); assert.equal(tuning.enemyScale(), 1);
   assert.deepEqual(JSON.parse(store.get(TUNING_KEY)), { ...TUNING_DEFAULT });
+  // 手机上默认封 60（省电、少发热）；自己选过的照样生效
+  const phone = createTuning({ app, ui: null, grade, flow, mobile: true, storage: { getItem: () => null, setItem() {} } }); phone.apply();
+  assert.deepEqual(calls.at(-1)[0], { maxFps: 60 }); phone.resetToTier(); assert.deepEqual(calls.at(-1)[0], { maxFps: 60 });
+  const picked = createTuning({ app, ui: null, grade, flow, mobile: true, storage: { getItem: () => JSON.stringify({ maxFps: 0 }), setItem() {} } }); picked.apply();
+  assert.deepEqual(calls.at(-1)[0], { maxFps: 0 }, '手机上选了不限就不限');
 });
 
 test('全图行动地点：二十处分在八个片区（商场上下、屋顶、艺文馆、酒店、公寓、地铁），每处都在空地上、四周基本是空的、从开局点走得到、附近有敌人出生点', async () => {

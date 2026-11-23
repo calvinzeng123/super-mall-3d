@@ -4,10 +4,11 @@
 // 选一档画面质量 = 这几项回到那一档的默认值（帧率上限默认 60：以前「低」档封在 30 帧，打枪不跟手）；之后再单独调的会存下来
 // （localStorage 的 zerohour.tuning.v1，只管这个模式，不动园区漫游存的画质）。
 export const TUNING_KEY = 'zerohour.tuning.v1';
-export const FPS_CAPS = Object.freeze([30, 45, 60]);
+export const FPS_CAPS = Object.freeze([30, 45, 60, 120, 0]); // 0 = 不限：跟着屏幕刷新率（60 / 120 / 144 Hz）
 export const ENEMY_CAPS = Object.freeze([{ v: 8, label: '少' }, { v: 11, label: '中' }, { v: 14, label: '多' }]);
 /** 每一项：null = 跟着画面质量那一档走 */
-export const TUNING_DEFAULT = Object.freeze({ maxFps: 60, resolution: null, shadows: null, aa: null, fx: null, crowd: null, enemies: null });
+// 帧率上限默认不限：电脑上鼠标转视角，封在 60 帧以下（或者刷新率高的屏上封 60）会觉得拖；手机上默认 60（见 createTuning），省电、少发热
+export const TUNING_DEFAULT = Object.freeze({ maxFps: 0, resolution: null, shadows: null, aa: null, fx: null, crowd: null, enemies: null });
 
 /** 存下来的微调 → 干净的对象（不认识的、越界的丢掉） */
 export function normalizeTuning(v) {
@@ -30,8 +31,10 @@ export function tuningPatch(t) {
 }
 
 export function createTuning({ app, ui, grade, flow, mobile = false, storage = null, baseSamples = 4 }) {
-  let t;
-  try { t = normalizeTuning(JSON.parse(storage?.getItem(TUNING_KEY) || 'null')); } catch { t = normalizeTuning(null); }
+  let t, saved = null; try { saved = JSON.parse(storage?.getItem(TUNING_KEY) || 'null'); } catch { /* 坏数据当没存过 */ }
+  t = normalizeTuning(saved);
+  const fresh = () => { const v = normalizeTuning(null); if (mobile) v.maxFps = 60; return v; };
+  if (mobile && !FPS_CAPS.includes(saved?.maxFps)) t.maxFps = 60;
   const baseEnemies = flow?.maxAlive ?? 14;
   const save = () => { try { storage?.setItem(TUNING_KEY, JSON.stringify(t)); } catch { /* 无痕模式存不了 */ } };
   /** 敌人数量的比例（任务里的增援上限也按它缩，见 missions.js） */
@@ -54,7 +57,7 @@ export function createTuning({ app, ui, grade, flow, mobile = false, storage = n
     root = document.createElement('div'); root.className = 'jm-tune';
     root.innerHTML = `
       <div class="jm-tune-h"><b>性能微调</b><span data-f="fps"></span></div>
-      <div class="row"><label>帧率上限</label>${seg('maxFps', FPS_CAPS.map((v) => ({ v, label: `${v}` })))}</div>
+      <div class="row"><label>帧率上限</label>${seg('maxFps', FPS_CAPS.map((v) => ({ v, label: v > 0 ? `${v}` : '不限' })))}</div>
       <div class="row"><label for="jt-res">分辨率</label><div class="slider"><input id="jt-res" type="range" min="0.5" max="${maxRes}" step="0.05" data-tune="resolution"><output data-o="resolution"></output></div></div>
       <div class="row"><label>阴影</label>${toggle('shadows')}</div>
       <div class="row"><label>抗锯齿</label>${toggle('aa')}</div>
@@ -99,7 +102,7 @@ export function createTuning({ app, ui, grade, flow, mobile = false, storage = n
     /** 开局时调一次：把存下来的微调叠到当前档位上 */
     apply,
     /** 玩家换了一档画面质量：微调回到默认（帧率上限 60） */
-    resetToTier() { t = normalizeTuning(null); save(); apply(); },
+    resetToTier() { t = fresh(); save(); apply(); },
     /** 每帧调：数帧率，一秒刷一次显示 */
     tick(now = performance.now()) {
       frames++;

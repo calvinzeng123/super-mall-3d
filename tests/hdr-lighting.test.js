@@ -46,7 +46,7 @@ test('细项可以单独调并保存；不认识的值丢掉；遮蔽和高光�
   const again = createQualityManager({ storage }).current;
   assert.deepEqual([again.preset, again.hdr, again.ao, again.shadowSize, again.maxFps, again.textures, again.detail, again.indoorLights, again.decals, again.custom],
     ['balanced', true, true, 4096, 60, 'high', 'low', 4, false, true]);
-  assert.deepEqual(normalizeQuality({ preset: 'ultra', overrides: { shadowSize: 3000, maxFps: 120, textures: 'ultra', detail: 3, indoorLights: 6, hdr: 'yes', ao: false } }),
+  assert.deepEqual(normalizeQuality({ preset: 'ultra', overrides: { shadowSize: 3000, maxFps: 90, textures: 'ultra', detail: 3, indoorLights: 6, hdr: 'yes', ao: false } }),
     { preset: 'ultra', overrides: { ao: false } });
   // HDR 光影关着：遮蔽和高光柔光即使开着也不生效（面板里这两项会置灰）
   const off = resolveQuality({ preset: 'ultra', overrides: { hdr: false } });

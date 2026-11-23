@@ -31,7 +31,7 @@ const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 /** 可以单独微调的开关项和可选值。 */
 export const QUALITY_SWITCHES = Object.freeze(['shadows', 'bloom', 'hdr', 'dayBloom', 'ao', 'decals']);
 export const QUALITY_CHOICES = Object.freeze({
-  shadowSize: Object.freeze([1024, 2048, 4096]), indoorLights: Object.freeze([0, 4, 8]), maxFps: Object.freeze([30, 45, 60]),
+  shadowSize: Object.freeze([1024, 2048, 4096]), indoorLights: Object.freeze([0, 4, 8]), maxFps: Object.freeze([30, 45, 60, 120, 0]), // 0 = 不限（跟着屏幕刷新率）
   textures: Object.freeze(['standard', 'high']), detail: Object.freeze(['low', 'balanced', 'high']),
 });
 

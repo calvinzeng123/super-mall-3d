@@ -37,7 +37,7 @@ export function attachQualityUI(app, viewport) {
     }
     document.getElementById('qualityCrowd').value = q.crowdDensity;
     document.getElementById('qualityCrowdValue').value = crowdLabel(q.crowdDensity);
-    document.getElementById('qualityStatus').textContent = `${q.preset === 'auto' ? '自动 · ' : ''}${q.label}${q.custom ? ' · 已微调' : ''} · 最高 ${q.maxFps} 帧/秒${q.autoReduced ? ' · 已按运行速度降低画质' : ''}`;
+    document.getElementById('qualityStatus').textContent = `${q.preset === 'auto' ? '自动 · ' : ''}${q.label}${q.custom ? ' · 已微调' : ''} · ${q.maxFps > 0 ? `最高 ${q.maxFps} 帧/秒` : '帧率不限'}${q.autoReduced ? ' · 已按运行速度降低画质' : ''}`;
     document.getElementById('qualityHint').textContent = q.custom ? '微调已保存。重新选择档位会恢复该档默认设置。' : q.preset === 'auto' ? '手机优先流畅；运行持续变慢时自动降低画质。设置保存在这台设备。'
       : q.preset === 'ultra' ? '「极致」把环境光遮蔽、高光柔光和室内灯光都打开，适合有独立显卡的电脑；卡顿时退回「精细」。' : '立即生效并保存在这台设备。想优先省电、减少发热，可选「流畅」。';
     // 贴图大小、装饰多少是进入时按画质定的（内存档位）：这里写明现在是哪一档、改了以后什么时候换
