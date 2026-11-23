@@ -1042,8 +1042,9 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const p = G.player.pos; let made = 0;
     if (!at) {
       // 爬楼的楼层：最多 horde 只，从这层的走廊、住户家里和上下两层的楼梯口涌出来（以前随便撒点，大半落进进不去的住户家里）；
-      // 人数按池子里真空着的位置算（尸体也占位置），给每层摆的那群留着
+      // 人数按池子里真空着的位置算（尸体也占位置），给每层摆的那群留着；不够的先收最早倒下的尸体腾位置（makeRoom），还不够再截断
       const c = climbSpawns(14, 60, true); if (c) { at = c; n = Math.min(n, FL.horde); }
+      while (freeSlots() - FL.hordeReserve < n && makeRoom()) { /* 收一具尸体 */ }
       n = Math.min(n, freeSlots() - FL.hordeReserve);
     }
     for (let k = 0; k < n * 6 && made < n; k++) {
