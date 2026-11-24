@@ -245,6 +245,9 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.supplies = supplies;
   const siege = zombies ? createSiege(G, { layout: ctx.layout, nav, scene, ui, zombies, director, runs: stairs.runs, flow: J.GAME_FLOW, storage: safeStorage(), tower: params.tower || null, supplies }) : null;
   if (siege && params.siege !== undefined) siege.enabled = params.siege !== '0';
+  // 撤离楼顶上只画给看的机房、屋顶花园（markSiegeRoofs 登记的 ctx.siegeRoofProps）：开着丧尸围城时藏起来，零点突围照旧
+  const siegeRoofProps = () => { for (const g of ctx.siegeRoofProps || []) g.visible = !siege?.enabled; };
+  siegeRoofProps();
   G.siege = siege; G.zombies = zombies;
   // 两名电脑队友（squad.js）：只在丧尸围城里出场。网址带 ?squad=0 关掉（一个人闯）
   const squad = siege ? createSquad(G, { scene, nav, zombies, siege, director, ui }) : null;
@@ -276,7 +279,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     const box = document.querySelector('[data-s="title"] [data-zh="actions"]') || document.querySelector('[data-s="title"] .m-actions');
     const b = document.createElement('button'); b.type = 'button'; b.className = 'jm-mode';
     const paint = () => { b.innerHTML = `<small>模式</small><b>${siege.enabled ? '丧尸围城' : '零点突围'}</b><i>点一下切换</i>`; b.classList.toggle('on', siege.enabled); };
-    b.addEventListener('click', (e) => { e.stopPropagation(); siege.enabled = !siege.enabled; director.roll(); siege.reset(); squad?.reset(); locCard(document, director.state.mission); paint(); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); siege.enabled = !siege.enabled; siegeRoofProps(); director.roll(); siege.reset(); squad?.reset(); locCard(document, director.state.mission); paint(); });
     paint(); box?.parentElement?.insertBefore(b, box);
   }
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
