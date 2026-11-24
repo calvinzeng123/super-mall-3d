@@ -1333,7 +1333,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       a.pool.scale.setScalar(a.radius * grow * (0.94 + 0.06 * Math.sin(a.t * 7)));
       if (age >= a.seconds) { a.dispose(); acids.splice(i, 1); continue; }
       a.pool.visible = fade > 0.02;
-      if (Math.hypot(p.x - a.to.x, p.z - a.to.z) < a.radius && Math.abs(p.y - a.to.y) < 1.4 && (a.tick -= dt) <= 0) { a.tick = 0.5; G.player.damage?.(a.dps * 0.5, a.to); if (S.tellT <= 0) { S.tellT = 2.5; say('酸液！别站在里面', 1.6); } }
+      if (Math.hypot(p.x - a.to.x, p.z - a.to.z) < a.radius && Math.abs(p.y - a.to.y) < 1.4 && !G.roofGun?.active && (a.tick -= dt) <= 0) { a.tick = 0.5; G.player.damage?.(a.dps * 0.5, a.to); if (S.tellT <= 0) { S.tellT = 2.5; say('酸液！别站在里面', 1.6); } }
     }
   }
 

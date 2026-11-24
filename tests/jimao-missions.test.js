@@ -299,7 +299,8 @@ test('低帧率：玩家按真实间隔分小步走（敌人照旧一步）；�
   const src = readFileSync(new URL('../src/jimao/run.js', import.meta.url), 'utf8');
   assert.match(src, /function stepPlayer\(dt, gap\)/);
   assert.match(src, /Math\.min\(Math\.max\(gap, dt\), 0\.15\)/);
-  assert.match(src, /stepPlayer\(dt, gap\); if \(!director\.gunActive\) run\('weapon', dt\); run\('enemies', dt\)/);
+  // 用舱门 / 车顶机枪、架着楼顶重机枪（roof-gun.js）时步枪不更新
+  assert.match(src, /stepPlayer\(dt, gap\); if \(!director\.gunActive && !roofGun\?\.active\) run\('weapon', dt\); run\('enemies', dt\)/);
   assert.match(src, /app\.setQuality\(VENDOR_TIER\[q\], \{ persist: false \}\)/);
   assert.match(src, /MOBILE && q && q\.tex > 1024/);
   assert.match(src, /stick\.apply\(\)/);

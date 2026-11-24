@@ -231,6 +231,8 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
     /** 开局前把跨层连接表建好（楼梯、扶梯、门洞每个都要试走一遍，放在加载画面里做） */
     prepare() { floorsOf(false); floorsOf(true); },
     reset() { for (const j of queue) j.dead = true; queue.length = 0; },
+    /** 这一层的格子缓存扔掉（楼顶重机枪台这类开局才摆上、导航里临时加的障碍：摆上 / 撤掉以后重新试走） */
+    forget(floor) { grids.delete(floor); shun.delete(floor); },
   };
   return api;
 }
