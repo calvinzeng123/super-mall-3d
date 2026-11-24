@@ -353,7 +353,8 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
         }
       } else { m.lowReady = Math.min(1, m.lowReady + dt * 2.5); m.pitch *= Math.exp(-dt * 6); }
       // 阿哲：特殊感染者一露头先喊出来
-      if (member.trait === 'spotter') for (const z of zs) if (z.special && !z.called && Math.abs(z.pos.y - m.pos.y) < 3 && Math.hypot(z.pos.x - m.pos.x, z.pos.z - m.pos.z) < 30 && sees(z)) { if (say(member, `${z.name}！${z.kind === 'brute' ? '别硬顶，边退边打！' : z.kind === 'spitter' ? '离地上那滩酸远点！' : z.kind === 'lunger' ? '它要扑人，盯住！' : '先打它！'}`)) z.called = true; break; }
+      // 喊特殊感染者：坐飞机、看炸楼时不喊地上的（只喊还活着的清扫目标）
+      if (member.trait === 'spotter') for (const z of zs) if (z.special && !z.called && (!director?.riding || (z.sweep && z.alive && z.active)) && Math.abs(z.pos.y - m.pos.y) < 3 && Math.hypot(z.pos.x - m.pos.x, z.pos.z - m.pos.z) < 30 && sees(z)) { if (say(member, `${z.name}！${z.kind === 'brute' ? '别硬顶，边退边打！' : z.kind === 'spitter' ? '离地上那滩酸远点！' : z.kind === 'lunger' ? '它要扑人，盯住！' : '先打它！'}`)) z.called = true; break; }
       // 走
       const k = 1 - Math.exp(-dt * 10);
       vel.x += (want.x - vel.x) * k; vel.z += (want.z - vel.z) * k; vel.y = 0;
