@@ -201,6 +201,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       },
       /** 听到 / 看到动静：朝那边扑过去 */
       alert(at, hunt = false) { if (m.alive && !m.fixed) notice(at, hunt); },
+      /** 不追了，就地站住发呆（siege.js：楼上先摆好的那几层，人不在跟前时守在自己那层）。只管在追的（咬着 / 按着人的不管） */
+      calm() { if (!m.alive || m.post || m.zs !== 'chase') return false; m.zs = 'idle'; m.hunt = false; m.home.copy(m.pos); m.hasGoal = false; m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.loseT = 0; m.noPath = 0; return true; },
       debugPose(fields = {}) { Object.assign(m, fields); if (fields.fall !== undefined) body.rotation.x = m.fall * m.fallSign; pose(0); },
     };
 

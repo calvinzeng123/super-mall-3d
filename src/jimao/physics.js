@@ -4,7 +4,8 @@
 //   走路：水平方向交给 layout/nav.js 的 step()（墙、栏杆、楼梯、扶梯都在里面）；竖直方向（跳、落地、天花）在这里按原游戏的规则算。
 //   射线：墙线和障碍物按竖直的面算，楼板按水平面算（中庭、扶梯洞这些洞口不挡）。
 import * as THREE from 'three';
-import { step, landAt, supported, floorsByHeight, NAV } from '../layout/nav.js';
+import { step, landAt, supported, floorsByHeight, NAV, clear } from '../layout/nav.js';
+import { toW } from '../layout/geom.js';
 import { findPath } from '../fps/pathfinding.js';
 
 /** 原游戏的台阶高度：站在地上时，脚下这么高以内的落差直接贴地（下楼梯不会腾空）。 */
@@ -19,6 +20,16 @@ export function createMapPhysics(nav) {
 
   function locate(x, y, z) {
     return landAt(nav, x, z, y + 0.6);
+  }
+  /** 梯段上的一点 → 这段梯离它近的那一头再往外 0.6 米（楼面 / 休息平台上，寻路认得的终点）；那一头站不住试另一头，都不行返回 null */
+  function slopeEnd(st) {
+    const sl = nav.slopeById?.get(st.slope.id); if (!sl) return null;
+    const ends = [[-0.6, sl.low], [sl.len + 0.6, sl.high]]; if (st.slope.u > sl.len / 2) ends.reverse();
+    for (const [u, floor] of ends) {
+      const [x, z] = toW(sl.F, u, (st.slope.v || 0) * 0.5), s = landAt(nav, x, z, (nav.floors.get(floor)?.y ?? 0) + 0.6);
+      if (s && s.floor === floor && !s.slope && clear(nav, s)) return s;
+    }
+    return null;
   }
   function stateFor(pos) {
     let s = tracked.get(pos);
@@ -284,9 +295,14 @@ export function createMapPhysics(nav) {
     },
     /** 分帧寻路（pathfinder.js）：排队，算完回调 cb(路线 | null)。返回 { cancel() }。没接寻路服务时当场算 */
     requestPath(from, to, cb, opts) {
-      const a = locate(from.x, from.y ?? 0, from.z), b = locate(to.x, to.y ?? 0, to.z);
-      const done = (path) => cb(path ? path.map((p) => { const v = new THREE.Vector3(p.x, p.y ?? 0, p.z); if (p.via) v.via = p; return v; }) : null);
-      if (!a || !b) { cb(null, a ? 'goal' : 'start'); return { cancel() {} }; } // 'goal'：目标那一点找不着楼面（人在半空 / 楼梯缝里），不怪走路的
+      const a = locate(from.x, from.y ?? 0, from.z);
+      let b = locate(to.x, to.y ?? 0, to.z);
+      // 目标在楼梯的梯段上（人站在楼梯上）：寻路只认楼面上的终点，梯段上的一点永远找不到路（以前追人的全算「找不到路」，几次以后被回收）。
+      // 改成去这段梯离人近的那一头（梯段口外一点，在楼面 / 休息平台上），到了跟前看得见人再直着扑上去；两头都站不住才算目标找不着
+      const stairs = !!b && (!!b.slope || !!nav.floors.get(b.floor)?.stairLanding);
+      if (b?.slope) b = slopeEnd(b);
+      const done = (path) => (path ? cb(path.map((p) => { const v = new THREE.Vector3(p.x, p.y ?? 0, p.z); if (p.via) v.via = p; return v; })) : cb(null, stairs ? 'goal' : undefined));
+      if (!a || !b) { cb(null, a ? 'goal' : 'start'); return { cancel() {} }; } // 'goal'：目标那一点找不着楼面（人在半空 / 楼梯缝里 / 楼梯上接不上），不怪走路的
       if (!physics.pathfinder) { done(findPath(nav, a, b, { maxNodes: 12000, cellSize: 0.8 })); return { cancel() {} }; }
       return physics.pathfinder.request(a, b, done, opts);
     },

@@ -127,7 +127,8 @@ export function buildStairSigns(nav, { runs = stairRuns(nav), doc = typeof docum
 
 /**
  * 快速上下楼。press('up' | 'down') 或键盘 Z / X、手机 ▲ ▼。
- * blocked(run, dir) 返回一句话就是不让走的原因（丧尸围城：这段楼梯被堵了）；lift.near 为真时让给电梯（两边都用 Z / X）。
+ * blocked(run, dir) 返回一句话就是不让走的原因（丧尸围城：这段楼梯被堵了）；lift.near 为真时让给电梯（两边都用 Z / X）——
+ * 电梯在这一点去不了楼梯能去的方向时，电梯那边先让出来（lift.js stairsHere），楼梯牌上写着的键不会被一个只会说「去不了」的电梯吃掉。
  */
 export function createStairControl(G, { nav, scene = null, root = null, hidden = () => false, post = null, lift = null, keys = { up: 'KeyZ', down: 'KeyX' }, blocked = () => null, runs = stairRuns(nav) }) {
   const signs = scene ? buildStairSigns(nav, { runs }) : null;
@@ -181,6 +182,8 @@ export function createStairControl(G, { nav, scene = null, root = null, hidden =
     get near() { return usable() && !!(near.up || near.down); },
     /** 这一刻能上 / 能下的那一段（没有就是 null） */
     get options() { return near; },
+    /** 这一点有没有楼梯可以快速上下（不看电梯）：电梯口挨着楼梯口时，电梯拿它决定让不让给楼梯（lift.js stairsHere） */
+    here() { return G.game?.state === 'playing' && !hidden() && !ride && G.player?.alive !== false && !G.player?.mounted ? scan() : { up: null, down: null }; },
     press(dir) {
       if (!usable() || ride) return false;
       near = scan();

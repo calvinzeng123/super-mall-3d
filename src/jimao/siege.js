@@ -54,9 +54,11 @@ export const SIEGE = Object.freeze({
   // 人到了这层才摆满（离人 near 米外、看不见的地方），上一层先摆几只（ahead）；北区的楼层小（电梯厅十来米），上一层整层先摆好（aheadFull）。
   // 下面两层以下没在追人的收回去，摆过的层不再摆；这一层没清干净（还剩 left 只以上、或者有一只在上楼梯口 clearNear 米内）往上的楼梯不让走。
   // 池子：摆的时候至少空着 reserve 个位置（尸体也占位置），爬楼时的尸潮最多 horde 只；每隔 ammo 层楼梯口放一个弹匣、每隔 medkit 层一个医疗包
+  // 楼上先摆好的那几层守在自己那层：人不在那层、也不在通往那层的那段楼梯上时，听见枪声每层最多下来 down 只（以前北区整层涌下来，人上去一看是空的）；
+  // 人上到一层时，这一层那一群（打死的不算）少了一大截（不到 refill 成）——被回收、走丢了——就从看不见的地方补回来
   floors: Object.freeze({ A: Object.freeze({ corridor: 8, landing: 1, flats: 2, gate: 2 }), T1: Object.freeze({ corridor: 2, landing: 1, flats: 6, gate: 1, aheadFull: true, endGap: 1.5 }),
     ahead: Object.freeze({ landing: 1, corridor: 4, flats: 0 }), mix: Object.freeze({ walker: 0.65, runner: 0.2, bloater: 0.1, screamer: 0.05 }),
-    near: 10, perFrame: 3, sight: 12, reserve: 6, wait: 10, horde: 8, hordeReserve: 2, left: 2, clearNear: 15, wake: 4, ammo: 2, medkit: 4,
+    near: 10, perFrame: 3, sight: 12, reserve: 6, wait: 10, horde: 8, hordeReserve: 2, left: 2, clearNear: 15, wake: 4, ammo: 2, medkit: 4, down: 2, refill: 0.6,
     grid: 2.5, endGap: 3, perFlat: 6, tries: 16, gap: 1.8, budget: 3 }),
   // 回收：寻路连着失败 noPath 次（困在屋里、卡在墙角）、或者追着人却 slow 秒都没靠近（隔着两层以上 / far 米外）的，人看不见时收回池子
   recycle: Object.freeze({ every: 0.5, noPath: 3, far: 60, storeys: 7, slow: 20 }),
@@ -69,6 +71,8 @@ export const SIEGE = Object.freeze({
     post: Object.freeze({ every: 1, lead: 3, roofWalk: 16, groundWalk: 30, roofPool: 48, groundPool: 72, off: 1 }),
     expose: Object.freeze({ every: 0.25, on: 0.3, off: 0.5 }) }),
   ammo: Object.freeze({ rifle: 30, reserve: 90 }),
+  // 安全点那句「这儿暂时安全」：等 near 米内没有在追人的丧尸、连着 calm 秒再说（以前清完关卡马上说，常常正被几只围着咬）；等了 cap 秒还在打，换一句不说「安全」的
+  safeTalk: Object.freeze({ near: 15, calm: 2, cap: 20 }),
   // 被拍飞 / 掀飞以后：飞着撞上墙（一帧里速度掉一大半）再掉 wall 点血，落地掉 land 点；最多算 seconds 秒
   fling: Object.freeze({ wall: 12, land: 6, seconds: 2, fast: 5.5, stop: 0.45 }),
 });
@@ -669,7 +673,7 @@ export function lootSpots(nav, site, n) {
 
 export function createSiege(G, { layout, nav, scene, ui = null, zombies, director, runs, flow = null, rng = Math.random, storage = null, tower: forceTower = null, supplies = null }) {
   const root = new THREE.Group(); root.name = '丧尸围城'; scene?.add(root);
-  const S = { bombAt: -1, plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, tellT: 0, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' };
+  const S = { bombAt: -1, plan: null, mission: null, stage: 0, noise: 0, quietT: 0, hordeCool: 0, spawnT: 0, hold: -1, waveI: 0, land: -1, landed: false, flight: null, sweep: null, safe: new THREE.Vector3(), hasSafe: false, floorPos: new THREE.Vector3(), hasFloor: false, run: null, tellT: 0, pin: null, bruteT: -1, brutes: 0, lastSpecial: '' };
   const blocks = [], balconies = [], acids = [];
   // 路障（人自己摆的沙袋墙）和封门的卷帘（见 siege-defense.js）
   const walls = createBarricades(G, { scene, zombies, ui });
@@ -777,7 +781,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     for (const c of ['landing', 'corridor', 'flats']) {
       const want = q[c] + carry; carry = 0;
       while (rec.cnt[c] < want) {
-        if (S.seedN >= FL.perFrame || freeSlots() <= FL.reserve) { short += want - rec.cnt[c]; break; }
+        if (S.seedN >= FL.perFrame || (freeSlots() <= FL.reserve && !(own && spareRoom()))) { short += want - rec.cnt[c]; break; } // 人这一层的那一群优先：池子满了腾位置（spareRoom）
         let spot = null;
         if (c === 'flats') { // 住户家里：哪户放得少先放哪户
           const order = [...sp.flats].sort((a, b) => (rec.flat.get(a.unit) || 0) - (rec.flat.get(b.unit) || 0)); let any = false;
@@ -795,31 +799,107 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 摆满了就不再摆。人在这一层：剩下的只差「都在眼前」过了两秒、池子满着等了 wait 秒，也就这么多了——不能一直拦着楼梯
     if (rec.full && ((!short && (!seen || !own || rec.t > 2)) || (own && rec.t > FL.wait))) rec.done = true;
   }
+  /** 池子满着、人这一层那一群还没摆齐：先收一具尸体，再收一只不在人这一层、人看不见、离人最远的尸潮里的（巨尸、扑袭者、喷酸者不收）。
+   * 以前尸潮一波波没打完就占满了池子，人上到一层，那一层一只都摆不出来 */
+  function spareRoom() {
+    if (makeRoom()) return true;
+    const p = G.player.pos; let far = null, fk = 0;
+    for (const z of zombies.pool) {
+      if (!z.active || !z.alive || z.seed || z.fixed || z.sweep || z.post || ['brute', 'lunger', 'spitter'].includes(z.kind)) continue;
+      const dy = Math.abs(z.pos.y - p.y); if (dy < 2.5) continue;
+      const k = Math.hypot(z.pos.x - p.x, z.pos.z - p.z) + dy * 3; if (k > fk) { far = z; fk = k; }
+    }
+    if (!far || G.physics.lineOfSight?.(_eye.set(p.x, p.y + 1.5, p.z), _head.set(far.pos.x, far.pos.y + 1.5, far.pos.z))) return false;
+    far._deactivate(); return true;
+  }
   /** 爬楼的补给：每隔 ammo 层上楼梯口放一个弹匣、每隔 medkit 层再放一个医疗包（关卡那层有自己的） */
   function stockClimb(f, sp) {
     const k = climbIdx(f); if (!supplies || k <= 0 || S.plan.gates.some((g) => g.floor === f)) return;
     const kinds = [...(k % FL.ammo === 0 ? ['ammo'] : []), ...(k % FL.medkit === 0 ? ['medkit'] : [])]; if (!kinds.length) return;
-    const at = []; for (const q of sp.landing.filter((l) => l.up)) if (!at.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 6)) at.push(q);
+    // 放在上楼梯口；没有上楼梯口的落点（北区 15F 往上的复式层只有一头有）就放在别的楼梯口，再没有就放在离上楼梯口最近的走廊 / 住户里——不能悄悄地不放
+    const up = upRuns(f)[0]?.a, by = (list) => (up ? [...list].sort((a, b) => Math.hypot(a.x - up.x, a.z - up.z) - Math.hypot(b.x - up.x, b.z - up.z)) : list);
+    const ups = sp.landing.filter((l) => l.up), src = ups.length ? ups : sp.landing.length ? sp.landing : by([...sp.corridor, ...sp.flats.flatMap((q) => q.spots)]).slice(0, 1);
+    const at = []; for (const q of src) if (!at.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 6)) at.push(q);
+    if (!at.length && up) at.push(up);
     for (const q of at) { const spots = lootSpots(nav, { floor: f, x: q.x, y: sp.y, z: q.z }, kinds.length); kinds.forEach((kind, i) => supplies.place(kind, spots[i])); }
   }
-  /** 人现在在爬楼的哪一层（在楼梯上不算）：{ f, i } 或 null */
-  function climbHere() { const st = G.physics.stateOf?.(G.player.pos); if (!st || st.slope) return null; const i = climbIdx(st.floor); return i >= 0 ? { f: st.floor, i } : null; }
+  /** 人现在在爬楼的哪一层：{ f, i } 或 null。在楼梯上不算哪一层；
+   * stairs（刷怪用）：在楼里的楼梯间上（梯段、休息平台）时算刚离开的那层（S.safeFloor），那层不爬楼就算高度差一层以内最近的那层——
+   * 以前人在楼梯上时来的尸潮、特殊感染者、巨尸一只都出不来（警告喊了、名额用了、巨尸那一只就没了） */
+  function climbHere(stairs = false) {
+    const st = G.physics.stateOf?.(G.player.pos); if (!st) return null;
+    if (!st.slope) { const i = climbIdx(st.floor); if (i >= 0) return { f: st.floor, i }; }
+    if (!stairs || !onTowerStairs(st)) return null;
+    const i = climbIdx(S.safeFloor); if (i >= 0) return { f: S.safeFloor, i };
+    const list = climbList(); let best = -1, bd = 4;
+    for (let k = 0; k < list.length; k++) { const d = Math.abs(floorY(list[k]) - st.y); if (d < bd) { bd = d; best = k; } }
+    return best >= 0 ? { f: list[best], i: best } : null;
+  }
+  /** 人上到（回到）爬楼的一层：
+   *   往上走到的：下面那几层算打过了（再下去、再上来不拦）；
+   *   这一层那一群（打死的不算）少了一大截——被回收、走丢了——就把少了的那些从这层看不见的地方补回来（只补一次） */
+  function arrived(here) {
+    const list = climbList(), pi = climbIdx(S.hereF); S.hereF = here.f;
+    if (pi >= 0 && pi < here.i) for (let k = 0; k < here.i; k++) { const r = S.seeded.get(list[k]); if (r) r.passed = true; }
+    const rec = S.seeded.get(here.f), sp = S.spots.get(here.f); if (!rec || !sp || rec.passed || rec.topped) return;
+    rec.topped = true;
+    const q = quota(here.f, true), want = q.landing + q.corridor + q.flats, mine = zalive().filter((z) => z.seed === here.f), dead = rec.killed || 0;
+    const add = Math.min(rec.cnt.landing + rec.cnt.corridor + rec.cnt.flats - mine.length - dead, want - mine.length - dead);
+    if (mine.length >= FL.refill * want || add <= 0) return;
+    let left = add; for (const c of ['flats', 'corridor', 'landing']) { const k = Math.min(left, rec.cnt[c]); rec.cnt[c] -= k; left -= k; }
+    rec.done = false; rec.t = 0; rec.used = mine.filter((z) => Math.abs(z.pos.y - sp.y) < 1.5).map((z) => ({ x: z.pos.x, z: z.pos.z }));
+    S.refilled = (S.refilled || 0) + add;
+  }
+  /** 楼上先摆好的那几层守在自己那层（人不在那层、也不在通往那层的那段楼梯上时）：听见动静扑出来的每层最多 FL.down 只，其余的原地站住。
+   * 以前北区整层先摆好，人在下一层一开枪整层都涌下来（再被回收掉），人上去一看是空的，楼梯口也不拦 */
+  function leashTick(dt, here, st) {
+    if ((S.leashT -= dt) > 0) return;
+    S.leashT = 0.25;
+    const at = here ? here.i : climbIdx(S.safeFloor), id = st?.slope?.id, stairs = onTowerStairs(st);
+    const near = (f) => !!st && ((!id && st.floor === f) || (stairs && runs.some((r) => (r.from === f || r.to === f) && ((id && r.slopes.includes(id)) || r.landings.includes(st.floor)))));
+    for (const z of zombies.pool) {
+      if (!z.active || !z.alive || !z.seed || z.zs !== 'chase' || climbIdx(z.seed) <= at) continue;
+      const rec = S.seeded.get(z.seed), y = floorY(z.seed); if (!rec || Math.abs(z.pos.y - y) > 1.2 || near(z.seed)) continue;
+      const down = (rec.down ||= new Set());
+      for (const q of down) if (!q.active || !q.alive || q.seed !== z.seed || (q.zs === 'idle' && Math.abs(q.pos.y - y) < 1.2)) down.delete(q);
+      if (down.has(z)) continue;
+      if (down.size < FL.down) down.add(z); else z.calm?.();
+    }
+  }
+  /** 调试看：爬楼摆的被收走 / 换地方的记一笔（最近 40 笔） */
+  function logRecycle(z, why, moved, y = z.pos.y) { if (!z.seed) return; S.recycleLog.push({ seed: z.seed, kind: z.kind, why, moved, y: +y.toFixed(1) }); if (S.recycleLog.length > 40) S.recycleLog.shift(); }
+  /** 爬楼摆的、那一层还没打过的：困住了 / 追不上的不收走，换到这一层别处看不见的地方（离人 near 米外）重新站好、不追人——那一层的那一群不会少。找不到地方返回 false */
+  function reseat(z) {
+    const f = z.seed, rec = f && S.hold < 0 && S.seeded.get(f), sp = rec && !rec.passed ? S.spots.get(f) : null; if (!sp) return false; // 守屋顶时楼里的不管
+    const p = G.player.pos, list = [...sp.corridor, ...sp.landing, ...sp.flats.flatMap((q) => q.spots)]; _eye.set(p.x, p.y + 1.5, p.z);
+    for (let k = 0, i0 = Math.floor(rng() * list.length); k < Math.min(list.length, 16); k++) {
+      const q = list[(i0 + k) % list.length];
+      if (Math.hypot(q.x - p.x, sp.y - p.y, q.z - p.z) < FL.near || Math.hypot(q.x - z.pos.x, sp.y - z.pos.y, q.z - z.pos.z) < 1.5) continue;
+      if (G.physics.lineOfSight?.(_eye, _head.set(q.x, sp.y + 1.5, q.z))) continue;
+      const kind = z.kind; z._deactivate();
+      spawn({ x: q.x, y: sp.y, z: q.z }, { kind, yaw: rng() * Math.PI * 2, seed: f });
+      return true;
+    }
+    return false;
+  }
   function floorsTick(dt) {
     S.wakeT = Math.max(0, (S.wakeT || 0) - dt);
     if (!S.plan || S.stage <= S.plan.armsStage) return;
     const list = climbList(), here = climbHere(), st = G.physics.stateOf?.(G.player.pos);
     S.seedN = 0; S.losN = 0;
     if (here) {
+      if (here.f !== S.hereF) arrived(here);
       seedFloor(here.f, true, true, dt); // 自己这一层摆满（离人 near 米外、看不见的地方）
       // 上一层先摆几只（北区整层先摆好）；这一层的关卡还拦着就不摆（上不去）
       const next = list[here.i + 1], g = activeGate(S.plan, S.stage);
       if (next && !(g && g.floor === here.f)) seedFloor(next, !!towerCfg().aheadFull, false, dt);
     } else if (S.stage > S.plan.powerStage && S.hold < 0 && list[0] && !onTowerStairs(st) && G.player.pos.y < floorY(list[0]) - 1) seedFloor(list[0], true, false, dt); // 合闸以后、人还没上来：第一道关那层整层先摆好（人已经在楼顶上了就不摆：池子留给守屋顶的尸群）
+    leashTick(dt, here, st);
     // 下面两层以下没在追人的收回去（摆过的层还记着，不会再摆）；上了屋顶，楼里的全收
     if ((S.dropT2 = (S.dropT2 || 0) - dt) <= 0) {
       S.dropT2 = 0.5;
       const roof = st?.floor === tower().roof, lim = roof ? floorY(tower().roof) - 1 : here && here.i >= 1 ? floorY(list[here.i - 1]) - 1.2 : -Infinity;
-      for (const z of zombies.pool) if (z.active && z.alive && z.seed && !z.hunt && z.zs === 'idle' && z.pos.y < lim) z._deactivate();
+      for (const z of zombies.pool) if (z.active && z.alive && z.seed && !z.hunt && z.zs === 'idle' && z.pos.y < lim) { logRecycle(z, 'below', false); z._deactivate(); }
     }
     // 屏幕上的目标：这一层还拦着楼梯时写还剩几只（这一层的关卡还没解决就照旧写关卡的事）
     let text = '';
@@ -832,13 +912,13 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   /** 爬楼的楼层上找刷怪的地方（尸潮、特殊感染者）：这一层的走廊和住户家里（离人 lo–hi 米），加上上下两层的楼梯口（从楼梯间涌出来）。
    * hide：看不见的排在前面（最多试 24 处）。不在爬楼的楼层返回 null */
   function climbSpawns(lo, hi, hide = false) {
-    const here = climbHere(); if (!here) return null;
+    const here = climbHere(true); if (!here) return null;
     const p = G.player.pos, sp = S.spots.get(here.f); if (!sp) return null;
     const out = [], g = activeGate(S.plan, S.stage), add = (q, y) => out.push(new THREE.Vector3(q.x, y, q.z));
     for (const q of [...sp.corridor, ...sp.flats.flatMap((f) => f.spots)]) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d >= lo && d <= hi) add(q, sp.y); }
     for (const n of [here.i - 1, here.i + 1]) {
       const f = climbList()[n], s2 = f && S.spots.get(f); if (!s2 || (n > here.i && g && g.floor === here.f)) continue; // 关卡还拦着：楼上的下不来
-      for (const q of s2.landing) add(q, s2.y);
+      for (const q of s2.landing) if (Math.hypot(q.x - p.x, s2.y - p.y, q.z - p.z) >= 4) add(q, s2.y); // 人在楼梯上时：别贴着人冒出来
     }
     for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
     if (hide && out.length) { _eye.set(p.x, p.y + 1.5, p.z); const seen = out.slice(0, 24).map((q) => !!G.physics.lineOfSight?.(_eye, _head.set(q.x, q.y + 1.5, q.z))); const hid = out.filter((q, i) => i < 24 && !seen[i]); if (hid.length) return hid; }
@@ -933,7 +1013,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 血不会自己回（原游戏的缓慢回血只在零点突围里留着）；医疗包、止痛药、地上的补给只有这个模式有
     G.noRegen = enabled; G.speedMul = 1; if (!enabled) G.weapon?.lock?.([]);
     if (supplies) { supplies.enabled = enabled; supplies.reset(); }
-    Object.assign(S, { bombAt: -1, look: null, carry: false, canAt: null, dropT: 0, carryT: 0, sleepers: null, sneakSaid: false, escortT: 0, holdT: 0, holdSpawn: 0, holdDirs: null, holdK: 0, surgeT: 0, surgeSaid: false, stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, hasInside: false, cores: null, genT: 0, genSpawn: 0, popped: null, tellT: 0, loadout: false, pin: null, fling: null, bruteT: -1, brutes: 0, lastSpecial: '', seeded: new Map(), climbText: '', safeFloor: null, recycleT: 0, wakeT: 0, dropT2: 0, pourQ: null, pourK: 0, surgeWave: null, flareLamp: null, flareT: 0, prep: null, prepOut: null });
+    Object.assign(S, { bombAt: -1, look: null, carry: false, canAt: null, dropT: 0, carryT: 0, sleepers: null, sneakSaid: false, escortT: 0, holdT: 0, holdSpawn: 0, holdDirs: null, holdK: 0, surgeT: 0, surgeSaid: false, stage: 0, noise: 0, quietT: 0, hordeCool: 6, spawnT: 2, hold: -1, waveI: 0, land: -1, landed: false, sweep: null, hasSafe: false, hasInside: false, cores: null, genT: 0, genSpawn: 0, popped: null, tellT: 0, loadout: false, pin: null, fling: null, bruteT: -1, brutes: 0, lastSpecial: '', seeded: new Map(), climbText: '', safeFloor: null, hasFloor: false, run: null, hereF: null, leashT: 0, safeTalk: null, recycleLog: [], bruteTry: 0, refilled: 0, recycleT: 0, wakeT: 0, dropT2: 0, pourQ: null, pourK: 0, surgeWave: null, flareLamp: null, flareT: 0, prep: null, prepOut: null });
     // 爬楼摆的丧尸收回去、重新记（读档以后按人站的地方重新摆，不会摆两遍）
     for (const z of zombies.pool) if (z.seed) { if (z.active) z._deactivate(); z.seed = null; }
     // 近战：新开一局只有刀（消防斧在店门外的消火栓箱里）；从存档点重来的等开打第一帧再给（只给不收，见 update 的 meleeSync）
@@ -1029,7 +1109,16 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const p = G.player, st = S.plan.stages[i]; if (!p?.pos) return;
     director.state.checkpoint = { kind: 'safe', stage: i + 1, start: { pos: p.pos.clone(), yaw: p.yaw || 0 }, label: st.kind === 'switch' ? '配电室' : `${S.plan.gates[st.gate].n}F 安全点`, kit: supplies?.snapshot?.() || null, rifle: G.rifle ? [G.rifle.ammo | 0, G.rifle.reserve | 0] : null };
     stock(i); G.squad?.rally?.();
-    G.hud?.radio?.('这儿暂时安全。倒下了从这里重来——柜子里有补给，拿上再走。', 4.5);
+    S.safeTalk = { t: 0, calm: 0 }; // 「这儿暂时安全」等身边没有在追人的了再说（safeTalkTick）
+  }
+  /** 安全点那句话：near 米内（上下一层以内）没有在追人的丧尸、连着 calm 秒才说；等了 cap 秒还在打，换一句不说「安全」的 */
+  function safeTalkTick(dt) {
+    const w = S.safeTalk; if (!w) return;
+    const T = SIEGE.safeTalk, p = G.player.pos; let hot = false; w.t += dt;
+    for (const z of zombies.pool) if (z.active && z.alive && !z.fixed && z.zs !== 'idle' && Math.abs(z.pos.y - p.y) < 3 && Math.hypot(z.pos.x - p.x, z.pos.z - p.z) < T.near) { hot = true; break; }
+    w.calm = hot ? 0 : w.calm + dt;
+    if (w.calm >= T.calm) { S.safeTalk = null; G.hud?.radio?.('这儿暂时安全。倒下了从这里重来——柜子里有补给，拿上再走。', 4.5); }
+    else if (w.t >= T.cap) { S.safeTalk = null; G.hud?.radio?.('安全点记下了：倒下了从这里重来。柜子里有补给，腾出手再拿。', 4.5); }
   }
 
   // ---- 响动、尸群 ----
@@ -1084,7 +1173,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   }
   /**
    * 回收（每 0.5 秒，哪儿都跑，不只是商场）：走远了还在发呆的；寻路连着失败好几次的（困在屋里、卡在墙角）；
-   * 追着人却老半天没靠近的（隔着两层以上 / 60 米外）。人看得见的不收。阳台上的、清扫的、爬楼摆的（floorsTick 自己收）不归这里管
+   * 追着人却老半天没靠近的（隔着两层以上 / 60 米外）。人看得见的不收。阳台上的、清扫的不归这里管；
+   * 爬楼摆的：走远了发呆的由 floorsTick 收；困住的、追不上的，那一层还没打过就换个地方站好（reseat），打过了才收
    */
   function recycle(dt) {
     if ((S.recycleT -= dt) > 0) return;
@@ -1097,7 +1187,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       let slow = false;
       if (z.hunt && (dy > R.storeys || d > R.far)) { const k = d + dy * 2; if (k < z._best - 2) { z._best = k; z._slowT = 0; } else slow = (z._slowT += R.every) > R.slow; }
       else { z._best = Infinity; z._slowT = 0; }
-      if (((z.noPath || 0) >= R.noPath || slow) && !G.physics.lineOfSight?.(_eye, _head.set(z.pos.x, z.pos.y + 1.5, z.pos.z))) z._deactivate();
+      // 爬楼摆的、那一层还没打过：不收走，换到那一层别处看不见的地方站好（reseat）；以前直接收掉，北区好几层的那一群人还没到就没了，楼梯口也不拦
+      if (((z.noPath || 0) >= R.noPath || slow) && !G.physics.lineOfSight?.(_eye.set(p.x, p.y + 1.5, p.z), _head.set(z.pos.x, z.pos.y + 1.5, z.pos.z))) { const y = z.pos.y, moved = !!z.seed && reseat(z); logRecycle(z, slow ? 'slow' : 'noPath', moved, y); if (!moved) z._deactivate(); }
     }
   }
 
@@ -1781,10 +1872,15 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if (!st) return;
     const id = st.slope?.id, on = (r) => (id && r.slopes.includes(id)) || r.landings.includes(st.floor);
     const blocked = g ? runs.filter((r) => g.runs.includes(r.id)) : [], inside = blocked.some(on);
-    // 爬楼：这一层没清干净，往上的那段楼梯不让走（只拦从这层往上走的；从楼上下来照走）
-    const climb = !inside && S.safeFloor ? upRuns(S.safeFloor).find((r) => on(r) && climbRule(r)) : null;
-    if (!inside && !climb) { S.safe.copy(p); S.hasSafe = true; if (!id && !stairBits().landings.has(st.floor)) S.safeFloor = st.floor; return; }
-    if (S.hasSafe) { p.copy(S.safe); G.player.vel?.set?.(0, 0, 0); G.physics.forget?.(p); }
+    // 爬楼：这一层没清干净，往上的那段楼梯不让走（只拦从这层往上走的；从楼上下来照走）。
+    // 拦不拦只在人从这一层踏上那段楼梯的那一下定（每踏上一次定一次）：放行了，走在梯段、休息平台上就一直放行；拦住的退回这一层的楼面上。
+    // 以前每一帧都重新判、拽回上一帧的位置：走到一半有一只凑到楼梯口，人就被定在楼梯上，上不去也下不来（边挨咬边动不了）
+    let climb = null;
+    if (!inside && !id && !stairBits().landings.has(st.floor)) { S.run = null; S.safeFloor = st.floor; S.floorPos.copy(p); S.hasFloor = true; }
+    else if (!inside && !S.run) { const r = S.safeFloor ? upRuns(S.safeFloor).find(on) : null; if (r && climbRule(r)) climb = r; else S.run = r?.id || id || st.floor; }
+    if (!inside && !climb) { S.safe.copy(p); S.hasSafe = true; return; }
+    const back = climb ? (S.hasFloor ? S.floorPos : null) : S.hasSafe ? S.safe : null;
+    if (back) { p.copy(back); G.player.vel?.set?.(0, 0, 0); G.physics.forget?.(p); }
     if (climb) wake(climb.from);
     if (S.tellT <= 0) { S.tellT = 2.5; say((inside ? stairRule(S.plan, S.stage, blocked[0]) : climbRule(climb)) || '上不去', 2.6); }
   }
@@ -1802,6 +1898,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   G.events?.on?.('grenade:explode', (e) => addNoise(SIEGE.noise.grenade, e?.pos));
   G.events?.on?.('zombie:scream', (e) => { if (!playing() || director.riding || S.stage <= S.plan.armsStage) return; addNoise(30, e?.pos); const at = holdSpots(); horde(3 + Math.floor(rng() * 3), at ? { at } : undefined); say('尖叫者！它在招同伴', 2.2); }); // 守屋顶时招来的从楼梯间口子上来
   G.events?.on?.('zombie:burst', (e) => addNoise(18, e?.pos));
+  G.events?.on?.('enemy:killed', (e) => { const rec = e?.enemy?.seed && S.seeded?.get(e.enemy.seed); if (rec) rec.killed = (rec.killed || 0) + 1; }); // 爬楼摆的打死了几只（人上到那层时补不补看这个）
   G.events?.on?.('zombie:pin', (e) => { if (playing() && e?.enemy) { S.pin = { by: e.enemy, x: G.player.pos.x, z: G.player.pos.z, tell: 0 }; pacing.hit(20); } });
   G.events?.on?.('zombie:unpin', (e) => { if (S.pin?.by === e?.enemy) S.pin = null; });
   G.events?.on?.('zombie:spit', (e) => { if (playing() && !director.riding) spit(e); });
@@ -1830,7 +1927,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       S.tellT -= dt;
       syncStage();
       if (director.riding) { clockEl?.classList.add('off'); return; }
-      wall(); leash(); genTick(dt); lockersTick(); escortTick(dt); sneakTick(dt); carryTick(dt); holdoutTick(dt); pinTick(); flingTick(dt); acidTick(dt); recycle(dt); floorsTick(dt); ambient(dt); holdTick(dt);
+      wall(); leash(); genTick(dt); lockersTick(); escortTick(dt); sneakTick(dt); carryTick(dt); holdoutTick(dt); pinTick(); flingTick(dt); acidTick(dt); recycle(dt); floorsTick(dt); ambient(dt); holdTick(dt); safeTalkTick(dt);
       // 响动：安静一会儿才开始往下掉；攒满会把下一波尸潮催来
       S.hordeCool -= dt;
       if ((S.quietT += dt) > SIEGE.noise.quiet) S.noise = Math.max(0, S.noise - SIEGE.noise.decay * dt);
@@ -1845,7 +1942,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       if (act.warn) { say(loud ? '动静太大——尸潮要来了！' : '远处一阵嚎叫——尸潮要来了！', 3); G.player.addShake?.(0.15); G.events?.emit?.('enemy:telegraph', { pos: p, type: 'soldier', scream: true }); }
       if (act.horde) { S.noise = Math.min(S.noise, SIEGE.noise.after); S.hordeCool = SIEGE.noise.cooldown; if (horde(Math.round(act.horde * (G.squad?.hordeScale || 1)))) { say('尸潮！', 2.2); G.player.addShake?.(0.25); } }
       if (act.special) spawnSpecial();
-      if (S.bruteT >= 0 && (S.bruteT -= dt) < 0) spawnBrute();
+      if (S.bruteT >= 0 && (S.bruteT -= dt) < 0 && !spawnBrute() && (S.bruteTry = (S.bruteTry || 0) + 1) < 60) S.bruteT = 0.5; // 这一回没出来（人在楼梯上找不着地方）：隔半秒再试，半分钟内不丢
       if (noiseEl) { noiseEl.classList.remove('off'); noiseEl.classList.toggle('hot', S.noise > 70); noiseEl.querySelector('b').style.width = `${Math.min(100, S.noise)}%`; }
     },
     dispose() { if (typeof window !== 'undefined') window.removeEventListener('keydown', onDropKey); dropBtn?.remove(); for (const a of acids.splice(0)) a.dispose(); acidMat.dispose(); acidBall.dispose(); acidDisc.dispose(); walls.dispose(); seals?.dispose(); for (const q of steps.splice(0)) q.seal.dispose(); root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
