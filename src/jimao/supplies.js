@@ -140,16 +140,16 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
 
   /**
    * 在 pos 放一样补给（pos 是地面上的点）。hang：东西不放在地上转，而是挂在那儿不动（世界坐标 { x, y, z, yaw }——消火栓箱里的斧子）；
-   * 地上那圈光还在 pos（人站到那儿捡）
+   * 地上那圈光还在 pos（人站到那儿捡）。ready()：另外的条件，返回假时走到跟前也不捡（斧子：卷帘起来了、看得见它）
    */
-  function place(kind, pos, { hang = null } = {}) {
+  function place(kind, pos, { hang = null, ready = null } = {}) {
     if (!P[kind] || !make[kind]) return null;
     const g = new THREE.Group(); g.position.set(pos.x, pos.y, pos.z);
     const model = make[kind](); model.scale.setScalar(1.25); model.position.y = 0.22; g.add(model);
     if (hang) { model.scale.setScalar(1); model.position.set(hang.x - pos.x, hang.y - pos.y, hang.z - pos.z); model.rotation.set(0, hang.yaw || 0, 0); }
     const halo = new THREE.Mesh(haloGeo, haloOf(kind)); halo.position.y = 0.03; g.add(halo);
     root.add(g);
-    const d = { kind, pos: new THREE.Vector3(pos.x, pos.y, pos.z), g, model, halo, t: rng() * 6, fullT: 0, hang: !!hang };
+    const d = { kind, pos: new THREE.Vector3(pos.x, pos.y, pos.z), g, model, halo, t: rng() * 6, fullT: 0, hang: !!hang, ready };
     drops.push(d);
     return d;
   }
@@ -196,7 +196,7 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
         const d = drops[i]; d.t += dt; d.fullT -= dt;
         if (!d.hang) { d.model.rotation.y = d.t * 1.4; d.model.position.y = 0.22 + Math.sin(d.t * 2.2) * 0.04; }
         d.halo.scale.setScalar(1 + Math.sin(d.t * 3) * 0.12);
-        if (!playing || Math.abs(d.pos.y - p.pos.y) > 1.7 || Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) > P.pickR) continue;
+        if (!playing || Math.abs(d.pos.y - p.pos.y) > 1.7 || Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) > P.pickR || (d.ready && !d.ready())) continue;
         const had = d.kind === 'launcher' && !!G.weapon?.owns?.launcher, touch = !!G.input?.touch; // 已经有榴弹枪：再捡一把只算两发榴弹
         if (give(d.kind, 1) > 0) {
           d.g.removeFromParent(); drops.splice(i, 1);

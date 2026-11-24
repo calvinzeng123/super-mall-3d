@@ -996,6 +996,38 @@ test('推搡：近战那一下把贴身的丧尸推开一步多、趔趄近一�
   assert.ok(events.some(([n]) => n === 'zombie:pin'), '扑倒过'); assert.ok(events.some(([n]) => n === 'zombie:unpin')); assert.notEqual(l.zs, 'pin');
 });
 
+test('消防斧打真丧尸：身前 0.9–2.4 米的一只、1.5 米并排的两只，劈一下都倒（推搡放在劈中以后，不会先把它们推到够不着的地方）；没砍死的照样被掀开一步多', async () => {
+  const { G, enemies, player, ctx, ahead } = zworld();
+  const A = await import('../src/jimao/arsenal.js');
+  const camera = new THREE.PerspectiveCamera(74, 1.6, 0.01, 10), pressed = new Set();
+  Object.assign(G, { game: { state: 'playing' }, input: { look: { dx: 0, dy: 0 }, fire: false, ads: false, pressed: (a) => pressed.has(a), down: () => false },
+    weapon: { name: '步枪', ammo: 30, magSize: 30, reserve: 90, state: 'idle', update() {}, reset() {}, setVisible() {}, addAmmo() {}, snap() {} }, render: { lightPool: { flash() {} } } });
+  player.onGround = true;
+  const arsenal = A.createArsenal(G, { camera }); G.rifle = G.weapon; G.weapon = arsenal;
+  const step = (secs) => { for (let t = 0; t < secs - 1e-9; t += 1 / 60) { arsenal.update(1 / 60); pressed.clear(); for (const z of [...ctx.list]) z._update(1 / 60); } };
+  arsenal.setMelee('axe'); arsenal.select('knife'); step(A.SWAP.lower + A.DRAW.quick + 0.1); assert.equal(arsenal.current, 'knife'); assert.equal(arsenal.name, '消防斧');
+  // 朝着 at 那一点（胸口高）看；side：并排两只各往左右挪多少
+  const swing = (at, side = 0) => {
+    for (const z of [...ctx.list]) z._deactivate(); ctx.list.length = 0;
+    const p = player.pos, dx = at.x - p.x, dz = at.z - p.z, d = Math.hypot(dx, dz), sx = -dz / d, sz = dx / d;
+    const list = (side ? [side, -side] : [0]).map((s) => enemies.spawn('zombie', new THREE.Vector3(at.x + sx * s, at.y, at.z + sz * s), { kind: 'walker', hunt: true }));
+    camera.position.set(p.x, p.y + 1.68, p.z); camera.lookAt(at.x, at.y + 1.1, at.z);
+    step(0.15); const d0 = list.map((z) => Math.hypot(z.pos.x - p.x, z.pos.z - p.z));
+    pressed.add('fire'); step(A.AXE.time + 0.2);
+    return { list, d0 };
+  };
+  for (const d of [0.9, 1.5, 2.4]) { const { list, d0 } = swing(ahead(d)); assert.ok(list.every((z) => !z.alive), `${d0[0].toFixed(1)} 米：一斧砍倒`); }
+  { const { list, d0 } = swing(ahead(1.5), 0.32); assert.ok(list.every((z) => !z.alive), `并排两只（${d0.map((x) => x.toFixed(1)).join(' / ')} 米）：一下都砍倒`); }
+  // 血厚的（这里调成 500）：中一斧没死——劈中以后被掀开一步多
+  { const at = ahead(1.5); for (const z of [...ctx.list]) z._deactivate(); ctx.list.length = 0;
+    const z = enemies.spawn('zombie', at, { kind: 'walker', hunt: true }); z.hp = 500; const p = player.pos;
+    camera.position.set(p.x, p.y + 1.68, p.z); camera.lookAt(at.x, at.y + 1.1, at.z); step(0.15);
+    pressed.add('fire'); step(A.AXE.hitAt - 0.05); const d1 = Math.hypot(z.pos.x - p.x, z.pos.z - p.z); assert.equal(z.hp, 500, '还没劈到：没先被推开');
+    step(0.4); const d2 = Math.hypot(z.pos.x - p.x, z.pos.z - p.z);
+    assert.ok(z.alive && z.hp === 500 - A.AXE.damage, '中了一斧'); assert.ok(d2 > d1 + 1, `劈中以后被掀开 ${(d2 - d1).toFixed(1)} 米`); }
+  arsenal.dispose();
+});
+
 // ---- 队友 ----
 function qworld() {
   const z = zworld({ count: 14 }), { G, player } = z, msgs = [];
@@ -1804,27 +1836,110 @@ test('护送：你走到扶梯口差一步（1.5 米）没踩到点上，小许�
   squad.dispose();
 });
 
-test('消防斧：开局店门外墙上挂着消火栓箱（门一开就在旁边、走得到），站过去就把近战换成斧子；没拿的话撬棍那一步顺手给上；斧子砍中有一点动静（刀没有）；新开一局又只有刀，从存档点回来斧子还在', () => {
+test('骑行家 → 救人那家：路线指引绕着锁着的店走（不从店角穿），照着走一路不被退回来；顶着卷帘时说「卷帘锁着」，斜着推顺着卷帘滑过去；寻路的人（队友、丧尸）也绕开', async () => {
+  const { createRouteGuide } = await import('../src/jimao/guide.js');
+  for (const tower of ['A', 'T1']) {
+    const { G, siege, begin, cut, run, player, msgs } = sworld({ tower });
+    const pf = createPathfinder(nav); pf.prepare(); G.physics.pathfinder = pf;
+    const m = begin(), at = m.plan.stageOf, R = m.plan.mall.rescue, site = m.plan.stages[at('rescue')].site, bike = m.plan.stages[at('crowbar')].site;
+    const poly = L.levels.find((l) => l.id === 'P1-3F').units.find((u) => u.id === R.unit).polys[0];
+    cut(at('crowbar') + 1); run(0.1); assert.equal(siege.state.stage, at('rescue'));
+    assert.equal(doorOutside(L, site, nav), null, '撬卷帘的那一点本来就在店门外：不用先找门（以前找到了店里面）');
+    // 路线指引（真的分帧寻路）
+    const guide = createRouteGuide(G, { scene: G.scene, layout: L, nav, pathfinder: pf });
+    G.game.state = 'playing'; player.pos.set(bike.x, bike.y, bike.z); guide.update(1 / 30); for (let i = 0; i < 400 && pf.pending; i++) pf.update(50); guide.update(1 / 30);
+    const route = guide.route; assert.ok(route.length > 5, `${tower}：路线画出来了`);
+    assert.ok(route.every((q) => !pointInPoly([q.x, q.z], poly)), `${tower}：路线不从锁着的店里穿`);
+    assert.ok(route.every((q) => siege.inArea({ floor: 'P1-3F', x: q.x, z: q.z })), '路线上每一点都走得到');
+    // 照着路线走（每帧朝前面的路线点走 4.5 米 / 秒、真的碰撞），离点 1.2 米算到
+    msgs.length = 0; let wp = 0, t = 0, stuck = 0; const vel = new THREE.Vector3();
+    for (; t < 25 && Math.hypot(site.x - player.pos.x, site.z - player.pos.z) > 1.2; t += 1 / 30) {
+      while (wp < route.length - 1 && Math.hypot(route[wp].x - player.pos.x, route[wp].z - player.pos.z) < 1) wp++;
+      const q = route[wp], d = Math.hypot(q.x - player.pos.x, q.z - player.pos.z) || 1, p0 = player.pos.clone();
+      vel.set((q.x - player.pos.x) / d * 4.5, 0, (q.z - player.pos.z) / d * 4.5); G.physics.moveCapsule(player.pos, vel, 1 / 30, 0.32, 1.8); siege.update(1 / 30);
+      if (player.pos.distanceTo(p0) < 1e-3) stuck++;
+    }
+    assert.ok(t < 12, `${tower}：${t.toFixed(1)} 秒走到卷帘跟前`); assert.equal(stuck, 0, '一帧都没被钉在原地'); assert.ok(!msgs.some((x) => /这边出不去/.test(x)), msgs.join(' | '));
+    // 直直地往卷帘里推：停在卷帘外面一点（不站进卷帘里），说「卷帘锁着」
+    const f = R.front, mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2, inward = pointInPoly([mx - f.nx * 0.5, mz - f.nz * 0.5], poly) ? -1 : 1;
+    player.pos.set(mx + f.nx * inward * -1.2, site.y, mz + f.nz * inward * -1.2); run(0.1); msgs.length = 0; siege.state.tellT = 0;
+    for (let k = 0; k < 60; k++) { vel.set(f.nx * inward * 3, 0, f.nz * inward * 3); G.physics.moveCapsule(player.pos, vel, 1 / 30, 0.32, 1.8); siege.update(1 / 30); }
+    const gap = Math.abs((player.pos.x - mx) * f.nx + (player.pos.z - mz) * f.nz);
+    assert.ok(!pointInPoly([player.pos.x, player.pos.z], poly) && gap > 0.3, `停在卷帘外 ${gap.toFixed(2)} 米`); assert.ok(msgs.includes('卷帘锁着，进不去'), msgs.join(' | '));
+    // 斜着推（45°）：顺着卷帘滑过去
+    const tx = (f.x1 - f.x0) / Math.hypot(f.x1 - f.x0, f.z1 - f.z0), tz = (f.z1 - f.z0) / Math.hypot(f.x1 - f.x0, f.z1 - f.z0), s0 = (player.pos.x - mx) * tx + (player.pos.z - mz) * tz;
+    for (let k = 0; k < 15; k++) { vel.set((f.nx * inward + tx) * 2.1, 0, (f.nz * inward + tz) * 2.1); G.physics.moveCapsule(player.pos, vel, 1 / 30, 0.32, 1.8); siege.update(1 / 30); }
+    assert.ok((player.pos.x - mx) * tx + (player.pos.z - mz) * tz - s0 > 0.8, '斜着推卷帘：顺着滑出去了'); assert.ok(!pointInPoly([player.pos.x, player.pos.z], poly));
+    // 别人的寻路也绕开（队友、丧尸都走 pathfinder）；撬开以后就不绕了
+    const a = landAt(nav, bike.x, bike.z, bike.y + 0.6), b = landAt(nav, R.inside.x + (site.x - R.inside.x) * 0.2, R.inside.z + (site.z - R.inside.z) * 0.2, site.y + 0.6);
+    const p1 = pf.findNow(a, landAt(nav, site.x, site.z, site.y + 0.6)); assert.ok(p1 && p1.every((q) => !pointInPoly([q.x, q.z], poly)), '绕着店走');
+    cut(1); run(0.1); assert.equal(siege.state.stage, at('escort')); assert.ok(pf.findNow(a, b), '撬开了：店里也能去');
+  }
+});
+
+test('读档回到配电室：前面已经过去的那几道分阶段卷帘（开局店面、救人那家、两处扶梯口）都收起来——不会看着落着、人却走得过去', () => {
+  const { siege, begin, director, G } = sworld();
+  const m = begin(), at = m.plan.stageOf, R = m.plan.mall.rescue, f = R.front, mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2;
+  const seals = () => { const out = []; G.scene.traverse((o) => { if (o.name === '丧尸围城 · 卷帘') out.push(o); }); return out; };
+  const over = (x, z) => seals().filter((o) => { o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox; return x > b.min.x - 0.2 && x < b.max.x + 0.2 && z > b.min.z - 0.2 && z < b.max.z + 0.2 && b.max.x - b.min.x < 15 && b.max.z - b.min.z < 15; });
+  assert.ok(over(mx, mz).length && over(mx, mz).every((o) => o.visible), '新开一局：救人那家的卷帘落着');
+  director.state.restore = { kind: 'safe', stage: m.plan.powerStage + 1, kit: null }; siege.reset(); siege.update(1 / 30);
+  assert.ok(siege.state.stage > at('rescue') && siege.inArea({ floor: 'P1-3F', x: R.inside.x, z: R.inside.z }), '读档以后救人那家进得去');
+  assert.ok(over(mx, mz).length && over(mx, mz).every((o) => !o.visible), '……它的卷帘也收起来了');
+  const shop = m.plan.mall.shop.fronts[0]; assert.ok(over((shop.x0 + shop.x1) / 2, (shop.z0 + shop.z1) / 2).every((o) => !o.visible), '开局那家店的卷帘也收了');
+  director.state.restore = false; siege.reset(); assert.ok(over(mx, mz).every((o) => o.visible), '再新开一局又落下来');
+});
+
+test('小许跟丢了直接跟到你身后时，不落在去不了的地方（楼梯顶、锁着的店里、范围外）；都不行就落在你脚下', () => {
+  const { G, siege, begin, cut, run, player, zombies } = sworld();
+  const squad = createSquad(G, { scene: G.scene, nav, zombies, siege, director: { riding: false }, rng: seq(5) }); G.squad = squad; squad.wanted = false; squad.reset();
+  const m = begin(), at = m.plan.stageOf, R = m.plan.mall.rescue;
+  const calm = () => { for (const z of zombies.alive()) z._deactivate(); squad.update(1 / 30); };
+  run(0.1, calm); cut(at('rescue') + 1); run(0.2, calm); assert.equal(siege.state.stage, at('escort'));
+  const xu = squad.guest; assert.ok(xu);
+  // 复现的那个姿势：人站在三层西边、朝西——以前小许被放到消防楼梯顶上（范围外），每一帧又被拉回同一点
+  for (const [x, z, yaw] of [[-165, -111.5, 4.71], [-164, -136.5, 4.71], [R.exit.x, R.exit.z, 0]]) {
+    player.pos.set(x, 12, z); player.yaw = yaw; xu.warp();
+    const st = landAt(nav, xu.pos.x, xu.pos.z, xu.pos.y + 0.6);
+    assert.ok(siege.inArea({ floor: st?.floor, x: xu.pos.x, z: xu.pos.z }) !== false, `(${x}, ${z})：小许落在 (${xu.pos.x.toFixed(1)}, ${xu.pos.z.toFixed(1)})，在范围里`);
+  }
+  squad.dispose();
+});
+
+test('消防斧：开局店门对面（栏杆边）立着消火栓箱，正面朝门——卷帘一起来从门里就看得见、走得到；站过去就把近战换成斧子；没拿的话撬棍那一步顺手给上；斧子砍中没砍死有一点动静（砍倒了和刀一样没声）；新开一局又只有刀，从存档点回来斧子还在', () => {
   const { G, siege, begin, cut, run, player, supplies, msgs, director } = sworld();
   const m = begin(), at = m.plan.stageOf, M = m.plan.mall, A = M.axe, S = siege.state;
   run(0.1); assert.equal(G.weapon.melee, 'knife', '开局只有刀');
   assert.ok(A && A.wall && G.scene.getObjectByName('消火栓箱'), '箱子挂上了');
-  assert.ok(!pointInPoly([A.x, A.z], M.shop.poly), '在店门外'); assert.ok(Math.hypot(A.x - m.plan.stages[at('exit')].site.x, A.z - m.plan.stages[at('exit')].site.z) < 4, '就在门边');
+  // 改过：以前挂在门洞旁边的实墙上，从门里看被门框挡住；现在在门对面、正面朝门
   const door = m.plan.stages[at('exit')].site, ds = landAt(nav, door.x, door.z, door.y + 0.6), as = landAt(nav, A.x, A.z, A.y + 0.6);
+  assert.ok(A.across && !pointInPoly([A.x, A.z], M.shop.poly), '在店门对面'); assert.ok(Math.hypot(A.wall.x - door.x, A.wall.z - door.z) < 6.5, '出门几步就到');
+  const face = new THREE.Vector3(A.wall.x + Math.sin(A.wall.yaw) * 0.3, door.y + 1.2, A.wall.z + Math.cos(A.wall.yaw) * 0.3);
+  assert.ok(G.physics.lineOfSight(new THREE.Vector3(door.x, door.y + 1.6, door.z), face), '卷帘一起来，从门里（摇卷帘那一点）看得见箱子正面');
+  assert.ok((door.x - A.wall.x) * Math.sin(A.wall.yaw) + (door.z - A.wall.z) * Math.cos(A.wall.yaw) > 2, '正面朝着门');
   assert.ok(as && clear(nav, as) && findPath(nav, ds, as), '从门口走得到');
   const drop = supplies.drops.find((d) => d.kind === 'axe'); assert.ok(drop, '斧子挂在箱子里');
   assert.ok(Math.hypot(drop.pos.x - A.x, drop.pos.z - A.z) < 1e-6 && drop.model.position.y > 0.8, '人站在箱子跟前捡，斧子挂在箱子里（离地一米上下）');
-  // 卷帘没开：人出不了店，捡不到；开了以后无线电提醒，走过去就拿到
+  // 卷帘没开：站到箱子跟前（直接挪过去）也捡不到——卷帘落着
+  player.pos.set(A.x, A.y, A.z); for (let k = 0; k < 6; k++) supplies.update(1 / 30); assert.equal(G.weapon.melee, 'knife', '卷帘没开：捡不到'); assert.ok(supplies.drops.some((d) => d.kind === 'axe'));
+  player.pos.set(door.x, door.y, door.z); run(0.1);
+  // 卷帘开了以后无线电提醒，走过去就拿到
   cut(2); run(0.1); assert.ok(msgs.some((t) => /消防箱里有把消防斧/.test(t)), '卷帘一开就提醒');
   player.pos.set(A.x, A.y, A.z); run(0.2, () => supplies.update(1 / 30));
   assert.equal(G.weapon.melee, 'axe'); assert.ok(!supplies.drops.some((d) => d.kind === 'axe')); assert.ok(msgs.some((t) => /捡到消防斧/.test(t)));
   // 斧子砍中有动静，刀没有
   S.noise = 0; G.events.emit('player:hitEnemy', { enemy: { pos: player.pos.clone() }, melee: true, tool: 'knife' }); assert.equal(S.noise, 0);
   G.events.emit('player:hitEnemy', { enemy: { pos: player.pos.clone() }, melee: true, tool: 'axe' }); assert.equal(S.noise, SIEGE.noise.axe);
-  const n0 = msgs.length; cut(1); run(0.1); assert.equal(S.stage, at('crowbar') + 1); assert.ok(!msgs.slice(n0).some((t) => /顺手带上/.test(t)), '已经有了：不再给');
+  // 一斧砍倒的：和刀一样没声，旁边站着睡的也不惊动（潜行时悄悄放倒挡路的）
+  { S.noise = 0;
+    const near = G.enemies.spawn('zombie', player.pos.clone().add(new THREE.Vector3(1.5, 0, 0)), { kind: 'walker', passive: true });
+    G.events.emit('player:hitEnemy', { enemy: { pos: player.pos.clone() }, melee: true, tool: 'axe', killed: true });
+    assert.equal(S.noise, 0, '砍倒了没声'); assert.equal(near.zs, 'idle', '旁边的没惊动');
+    G.events.emit('player:hitEnemy', { enemy: { pos: player.pos.clone() }, melee: true, tool: 'axe', killed: false }); assert.notEqual(near.zs, 'idle', '没砍死的那一下：旁边的惊动了'); near._deactivate(); }
+  const n0 = msgs.length; cut(1); run(0.1); assert.equal(S.stage, at('crowbar') + 1); assert.ok(!msgs.slice(n0).some((t) => /门口消防箱里那把消防斧/.test(t)), '已经有了：不再给');
   // 新开一局：又只有刀，斧子挂回箱子里；这回不去拿——撬棍那一步给上，箱子里那把收走
   begin(); run(0.1); assert.equal(G.weapon.melee, 'knife'); assert.equal(supplies.drops.filter((d) => d.kind === 'axe').length, 1);
-  cut(at('crowbar') + 1); run(0.1); assert.equal(G.weapon.melee, 'axe', '没拿也不会错过'); assert.equal(supplies.drops.filter((d) => d.kind === 'axe').length, 0); assert.ok(msgs.some((t) => /顺手带上/.test(t)));
+  cut(at('crowbar') + 1); run(0.1); assert.equal(G.weapon.melee, 'axe', '没拿也不会错过'); assert.equal(supplies.drops.filter((d) => d.kind === 'axe').length, 0); assert.ok(msgs.some((t) => /出门时顺手把门口消防箱里那把消防斧带上了/.test(t)), '说的是门口箱子里那把（箱子里的收走了）');
   // 从合闸那个存档点回来（原游戏重置了武器、近战换回了刀）：开打第一帧斧子还给你
   director.state.restore = { kind: 'safe', stage: m.plan.powerStage + 1, kit: null }; G.weapon.melee = 'knife'; siege.reset(); run(0.1);
   assert.equal(G.weapon.melee, 'axe', '存档点在撬棍之后：斧子还在'); assert.ok(!supplies.drops.some((d) => d.kind === 'axe'), '不再挂一把');
@@ -1844,6 +1959,7 @@ test('榴弹枪提前：一层武器柜一开就给（不换到手上，告诉�
   supplies.enabled = true; const p = player.pos;
   G.weapon.owns = { launcher: true }; supplies.place('launcher', { x: p.x + 0.3, y: p.y, z: p.z }); for (let k = 0; k < 6; k++) supplies.update(1 / 30);
   assert.ok(msgs.includes('榴弹 +2') && !msgs.some((t) => /捡到榴弹枪/.test(t)), msgs.slice(-3).join(' | '));
+  assert.equal(msgs.filter((t) => t === '榴弹 +2').length, 1, '只说一次（实测里看到的两条是日志里同一条打了两遍）'); assert.equal(lootOf(m.plan, m.plan.gates[1].stage).filter((k) => k === 'launcher' || k === 'shell').length, 1, '第二道关只放一把');
   G.weapon.owns = { launcher: false }; supplies.place('launcher', { x: p.x + 0.3, y: p.y, z: p.z }); for (let k = 0; k < 6; k++) supplies.update(1 / 30);
   assert.ok(msgs.some((t) => /捡到榴弹枪 · 一发一装，按 5 换/.test(t)));
 });

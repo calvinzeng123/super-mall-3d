@@ -307,8 +307,8 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
     }
     // 自动开火：准星压在敌人身上超过 fireDelay 就开火，离开后再多打 fireHold（免得抖一下就断）
     if (autoFireOn() && inp.touch) {
-      // 拿着刀：人到了够得着的地方（刀两米多、斧子两米七）才自己出刀
-      const on = !!target && target.angle < ASSIST.fireCone && (G.weapon?.ammo ?? 1) > 0 && G.weapon?.state !== 'reloading' && (G.weapon?.current !== 'knife' || target.dist < (G.weapon?.meleeReach ?? 2.4));
+      // 拿着刀：人到了够得着的地方（刀两米多、斧子两米七）才自己出刀；发呆不动的（丧尸围城潜行时站着睡的、隔着玻璃拍门的）不自己打——要打自己按
+      const on = !!target && !target.enemy.passive && target.angle < ASSIST.fireCone && (G.weapon?.ammo ?? 1) > 0 && G.weapon?.state !== 'reloading' && (G.weapon?.current !== 'knife' || target.dist < (G.weapon?.meleeReach ?? 2.4));
       onTargetT = on ? onTargetT + dt : 0;
       if (on && onTargetT >= ASSIST.fireDelay) fireHold = ASSIST.fireHold; else fireHold -= dt;
       if (fireHold > 0) inp.fire = true;

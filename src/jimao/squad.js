@@ -160,13 +160,15 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     function place(at, yaw = 0) {
       m.pos.set(at.x, at.y, at.z); m.yaw = yaw; vel.set(0, 0, 0); m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.awayT = 0; m.planT = 0;
     }
+    /** 救出来的人（小许）去不了的地方：卷帘拉下的店里、楼梯顶、范围外（不然跟过去又被判在范围外，一直原地闪） */
+    const off = (st, x, z) => !!member.guest && siege?.inArea?.({ floor: st.floor, x, z }) === false;
     /** 跟到你身后站得住的一点（优先你看不见的方向） */
     function warp() {
       const p = G.player; if (!p?.pos) return false;
       const yaw = p.yaw || 0, fx = -Math.sin(yaw), fz = -Math.cos(yaw);
       for (const [b, s] of [[member.back, member.side * 1.3], [member.back, -member.side * 1.3], [2, member.side], [1.4, 0], [-1.6, member.side * 1.2], [0.8, member.side * 0.8]]) {
         const x = p.pos.x - fx * b + fz * s, z = p.pos.z - fz * b - fx * s, st = landAt(nav, x, z, p.pos.y + 0.6);
-        if (!st || Math.abs(st.y - p.pos.y) > 0.5 || !clear(nav, st)) continue;
+        if (!st || Math.abs(st.y - p.pos.y) > 0.5 || !clear(nav, st) || off(st, x, z)) continue;
         if (G.physics?.lineOfSight && !G.physics.lineOfSight(tmp.set(p.pos.x, p.pos.y + 1.2, p.pos.z), tmp2.set(x, st.y + 1.2, z))) continue;
         place({ x, y: st.y, z }, yaw); return true;
       }
@@ -175,7 +177,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     /** 站位 spec（{ back, side }）落在哪：站得住、和你同一层；look：还要你看得见那一点。不行返回 null */
     function slotAt(spec, yaw, look) {
       const p = G.player, s = slotOf(p.pos, yaw, spec), st = landAt(nav, s.x, s.z, p.pos.y + 0.6);
-      if (!st || Math.abs(st.y - p.pos.y) >= 0.5 || !clear(nav, st)) return null;
+      if (!st || Math.abs(st.y - p.pos.y) >= 0.5 || !clear(nav, st) || off(st, s.x, s.z)) return null;
       if (look && G.physics?.lineOfSight && !G.physics.lineOfSight(tmp.set(p.pos.x, p.pos.y + 1.2, p.pos.z), tmp2.set(s.x, st.y + 1.2, s.z))) return null;
       return new THREE.Vector3(s.x, st.y, s.z);
     }
