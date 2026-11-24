@@ -42,14 +42,15 @@ function accessibleTowerRoof(building, roof, levels) {
 /** 丧尸围城（runtime 的 jimao 模式）撤离用的两栋楼的屋面（公寓 A、北区 1 号楼 T1，见 src/jimao/siege.js 的 TOWERS）。 */
 export const SIEGE_ROOFS = Object.freeze(['A-RF', 'T1-RF']);
 /**
- * 丧尸围城的地图：楼顶是能走、能打的平台——标成 playableRoof，渲染就不放导航里没有的东西（hospitality.js 的 crown() 机房、
- * buildRoofGarden() 屋顶花园见 playableRoof 就跳过）。公寓那间 2.4 米高的机房正压在停机位上，守屋顶时尸群从它后面绕过来，
- * 走到跟前两三米才露出来（用户：最后一波守住等直升机的时候还是看不到敌人）。漫游、小游戏不调这个，屋顶照旧。
+ * 丧尸围城的地图：楼顶是能走、能打的平台——标成 siegeRoof，渲染把导航里没有的东西（hospitality.js 的屋顶机房、屋顶花园）单独放一组，
+ * 登记在 ctx.siegeRoofProps 里，开着丧尸围城的时候藏起来（run.js 按 siege.enabled 切）。公寓那间 2.4 米高的机房正压在停机位上，
+ * 守屋顶时尸群从它后面绕过来，走到跟前两三米才露出来（用户：最后一波守住等直升机的时候还是看不到敌人）。
+ * 同一张地图的零点突围（封面上能来回切）照旧有机房；漫游、小游戏不调这个，屋顶照旧。
  * runtime.js 在 buildPlayableLayout 之后调（layout.game 这时才定下来，scopeArcade 里看不到）
  */
 export function markSiegeRoofs(layout) {
   layout.game = 'jimao';
-  for (const lv of layout.levels) if (SIEGE_ROOFS.includes(lv.id)) lv.playableRoof = true;
+  for (const lv of layout.levels) if (SIEGE_ROOFS.includes(lv.id)) lv.siegeRoof = true;
   return layout;
 }
 

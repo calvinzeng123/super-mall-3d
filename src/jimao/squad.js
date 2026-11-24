@@ -270,7 +270,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       }
       m.fallK = Math.max(0, m.fallK - dt * 4);
       if (biting > 0) {
-        m.hp -= P.bite.dps * biting * dt; m.hurtT = 0.6;
+        m.hp -= P.bite.dps * (siege?.mateBites?.(biting) ?? biting) * dt; m.hurtT = 0.6; // 守屋顶时同时挨咬的只数有上限、打折（siege.js 的 SIEGE.crowd）
         if (m.hp <= 0) { goDown(); pose(dt); return; }
         if (m.hp < m.maxHp * 0.4 && m.biteSay <= 0) { m.biteSay = 14; say(member, member.trait === 'medic' ? '我被围住了！' : '顶不住了，帮我一把！'); }
       }

@@ -133,6 +133,9 @@ export function buildHospitalityTower(ctx,b,records) {
     }
   });
   B.flush(group);
+  // 丧尸围城的撤离楼（markSiegeRoofs）：屋顶机房单独一组，开着围城时藏起来（ctx.siegeRoofProps，run.js 切），零点突围照旧看得见
+  const top=levels.at(-1);
+  if(top?.siegeRoof&&!top.playableRoof&&b.usage!=='residential'){const M=new BatchSet(materials),g=new THREE.Group();g.name=`${b.id}-machine-room`;M.frame(F,()=>machineRoom(M,b,top));M.flush(g);group.add(g);(ctx.siegeRoofProps||=[]).push(g);}
   buildTowerStairInstances(ctx,b,levels,ctx.layout.stairs.filter(s=>s.building===b.id),materials,group);
   // 酒店 / 公寓的公共走廊：户门墙的踢脚、两头的消火栓箱和表箱、吊顶烟感（逐层实例化，只在当前楼层上下显示）
   if(b.usage!=='residential')buildCorridorInstances(ctx,b,levels,materials,group);
@@ -391,8 +394,13 @@ function crown(B,b,lv,pal) {
     sideBox(B,e,'extMetal',-0.15,e.len+0.15,y+height,y+height+0.1,0.01,0.62,pal.metal);
     if(b.usage!=='residential')sideBox(B,e,'glowSoft',0.2,e.len-0.2,y+height-0.17,y+height-0.12,0.07,0.12,'#ead8af');
   }
-  if(lv.playableRoof)return;
-  // 住宅机房在东北角，避开中部双电梯井；酒店机房在中央服务区。
+  if(lv.playableRoof||lv.siegeRoof)return; // 围城的撤离楼：机房另放一组（machineRoom）
+  machineRoom(B,b,lv);
+}
+
+/** 屋顶机房：住宅机房在东北角，避开中部双电梯井；酒店机房在中央服务区 */
+function machineRoom(B,b,lv) {
+  const r=b.footprint,y=lv.kind==='roof'?lv.elev:lv.elev+lv.height,w=r.x1-r.x0,d=r.z1-r.z0,cx=(r.x0+r.x1)/2,cz=(r.z0+r.z1)/2;
   const mx=b.usage==='residential'?r.x1-6:cx,mz=b.usage==='residential'?r.z0+4:cz;
   B.get('extSatin').box(mx,y+1.2,mz,w*0.28,2.4,d*0.26,'#a5adae');
   for(const x of [mx-w*0.1,mx+w*0.1]) {
@@ -405,6 +413,8 @@ function crown(B,b,lv,pal) {
 function buildRoofGarden(ctx,b,lv,pal) {
   const group=new THREE.Group();group.name=`${b.id}-roof-garden`;
   if(!lv||lv.playableCap||lv.playableRoof)return group;
+  // 丧尸围城的撤离楼：花园放进里面一组，开着围城时藏起来（外面这组远近切换照旧）
+  let into=group;if(lv.siegeRoof){into=new THREE.Group();into.name=`${b.id}-roof-garden-props`;group.add(into);(ctx.siegeRoofProps||=[]).push(into);}
   const B=new BatchSet(ctx.mats.base),r=b.footprint,y=lv.elev;
   B.frame(b.frame,()=>{
     for(const x of [r.x0+4,r.x1-4]) {
@@ -419,7 +429,7 @@ function buildRoofGarden(ctx,b,lv,pal) {
     B.get('stone').cyl(cx,y+0.15,cz,0.75,0.35,'#d9d5ca',12);
     for(const x of [cx-w*0.3,cx+w*0.3])bench(B,x,y,cz,Math.PI/2);
   });
-  B.flush(group);ctx.levels[lv.id].base.add(group);return group;
+  B.flush(into);ctx.levels[lv.id].base.add(group);return group;
 }
 
 function liftEnclosures(ctx,B,b,levels,pal) {

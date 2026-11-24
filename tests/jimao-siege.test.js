@@ -12,6 +12,7 @@ import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stair
 import { aimAngles, inGunArc, createDoorGun, DOOR_GUN } from '../src/jimao/door-gun.js';
 import { createSupplies, SUPPLY, healChoice, MEDIC_CSS } from '../src/jimao/supplies.js';
 import { createSquad, SQUAD, pickTarget, shotHits, slotOf, SQUAD_CSS } from '../src/jimao/squad.js';
+import { DEFENSE } from '../src/jimao/siege-defense.js';
 import { createHealthBars, BARS, barWidth, pickBars, BARS_CSS } from '../src/jimao/healthbars.js';
 import { doorOutside } from '../src/jimao/guide.js';
 import { PACING, createPacing } from '../src/jimao/pacing.js';
@@ -757,7 +758,7 @@ test('围城里的补给和安全点：不回血；武器柜、工具间、楼�
   assert.equal(supplies.drops.length, LOOT.pistol.length + LOOT.locker.length + LOOT.holdout.length + 6 + LOOT.flare.length + 1);
   assert.ok(!supplies.drops.some((d) => d.kind === 'medkit' && Math.abs(d.pos.y - plan.stages[plan.powerStage].site.y) < 0.5 && Math.hypot(d.pos.x - plan.stages[plan.powerStage].site.x, d.pos.z - plan.stages[plan.powerStage].site.z) < 3));
   for (let i = 0; i < plan.stages.length; i++) {
-    const list = lootOf(plan, i), st = plan.stages[i]; if (i < plan.armsStage && st.kind !== 'pistol') { assert.equal(list.length, 0, '商场段的小步骤不出补给'); continue; } assert.ok(list.length >= 1 && list.length <= 3, st.id);
+    const list = lootOf(plan, i), st = plan.stages[i]; if (i < plan.armsStage && st.kind !== 'pistol') { assert.equal(list.length, 0, '商场段的小步骤不出补给'); continue; } assert.ok(list.length >= 1 && list.length <= (st.kind === 'flare' ? 4 : 3), st.id); // 楼顶信号弹旁边多一颗手雷（守屋顶用）
     const spots = lootSpots(nav, st.site, list.length); assert.equal(spots.length, list.length);
     for (const q of spots) { const d = Math.hypot(q.x - st.site.x, q.z - st.site.z); assert.ok(d > 0.4 && d < 2, `${st.id} 的补给离目标 ${d.toFixed(1)} 米`); assert.ok(Math.abs(q.y - st.site.y) < 0.4); }
   }
@@ -1236,24 +1237,38 @@ test('清扫时守点：八十秒假航线上屋顶、楼下的丧尸不往楼�
   }
 });
 
-test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那阵也出得来（尸体占着池子先收掉）；楼梯口那一份从门外排着队出来，全在露天的屋面上；点信号弹时楼里落在下面的收掉；没出来就不喊「第几波」', () => {
+/** 守屋顶开场：前面几步一口气做完、清掉招来的，人站到 at（默认信号弹往停机位走 15%），点着信号弹。返回 { ...sworld, m, T, roof, px, pz, S } */
+function holdWorld(tower, at = null) {
+  const w = sworld({ tower }), { siege, zombies, player, begin, cut, run } = w;
+  const m = begin(), T = TOWERS[tower], roof = elev(T.roof), f = m.plan.flare;
+  cut(m.plan.stages.length - 1); run(0.1); for (const z of zombies.alive()) z._deactivate();
+  Object.assign(siege.state, { genT: 0, holdT: 0, bruteT: -1 }); // 一口气做完前面几步：商场段发电机、一层守点的倒计时别带到楼顶上来
+  const px = at ? at.x : f.x + (m.plan.pad.x - f.x) * 0.15, pz = at ? at.z : f.z + (m.plan.pad.z - f.z) * 0.15; player.pos.set(px, roof, pz);
+  return { ...w, m, T, roof, px, pz, S: siege.state, light: () => { cut(1); run(1 / 30); } };
+}
+/** 楼梯间里（屋面上的楼梯间盒子里，或者通到屋顶的那几跑楼梯、休息平台、下一层的楼梯口上） */
+const inStairs = (siege, roof, q) => q.y < roof - 0.3 || siege.housings().some((b) => inBox(b, q));
+
+test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那阵也出得来；楼梯口那一份在楼梯间里、人看不见的地方冒出来，自己走出门上了露天的屋面；翻墙的离人 10 米以外；屋面上看得见一大群；点信号弹时楼里落在下面的收掉；没出来就不喊「第几波」', () => {
   for (const tower of ['A', 'T1']) {
-    const { G, siege, zombies, enemies, player, begin, cut, run, msgs } = sworld({ tower });
-    const m = begin(), T = TOWERS[tower], roof = elev(T.roof), f = m.plan.flare;
-    cut(m.plan.stages.length - 1); run(0.1); for (const z of zombies.alive()) z._deactivate();
-    Object.assign(siege.state, { genT: 0, holdT: 0, bruteT: -1 }); // 一口气做完前面几步：商场段发电机、一层守点的倒计时别带到楼顶上来
+    const { G, siege, zombies, enemies, player, run, msgs, T, roof, px, pz, S, light } = holdWorld(tower);
     // 楼里还有一群追上来的（落在十五层）
     const deep = []; for (let k = 0; k < 40 && deep.length < 10; k++) { const q = G.physics.nav.randomPoint({ x: T.pad.x, y: elev(`${T.id}-15F`), z: T.pad.z }, 14); if (Math.abs(q.y - elev(`${T.id}-15F`)) < 0.3) { const z = enemies.spawn('zombie', q, { hunt: true, state: 'alert' }); if (z) deep.push(z); } }
     assert.ok(deep.length >= 5);
-    const px = f.x + (m.plan.pad.x - f.x) * 0.15, pz = f.z + (m.plan.pad.z - f.z) * 0.15; player.pos.set(px, roof, pz);
-    const born = [], spawn0 = enemies.spawn.bind(enemies), S = siege.state;
-    enemies.spawn = (type, pos, opts) => { const z = spawn0(type, pos, opts); if (z) born.push({ t: S.hold, x: pos.x, y: pos.y, z: pos.z }); return z; };
-    cut(1); run(1 / 30); assert.ok(S.hold >= 0, '点着了');
+    const born = [], spawn0 = enemies.spawn.bind(enemies), P = createMapPhysics(nav), eye = new THREE.Vector3(px, roof + 1.6, pz), at = new THREE.Vector3();
+    enemies.spawn = (type, pos, opts) => {
+      const z = spawn0(type, pos, opts);
+      if (z) born.push({ t: S.hold, x: pos.x, y: pos.y, z: pos.z, zb: z, id: (z.__life = (z.__life || 0) + 1), door: inStairs(siege, roof, pos), seen: P.sightAcross(eye, at.set(pos.x, pos.y + 1.55, pos.z)) || P.sightAcross(eye, at.set(pos.x, pos.y + 0.8, pos.z)), d: Math.hypot(pos.x - px, pos.y - roof, pos.z - pz) });
+      return z;
+    };
+    light(); assert.ok(S.hold >= 0, '点着了');
     assert.ok(deep.every((z) => !z.active), '楼里落在下面的收回池子');
-    const boxes = siege.housings(), eye = new THREE.Vector3(), chest = new THREE.Vector3(); let k = 0;
+    const chest = new THREE.Vector3(), out = new Map(), seenN = []; let k = 0;
     run(SIEGE.hold - 0.5, () => {
-      player.pos.set(px, roof, pz); eye.set(px, roof + 1.6, pz);
-      if (++k % 21) return; // 0.7 秒打死一只看得见的（最近的）
+      player.pos.set(px, roof, pz);
+      for (const b of born) if (b.door && !out.has(b) && b.zb.__life === b.id && b.zb.alive && b.zb.active && !inStairs(siege, roof, b.zb.pos)) out.set(b, S.hold - b.t);
+      if (++k % 30 === 0) seenN.push([S.hold, zombies.alive().filter((z) => Math.abs(z.pos.y - roof) < 1 && G.physics.lineOfSight(eye, chest.set(z.pos.x, z.pos.y + 1.2, z.pos.z))).length]);
+      if (k % 21) return; // 0.7 秒打死一只看得见的（最近的）
       let best = null, bd = Infinity;
       for (const z of zombies.alive()) { if (Math.abs(z.pos.y - roof) > 1) continue; chest.set(z.pos.x, z.pos.y + 1.2, z.pos.z); const d = eye.distanceTo(chest); if (d < bd && G.physics.lineOfSight(eye, chest)) { bd = d; best = z; } }
       best?.damage(9999, null, null, 'body');
@@ -1262,19 +1277,140 @@ test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那
     SIEGE.waves.slice(0, 5).forEach((w, i) => assert.ok(inWin(w, w + 7) >= SIEGE.waveSize[0], `${tower} 第 ${i + 1} 波出来 ${inWin(w, w + 7)} 只`));
     const surge = inWin(SIEGE.hold - SIEGE.surge.last, SIEGE.hold);
     assert.ok(surge >= SIEGE.surge.each * 4, `${tower} 最后那阵出来 ${surge} 只`);
-    for (const q of born) {
+    // 楼梯口那一份：楼梯间里、人看不见、离人 5 米以外冒出来；翻墙上来的：屋面上、楼梯间外、离人 10 米以外
+    const door = born.filter((q) => q.door), rim = born.filter((q) => !q.door);
+    assert.ok(door.length > born.length * 0.5, `${tower} 大半从楼梯口来（${door.length} / ${born.length}）`);
+    for (const q of door) { assert.equal(q.seen, false, `${tower} (${q.x.toFixed(1)}, ${q.y.toFixed(1)}, ${q.z.toFixed(1)}) 冒出来的时候人看得见`); assert.ok(q.d >= SIEGE.spawn.doorNear, `${tower} 离人 ${q.d.toFixed(1)} 米就冒出来`); }
+    for (const q of rim) {
       const st = landAt(nav, q.x, q.z, q.y + 0.6);
-      assert.ok(st && st.floor === T.roof && Math.abs(q.y - roof) < 0.3, `${tower} 守屋顶时出来的都在屋面上`);
-      assert.ok(!boxes.some((b) => inBox(b, q)), `${tower} (${q.x.toFixed(1)}, ${q.z.toFixed(1)}) 不在楼梯间里`);
+      assert.ok(st && st.floor === T.roof && Math.abs(q.y - roof) < 0.3 && !siege.housings().some((b) => inBox(b, q)), `${tower} 翻墙上来的在露天的屋面上`);
+      assert.ok(Math.hypot(q.x - px, q.z - pz) >= SIEGE.spawn.rimNear, `${tower} 翻墙上来的离人 ${Math.hypot(q.x - px, q.z - pz).toFixed(1)} 米`);
     }
-    // 楼梯口那一份是一只只出来的：同一帧最多几只（翻墙的那几只是一起上来的）
+    // 门里冒出来的自己走出门（以前放在楼梯顶的卡在门框的墙角上出不来）：活过 15 秒的九成以上 15 秒内上了露天的屋面
+    const lived = door.filter((q) => q.t < SIEGE.hold - 16 && (out.has(q) || (q.zb.__life === q.id && q.zb.alive && q.zb.active)));
+    assert.ok(lived.length > 20 && lived.filter((q) => out.has(q) && out.get(q) < 15).length >= lived.length * 0.9, `${tower} 门里出来的 ${lived.filter((q) => out.has(q)).length} / ${lived.length} 走出了门`);
+    // 屋面上看得见一大群：每一波都有好几只同时看得见，最后那阵更多
+    const peak = (a, b) => Math.max(0, ...seenN.filter(([t]) => t >= a && t < b).map(([, n]) => n));
+    SIEGE.waves.forEach((w, i) => assert.ok(peak(w, w + 10) >= 4, `${tower} 第 ${i + 1} 波同时看得见的最多 ${peak(w, w + 10)} 只`));
+    assert.ok(peak(SIEGE.hold - SIEGE.surge.last, SIEGE.hold) >= 12, `${tower} 最后那阵同时看得见 ${peak(SIEGE.hold - SIEGE.surge.last, SIEGE.hold)} 只`);
+    // 同一帧最多几只（翻墙的那几只是一起上来的）
     const byT = {}; for (const q of born) { const key = Math.round(q.t * 30); byT[key] = (byT[key] || 0) + 1; }
     assert.ok(Math.max(...Object.values(byT)) <= 8, `${tower} 同一帧出来 ${Math.max(...Object.values(byT))} 只`);
-    // 喊「第几波」要真出来了才喊（最后一两波池子里全是活着的、一只都出不来就不喊）
+    // 喊「第几波」要真出来了才喊（池子里全是活着的、一只都出不来就不喊）
     for (let i = 1; i <= 5; i++) assert.ok(msgs.some((t) => String(t).startsWith(`第 ${i} 波`)), `${tower} 喊了第 ${i} 波`);
     SIEGE.waves.forEach((w, i) => { if (msgs.some((t) => String(t).startsWith(`第 ${i + 1} 波`))) assert.ok(born.some((q) => q.t >= w), `${tower} 第 ${i + 1} 波喊了就有出来的`); });
     assert.ok(siege.onRoof(player.pos), '人在露天的屋面上（雾退远）');
   }
+});
+
+test('守屋顶时不在人眼皮底下冒出来：人堵在楼梯间门口、站在出口上、站在登机门口，旁边站着队友——楼梯口的一只都不在人、队友 5 米内冒出来，人看不见；翻墙上来的离人、离队友 10 米以外；巨尸、特殊感染者、尖叫招来的也走楼梯口', () => {
+  for (const tower of ['A', 'T1']) {
+    const probe = holdWorld(tower), ex = probe.siege.roofExits(), pad = probe.m.plan.pad;
+    const spots = [{ name: '出口', ...ex[0] }, { name: '门洞', x: ex[0].door.x + ex[0].door.dx * 0.6, z: ex[0].door.z + ex[0].door.dz * 0.6 }, { name: '登机门', x: pad.x - 0.25, z: pad.z - 1.75 }];
+    for (const at of spots) {
+      const { G, siege, enemies, player, run, roof, S, light } = holdWorld(tower, at);
+      const mate = { active: true, pos: new THREE.Vector3(at.x + 2.5, roof, at.z + 1.5) }; G.squad = { mates: [mate] };
+      const born = [], spawn0 = enemies.spawn.bind(enemies), P = createMapPhysics(nav), eye = new THREE.Vector3(at.x, roof + 1.6, at.z), h = new THREE.Vector3();
+      enemies.spawn = (type, pos, opts) => { const z = spawn0(type, pos, opts); if (z) born.push({ kind: z.kind, x: pos.x, y: pos.y, z: pos.z, door: inStairs(siege, roof, pos), seen: P.sightAcross(eye, h.set(pos.x, pos.y + 1.55, pos.z)) || P.sightAcross(eye, h.set(pos.x, pos.y + 0.8, pos.z)), d: Math.hypot(pos.x - at.x, pos.y - roof, pos.z - at.z), dm: Math.hypot(pos.x - mate.pos.x, pos.y - roof, pos.z - mate.pos.z) }); return z; };
+      light();
+      siege.spawnSpecial(); G.events.emit('zombie:scream', { pos: player.pos.clone() }); // 守屋顶时的特殊感染者、尖叫招来的
+      const bw = (TOWERS[tower].hold?.brutes || SIEGE.brutes)[0]; S.hold = SIEGE.waves[bw - 1] - 0.1; S.waveI = bw - 1; // 下一波带巨尸
+      run(24, () => player.pos.set(at.x, roof, at.z));
+      assert.ok(born.length > 20, `${tower} ${at.name} 出来了 ${born.length} 只`);
+      assert.ok(born.some((q) => q.kind === 'brute' && q.door), `${tower} ${at.name} 巨尸从楼梯口来`);
+      for (const q of born) {
+        if (q.door) { assert.ok(q.d >= SIEGE.spawn.doorNear && q.dm >= SIEGE.spawn.doorNear, `${tower} ${at.name}：楼梯口那只离人 ${q.d.toFixed(1)}、离队友 ${q.dm.toFixed(1)} 米`); assert.equal(q.seen, false, `${tower} ${at.name}：楼梯口那只冒出来时人看得见`); }
+        else assert.ok(Math.hypot(q.x - at.x, q.z - at.z) >= SIEGE.spawn.rimNear && Math.hypot(q.x - mate.pos.x, q.z - mate.pos.z) >= SIEGE.spawn.rimNear, `${tower} ${at.name}：翻墙那只离人 ${q.d.toFixed(1)} 米`);
+      }
+    }
+  }
+});
+
+test('守屋顶：楼梯间门口横一道路障，门里出来的被挡在里面（挡到路障被冲垮，至少挡三秒）；不摆的话同一阵早就涌出来了', () => {
+  const outBy = (tower, wall) => {
+    const { siege, zombies, player, run, roof, px, pz, S, light } = holdWorld(tower), walls = siege.walls;
+    // 人站在门洞正中外面两米，朝门里摆：沙袋墙横在门洞外 0.3 米
+    if (wall) { walls.enabled = true; walls.give(4); for (const e of siege.roofExits()) { const g = e.gap; assert.ok(g && g.w > 1 && g.w < 4.4, `${tower} 门洞 ${g?.w?.toFixed(1)} 米宽`); player.pos.set(g.x + g.nx * 2, roof, g.z + g.nz * 2); player.yaw = Math.atan2(g.nx, g.nz); assert.ok(walls.place(), `${tower} 门口摆得下`); } player.pos.set(px, roof, pz); }
+    light();
+    const door = new Set(), out = new Set(), line = []; let first = null, broke = null;
+    run(14, () => {
+      player.pos.set(px, roof, pz);
+      for (const z of zombies.alive()) { if (z.exitRoute) door.add(z); if (door.has(z) && !out.has(z) && !inStairs(siege, roof, z.pos)) { out.add(z); first ??= S.hold; } }
+      if (wall && broke === null && walls.walls.some((w) => w.fallT >= 0)) broke = S.hold;
+      line.push([S.hold, out.size]);
+    });
+    return { first, broke, door: door.size, by: (t) => (line.filter(([h]) => h <= t).at(-1) || [0, 0])[1], hurt: walls.walls.some((w) => w.hp < DEFENSE.wall.hp) || walls.walls.length < siege.roofExits().length };
+  };
+  for (const tower of ['A', 'T1']) {
+    const open = outBy(tower, false), held = outBy(tower, true), t = held.broke ?? 14;
+    assert.ok(open.door >= 6 && open.by(t) >= 2, `${tower} 不摆：${t.toFixed(1)} 秒内 ${open.by(t)} / ${open.door} 只出了门`);
+    assert.ok(t >= 3, `${tower} 路障挡了 ${t.toFixed(1)} 秒`);
+    assert.ok(held.by(t) <= open.by(t) * 0.5, `${tower} 路障冲垮之前出了门 ${held.by(t)} 只（不摆的话同一阵 ${open.by(t)} 只）`);
+    assert.ok(held.hurt, `${tower} 路障被它们磨掉了耐久`);
+  }
+});
+
+test('守屋顶池子满了：先收尸体，再收人看不见、离人 15 米以外的（最远的先收）；人退到下一层楼，追到跟前、看得见的一只都不收；排着队出不来时隔一阵收一只人视野外、20 米外的', () => {
+  // 人退到公寓 20 层（屋面下 6.5 米）：五十秒里收掉的没有一只在人 15 米内、也没有一只看得见（以前当着面一只只没了）
+  {
+    const { G, siege, zombies, player, run, T, roof, S, light } = holdWorld('A');
+    light();
+    const r = runs.find((q) => q.to === T.roof && q.id.startsWith(T.stair)), below = r.a, eye = new THREE.Vector3(), h = new THREE.Vector3(); let culled = 0, bad = [];
+    for (const z of zombies.pool) { const d0 = z._deactivate; z._deactivate = function () { if (this.alive && this.active) { culled++; eye.set(player.pos.x, player.pos.y + 1.6, player.pos.z); const d = this.pos.distanceTo(player.pos); if (d < SIEGE.cull.near || createMapPhysics(nav).sightAcross(eye, h.set(this.pos.x, this.pos.y + 1.5, this.pos.z))) bad.push(d.toFixed(1)); } return d0.call(this); }; }
+    run(50, () => player.pos.set(below.x, elev(r.from), below.z));
+    assert.ok(culled > 5, `池子满了也收了 ${culled} 只（远处看不见的）`);
+    assert.deepEqual(bad, [], '收掉的里面有人跟前 / 看得见的');
+    assert.ok(roof - player.pos.y > 6 && S.hold > 40);
+    void G;
+  }
+  // 直接看 makeRoom：池子塞满活的——人跟前看得见的、远处看不见的；只收后者，收完了就不收
+  {
+    const { siege, zombies, enemies, player, roof, px, pz, light } = holdWorld('A');
+    light(); for (const z of zombies.alive()) z._deactivate();
+    const near = [], far = [];
+    for (let i = 0; near.length < 30 && i < 200; i++) { const a = i * 0.7, q = new THREE.Vector3(px + Math.cos(a) * (3 + (i % 5)), roof, pz + Math.sin(a) * (3 + (i % 5))); const st = landAt(nav, q.x, q.z, roof + 0.6); if (!st || st.floor !== 'A-RF' || !clear(nav, st)) continue; const z = enemies.spawn('zombie', q, { kind: 'walker', hunt: true, state: 'alert' }); if (z) near.push(z); }
+    const ex = siege.roofExits(); for (const q of ex.flatMap((e) => e.inner)) { const z = enemies.spawn('zombie', q.clone(), { kind: 'walker', hunt: true, state: 'alert' }); if (z) far.push(z); }
+    while (zombies.pool.some((z) => !z.active)) { const z = enemies.spawn('zombie', new THREE.Vector3(px + 1, roof, pz + 1), { kind: 'walker' }); if (!z) break; near.push(z); }
+    const P = createMapPhysics(nav), eye = new THREE.Vector3(px, roof + 1.6, pz), h = new THREE.Vector3();
+    const hidden = far.filter((z) => z.pos.distanceTo(player.pos) > SIEGE.cull.near && !P.sightAcross(eye, h.set(z.pos.x, z.pos.y + 1.5, z.pos.z)) && !P.sightAcross(eye, h.set(z.pos.x, z.pos.y + 0.8, z.pos.z))).length;
+    assert.ok(hidden >= 4, `楼梯间里看不见的 ${hidden} 只`);
+    let n = 0; while (siege.makeRoom()) n++;
+    assert.equal(n, hidden, '楼梯间里看不见、15 米外的都收了');
+    assert.ok(near.every((z) => z.active && z.alive), '人跟前看得见的一只没收');
+  }
+  // 排着队出不来：池子里全是活的、都看得见（屋面上）；人背后 20 米外的隔一阵收一只，面前的不收
+  {
+    const { siege, zombies, enemies, player, run, roof, px, pz, S, light } = holdWorld('A');
+    light(); for (const z of zombies.alive()) z._deactivate();
+    player.yaw = 0; // 面朝 −z（北）
+    const front = [], back = [];
+    const grid = []; for (let x = -52; x <= -18; x += 2.2) for (let z = -250; z <= -180; z += 2.2) { const st = landAt(nav, x, z, roof + 0.6); if (st && st.floor === 'A-RF' && clear(nav, st) && !siege.housings().some((b) => inBox(b, { x, z }, 0.8))) grid.push(new THREE.Vector3(x, st.y, z)); }
+    for (const q of grid) { if (zombies.pool.every((z) => z.active)) break; const d = Math.hypot(q.x - px, q.z - pz); if (d < 21) continue; const z = enemies.spawn('zombie', q, { kind: 'walker', fixed: true }); if (z) (siege.inView(q) ? front : back).push(z); } // 钉在原地（看收的是哪些）
+    assert.ok(zombies.pool.every((z) => z.active) && back.length >= 4 && front.length >= 4, `前 ${front.length} 后 ${back.length}`);
+    S.waveI = SIEGE.waves.length; S.hold = 30; // 不再来新的波次，只看排着的队
+    const t0 = S.retired || 0, gone = [], P = createMapPhysics(nav), eye = new THREE.Vector3(px, roof + 1.6, pz), h = new THREE.Vector3();
+    for (const z of zombies.pool) { const d0 = z._deactivate; z._deactivate = function () { if (this.alive && this.active) gone.push({ view: siege.inView(this.pos), seen: P.sightAcross(eye, h.set(this.pos.x, this.pos.y + 1.5, this.pos.z)), d: Math.hypot(this.pos.x - px, this.pos.z - pz) }); return d0.call(this); }; }
+    // 往楼梯口塞几只排队
+    S.pourQ = siege.roofExits().map(() => ({ q: Array.from({ length: 4 }, () => ({ mix: { walker: 1 }, wave: null })), t: 0 }));
+    run(3, () => { player.pos.set(px, roof, pz); player.yaw = 0; S.waveI = SIEGE.waves.length; });
+    const retired = (S.retired || 0) - t0;
+    assert.ok(gone.length >= 3, `三秒腾出来 ${gone.length} 个位置（收 ${retired} 只人背后的）`);
+    assert.ok(retired <= Math.ceil(3 / SIEGE.cull.retire) + 1, `隔一阵才收一只：三秒收了 ${retired} 只`);
+    assert.deepEqual(gone.filter((q) => (q.view && q.seen) || q.d < SIEGE.cull.near), [], '收掉的里面有人面前看得见的、离人近的');
+    assert.ok(front.filter((z) => P.sightAcross(eye, h.set(z.pos.x, z.pos.y + 1.5, z.pos.z))).every((z) => z.active), '人面前看得见的一只没收');
+  }
+});
+
+test('守屋顶围上来的：贴着人同时抡、咬的最多三只（巨尸算两只），别的围在旁边等；队友同时挨咬的算三只、打六折；不在守屋顶时照实算', () => {
+  const { siege, zombies, enemies, player, run, roof, px, pz, S, light } = holdWorld('A');
+  light(); S.waveI = SIEGE.waves.length; for (const z of zombies.alive()) z._deactivate();
+  const ring = []; for (let k = 0; k < 10; k++) { const a = k * 0.63, z = enemies.spawn('zombie', new THREE.Vector3(px + Math.cos(a) * 1.0, roof, pz + Math.sin(a) * 1.0), { kind: k ? 'walker' : 'brute', hunt: true, state: 'alert' }); if (z) ring.push(z); }
+  let most = 0;
+  const weight = (z) => (z.kind === 'brute' ? 2 : 1);
+  run(6, () => { player.pos.set(px, roof, pz); player.health = 100; player.alive = true; S.waveI = SIEGE.waves.length; most = Math.max(most, ring.filter((z) => z.alive && z.zs === 'attack').reduce((n, z) => n + weight(z), 0)); });
+  assert.ok(most >= 2 && most <= SIEGE.crowd.bite, `同时在咬的最多 ${most}`);
+  assert.equal(siege.mateBites(10), SIEGE.crowd.mateBite * SIEGE.crowd.mate); assert.equal(siege.mateBites(1), SIEGE.crowd.mate);
+  S.landed = true; assert.equal(siege.mateBites(10), 10, '不在守屋顶照实算');
 });
 
 // ---- 救人：小许出得来、跟得上 ----
