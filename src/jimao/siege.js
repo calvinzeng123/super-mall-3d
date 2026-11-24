@@ -113,7 +113,7 @@ export const TOWERS = Object.freeze({
     // （隔 pour 秒一只、每波 22–25 只，门洞里 lanes 条道并排挤出来）；只有这一个口子，一个口子能排 queue 只（公寓两个口子各 16 只，北区以前一波排不下、多的扔掉了）；
     // 最后那阵每 1.4 秒 surgeEach 只。女儿墙那边离人 10 米外、视野外的地方几乎没有（东半边就 14 × 16 米），翻墙上来的很少，压力全在门口。
     // 巨尸只来一只、晚一点（第 5 波）、血再少一点（一冒头就到跟前了）
-    hold: Object.freeze({ waveSize: Object.freeze([22, 25]), brutes: Object.freeze([5]), bruteHp: 0.5, pour: 0.1, lanes: 3, queue: 32, surgeEach: 5 }) }),
+    hold: Object.freeze({ waveSize: Object.freeze([22, 25]), brutes: Object.freeze([5]), bruteHp: 0.5, pour: 0.1, lanes: 3, queue: 32, surgeEach: 6 }) }),
 });
 // parapet：女儿墙（画面上有、导航里没有）顶比屋面高多少（公寓 1.8 米 + 压顶；北区 1.15 米 + 压顶），清扫时看屋顶上的丧尸要越过它
 /** 抽一栋楼。r ∈ [0, 1)；force 是楼的 id */
