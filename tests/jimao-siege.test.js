@@ -328,7 +328,9 @@ function climbWorld(tower = 'A', seed = 7) {
   const onFloor = (f) => w.zombies.alive().filter((z) => landAt(nav, z.pos.x, z.pos.z, z.pos.y + 0.6)?.floor === f);
   return { ...w, m, P, list, T, arrive, onFloor };
 }
-for (const [tower, least] of [['A', 10], ['T1', 6]]) test(`爬楼（${tower === 'A' ? '公寓' : '北区 1 号楼'}）：人上到哪一层，两秒内那一层就有 ${least} 只以上（公寓：人到了才在离人十米外、看不见的地方冒出来；北区电梯厅太小：人还在下一层就整层摆好），上一层先摆着几只；同一高度的别的楼层一只都没有；摆出来的都走得到人跟前`, () => {
+// 改过：以前每层都摆满一群（公寓 10 只以上、北区 6 只以上）。现在只有关卡那几层摆满、非清不可，中间的楼层（list[1]）按 pass 摆少一点（少一只也算：有的点放不下）
+const passN = (t) => { const P = SIEGE.floors[t].pass; return P.corridor + P.landing + P.flats; };
+for (const [tower, least] of [['A', passN('A') - 1], ['T1', passN('T1') - 1]]) test(`爬楼（${tower === 'A' ? '公寓' : '北区 1 号楼'}）：人上到中间的一层，两秒内那一层就有 ${least} 只以上（公寓：人到了才在离人十米外、看不见的地方冒出来；北区电梯厅太小：人还在下一层就整层摆好），上一层先摆着几只；同一高度的别的楼层一只都没有；摆出来的都走得到人跟前`, () => {
   const { G, zombies, player, run, list, arrive, onFloor, siege } = climbWorld(tower), f1 = list[1], y1 = elev(f1);
   if (tower === 'T1') { arrive(list[0]); run(0.5); assert.ok(onFloor(f1).length >= least, `人还在 ${list[0]}，${f1} 已经摆好 ${onFloor(f1).length} 只`); }
   arrive(f1); const first = new Map(), eye = new THREE.Vector3(), pre = new Set(zombies.alive());
@@ -351,7 +353,7 @@ test('爬楼：上去两层以后，下面那层没在追人的收回池子；�
   const { zombies, player, run, list, arrive, siege, supplies } = climbWorld('A'), [, f1, f2, f3, f4] = list;
   arrive(f1); run(2);
   const mine = () => zombies.alive().filter((z) => z.seed === f1 && !z.hunt);
-  assert.ok(mine().length >= 10);
+  assert.ok(mine().length >= passN('A') - 1);
   arrive(f2); run(1); assert.ok(mine().length >= 1, '只上了一层：下面那层的还在');
   arrive(f3); run(12); // 发现过人的那几只跟丢了才回去发呆，发呆的才收
   assert.equal(mine().length, 0, `下面两层的收回去了（还剩 ${mine().length}）`); assert.ok(siege.state.seeded.has(f1));
@@ -383,7 +385,7 @@ test('爬楼时的池子：尸体也算占位置；尸潮最多 8 只、从这�
 
 test('读档（第一道关的安全点）：爬楼摆的先收回去，安全点那层算打过了（不再摆、不拦楼梯），上面那层重新摆、不会摆两遍', () => {
   const { G, siege, zombies, director, player, run, list, arrive, P } = climbWorld('A'), [f0, f1] = list;
-  arrive(f1); run(2); assert.ok(zombies.alive().filter((z) => z.seed === f1).length >= 10);
+  arrive(f1); run(2); assert.ok(zombies.alive().filter((z) => z.seed === f1).length >= passN('A') - 1);
   const c = director.state.checkpoint; assert.ok(c && c.stage === P.stageOf('gate0') + 1, '第一道关是安全点');
   director.state.restore = c; director.state.checkpoint = null; G.game.run.relays.forEach((r) => { r.cut = false; });
   siege.reset();
@@ -394,8 +396,8 @@ test('读档（第一道关的安全点）：爬楼摆的先收回去，安全�
   assert.equal(zombies.alive().filter((z) => z.seed === f0).length, 0, '安全点那层不再摆');
   const up = runs.find((r) => r.from === f0 && r.id.startsWith('A-ST')); assert.equal(G.stairBlock(up, 'up'), null, '安全点那层不拦楼梯');
   arrive(f1); run(2);
-  const n = zombies.alive().filter((z) => z.seed === f1).length, F = SIEGE.floors.A;
-  assert.ok(n >= 10 && n <= F.corridor + F.landing + F.flats, `${f1} 重新摆了 ${n} 只（不是两遍）`);
+  const n = zombies.alive().filter((z) => z.seed === f1).length;
+  assert.ok(n >= passN('A') - 1 && n <= passN('A'), `${f1} 重新摆了 ${n} 只（不是两遍）`);
 });
 
 test('回收困住的：追人的丧尸连着几次找不到去人那儿的路（困在出不来的户里），人看不见时收回池子', () => {
@@ -420,7 +422,7 @@ const syncPaths = (G) => { const pf = createPathfinder(nav); G.physics.pathfinde
 
 // 以前每一帧都重新判这一层清没清干净、把人拽回上一帧的位置：走到一半有一只凑到楼梯口，人就被定在楼梯上，上不去也下不来（边挨咬边动不了）
 test('爬楼的规则只在人从这一层踏上楼梯的那一下定：放行了，走到休息平台上这一层又凑过来一只，往上往下都照走；回到楼面再踏上去才拦，拦住的退回这一层的楼面上（不是梯段上）', () => {
-  const { G, zombies, player, run, list, arrive, siege, enemies, msgs, T } = climbWorld('A'), f1 = list[1], y1 = elev(f1);
+  const { G, zombies, player, run, list, arrive, siege, enemies, msgs, T } = climbWorld('A'), f1 = list[0], y1 = elev(f1); // 关卡那层（中间的楼层不拦，见下一条）
   arrive(f1); run(2);
   const r = runs.find((q) => q.from === f1 && q.id.startsWith(T.stair));
   for (const z of zombies.alive()) if (z.seed === f1) z.damage(9999, null, null, 'body');
@@ -2135,4 +2137,23 @@ test('榴弹枪提前：一层武器柜一开就给（不换到手上，告诉�
   assert.equal(msgs.filter((t) => t === '榴弹 +2').length, 1, '只说一次（实测里看到的两条是日志里同一条打了两遍）'); assert.equal(lootOf(m.plan, m.plan.gates[1].stage).filter((k) => k === 'launcher' || k === 'shell').length, 1, '第二道关只放一把');
   G.weapon.owns = { launcher: false }; supplies.place('launcher', { x: p.x + 0.3, y: p.y, z: p.z }); for (let k = 0; k < 6; k++) supplies.update(1 / 30);
   assert.ok(msgs.some((t) => /捡到榴弹枪 · 一发一装，按 5 换/.test(t)));
+});
+
+// 用户：「不用每一层都打完僵尸才走，挑两三层打完就好了」——只有关卡那三层非清不可，中间的楼层照样有丧尸、但楼梯不拦
+test('逐层破楼只拦关卡那几层：中间的楼层还剩一群也能直接上楼梯（快速上楼也行）；关卡那层（关卡解决了）还剩一群照样拦；关卡那层摆得比中间的楼层多', () => {
+  for (const tower of ['A', 'T1']) {
+    const { G, zombies, run, list, arrive, siege, P, T } = climbWorld(tower);
+    const mid = list.find((f) => !siege.mustClear(f)), g0 = P.gates[0].floor;
+    assert.deepEqual(list.filter((f) => siege.mustClear(f)), P.gates.map((g) => g.floor), `${tower}：非清不可的就是三道关那三层`);
+    // 先在关卡那层（第一道关已经解决）：还剩一群，拦（上到楼上以后，下面的楼层算打过了，所以先看这一层）
+    arrive(g0); run(2);
+    const here = zombies.alive().filter((z) => z.seed === g0).length, F = SIEGE.floors[tower];
+    const r0 = runs.find((r) => r.from === g0 && r.id.startsWith(T.stair));
+    assert.ok(here > SIEGE.floors.left, `${tower}：关卡那层 ${here} 只`); assert.match(siege.climbRule(r0), /先把这层清干净/);
+    arrive(mid); run(2);
+    const left = zombies.alive().filter((z) => z.seed === mid).length; assert.ok(left >= 3, `${mid} 有 ${left} 只`);
+    const up = runs.find((r) => r.from === mid && r.id.startsWith(T.stair));
+    assert.equal(siege.climbRule(up), null, `${mid} 还剩 ${left} 只也不拦`); assert.equal(G.stairBlock(up, 'up'), null);
+    assert.ok(F.corridor + F.gate + F.landing + F.flats > F.pass.corridor + F.pass.landing + F.pass.flats, '关卡那层摆得多');
+  }
 });
