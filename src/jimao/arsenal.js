@@ -510,6 +510,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
 
   // ---- 切枪 ----
   function select(slot, { quick = false, plain = false } = {}) {
+    if (G.weaponHold) return false; // 架着楼顶重机枪（roof-gun.js）：不切枪，下来还是原来那把
     if (!slots().includes(slot) || (slot === S.cur && !S.next) || S.next === slot) return false;
     if (S.cur === 'pistol' && P.reload) P.reload = null;
     // 正掏到一半又换：从现在放下去的位置接着放（不跳）

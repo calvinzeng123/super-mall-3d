@@ -46,6 +46,7 @@ import { createBlackout } from './blackout.js';
 import { loadZombieKit } from './zombie-skin.js';
 import { HELI_ORBIT } from './ride-paths.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
+import { createRoofGun, ROOF_GUN_CSS } from './roof-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
 
@@ -101,7 +102,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS + ROOF_GUN_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -233,7 +234,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 消防楼梯（stairs.js）：每层楼梯口挂楼层牌；站在楼梯口按 Z / X（手机 ▲ ▼）快速上 / 下一层，不用自己绕折返梯（用户反馈绕得头晕）
   const stairs = createStairControl(G, { nav, scene, root: ui, hidden: () => director.riding, post: render.post, lift, blocked: (run, dir) => G.stairBlock?.(run, dir) || null });
   G.stairs = stairs;
-  const actions = createActions(G, { scene, nav, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding || stairs.riding });
+  const actions = createActions(G, { scene, nav, ui, storage: safeStorage(), hidden: () => director.riding || lift.riding || stairs.riding || !!G.roofGun?.active });
   G.actions = actions;
   // 小地图 + 下一步提示（minimap.js）：左上角；坐载具时不显示
   const minimap = createMinimap(G, { nav, layout: ctx.layout, ui, guide, hidden: () => director.riding });
@@ -253,6 +254,9 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const squad = siege ? createSquad(G, { scene, nav, zombies, siege, director, ui }) : null;
   if (squad) { try { if (safeStorage()?.getItem('jimao-squad') === '0') squad.wanted = false; } catch { /* 读不了就按默认 */ } if (params.squad !== undefined) squad.wanted = params.squad !== '0'; }
   G.squad = squad;
+  // 楼顶重机枪台（roof-gun.js）：只在丧尸围城里、这一局那栋楼的楼顶上；架着枪时步枪不更新、不切枪、操作补强不管
+  const roofGun = siege ? createRoofGun(G, { scene, nav, siege, director, camera, ui }) : null;
+  G.roofGun = roofGun;
   // 血条（healthbars.js）：被打中的丧尸、近处的特殊感染者、队友；巨尸另有屏幕上方的大血条。只在丧尸围城里开
   const bars = zombies ? createHealthBars(G, { scene, camera, zombies, squad, ui }) : null;
   G.bars = bars;
@@ -261,9 +265,9 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.routeDress = routeDress;
   // 丧尸换上贴图外形（行人模型改的，后台加载；加载不出来就还是方块人）。网址带 ?boxzombie=1 不换
   if (zombies && !params.boxzombie) loadZombieKit().then((kit) => { if (G.zombies === zombies) zombies.useSkin(kit); else kit.dispose(); }).catch((e) => console.warn('[零点突围] 丧尸模型没加载出来，用简化模型', e));
-  G.level.onReset = () => { pathfinder.reset(); director.roll(); siege?.reset(); squad?.reset(); ammo.reset(); guide.reset(); lift.reset(); stairs.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
-  G.level.extraMarkers = () => [...ammo.markers(), ...director.markers()];
-  director.roll(); siege?.reset(); squad?.reset();
+  G.level.onReset = () => { pathfinder.reset(); director.roll(); siege?.reset(); roofGun?.reset(); squad?.reset(); ammo.reset(); guide.reset(); lift.reset(); stairs.reset(); actions.reset(); minimap.reset(); locCard(document, director.state.mission); };
+  G.level.extraMarkers = () => [...ammo.markers(), ...director.markers(), ...(roofGun?.markers() || [])];
+  director.roll(); siege?.reset(); roofGun?.reset(); squad?.reset();
   G.missions = director; G.ammo = ammo; G.guide = guide; G.lift = lift;
   G.game = J.createGame(G);
   // 新封面和各菜单页的话术（cover.js）：原游戏的菜单建好以后改版面、改文字，按钮照旧
@@ -279,7 +283,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     const box = document.querySelector('[data-s="title"] [data-zh="actions"]') || document.querySelector('[data-s="title"] .m-actions');
     const b = document.createElement('button'); b.type = 'button'; b.className = 'jm-mode';
     const paint = () => { b.innerHTML = `<small>模式</small><b>${siege.enabled ? '丧尸围城' : '零点突围'}</b><i>点一下切换</i>`; b.classList.toggle('on', siege.enabled); };
-    b.addEventListener('click', (e) => { e.stopPropagation(); siege.enabled = !siege.enabled; siegeRoofProps(); director.roll(); siege.reset(); squad?.reset(); locCard(document, director.state.mission); paint(); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); siege.enabled = !siege.enabled; siegeRoofProps(); director.roll(); siege.reset(); roofGun?.reset(); squad?.reset(); locCard(document, director.state.mission); paint(); });
     paint(); box?.parentElement?.insertBefore(b, box);
   }
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
@@ -334,7 +338,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   let lastNow = 0, ridingUi = false;
   function stepPlayer(dt, gap) {
     const span = gap > 0.5 ? dt : Math.min(Math.max(gap, dt), 0.15), steps = Math.max(1, Math.ceil(span / 0.05 - 1e-6));
-    if (steps === 1 || director.riding || director.gunActive) { run('player', dt); return; }
+    if (steps === 1 || director.riding || director.gunActive || roofGun?.active) { run('player', dt); return; }
     const L = G.input.look, dx = L.dx, dy = L.dy;
     for (let i = 0; i < steps; i++) { run('player', span / steps); L.dx = L.dy = 0; }
     L.dx = dx; L.dy = dy; // 枪的晃动还要用这一帧的转头量
@@ -358,10 +362,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       // 寻路每帧最多算 PATH.budget 毫秒（帧率很低时减半，别再雪上加霜）
       if (active) { try { pathfinder.update(rawDt > 0.05 ? PATH.budget / 2 : PATH.budget); } catch (e) { fail('path', e, '寻路出错'); } }
       if (active) { try { actions.pre(dt); } catch (e) { fail('actions', e, '操作补强出错'); } }
-      if (active) { stepPlayer(dt, gap); if (!director.gunActive) run('weapon', dt); run('enemies', dt); }
+      if (active) { stepPlayer(dt, gap); if (!director.gunActive && !roofGun?.active) run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { try { actions.update(dt); } catch (e) { fail('actions', e, '手雷出错'); } }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
       if (siege && G.game.state !== 'paused') { try { siege.update(dt); } catch (e) { fail('siege', e, '丧尸围城出错'); } }
+      if (roofGun && G.game.state !== 'paused') { try { roofGun.update(dt); } catch (e) { fail('roofgun', e, '楼顶重机枪出错'); } }
       if (supplies && G.game.state !== 'paused') { try { supplies.update(dt); } catch (e) { fail('supplies', e, '补给出错'); } }
       if (squad && G.game.state !== 'paused') { try { squad.update(dt); } catch (e) { fail('squad', e, '队友出错'); } }
       if (routeDress) { try { routeDress.update(rawDt); } catch (e) { fail('dress', e, '沿途痕迹出错'); } }
@@ -496,7 +501,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); roofGun?.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }

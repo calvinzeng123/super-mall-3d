@@ -28,8 +28,8 @@ export function impactAt(wall, dir) {
   return { point: wall.point.clone(), normal: n, dist: wall.dist, surface: wall.surface || 'concrete', enemy: null, dir: dir.clone(), from: 'player' };
 }
 /** 这个角度在射界里（左右 ±yaw、上 pitchUp 下 pitchDown，边上留 margin 弧度）、150 米以内（辅助瞄准也只管这么远） */
-export function inGunArc(a, margin = 0.03, range = 150) {
-  return a.dist <= range && Math.abs(a.yaw) <= DOOR_GUN.yaw - margin && a.pitch >= -DOOR_GUN.pitchUp + margin && a.pitch <= DOOR_GUN.pitchDown - margin;
+export function inGunArc(a, margin = 0.03, range = 150, C = DOOR_GUN) {
+  return a.dist <= range && Math.abs(a.yaw) <= C.yaw - margin && a.pitch >= -C.pitchUp + margin && a.pitch <= C.pitchDown - margin;
 }
 
 function material(G, name, fallback) {
@@ -160,8 +160,12 @@ function mergeByMaterial(group, geos) {
  * 舱门机枪的操作。mount 是机舱里的挂点（Object3D，默认枪口朝舱门外 = mount 的 +z）。
  * update(dt, { active, firing, camera }) 每帧调用；返回 { heat, overheated, inArc }。
  */
-/** label：状态条上的名字；post：立柱长度（见 buildDoorGun）；flash：枪口焰大小（车顶机枪就在眼前，给小一点，不然糊住准星） */
-export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, drop, flash = 1.5 } = {}) {
+/**
+ * label：状态条上的名字；post：立柱长度（见 buildDoorGun）；flash：枪口焰大小（车顶机枪就在眼前，给小一点，不然糊住准星）；
+ * cfg：改掉 DOOR_GUN 里的哪几项（楼顶重机枪：左右不限 yaw: Infinity、往下压得更低、辅助瞄准弱一点、子弹能穿 pierce 只）。tune(over) 开打以后再改（键鼠 / 触屏换辅助瞄准）
+ */
+export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, drop, flash = 1.5, cfg = null } = {}) {
+  const C = { pierce: 0, pierceMul: 0.6, ...DOOR_GUN, ...(cfg || {}) };
   const gun = buildDoorGun(G, { ...(post == null ? {} : { post }), ...(drop == null ? {} : { drop }) });
   mount.add(gun.root);
   let heat = 0, overheated = false, spin = 0, spinAngle = 0, cooldown = 0, active = false;
@@ -178,7 +182,7 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
       to.copy(t).sub(from); const dist = to.length();
       if (dist > 150 || dist < 1) continue;
       const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(dir) / dist)));
-      if (ang < DOOR_GUN.assistCone && (!best || ang < best.angle)) best = { point: t, angle: ang };
+      if (ang < C.assistCone && (!best || ang < best.angle)) best = { point: t, angle: ang };
     }
     return best;
   }
@@ -198,30 +202,30 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
   /** 人眼在哪（最近一次 update 给的镜头；还没给过就用枪架） */
   function eye(out = new THREE.Vector3()) { return cam ? cam.getWorldPosition(out) : mount.getWorldPosition(out); }
   /** 这一点枪转得过去（在射界里）：HUD 标记、辅助瞄准、丧尸能不能打飞机都按这一条（siege.js 的 exposed） */
-  function canAim(point, from = null) { mount.getWorldQuaternion(mq); return inGunArc(aimAngles(mq, from || eye(me), point, ma)); }
+  function canAim(point, from = null) { mount.getWorldQuaternion(mq); return inGunArc(aimAngles(mq, from || eye(me), point, ma), 0.03, 150, C); }
 
   function update(dt, { active: on = false, firing = false, camera = null, targets = null } = {}) {
     active = on; hud.show(on); if (camera) cam = camera;
     lock = on && camera ? pickTarget(camera, targets) : null;
-    if (lock) pull(camera, lock.point, (firing ? DOOR_GUN.assistPull : DOOR_GUN.assistPullIdle) * (1 - 0.6 * lock.angle / DOOR_GUN.assistCone), dt);
-    heat = Math.max(0, heat - DOOR_GUN.cool * dt * (firing && !overheated ? 0.15 : 1));
-    if (overheated && heat < DOOR_GUN.unlock) overheated = false;
+    if (lock) pull(camera, lock.point, (firing ? C.assistPull : C.assistPullIdle) * (1 - 0.6 * lock.angle / C.assistCone), dt);
+    heat = Math.max(0, heat - C.cool * dt * (firing && !overheated ? 0.15 : 1));
+    if (overheated && heat < C.unlock) overheated = false;
     if (on && camera) {
       // 视线方向换到挂点坐标里，枪跟着转（超出射界就停在边上、不出弹）
       mount.getWorldQuaternion(q).invert();
       camera.getWorldDirection(d).applyQuaternion(q);
       const yaw = Math.atan2(d.x, d.z), pitch = -Math.asin(Math.max(-1, Math.min(1, d.y)));
-      const cy = Math.max(-DOOR_GUN.yaw, Math.min(DOOR_GUN.yaw, yaw)), cp = Math.max(-DOOR_GUN.pitchUp, Math.min(DOOR_GUN.pitchDown, pitch));
+      const cy = Math.max(-C.yaw, Math.min(C.yaw, yaw)), cp = Math.max(-C.pitchUp, Math.min(C.pitchDown, pitch));
       inArc = Math.abs(cy - yaw) < 0.02 && Math.abs(cp - pitch) < 0.02;
       gun.yawG.rotation.y += (cy - gun.yawG.rotation.y) * Math.min(1, dt * 18);
       gun.pitchG.rotation.x += (cp - gun.pitchG.rotation.x) * Math.min(1, dt * 18);
     }
     const want = on && firing && !overheated ? 1 : 0;
-    spin += (want - spin) * Math.min(1, dt / (want ? DOOR_GUN.spinUp : 0.9));
+    spin += (want - spin) * Math.min(1, dt / (want ? C.spinUp : 0.9));
     spinAngle += dt * spin * 60; gun.barrels.rotation.z = spinAngle;
     cooldown -= dt;
     if (on && firing && !overheated && inArc && spin > 0.6 && camera) {
-      while (cooldown <= 0) { cooldown += 1 / DOOR_GUN.rate; shoot(camera); }
+      while (cooldown <= 0) { cooldown += 1 / C.rate; shoot(camera); }
     } else cooldown = Math.max(cooldown, 0);
     gun.mats.hot.emissiveIntensity = Math.max(0, heat - 0.25) * 2.2;
     hud.set(heat, overheated, inArc, !!lock);
@@ -231,16 +235,24 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
   function shoot(camera) {
     camera.getWorldPosition(from); camera.getWorldDirection(dir);
     // 子弹修正：准星 4° 以内有敌人，就朝它身上打
-    if (lock && lock.angle < DOOR_GUN.bulletCone) dir.copy(lock.point).sub(from).normalize();
-    const a = Math.random() * Math.PI * 2, r = Math.tan(DOOR_GUN.spread) * Math.sqrt(Math.random());
+    if (lock && lock.angle < C.bulletCone) dir.copy(lock.point).sub(from).normalize();
+    const a = Math.random() * Math.PI * 2, r = Math.tan(C.spread) * Math.sqrt(Math.random());
     const up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(dir, up).normalize(), u2 = new THREE.Vector3().crossVectors(right, dir);
     dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(u2, Math.sin(a) * r).normalize();
     let hit = null;
     // 子弹穿不过楼：原游戏的射线只查起点那一层的墙（从天上打出去就只有楼板挡），楼的外墙、楼顶楼梯间挡不住，
     // 楼里看不见的丧尸照样打得中。射程先按跨楼层的射线截到第一堵墙 / 楼板
-    const wall = G.physics?.castAcross?.(from, dir, DOOR_GUN.range) || null;
+    const wall = G.physics?.castAcross?.(from, dir, C.range) || null;
     // 射程多放一毫米：castAcross 从挪过的起点量，同一堵墙量出来比 raycast 短 1e-14，不放的话 raycast 看得见的墙也不冒火花
-    try { hit = G.combat?.playerShot?.(from.clone(), dir.clone(), { damage: DOOR_GUN.damage, range: wall ? wall.dist + 1e-3 : DOOR_GUN.range, impulse: 2 }); } catch { /* 打空 */ }
+    const reach = wall ? wall.dist + 1e-3 : C.range;
+    try { hit = G.combat?.playerShot?.(from.clone(), dir.clone(), { damage: C.damage, range: reach, impulse: 2 }); } catch { /* 打空 */ }
+    // 穿透（楼顶重机枪）：打中一只，从它身后接着飞，再打中后面排着的 pierce 只，每穿一只伤害打 pierceMul 折；穿过去的那一截照样被墙截住
+    for (let k = 0, dmg = C.damage; k < C.pierce && hit?.enemy && hit.dist < reach - 0.5; k++) {
+      const o = from.clone().addScaledVector(dir, hit.dist + 0.45), left = reach - hit.dist - 0.45; let next = null;
+      try { next = G.combat?.playerShot?.(o, dir.clone(), { damage: (dmg *= C.pierceMul), range: left, impulse: 2 }); } catch { next = null; }
+      if (!next) break;
+      hit = { ...next, dist: hit.dist + 0.45 + next.dist };
+    }
     // 打在 raycast 不查的墙、楼板、阳台上（起点那一层以外的）：火花、弹孔、声音照样要有（原游戏的处理按 point / normal 读）
     if (!hit && wall) G.events?.emit?.('impact', impactAt(wall, dir));
     gun.muzzle.getWorldPosition(mz);
@@ -251,12 +263,13 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
     if (Math.random() < 0.5) { gun.eject.getWorldPosition(ej); vel.set(0, -1.5, 0).addScaledVector(right, 2.2); G.fx?.shell?.(ej.clone(), vel.clone()); }
     G.events?.emit?.('weapon:fire', { origin: from.clone(), dir: dir.clone(), muzzle: mz.clone(), ads: 0, doorGun: true });
     G.player?.addShake?.(0.035);
-    heat = Math.min(1, heat + DOOR_GUN.heatPerShot);
+    heat = Math.min(1, heat + C.heatPerShot);
     if (heat >= 1) { overheated = true; G.hud?.message?.('机枪过热！松开扳机冷却', 1.6); }
   }
 
   return { gun, update, canAim, eye, get heat() { return heat; }, get overheated() { return overheated; }, get active() { return active; },
     reset() { heat = 0; overheated = false; spin = 0; cooldown = 0; gun.mats.hot.emissiveIntensity = 0; hud.show(false); },
+    cfg: C, tune(over) { Object.assign(C, over || {}); },
     dispose() { gun.dispose(); hud.remove(); } };
 }
 
