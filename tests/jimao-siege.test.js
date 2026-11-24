@@ -208,7 +208,7 @@ test('胖尸倒下炸开（人和旁边的丧尸都掉血）；尖叫者隔着�
 });
 
 // ---- 接到游戏上 ----
-function sworld({ enabled = true, tower = 'A' } = {}) {
+function sworld({ enabled = true, tower = 'A', seed = 7 } = {}) {
   const z = zworld({ count: ZOMBIE.pool }), { G } = z, msgs = [], store = new Map([['jimao-siege', enabled ? '1' : '0']]);
   const heli = { root: new THREE.Group(), poses: [], setPose(p) { this.poses.push(p); }, reset() { this.parked = true; }, moveTo() {} };
   const director = { state: { mission: null, restore: false, checkpoint: null }, vehicles: { heli }, riding: false, opened: 0, openExtraction() { this.opened++; }, dead: [], deadActions(...a) { this.dead.push(a); } };
@@ -219,7 +219,7 @@ function sworld({ enabled = true, tower = 'A' } = {}) {
   const thrown = { frag: 2, fire: 0, lure: 0 };
   const actions = { countOf: (k) => thrown[k] || 0, give(n, k = 'frag') { const b = thrown[k]; thrown[k] = Math.min(k === 'frag' ? 3 : 2, b + n); return thrown[k] - b; } };
   const supplies = createSupplies(G, { scene: G.scene, actions, ammo: { give: (n) => { G.rifle.reserve += n; return n; } }, rng: seq(3) });
-  const siege = createSiege(G, { layout: L, nav, scene: G.scene, zombies: z.zombies, director, runs, flow, rng: seq(7), tower, supplies, storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
+  const siege = createSiege(G, { layout: L, nav, scene: G.scene, zombies: z.zombies, director, runs, flow, rng: seq(seed), tower, supplies, storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
   const begin = (seed = 7) => { const m = siege.mission(seq(seed)); director.state.mission = m; m.objectives.forEach((o) => { o.object = o.model(); o.pos = new THREE.Vector3(o.site.x, o.site.y, o.site.z); }); G.game.run.relays = m.objectives.map((o) => ({ o, cut: false })); siege.reset(); return m; };
   const cut = (n) => { for (let i = 0; i < n; i++) G.game.run.relays.find((r) => !r.cut).cut = true; };
   const run = (secs, each) => { for (let t = 0; t < secs - 1e-9; t += 1 / 30) { G.time.frame++; each?.(); siege.update(1 / 30); for (const q of [...z.ctx.list]) q._update(1 / 30); } };
@@ -1436,9 +1436,9 @@ test('清扫时守点：八十秒假航线上屋顶、楼下的丧尸不往楼�
   }
 });
 
-/** 守屋顶开场：前面几步一口气做完、清掉招来的，人站到 at（默认信号弹往停机位走 15%），点着信号弹。返回 { ...sworld, m, T, roof, px, pz, S } */
-function holdWorld(tower, at = null) {
-  const w = sworld({ tower }), { siege, zombies, player, begin, cut, run } = w;
+/** 守屋顶开场：前面几步一口气做完、清掉招来的，人站到 at（默认信号弹往停机位走 15%），点着信号弹。seed：这一局的随机序列（默认同 sworld）。返回 { ...sworld, m, T, roof, px, pz, S } */
+function holdWorld(tower, at = null, seed = 7) {
+  const w = sworld({ tower, seed }), { siege, zombies, player, begin, cut, run } = w;
   const m = begin(), T = TOWERS[tower], roof = elev(T.roof), f = m.plan.flare;
   cut(m.plan.stages.length - 1); run(0.1); for (const z of zombies.alive()) z._deactivate();
   Object.assign(siege.state, { genT: 0, holdT: 0, bruteT: -1 }); // 一口气做完前面几步：商场段发电机、一层守点的倒计时别带到楼顶上来
@@ -1618,9 +1618,12 @@ test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那
     const peak = (a, b) => Math.max(0, ...seenN.filter(([t]) => t >= a && t < b).map(([, n]) => n));
     SIEGE.waves.forEach((w, i) => assert.ok(peak(w, w + 10) >= 4, `${tower} 第 ${i + 1} 波同时看得见的最多 ${peak(w, w + 10)} 只`));
     assert.ok(peak(SIEGE.hold - SIEGE.surge.last, SIEGE.hold) >= 12, `${tower} 最后那阵同时看得见 ${peak(SIEGE.hold - SIEGE.surge.last, SIEGE.hold)} 只`);
-    // 楼梯口那一份是一只只出来的：同一帧最多几只（翻墙的那几只是一起上来的）
-    // 改过：8 → 10。一波翻墙的最多 round(16 × 0.35) = 6 只一起上来，同一帧里还可能有楼梯口各一只、巨尸 / 特殊感染者、最后那阵翻墙的一只——
-    // 以前刚好没凑到一起；清扫的点改成开局就在后台算、不再从这一局的随机序列里取数以后，守屋顶这段的随机数换了一串，凑到了 9–10 只
+    // 楼梯口那一份是一只只出来的：同一帧里每个口子最多一只（巨尸、特殊感染者、尖叫招来的也排在同一个队里）
+    const exits = siege.roofExits().filter((e) => e.inner?.length).length, byD = {};
+    for (const q of door) { const key = Math.round(q.t * 30); byD[key] = (byD[key] || 0) + 1; }
+    assert.ok(Math.max(0, ...Object.values(byD)) <= exits, `${tower} 同一帧从 ${exits} 个楼梯口出来 ${Math.max(0, ...Object.values(byD))} 只`);
+    // 同一帧一共最多几只：翻墙的那几只是一起上来的（一波最多 round(18 × 0.35) = 6 只，北区翻墙的点少），加上每个口子各一只。
+    // 上限 10 留了余量：清扫的点改成开局就在后台算、不再从这一局的随机序列里取数以后，守屋顶这段的随机数换了一串（合并时量到公寓 8 只、北区 2 只）
     const byT = {}; for (const q of born) { const key = Math.round(q.t * 30); byT[key] = (byT[key] || 0) + 1; }
     assert.ok(Math.max(...Object.values(byT)) <= 10, `${tower} 同一帧出来 ${Math.max(...Object.values(byT))} 只`);
     // 喊「第几波」要真出来了才喊（最后一两波池子里全是活着的、一只都出不来就不喊）
@@ -1654,8 +1657,8 @@ test('守屋顶时不在人眼皮底下冒出来：人堵在楼梯间门口、�
 });
 
 test('守屋顶：楼梯间门口横一道路障，门里出来的被挡在里面（挡到路障被冲垮，至少挡三秒）；不摆的话同一阵早就涌出来了', () => {
-  const outBy = (tower, wall) => {
-    const { siege, zombies, player, run, roof, px, pz, S, light } = holdWorld(tower), walls = siege.walls;
+  const outBy = (tower, wall, seed) => {
+    const { siege, zombies, player, run, roof, px, pz, S, light } = holdWorld(tower, null, seed), walls = siege.walls;
     // 人站在门洞正中外面两米，朝门里摆：沙袋墙横在门洞外 0.3 米
     if (wall) { walls.enabled = true; walls.give(4); for (const e of siege.roofExits()) { const g = e.gap; assert.ok(g && g.w > 1 && g.w < 4.4, `${tower} 门洞 ${g?.w?.toFixed(1)} 米宽`); player.pos.set(g.x + g.nx * 2, roof, g.z + g.nz * 2); player.yaw = Math.atan2(g.nx, g.nz); assert.ok(walls.place(), `${tower} 门口摆得下`); } player.pos.set(px, roof, pz); }
     light();
@@ -1668,12 +1671,17 @@ test('守屋顶：楼梯间门口横一道路障，门里出来的被挡在里�
     });
     return { first, broke, door: door.size, by: (t) => (line.filter(([h]) => h <= t).at(-1) || [0, 0])[1], hurt: walls.walls.some((w) => w.hp < DEFENSE.wall.hp) || walls.walls.length < siege.roofExits().length };
   };
+  // 出了门的只有几只到十几只，差一只比例就跳一截（北区一局 5 / 10 和 6 / 10 只差随机序列换了一串）：按几串随机序列加起来比
   for (const tower of ['A', 'T1']) {
-    const open = outBy(tower, false), held = outBy(tower, true), t = held.broke ?? 14;
-    assert.ok(open.door >= 6 && open.by(t) >= 2, `${tower} 不摆：${t.toFixed(1)} 秒内 ${open.by(t)} / ${open.door} 只出了门`);
-    assert.ok(t >= 3, `${tower} 路障挡了 ${t.toFixed(1)} 秒`);
-    assert.ok(held.by(t) <= open.by(t) * 0.5, `${tower} 路障冲垮之前出了门 ${held.by(t)} 只（不摆的话同一阵 ${open.by(t)} 只）`);
-    assert.ok(held.hurt, `${tower} 路障被它们磨掉了耐久`);
+    let heldN = 0, openN = 0; const each = [];
+    for (const seed of [7, 11, 13, 17, 19, 23]) {
+      const open = outBy(tower, false, seed), held = outBy(tower, true, seed), t = held.broke ?? 14;
+      assert.ok(open.door >= 6 && open.by(t) >= 2, `${tower}#${seed} 不摆：${t.toFixed(1)} 秒内 ${open.by(t)} / ${open.door} 只出了门`);
+      assert.ok(t >= 3, `${tower}#${seed} 路障挡了 ${t.toFixed(1)} 秒`);
+      assert.ok(held.hurt, `${tower}#${seed} 路障被它们磨掉了耐久`);
+      heldN += held.by(t); openN += open.by(t); each.push(`${held.by(t)}/${open.by(t)}`);
+    }
+    assert.ok(heldN <= openN * 0.5, `${tower} 路障冲垮之前出了门 ${heldN} 只（不摆的话同一阵 ${openN} 只；每串 ${each.join(' ')}）`);
   }
 });
 
@@ -1726,6 +1734,18 @@ test('守屋顶池子满了：先收尸体，再收人看不见、离人 15 米�
     assert.deepEqual(gone.filter((q) => (q.view && q.seen) || q.d < SIEGE.cull.near), [], '收掉的里面有人面前看得见的、离人近的');
     assert.ok(front.filter((z) => P.sightAcross(eye, h.set(z.pos.x, z.pos.y + 1.5, z.pos.z))).every((z) => z.active), '人面前看得见的一只没收');
   }
+});
+
+test('第二道关清了以后惊动的那只巨尸赶上守屋顶：排进楼梯口的队，这一下没出来也不隔半秒再排一只（队里只有一只）', () => {
+  const { enemies, run, S, light } = holdWorld('A');
+  light(); assert.ok(S.hold >= 0, '点着了');
+  const spawn0 = enemies.spawn; enemies.spawn = () => null; // 一只都放不出来（池子满着、门里全在人眼皮底下）
+  Object.assign(S, { bruteT: 0.01, bruteTry: 0 });
+  run(3);
+  const queued = (S.pourQ || []).reduce((n, e) => n + e.q.filter((it) => it.kind === 'brute').length, 0);
+  assert.equal(queued, 1, `排了 ${queued} 只巨尸`);
+  assert.ok(S.bruteT < 0, '不再重试');
+  enemies.spawn = spawn0;
 });
 
 test('守屋顶围上来的：贴着人同时抡、咬的最多三只（巨尸算两只），别的围在旁边等；队友同时挨咬的算三只、打六折；不在守屋顶时照实算', () => {

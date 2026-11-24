@@ -844,6 +844,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
    * 以前尸潮一波波没打完就占满了池子，人上到一层，那一层一只都摆不出来 */
   function spareRoom() {
     if (makeRoom()) return true;
+    if (holding()) return false; // 守屋顶时人退到楼里：只按 makeRoom 的规矩收（人看不见、离人 15 米以外的），不从头顶上那层屋面收
     const p = G.player.pos; let far = null, fk = 0;
     for (const z of zombies.pool) {
       if (!z.active || !z.alive || z.seed || z.fixed || z.sweep || z.post || ['brute', 'lunger', 'spitter'].includes(z.kind)) continue;
@@ -2246,7 +2247,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       if (act.warn) { say(loud ? '动静太大——尸潮要来了！' : '远处一阵嚎叫——尸潮要来了！', 3); G.player.addShake?.(0.15); G.events?.emit?.('enemy:telegraph', { pos: p, type: 'soldier', scream: true }); }
       if (act.horde) { S.noise = Math.min(S.noise, SIEGE.noise.after); S.hordeCool = SIEGE.noise.cooldown; if (horde(Math.round(act.horde * (G.squad?.hordeScale || 1)))) { say('尸潮！', 2.2); G.player.addShake?.(0.25); } }
       if (act.special) spawnSpecial();
-      if (S.bruteT >= 0 && (S.bruteT -= dt) < 0 && !spawnBrute() && (S.bruteTry = (S.bruteTry || 0) + 1) < 60) S.bruteT = 0.5; // 这一回没出来（人在楼梯上找不着地方）：隔半秒再试，半分钟内不丢
+      // 这一回没出来（人在楼梯上找不着地方）：隔半秒再试，半分钟内不丢。守屋顶时 spawnBrute 是排进楼梯口的队（这一下没出来也排上了），不再试——不然一只排成几十只
+      if (S.bruteT >= 0 && (S.bruteT -= dt) < 0 && !spawnBrute() && !holding() && (S.bruteTry = (S.bruteTry || 0) + 1) < 60) S.bruteT = 0.5;
       if (noiseEl) { noiseEl.classList.remove('off'); noiseEl.classList.toggle('hot', S.noise > 70); noiseEl.querySelector('b').style.width = `${Math.min(100, S.noise)}%`; }
     },
     dispose() { if (typeof window !== 'undefined') window.removeEventListener('keydown', onDropKey); dropBtn?.remove(); for (const a of acids.splice(0)) a.dispose(); acidMat.dispose(); acidBall.dispose(); acidDisc.dispose(); walls.dispose(); seals?.dispose(); for (const q of steps.splice(0)) q.seal.dispose(); root.removeFromParent(); noiseEl?.remove(); clockEl?.remove(); G.liftAllow = null; G.stairBlock = null; },
