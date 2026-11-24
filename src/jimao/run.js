@@ -227,7 +227,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 地面路线指引（guide.js）：脚下一串淡蓝色小箭头指向最近的目标 / 撤离点，坐载具时不画
   const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding, pathfinder });
   // 坐电梯（lift.js）：走到电梯门口，按 Z / X（手机上 ▲ ▼）选楼层，停手就出发，真的走进轿厢坐过去；坐载具时不显示
-  const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post, cars: ctx.elevatorCars, guide });
+  // stairsHere：电梯口挨着楼梯口、电梯又去不了楼梯能去的方向时（围城爬楼：电梯只到第一道关那层），这一点的 Z / X 让给楼梯（stairs 就在下面建，回调只在每帧更新时调）
+  const lift = createLiftControl(G, { nav, layout: ctx.layout, root: ui, hidden: () => director.riding, post: render.post, cars: ctx.elevatorCars, guide, stairsHere: () => stairs.here() });
   // 滑铲、手雷、手机上的蹲 / 近战 / 手雷键、辅助瞄准、自动开火（actions.js）；坐载具、坐电梯时不管
   // 消防楼梯（stairs.js）：每层楼梯口挂楼层牌；站在楼梯口按 Z / X（手机 ▲ ▼）快速上 / 下一层，不用自己绕折返梯（用户反馈绕得头晕）
   const stairs = createStairControl(G, { nav, scene, root: ui, hidden: () => director.riding, post: render.post, lift, blocked: (run, dir) => G.stairBlock?.(run, dir) || null });

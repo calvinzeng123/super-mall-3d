@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { buildPlayableLayout } from '../src/layout/playable.js';
 import { buildNav, landAt, clear } from '../src/layout/nav.js';
 import { findPath } from '../src/fps/pathfinding.js';
-import { pointInPoly } from '../src/layout/geom.js';
+import { pointInPoly, toW } from '../src/layout/geom.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
 import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, flightBox, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots, floorSpots, climbFloors, heliGun } from '../src/jimao/siege.js';
@@ -219,7 +219,7 @@ function sworld({ enabled = true, tower = 'A' } = {}) {
   const actions = { countOf: (k) => thrown[k] || 0, give(n, k = 'frag') { const b = thrown[k]; thrown[k] = Math.min(k === 'frag' ? 3 : 2, b + n); return thrown[k] - b; } };
   const supplies = createSupplies(G, { scene: G.scene, actions, ammo: { give: (n) => { G.rifle.reserve += n; return n; } }, rng: seq(3) });
   const siege = createSiege(G, { layout: L, nav, scene: G.scene, zombies: z.zombies, director, runs, flow, rng: seq(7), tower, supplies, storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
-  const begin = () => { const m = siege.mission(seq(7)); director.state.mission = m; m.objectives.forEach((o) => { o.object = o.model(); o.pos = new THREE.Vector3(o.site.x, o.site.y, o.site.z); }); G.game.run.relays = m.objectives.map((o) => ({ o, cut: false })); siege.reset(); return m; };
+  const begin = (seed = 7) => { const m = siege.mission(seq(seed)); director.state.mission = m; m.objectives.forEach((o) => { o.object = o.model(); o.pos = new THREE.Vector3(o.site.x, o.site.y, o.site.z); }); G.game.run.relays = m.objectives.map((o) => ({ o, cut: false })); siege.reset(); return m; };
   const cut = (n) => { for (let i = 0; i < n; i++) G.game.run.relays.find((r) => !r.cut).cut = true; };
   const run = (secs, each) => { for (let t = 0; t < secs - 1e-9; t += 1 / 30) { G.time.frame++; each?.(); siege.update(1 / 30); for (const q of [...z.ctx.list]) q._update(1 / 30); } };
   return { ...z, siege, director, flow, msgs, store, heli, begin, cut, run, supplies, thrown };
@@ -317,8 +317,8 @@ test('爬楼的落点：走廊、楼梯口、住户家里，每一点都真走�
   assert.deepEqual(t15.flats.map((f) => f.name), ['15–16E 室'], '北区 15F：西户是 14–15W 复式的上层（门在 14F），不放');
 });
 
-function climbWorld(tower = 'A') {
-  const w = sworld({ tower }), m = w.begin(); w.siege.prepareFloors();
+function climbWorld(tower = 'A', seed = 7) {
+  const w = sworld({ tower }), m = w.begin(seed); w.siege.prepareFloors();
   const P = m.plan, list = climbFloors(P, nav), T = P.tower;
   w.cut(P.stageOf('tool1')); w.run(0.1); // 第一道关解决了：往上全走楼梯
   for (const z of w.zombies.alive()) z._deactivate(); // 商场段招来的先清掉，只看楼里的
@@ -410,6 +410,173 @@ test('回收困住的：追人的丧尸连着几次找不到去人那儿的路�
   let gone = false; run(10, () => { gone ||= !z.active; }); // 收回去以后这一只可能马上被别处放出来再用，所以只看收没收过
   assert.ok(gone, '困住的收回去了');
   void zombies; void siege;
+});
+
+// ---- 爬楼第二轮（复查发现的）：楼梯上被定住、北区的楼层人还没到就空了、补给丢了、楼梯上不来尸潮、电梯抢了楼梯的键、安全点那句话 ----
+const flightAt = (r, k, at) => { const s = nav.slopeById.get(r.slopes[k]), [x, z] = toW(s.F, s.len * at, 0); return landAt(nav, x, z, s.y0 + (s.y1 - s.y0) * at + 0.6); };
+const landingMid = (r) => { const F = nav.floors.get(r.landings[0]), b = F.pieces[0].bb; return { x: (b.x0 + b.x1) / 2, y: F.y, z: (b.z0 + b.z1) / 2 }; };
+const syncPaths = (G) => { const pf = createPathfinder(nav); G.physics.pathfinder = { request: (a, b, cb) => { cb(pf.findNow(a, b)); return { cancel() {} }; } }; return pf; };
+
+// 以前每一帧都重新判这一层清没清干净、把人拽回上一帧的位置：走到一半有一只凑到楼梯口，人就被定在楼梯上，上不去也下不来（边挨咬边动不了）
+test('爬楼的规则只在人从这一层踏上楼梯的那一下定：放行了，走到休息平台上这一层又凑过来一只，往上往下都照走；回到楼面再踏上去才拦，拦住的退回这一层的楼面上（不是梯段上）', () => {
+  const { G, zombies, player, run, list, arrive, siege, enemies, msgs, T } = climbWorld('A'), f1 = list[1], y1 = elev(f1);
+  arrive(f1); run(2);
+  const r = runs.find((q) => q.from === f1 && q.id.startsWith(T.stair));
+  for (const z of zombies.alive()) if (z.seed === f1) z.damage(9999, null, null, 'body');
+  run(0.2); assert.equal(siege.climbRule(r), null, '这一层清干净了');
+  player.pos.set(r.a.x, r.a.y, r.a.z); run(0.1);
+  const p1 = flightAt(r, 0, 0.5); player.pos.set(p1.x, p1.y, p1.z); run(0.1);
+  assert.ok(Math.hypot(player.pos.x - p1.x, player.pos.z - p1.z) < 1e-6, '踏上去了');
+  const mid = landingMid(r); player.pos.set(mid.x, mid.y, mid.z); run(0.1);
+  // 人在休息平台上，这一层凑过来一只（楼梯口十来米）：按规则这一层又没清干净了
+  const spot = siege.state.spots.get(f1).corridor.find((q) => { const d = Math.hypot(q.x - r.a.x, q.z - r.a.z); return d > 8 && d < 14; });
+  const z = enemies.spawn('zombie', new THREE.Vector3(spot.x, y1, spot.z), { kind: 'walker', passive: true }); z.seed = f1;
+  assert.match(siege.climbRule(r), /还剩 1 只/);
+  const last = r.slopes.length - 1;
+  for (const [k, at] of [[0, 0.7], [0, 0.35], [last, 0.3], [last, 0.7]]) {
+    const q = flightAt(r, k, at); player.pos.set(q.x, q.y, q.z); run(1 / 30);
+    assert.ok(Math.hypot(player.pos.x - q.x, player.pos.z - q.z) < 1e-6, `走在楼梯上（第 ${k + 1} 段的 ${at}）没被拽回去`);
+  }
+  // 下到楼面，再踏上去：这回拦，退回楼面上
+  player.pos.set(r.a.x, r.a.y, r.a.z); run(0.1); siege.state.tellT = 0;
+  const q = flightAt(r, 0, 0.3); player.pos.set(q.x, q.y, q.z); run(1 / 30);
+  const st = landAt(nav, player.pos.x, player.pos.z, player.pos.y + 0.6);
+  assert.ok(st && !st.slope && st.floor === f1, `退回 ${f1} 的楼面上（${st?.floor} ${st?.slope?.id || ''}）`);
+  assert.match(msgs.at(-1), /楼梯口还有丧尸/); assert.equal(G.stairBlock(r, 'down'), null, '往下照走');
+});
+
+test('人站在楼梯的梯段上：寻路去这段梯离人近的那一头（以前梯段上的一点永远找不到路），追人的不算「找不到路」、不会被回收，照样扑得上来', () => {
+  const { G, zombies, player, run, list, arrive, enemies, T, hurt } = climbWorld('A'), f1 = list[1], y1 = elev(f1);
+  syncPaths(G); arrive(f1); run(1); for (const z of zombies.alive()) z._deactivate();
+  const r = runs.find((q) => q.from === f1 && q.id.startsWith(T.stair)), at = flightAt(r, 0, 0.6), P = new THREE.Vector3(at.x, at.y, at.z);
+  const sp = floorSpots(L, nav, runs, T, f1), spots = [...sp.corridor, ...sp.flats.flatMap((x) => x.spots)];
+  assert.ok(at.slope, '这一点在梯段上');
+  const from = spots.find((q) => Math.hypot(q.x - r.a.x, q.z - r.a.z) > 12);
+  let got = null, why = 'none';
+  G.physics.nav.requestPath(new THREE.Vector3(from.x, y1, from.z), P, (p, w) => { got = p; why = w; });
+  assert.ok(got && got.length >= 2, `找得到路（${why}）`);
+  const end = got.at(-1); assert.ok(Math.hypot(end.x - at.x, end.z - at.z) < 3 && Math.abs(end.y - at.y) < 1.2, `路的终点在这段梯的一头（离人 ${Math.hypot(end.x - at.x, end.z - at.z).toFixed(1)} 米）`);
+  const zs = spots.filter((q) => Math.hypot(q.x - P.x, q.z - P.z) > 8).slice(0, 3).map((q) => enemies.spawn('zombie', new THREE.Vector3(q.x, y1, q.z), { kind: 'walker', hunt: true, state: 'alert' }));
+  let worst = 0, best = Infinity;
+  run(15, () => { player.pos.copy(P); for (const z of zs) { worst = Math.max(worst, z.noPath || 0); best = Math.min(best, z.pos.distanceTo(P)); } });
+  assert.equal(worst, 0, '一次都没算成找不到路'); assert.ok(zs.every((z) => z.active), '一只都没被回收');
+  assert.ok(best < 2.5 || hurt.length > 0, `扑上来了（最近 ${best.toFixed(1)} 米，咬了 ${hurt.length} 下）`);
+});
+
+test('爬楼摆的困住了、追不上的（人看不见）：那一层还没打过就不收走，换到那一层别处看不见的地方站好、不追人（一只不少）；打过的那几层照样收', () => {
+  const { G, zombies, player, run, list, arrive, siege } = climbWorld('T1'), [f0, f1] = list;
+  arrive(f0); run(0.5); arrive(f1); run(1);
+  const seeded = (f) => zombies.alive().filter((z) => z.seed === f), n = seeded(f1).length; assert.ok(n >= 6, `${f1} 摆了 ${n} 只`);
+  const eye = () => new THREE.Vector3(player.pos.x, player.pos.y + 1.5, player.pos.z), hid = (q) => !G.physics.lineOfSight(eye(), new THREE.Vector3(q.pos.x, q.pos.y + 1.5, q.pos.z));
+  const stuck = (z) => { z.hunt = true; z.zs = 'chase'; z.noPath = 5; z.planT = 99; }; // 连着几次找不到路（这 0.6 秒里不再重新找）
+  const z = seeded(f1).find(hid); assert.ok(z, '有一只在看不见的地方'); stuck(z); run(0.6);
+  assert.equal(seeded(f1).length, n, '一只没少');
+  const log = siege.state.recycleLog.at(-1); assert.ok(log && log.seed === f1 && log.moved, `换了地方：${JSON.stringify(log)}`);
+  assert.ok(seeded(f1).filter((q) => q.hunt).length === 0, '换了地方的不追人');
+  assert.ok(seeded(f1).every((q) => Math.abs(q.pos.y - elev(f1)) < 0.5), '还在自己那一层');
+  // f0 已经打过了（人上到了 f1）：f0 剩下的困住了就收走
+  const left = seeded(f0).filter(hid); assert.ok(left.length >= 1, `${f0} 还剩看不见的 ${left.length} 只`);
+  const m = seeded(f0).length; stuck(left[0]); run(0.6);
+  assert.equal(seeded(f0).length, m - 1, '打过的那层：收走'); assert.equal(siege.state.recycleLog.at(-1).moved, false);
+});
+
+test('北区：人在下一层开枪，上一层先摆好的那一群最多下来两只，其余守在自己那层；人上去时那一群少了一大截（回收、走丢）就补回来，打死的不补', () => {
+  {
+    const { G, zombies, run, list, arrive, siege } = climbWorld('T1'), [f0, f1] = list;
+    syncPaths(G); arrive(f0); run(0.5);
+    const mine = () => zombies.alive().filter((z) => z.seed === f1), home = () => mine().filter((z) => Math.abs(z.pos.y - elev(f1)) < 1.2);
+    const n = mine().length; assert.ok(n >= 6);
+    run(10, () => { if (G.time.frame % 6 === 0) siege.addNoise(7); }); // 一直在开枪
+    assert.ok(home().length >= n - SIEGE.floors.down, `${f1} 的 ${n} 只还有 ${home().length} 只在自己那层`);
+    // 被回收了一大截：人上去时补回来（离人十米外、看不见的地方）
+    const before = mine().length; for (const z of mine().slice(0, 5)) z._deactivate();
+    arrive(f1); run(2.5);
+    assert.ok(mine().length >= Math.min(before, Math.ceil(n * SIEGE.floors.refill)), `补回来了：${before} → 丢了 5 只 → ${mine().length}`);
+    assert.ok(siege.state.refilled >= 1);
+  }
+  {
+    const { zombies, run, list, arrive, siege } = climbWorld('T1'), [f0, f1] = list;
+    arrive(f0); run(0.5);
+    const mine = () => zombies.alive().filter((z) => z.seed === f1), n = mine().length, r0 = siege.state.refilled || 0;
+    for (const z of mine().slice(0, 5)) z.damage(9999, null, null, 'body');
+    run(0.2); arrive(f1); run(2.5);
+    assert.equal(mine().length, n - 5, '打死的不补'); assert.equal(siege.state.refilled || 0, r0);
+  }
+});
+
+test('北区爬楼的补给：第一道关抽到 9F、10F、11F 都一样，每隔两层的弹匣、四层的医疗包一个不少（15F 往上的复式层只有一头有楼梯口落点，以前那几层的悄悄没放）', () => {
+  const probe = sworld({ tower: 'T1' }), seeds = new Map();
+  for (let s = 1; s < 200 && seeds.size < 3; s++) { const n = probe.siege.mission(seq(s)).plan.gates[0].n; if (!seeds.has(n)) seeds.set(n, s); }
+  assert.deepEqual([...seeds.keys()].sort((a, b) => a - b), [9, 10, 11]);
+  for (const [n, s] of seeds) {
+    const { list, arrive, run, supplies, P, zombies } = climbWorld('T1', s), gates = new Set(P.gates.map((g) => g.floor)), miss = [];
+    let want = 0;
+    for (let i = 1; i < list.length; i++) {
+      const f = list[i]; arrive(f); run(0.1); for (const z of zombies.alive()) z._deactivate();
+      const kinds = gates.has(f) ? [] : [...(i % SIEGE.floors.ammo === 0 ? ['ammo'] : []), ...(i % SIEGE.floors.medkit === 0 ? ['medkit'] : [])];
+      for (const k of kinds) { want++; if (!supplies.drops.some((d) => d.kind === k && Math.abs(d.pos.y - elev(f)) < 0.5)) miss.push(`${f} ${k}`); }
+    }
+    assert.ok(want >= 6, `第一道关 ${n}F：该放 ${want} 件`); assert.deepEqual(miss, [], `第一道关 ${n}F：没放的 ${miss}`);
+  }
+});
+
+test('人在楼梯上（梯段、休息平台）时来的尸潮、巨尸照样出得来：从刚离开的那层和上下两层的楼梯口涌出来，不贴着人冒出来', () => {
+  for (const tower of ['A', 'T1']) {
+    const { zombies, player, run, list, arrive, siege, T } = climbWorld(tower), f = list[2];
+    const r = arrive(f); run(1); // 从下面那层走上来的那段楼梯（下来不拦）：人停在梯段中间、休息平台上
+    const a = flightAt(r, 0, 0.5);
+    for (const P of [new THREE.Vector3(a.x, a.y, a.z), new THREE.Vector3(landingMid(r).x, landingMid(r).y, landingMid(r).z)]) {
+      for (const q of zombies.alive()) if (!q.seed) q._deactivate();
+      player.pos.copy(P); run(1 / 30); assert.ok(player.pos.distanceTo(P) < 1e-6, '人还在楼梯上');
+      const before = new Set(zombies.alive()), made = siege.horde(8), fresh = zombies.alive().filter((q) => !before.has(q));
+      assert.ok(made >= 4, `${tower} 楼梯上来了一波 ${made} 只`);
+      assert.ok(fresh.every((q) => q.pos.distanceTo(P) >= 3.9), `离人都在四米外：${fresh.map((q) => q.pos.distanceTo(P).toFixed(1))}`);
+      const b = siege.spawnBrute(); assert.ok(b, `${tower} 楼梯上来得了巨尸`); b._deactivate();
+    }
+  }
+});
+
+test('北区电梯厅：站在楼梯口、又在电梯口跟前时（爬楼的楼层电梯哪儿都去不了），Z / X 让给楼梯——楼梯牌亮着、电梯选层不弹；电梯去得了的时候照旧是电梯', async () => {
+  const { createLiftControl, liftAt } = await import('../src/jimao/lift.js'), { createStairControl, STAIR } = await import('../src/jimao/stairs.js');
+  const { G, player, list } = climbWorld('T1'), f = list[2], y = elev(f), lifts = nav.links.filter((l) => l.kind === 'lift' && l.stops?.length > 1);
+  // 找一点：楼梯牌给得出来（离梯段口 2.6 米内），又在电梯口 2.4 米内
+  let pt = null;
+  for (const r of runs.filter((q) => q.from === f)) for (let dx = -2.4; dx <= 2.4 && !pt; dx += 0.3) for (let dz = -2.4; dz <= 2.4 && !pt; dz += 0.3) {
+    const x = r.a.x + dx, z = r.a.z + dz, s = landAt(nav, x, z, y + 0.6);
+    if (s && s.floor === f && !s.slope && Math.hypot(r.a.x - x, r.a.z - z, r.ea.y - y) < STAIR.reach - 0.2 && liftAt(lifts, f, x, z)) pt = { x, z };
+  }
+  assert.ok(pt, `${f} 有一处既在楼梯口又在电梯口`);
+  let lift = null; const ref = { get near() { return lift?.near || null; }, get riding() { return !!lift?.riding; } };
+  const stairs = createStairControl(G, { nav, runs, lift: ref, blocked: (r, d) => G.stairBlock?.(r, d) || null });
+  lift = createLiftControl(G, { nav, layout: L, stairsHere: () => stairs.here() });
+  const bare = createLiftControl(G, { nav, layout: L });
+  player.pos.set(pt.x, y, pt.z);
+  lift.update(0.3); bare.update(0.3); stairs.update(1 / 30);
+  assert.ok(G.liftAllow(liftAt(lifts, f, pt.x, pt.z).link, f, list[0]), '爬楼的楼层电梯去不了');
+  assert.ok(bare.near, '以前：电梯口抢了这一点（Z 弹出一个只会说「去不了」的选层）');
+  assert.equal(lift.near, null, '让给楼梯'); assert.equal(stairs.near, true, '楼梯牌亮着'); assert.ok(stairs.options.up && stairs.options.down);
+  // 电梯去得了（不在围城里）：照旧是电梯
+  const allow = G.liftAllow; G.liftAllow = null;
+  lift.update(0.3); stairs.update(1 / 30); assert.ok(lift.near, '电梯去得了就是电梯'); assert.equal(stairs.near, false);
+  G.liftAllow = allow; stairs.dispose();
+});
+
+test('安全点那句「这儿暂时安全」：合闸 / 清完关卡时身边还有在追人的就先不说，身边清净两秒再说；一直打个不停，过一阵换一句不说「安全」的', () => {
+  const { siege, begin, cut, run, player, msgs, enemies, zombies } = sworld();
+  const m = begin(), P = m.plan; siege.prepareFloors();
+  cut(P.stageOf('power')); run(0.1);
+  const near = () => new THREE.Vector3(player.pos.x + 5, player.pos.y, player.pos.z);
+  let z = null; const keep = () => { for (const q of zombies.alive()) if (q !== z) q._deactivate(); if (z) { z.pos.copy(near()); z.zs = 'chase'; z.cool = 9; } };
+  z = enemies.spawn('zombie', near(), { kind: 'walker', hunt: true, state: 'alert' });
+  const said = () => msgs.filter((t) => t.startsWith('R:这儿暂时安全')).length, other = () => msgs.filter((t) => t.startsWith('R:安全点记下了')).length;
+  cut(1); run(3, keep);
+  assert.ok(siege.state.stage > P.stageOf('power'), '合了闸'); assert.equal(said(), 0, '身边还有一只在追：先不说');
+  z._deactivate(); z = null; run(1, keep); assert.equal(said(), 0, '清净了还不到两秒');
+  run(1.5, keep); assert.equal(said(), 1, '清净两秒：说了');
+  // 第一道关：一直有一只贴着，过了 20 秒换一句不说「安全」的
+  cut(P.stageOf('gate0') + 1 - siege.state.stage); z = enemies.spawn('zombie', near(), { kind: 'walker', hunt: true, state: 'alert' });
+  run(SIEGE.safeTalk.cap + 1, keep);
+  assert.equal(said(), 1, '没再说「安全」'); assert.equal(other(), 1, '换了一句');
 });
 
 test('响动：开枪攒响动（手枪比步枪小），攒满来一波尸群（认定了人、不会跟丢），之后有冷却；安静下来慢慢回落；附近的丧尸听见枪声围过来', () => {

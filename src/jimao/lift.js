@@ -33,7 +33,11 @@ export function liftAt(lifts, floor, x, z, reach = LIFT.reach) {
 /** 门口朝外的视角：stop.face 是门的外法线（x, z）。原游戏的 yaw：朝 (dx, dz) 看时 yaw = atan2(−dx, −dz) */
 export const faceYaw = (stop) => (stop?.face ? Math.atan2(-stop.face[0], -stop.face[1]) : null);
 
-export function createLiftControl(G, { nav, layout, root = null, hidden = () => false, post = null, keys = { up: 'KeyZ', down: 'KeyX' }, cars = null, guide = null }) {
+/**
+ * stairsHere()：这一点能不能用楼梯快速上下（stairs.js 的 here()，返回 { up, down }）。电梯口和楼梯口挨着（北区的电梯厅）时：
+ * 楼梯能走的那个方向电梯去不了（G.liftAllow 一层都不让去），这一点让给楼梯——Z / X 走楼梯，不弹一个只会说「去不了」的电梯选层（丧尸围城爬楼时电梯只到第一道关那层）
+ */
+export function createLiftControl(G, { nav, layout, root = null, hidden = () => false, post = null, keys = { up: 'KeyZ', down: 'KeyX' }, cars = null, guide = null, stairsHere = null }) {
   const lifts = (nav?.links || []).filter((l) => l.kind === 'lift' && l.stops?.length > 1);
   // 楼面高度从导航网格取（室外的 ground、天桥 bridge 这些不是楼层记录，也有高度）
   const elev = (id) => nav.floors.get(id)?.y ?? layout.levels.find((l) => l.id === id)?.elev ?? 0;
@@ -65,6 +69,8 @@ export function createLiftControl(G, { nav, layout, root = null, hidden = () => 
   const kd = onKey(true), ku = onKey(false);
   if (typeof addEventListener === 'function') { addEventListener('keydown', kd); addEventListener('keyup', ku); }
 
+  /** 这部电梯从这一层往 dir（1 上 / −1 下）方向有没有一层去得了（G.liftAllow 不拦） */
+  const serves = (n, dir) => n.link.stops.some((s, j) => Math.sign(j - n.i) === dir && !G.liftAllow?.(n.link, n.link.stops[n.i].floor, s.floor));
   /** 把人放到这部电梯第 i 层的门口 */
   function place(link, i, faceOut) {
     const s = link.stops[i], p = G.player.pos;
@@ -177,7 +183,8 @@ export function createLiftControl(G, { nav, layout, root = null, hidden = () => 
     if ((scanT -= dt) <= 0) {
       scanT = LIFT.scan;
       const st = G.physics?.stateOf?.(G.player.pos);
-      const n = st ? liftAt(lifts, st.floor, G.player.pos.x, G.player.pos.z) : null;
+      let n = st ? liftAt(lifts, st.floor, G.player.pos.x, G.player.pos.z) : null;
+      if (n && stairsHere && G.liftAllow) { const o = stairsHere(); if ((o?.up && !serves(n, 1)) || (o?.down && !serves(n, -1))) n = null; }
       if ((n?.link !== near?.link) || n?.i !== near?.i) { near = n; pick = null; show(!!near); paint(); }
     }
     if (!near) return;
