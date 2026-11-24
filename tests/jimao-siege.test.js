@@ -1926,6 +1926,102 @@ test('小许跟丢了直接跟到你身后时，不落在去不了的地方（�
   squad.dispose();
 });
 
+/** 护送刚开始：单人，人站在撬开的卷帘门口，小许出来了；门口来的那几只先收掉，之后不再刷（escortT 拉长） */
+function escortWorld({ tower = 'A' } = {}) {
+  const w = sworld({ tower }), { G, siege, begin, cut, run, player, zombies } = w;
+  const squad = createSquad(G, { scene: G.scene, nav, zombies, siege, director: { riding: false }, rng: seq(5) }); G.squad = squad; squad.wanted = false; squad.reset();
+  const m = begin(), at = m.plan.stageOf, site = m.plan.stages[at('rescue')].site, mark = m.plan.stages[at('escort')].site;
+  const calm = () => { for (const z of zombies.alive()) z._deactivate(); squad.update(1 / 30); };
+  run(0.1, calm); cut(at('crowbar') + 1); run(0.1, calm);
+  player.pos.set(site.x, site.y, site.z); run(0.3, calm); cut(1); run(1.5, calm);
+  assert.equal(siege.state.stage, at('escort')); siege.state.escortT = 999;
+  return { ...w, squad, m, at, site, mark, xu: squad.guest, calm };
+}
+
+test('护送：小许身边围着六只，同时最多两只咬得到（其余的等着），每只贴上半秒才咬第一口、之后一口隔 1.4 秒；你手里还没枪时一口打六折，四秒下来他还站着（以前六只一起算，四秒掉 156）', () => {
+  const { G, siege, run, enemies, xu } = escortWorld(), B = SQUAD.guest;
+  assert.equal(siege.guestHurt(), MALL.rescue.soft, '只有刀 / 斧子：打折'); G.weapon.slots = ['knife', 'pistol']; assert.equal(siege.guestHurt(), 1, '有枪了：照实算'); delete G.weapon.slots;
+  const ring = []; for (let k = 0; k < 6; k++) ring.push(enemies.spawn('zombie', xu.pos.clone(), { kind: 'walker', hunt: true, state: 'alert' }));
+  assert.equal(ring.filter(Boolean).length, 6);
+  // 一直围着他一圈（他躲到哪儿跟到哪儿）
+  const pin = () => ring.forEach((z, k) => { const a = (k / 6) * Math.PI * 2; z.pos.set(xu.pos.x + Math.cos(a) * 0.9, xu.pos.y, xu.pos.z + Math.sin(a) * 0.9); });
+  let t = 0, most = 0; const bites = [], hp0 = xu.hp;
+  G.events.on('squad:bite', (e) => { if (e.mate === xu) bites.push([t, e.by, e.damage]); });
+  run(4, () => { pin(); G.squad.update(1 / 30); t += 1 / 30; most = Math.max(most, xu.biters.length); });
+  assert.equal(most, B.cap, `同时咬得到的最多 ${most} 只`);
+  assert.ok(bites.length >= 4 && bites.length <= B.cap * (1 + Math.floor((4 - B.windup) / B.every)), `四秒咬了 ${bites.length} 口`);
+  assert.ok(bites[0][0] >= B.windup - 1 / 30, `第一口在 ${bites[0][0].toFixed(2)} 秒（贴上要先抡一下）`);
+  for (const z of ring) { const ts = bites.filter((b) => b[1] === z).map((b) => b[0]); for (let i = 1; i < ts.length; i++) assert.ok(ts[i] - ts[i - 1] >= B.every - 1e-6, `同一只两口隔 ${(ts[i] - ts[i - 1]).toFixed(2)} 秒`); }
+  assert.ok(bites.every((b) => Math.abs(b[2] - B.hit * MALL.rescue.soft) < 1e-9), '一口打了折');
+  assert.ok(Math.abs(hp0 - xu.hp - bites.length * B.hit * MALL.rescue.soft) < 1e-6 && !xu.down, `还剩 ${xu.hp.toFixed(0)} 血、没倒`);
+  G.squad.dispose();
+});
+
+test('护送：附近一群离小许比离你近的，最多两只（MALL.rescue.mob）转去扑他——以前队友那一句「离他近就扑他」把六只全招过去', () => {
+  const { G, run, enemies, player, xu } = escortWorld();
+  const at = xu.pos.clone(), dx = at.x - player.pos.x, dz = at.z - player.pos.z, dl = Math.hypot(dx, dz) || 1;
+  const pack = [];
+  for (let k = 0; k < 6; k++) { const a = Math.atan2(dz, dx) + (k - 2.5) * 0.35, r = 3 + (k % 2) * 1.2; pack.push([enemies.spawn('zombie', at.clone(), { kind: 'walker', hunt: true, state: 'alert' }), at.x + Math.cos(a) * r, at.z + Math.sin(a) * r]); }
+  for (const [, x, z] of pack) assert.ok(Math.hypot(x - at.x, z - at.z) < Math.hypot(x - player.pos.x, z - player.pos.z) - 0.5, '离他比离你近');
+  run(1.5, () => { xu.pos.copy(at); for (const [z, x, zz] of pack) z.pos.set(x, at.y, zz); G.squad.update(1 / 30); });
+  const lured = pack.filter(([z]) => z.lureT > 0 && Math.hypot(z.lure.x - at.x, z.lure.z - at.z) < 0.5).length;
+  assert.ok(lured >= 1 && lured <= MALL.rescue.mob, `扑他的有 ${lured} 只`);
+  G.squad.dispose();
+});
+
+test('护送：丧尸凑到小许三米内，他往你身后（尸群的另一边、栏杆里侧）躲开，不站在尸群里等着挨咬；躲完还在你身边、在范围里', () => {
+  const { G, siege, run, enemies, player, xu } = escortWorld();
+  const P = player.pos; let tried = 0;
+  for (const [ox, oz] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+    // 小许站在你旁边 1.5 米，三只从他外侧贴上来（离他 1.2 米、隔着他在你对面）
+    const st = landAt(nav, P.x + ox * 1.5, P.z + oz * 1.5, P.y + 0.6); if (!st || Math.abs(st.y - P.y) > 0.3 || !clear(nav, st) || siege.inArea({ floor: st.floor, x: st.x, z: st.z }) === false) continue;
+    xu.place({ x: st.x, y: P.y, z: st.z }); xu.hide = null; xu.senseT = 0; tried++;
+    const pack = [-0.5, 0, 0.5].map((k) => { const a = Math.atan2(oz, ox) + k; return [enemies.spawn('zombie', xu.pos.clone(), { kind: 'walker', hunt: true, state: 'alert' }), st.x + Math.cos(a) * 1.2, st.z + Math.sin(a) * 1.2]; });
+    const room = () => Math.min(...pack.map(([, x, z]) => Math.hypot(x - xu.pos.x, z - xu.pos.z)));
+    const r0 = room();
+    run(1.5, () => { for (const [z, x, zz] of pack) z.pos.set(x, P.y, zz); G.squad.update(1 / 30); });
+    const cx = pack.reduce((a, q) => a + q[1], 0) / 3, cz = pack.reduce((a, q) => a + q[2], 0) / 3, side = ((xu.pos.x - P.x) * (cx - P.x) + (xu.pos.z - P.z) * (cz - P.z)) / (Math.hypot(xu.pos.x - P.x, xu.pos.z - P.z) * Math.hypot(cx - P.x, cz - P.z) || 1);
+    const here = landAt(nav, xu.pos.x, xu.pos.z, xu.pos.y + 0.6);
+    assert.ok(room() > r0 + 1.2 && room() >= SQUAD.guest.flee - 0.6, `(${ox}, ${oz})：离尸群 ${r0.toFixed(1)} → ${room().toFixed(1)} 米`);
+    assert.ok(side < 0.3, `(${ox}, ${oz})：躲到了你另一边（${side.toFixed(2)}）`);
+    assert.ok(Math.hypot(xu.pos.x - P.x, xu.pos.z - P.z) < SQUAD.follow.far, '还在你身边');
+    assert.ok(here && Math.abs(here.y - P.y) < 0.3 && siege.inArea({ floor: here.floor, x: xu.pos.x, z: xu.pos.z }) !== false, '站在这一层、范围里（没往中庭栏杆外跑）');
+    for (const [z] of pack) z._deactivate();
+  }
+  assert.ok(tried >= 2, `试了 ${tried} 个方向`);
+  G.squad.dispose();
+});
+
+test('护送：小许倒了——头顶标「扶」、提示走过去多远；你身边贴着丧尸扶不起来（说先砍开）；腾出手站到他跟前一秒多就起来（比扶队友快），标记撤掉', () => {
+  const { G, siege, run, enemies, player, xu, mark, director, msgs } = escortWorld(), B = SQUAD.guest;
+  const mk = () => director.state.mission.markers();
+  assert.deepEqual(mk(), [], '没倒：不标');
+  xu.goDown(); assert.ok(msgs.some((t) => /小许倒下了！把你身边的丧尸砍开/.test(t)));
+  const m0 = mk(); assert.equal(m0.length, 1); assert.equal(m0[0].short, '扶'); assert.ok(Math.hypot(m0[0].pos.x - xu.pos.x, m0[0].pos.z - xu.pos.z) < 1e-6);
+  player.pos.set(mark.x, mark.y, mark.z); msgs.length = 0; siege.state.tellT = 0; run(1, () => G.squad.update(1 / 30));
+  assert.ok(msgs.some((t) => /小许倒了！走到他跟前扶起来（\d+ 米）/.test(t)), msgs.join(' | ')); assert.equal(xu.help, 'far');
+  // 走到他跟前，可身边贴着一只
+  const by = new THREE.Vector3(xu.pos.x + 1, xu.pos.y, xu.pos.z), z = enemies.spawn('zombie', by.clone(), { kind: 'walker', hunt: true, state: 'alert' });
+  msgs.length = 0; siege.state.tellT = 0;
+  run(3, () => { player.pos.copy(by); z.pos.set(by.x + 0.9, by.y, by.z); G.squad.update(1 / 30); });
+  assert.equal(xu.down, true, '贴着丧尸：扶不起来'); assert.equal(xu.help, 'busy'); assert.ok(msgs.some((t) => /身边有丧尸，扶不了/.test(t)), msgs.join(' | '));
+  z._deactivate(); msgs.length = 0;
+  let t = 0; run(B.revive + 0.3, () => { player.pos.copy(by); if (xu.down) t += 1 / 30; G.squad.update(1 / 30); });
+  assert.equal(xu.down, false, '腾出手：扶起来了'); assert.ok(t <= B.revive + 0.1 && t < SQUAD.down.revive, `扶了 ${t.toFixed(1)} 秒`);
+  assert.ok(msgs.some((t) => /正在扶起小许… \d+%/.test(t)), '扶的时候报进度'); assert.deepEqual(mk(), [], '起来了：标记撤掉');
+  G.squad.dispose();
+});
+
+test('队友打谁：正在扑小许的（离他 2.4 米内、醒着的）排在特殊感染者和离你近的前面；按着你的还是最先', () => {
+  const at = (x, z, o = {}) => ({ pos: { x, y: 0, z }, alive: true, active: true, zs: 'chase', ...o });
+  const me = { x: 0, y: 0, z: 0 }, mate = { x: 2, y: 0, z: 2 }, xu = { x: -4, y: 0, z: 0 };
+  const near = at(1.5, 0), onXu = at(-5, 0.5), sp = at(6, 0, { special: true }), pin = at(3, 3), dozing = at(-4.5, 0, { zs: 'idle' });
+  assert.equal(pickTarget(mate, me, [near, onXu, sp], { guard: xu }), onXu, '扑小许的先打');
+  assert.equal(pickTarget(mate, me, [near, onXu, sp]), sp, '没有要护着的：照旧');
+  assert.equal(pickTarget(mate, me, [onXu, pin], { pin, guard: xu }), pin, '按着你的最先');
+  assert.equal(pickTarget(mate, me, [near, dozing], { guard: xu }), near, '他身边发呆的不算扑他');
+});
+
 test('消防斧：开局店门对面（栏杆边）立着消火栓箱，正面朝门——卷帘一起来从门里就看得见、走得到；站过去就把近战换成斧子；没拿的话撬棍那一步顺手给上；斧子砍中没砍死有一点动静（砍倒了和刀一样没声）；新开一局又只有刀，从存档点回来斧子还在', () => {
   const { G, siege, begin, cut, run, player, supplies, msgs, director } = sworld();
   const m = begin(), at = m.plan.stageOf, M = m.plan.mall, A = M.axe, S = siege.state;
