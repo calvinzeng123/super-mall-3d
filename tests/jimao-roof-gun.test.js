@@ -167,7 +167,7 @@ test('360 度：枪架跟着视线绕一整圈、哪个方向都在射界里（�
       camera.getWorldDirection(d); const look = Math.atan2(d.x, d.z);
       e.ring.getWorldQuaternion(q); const ring = Math.atan2(new THREE.Vector3(0, 0, 1).applyQuaternion(q).x, new THREE.Vector3(0, 0, 1).applyQuaternion(q).z);
       assert.ok(Math.abs(((ring - look + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.02, `朝 ${(player.yaw * 57.3).toFixed(0)}°：枪架跟着转`);
-      const n = w.shots.length; w.input.held.add('fire'); w.run(0.5); w.input.held.delete('fire');
+      const n = w.shots.length; w.input.held.add('fire'); w.run(0.5); w.input.held.delete('fire'); w.run(0.8); // 歇一下等枪管凉下来（一圈 24 个方向连着打会过热）
       assert.ok(w.shots.length > n, `朝 ${(player.yaw * 57.3).toFixed(0)}° 打得响`);
       assert.ok(w.shots.at(-1).d.dot(d) > 0.97, '子弹顺着视线出去');
     }
@@ -190,8 +190,8 @@ test('不耗子弹，只会过热：连着打几秒锁死、锁着不出弹，�
     player.pitch = -0.2; w.input.held.add('fire');
     let t = 0; while (!e.gun.overheated && t < 20) { w.frame(); t += 1 / 30; }
     assert.ok(e.gun.overheated, '会过热');
-    assert.ok(t > 4 && t < 10, `连打 ${t.toFixed(1)} 秒过热（不是一下就热，也不是打不热）`);
-    const n0 = w.shots.length; assert.ok(n0 > 50, `过热之前打了 ${n0} 发`);
+    assert.ok(t > 3 && t < 10, `连打 ${t.toFixed(1)} 秒过热（不是一下就热，也不是打不热）`);
+    const n0 = w.shots.length; assert.ok(n0 > 35, `过热之前打了 ${n0} 发`);
     w.run(1); assert.equal(w.shots.length, n0, '锁着不出弹');
     assert.ok(w.msgs.some((m) => /过热/.test(m)));
     w.input.held.delete('fire'); let c = 0; while (e.gun.overheated && c < 10) { w.frame(); c += 1 / 30; }

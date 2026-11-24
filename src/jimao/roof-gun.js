@@ -30,7 +30,7 @@ export const ROOF_GUN = Object.freeze({
   ring: Object.freeze({ r: 0.9, y: 1.02, gun: 0.3 }), eye: 1.62, ladder: 0.15, traverse: 2.0,
   foot: 0.7, use: 1.8, climb: 0.45, down: 0.3, burst: 0.5,
   band: Object.freeze([1.15, 1.5]),
-  gun: Object.freeze({ rate: 13, damage: 40, spread: 0.018, heatPerShot: 0.018, cool: 0.3, unlock: 0.35, spinUp: 0.35, range: 160,
+  gun: Object.freeze({ rate: 13, damage: 34, spread: 0.02, heatPerShot: 0.024, cool: 0.26, unlock: 0.4, spinUp: 0.35, range: 160,
     yaw: Infinity, pitchUp: 0.55, pitchDown: 1.35, pierce: 1, pierceMul: 0.6 }),
   desk: Object.freeze({ assistCone: 0.07, assistPull: 0.9, assistPullIdle: 0, bulletCone: 0.025 }),
   touch: Object.freeze({ assistCone: 0.157, assistPull: 2.4, assistPullIdle: 1.0, bulletCone: 0.06 }),
