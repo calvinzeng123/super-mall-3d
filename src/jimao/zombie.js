@@ -499,6 +499,14 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       m.stagger = Math.max(m.stagger, 0.9); m.cool = Math.max(m.cool, 0.9); m.pushT = 0.22; m.pushX = dx * power; m.pushZ = dz * power;
       return true;
     };
+    // 改成守点的（直升机清扫：守屋顶剩下的、从楼梯间涌出来的接着当屋顶那一拨）：不再追人，只在 anchor 那一层走，走到 p
+    m.guard = (p, anchor) => {
+      if (!m.alive || !m.active || m.fixed) return false;
+      m.post = (m._post ||= new THREE.Vector3()).copy(p); m.anchor = anchor ?? null; m.anchorY = m.pos.y; m.hunt = false; m.lureT = 0; m.leap = null; m.lunge = 0; m.bit = false;
+      if (m.zs === 'pin') G.events.emit('zombie:unpin', { enemy: m });
+      if (m.zs !== 'scream') m.zs = 'chase';
+      m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.planT = 0; m.lineT = 0; m.lineOk = false; m.hasGoal = false; return true;
+    };
     /** 守点的换一个点（siege.js 跟着直升机挪）：之前的路线、直线判断作废 */
     m.repost = (p) => { if (!m.post) return false; m.post.copy(p); m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.planT = 0; m.lineT = 0; m.hasGoal = false; return true; };
     /** 被响动引过去（诱饵弹）：seconds 秒内不管人，朝 at 凑；巨尸不吃这一套 */
