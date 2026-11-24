@@ -853,6 +853,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     run.cut = (run.relays || []).length;
     state.mission.hold?.object?.userData?.setState?.('cut');
     G.game.completeAll?.();
+    G.hud?.clearRadio?.(); // completeAll 会放「信号弹点着了…守住屋顶」那句：飞机已经在停机位上了，不放
     G.hud?.radio?.(`回到登机点了。${state.mission.extraction.label}已经重新就位，这次稳住。`, 4);
     G.game.refreshObjective?.();
   }

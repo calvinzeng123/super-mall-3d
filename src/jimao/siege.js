@@ -2129,7 +2129,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       }
       else if (!demo.offered) { S.flight.setLeave(rideT + 1.2); G.hud?.radio?.('返航。', 3); }
     }
-    else if (!S.flight.leaving && rideT > W.cap - 8) G.hud?.message?.('油不多了，准备返航', 2);
+    else if (!S.flight.leaving && rideT > W.cap - 8 && !S.flight.fuelSaid) { S.flight.fuelSaid = true; G.hud?.message?.('油不多了，准备返航', 2); } // 只说一次（以前每帧都发）
   }
   /** 炸楼时：视角慢慢转向正在垮的楼（人一动鼠标 / 手指就让开，停手 1.5 秒后再慢慢转回去） */
   function watchLook(dt) {
