@@ -77,9 +77,9 @@ export const SIEGE = Object.freeze({
     grid: 2.5, endGap: 3, perFlat: 6, tries: 16, gap: 1.8, budget: 3 }),
   // 回收：寻路连着失败 noPath 次（困在屋里、卡在墙角）、或者追着人却 slow 秒都没靠近（隔着两层以上 / far 米外）的，人看不见时收回池子
   recycle: Object.freeze({ every: 0.5, noPath: 3, far: 60, storeys: 7, slow: 20 }),
-  // 清扫：屋顶（一半在楼梯口、一半沿着女儿墙）、阳台玻璃后面、楼下；它们会朝飞机扔东西（throw：多远以内扔、最快隔几秒一发、飞多久、几成砸中、一发顶几发子弹）
+  // 清扫：屋顶（一大群，见 surge）、阳台玻璃后面、楼下；它们会朝飞机扔东西（throw：多远以内扔、最快隔几秒一发、飞多久、几成砸中、一发顶几发子弹）
   // 只有飞机上看得见、舱门机枪转得过去的才扔、才叫得着飞机（楼里、楼梯间里、射界外的打不着它们，它们也打不着飞机）；crowd：看得见的不到这么多只，扔得按比例稀一点
-  // post：屋顶、楼下的守在一个点上（不追人——人在飞机上，追就钻进楼里了），每 every 秒按 lead 秒以后飞机的位置挪到看得见的点（屋顶 roofWalk、楼下 groundWalk 米以内）；
+  // post：屋顶、楼下的守在一个点上（不追人——人在飞机上，追就钻进楼里了），每 every 秒按 lead 秒以后飞机的位置挪到看得见的点（楼下 groundWalk 米以内；屋顶的见 surge）；
   //   备选点屋顶 roofPool、楼下 groundPool 个；离开自己那一层超过 off 秒的收回重放
   // expose：每只隔 every 秒查一遍看不看得见，连着看得见 on 秒才算露出来、连着看不见 off 秒才算藏起来（HUD 红点、辅助瞄准不闪）
   // post.spread / ms：换点前给备选点重新打分，分到 spread × every 秒里的各帧去做（一帧最多 ms 毫秒），不在一帧里打一百多条跨楼层射线
@@ -87,8 +87,14 @@ export const SIEGE = Object.freeze({
   // balcony.front：阳台里的站在离阳台中线往外 front 米（贴着玻璃）；阳台的楼板、挡板挡视线、挡子弹（physics.addOccluder），往里站从飞机上只看得见顶板。
   //   low：降到低空绕楼下那一圈上看得见不到这么几成的（高层、只在一个角上露一下），进了那一段就不挡「清完了」（不让人为最后一只干转大半圈）
   // prep：清扫要用的点在楼里爬楼那一阵就开始分帧算（爬楼的落点算完以后），一帧最多 prep 毫秒
-  sweep: Object.freeze({ roof: 14, window: 12, ground: 18, screamers: 3, cap: 150, throw: Object.freeze({ range: 85, every: 0.6, flight: 1.5, hit: 0.8, hits: 1.5, first: 9, crowd: 5 }),
-    post: Object.freeze({ every: 1, lead: 3, roofWalk: 16, groundWalk: 30, roofPool: 48, groundPool: 72, off: 1, spread: 0.8, ms: 1.2 }),
+  // surge：屋顶那一拨是一大群、一直在动。起飞时守屋顶剩下的活的接着当屋顶的（最多 peak − min 只），不够 start 只的当场补到 start 只（放在看得见的点上），
+  //   其余从楼梯间门里一只只涌出来（每个门 every 秒一只，first 秒以后开始），屋顶同时最多 peak 只、这一拨一共 roof 只左右（剩下的多：再多涌 min 只，最多 max 只）。
+  //   每一轮（post.every 秒）按 post.lead 秒以后飞机的位置，在看得见的点里挑离飞机（水平）最接近 near 米的 rally 处集结点（隔 gap 米，一处大约 per 只；飞机在楼外时就是离它最近的），
+  //   每只冲向离自己近的那一处、在它周围 r 米里挤着（每轮有 churn 成的换个位置挤、swap 成的换到最远那一处），跟着飞机绕楼转；在楼梯间盒子里待了 house 秒的收回重放。mix：涌出来的是哪几种；
+  //   降到低空时屋顶上剩下的最多 down 只下到楼下（别的收掉、从总数里去掉）
+  sweep: Object.freeze({ roof: 30, window: 12, ground: 18, screamers: 3, cap: 150, throw: Object.freeze({ range: 85, every: 0.6, flight: 1.5, hit: 0.8, hits: 1.5, first: 9, crowd: 5 }),
+    surge: Object.freeze({ start: 12, peak: 26, min: 6, max: 34, down: 10, every: 0.3, first: 0.3, rally: 3, gap: 5, per: 9, near: 14, r: 2.6, churn: 0.4, swap: 0.15, house: 2.5, mix: Object.freeze({ walker: 0.5, runner: 0.45, bloater: 0.05, screamer: 0 }) }),
+    post: Object.freeze({ every: 1, lead: 3, groundWalk: 30, roofPool: 80, groundPool: 72, off: 1, spread: 0.8, ms: 1.2 }),
     expose: Object.freeze({ every: 0.25, on: 0.3, off: 0.5 }), refill: Object.freeze({ left: 2, quiet: 2, lull: 3 }), balcony: Object.freeze({ front: 0.4, low: 0.15 }), prep: 2 }),
   ammo: Object.freeze({ rifle: 30, reserve: 90 }),
   // 安全点那句「这儿暂时安全」：等 near 米内没有在追人的丧尸、连着 calm 秒再说（以前清完关卡马上说，常常正被几只围着咬）；等了 cap 秒还在打，换一句不说「安全」的
@@ -1767,7 +1773,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if (!eye) return false;
     const b = z && balconyOf(z);
     if (b) { if ((eye.x - b.s.x) * b.s.nx + (eye.z - b.s.z) * b.s.nz <= 0.5) return false; }
-    else if (z?.post && (!onAnchor(z) || (z.anchor === tower().roof && inHousing(z.pos.x, z.pos.z)))) return false;
+    else if (z?.pouring || (z?.post && (!onAnchor(z) || (z.anchor === tower().roof && inHousing(z.pos.x, z.pos.z))))) return false; // 还在楼梯间里往外涌的也不算
     if (gun?.canAim && !gun.canAim(at, eye)) return false;
     if (z?.anchor === tower().roof && !overParapet(eye, at)) return false;
     return sight(eye, at);
@@ -1799,7 +1805,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function spawnPosted(q, group, kind, mix = null) {
     const z = spawn(new THREE.Vector3(q.x, q.y, q.z), { kind, mix, post: q, anchor: q.floor });
     if (!z) return null;
-    Object.assign(z, { sweep: group, offT: 0, exposeOn: false, expRaw: false, expRun: 0, expDt: 0, postQ: q }); // postQ：它守的那个备选点本身（z.post 是拷贝），换点时直接看那一点这一轮的 seen
+    Object.assign(z, { sweep: group, offT: 0, houseT: 0, pouring: false, kept: false, exposeOn: false, expRaw: false, expRun: 0, expDt: 0, postQ: q }); // postQ：它守的那个备选点本身（z.post 是拷贝），换点时直接看那一点这一轮的 seen
+    if (group === 'roof') { z.side = q.side ?? sideOf(q); if (kind === 'screamer') S.sweep.screamer = true; }
     if (!S.sweep.list.includes(z)) S.sweep.list.push(z);
     return z;
   }
@@ -1807,15 +1814,17 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const disarm = (z) => { for (const r of rocks) if (r.by === z) r.by = null; };
   /** 离开了自己那一层（钻进楼梯、楼里）：收回来，在同一拨的点上重放一只同样的（不算打死）。down：屋顶上的换到楼下 */
   function respawnPosted(z, down = false) {
-    const sw = S.sweep, group = z.sweep, kind = z.kind, roof = !down && z.anchor === tower().roof, anchor = z.anchor;
+    const sw = S.sweep, group = z.sweep, kind = z.kind, roof = !down && z.anchor === tower().roof, anchor = z.anchor, kept = z.kept;
     const i = sw.list.indexOf(z); if (i >= 0) sw.list.splice(i, 1);
     z.sweep = null; disarm(z); z._deactivate();
     const pool = roof ? sw.roofPool : sw.groundPool.filter((q) => down || q.floor === anchor), taken = sw.list.map((o) => o.post).filter(Boolean);
     const free = pool.filter((q) => !taken.some((p) => Math.hypot(p.x - q.x, p.z - q.z) < 1.2));
-    const q = free.find((p) => p.seen) || free[Math.floor(rng() * free.length)] || pool[0];
-    return q ? spawnPosted(q, group, kind) : null;
+    const q = free.find((p) => p.seen) || free[Math.floor(rng() * free.length)] || pool[0], o = q && spawnPosted(q, group, kind);
+    if (!o && group) sw.total[group]--; // 放不回去了（池子满了）：从总数里去掉，HUD 和「全部清掉了」对得上
+    if (o) o.kept = kept;
+    return o || null;
   }
-  /** 守点的跟着飞机挪：按 lead 秒以后飞机的位置，现在的点那时看不见了，就换到走得到（屋顶：直线走得过去）、那时看得见、没人占着的最近一点 */
+  /** 楼下守点的跟着飞机挪：按 lead 秒以后飞机的位置，现在的点那时看不见了，就换到走得到、那时看得见、没人占着的最近一点；屋顶那一拨往集结点涌（surge） */
   // 每 every 秒一轮：先按 lead 秒以后飞机的位置给备选点打分（分到 spread × every 秒里的各帧，一帧最多 ms 毫秒——以前一帧里打一百多条跨楼层射线，
   // 清扫时每秒卡一下），打完分再挪人（它守的点这一轮的分直接用，不再打一遍）
   function repostTick(dt, rideT, live) {
@@ -1823,7 +1832,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     sw.postT -= dt;
     if (!sw.rp) {
       if (sw.postT > 0) return;
-      sw.postT = P.every; heliGun(S.flight.poseAt(rideT + P.lead), sw.frame);
+      // 还在停机位上方往上拔的时候（机枪对着天、看不着脚下）按刚飞出去那一会儿的位置算：屋顶那一拨先往飞机要去的那一边涌
+      const h = S.flight.poseAt(Math.max(rideT, S.flight.times.roof) + P.lead); sw.postT = P.every; heliGun(h, sw.frame); sw.foot = { x: h.x, z: h.z };
       sw.rp = { k: 0, pass: (sw.pass = (sw.pass || 0) + 1) };
     }
     const f = sw.frame, R = sw.rp, nr = sw.roofPool.length, all = nr + sw.groundPool.length;
@@ -1835,18 +1845,99 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     }
     if (R.k < all) return;
     sw.rp = null;
+    surge(live.filter((z) => z.post && z.anchor === roofId));
     const taken = live.map((z) => z.post).filter(Boolean);
     for (const z of live) {
-      if (!z.post) continue;
-      const roof = z.anchor === roofId, mine = z.postQ?.pooled && z.postQ.pass === R.pass && Math.hypot(z.postQ.x - z.post.x, z.postQ.z - z.post.z) < 1e-6;
-      if (mine ? z.postQ.seen : seenFrom(f, chestOf(z.post), roof)) continue;
-      const near = (roof ? sw.roofPool : sw.groundPool).filter((q) => q.seen && q.floor === z.anchor && !taken.some((p) => p !== z.post && Math.hypot(p.x - q.x, p.z - q.z) < 1.2))
-        .map((q) => [q, Math.hypot(q.x - z.pos.x, q.z - z.pos.z)]).filter(([, d]) => d < (roof ? P.roofWalk : P.groundWalk)).sort((a, b) => a[1] - b[1]);
-      for (const [q] of near.slice(0, 3)) {
-        if (roof && G.physics.nav?.clearLine && !G.physics.nav.clearLine(z.pos, q)) continue; // 屋顶：北区的机房把屋面隔成两半，绕不过去的不去
-        if (z.repost(q)) z.postQ = q; break;
-      }
+      if (!z.post || z.anchor === roofId) continue;
+      const mine = z.postQ?.pooled && z.postQ.pass === R.pass && Math.hypot(z.postQ.x - z.post.x, z.postQ.z - z.post.z) < 1e-6;
+      if (mine ? z.postQ.seen : seenFrom(f, chestOf(z.post))) continue;
+      const near = sw.groundPool.filter((q) => q.seen && q.floor === z.anchor && !taken.some((p) => p !== z.post && Math.hypot(p.x - q.x, p.z - q.z) < 1.2))
+        .map((q) => [q, Math.hypot(q.x - z.pos.x, q.z - z.pos.z)]).filter(([, d]) => d < P.groundWalk).sort((a, b) => a[1] - b[1]);
+      if (near.length && z.repost(near[0][0])) z.postQ = near[0][0];
     }
+  }
+  /**
+   * 屋顶那一拨往飞机那一边涌：每一块屋面（side）上挑几处集结点——这一轮看得见的点里离 lead 秒以后的飞机最近的（隔 gap 米；那一块一处都看不见就挑离飞机最近的），
+   * 一处大约 per 只；每只冲向离自己近、还没挤满的那一处，在它周围 r 米里挤着（每轮 churn 成的换个位置）。飞机绕着楼转，集结点跟着转，尸群就一直追着飞机跑
+   */
+  function surge(mob) {
+    const U = SIEGE.sweep.surge, sw = S.sweep, h = sw.foot || S.flight.poseAt(S.flight.times.roof + SIEGE.sweep.post.lead), by = new Map(), R = new Map();
+    for (const q of sw.roofPool) { if (!by.has(q.side)) by.set(q.side, []); by.get(q.side).push(q); }
+    // 离飞机（水平）near 米上下最好：飞机还在屋面上方的时候不挤到它正下方（机枪俯不下去、被枪身挡着），一圈站在斜下方
+    const d = (q) => Math.abs(Math.hypot(q.x - h.x, q.z - h.z) - U.near);
+    for (const [side, l] of by) {
+      const n = mob.filter((z) => z.side === side).length, k = Math.max(1, Math.min(U.rally, Math.ceil(n / U.per))), seen = l.filter((q) => q.seen), pick = [];
+      for (const q of (seen.length ? seen : l).sort((a, b) => d(a) - d(b))) { if (pick.length >= k) break; if (!pick.some((o) => Math.hypot(o.q.x - q.x, o.q.z - q.z) < U.gap)) pick.push({ q, n: 0, cap: Math.ceil(n / k) + 1 }); }
+      R.set(side, pick);
+    }
+    sw.rally = R;
+    const e = (p) => Math.hypot(p.x - h.x, p.z - h.z);
+    for (const z of [...mob].sort((a, b) => e(a.pos) - e(b.pos))) surgeOne(z);
+  }
+  /** 一只冲向它那一块屋面上离它近、还没挤满的集结点，在周围挤着（刚出门的、刚编进来的不等下一轮，马上冲） */
+  function surgeOne(z) {
+    const U = SIEGE.sweep.surge, l = S.sweep.rally?.get(z.side); if (!l?.length || !z.post) return;
+    let best = null, bd = Infinity; const hop = rng() < U.swap; // 有几成换到另一处去挤（屋面小、飞机一直在同一头的时候也不站死）
+    for (const r of l) { const e = Math.hypot(r.q.x - z.pos.x, r.q.z - z.pos.z) * (hop ? -1 : 1) + (r.n >= r.cap ? 1e3 : 0); if (e < bd) { bd = e; best = r; } }
+    best.n++;
+    if (z.surgeR === undefined || rng() < U.churn) { z.surgeA = rng() * Math.PI * 2; z.surgeR = Math.sqrt(rng()) * U.r; }
+    const q = surgeSpot(best.q, z.surgeA, z.surgeR);
+    if (Math.hypot(q.x - z.post.x, q.z - z.post.z) < 1.5) z.post.copy(q); else z.repost(q); // 挪得不多：只改目标，不打断它正走的路
+  }
+  /** 集结点 c 周围 r 米、a 方向那一点：屋面上露天、站得住、离女儿墙 1 米、离楼梯间 0.6 米、离停机位 6 米以外，和 c 之间直线走得通；不行就近一半，再不行就 c */
+  const _sp = new THREE.Vector3();
+  function surgeSpot(c, a, r) {
+    const y = padY(), { x0, x1, z0, z1 } = tb(), pad = S.plan.pad;
+    for (const k of [1, 0.5]) {
+      const x = c.x + Math.cos(a) * r * k, z = c.z + Math.sin(a) * r * k;
+      if (x < x0 + 1 || x > x1 - 1 || z < z0 + 1 || z > z1 - 1 || inHousing(x, z, 0.6) || Math.hypot(x - pad.x, z - pad.z) < 6) continue;
+      const st = landAt(nav, x, z, y + 0.6);
+      if (st && st.floor === tower().roof && Math.abs(st.y - y) < 0.3 && clear(nav, st) && (!G.physics.nav?.clearLine || G.physics.nav.clearLine(c, st))) return _sp.set(x, st.y, z);
+    }
+    return c;
+  }
+  /** 屋面上的这一点属于哪一块（side）：离它最近、直线走得通的备选点那一块 */
+  function sideOf(p) {
+    const l = S.sweep.roofPool.map((q) => [q, Math.hypot(q.x - p.x, q.z - p.z)]).sort((a, b) => a[1] - b[1]).slice(0, 6);
+    const hit = l.find(([q]) => !G.physics.nav?.clearLine || G.physics.nav.clearLine(p, q));
+    return (hit || l[0])?.[0].side ?? 0;
+  }
+  /**
+   * 守屋顶剩下的、刚从门里出来的编进屋顶那一拨。pouring：还在楼梯间里、楼梯上，照着出门的路往外走（usherTick），出了门再改成守点的（roofPour）；
+   * kept：起飞时守屋顶剩下的（不是新放的）
+   */
+  function enlist(z, { pouring = false, kept = false } = {}) {
+    Object.assign(z, { sweep: 'roof', offT: 0, houseT: 0, pouring, kept, exposeOn: false, expRaw: false, expRun: 0, expDt: 0, postQ: null, surgeR: undefined });
+    if (!pouring && z.guard(z.pos, tower().roof)) { z.side = sideOf(z.pos); surgeOne(z); }
+    if (!S.sweep.list.includes(z)) S.sweep.list.push(z);
+  }
+  /**
+   * 屋顶那一拨还没出来的：从楼梯间门里一只只涌出来（每个门 every 秒一只，在门里头的出生点冒出来、照着出门的路走出来）；屋顶上已经 peak 只了就等打掉几只。
+   * 出了门的改成守点的、马上冲向集结点。这栋楼没有门里的出生点：放在屋面上的备选点上
+   */
+  function roofPour(dt, live) {
+    const U = SIEGE.sweep.surge, sw = S.sweep, P = sw.pour, roofId = tower().roof;
+    for (const z of live) if (z.pouring && !z.exitRoute) { z.pouring = false; if (z.guard(z.pos, roofId)) { z.side = sideOf(z.pos); surgeOne(z); } }
+    if (P.left <= 0) return;
+    let up = live.filter((z) => z.sweep === 'roof').length;
+    const ex = roofExits().filter((e) => e.inner?.length), born = (z) => { P.left--; up++; live.push(z); };
+    if (!ex.length) {
+      if ((P.t -= dt) > 0 || up >= U.peak) return;
+      P.t = U.every; const q = sw.roofPool[Math.floor(rng() * sw.roofPool.length)], z = q && (spawnPosted(q, 'roof', sw.screamer ? undefined : 'screamer', U.mix) || (makeRoom() && spawnPosted(q, 'roof', undefined, U.mix)));
+      if (z) born(z);
+      return;
+    }
+    P.ts ||= ex.map((_, i) => U.first + (i * U.every) / ex.length);
+    ex.forEach((e, i) => {
+      if (P.left <= 0 || (P.ts[i] -= dt) > 0) return;
+      P.ts[i] = 0.2; if (up >= U.peak) return;
+      const q = e.inner.find((p) => !live.some((z) => Math.hypot(z.pos.x - p.x, z.pos.z - p.z) < 0.6 && Math.abs(z.pos.y - p.y) < 1)); if (!q) return; // 门里头每一处都还站着刚出来的：等它走开
+      const opts = { hunt: true, state: 'alert', mix: U.mix, kind: sw.screamer ? undefined : 'screamer' }, z = spawn(q, opts) || (makeRoom() && spawn(q, opts));
+      if (!z) return;
+      if (z.kind === 'screamer') sw.screamer = true;
+      z.exitRoute = laneRoute(e, q, (P.lane = (P.lane || 0) + 1)); z.exitT = 0;
+      enlist(z, { pouring: true }); born(z); P.ts[i] = U.every;
+    });
   }
   /**
    * 清扫要用的点：屋面上露天的点、楼下（街上、商场屋面）离外墙 6–22 米一圈的点，各按航线上看得见几成打分；还有航线上隔几秒的飞机（人眼、枪架）。
@@ -1865,7 +1956,15 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 屋顶：露天的点（不在楼梯间里），按屋顶那一段航线上看得见几成
     const grid = roofGrid(2.5); yield;
     for (const q of grid) q.score = yield* share(q, out.roofFrames, true);
-    out.roofPool = spread(grid, W.post.roofPool, (q) => q.score, 2.4, 2.4);
+    // 先隔 5 米铺满整个屋面（屋顶那一拨要往飞机那一边涌，哪一边都得有点），再按分数补到 roofPool 个（以前只挑分高的，全挤在西边一条上）
+    out.roofPool = spread(grid, W.post.roofPool, (q) => q.score, 5, 2.4);
+    // 屋面被机房、楼梯间（以后还有架机枪的台子）隔开的几块：相邻（7 米内）两点直线走得通就算同一块（side），屋顶那一拨只往自己那一块的集结点冲
+    const rp = out.roofPool, up = rp.map((_, i) => i), find = (i) => (up[i] === i ? i : (up[i] = find(up[i])));
+    for (let i = 0; i < rp.length; i++) {
+      for (let j = i + 1; j < rp.length; j++) if (find(i) !== find(j) && Math.hypot(rp[i].x - rp[j].x, rp[i].z - rp[j].z) < 7 && (!G.physics.nav?.clearLine || G.physics.nav.clearLine(rp[i], rp[j]))) up[find(i)] = find(j);
+      yield;
+    }
+    rp.forEach((q, i) => { q.side = find(i); });
     // 楼下：一次只撒一个点（撒点要找落脚的楼面，一个点就要一两毫秒），分得开的收下
     const ground = [];
     for (let k = 0; k < 160 && ground.length < W.post.groundPool; k++) {
@@ -1885,17 +1984,32 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     while (!S.prep.next().done) if (performance.now() - t0 > ms) return;
   }
   function startSweep() {
-    for (const z of zalive()) z._deactivate();
-    const W = SIEGE.sweep, T = tower();
+    const W = SIEGE.sweep, U = W.surge, T = tower();
     prepStep(Infinity);
     const P = S.prepOut;
+    // 守屋顶剩下的活的：屋面上露天的（普通的几种，巨尸、特殊感染者不算）接着当屋顶那一拨；还在楼梯间里、楼梯上照着出门的路往外走的接着往外涌；别的收掉。
+    // 最多留 peak − min 只：起飞时门里总还有 min 只涌得出来（头一只是尖叫者）
+    const keep = [], out = [];
+    for (const z of zalive()) {
+      const st = G.physics.stateOf?.(z.pos), ok = !z.special && z.kind !== 'brute' && !z.fixed && !z.post && keep.length + out.length < U.peak - U.min && typeof z.guard === 'function';
+      if (ok && st && !st.slope && st.floor === T.roof && !inHousing(z.pos.x, z.pos.z)) keep.push(z);
+      else if (ok && z.exitRoute) out.push(z);
+      else z._deactivate();
+    }
     const sw = { list: [], kill: { roof: 0, window: 0, ground: 0 }, total: { roof: 0, window: 0, ground: W.ground }, made: { ground: 0 }, t: 0, tick: 0, throwT: W.throw.first, offered: false,
-      roofPool: P.roofPool, groundPool: P.groundPool, rr: 0, postT: 0.5, down: false, frame: { eye: new THREE.Vector3(), q: new THREE.Quaternion() } };
+      roofPool: P.roofPool, groundPool: P.groundPool, rr: 0, postT: 0.5, down: false, frame: { eye: new THREE.Vector3(), q: new THREE.Quaternion() }, pour: { left: 0, t: U.first }, screamer: false, foot: null };
     S.sweep = sw;
-    // 屋顶：全在露天的点上（以前一半在楼梯口——那是楼梯间的盒子里面，飞机上看不见、打不着，它还一直在打飞机），先放在看得见得多的点上、互相分开
-    const roofAt = spread(sw.roofPool.filter((q) => q.score > 0), W.roof, (q) => q.score, 4, 1.6);
-    if (roofAt.length < W.roof) for (const q of roofOpen(W.roof * 3)) { if (roofAt.length >= W.roof) break; if (!roofAt.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 1.6)) roofAt.push(q); }
-    roofAt.slice(0, W.roof).forEach((q, i) => { if (spawnPosted(q, 'roof', i === 0 ? 'screamer' : i % 3 === 1 ? 'runner' : 'walker')) sw.total.roof++; });
+    for (const z of keep) enlist(z, { kept: true });
+    for (const z of out) enlist(z, { pouring: true, kept: true });
+    // 不够 start 只：当场补到 start 只，放在露天、看得见得多的点上、互相分开（以前一半在楼梯口——那是楼梯间的盒子里面，飞机上看不见、打不着）；头一只是尖叫者
+    const n0 = Math.max(0, U.start - keep.length - out.length), roofAt = spread(sw.roofPool.filter((q) => q.score > 0), n0, (q) => q.score, 4, 1.6);
+    if (roofAt.length < n0) for (const q of roofOpen(n0 * 3)) { if (roofAt.length >= n0) break; if (!roofAt.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 1.6)) roofAt.push(q); }
+    let made = 0; roofAt.slice(0, n0).forEach((q, i) => { if (spawnPosted(q, 'roof', i === 0 ? 'screamer' : i % 3 === 1 ? 'runner' : 'walker')) made++; });
+    // 其余的从楼梯间门里涌出来（roofPour）：这一拨一共 roof 只左右，剩下的多就再多涌 min 只，最多 max 只
+    const have = keep.length + out.length + made;
+    sw.pour.left = Math.max(0, Math.min(U.max - have, Math.max(U.min, W.roof - have)));
+    sw.total.roof = have + sw.pour.left;
+    surge(sw.list.filter((z) => z.post && z.anchor === T.roof)); // 一上来就往飞机那边冲（飞机还在停机位上方往上拔）
     // 楼里的：都在阳台的玻璃后面（窗边），不在看不见的屋里；钉在原地不动。
     // 阳台的楼板、挡板挡视线也挡子弹（登记成跨楼层射线的方盒）；人贴着玻璃站（往里站，飞机从上面看下来只看得见顶板——以前标着红点、扔着东西，人却看不见）
     const fr = W.balcony.front;
@@ -1951,19 +2065,28 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     if ((sw.tick -= dt) <= 0 && sw.made.ground < want) {
       sw.tick = 0.35;
       const s = sw.ground[sw.made.ground % sw.ground.length];
-      // 尖叫者一共三只（屋顶一只、楼下两只），别的不会随机抽到它
-      spawnPosted(s, 'ground', sw.made.ground === 2 || sw.made.ground === 9 ? 'screamer' : sw.made.ground % 3 === 0 ? 'runner' : undefined, { walker: 0.7, runner: 0.2, bloater: 0.1, screamer: 0 });
-      sw.made.ground++;
+      // 尖叫者一共三只（屋顶一只、楼下两只），别的不会随机抽到它。池子满了先收尸体，还放不下等下一下（不白算一只——以前 HUD 会挂着「楼下 17/18」）
+      const kind = sw.made.ground === 2 || sw.made.ground === 9 ? 'screamer' : sw.made.ground % 3 === 0 ? 'runner' : undefined, mix = { walker: 0.7, runner: 0.2, bloater: 0.1, screamer: 0 };
+      if (spawnPosted(s, 'ground', kind, mix) || (makeRoom() && spawnPosted(s, 'ground', kind, mix))) sw.made.ground++;
     }
+    // 屋顶那一拨：从楼梯间门里涌出来、出了门冲向集结点
+    roofPour(dt, sw.list.filter((z) => z.alive && z.active)); usherTick(dt);
     // 降到低空以后屋顶就看不见了（机枪仰不上去、楼板挡着）：屋顶上剩下的从楼里下来，冲到街上
+    // 还没涌出来的不出来了；下来的最多 surge.down 只（屋顶那一大群都下来，楼下的池子就不够放了），别的收掉、从总数里去掉
     if (!sw.down && rideT >= S.flight.times.ground) {
-      sw.down = true; let n = 0;
-      for (const z of sw.list.filter((q) => q.alive && q.active && q.anchor === tower().roof)) if (respawnPosted(z, true)) n++;
+      sw.down = true; let n = 0; sw.total.roof -= sw.pour.left; sw.pour.left = 0;
+      for (const z of sw.list.filter((q) => q.alive && q.active && q.sweep === 'roof').sort((a, b) => (b.kind === 'screamer') - (a.kind === 'screamer'))) { // 尖叫者先下来
+        if (n < W.surge.down && respawnPosted(z, true)) { n++; continue; }
+        if (z.sweep) { sw.total.roof--; const i = sw.list.indexOf(z); if (i >= 0) sw.list.splice(i, 1); z.sweep = null; disarm(z); z._deactivate(); }
+      }
       if (n) G.hud?.radio?.(`屋顶上剩下的 ${n} 只从楼里下来了，在楼下！`, 3.5);
+      G.game?.refreshObjective?.();
     }
-    // 钻进楼梯、楼里的（离开自己那一层一秒多）：收回来，在同一拨的点上重放（不算打死）
+    // 钻进楼梯、楼里的（离开自己那一层一秒多）、屋顶上的在楼梯间盒子里待了 house 秒（看不见、打不着）：收回来，在同一拨的点上重放（不算打死）
     for (const z of sw.list.filter((q) => q.alive && q.active && q.post)) {
-      if (onAnchor(z)) z.offT = 0; else if ((z.offT = (z.offT || 0) + dt) > W.post.off) respawnPosted(z);
+      if (!onAnchor(z)) { if ((z.offT = (z.offT || 0) + dt) > W.post.off) respawnPosted(z); continue; }
+      z.offT = 0;
+      if (z.anchor === tower().roof && inHousing(z.pos.x, z.pos.z)) { if ((z.houseT = (z.houseT || 0) + dt) > W.surge.house) respawnPosted(z); } else z.houseT = 0;
     }
     const live = sw.list.filter((z) => z.alive && z.active);
     repostTick(dt, rideT, live);
@@ -1986,7 +2109,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 清完了（该出来的都出来了、一个不剩）：先问要不要炸楼，不炸（或者时间到了）就返航；炸的话拉高飞走，机外镜头看着楼垮。
     // 绕楼下转圈的时候还剩在高层阳台上的（机枪仰不上去、再也打不着）不挡
     const left = live.filter((z) => !(z.sweep === 'window' && rideT >= S.flight.times.ground && !(balconyOf(z)?.low >= W.balcony.low)));
-    if (!S.flight.leaving && sw.made.ground >= W.ground && rideT > 12 && !left.length) {
+    if (!S.flight.leaving && sw.made.ground >= W.ground && !sw.pour.left && rideT > 12 && !left.length) {
       if (!sw.offered) {
         // 够不着的那几只（高层阳台）这会儿收掉、从总数里去掉：HUD 和「全部清掉了」对得上（以前清完了 HUD 还挂着「阳台 9/12」）
         if (live.length) { for (const z of live) { if (z.sweep) sw.total[z.sweep]--; z.sweep = null; disarm(z); z._deactivate(); } G.game?.refreshObjective?.(); }

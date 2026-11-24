@@ -78,6 +78,12 @@ for (const tower of ['A', 'T1']) {
     assert.equal(S.prepOut, prep, '同一局、同一条航线：算好的清扫点留着');
     assert.ok(atDoor(), '走到登机门就上飞机'); assert.equal(director.state.phase, 'board');
     assert.ok(S.sweep && S.sweep.list.length > 0, '清扫开始了');
+    // 重来以后屋顶照样是一大群：先补到 start 只，再从楼梯间门里涌出来，起飞十来秒屋顶上二十只以上；HUD 的总数是这一拨实际要出来的
+    const sw = S.sweep, U = SIEGE.sweep.surge, roofOut = () => sw.list.filter((z) => z.alive && z.active && z.sweep === 'roof' && !z.pouring).length;
+    assert.ok(sw.list.filter((z) => z.sweep === 'roof').length >= U.start && sw.total.roof >= SIEGE.sweep.roof && sw.pour.left > 0, `重来：屋顶 ${sw.list.filter((z) => z.sweep === 'roof').length} 只、一共 ${sw.total.roof}`);
+    let most = 0; for (let k = 0; k < 30; k++) { step(0.5); most = Math.max(most, roofOut()); }
+    assert.equal(director.state.phase, 'ride'); assert.ok(most >= 20, `${tower} 重来以后屋顶上最多同时 ${most} 只`);
+    assert.equal(sw.list.filter((z) => z.sweep === 'roof').length + sw.kill.roof + sw.pour.left, sw.total.roof, '还在的 + 打死的 + 没出来的 = 总数');
     // 再换一局（不是从登机点重来）：清扫点扔掉重算
     director.state.retryArmed = false; G.player.alive = true; reset();
     assert.equal(director.state.restore, false); assert.equal(S.prepOut, null); assert.equal(G.level.extraction, null, '新的一局登机门照旧关着');

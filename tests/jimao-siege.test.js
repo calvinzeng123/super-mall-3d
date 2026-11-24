@@ -619,20 +619,23 @@ test('守屋顶：一波波从楼梯口上来，倒计时走完直升机从天�
   // 登机
   director.riding = true; m.extraction.ride.onBoard();
   const sw = S.sweep; assert.ok(sw);
-  assert.equal(sw.list.filter((z) => z.sweep === 'roof').length, SIEGE.sweep.roof); assert.equal(sw.list.filter((z) => z.sweep === 'window').length, SIEGE.sweep.window);
+  const U = SIEGE.sweep.surge, roof0 = sw.list.filter((z) => z.sweep === 'roof').length; // 屋顶：守屋顶剩下的 + 当场补到 start 只，其余从门里涌出来
+  assert.ok(roof0 >= U.start && sw.total.roof === roof0 + sw.pour.left && sw.total.roof >= SIEGE.sweep.roof && sw.total.roof <= U.max, `屋顶 ${roof0} 只、一共 ${sw.total.roof}`);
+  assert.equal(sw.list.filter((z) => z.sweep === 'window').length, SIEGE.sweep.window);
   assert.ok(sw.list.filter((z) => z.sweep === 'window').every((z) => z.fixed), '阳台上的钉在原地');
-  assert.ok(sw.list.some((z) => z.kind === 'screamer'), '屋顶上有尖叫者');
   let t = 0; const tick = (secs) => { for (let k = 0; k < secs * 30; k++) { t += 1 / 30; m.extraction.ride.spawns(1 / 30, t); } };
-  tick(20); const half = sw.list.filter((z) => z.sweep === 'ground').length; assert.ok(half >= 5 && half <= SIEGE.sweep.ground / 2 + 1, `前半程楼下出来 ${half} 只`);
+  tick(20); assert.ok(sw.screamer && sw.list.some((z) => z.kind === 'screamer' && z.sweep === 'roof' && !z.kept), '屋顶上有尖叫者（当场补的头一只，没补的话从门里头一个出来）');
+  const half = sw.list.filter((z) => z.sweep === 'ground').length; assert.ok(half >= 5 && half <= SIEGE.sweep.ground / 2 + 1, `前半程楼下出来 ${half} 只`);
   t = m.extraction.flight.times.ground; tick(8); assert.equal(sw.made.ground, SIEGE.sweep.ground);
-  assert.equal(sw.list.filter((z) => z.kind === 'screamer').length, SIEGE.sweep.screamers, '尖叫者一共三只');
+  assert.equal(sw.list.filter((z) => z.kind === 'screamer' && !z.kept).length, SIEGE.sweep.screamers, '新放的尖叫者一共三只（守屋顶剩下的不算）');
   assert.equal(m.extraction.ride.targets().length, sw.list.filter((z) => z.alive).length);
-  assert.match(m.text({ allCut: true }, { kills: 0 }), new RegExp(`清扫 · 屋顶 0/${SIEGE.sweep.roof} · 阳台 0/${SIEGE.sweep.window} · 楼下 0/${SIEGE.sweep.ground}`));
+  assert.match(m.text({ allCut: true }, { kills: 0 }), new RegExp(`清扫 · 屋顶 0/${sw.total.roof} · 阳台 0/${SIEGE.sweep.window} · 楼下 0/${SIEGE.sweep.ground}`));
+  assert.equal(sw.pour.left, 0, '降到低空以后屋顶上不再涌出来');
   // 打一只阳台上的：玻璃先碎
   const bz = sw.list.find((z) => z.sweep === 'window'); bz.damage(10, null, null, 'body');
   assert.equal(m.extraction.flight.leaving, false);
   for (const z of sw.list) if (z.alive) z.damage(9999, null, null, 'body');
-  assert.match(m.text({ allCut: true }, { kills: 0 }), new RegExp(`屋顶 ${SIEGE.sweep.roof}/${SIEGE.sweep.roof} · 阳台 ${SIEGE.sweep.window}/${SIEGE.sweep.window}`));
+  assert.match(m.text({ allCut: true }, { kills: 0 }), new RegExp(`屋顶 ${sw.total.roof}/${sw.total.roof} · 阳台 ${SIEGE.sweep.window}/${SIEGE.sweep.window}`));
   // 清完了：先问要不要炸楼（还不返航）；没选、时间到了才返航
   tick(0.2); assert.equal(siege.demo.offered, true, '清完先问炸不炸'); assert.equal(m.extraction.flight.leaving, false);
   assert.ok(m.extraction.ride.outroCam({ x: SIEGE.pad.x + 30, y: 90, z: SIEGE.pad.z }), '没选：机外镜头照旧架在楼顶边上');
@@ -1361,8 +1364,8 @@ test('跨楼层的视线：从楼外看楼顶楼梯间里面，原来的射线�
   gun.dispose();
 });
 
-/** 一趟假的清扫：直升机按航线飞（人眼、枪架按 heliGun 算），不开枪；返回推进的办法 */
-function fakeRide(tower) {
+/** 一趟假的清扫：直升机按航线飞（人眼、枪架按 heliGun 算），不开枪；返回推进的办法。survivors：登机时屋顶上再多放几只追人的（守屋顶剩下的）；clear：登机前清场（屋顶上只有当场补的） */
+function fakeRide(tower, { survivors = 0, clear = false } = {}) {
   const w = sworld({ tower }), { G, siege, director, begin, cut, run, zombies, player } = w;
   const m = begin(); cut(m.plan.stages.length); run(0.1); for (const z of zombies.alive()) z._deactivate();
   siege.state.hold = SIEGE.hold - 0.2; run(SIEGE.land + 2); director.riding = true;
@@ -1370,19 +1373,21 @@ function fakeRide(tower) {
   let t = 0;
   G.missions = { rideKind: 'helicopter', vehicleCenter: () => { const p = F.poseAt(t); return new THREE.Vector3(p.x, p.y + 1.4, p.z); },
     doorGun: { eye: (o) => o.copy(frame.eye), canAim: (p, from) => inGunArc(aimAngles(frame.q, from || frame.eye, p, aa)) }, rideCanAttack: (z, fresh) => m.extraction.ride.canAttack(z, fresh) };
+  if (clear) for (const z of zombies.alive()) z._deactivate();
+  for (const q of siege.roofOpen(survivors)) G.enemies.spawn('zombie', q.clone(), { kind: 'walker', hunt: true, state: 'alert' });
   m.extraction.ride.onBoard();
   const step = (secs, each) => { for (let k = 0; k < secs * 30; k++) { t += 1 / 30; G.time.frame++; heliGun(F.poseAt(t), frame); player.pos.copy(frame.eye).y -= 1.62; m.extraction.ride.spawns(1 / 30, t); for (const q of [...w.ctx.list]) q._update(1 / 30); each?.(t); } };
   return { ...w, m, F, frame, step, aa, sw: siege.state.sweep, time: () => t };
 }
 const inBox = (b, p, pad = 0) => p.x > b.x0 - pad && p.x < b.x1 + pad && p.z > b.z0 - pad && p.z < b.z1 + pad;
 
-test('清扫的屋顶：十四只全在露天的屋面上（不在楼梯间、电梯井里），屋顶那一段航线上大多看得见；守屋顶时尸群从楼梯间门外出来，那些点站得住、看得见停机位', () => {
+test('清扫的屋顶：当场补的那十几只全在露天的屋面上（不在楼梯间、电梯井里），屋顶那一段航线上大多看得见；守屋顶时尸群从楼梯间门外出来，那些点站得住、看得见停机位', () => {
   for (const tower of ['A', 'T1']) {
-    const { siege, m, F, sw } = fakeRide(tower), T = TOWERS[tower], roof = elev(T.roof), boxes = siege.housings(), P = createMapPhysics(nav);
+    const { siege, m, F, sw } = fakeRide(tower, { clear: true }), T = TOWERS[tower], roof = elev(T.roof), boxes = siege.housings(), P = createMapPhysics(nav);
     const lv = L.levels.find((l) => l.id === T.roof), stairs = lv.rooms.filter((r) => r.type === 'stair');
     assert.ok(boxes.length >= stairs.length && stairs.every((r) => boxes.some((b) => r.polys[0].every(([x, z]) => x >= b.x0 - 1e-6 && x <= b.x1 + 1e-6 && z >= b.z0 - 1e-6 && z <= b.z1 + 1e-6))), `${tower} 楼梯间都算进去了`);
     const top = sw.list.filter((z) => z.sweep === 'roof');
-    assert.equal(top.length, SIEGE.sweep.roof);
+    assert.equal(top.length, SIEGE.sweep.surge.start); assert.equal(sw.total.roof, SIEGE.sweep.roof);
     const frames = []; for (let t = F.times.roof + 1; t < F.times.windows; t += 2.5) frames.push(heliGun(F.poseAt(t)));
     const shares = top.map((z) => {
       const st = landAt(nav, z.pos.x, z.pos.z, z.pos.y + 0.6); assert.equal(st.floor, T.roof, `${tower} 在屋面上`); assert.ok(!boxes.some((b) => inBox(b, z.pos, 0.5)), `${tower} (${z.pos.x.toFixed(1)}, ${z.pos.z.toFixed(1)}) 在楼梯间外面`);
@@ -1433,6 +1438,46 @@ test('清扫时守点：八十秒假航线上屋顶、楼下的丧尸不往楼�
     assert.deepEqual(bad, [], `${tower} 看不见 / 射界外的打着了飞机`);
     assert.ok(marks > 100 && markBad === 0, `${tower} HUD 标记 ${marks}`);
     assert.ok(sw.list.filter((z) => z.sweep === 'roof').every((z) => !z.alive || z.anchor !== TOWERS[tower].roof), `${tower} 降到低空以后屋顶上剩下的都下到楼下了`);
+  }
+});
+
+test('清扫的屋顶是一大群、一直在动：守屋顶剩下的接着当屋顶的，再从楼梯间门里涌出来，起飞十几秒屋顶上二十只以上；跟着飞机挪、挤成几堆，不进楼梯间、不离开屋面；HUD 的总数对得上', () => {
+  for (const tower of ['A', 'T1']) {
+    const { siege, m, sw, step, F, time } = fakeRide(tower, { survivors: 5 }), T = TOWERS[tower], boxes = siege.housings(), U = SIEGE.sweep.surge;
+    const kept = sw.list.filter((z) => z.kept);
+    // 守屋顶最后那几波、加上这 5 只：屋面上露天的都留下（还在楼梯间里往外走的接着往外走），不够 start 只的当场补
+    const outNow = kept.filter((z) => !z.pouring);
+    assert.ok(outNow.length >= 5 && kept.every((z) => z.sweep === 'roof' && (z.pouring ? !!z.exitRoute : !z.hunt && z.post && z.anchor === T.roof)), `${tower} 守屋顶剩下的 ${kept.length} 只接着当屋顶的`);
+    assert.equal(sw.list.filter((z) => z.sweep === 'roof').length, Math.max(U.start, kept.length), `${tower} 当场补到 ${U.start} 只`);
+    assert.ok(sw.total.roof === Math.max(U.start, kept.length) + sw.pour.left && sw.total.roof >= SIEGE.sweep.roof && sw.total.roof <= U.max && sw.pour.left >= U.min, `${tower} 这一拨一共 ${sw.total.roof} 只、还要涌出来 ${sw.pour.left} 只`);
+    assert.match(m.text({ allCut: true }, {}), new RegExp(`屋顶 0/${sw.total.roof} `));
+    const top = () => sw.list.filter((z) => z.alive && z.active && z.sweep === 'roof' && !z.pouring);
+    const open = (z) => { const st = landAt(nav, z.pos.x, z.pos.z, z.pos.y + 0.6); return !!st && !st.slope && st.floor === T.roof && !boxes.some((b) => inBox(b, z.pos)); };
+    let most = 0, mostAt = 0, bad = 0, samples = 0, clump = 0, nearer = 0, looks = 0, poured = 0;
+    const look = (t) => {
+      if (Math.round(t * 30) % 15) return;
+      const l = top(), h = F.poseAt(t); most < l.length && (most = l.length, mostAt = t);
+      for (const z of l) { samples++; if (!open(z)) bad++; clump = Math.max(clump, l.filter((o) => o !== z && Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z) < 3).length); }
+      poured = Math.max(poured, sw.list.filter((z) => z.sweep === 'roof' && !z.kept && z.pouring === false && !z.postQ).length);
+      // 往飞机那一边涌：离飞机（水平）比屋面上的点平均近 3 米以上
+      if (t > 8 && l.length) { looks++; const d = (p) => Math.hypot(p.x - h.x, p.z - h.z), a = l.reduce((s, z) => s + d(z.pos), 0) / l.length, b = sw.roofPool.reduce((s, q) => s + d(q), 0) / sw.roofPool.length; if (a < b - 3) nearer++; }
+    };
+    step(15, look);
+    assert.ok(most >= 20 && mostAt <= 15, `${tower} 屋顶上最多同时 ${most} 只（${mostAt.toFixed(1)} 秒）`);
+    assert.ok(poured >= 8, `${tower} 从门里涌出来 ${poured} 只`);
+    // 一直在动：接下来 8 秒里大多数走了好几米（每 0.5 秒量一次、加起来），公寓屋面大、离开原地也有好几米
+    const p0 = new Map(top().map((z) => [z, z.pos.clone()])), last = new Map(top().map((z) => [z, z.pos.clone()])), walk = new Map();
+    step(8, (t) => { look(t); if (Math.round(t * 30) % 15) return; for (const [z, p] of last) { walk.set(z, (walk.get(z) || 0) + Math.hypot(z.pos.x - p.x, z.pos.z - p.z)); p.copy(z.pos); } });
+    const live = [...p0.keys()].filter((z) => z.alive && z.active), mid = (l) => l.sort((a, b) => a - b)[Math.floor(l.length / 2)];
+    const d = live.map((z) => Math.hypot(z.pos.x - p0.get(z).x, z.pos.z - p0.get(z).z)), w = live.map((z) => walk.get(z));
+    assert.ok(live.length >= 15 && mid(w) > 4 && (tower !== 'A' || mid(d) > 3), `${tower} 8 秒走了 ${w.map((x) => x.toFixed(1)).join(' ')}，离开原地 ${d.map((x) => x.toFixed(1)).join(' ')}`);
+    assert.ok(bad <= samples * 0.02, `${tower} 不在露天屋面上 ${bad} / ${samples}`);
+    assert.ok(clump >= 5, `${tower} 挤成堆：一只身边 3 米内最多 ${clump} 只`);
+    assert.ok(nearer >= looks * 0.7, `${tower} 往飞机那边涌 ${nearer} / ${looks}`);
+    // 打掉屋顶上的，门里接着涌，直到这一拨出齐；HUD 的分子分母对得上
+    while (time() < 60 && (sw.pour.left || sw.list.some((z) => z.alive && z.active && z.sweep === 'roof'))) step(1, () => { for (const z of top()) if (z.exposeOn || Math.round(time() * 30) % 30 === 0) z.damage(9999, null, null, 'body'); });
+    const hud = /屋顶 (\d+)\/(\d+)/.exec(m.text({ allCut: true }, {}));
+    assert.equal(sw.pour.left, 0); assert.ok(hud && +hud[1] === sw.kill.roof && +hud[2] === sw.total.roof && sw.kill.roof === sw.total.roof, `${tower} ${hud?.[0]} 还剩 ${JSON.stringify(sw.list.filter((z) => z.alive && z.sweep === 'roof').map((z) => [z.pouring, !!z.exitRoute, z.exitT?.toFixed(1), z.kept, z.zs, z.pos.toArray().map((v) => +v.toFixed(1))]))} t=${time().toFixed(1)}`);
   }
 });
 
@@ -1549,7 +1594,7 @@ test('清扫打得快的：楼下第一批打光了第二批马上冲出来（�
     const hud = /屋顶 (\d+)\/(\d+) · 阳台 (\d+)\/(\d+) · 楼下 (\d+)\/(\d+)/.exec(m.text({ allCut: true }, {}));
     assert.ok(hud && hud[1] === hud[2] && hud[3] === hud[4] && hud[5] === hud[6], `${tower} ${hud?.[0]}`);
     assert.equal(m.extraction.ride.targets().length, 0);
-    assert.ok(sw.total.window <= SIEGE.sweep.window && sw.total.roof === SIEGE.sweep.roof && sw.total.ground === SIEGE.sweep.ground);
+    assert.ok(sw.total.window <= SIEGE.sweep.window && sw.total.roof === sw.kill.roof && (passive || sw.total.roof >= 20) && sw.total.ground === SIEGE.sweep.ground, `${tower} ${JSON.stringify(sw.total)}`);
   }
   assert.ok(fires.length >= 3, `一共砸着飞机 ${fires.length} 下`);
 });
