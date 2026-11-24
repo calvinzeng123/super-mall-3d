@@ -466,6 +466,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     G.level.extraction = null; G.game?.refreshObjective?.();
     if (camera) { from.pos.copy(camera.position); from.quat.copy(camera.quaternion); }
     G.weapon?.setVisible?.(false);
+    // 地上那些还没播完的无线电（原游戏的无线电一句接一句排队：守屋顶时队友喊的「尖叫者！先打它！」、楼里的台词）登机时清掉——
+    // 不然排在后面，飞机上、看炸楼时才轮到它播，喊的是早就不在的东西
+    G.hud?.clearRadio?.();
     G.hud?.radio?.(rideHooks()?.boardRadio || (vv.kind === 'helicopter' ? '上机！左舷机枪交给你，绕楼顶一圈，把冲上来的敌人全部清掉。' : '上车！从车顶射击口压制沿路的敌人，我们冲出去！'), 4.5);
     rideHooks()?.onBoard?.();
   }

@@ -1588,18 +1588,20 @@ test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那
     };
     light(); assert.ok(S.hold >= 0, '点着了');
     assert.ok(deep.every((z) => !z.active), '楼里落在下面的收回池子');
-    const chest = new THREE.Vector3(), out = new Map(), seenN = []; let k = 0;
+    const chest = new THREE.Vector3(), out = new Map(), seenN = [], aliveN = []; let k = 0;
     run(SIEGE.hold - 0.5, () => {
       player.pos.set(px, roof, pz);
       for (const b of born) if (b.door && !out.has(b) && b.zb.__life === b.id && b.zb.alive && b.zb.active && !inStairs(siege, roof, b.zb.pos)) out.set(b, S.hold - b.t);
-      if (++k % 30 === 0) seenN.push([S.hold, zombies.alive().filter((z) => Math.abs(z.pos.y - roof) < 1 && G.physics.lineOfSight(eye, chest.set(z.pos.x, z.pos.y + 1.2, z.pos.z))).length]);
+      if (++k % 30 === 0) { seenN.push([S.hold, zombies.alive().filter((z) => Math.abs(z.pos.y - roof) < 1 && G.physics.lineOfSight(eye, chest.set(z.pos.x, z.pos.y + 1.2, z.pos.z))).length]); aliveN.push([S.hold, zombies.alive().length]); }
       if (k % 21) return; // 0.7 秒打死一只看得见的（最近的）
       let best = null, bd = Infinity;
       for (const z of zombies.alive()) { if (Math.abs(z.pos.y - roof) > 1) continue; chest.set(z.pos.x, z.pos.y + 1.2, z.pos.z); const d = eye.distanceTo(chest); if (d < bd && G.physics.lineOfSight(eye, chest)) { bd = d; best = z; } }
       best?.damage(9999, null, null, 'body');
     });
     const inWin = (a, b) => born.filter((q) => q.t >= a && q.t < b).length;
-    SIEGE.waves.slice(0, 5).forEach((w, i) => assert.ok(inWin(w, w + 7) >= SIEGE.waveSize[0], `${tower} 第 ${i + 1} 波出来 ${inWin(w, w + 7)} 只`));
+    // 北区一波 22–25 只、只有一个口子：人打得慢（这里 0.7 秒才打死一只）的话屋顶上活着的就把池子占满了，那一波等腾出位置再出来——只有这时候才许出不满
+    const packed = (a, b) => aliveN.some(([t, n]) => t >= a && t < b && n >= ZOMBIE.pool - 4);
+    SIEGE.waves.slice(0, 5).forEach((w, i) => assert.ok(inWin(w, w + 7) >= SIEGE.waveSize[0] || (tower === 'T1' && packed(w, w + 7)), `${tower} 第 ${i + 1} 波出来 ${inWin(w, w + 7)} 只`));
     const surge = inWin(SIEGE.hold - SIEGE.surge.last, SIEGE.hold);
     assert.ok(surge >= SIEGE.surge.each * 4, `${tower} 最后那阵出来 ${surge} 只`);
     // 楼梯口那一份：楼梯间里、人看不见、离人 5 米以外冒出来；翻墙上来的：屋面上、楼梯间外、离人 10 米以外
@@ -1758,6 +1760,61 @@ test('守屋顶围上来的：贴着人同时抡、咬的最多三只（巨尸�
   assert.ok(most >= 2 && most <= SIEGE.crowd.bite, `同时在咬的最多 ${most}`);
   assert.equal(siege.mateBites(10), SIEGE.crowd.mateBite * SIEGE.crowd.mate); assert.equal(siege.mateBites(1), SIEGE.crowd.mate);
   S.landed = true; assert.equal(siege.mateBites(10), 10, '不在守屋顶照实算');
+});
+
+test('北区守屋顶：只有一个口子正对着人——一整波都排得下（不扔掉多的），门洞里几只并排挤出来（不是一只跟着一只在门口被点名）；公寓照旧一条道', () => {
+  const T1 = holdWorld('T1'), H = TOWERS.T1.hold;
+  assert.ok(H.lanes >= 2 && H.queue >= H.waveSize[1], '北区的口子排得下一整波、几条道并排');
+  const { siege, zombies, enemies, player, run, roof, px, pz, S, light } = T1;
+  const born = [], sp = enemies.spawn.bind(enemies);
+  enemies.spawn = (t, pos, o) => { const z = sp(t, pos, o); if (z) born.push({ t: S.hold, door: inStairs(siege, roof, pos) }); return z; };
+  light();
+  const ex = siege.roofExits()[0], g = ex.gap, ux = Math.abs(g.nz), uz = Math.abs(g.nx), side = new Set(); let abreast = 0;
+  run(SIEGE.waves[1] - 0.5, () => {
+    player.pos.set(px, roof, pz); player.health = 100; player.alive = true;
+    // 刚出门的（门洞外 0–1.5 米）横着分在门洞的哪一段
+    const at = zombies.alive().filter((z) => { const o = (z.pos.x - g.x) * g.nx + (z.pos.z - g.z) * g.nz; return Math.abs(z.pos.y - roof) < 0.4 && o > 0 && o < 1.5; }).map((z) => (z.pos.x - g.x) * ux + (z.pos.z - g.z) * uz);
+    for (const v of at) side.add(Math.round(v / 0.8));
+    abreast = Math.max(abreast, at.length && Math.max(...at) - Math.min(...at));
+  });
+  const wave1 = born.filter((b) => b.door && b.t < SIEGE.waves[1]).length;
+  assert.ok(wave1 >= H.waveSize[0] - 4, `第一波从楼梯间里出来 ${wave1} 只（一个口子以前最多排 ${SIEGE.spawn.queue} 只）`);
+  assert.ok(side.size >= 3 && abreast >= 1.2, `出门时横着散开 ${abreast.toFixed(1)} 米、占了门洞 ${side.size} 段`);
+  assert.ok(zombies.alive().length + born.length > 0);
+  // 公寓：两个口子各排 16 只、一条道（这一份没动）
+  const A = holdWorld('A'); A.light(); A.run(1); assert.ok(A.siege.roofExits().every((e) => e.inner.every((q) => !q.lanes)), '公寓不分道');
+});
+
+test('楼顶的出口（守屋顶的出生点、出门的路，几十条寻路）开局起在后台分帧算：落点算完以后一两秒就好了，清掉最后一道关那一帧不用再算；和一口气算的一样', () => {
+  for (const tower of ['A', 'T1']) {
+    const { siege, begin, run } = sworld({ tower });
+    begin(); siege.prepareFloors(); const S = siege.state, roofId = TOWERS[tower].roof;
+    let frames = 0; while (S.exits?.roof !== roofId && frames < 150) { run(1 / 30); frames++; }
+    assert.ok(S.exits?.roof === roofId && frames > 3, `${tower} 分 ${frames} 帧算完`);
+    assert.equal(S.stage, 0, '还在开局那家店里');
+    const w = sworld({ tower }); w.begin(); const sync = w.siege.roofExits(), bg = siege.roofExits();
+    assert.equal(bg, S.exits.list, '算好了直接用');
+    assert.deepEqual(bg.map((e) => [e.x, e.z, e.inner.length, e.spots.length]), sync.map((e) => [e.x, e.z, e.inner.length, e.spots.length]), `${tower} 分帧算的和一口气算的一样`);
+    assert.ok(bg.length && bg.every((e) => e.inner.length >= 5), `${tower} 门里头的出生点 ${bg.map((e) => e.inner.length).join('/')}`);
+  }
+});
+
+test('直升机落稳以后（跑去登机那几步）：排着队的那几波收掉，不再来新的一波、不催尸潮、不放特殊感染者，只从楼梯间门里零零星星出来几只', () => {
+  for (const tower of ['A', 'T1']) {
+    const { siege, zombies, enemies, player, run, roof, px, pz, S, light } = holdWorld(tower);
+    light(); S.hold = SIEGE.hold - 0.1; run(SIEGE.land + 0.3);
+    assert.equal(S.landed, true);
+    assert.ok((S.pourQ || []).every((e) => !e.q.length), `${tower} 排着队还没出来的收掉了`);
+    for (const z of zombies.alive()) z._deactivate();
+    // 节奏器正要催一波尸潮、马上该放一只特殊感染者，响动条也满着：落稳以后都不算
+    Object.assign(siege.pacing.state, { phase: 'build', warned: true, left: 0.2, specialT: 0.1 }); S.noise = 140; S.hordeCool = 0;
+    const born = [], sp = enemies.spawn.bind(enemies);
+    enemies.spawn = (t, pos, o) => { const z = sp(t, pos, o); if (z) born.push({ z, pos: pos.clone() }); return z; };
+    run(10, () => { player.pos.set(px, roof, pz); player.health = 100; player.alive = true; });
+    assert.ok(born.length >= 2 && born.length <= Math.ceil(10 / SIEGE.board.every) + 1, `${tower} 落稳以后 10 秒出来 ${born.length} 只`);
+    assert.ok(born.every((b) => inStairs(siege, roof, b.pos)), `${tower} 都是从楼梯间门里出来的`);
+    assert.ok(born.every((b) => !b.z.special), `${tower} 不放特殊感染者`);
+  }
 });
 
 // ---- 救人：小许出得来、跟得上 ----
