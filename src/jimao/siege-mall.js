@@ -24,8 +24,9 @@ export const MALL = Object.freeze({
   pad: Object.freeze({ leash: 0.35, path: 0.5, hose: 0.3 }),
   gen: Object.freeze({ seconds: 25, every: 4.5, each: 2 }), out: 3,
   // 救人：被困的店离撬棍那家、扶梯口都至少 near 米；护送时隔 every 秒从看不见的地方来 each 只，追人的最多 mob 只先扑小许，小许走到扶梯口 arrive 米内算到；
-  // 卷帘撬开以后小许先走到门洞外 out 米、往旁边挪 side 米的地方（不挡在撬门的人跟前）
-  rescue: Object.freeze({ near: 8, every: 7, each: 2, mob: 2, arrive: 4.5, out: 1.0, side: 1.4 }),
+  // 卷帘撬开以后小许先走到门洞外 out 米、往旁边挪 side 米的地方（不挡在撬门的人跟前）；
+  // soft：你手里还没枪（只有刀 / 斧子）时小许挨一口只掉这么多成（一口多少、同时几只咬得到见 squad.js 的 SQUAD.guest）
+  rescue: Object.freeze({ near: 8, every: 7, each: 2, mob: 2, arrive: 4.5, out: 1.0, side: 1.4, soft: 0.6 }),
   // 消防斧：开局那家店门口的消火栓箱（宽 w 米），站到箱子正前方 out 米捡。先找门对面：出门 lo–hi 米是中庭栏杆（地面到头），
   // 箱子连着石材壁柱背靠栏杆（离地面边 edge 米）、正面朝着门（卷帘一起来，从门里就看得见），顺着门脸往 side 里那几个距离挪开一点（不挡出门的路），
   // 站到箱子正前方 across 米捡（壁柱 + 箱子厚 depth 米，人离它 siege.js 的 MALL.pad.leash 米就停）；门对面没有栏杆就退回门洞旁边的实墙上（离门洞 gap 米）

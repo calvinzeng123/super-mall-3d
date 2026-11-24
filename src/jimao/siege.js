@@ -1009,7 +1009,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
           // 炸楼是在飞机上看完的（观看圈）；最后离开那几秒照常切机外镜头（楼都垮了，不用再架在楼顶边上）
           outroTick: (dt) => { if (demo.running) demo.tick(dt); }, outroTitle: () => (demo.chosen ? '<b>大楼已炸毁</b>直升机已离开云澜汇上空' : null),
           ground: (s0) => landAt(nav, s0.x, s0.z, s0.y)?.y ?? 0 } }, // 坠机落在哪：正下方最高的那层楼面（楼顶 / 商场屋面 / 街上）
-      text: (c, ride) => textNow(c, ride), markers: () => [],
+      text: (c, ride) => textNow(c, ride), markers: () => guestMarks(),
       radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你们被困在三层的店里，手上只有一把刀、两颗手雷。先想办法出去，一层一层往下摸到保安室拿枪，再上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName) + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
         contact: '它们发现你了！', cut: plan.stages.slice(0, -1).map((st, i) => cutLine(plan, i)), all: `信号弹点着了！直升机 ${SIEGE.hold} 秒后到，守住屋顶！`, low: '你被咬伤了，拉开距离。', done: '指挥中心收到。幸存者已撤离云澜汇——干得漂亮。' } };
     S.plan = plan; S.mission = m; S.flight = flight;
@@ -2158,11 +2158,25 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     }
     // 追人的先扑小许——最多 mob 只（离他近的先）：这时你手里只有斧子，一下子全扑上去十几秒就把他啃倒了，剩下的照样冲你来
     if (xu && !xu.down) { let n = 0; for (const z of zalive().filter((q) => q.zs === 'chase' && Math.abs(q.pos.y - xu.pos.y) < 2 && Math.hypot(q.pos.x - xu.pos.x, q.pos.z - xu.pos.z) < 12).sort((a, b) => a.pos.distanceTo(xu.pos) - b.pos.distanceTo(xu.pos))) if (n++ < R.mob) z.distract?.(xu.pos, 0.5); }
-    if (xu?.down && S.tellT <= 0) { S.tellT = 3; say('小许倒了！过去扶他', 2.4); }
+    if (xu?.down) helpTell(xu);
     // 到了：小许到了扶梯口；或者你到了扶梯口、他就跟在你身后（站位离你三四米，你差一步没踩到点上也算）
     const near = (q, at, r) => Math.abs(q.y - at.y) < 1.5 && Math.hypot(q.x - at.x, q.z - at.z) < r, P = G.player.pos;
     if (!who.down && (near(who.pos, st.site, R.arrive) || (xu && near(P, st.site, R.arrive) && near(xu.pos, P, SQUAD.follow.far + 1)))) autoCut();
   }
+  /** 小许倒了：一直标在 HUD 上（「扶」），按你离他多远 / 身边有没有丧尸 / 扶到几成说清楚该干什么（squad.js 给的 help） */
+  function helpTell(xu) {
+    const d = Math.hypot(xu.pos.x - G.player.pos.x, xu.pos.z - G.player.pos.z);
+    if (xu.help === 'up' && xu.reviveT > 0.02) { if (S.tellT <= 2.6) { S.tellT = 3; say(`正在扶起小许… ${Math.min(99, Math.round(xu.reviveT * 100))}%`, 0.5); } return; }
+    if (S.tellT > 0) return;
+    S.tellT = 2.2; say(xu.help === 'busy' ? '身边有丧尸，扶不了——先把它们砍开！' : `小许倒了！走到他跟前扶起来（${Math.max(1, Math.round(d))} 米）`, 2);
+  }
+  const xuMark = new THREE.Vector3();
+  /** HUD 标记：护送时小许倒了，在他头顶标一个「扶」 */
+  const guestMarks = () => { const xu = G.squad?.guest; return curKind() === 'escort' && xu?.down ? [{ id: 'xu', short: '扶', label: '小许倒地 · 走到跟前扶起来', pos: xuMark.set(xu.pos.x, xu.pos.y + 1.1, xu.pos.z), kind: 'relay' }] : []; };
+  /** 小许挨一口打几折（squad.js 问）：你手里还没枪、只有刀 / 斧子时打 MALL.rescue.soft 折 */
+  const guestHurt = () => ((G.weapon?.slots || []).some((s) => s !== 'knife') ? 1 : MALL.rescue.soft);
+  /** 小许躲的时候偏向哪边（squad.js 问）：护送时是扶梯口那一点 */
+  const refuge = () => (curKind() === 'escort' ? S.plan.stages[S.stage].site : null);
   /** 潜行：一路站着发呆的丧尸。跑、不蹲着走、开枪都会攒响动；攒满全醒；走到哪只跟前，那只和旁边几只醒 */
   function sneakTick(dt) {
     if (curKind() !== 'sneak') return;
@@ -2268,7 +2282,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const api = {
     get enabled() { return enabled; },
     set enabled(v) { enabled = !!v; if (enabled) warmProps(); try { storage?.setItem?.('jimao-siege', enabled ? '1' : '0'); } catch { /* 存不了就不存 */ } },
-    mission, reset, state: S, walls, demo, get seals() { return seals; }, addNoise, horde, pacing, spawnSpecial, spawnBrute, supplies, inArea, climbRule, onRoof, roofExits, roofRim, roofOpen, housings, exposedNow, mateBites, makeRoom, inView,
+    mission, reset, state: S, walls, demo, get seals() { return seals; }, addNoise, horde, pacing, spawnSpecial, spawnBrute, supplies, inArea, climbRule, onRoof, roofExits, roofRim, roofOpen, housings, exposedNow, mateBites, guestHurt, refuge, makeRoom, inView,
     /** 爬楼那几层的落点一口气算完（测试、调试跳关用；游戏里开局起分帧算） */
     prepareFloors() { while (S.spotJob) if (S.spotJob.next().done) S.spotJob = null; return S.spots; },
     get plan() { return S.plan; },

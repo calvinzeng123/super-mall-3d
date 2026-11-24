@@ -23,6 +23,11 @@ export const SQUAD = Object.freeze({
   // 巨尸够得着队友：一巴掌拍飞出去（掉 damage 点血、躺 stun 秒），every 秒内不再挨第二下
   fling: Object.freeze({ damage: 28, speed: 11, stun: 1.2, every: 3.5 }),
   down: Object.freeze({ revive: 3, reach: 2.1, hp: 50, medic: 4.5 }),
+  // 救出来的人（小许）不按队友那套「贴着的每只每秒咬 dps」算（以前五六只一起贴上，五秒就没了）：
+  //   同时最多 cap 只真咬得到他（先贴上的先咬，其余的围着等），每只贴上 windup 秒咬第一口、之后每 every 秒一口、一口 hit 点（siege 再按你手里有没有枪打折）；
+  //   身边 flee 米内有丧尸就往你身后（尸群的另一边、扶梯口那边优先）躲，跑 run 米 / 秒（比行尸快、比奔尸慢）；
+  //   倒了你站到 reach 米内 revive 秒就扶起来（比队友快），但你身边 busy 米内有醒着的丧尸时扶不了（先腾出手）；两个队友优先打离他 guard 米内的
+  guest: Object.freeze({ cap: 2, hit: 8, every: 1.4, windup: 0.5, flee: 3, run: 4.2, revive: 1.4, reach: 2.6, busy: 1.6, guard: 2.4 }),
   horde: 1.25,
   members: Object.freeze([
     Object.freeze({ id: 'zhe', name: '阿哲', role: '夜班保安', hp: 130, side: -1, back: 2.6, trait: 'spotter',
@@ -57,15 +62,17 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 /**
  * 该打哪一只。mate：队友的位置；player：玩家的位置；zombies：[{ pos, special, zs, alive, active }]；pin：正按着玩家的那只（没有是 null）。
- * 排序：按着你的 > 特殊感染者 > 离你近的 > 离他近的。超出 range、不在同一层的不算。纯函数，返回丧尸或 null（看不看得见由调用的人查）。
+ * 排序：按着你的 > 正在扑小许的（guard：他站的地方，离他 guardR 米内、醒着的） > 特殊感染者 > 离你近的 > 离他近的。超出 range、不在同一层的不算。
+ * 纯函数，返回丧尸或 null（看不看得见由调用的人查）。
  */
-export function pickTarget(mate, player, zombies, { range = SQUAD.see, pin = null, sees = () => true } = {}) {
+export function pickTarget(mate, player, zombies, { range = SQUAD.see, pin = null, sees = () => true, guard = null, guardR = SQUAD.guest.guard } = {}) {
   let best = null, bs = Infinity;
   for (const z of zombies) {
     if (!z.alive || !z.active || Math.abs(z.pos.y - mate.y) > 2.6) continue;
     const dm = Math.hypot(z.pos.x - mate.x, z.pos.z - mate.z); if (dm > range) continue;
     const dp = Math.hypot(z.pos.x - player.x, z.pos.z - player.z);
-    const score = (z === pin ? -1000 : 0) + (z.special ? -25 : 0) + (z.zs === 'idle' ? 10 : 0) + dp * 1.2 + dm * 0.5;
+    const onGuest = !!guard && z.zs !== 'idle' && Math.abs(z.pos.y - guard.y) < 1.6 && Math.hypot(z.pos.x - guard.x, z.pos.z - guard.z) < guardR;
+    const score = (z === pin ? -1000 : 0) + (onGuest ? -40 : 0) + (z.special ? -25 : 0) + (z.zs === 'idle' ? 10 : 0) + dp * 1.2 + dm * 0.5;
     if (score < bs && sees(z)) { bs = score; best = z; }
   }
   return best;
@@ -155,6 +162,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       member, id: member.id, name: member.name, pos: root.position, root, yaw: 0, speed: 0, hp: member.hp, maxHp: member.hp, alive: true, down: false, active: false,
       target: null, senseT: rng() * 0.3, cool: 0.6, burst: 0, shots: 0, kills: 0, path: null, wp: 0, planT: 0, pathJob: null, awayT: 0, gait: 0, pitch: 0, recoil: 0, lowReady: 1,
       reviveT: 0, flingT: 0, stun: 0, flingX: 0, flingZ: 0, dodgeT: 0, dodgeSide: 1, holdT: 0, slotK: 0, goalSeen: true, seenP: true, offArea: false, lostT: 0, exitTo: null, exitT: 0, healT: 12 + rng() * 8, healing: 0, fallK: 0, muzzle: new THREE.Vector3(), chest: new THREE.Vector3(), parts, hurtT: 0, stuckT: 0, biteSay: 0,
+      biters: [], biteAt: new Map(), clock: 0, hide: null, bitten: 0, // 小许：正在咬他的（最多 P.guest.cap 只）、每只下一口的时刻、往哪儿躲、挨了几口
     };
 
     function place(at, yaw = 0) {
@@ -180,6 +188,57 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       if (!st || Math.abs(st.y - p.pos.y) >= 0.5 || !clear(nav, st) || off(st, s.x, s.z)) return null;
       if (look && G.physics?.lineOfSight && !G.physics.lineOfSight(tmp.set(p.pos.x, p.pos.y + 1.2, p.pos.z), tmp2.set(s.x, st.y + 1.2, s.z))) return null;
       return new THREE.Vector3(s.x, st.y, s.z);
+    }
+    /**
+     * 小许挨咬：贴着他的（close：[[离他多远, 丧尸], ...]）里最多 P.guest.cap 只咬得到——咬着的不换，空出位置才轮到下一只（近的先），
+     * 其余的围着等；每只各数各的：贴上 windup 秒咬第一口，之后每 every 秒一口（离开再贴上也不重新算）。一口 hit 点，siege.guestHurt() 再打折（你手里还没枪时）。
+     * 返回这一下是不是咬倒了
+     */
+    function guestBites(dt, close) {
+      const B = P.guest; m.clock += dt;
+      m.biters = m.biters.filter((z) => close.some((q) => q[1] === z));
+      for (const [, z] of close.sort((a, b) => a[0] - b[0])) {
+        if (m.biters.length >= B.cap) break;
+        if (!m.biters.includes(z)) { m.biters.push(z); m.biteAt.set(z, Math.max(m.biteAt.get(z) ?? -Infinity, m.clock + B.windup)); }
+      }
+      let bit = 0;
+      for (const z of m.biters) {
+        if (m.clock < m.biteAt.get(z)) continue;
+        m.biteAt.set(z, m.clock + B.every);
+        const n = B.hit * (siege?.guestHurt?.() ?? 1); m.hp -= n; m.hurtT = 0.6; m.bitten++; bit++;
+        G.events?.emit?.('squad:bite', { mate: m, by: z, damage: n });
+        if (m.hp <= 0) return true;
+      }
+      if (m.biteAt.size > 24) for (const [z, at] of m.biteAt) if (at < m.clock - 3) m.biteAt.delete(z);
+      if (bit && m.biteSay <= 0) { m.biteSay = 8; say(member, m.hp < m.maxHp * 0.4 ? '救命——快把它们弄开！' : '它咬我！别丢下我！'); }
+      return false;
+    }
+    /**
+     * 小许往哪儿躲：身边 P.guest.flee 米内有醒着的丧尸时，在你周围（1.7 / 2.6 米一圈）挑一处离尸群远、隔着你在尸群另一边、偏扶梯口那边（siege.refuge()）的地方；
+     * 要站得住、在范围里、你看得见。身边没丧尸、或者挪过去也不比原地宽敞，就不躲（null）
+     */
+    function hideSpot(zs) {
+      const B = P.guest, p = G.player?.pos; if (!p || Math.abs(p.y - m.pos.y) > 1.5) return null;
+      const awake = zs.filter((z) => z.zs !== 'idle' && !z.fixed && !z.passive && Math.abs(z.pos.y - m.pos.y) < 1.6);
+      const room = (x, z) => { let r = 6; for (const q of awake) r = Math.min(r, Math.hypot(q.pos.x - x, q.pos.z - z)); return r; };
+      const here = room(m.pos.x, m.pos.z); if (here >= B.flee) return null;
+      let cx = 0, cz = 0, n = 0; // 尸群（离他 6 米内的，近的分量大）的重心
+      for (const q of awake) { const d = Math.hypot(q.pos.x - m.pos.x, q.pos.z - m.pos.z); if (d < 6) { const w = 1 / Math.max(0.5, d); cx += q.pos.x * w; cz += q.pos.z * w; n += w; } }
+      cx /= n; cz /= n;
+      let ux = p.x - cx, uz = p.z - cz; const ul = Math.hypot(ux, uz); if (ul > 1e-3) { ux /= ul; uz /= ul; } else { ux = Math.sin(p.yaw || 0); uz = Math.cos(p.yaw || 0); }
+      const ref = siege?.refuge?.(); let rx = 0, rz = 0; if (ref && Math.abs(ref.y - p.y) < 1.5) { const rl = Math.hypot(ref.x - p.x, ref.z - p.z); if (rl > 1) { rx = (ref.x - p.x) / rl; rz = (ref.z - p.z) / rl; } }
+      const cands = [];
+      for (let k = 0; k < 8; k++) {
+        const a = k / 8 * Math.PI * 2, ax = Math.sin(a), az = Math.cos(a);
+        for (const r of [1.7, 2.6]) {
+          const x = p.x + ax * r, z = p.z + az * r, rm = room(x, z); if (rm < here + 0.5) continue; // 挪过去不比原地宽敞：不去
+          const st = landAt(nav, x, z, p.y + 0.6); if (!st || Math.abs(st.y - p.y) > 0.5 || !clear(nav, st) || off(st, x, z)) continue; // 栏杆外（中庭）、墙里、范围外
+          cands.push({ x, y: st.y, z, s: rm + 1.2 * (ax * ux + az * uz) + 0.5 * (ax * rx + az * rz) - 0.2 * Math.hypot(x - m.pos.x, z - m.pos.z) });
+        }
+      }
+      cands.sort((a, b) => b.s - a.s);
+      for (const c of cands.slice(0, 4)) if (!G.physics?.lineOfSight || G.physics.lineOfSight(tmp.set(p.x, p.y + 1.2, p.z), tmp2.set(c.x, c.y + 1.2, c.z))) return new THREE.Vector3(c.x, c.y, c.z);
+      return null;
     }
     function plan(goal) {
       m.planT = 0.5 + rng() * 0.3;
@@ -217,7 +276,8 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
 
     function goDown() {
       m.down = true; m.hp = 0; m.target = null; m.reviveT = 0; m.burst = 0; m.path = null; want.set(0, 0, 0); vel.set(0, 0, 0);
-      G.hud?.radio?.(`${member.name}倒下了！走到跟前把人扶起来。`, 4);
+      m.biters = []; m.hide = null;
+      G.hud?.radio?.(member.guest ? `${member.name}倒下了！把你身边的丧尸砍开，站到他跟前一秒多就能扶起来（倒着的时候它们不咬他）。` : `${member.name}倒下了！走到跟前把人扶起来。`, 4);
       G.events?.emit?.('squad:down', { mate: m });
     }
     function getUp(hp = P.down.hp, quiet = false) {
@@ -237,12 +297,12 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       if (!m.down && (dist > P.follow.warp || Math.abs(dy) > 2.2)) { m.awayT += dt; if ((dist > P.follow.warp * 1.6 || m.awayT > P.follow.warpSeconds) && p.onGround !== false) warp(); } else m.awayT = 0;
       // 丧尸贴身：掉血
       const zs = zombies?.alive?.() || [];
-      let biting = 0;
+      let biting = 0; const close = member.guest ? [] : null; // 小许：贴着他的先记下（离他多远、哪一只），下面按上限一口一口算
       for (const z of zs) {
         if (z.zs === 'idle' || z.fixed || Math.abs(z.pos.y - m.pos.y) > 1.6) continue;
         const d = Math.hypot(z.pos.x - m.pos.x, z.pos.z - m.pos.z);
         if (d < P.bite.reach * (z.scale || 1)) {
-          if (z.kind !== 'brute') biting++;
+          if (z.kind !== 'brute') { biting++; close?.push([d, z]); }
           else if (!m.down && m.flingT <= 0) {
             // 巨尸：一巴掌拍飞
             const hx = m.pos.x - z.pos.x, hz = m.pos.z - z.pos.z, hd = Math.hypot(hx, hz) || 1;
@@ -251,8 +311,9 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
             if (m.hp > 0) say(member, '被拍飞了——别让它近身！');
           }
         }
-        // 贴近了、离他比离你近：转过去扑他，咬上了就不撒口（巨尸、正按着人的不管；倒地的不再招丧尸）
-        if (!m.down && d < P.bite.pull && d < Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) - 0.5 && z.zs === 'chase') z.distract?.(m.pos, 0.6);
+        // 贴近了、离他比离你近：转过去扑他，咬上了就不撒口（巨尸、正按着人的不管；倒地的不再招丧尸）。
+        // 小许不在这儿招：扑他的几只由护送那一步定（siege-mall 的 MALL.rescue.mob）——以前这一句把他身边追你的全招过去，五六只一起啃
+        if (!member.guest && !m.down && d < P.bite.pull && d < Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) - 0.5 && z.zs === 'chase') z.distract?.(m.pos, 0.6);
       }
       m.flingT -= dt;
       if (m.hp <= 0 && !m.down) { goDown(); }
@@ -263,15 +324,20 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
         m.fallK = Math.min(1, m.fallK + dt * 5); m.speed = 0; pose(dt); return;
       }
       if (m.down) {
-        // 倒地：等人来扶（你站在跟前三秒；林医生过来四秒半）
-        const near = p.alive !== false && dist < P.down.reach && Math.abs(dy) < 1.5;
+        // 倒地：等人来扶（你站在跟前三秒；林医生过来四秒半）。小许：你站到 P.guest.reach 米内 P.guest.revive 秒就起来，
+        // 但你身边 busy 米内有醒着的丧尸时扶不了（先腾出手）——光站着不打就扶不起来；扶了一半走开，进度慢慢退
+        const B = P.guest, reach = member.guest ? B.reach : P.down.reach;
+        const near = p.alive !== false && dist < reach && Math.abs(dy) < 1.5;
+        const busy = member.guest && near && zs.some((z) => z.zs !== 'idle' && !z.fixed && !z.passive && Math.abs(z.pos.y - p.pos.y) < 1.6 && Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) < B.busy);
         const medic = others.find((o) => o !== m && !o.down && o.member.trait === 'medic' && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < P.down.reach && Math.abs(o.pos.y - m.pos.y) < 1.5);
-        if (near) m.reviveT += dt / P.down.revive; else if (medic) m.reviveT += dt / P.down.medic; else m.reviveT = Math.max(0, m.reviveT - dt * 0.5);
+        m.help = !near ? 'far' : busy ? 'busy' : 'up'; // siege 的护送提示按这个说
+        if (near && !busy) m.reviveT += dt / (member.guest ? B.revive : P.down.revive); else if (medic) m.reviveT += dt / P.down.medic; else if (!busy) m.reviveT = Math.max(0, m.reviveT - dt * (member.guest ? 0.2 : 0.5));
         if (m.reviveT >= 1) getUp();
         m.fallK = Math.min(1, m.fallK + dt * 3); m.speed = 0; pose(dt); return;
       }
-      m.fallK = Math.max(0, m.fallK - dt * 4);
-      if (biting > 0) {
+      m.fallK = Math.max(0, m.fallK - dt * 4); m.help = null;
+      if (member.guest) { if (guestBites(dt, close)) { goDown(); pose(dt); return; } }
+      else if (biting > 0) {
         m.hp -= P.bite.dps * (siege?.mateBites?.(biting) ?? biting) * dt; m.hurtT = 0.6; // 守屋顶时同时挨咬的只数有上限、打折（siege.js 的 SIEGE.crowd）
         if (m.hp <= 0) { goDown(); pose(dt); return; }
         if (m.hp < m.maxHp * 0.4 && m.biteSay <= 0) { m.biteSay = 14; say(member, member.trait === 'medic' ? '我被围住了！' : '顶不住了，帮我一把！'); }
@@ -280,8 +346,9 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       const sensed = (m.senseT -= dt) <= 0;
       if (sensed) {
         m.senseT = 0.22 + rng() * 0.1;
-        const pin = siege?.state?.pin?.by || null;
-        m.target = pickTarget(m.pos, p.pos, zs, { range: member.gun.range, pin, sees });
+        const pin = siege?.state?.pin?.by || null, guest = member.guest ? null : others.find((o) => o.member.guest && !o.down);
+        m.target = pickTarget(m.pos, p.pos, zs, { range: member.gun.range, pin, sees, guard: guest?.pos || null }); // 扑小许的先打
+        if (member.guest) m.hide = m.exitTo ? null : hideSpot(zs);
       }
       // 救出来的人（小许）卡住了的保底：你 lost 秒看不见他（隔着店面玻璃、墙），或者他站在你进不去的地方（卷帘拉下的店里、范围外）——直接跟到你身后
       if (member.guest) {
@@ -305,6 +372,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       if (needHeal) { goal = p.pos; stopAt = H.reach * 0.8; }
       else if (fallen) { goal = fallen.pos; stopAt = P.down.reach * 0.7; }
       else if (m.exitTo) { goal = m.exitTo; stopAt = 0.4; }
+      else if (m.hide) { goal = m.hide; stopAt = 0.35; } // 小许：身边有丧尸，躲到你身后
       else {
         // 站位：你身后偏一侧；那一点站不住（墙里、栏杆外）或者你看不见（隔着玻璃、墙）就换一个（SLOT_ALTS，挑哪个按节奏重查）；都不行才直接朝你靠
         const yaw = trail.ready ? trail.yaw : (p.yaw || 0);
@@ -317,8 +385,8 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       // 到没到位要看得见那一点：隔着店面玻璃离站位一米多不算到（小许以前就这样站在店里的玻璃后面不出来）
       if (sensed) m.goalSeen = gd >= 1.6 || !G.physics?.lineOfSight || G.physics.lineOfSight(tmp.set(m.pos.x, m.pos.y + 0.9, m.pos.z), tmp2.set(goal.x, goal.y + 0.9, goal.z));
       // 在位置上（离你不远、离站位不远）就不动；有目标时也不追着站位小碎步挪。站位都不行时：队友离你不远就站着，小许（没枪）一直走到你跟前
-      const settle = !needHeal && !fallen && !m.exitTo && dist < P.follow.far + 0.6 && ((gd < 1.6 && m.goalSeen) || !!t || (goal === p.pos && !member.guest));
-      if (gd > stopAt && !settle) steer(dt, goal, hurry ? P.follow.sprint : P.follow.walk, gd < 7 && Math.abs(goal.y - m.pos.y) < 0.8 && (!G.physics?.lineOfSight || G.physics.lineOfSight(tmp.set(m.pos.x, m.pos.y + 0.9, m.pos.z), new THREE.Vector3(goal.x, goal.y + 0.9, goal.z))));
+      const settle = !needHeal && !fallen && !m.exitTo && !m.hide && dist < P.follow.far + 0.6 && ((gd < 1.6 && m.goalSeen) || !!t || (goal === p.pos && !member.guest));
+      if (gd > stopAt && !settle) steer(dt, goal, hurry ? P.follow.sprint : m.hide ? P.guest.run : P.follow.walk, gd < 7 && Math.abs(goal.y - m.pos.y) < 0.8 && (!G.physics?.lineOfSight || G.physics.lineOfSight(tmp.set(m.pos.x, m.pos.y + 0.9, m.pos.z), new THREE.Vector3(goal.x, goal.y + 0.9, goal.z))));
       // 别挡枪口：站在你正前方四米内就往旁边让（包扎、扶人的时候除外）。小许没枪、也不用给你让枪线——以前他从店门出来正对着你，
       // 一让就让到门边的玻璃后面、站住六秒，再出来又正对着你……一直出不来
       m.dodgeT -= dt; m.holdT -= dt;
@@ -424,7 +492,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     /** 尸潮规模的倍数：有站着的队友才加 */
     get hordeScale() { return enabled && api.spawned && mates.some((m) => !m.down) ? P.horde : 1; },
     /** 救出来的人（小许）：从 at 出来，跟着你。exit：先走到门外这一点（从店里放出来，别让他自己在店里找站位） */
-    join(id, at, { exit = null } = {}) { const m = guests.find((q) => q.id === id); if (!m) return null; m.joined = true; m.hp = m.maxHp; m.down = false; m.reviveT = 0; m.fallK = 0; m.place(at, 0);
+    join(id, at, { exit = null } = {}) { const m = guests.find((q) => q.id === id); if (!m) return null; m.joined = true; m.hp = m.maxHp; m.down = false; m.reviveT = 0; m.fallK = 0; m.biters = []; m.biteAt.clear(); m.hide = null; m.bitten = 0; m.help = null; m.place(at, 0);
       m.exitTo = exit ? new THREE.Vector3(exit.x, exit.y ?? at.y, exit.z) : null; m.exitT = 4; m.lostT = 0; m.seenP = true; m.offArea = false; m.slotK = 0; m.goalSeen = true; if (api.spawned || !enabled) { m.root.visible = true; m.active = true; } m.pose(0.016); paint(); return m; },
     leave(id) { const m = guests.find((q) => q.id === id); if (!m || !m.joined) return; m.joined = false; m.root.visible = false; m.active = false; m.pathJob?.cancel?.(); paint(); },
     get guest() { return guests.find((m) => m.joined) || null; },
