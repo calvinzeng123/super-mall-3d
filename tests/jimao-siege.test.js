@@ -8,8 +8,8 @@ import { findPath } from '../src/fps/pathfinding.js';
 import { pointInPoly, toW } from '../src/layout/geom.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
-import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, flightBox, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, reachSpot, plateOf, LOOT, lootOf, lootSpots, floorSpots, climbFloors, heliGun } from '../src/jimao/siege.js';
-import { aimAngles, inGunArc, createDoorGun, DOOR_GUN } from '../src/jimao/door-gun.js';
+import { SIEGE, TOWERS, GATES, pickTower, siegePlan, activeGate, liftRule, stairRule, siegeFlight, flightBox, groundSpots, balconySpots, unitSites, lobbySpot, createSiege, gateBlock, balconyModel, balconyBoxes, reachSpot, plateOf, LOOT, lootOf, lootSpots, floorSpots, climbFloors, heliGun } from '../src/jimao/siege.js';
+import { aimAngles, inGunArc, createDoorGun, DOOR_GUN, DOOR_GUN_CSS, impactAt } from '../src/jimao/door-gun.js';
 import { createSupplies, SUPPLY, healChoice, MEDIC_CSS } from '../src/jimao/supplies.js';
 import { createSquad, SQUAD, pickTarget, shotHits, slotOf, SQUAD_CSS } from '../src/jimao/squad.js';
 import { DEFENSE } from '../src/jimao/siege-defense.js';
@@ -1416,6 +1416,132 @@ function holdWorld(tower, at = null) {
 /** 楼梯间里（屋面上的楼梯间盒子里，或者通到屋顶的那几跑楼梯、休息平台、下一层的楼梯口上） */
 const inStairs = (siege, roof, q) => q.y < roof - 0.3 || siege.housings().some((b) => inBox(b, q));
 
+test('只挡跨楼层射线的方盒（清扫时的阳台）：castAcross / sightAcross 挡、法线朝来的方向；raycast（走路、丧尸看人、平时的子弹）照旧不挡；撤掉就不挡。打在楼板上的法线朝上', () => {
+  const P = createMapPhysics(nav), roof = elev('A-RF'), sky = new THREE.Vector3(SIEGE.pad.x + 80, 400, SIEGE.pad.z), east = new THREE.Vector3(1, 0, 0);
+  assert.equal(P.castAcross(sky, east, 50), null, '天上什么都没有');
+  const box = P.addOccluder({ x0: sky.x + 10, y0: 399, z0: sky.z - 1, x1: sky.x + 11, y1: 401, z1: sky.z + 1 }, { tag: 'balcony' });
+  const hit = P.castAcross(sky, east, 50);
+  assert.ok(hit && Math.abs(hit.dist - 10) < 1e-6 && hit.normal.x === -1 && hit.box === box && Math.abs(hit.point.x - sky.x - 10) < 1e-6, '截在方盒朝人那一面上');
+  assert.equal(P.sightAcross(sky, new THREE.Vector3(sky.x + 20, 400, sky.z)), false);
+  assert.equal(P.raycast(sky, east, 50), null, 'raycast 不查它');
+  assert.equal(P.castAcross(new THREE.Vector3(sky.x + 10.5, 400, sky.z), east, 50), null, '起点在盒子里不算');
+  P.removeOccluder(box); assert.equal(P.castAcross(sky, east, 50), null, '撤掉了');
+  // 往下打在屋面上：法线朝上（以前跨楼层射线打在楼板上法线是零，火花朝哪都不知道）；中间隔着一块方盒，截在它顶面
+  const eye = new THREE.Vector3(SIEGE.pad.x + 2, roof + 12, SIEGE.pad.z), down = new THREE.Vector3(0, -1, 0);
+  const floor = P.castAcross(eye, down, 50); assert.ok(floor && Math.abs(floor.dist - 12) < 1e-6 && floor.normal.y === 1, `打在屋面上 ${floor?.dist} ${floor?.normal.toArray()}`);
+  P.addOccluder({ x0: eye.x - 1, y0: roof + 5, z0: eye.z - 1, x1: eye.x + 1, y1: roof + 6, z1: eye.z + 1 });
+  const top = P.castAcross(eye, down, 50); assert.ok(Math.abs(top.dist - 6) < 1e-6 && top.normal.y === 1);
+});
+
+test('舱门机枪（零点突围的车顶机枪也是它）：子弹截在 castAcross 找到的墙 / 阳台顶板上，那儿照样冒火花（impact 事件带 point、朝着来的方向的 normal——原游戏的火花、声音按 point 读）；打中了敌人的不另报', () => {
+  const P = createMapPhysics(nav), roof = elev('A-RF'), run = runs.find((r) => r.to === 'A-RF'), A = L.buildings.find((b) => b.id === 'A'), x1 = Math.max(...A.outline.map((p) => p[0]));
+  const ev = [], ranges = []; let reply = null;
+  const G = { physics: P, events: { emit(n, e) { if (n === 'impact') ev.push(e); }, on() {} }, combat: { playerShot: (o, d, opt) => { ranges.push(opt.range); return reply; } }, fx: {} };
+  const mount = new THREE.Object3D(), cam = new THREE.PerspectiveCamera(60, 1, 0.1, 1000), gun = createDoorGun(G, mount);
+  const fire = (eye, at) => { for (const o of [mount, cam]) { o.position.copy(eye); o.lookAt(at); o.updateMatrixWorld(true); } ev.length = 0; ranges.length = 0; for (let k = 0; k < 30; k++) gun.update(1 / 30, { active: true, firing: true, camera: cam }); };
+  // 楼梯间外墙（raycast 从楼外看不见它，以前 playerShot 什么都不报：曳光弹停在墙上，没火花没弹孔）
+  const eye = new THREE.Vector3(x1 + 24, roof + 2.5, run.b.z), inside = new THREE.Vector3(run.b.x, roof + 1.15, run.b.z);
+  fire(eye, inside);
+  assert.ok(ranges.length >= 8 && ev.length === ranges.length, `开了 ${ranges.length} 枪，火花 ${ev.length} 处`);
+  for (const e of ev) {
+    assert.ok(e.point && e.normal && e.surface && e.from === 'player' && e.enemy === null);
+    assert.ok(Math.abs(e.normal.y) < 1e-6 && e.normal.dot(e.dir) < 0, '墙的法线朝着开枪的人');
+    assert.ok(eye.distanceTo(e.point) < eye.distanceTo(inside) - 0.5, '截在墙上，没进楼梯间');
+  }
+  // 阳台：顶板挡着里面的人（飞机在正上方往下打）——子弹截在顶板上（range 不超过顶板），顶板上冒火花、法线朝上
+  const y = elev('A-20F'), s = { x: x1 + 0.75, y, z: SIEGE.pad.z + 6 }, g = balconyModel(); g.position.set(s.x, s.y, s.z); g.updateMatrixWorld(true);
+  for (const q of balconyBoxes(g)) P.addOccluder(q);
+  const chest = new THREE.Vector3(s.x + SIEGE.sweep.balcony.front, y + 1.15, s.z);
+  fire(chest.clone().setY(y + 40), chest);
+  assert.ok(ranges.length >= 8 && ranges.every((r) => r < 40 - 1.15 - 1.3 + 0.01), `子弹截在顶板上：${ranges.map((r) => r.toFixed(2)).join(' ')}`);
+  assert.ok(ev.length === ranges.length && ev.every((e) => Math.abs(e.point.y - (y + 2.55)) < 0.02 && e.normal.y === 1), '顶板上冒火花');
+  // playerShot 打中了东西（它自己报过 impact）：不再另报
+  reply = { point: chest.clone(), dist: 1 }; fire(chest.clone().setY(y + 40), chest); assert.ok(ranges.length > 0 && ev.length === 0);
+  // 法线没有（老数据）就朝着来的方向
+  const d = new THREE.Vector3(0, -1, 0), e = impactAt({ point: new THREE.Vector3(1, 2, 3), normal: new THREE.Vector3(), dist: 5 }, d);
+  assert.deepEqual([e.normal.toArray().map((v) => v + 0), e.surface, e.point.toArray()], [[0, 1, 0], 'concrete', [1, 2, 3]]);
+  gun.dispose();
+});
+
+test('清扫时阳台里的：阳台的楼板、挡板登记成挡跨楼层射线的方盒（下一局撤掉）；人贴着玻璃站——算成露出来（红点、能扔）的那一刻，对着真的阳台网格从机枪那儿看胸口不挡；每一只航线上都有一两成时间露出来；换点前的打分分到各帧（一帧最多二十来条跨楼层射线）', () => {
+  for (const tower of ['A', 'T1']) {
+    const { G, m, sw, step, frame, siege } = fakeRide(tower);
+    const win = sw.list.filter((z) => z.sweep === 'window');
+    assert.equal(win.length, SIEGE.sweep.window); assert.equal(G.physics.occluders.length, win.length * 5, `${tower} 每个阳台五块（楼板、顶板、两块挡板、背板）`);
+    const meshes = []; G.scene.updateMatrixWorld(true);
+    G.scene.traverse((o) => { if (o.isMesh && o.parent?.name === '阳台' && !o.material.transparent) meshes.push(o); });
+    assert.equal(meshes.length, win.length * 5);
+    let casts = 0, maxCasts = 0, n = 0; const bad = [], seen = new Map(win.map((z) => [z, 0])), rc = new THREE.Raycaster();
+    const orig = G.physics.castAcross; G.physics.castAcross = function (...a) { casts++; return orig.apply(this, a); };
+    step(70, (t) => {
+      maxCasts = Math.max(maxCasts, casts);
+      if (Math.round(t * 30) % 15 === 0) {
+        n++;
+        for (const z of win) {
+          if (!z.alive || !m.extraction.ride.canAttack(z, true)) continue;
+          seen.set(z, seen.get(z) + 1);
+          const c = new THREE.Vector3(z.pos.x, z.pos.y + 1.15, z.pos.z), d = c.clone().sub(frame.eye), len = d.length();
+          rc.set(frame.eye, d.normalize()); rc.near = 0.1; rc.far = len - 0.05;
+          if (rc.intersectObjects(meshes, false).length) bad.push([+t.toFixed(1), +z.pos.y.toFixed(1)]);
+        }
+      }
+      casts = 0;
+    });
+    assert.deepEqual(bad, [], `${tower} 算成露出来、其实被阳台挡着`);
+    const share = win.map((z) => seen.get(z) / n);
+    assert.ok(Math.min(...share) >= 0.1, `${tower} 每只露出来几成：${share.map((x) => x.toFixed(2)).join(' ')}`);
+    assert.ok(maxCasts <= 24, `${tower} 一帧最多 ${maxCasts} 条跨楼层射线`);
+    G.physics.castAcross = orig;
+    siege.reset(); assert.equal(G.physics.occluders.length, 0, `${tower} 下一局撤掉`);
+  }
+});
+
+test('清扫打得快的：楼下第一批打光了第二批马上冲出来（不干转几十秒）；被打死的扔出来的东西落下来不再砸飞机；高层阳台够不着的那几只清完的时候从总数里去掉，HUD 和「全部清掉了」对得上', () => {
+  const fires = [];
+  for (const [tower, passive] of [['A', 0], ['T1', 45]]) {
+    const { G, m, sw, step, msgs, time } = fakeRide(tower), F = m.extraction.flight;
+    G.events.on('enemy:fire', (e) => { if (e.enemy?.zombie) fires.push(!!e.enemy.alive); });
+    let kt = 0, empty = 0, maxEmpty = 0, earlyAt = null;
+    const each = (t) => {
+      if (t > passive && (kt += 1 / 30) > 0.6) { kt = 0; const a = m.extraction.ride.aimTargets(); if (a.length) a[Math.floor(a.length / 2)].damage(9999, null, null, 'body'); }
+      if (sw.early && earlyAt === null) earlyAt = t;
+      if (t > 10 && !sw.offered) { empty = m.extraction.ride.targets().length ? 0 : empty + 1 / 30; maxEmpty = Math.max(maxEmpty, empty); }
+    };
+    while (!sw.offered && time() < 140) step(1, each);
+    assert.ok(sw.offered, `${tower} 清完了 ${JSON.stringify(sw.kill)} / ${JSON.stringify(sw.total)}`);
+    assert.ok(maxEmpty <= 3, `${tower} 最长 ${maxEmpty.toFixed(1)} 秒一只都没有`);
+    if (!passive) assert.ok(earlyAt !== null && earlyAt < F.times.ground - 6, `${tower} 第二批 ${earlyAt?.toFixed(1)} 秒就来了`);
+    assert.ok(msgs.includes('R:楼下又冲出来一批！') || !sw.early);
+    assert.ok(fires.every(Boolean), `${tower} 砸着飞机的 ${fires.length} 下里有已经死了的`);
+    // 清完的那一刻：HUD 的每一项都是满的（够不着的去掉了），场上一只都不剩
+    const hud = /屋顶 (\d+)\/(\d+) · 阳台 (\d+)\/(\d+) · 楼下 (\d+)\/(\d+)/.exec(m.text({ allCut: true }, {}));
+    assert.ok(hud && hud[1] === hud[2] && hud[3] === hud[4] && hud[5] === hud[6], `${tower} ${hud?.[0]}`);
+    assert.equal(m.extraction.ride.targets().length, 0);
+    assert.ok(sw.total.window <= SIEGE.sweep.window && sw.total.roof === SIEGE.sweep.roof && sw.total.ground === SIEGE.sweep.ground);
+  }
+  assert.ok(fires.length >= 3, `一共砸着飞机 ${fires.length} 下`);
+});
+
+test('清扫要用的点：开局（爬楼的落点算完）就在后台分帧算，点信号弹以前就算好了；每一小步最多两条跨楼层视线；楼下的点街上、商场屋面都有', () => {
+  const { G, siege, begin, run } = sworld();
+  begin(); siege.prepareFloors(); const S = siege.state;
+  assert.equal(S.prepOut, null); run(1 / 30); assert.ok(S.prep, '开局就开始算');
+  let casts = 0, worst = 0; const orig = G.physics.castAcross; G.physics.castAcross = function (...a) { casts++; return orig.apply(this, a); };
+  for (let i = 0; i < 40000 && !S.prepOut; i++) { casts = 0; S.prep.next(); worst = Math.max(worst, casts); }
+  G.physics.castAcross = orig;
+  assert.ok(S.prepOut && worst <= 2, `每一小步最多 ${worst} 条`);
+  assert.equal(S.hold, -1, '还没点信号弹');
+  const P = S.prepOut;
+  assert.ok(P.roofPool.length >= 30 && P.groundPool.length >= 50, `屋顶 ${P.roofPool.length}、楼下 ${P.groundPool.length}`);
+  assert.ok(P.groundPool.some((q) => q.where === 'street') && P.groundPool.some((q) => q.where === 'mall'));
+  assert.ok([...P.roofPool, ...P.groundPool].every((q) => q.pooled));
+});
+
+test('坐飞机时（看炸楼那一段也是）治疗、路障键收起来（手机上拖着转视角老按到）；手机上的无线电字幕挪到屏幕最底下，不挡准星', () => {
+  assert.match(DOOR_GUN_CSS, /\.jm-riding \.t-heal, \.jm-riding \.t-wall[^{]*\{ display: none !important; \}/);
+  assert.match(DOOR_GUN_CSS, /\.is-touch \.jm-riding \.comms \{ top: auto !important; bottom: calc\(8px/);
+});
+
 test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那阵也出得来；楼梯口那一份在楼梯间里、人看不见的地方冒出来，自己走出门上了露天的屋面；翻墙的离人 10 米以外；屋面上看得见一大群；点信号弹时楼里落在下面的收掉；没出来就不喊「第几波」', () => {
   for (const tower of ['A', 'T1']) {
     const { G, siege, zombies, enemies, player, run, msgs, T, roof, px, pz, S, light } = holdWorld(tower);
@@ -1460,10 +1586,12 @@ test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那
     const peak = (a, b) => Math.max(0, ...seenN.filter(([t]) => t >= a && t < b).map(([, n]) => n));
     SIEGE.waves.forEach((w, i) => assert.ok(peak(w, w + 10) >= 4, `${tower} 第 ${i + 1} 波同时看得见的最多 ${peak(w, w + 10)} 只`));
     assert.ok(peak(SIEGE.hold - SIEGE.surge.last, SIEGE.hold) >= 12, `${tower} 最后那阵同时看得见 ${peak(SIEGE.hold - SIEGE.surge.last, SIEGE.hold)} 只`);
-    // 同一帧最多几只（翻墙的那几只是一起上来的）
+    // 楼梯口那一份是一只只出来的：同一帧最多几只（翻墙的那几只是一起上来的）
+    // 改过：8 → 10。一波翻墙的最多 round(16 × 0.35) = 6 只一起上来，同一帧里还可能有楼梯口各一只、巨尸 / 特殊感染者、最后那阵翻墙的一只——
+    // 以前刚好没凑到一起；清扫的点改成开局就在后台算、不再从这一局的随机序列里取数以后，守屋顶这段的随机数换了一串，凑到了 9–10 只
     const byT = {}; for (const q of born) { const key = Math.round(q.t * 30); byT[key] = (byT[key] || 0) + 1; }
-    assert.ok(Math.max(...Object.values(byT)) <= 8, `${tower} 同一帧出来 ${Math.max(...Object.values(byT))} 只`);
-    // 喊「第几波」要真出来了才喊（池子里全是活着的、一只都出不来就不喊）
+    assert.ok(Math.max(...Object.values(byT)) <= 10, `${tower} 同一帧出来 ${Math.max(...Object.values(byT))} 只`);
+    // 喊「第几波」要真出来了才喊（最后一两波池子里全是活着的、一只都出不来就不喊）
     for (let i = 1; i <= 5; i++) assert.ok(msgs.some((t) => String(t).startsWith(`第 ${i} 波`)), `${tower} 喊了第 ${i} 波`);
     SIEGE.waves.forEach((w, i) => { if (msgs.some((t) => String(t).startsWith(`第 ${i + 1} 波`))) assert.ok(born.some((q) => q.t >= w), `${tower} 第 ${i + 1} 波喊了就有出来的`); });
     assert.ok(siege.onRoof(player.pos), '人在露天的屋面上（雾退远）');
