@@ -20,12 +20,16 @@ export const MALL = Object.freeze({
   shop: Object.freeze({ start: '意食', crowbar: '骑行家', pistol: '冲浪者', note: '风格志', card: '小确幸饰品', gen: '盲盒星球' }),
   stairs: Object.freeze({ down3: 'P1-K6', down2: 'P1-K3' }),
   zone: 46, lockers: 1.25,
+  // 卷帘拉下的店：人走到离卷帘 leash 米就停（再往前镜头就站进卷帘那一层里、看不见它，像一堵空气墙）；寻路（路线指引、队友、丧尸）离它 path 米以外绕过去
+  pad: Object.freeze({ leash: 0.35, path: 0.5, hose: 0.3 }),
   gen: Object.freeze({ seconds: 25, every: 4.5, each: 2 }), out: 3,
-  // 救人：被困的店离撬棍那家、扶梯口都至少 near 米；护送时隔 every 秒从看不见的地方来 each 只，小许走到扶梯口 arrive 米内算到；
+  // 救人：被困的店离撬棍那家、扶梯口都至少 near 米；护送时隔 every 秒从看不见的地方来 each 只，追人的最多 mob 只先扑小许，小许走到扶梯口 arrive 米内算到；
   // 卷帘撬开以后小许先走到门洞外 out 米、往旁边挪 side 米的地方（不挡在撬门的人跟前）
-  rescue: Object.freeze({ near: 8, every: 7, each: 2, arrive: 4.5, out: 1.0, side: 1.4 }),
-  // 消防斧：开局那家店的门洞旁边、实墙上挂的消火栓箱（宽 w 米，离门洞 gap 米），站到箱子正前方 out 米捡
-  axe: Object.freeze({ w: 0.9, gap: 0.15, out: 0.55 }),
+  rescue: Object.freeze({ near: 8, every: 7, each: 2, mob: 2, arrive: 4.5, out: 1.0, side: 1.4 }),
+  // 消防斧：开局那家店门口的消火栓箱（宽 w 米），站到箱子正前方 out 米捡。先找门对面：出门 lo–hi 米是中庭栏杆（地面到头），
+  // 箱子连着石材壁柱背靠栏杆（离地面边 edge 米）、正面朝着门（卷帘一起来，从门里就看得见），顺着门脸往 side 里那几个距离挪开一点（不挡出门的路），
+  // 站到箱子正前方 across 米捡（壁柱 + 箱子厚 depth 米，人离它 siege.js 的 MALL.pad.leash 米就停）；门对面没有栏杆就退回门洞旁边的实墙上（离门洞 gap 米）
+  axe: Object.freeze({ w: 0.9, gap: 0.15, out: 0.55, lo: 2.4, hi: 6, edge: 0.06, across: 0.75, depth: 0.29, wide: 1.02, side: Object.freeze([1.6, 2.2, 1.0, 2.8]) }),
   // 潜行：一路站着 count 只发呆的行尸（离路线 band 米以内、彼此隔开 gap 米）；响动到 wake 全醒，人走到它跟前 close 米（蹲着 closeCrouch 米）这一只和旁边 group 米内的醒
   sneak: Object.freeze({ count: 14, band: 6, gap: 2.4, wake: 60, close: 2.4, closeCrouch: 1.3, group: 5, run: 22, walk: 7, arrive: 2.6 }),
   // 搬油桶：抬着跑多快、离发电机最好多远（取 lo–hi 米之间最接近 best 的那家）、隔几秒来几只
@@ -52,6 +56,31 @@ export function cabinetSpot(nav, lv, u, f, toward = null, A = MALL.axe) {
   for (const c of spots) {
     const wx = f.x0 + tx * c, wz = f.z0 + tz * c, x = wx + f.nx * A.out, z = wz + f.nz * A.out, st = landAt(nav, x, z, lv.elev + 0.6);
     if (st && st.floor === lv.id && Math.abs(st.y - lv.elev) < 0.3 && clear(nav, st)) return { floor: lv.id, x: st.x, y: lv.elev, z: st.z, wall: { x: wx, z: wz, yaw: Math.atan2(f.nx, f.nz) } };
+  }
+  return null;
+}
+/**
+ * 门对面的消火栓箱（见 MALL.axe）：门洞 gap（[a, b]，从门脸起点量）中间往外走到地面到头（中庭栏杆）的地方，箱子背靠那儿、正面朝门；
+ * eye：门里头站着看的那一点（卷帘一开从这儿要看得见箱子）。返回和 cabinetSpot 一样的 { floor, x, y, z, wall: { x, z, yaw }, across: true }；没有合适的返回 null
+ */
+export function cabinetAcross(nav, lv, f, gap, eye, toward = null, A = MALL.axe) {
+  const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0), tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len, c = (gap[0] + gap[1]) / 2, y = lv.elev + 0.6;
+  const on = (x, z) => { const q = landAt(nav, x, z, y); return !!q && q.floor === lv.id && Math.abs(q.y - lv.elev) < 0.3; };
+  // 从门脸上沿外法线往外走，地面到头的那一点（lo–hi 米之间才算）
+  const edgeAt = (s) => { const bx = f.x0 + tx * (c + s), bz = f.z0 + tz * (c + s); let d = 0.5; while (d < A.hi + 0.5 && on(bx + f.nx * d, bz + f.nz * d)) d += 0.05; return d >= A.lo && d <= A.hi ? { bx, bz, d } : null; };
+  const mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2, side = toward ? Math.sign((toward.x - mx) * tx + (toward.z - mz) * tz) || 1 : 1;
+  for (const k of A.side) for (const s of [side * k, -side * k]) {
+    const e = edgeAt(s); if (!e) continue;
+    const d = e.d - A.edge, wx = e.bx + f.nx * d, wz = e.bz + f.nz * d, st = landAt(nav, wx - f.nx * A.across, wz - f.nz * A.across, y);
+    if (!st || st.floor !== lv.id || !clear(nav, st)) continue;
+    // 壁柱两头都落在这一层的地面上（不悬在洞口外、不压到扶梯口）
+    if (![-A.wide / 2, A.wide / 2].every((u) => on(wx + tx * u - f.nx * 0.05, wz + tz * u - f.nz * 0.05))) continue;
+    // 隔着门洞看得见：从 eye 到箱子正面中间那一条线，穿过门脸的地方落在门洞里
+    const fx = wx - f.nx * 0.3, fz = wz - f.nz * 0.3, de = (eye.x - f.x0) * f.nx + (eye.z - f.z0) * f.nz, df = (fx - f.x0) * f.nx + (fz - f.z0) * f.nz;
+    if (!(de < 0 && df > 0)) continue;
+    const t = de / (de - df), cx = eye.x + (fx - eye.x) * t, cz = eye.z + (fz - eye.z) * t, along = (cx - f.x0) * tx + (cz - f.z0) * tz;
+    if (along < gap[0] + 0.25 || along > gap[1] - 0.25) continue;
+    return { floor: lv.id, x: st.x, y: lv.elev, z: st.z, wall: { x: wx, z: wz, yaw: Math.atan2(-f.nx, -f.nz) }, across: true };
   }
   return null;
 }
@@ -125,7 +154,7 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
     return pickQ;
   };
   const bike = take(F.top, M.shop.crowbar), gun = take(F.mid, M.shop.pistol), note = take(F.mid, M.shop.note), gen = take(F.mid, M.shop.gen);
-  const axe = cabinetSpot(nav, lv3, u, doorF, bike, M.axe);
+  const axe = (door && doorF && (() => { const { len, gaps } = gapsOf(lv3, u, doorF), g = gaps.find(([a, b]) => { const c = (a + b) / 2, x = doorF.x0 + (doorF.x1 - doorF.x0) / len * c, z = doorF.z0 + (doorF.z1 - doorF.z0) / len * c; return Math.hypot(x - door.x, z - door.z) < (b - a) / 2 + 1.5; }); return g ? cabinetAcross(nav, lv3, doorF, g, door, bike, M.axe) : null; })()) || cabinetSpot(nav, lv3, u, doorF, bike, M.axe);
   // 三个储物柜：在那家店里沿长边排开，抽一个是对的
   const cardShop = take(F.mid, M.shop.card), cu = cardShop.u, r = cu.rects[0], lv2 = layout.levels.find((l) => l.id === F.mid);
   const alongX = (r.x1 - r.x0) >= (r.z1 - r.z0), right = Math.floor(rng() * 3), lockers = [];

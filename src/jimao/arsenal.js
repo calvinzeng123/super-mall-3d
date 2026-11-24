@@ -23,9 +23,11 @@ export const PISTOL = Object.freeze({ name: 'P17 手枪', mag: 12, reserve: 48, 
 export const KNIFE = Object.freeze({ name: '战术刀', damage: 150, reach: 2.3, cone: 0.9, time: 0.5, hitAt: 0.14, cooldown: 0.08, lunge: 2.6 });
 /**
  * 消防斧：hits 一下最多砍中几只（近的先，各自要看得见）；shove / shoveReach 这一下的推搡力道和距离（刀用 SHOVE 的）。
+ * knock：推搡放在劈中之后（砍完把还站着的掀开）——刀是一出手就推，斧子 0.3 秒才落下来，先推的话人已经被推出两米开外，劈了个空；
+ * grace：起手时够得着的先记下，落下那一刻它晃开了这么多米也照样砍中（还要在 cone + 0.35 的角度里）。
  * 一斧 200：行尸、奔尸、扑袭者、喷酸者一下倒，胖尸（190）也一下；比刀慢（0.8 秒一下），拿着它还是跑得和拿刀一样快
  */
-export const AXE = Object.freeze({ name: '消防斧', damage: 200, reach: 2.7, cone: 0.95, hits: 2, time: 0.8, hitAt: 0.3, cooldown: 0.15, lunge: 2.0, shove: 9, shoveReach: 2.6 });
+export const AXE = Object.freeze({ name: '消防斧', damage: 200, reach: 2.7, cone: 0.95, hits: 2, time: 0.8, hitAt: 0.3, cooldown: 0.15, lunge: 2.0, shove: 9, shoveReach: 2.6, knock: true, grace: 0.8 });
 /** 近战槽里能放的东西（setMelee 换）；刀是默认的 */
 export const MELEE = Object.freeze({ knife: KNIFE, axe: AXE });
 /**
@@ -391,7 +393,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
 
   // ---- 状态 ----
   const P = { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, twist: 0, twistV: 0, lean: 0, flashT: 0, spread: PISTOL.spreadHip, lastShot: -9, bob: 0, swayX: 0, swayY: 0, sprint: 0, finger: 0, left: 0 };
-  const K = { t: -1, cool: 0, hit: false, bob: 0, swayX: 0, swayY: 0, sprint: 0 };
+  const K = { t: -1, cool: 0, hit: false, marks: null, bob: 0, swayX: 0, swayY: 0, sprint: 0 };
   const S = { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, shown: true, quick: null, plain: false, pose: null, racked: false, time: 0 };
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q1 = new THREE.Quaternion(), e1 = new THREE.Euler();
   const X_AXIS = new THREE.Vector3(1, 0, 0);
@@ -460,7 +462,9 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
    */
   function knifeHit() {
     const eye = camera.getWorldPosition(new THREE.Vector3()), f = camera.getWorldDirection(new THREE.Vector3()), hits = MW.hits || 1, list = [];
-    for (const e of G.enemies?.list || []) if (e.alive && e.active && knifeReaches(eye, f.x, f.y, f.z, e, MW.reach, MW.cone)) list.push({ e, d: Math.hypot(e.pos.x - eye.x, e.pos.z - eye.z) });
+    // 斧子：起手时记下的（K.marks）落下时晃开一点也算
+    const reach = (e) => knifeReaches(eye, f.x, f.y, f.z, e, MW.reach, MW.cone) || (MW.grace > 0 && !!K.marks?.includes(e) && knifeReaches(eye, f.x, f.y, f.z, e, MW.reach + MW.grace, MW.cone + 0.35));
+    for (const e of G.enemies?.list || []) if (e.alive && e.active && reach(e)) list.push({ e, d: Math.hypot(e.pos.x - eye.x, e.pos.z - eye.z) });
     list.sort((a, b) => a.d - b.d);
     let n = 0;
     for (const { e, d } of list) {
@@ -476,21 +480,25 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     if (n) G.player?.addShake?.(MW === KNIFE ? 0.18 : 0.26);
     return n > 0;
   }
+  /** 推搡：刀只扎得到一个，但这一下会把贴身的都推开一步、打个趔趄——被围住的时候腾出空来（丧尸才有 shove，劫持者不吃这一套）；斧子推得更远更狠 */
+  function shove() {
+    const eye = camera.getWorldPosition(v3), f = camera.getWorldDirection(v1), fl = Math.hypot(f.x, f.z) || 1, reach = Math.max(SHOVE.reach, MW.shoveReach || 0), power = MW.shove || SHOVE.power; let n = 0;
+    for (const e of G.enemies?.list || []) {
+      if (!e.alive || !e.active || !e.shove) continue;
+      const dx = e.pos.x - eye.x, dz = e.pos.z - eye.z, d = Math.hypot(dx, dz);
+      if (d > reach || Math.abs(e.pos.y + 1.6 - eye.y) > 1.5 || (d > 0.6 && (dx * f.x + dz * f.z) / (d * fl) < SHOVE.cos)) continue;
+      if (e.shove(d > 0.05 ? dx / d : f.x / fl, d > 0.05 ? dz / d : f.z / fl, power)) n++;
+    }
+    if (n) { G.events?.emit?.('weapon:shove', { count: n }); G.player?.addShake?.(0.1); }
+  }
   function slash() {
     if (K.t >= 0 || K.cool > 0) return false;
     K.t = 0; K.hit = false;
     G.events?.emit?.('weapon:melee', {});
-    // 推搡：刀只扎得到一个，但这一下会把贴身的都推开一步、打个趔趄——被围住的时候腾出空来（丧尸才有 shove，劫持者不吃这一套）；斧子推得更远更狠
-    {
-      const eye = camera.getWorldPosition(v3), f = camera.getWorldDirection(v1), fl = Math.hypot(f.x, f.z) || 1, reach = Math.max(SHOVE.reach, MW.shoveReach || 0), power = MW.shove || SHOVE.power; let n = 0;
-      for (const e of G.enemies?.list || []) {
-        if (!e.alive || !e.active || !e.shove) continue;
-        const dx = e.pos.x - eye.x, dz = e.pos.z - eye.z, d = Math.hypot(dx, dz);
-        if (d > reach || Math.abs(e.pos.y + 1.6 - eye.y) > 1.5 || (d > 0.6 && (dx * f.x + dz * f.z) / (d * fl) < SHOVE.cos)) continue;
-        if (e.shove(d > 0.05 ? dx / d : f.x / fl, d > 0.05 ? dz / d : f.z / fl, power)) n++;
-      }
-      if (n) { G.events?.emit?.('weapon:shove', { count: n }); G.player?.addShake?.(0.1); }
-    }
+    // 刀：一出手就推；斧子：劈中以后再把还站着的掀开（updateKnife），起手时够得着的先记下
+    K.marks = null;
+    if (MW.knock) { const eye = camera.getWorldPosition(v3), f = camera.getWorldDirection(v1); K.marks = (G.enemies?.list || []).filter((e) => e.alive && e.active && knifeReaches(eye, f.x, f.y, f.z, e, MW.reach, MW.cone)); }
+    else shove();
     // 近处有人：往前垫一小步
     const p = G.player;
     if (p?.onGround && p.vel) {
@@ -632,7 +640,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     let pose = { back: 0, thrust: 0, sweep: 0 };
     if (K.t >= 0) {
       K.t += dt;
-      if (!K.hit && K.t >= MW.hitAt) { K.hit = true; knifeHit(); }
+      if (!K.hit && K.t >= MW.hitAt) { K.hit = true; knifeHit(); if (MW.knock) shove(); K.marks = null; } // 斧子：砍完再推（砍倒的不推，没倒的掀开）
       pose = slashPose(K.t / MW.time);
       if (K.t >= MW.time) { K.t = -1; K.cool = MW.cooldown; if (S.quick && S.cur === 'knife') { const back = S.quick; S.quick = null; select(back, { plain: true }); } }
     }

@@ -204,6 +204,9 @@ test('自动开火（触屏）：准星压在敌人身上一瞬就开火，移�
   const near = () => { fired = 0; for (let i = 0; i < 30; i++) { input.fire = false; actions.pre(1 / 60); if (input.fire) fired++; } return fired; };
   e.pos.set(-135, 0, -100.5); G.weapon.current = 'knife'; player.pitch = -Math.atan2(1.68 - 1.15, 2.5); // 准星压在它胸口
   assert.equal(near(), 0, '刀够不着两米半外'); G.weapon.meleeReach = 2.7; assert.ok(near() > 0, '斧子够得着');
+  // 发呆不动的（潜行时站着睡的）：不自己出手，枪也不自己开
+  e.passive = true; near(); assert.equal(near(), 0, '睡着的不自己砍'); // 先放掉上一下按住的余量 G.weapon.current = 'pistol'; assert.equal(near(), 0, '也不自己开枪');
+  e.passive = false; assert.ok(near() > 0, '醒了照打');
 });
 
 test('手机按键：蹲、近战、手雷三个键能在「键位布局」里调，样式里有它们的位置', () => {

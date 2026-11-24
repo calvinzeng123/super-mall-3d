@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { findPath } from '../fps/pathfinding.js';
 import { landAt, clear } from '../layout/nav.js';
+import { pointInPoly } from '../layout/geom.js';
 import { routeHint } from './minimap.js';
 
 export const GUIDE = Object.freeze({ spacing: 1.4, ahead: 45, count: 34, recompute: 1.5, stray: 5, speed: 7, color: '#9fe8ff' });
@@ -20,6 +21,8 @@ export function doorOutside(layout, site, nav = null) {
   if (!site?.unit) return null;
   const lv = layout.levels.find((l) => l.id === site.floor), u = lv?.units?.find((q) => q.id === site.unit), f = u?.wfronts?.[0];
   if (!f) return null;
+  // 目标本来就在店门外（丧尸围城撬卷帘救人：站在店门口撬）：不用先找门。以前照样取「离落点远的那一侧」，反倒取到了店里面，路线从锁着的店里穿
+  if (!u.residence && u.polys?.length && !u.polys.some((p) => pointInPoly([site.x, site.z], p))) return null;
   const at = u.residence?.entryDoor?.at, L = Math.hypot(f.x1 - f.x0, f.z1 - f.z0) || 1;
   // 门脸在世界里是 (x0,z0) → (x1,z1)，对应户内坐标沿门脸从 fronts[0].x0 到 x1
   const lf = u.fronts?.[0], k = typeof at === 'number' && lf ? (at - lf.x0) / ((lf.x1 - lf.x0) || 1) : 0.5;

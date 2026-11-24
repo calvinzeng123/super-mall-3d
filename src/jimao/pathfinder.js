@@ -30,6 +30,12 @@ class Heap {
 
 export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNodes, now = () => performance.now() } = {}) {
   const grids = new Map();
+  // 绕开的地方（setAvoid：丧尸围城里卷帘拉下的店）：avoid(floor, x, z) 为真的格子不走，直线、拉直的那几段也不从里面穿；
+  // core 是不留余量的那一圈（店里面）：起点或终点自己就在里面的那一段照旧（不然出不来），起点、终点接到格子上的那一小段只要不穿进去就行。
+  // 格子的结果按层缓存，setAvoid 时清掉
+  let avoid = null, core = null; const shun = new Map();
+  const shunned = (floor, i, j) => { let c = shun.get(floor); if (!c) shun.set(floor, c = new Map()); const k = keyOf(i, j); let v = c.get(k); if (v === undefined) { v = avoid(floor, i * cell, j * cell) ? 1 : 0; c.set(k, v); } return v === 1; };
+  const crosses = (a, b, fn) => { const L = dist(a, b), n = Math.ceil(L / 0.3); for (let k = 0; k <= n; k++) { const t = n ? k / n : 0; if (fn(a.floor, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t)) return true; } return false; };
   const stats = { requests: 0, done: 0, failed: 0, cancelled: 0, slices: 0, worst: 0, cells: 0, edges: 0 };
   const floorY = (id) => nav.floors.get(id)?.y ?? 0;
   const asState = (s) => ({ ...s, y: s.y ?? floorY(s.floor), slope: s.slope || null });
@@ -59,9 +65,11 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
   function* local(a, b) {
     if (a.floor !== b.floor || !clear(nav, a) || !clear(nav, b)) return null;
     yield; // 跨层的路是一串很短的同层段（扶梯口到下一部扶梯口），每段开头都让一次，不然一帧里连着算完好几段
-    if (dist(a, b) < PATH.direct && traceMotion(nav, a, b)) return [asState(a), asState(b)];
+    const dodge = !!avoid && !core(a.floor, a.x, a.z) && !core(b.floor, b.x, b.z);
+    const walk = (p, q) => traceMotion(nav, p, q) && !(dodge && crosses(p, q, avoid)), join = (p, q) => traceMotion(nav, p, q) && !(dodge && crosses(p, q, core));
+    if (dist(a, b) < PATH.direct && walk(a, b)) return [asState(a), asState(b)];
     yield;
-    const { point, isOpen, edge } = ops(a.floor);
+    const g0 = ops(a.floor), point = g0.point, edge = g0.edge, isOpen = dodge ? (i, j) => g0.isOpen(i, j) && !shunned(a.floor, i, j) : g0.isOpen;
     const starts = [], ends = new Map();
     for (const [isStart, s] of [[true, a], [false, b]]) {
       const cx = Math.round(s.x / cell), cz = Math.round(s.z / cell);
@@ -69,7 +77,7 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
         if (!isOpen(i, j)) continue;
         const p = point(i, j);
         yield; // 楼梯口、扶梯口附近试走一次要将近 1 毫秒，25 个点不能一口气试完
-        if (!(isStart ? traceMotion(nav, s, p) : traceMotion(nav, p, s))) continue;
+        if (!(isStart ? join(s, p) : join(p, s))) continue;
         if (isStart) starts.push({ i, j, cost: dist(s, p) }); else ends.set(keyOf(i, j), dist(s, p));
       }
       yield;
@@ -98,7 +106,7 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
     const out = [raw[0]];
     for (let i = 0; i < raw.length - 1;) {
       let j = i + 1;
-      for (const n of [18, 12, 8, 5, 3, 2]) { const q = Math.min(raw.length - 1, i + n); if (q <= i + 1) break; yield; if (traceMotion(nav, raw[i], raw[q])) { j = q; break; } }
+      for (const n of [18, 12, 8, 5, 3, 2]) { const q = Math.min(raw.length - 1, i + n); if (q <= i + 1) break; yield; if (walk(raw[i], raw[q])) { j = q; break; } }
       out.push(raw[j]); i = j;
     }
     return out;
@@ -191,6 +199,8 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
     get pending() { return queue.length; },
     /** fn(connector) 返回 true 的连接，给玩家排路线时不走（connector: { id, kind, link?, from?, to? }）；传 null 取消 */
     setBlocked(fn) { blocked = typeof fn === 'function' ? fn : null; },
+    /** fn(floor, x, z) 返回 true 的地方寻路绕开（谁的路都绕：人、队友、丧尸），inner 是不带余量的里圈（默认同 fn）；传 null 取消。范围变了（比如一家店的卷帘撬开了）再调一次：缓存清掉重算 */
+    setAvoid(fn, inner = null) { avoid = typeof fn === 'function' ? fn : null; core = typeof inner === 'function' ? inner : avoid; shun.clear(); },
     /** 排一条路：算完调 cb(path | null)。opts.lifts 把电梯算进去；opts.urgent 插到队首（正在算的那条之后）。返回 { cancel() } */
     request(from, to, cb, opts = {}) {
       const job = { gen: search(from, to, opts), cb, dead: false, cancel() { if (!job.dead) { job.dead = true; stats.cancelled++; } } };
