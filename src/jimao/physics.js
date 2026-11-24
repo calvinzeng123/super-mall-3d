@@ -34,7 +34,7 @@ export function createMapPhysics(nav) {
     return s ? nav.floors.get(s.floor) : null;
   }
 
-  const ray = { o: new THREE.Vector3(), d: new THREE.Vector3() }, across = { o: new THREE.Vector3(), d: new THREE.Vector3(), maxH: 0 };
+  const ray = { o: new THREE.Vector3(), d: new THREE.Vector3() }, across = { o: new THREE.Vector3(), d: new THREE.Vector3(), n: new THREE.Vector3(), maxH: 0 };
   /** 射线和二维线段（竖直的面，底 y0、高 h）求交，返回距离或 Infinity */
   function hitSegment(ax, az, bx, bz, y0, h, maxDist, out) {
     const { o, d } = ray, ex = bx - ax, ez = bz - az, den = d.x * ez - d.z * ex;
@@ -84,6 +84,22 @@ export function createMapPhysics(nav) {
     }
     return false;
   }
+  /** 射线 (o, d) 在 [0, maxT] 里第一次进入轴对齐方盒 b（x0..x1、y0..y1、z0..z1）的距离；碰不到、或者起点就在盒子里，给 Infinity。n 写进来的那一面的法线 */
+  function boxEntry(b, o, d, maxT, n) {
+    let t0 = 0, t1 = maxT, axis = -1, sign = 0;
+    for (let a = 0; a < 3; a++) {
+      const p = a === 0 ? o.x : a === 1 ? o.y : o.z, v = a === 0 ? d.x : a === 1 ? d.y : d.z, lo = a === 0 ? b.x0 : a === 1 ? b.y0 : b.z0, hi = a === 0 ? b.x1 : a === 1 ? b.y1 : b.z1;
+      if (Math.abs(v) < 1e-12) { if (p < lo || p > hi) return Infinity; continue; }
+      let ta = (lo - p) / v, tb = (hi - p) / v;
+      if (ta > tb) { const k = ta; ta = tb; tb = k; }
+      if (ta > t0) { t0 = ta; axis = a; sign = v > 0 ? -1 : 1; }
+      if (tb < t1) t1 = tb;
+      if (t0 > t1) return Infinity;
+    }
+    if (axis < 0) return Infinity;
+    n?.set(axis === 0 ? sign : 0, axis === 1 ? sign : 0, axis === 2 ? sign : 0);
+    return t0;
+  }
   /** 射线（水平投影）在 limit 距离内碰不到这个包围盒 */
   function missesBox(b, limit) {
     const { o, d } = ray;
@@ -105,6 +121,13 @@ export function createMapPhysics(nav) {
     bounds: { min: new THREE.Vector3(-1e5, -1e5, -1e5), max: new THREE.Vector3(1e5, 1e5, 1e5) },
     addBox(min, max, opts = {}) { const b = { min: min.clone(), max: max.clone(), surface: opts.surface || 'concrete', tag: opts.tag || '', bulletOnly: !!opts.bulletOnly }; physics.boxes.push(b); return b; },
     removeBox(b) { const i = physics.boxes.indexOf(b); if (i >= 0) physics.boxes.splice(i, 1); },
+    /**
+     * 只挡跨楼层射线（castAcross / sightAcross：直升机、车顶机枪往外看、往外打）的实心方盒 { x0, y0, z0, x1, y1, z1 }，比如清扫时外挂的阳台（楼板、挡板）。
+     * 不进 raycast：人走路、丧尸看人、平时的子弹照旧。返回登记的那一份（removeOccluder 用）
+     */
+    occluders: [],
+    addOccluder(b, opts = {}) { const o = { x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), z0: Math.min(b.z0, b.z1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1), z1: Math.max(b.z0, b.z1), surface: opts.surface || 'concrete', tag: opts.tag || '' }; physics.occluders.push(o); return o; },
+    removeOccluder(o) { const i = physics.occluders.indexOf(o); if (i >= 0) physics.occluders.splice(i, 1); },
     build() {},
     /** 导航状态（只读），给画面同步楼层可见性用 */
     stateOf(pos) { return tracked.get(pos) || null; },
@@ -174,7 +197,8 @@ export function createMapPhysics(nav) {
       const byY = floorsByHeight(nav);
       if (!byY) return physics.raycast(origin, dir, maxDist); // 没建索引（小导航）：退回只查一层
       const d = across.d.copy(dir).normalize(), o = across.o.copy(origin);
-      const out = { dist: Infinity, normal: new THREE.Vector3(), surface: 'concrete', box: null }, sub = { dist: Infinity, normal: out.normal, surface: 'concrete' };
+      // sub 的法线单独一份：每一层都会写它，只有比已有命中更近的那一层才抄进 out（以前共用一份，远处那一层的墙会把近处的法线改掉）
+      const out = { dist: Infinity, normal: new THREE.Vector3(), surface: 'concrete', box: null }, sub = { dist: Infinity, normal: across.n, surface: 'concrete' };
       const y1 = o.y + d.y * maxDist, lo = Math.min(o.y, y1), hi = Math.max(o.y, y1);
       const ex = o.x + d.x * maxDist, ez = o.z + d.z * maxDist, bx0 = Math.min(o.x, ex) - 0.5, bx1 = Math.max(o.x, ex) + 0.5, bz0 = Math.min(o.z, ez) - 0.5, bz1 = Math.max(o.z, ez) + 0.5;
       if (!(across.maxH > 0)) { across.maxH = 0; for (const F of nav.floors.values()) across.maxH = Math.max(across.maxH, floorHeight(F)); }
@@ -202,7 +226,7 @@ export function createMapPhysics(nav) {
           if (!(sub.dist < Infinity)) break;
           const t = from + sub.dist, y = o.y + d.y * t;
           if (y - F.y > 2.4 && slabBetween(byY, F.y + 0.5, y, o.x + d.x * t, o.z + d.z * t)) { from = t + 0.02; continue; }
-          if (t < out.dist) out.dist = t;
+          if (t < out.dist) { out.dist = t; out.normal.copy(sub.normal); out.surface = sub.surface; }
           break;
         }
       }
@@ -216,14 +240,24 @@ export function createMapPhysics(nav) {
           if (t <= 1e-4 || t >= out.dist || t > maxDist) continue;
           const x = o.x + d.x * t, z = o.z + d.z * t;
           if (x < e.x0 || x > e.x1 || z < e.z0 || z > e.z1 || !supported(G, x, z)) continue;
-          out.dist = t;
+          out.dist = t; out.normal.set(0, d.y < 0 ? 1 : -1, 0); out.surface = 'concrete';
         }
       }
       for (const b of physics.boxes) {
         const p = new THREE.Ray(o, d).intersectBox(new THREE.Box3(b.min, b.max), new THREE.Vector3());
         if (!p) continue;
         const t = p.distanceTo(o);
-        if (t < out.dist && t <= maxDist) { out.dist = t; out.box = b; }
+        if (t < out.dist && t <= maxDist) {
+          out.dist = t; out.box = b; out.surface = b.surface;
+          // 法线：交点贴着的那一面
+          const f = [p.x - b.min.x, b.max.x - p.x, p.y - b.min.y, b.max.y - p.y, p.z - b.min.z, b.max.z - p.z], k = f.indexOf(Math.min(...f));
+          out.normal.set(k === 0 ? -1 : k === 1 ? 1 : 0, k === 2 ? -1 : k === 3 ? 1 : 0, k === 4 ? -1 : k === 5 ? 1 : 0);
+        }
+      }
+      // 只挡跨楼层射线的方盒（阳台）
+      for (const b of physics.occluders) {
+        const t = boxEntry(b, o, d, Math.min(maxDist, out.dist), across.n);
+        if (t < out.dist) { out.dist = t; out.normal.copy(across.n); out.surface = b.surface; out.box = b; }
       }
       if (!Number.isFinite(out.dist)) return null;
       out.point = o.clone().addScaledVector(d, out.dist);

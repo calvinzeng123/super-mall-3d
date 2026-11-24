@@ -65,9 +65,14 @@ export const SIEGE = Object.freeze({
   // post：屋顶、楼下的守在一个点上（不追人——人在飞机上，追就钻进楼里了），每 every 秒按 lead 秒以后飞机的位置挪到看得见的点（屋顶 roofWalk、楼下 groundWalk 米以内）；
   //   备选点屋顶 roofPool、楼下 groundPool 个；离开自己那一层超过 off 秒的收回重放
   // expose：每只隔 every 秒查一遍看不看得见，连着看得见 on 秒才算露出来、连着看不见 off 秒才算藏起来（HUD 红点、辅助瞄准不闪）
+  // post.spread / ms：换点前给备选点重新打分，分到 spread × every 秒里的各帧去做（一帧最多 ms 毫秒），不在一帧里打一百多条跨楼层射线
+  // refill：楼下第二批平时降到低空才来；第一批只剩 left 只、或者连着 lull 秒能打的不到 quiet 只（屋顶、阳台都清了），就提前冲出来——不让人干转半圈
+  // balcony.front：阳台里的站在离阳台中线往外 front 米（贴着玻璃）；阳台的楼板、挡板挡视线、挡子弹（physics.addOccluder），往里站从飞机上只看得见顶板。
+  //   low：降到低空绕楼下那一圈上看得见不到这么几成的（高层、只在一个角上露一下），进了那一段就不挡「清完了」（不让人为最后一只干转大半圈）
+  // prep：清扫要用的点在楼里爬楼那一阵就开始分帧算（爬楼的落点算完以后），一帧最多 prep 毫秒
   sweep: Object.freeze({ roof: 14, window: 12, ground: 18, screamers: 3, cap: 150, throw: Object.freeze({ range: 85, every: 0.6, flight: 1.5, hit: 0.8, hits: 1.5, first: 9, crowd: 5 }),
-    post: Object.freeze({ every: 1, lead: 3, roofWalk: 16, groundWalk: 30, roofPool: 48, groundPool: 72, off: 1 }),
-    expose: Object.freeze({ every: 0.25, on: 0.3, off: 0.5 }) }),
+    post: Object.freeze({ every: 1, lead: 3, roofWalk: 16, groundWalk: 30, roofPool: 48, groundPool: 72, off: 1, spread: 0.8, ms: 1.2 }),
+    expose: Object.freeze({ every: 0.25, on: 0.3, off: 0.5 }), refill: Object.freeze({ left: 2, quiet: 2, lull: 3 }), balcony: Object.freeze({ front: 0.4, low: 0.15 }), prep: 2 }),
   ammo: Object.freeze({ rifle: 30, reserve: 90 }),
   // 被拍飞 / 掀飞以后：飞着撞上墙（一帧里速度掉一大半）再掉 wall 点血，落地掉 land 点；最多算 seconds 秒
   fling: Object.freeze({ wall: 12, land: 6, seconds: 2, fast: 5.5, stop: 0.45 }),
@@ -402,11 +407,11 @@ const bounds = (layout, tower) => { const b = layout.buildings.find((x) => x.id 
  *   公寓：一半在东、南两面的街上（标高 0 的室外地面），一半在西边紧挨着的商场屋面上（从楼与楼之间冲过来的）；
  *   北区 1 号楼压在商场上面，四周全是商场屋面（tower.mall）。
  */
-export function groundSpots(nav, layout, count, rng, tower = TOWERS.A, lo = 8, hi = 34) {
+export function groundSpots(nav, layout, count, rng, tower = TOWERS.A, lo = 8, hi = 34, mallFirst = false) {
   const { x0, x1, z0, z1 } = bounds(layout, tower), out = [];
   const mallY = nav.floors.get('P1-RF')?.y ?? 34;
   for (let k = 0; k < count * 80 && out.length < count; k++) {
-    const mall = tower.mall || out.length % 2 === 1;
+    const mall = tower.mall || (out.length + (mallFirst ? 1 : 0)) % 2 === 1; // mallFirst：一次只撒一个点时轮着来（这次先撒商场屋面上的）
     const x = x0 - hi + rng() * (x1 - x0 + hi * 2), z = z0 - hi + rng() * (z1 - z0 + hi * 2);
     const dx = Math.max(x0 - x, 0, x - x1), dz = Math.max(z0 - z, 0, z - z1), d = Math.hypot(dx, dz);
     if (d < lo || d > hi) continue;
@@ -609,12 +614,17 @@ export function flareModel() {
   let t = 0; g.userData.update = (dt) => { if (!lit.visible) return; t += dt; fireStep(lit.userData.mats, t); };
   beacon(g); g.userData.setState = (s) => setState(g, s); return g;
 }
-/** 一个阳台：楼板、两侧挡板、整面玻璃（pane）。朝 +x 伸出去 */
+/** 一个阳台：楼板、两侧挡板、整面玻璃（pane）。朝 +x 伸出去。solid：不透光的那几块（清扫时登记成挡视线、挡子弹的方盒） */
 export function balconyModel() {
   const m = mats(), g = new THREE.Group(); g.name = '阳台';
-  box(g, 1.5, 0.14, 2.6, 0, -0.07, 0, m.slab); box(g, 1.5, 0.1, 2.6, 0, 2.5, 0, m.slab); box(g, 1.5, 2.5, 0.08, 0, 1.25, -1.3, m.white); box(g, 1.5, 2.5, 0.08, 0, 1.25, 1.3, m.white); box(g, 0.06, 2.5, 2.6, -0.72, 1.25, 0, m.dark);
+  const solid = [box(g, 1.5, 0.14, 2.6, 0, -0.07, 0, m.slab), box(g, 1.5, 0.1, 2.6, 0, 2.5, 0, m.slab), box(g, 1.5, 2.5, 0.08, 0, 1.25, -1.3, m.white), box(g, 1.5, 2.5, 0.08, 0, 1.25, 1.3, m.white), box(g, 0.06, 2.5, 2.6, -0.72, 1.25, 0, m.dark)];
   const pane = box(g, 0.03, 2.4, 2.5, 0.72, 1.25, 0, m.glass); pane.castShadow = false; pane.renderOrder = 3;
-  g.userData.pane = pane; return g;
+  g.userData.pane = pane; g.userData.solid = solid; return g;
+}
+/** 摆好（position / rotation 设过）的阳台模型里不透光那几块的世界包围盒 [{ x0, y0, z0, x1, y1, z1 }]（阳台只转 90° 的倍数，包围盒就是原样） */
+export function balconyBoxes(g) {
+  g.updateWorldMatrix(true, true);
+  return (g.userData.solid || []).map((o) => { const b = new THREE.Box3().setFromObject(o); return { x0: b.min.x, y0: b.min.y, z0: b.min.z, x1: b.max.x, y1: b.max.y, z1: b.max.z }; });
 }
 
 export const SIEGE_CSS = DEFENSE_CSS + DEMOLISH_CSS + `
@@ -923,7 +933,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   }
   function reset() {
     for (const b of blocks.splice(0)) { b.userData.dispose?.(); b.removeFromParent(); }
-    for (const b of balconies.splice(0)) b.g.removeFromParent();
+    for (const b of balconies.splice(0)) { b.g.removeFromParent(); for (const o of b.occ || []) G.physics?.removeOccluder?.(o); }
     for (const a of acids.splice(0)) a.dispose();
     for (const r of rocks.splice(0)) r.m.removeFromParent();
     if (S.flareLamp) { S.flareLamp.light.decay = 2; S.flareLamp.release(); }
@@ -1410,38 +1420,52 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   function spawnPosted(q, group, kind, mix = null) {
     const z = spawn(new THREE.Vector3(q.x, q.y, q.z), { kind, mix, post: q, anchor: q.floor });
     if (!z) return null;
-    Object.assign(z, { sweep: group, offT: 0, exposeOn: false, expRaw: false, expRun: 0, expDt: 0 });
+    Object.assign(z, { sweep: group, offT: 0, exposeOn: false, expRaw: false, expRun: 0, expDt: 0, postQ: q }); // postQ：它守的那个备选点本身（z.post 是拷贝），换点时直接看那一点这一轮的 seen
     if (!S.sweep.list.includes(z)) S.sweep.list.push(z);
     return z;
   }
+  /** 打死、收回的：飞着的那块东西还会落下来，但不再算砸中 */
+  const disarm = (z) => { for (const r of rocks) if (r.by === z) r.by = null; };
   /** 离开了自己那一层（钻进楼梯、楼里）：收回来，在同一拨的点上重放一只同样的（不算打死）。down：屋顶上的换到楼下 */
   function respawnPosted(z, down = false) {
     const sw = S.sweep, group = z.sweep, kind = z.kind, roof = !down && z.anchor === tower().roof, anchor = z.anchor;
     const i = sw.list.indexOf(z); if (i >= 0) sw.list.splice(i, 1);
-    z.sweep = null; z._deactivate();
+    z.sweep = null; disarm(z); z._deactivate();
     const pool = roof ? sw.roofPool : sw.groundPool.filter((q) => down || q.floor === anchor), taken = sw.list.map((o) => o.post).filter(Boolean);
     const free = pool.filter((q) => !taken.some((p) => Math.hypot(p.x - q.x, p.z - q.z) < 1.2));
     const q = free.find((p) => p.seen) || free[Math.floor(rng() * free.length)] || pool[0];
     return q ? spawnPosted(q, group, kind) : null;
   }
   /** 守点的跟着飞机挪：按 lead 秒以后飞机的位置，现在的点那时看不见了，就换到走得到（屋顶：直线走得过去）、那时看得见、没人占着的最近一点 */
+  // 每 every 秒一轮：先按 lead 秒以后飞机的位置给备选点打分（分到 spread × every 秒里的各帧，一帧最多 ms 毫秒——以前一帧里打一百多条跨楼层射线，
+  // 清扫时每秒卡一下），打完分再挪人（它守的点这一轮的分直接用，不再打一遍）
   function repostTick(dt, rideT, live) {
-    const sw = S.sweep, P = SIEGE.sweep.post;
-    if ((sw.postT -= dt) > 0) return;
-    sw.postT = P.every;
-    const f = heliGun(S.flight.poseAt(rideT + P.lead), sw.frame), roofId = tower().roof;
-    for (const q of sw.roofPool) q.seen = seenFrom(f, chestOf(q), true);
-    for (const q of sw.groundPool) q.seen = seenFrom(f, chestOf(q), false);
+    const sw = S.sweep, P = SIEGE.sweep.post, roofId = tower().roof;
+    sw.postT -= dt;
+    if (!sw.rp) {
+      if (sw.postT > 0) return;
+      sw.postT = P.every; heliGun(S.flight.poseAt(rideT + P.lead), sw.frame);
+      sw.rp = { k: 0, pass: (sw.pass = (sw.pass || 0) + 1) };
+    }
+    const f = sw.frame, R = sw.rp, nr = sw.roofPool.length, all = nr + sw.groundPool.length;
+    const n = Math.max(1, Math.ceil(all * dt / (P.every * P.spread))), t0 = performance.now();
+    for (let c = 0; c < n && R.k < all; c++) {
+      const roof = R.k < nr, q = roof ? sw.roofPool[R.k] : sw.groundPool[R.k - nr]; R.k++;
+      q.seen = seenFrom(f, chestOf(q), roof); q.pass = R.pass;
+      if (performance.now() - t0 > P.ms) break;
+    }
+    if (R.k < all) return;
+    sw.rp = null;
     const taken = live.map((z) => z.post).filter(Boolean);
     for (const z of live) {
       if (!z.post) continue;
-      const roof = z.anchor === roofId;
-      if (seenFrom(f, chestOf(z.post), roof)) continue;
+      const roof = z.anchor === roofId, mine = z.postQ?.pooled && z.postQ.pass === R.pass && Math.hypot(z.postQ.x - z.post.x, z.postQ.z - z.post.z) < 1e-6;
+      if (mine ? z.postQ.seen : seenFrom(f, chestOf(z.post), roof)) continue;
       const near = (roof ? sw.roofPool : sw.groundPool).filter((q) => q.seen && q.floor === z.anchor && !taken.some((p) => p !== z.post && Math.hypot(p.x - q.x, p.z - q.z) < 1.2))
         .map((q) => [q, Math.hypot(q.x - z.pos.x, q.z - z.pos.z)]).filter(([, d]) => d < (roof ? P.roofWalk : P.groundWalk)).sort((a, b) => a[1] - b[1]);
       for (const [q] of near.slice(0, 3)) {
         if (roof && G.physics.nav?.clearLine && !G.physics.nav.clearLine(z.pos, q)) continue; // 屋顶：北区的机房把屋面隔成两半，绕不过去的不去
-        z.repost(q); break;
+        if (z.repost(q)) z.postQ = q; break;
       }
     }
   }
@@ -1451,25 +1475,30 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
    */
   function* sweepPrep() {
     const W = SIEGE.sweep, F = S.flight, T = tower(), out = {};
+    // 楼下撒点用自己的随机数（种子取这一局的关卡位置）：开局就在后台算，不能搅乱这一局别处要用的随机序列
+    let seed = 7; for (const st of S.plan?.stages || []) seed = (seed * 31 + Math.round(st.site.x * 10) * 7 + Math.round(st.site.z * 10)) % 2147483647;
+    seed = (Math.abs(seed) % 2147483646) + 1; const prng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const lapT = (F.times.windows - F.times.roof) / 0.75, frames = (t0, t1, every) => { const l = []; for (let t = t0; t < t1; t += every) l.push(heliGun(F.poseAt(t))); return l; };
-    out.share = (q, list, roof = false) => { let n = 0; const at = chestOf(q, new THREE.Vector3()); for (const f of list) if (seenFrom(f, at, roof)) n++; return list.length ? n / list.length : 0; };
+    // 看得见几成：每查两帧（两条跨楼层射线，长的一条半毫秒）让一下
+    function* share(q, list, roof = false) { let n = 0, k = 0; const at = chestOf(q, new THREE.Vector3()); for (const f of list) { if (seenFrom(f, at, roof)) n++; if (++k % 2 === 0 || k === list.length) yield; } return list.length ? n / list.length : 0; }
     out.roofFrames = frames(F.times.roof + 1, F.times.windows, 2.5); out.lowFrames = frames(F.times.ground, F.times.ground + lapT, 2.5); out.allFrames = frames(6, F.times.ground + lapT, 5);
     yield;
     // 屋顶：露天的点（不在楼梯间里），按屋顶那一段航线上看得见几成
     const grid = roofGrid(2.5); yield;
-    for (let i = 0; i < grid.length; i++) { grid[i].score = out.share(grid[i], out.roofFrames, true); if (i % 6 === 5) yield; }
+    for (const q of grid) q.score = yield* share(q, out.roofFrames, true);
     out.roofPool = spread(grid, W.post.roofPool, (q) => q.score, 2.4, 2.4);
-    // 楼下：一次只撒几个点（撒点要找落脚的楼面，一次撒几十个要上百毫秒），分得开的收下
+    // 楼下：一次只撒一个点（撒点要找落脚的楼面，一个点就要一两毫秒），分得开的收下
     const ground = [];
-    for (let k = 0; k < 40 && ground.length < W.post.groundPool; k++) {
-      for (const q of groundSpots(nav, layout, 4, rng, T, 6, 22)) if (!ground.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 2.5)) ground.push(Object.assign(new THREE.Vector3(q.x, q.y, q.z), { floor: q.where === 'mall' ? 'P1-RF' : 'ground', where: q.where }));
+    for (let k = 0; k < 160 && ground.length < W.post.groundPool; k++) {
+      for (const q of groundSpots(nav, layout, 1, prng, T, 6, 22, k % 2 === 1)) if (!ground.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 2.5)) ground.push(Object.assign(new THREE.Vector3(q.x, q.y, q.z), { floor: q.where === 'mall' ? 'P1-RF' : 'ground', where: q.where }));
       yield;
     }
-    for (const q of ground) { q.score = out.share(q, out.allFrames); yield; }
+    for (const q of ground) q.score = yield* share(q, out.allFrames);
     out.groundPool = ground;
+    for (const q of [...out.roofPool, ...ground]) q.pooled = true; // 备选点：repostTick 每一轮给它们打 seen
     S.prepOut = out;
   }
-  /** 往下算 ms 毫秒（Infinity：算完） */
+  /** 往下算 ms 毫秒（Infinity：算完）。每一小步最多查两条跨楼层视线、撒一个点，预算守得住 */
   function prepStep(ms) {
     if (S.prepOut || !S.flight) return;
     S.prep ||= sweepPrep();
@@ -1488,14 +1517,17 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const roofAt = spread(sw.roofPool.filter((q) => q.score > 0), W.roof, (q) => q.score, 4, 1.6);
     if (roofAt.length < W.roof) for (const q of roofOpen(W.roof * 3)) { if (roofAt.length >= W.roof) break; if (!roofAt.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 1.6)) roofAt.push(q); }
     roofAt.slice(0, W.roof).forEach((q, i) => { if (spawnPosted(q, 'roof', i === 0 ? 'screamer' : i % 3 === 1 ? 'runner' : 'walker')) sw.total.roof++; });
-    // 楼里的：都在阳台的玻璃后面（窗边），不在看不见的屋里；钉在原地不动
+    // 楼里的：都在阳台的玻璃后面（窗边），不在看不见的屋里；钉在原地不动。
+    // 阳台的楼板、挡板挡视线也挡子弹（登记成跨楼层射线的方盒）；人贴着玻璃站（往里站，飞机从上面看下来只看得见顶板——以前标着红点、扔着东西，人却看不见）
+    const fr = W.balcony.front;
     for (const s of balconySpots(layout, nav, W.window, rng, T)) {
       const g = balconyModel(); g.position.set(s.x, s.y, s.z); g.rotation.y = Math.atan2(-s.nz, s.nx); root.add(g); // 阳台模型朝 +x 伸出去，转到朝外
-      const z = spawn(new THREE.Vector3(s.x, s.y, s.z), { kind: 'walker', fixed: true, yaw: Math.atan2(s.nx, s.nz), passive: true });
+      const occ = G.physics?.addOccluder ? balconyBoxes(g).map((q) => G.physics.addOccluder(q, { tag: 'balcony' })) : [];
+      const z = spawn(new THREE.Vector3(s.x + s.nx * fr, s.y, s.z + s.nz * fr), { kind: 'walker', fixed: true, yaw: Math.atan2(s.nx, s.nz), passive: true });
       if (z) { Object.assign(z, { sweep: 'window', exposeOn: false, expRaw: false, expRun: 0, expDt: 0 }); sw.list.push(z); sw.total.window++; }
-      const b = { g, z, s, broken: false }; balconies.push(b);
+      const b = { g, z, s, occ, broken: false }; balconies.push(b);
       // 绕楼下转的那一圈上还看不看得见：看不见的（高层、机枪仰不上去）进了那一段就不挡「清完了」
-      const at = new THREE.Vector3(s.x, s.y + 1.15, s.z); let k = 0;
+      const at = new THREE.Vector3(s.x + s.nx * fr, s.y + 1.15, s.z + s.nz * fr); let k = 0;
       for (const f of P.lowFrames) if ((f.eye.x - s.x) * s.nx + (f.eye.z - s.z) * s.nz > 0.5 && seenFrom(f, at)) k++;
       b.low = P.lowFrames.length ? k / P.lowFrames.length : 0;
     }
@@ -1507,9 +1539,11 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   /** 一只丧尸朝飞机扔一块东西（楼上的扔碎砖，楼下的吐酸）：飞 flight 秒，砸中了掉耐久 */
   function hurl(z, rideT) {
     const T = SIEGE.sweep.throw, c = G.missions?.vehicleCenter?.(); if (!c) return;
-    const b = balconies.find((x) => x.z === z && !x.broken); if (b) breakPane(b); // 阳台里的先把玻璃砸了
+    const b = balconyOf(z); if (b && !b.broken) breakPane(b); // 阳台里的先把玻璃砸了
     const at = S.flight.poseAt(rideT + T.flight), hit = rng() < T.hit, miss = hit ? 0 : 5 + rng() * 5, a = rng() * 6.28;
-    const from = new THREE.Vector3(z.pos.x, z.pos.y + 1.7, z.pos.z), to = new THREE.Vector3(at.x + Math.cos(a) * miss, at.y + 1.2 + (hit ? 0 : -2), at.z + Math.sin(a) * miss);
+    // 出手的地方：阳台里的从胸口扔出来（落下来时飞机上还看得见它的胸口才算砸着——不会躲在顶板、挡板后面砸人）
+    const from = b ? chestOf(z.pos, new THREE.Vector3(), z.scale || 1) : new THREE.Vector3(z.pos.x, z.pos.y + 1.7, z.pos.z);
+    const to = new THREE.Vector3(at.x + Math.cos(a) * miss, at.y + 1.2 + (hit ? 0 : -2), at.z + Math.sin(a) * miss);
     const m = new THREE.Mesh(rockGeo, z.sweep === 'ground' ? gobMat : rockMat); m.position.copy(from); root.add(m);
     rocks.push({ m, from, to, t: 0, life: T.flight, hit, by: z });
   }
@@ -1519,8 +1553,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       r.m.position.lerpVectors(r.from, r.to, k); r.m.position.y += Math.sin(k * Math.PI) * 4; r.m.rotation.x += dt * 9; r.m.rotation.z += dt * 6;
       if (k < 1) continue;
       const c = G.missions?.vehicleCenter?.();
-      // 砸在机身上：从来的方向算一发（顶 hits 发子弹）。飞的这一秒半里飞机绕到楼后面去了（出手那一点看不见了）就算没砸着
-      if (r.hit && c && exposedAt(r.from, r.by)) {
+      // 砸在机身上：从来的方向算一发（顶 hits 发子弹）。飞的这一秒半里飞机绕到楼后面去了（出手那一点看不见了）、扔的那只已经被打死了（disarm），就算没砸着
+      if (r.hit && c && r.by?.alive && exposedAt(r.from, r.by)) {
         const dir = c.clone().sub(r.from).normalize();
         G.events?.emit?.('enemy:fire', { enemy: r.by, pos: c.clone().addScaledVector(dir, -3.5), dir, type: 'zombie', hits: SIEGE.sweep.throw.hits, from: r.from.clone() });
         G.player?.addShake?.(0.12);
@@ -1533,8 +1567,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     sw.t = rideT; rocksTick(dt); demo.tick(dt);
     if (S.bombAt >= 0 && rideT >= S.bombAt && !demo.running) { demo.start(); G.hud?.radio?.('炸弹投下！', 2.5); }
     if (S.flight.watching) watchLook(dt);
-    // 地面的分两批冲出来：起飞不久一批，降到低空再来一批（尖叫者混在里面）
-    const W = SIEGE.sweep, want = rideT > S.flight.times.ground - 6 ? W.ground : rideT > 6 ? Math.ceil(W.ground / 2) : 0;
+    // 地面的分两批冲出来：起飞不久一批，降到低空再来一批（尖叫者混在里面）；第一批快打光了、或者好几秒没东西可打，第二批提前来（sw.early，见下面）
+    const W = SIEGE.sweep, want = sw.early || rideT > S.flight.times.ground - 6 ? W.ground : rideT > 6 ? Math.ceil(W.ground / 2) : 0;
     if ((sw.tick -= dt) <= 0 && sw.made.ground < want) {
       sw.tick = 0.35;
       const s = sw.ground[sw.made.ground % sw.ground.length];
@@ -1555,6 +1589,12 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const live = sw.list.filter((z) => z.alive && z.active);
     repostTick(dt, rideT, live);
     exposeTick(dt, live);
+    // 不干转：第一批都出来了以后，楼下的只剩 left 只、或者连着 lull 秒露出来能打的不到 quiet 只，第二批马上冲出来（以前要等到降到低空，中间四十来秒没东西打，HUD 还挂着「楼下 9/18」）
+    if (!sw.early && rideT < S.flight.times.ground - 6 && sw.made.ground >= Math.ceil(W.ground / 2)) {
+      const R = W.refill, shown = live.reduce((n, z) => n + (z.exposeOn ? 1 : 0), 0), eye = !!(G.missions?.doorGun || G.missions?.vehicleCenter); // 没有飞机（测试）谈不上露不露出来
+      sw.lull = eye && shown < R.quiet ? (sw.lull || 0) + dt : 0;
+      if (live.filter((z) => z.sweep === 'ground').length <= R.left || sw.lull >= R.lull) { sw.early = true; G.hud?.radio?.('楼下又冲出来一批！', 2.5); }
+    }
     // 它们会还手：飞机上看得见的、离飞机 range 米以内的轮流朝飞机扔东西，剩得越少扔得越稀（先按缓存挑，扔之前当场再看一眼）
     if (!S.flight.leaving && (sw.throwT -= dt) <= 0) {
       const c = G.missions?.vehicleCenter?.(), T = W.throw;
@@ -1566,9 +1606,13 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     }
     // 清完了（该出来的都出来了、一个不剩）：先问要不要炸楼，不炸（或者时间到了）就返航；炸的话拉高飞走，机外镜头看着楼垮。
     // 绕楼下转圈的时候还剩在高层阳台上的（机枪仰不上去、再也打不着）不挡
-    const left = live.filter((z) => !(z.sweep === 'window' && rideT >= S.flight.times.ground && !(balconyOf(z)?.low > 0)));
+    const left = live.filter((z) => !(z.sweep === 'window' && rideT >= S.flight.times.ground && !(balconyOf(z)?.low >= W.balcony.low)));
     if (!S.flight.leaving && sw.made.ground >= W.ground && rideT > 12 && !left.length) {
-      if (!sw.offered) { sw.offered = true; demo.offer(); G.hud?.radio?.('全部清掉了！指挥中心授权空袭——要不要把这几栋楼一起炸掉？', 4); }
+      if (!sw.offered) {
+        // 够不着的那几只（高层阳台）这会儿收掉、从总数里去掉：HUD 和「全部清掉了」对得上（以前清完了 HUD 还挂着「阳台 9/12」）
+        if (live.length) { for (const z of live) { if (z.sweep) sw.total[z.sweep]--; z.sweep = null; disarm(z); z._deactivate(); } G.game?.refreshObjective?.(); }
+        sw.offered = true; demo.offer(); G.hud?.radio?.('全部清掉了！指挥中心授权空袭——要不要把这几栋楼一起炸掉？', 4);
+      }
       else if (demo.chosen) { // 不切机外镜头：飞机拉高、绕着整片楼转一大圈，人坐在机舱门口自己转头看
         const W = DEMOLISH.watch; S.flight.setWatch(rideT, { center: { x: W.center[0], z: W.center[1] }, R: W.R, y: W.y, turn: W.turn }); S.flight.setLeave(rideT + W.seconds); S.bombAt = rideT + W.delay;
         G.hud?.radio?.('空袭批准！拉高，离开爆炸范围——从舱门往外看。', 4);
@@ -1594,11 +1638,12 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     b.broken = true; b.g.userData.pane.visible = false;
     const at = b.g.userData.pane.getWorldPosition(new THREE.Vector3());
     for (let i = 0; i < 5; i++) G.fx?.smoke?.(at.clone().add(new THREE.Vector3(0, (i - 2) * 0.4, (i % 3 - 1) * 0.6)), { size: 0.35, life: 0.5, color: 0xcfe6f2, rise: -1.2 });
-    G.events?.emit?.('impact', { pos: at, surface: 'glass' });
+    G.events?.emit?.('impact', { point: at, normal: new THREE.Vector3(b.s.nx, 0, b.s.nz), surface: 'glass' }); // 原游戏的火花、声音按 point 读（以前写成 pos，玻璃碎了没声音）
   }
   G.events?.on?.('enemy:hit', (ev) => { const b = balconies.find((x) => x.z === ev?.enemy && !x.broken); if (b) breakPane(b); }); // 打到阳台里的：先把玻璃打碎
   G.events?.on?.('enemy:killed', (ev) => {
-    const z = ev?.enemy; if (!S.sweep || !z?.sweep) return;
+    const z = ev?.enemy; if (z && rocks.length) disarm(z);
+    if (!S.sweep || !z?.sweep) return;
     S.sweep.kill[z.sweep]++; z.sweep = null; G.game?.refreshObjective?.();
   });
 
@@ -1816,6 +1861,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     get plan() { return S.plan; },
     update(dt) {
       if (enabled && S.plan) prepTick(); // 爬楼那几层的落点：开局起分帧算（标题页、商场那段都在算）
+      if (enabled && S.plan && !S.spotJob && S.hold < 0 && !S.landed) prepStep(SIEGE.sweep.prep); // 清扫要用的点：落点算完接着在后台算（点了信号弹以后 holdTick 接着算）
       for (const b of blocks) b.userData.update?.(dt, G);
       flareLight(dt);
       if (playing() && !director.riding) walls.update(dt);

@@ -22,6 +22,11 @@ export function aimAngles(q, from, point, out = { yaw: 0, pitch: 0, dist: 0 }) {
   out.yaw = Math.atan2(_ad.x, _ad.z); out.pitch = -Math.asin(Math.max(-1, Math.min(1, _ad.y)));
   return out;
 }
+/** 子弹打在 castAcross 找到的墙 / 楼板 / 阳台上：原游戏 impact 事件的样子（火花、弹孔、声音都按 point、normal、surface 读）。法线是零的（老数据）就朝着来的方向 */
+export function impactAt(wall, dir) {
+  const n = wall.normal && wall.normal.lengthSq() > 1e-6 ? wall.normal.clone() : dir.clone().negate();
+  return { point: wall.point.clone(), normal: n, dist: wall.dist, surface: wall.surface || 'concrete', enemy: null, dir: dir.clone(), from: 'player' };
+}
 /** 这个角度在射界里（左右 ±yaw、上 pitchUp 下 pitchDown，边上留 margin 弧度）、150 米以内（辅助瞄准也只管这么远） */
 export function inGunArc(a, margin = 0.03, range = 150) {
   return a.dist <= range && Math.abs(a.yaw) <= DOOR_GUN.yaw - margin && a.pitch >= -DOOR_GUN.pitchUp + margin && a.pitch <= DOOR_GUN.pitchDown - margin;
@@ -234,7 +239,10 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
     // 子弹穿不过楼：原游戏的射线只查起点那一层的墙（从天上打出去就只有楼板挡），楼的外墙、楼顶楼梯间挡不住，
     // 楼里看不见的丧尸照样打得中。射程先按跨楼层的射线截到第一堵墙 / 楼板
     const wall = G.physics?.castAcross?.(from, dir, DOOR_GUN.range) || null;
-    try { hit = G.combat?.playerShot?.(from.clone(), dir.clone(), { damage: DOOR_GUN.damage, range: wall ? wall.dist : DOOR_GUN.range, impulse: 2 }); } catch { /* 打空 */ }
+    // 射程多放一毫米：castAcross 从挪过的起点量，同一堵墙量出来比 raycast 短 1e-14，不放的话 raycast 看得见的墙也不冒火花
+    try { hit = G.combat?.playerShot?.(from.clone(), dir.clone(), { damage: DOOR_GUN.damage, range: wall ? wall.dist + 1e-3 : DOOR_GUN.range, impulse: 2 }); } catch { /* 打空 */ }
+    // 打在 raycast 不查的墙、楼板、阳台上（起点那一层以外的）：火花、弹孔、声音照样要有（原游戏的处理按 point / normal 读）
+    if (!hit && wall) G.events?.emit?.('impact', impactAt(wall, dir));
     gun.muzzle.getWorldPosition(mz);
     to.copy(hit?.point || wall?.point || from.clone().addScaledVector(dir, 320));
     G.fx?.tracer?.(mz.clone(), to.clone(), { color: 0xffb35a, speed: 720, width: 0.055 });
@@ -277,6 +285,10 @@ export const DOOR_GUN_CSS = `
 /* 坐在载具上用的是车载机枪：手雷、切枪、换弹、跳、蹲、近战、瞄准、交互这些键用不着，还会压住机枪的状态条（用户截图）；步枪的子弹数也不该显示 */
 .jm-riding .t-reload, .jm-riding .t-jump, .jm-riding .t-ads, .jm-riding .t-crouch, .jm-riding .t-melee, .jm-riding .t-nade, .jm-riding .t-swap, .jm-riding .t-interact { display: none !important; }
 .jm-riding .h-ammo { display: none !important; }
+/* 治疗、路障在飞机上用不着（看炸楼那一段也是），手机上这两个键正好在中间偏右、拖着转视角老按到它们（测试：一趟飞下来「不用治——血是满的」十七遍） */
+.jm-riding .t-heal, .jm-riding .t-wall, .jm-riding .jm-heal, .jm-riding .jm-walls { display: none !important; }
+/* 手机上无线电字幕平时在准星正下方（minimap.js），坐飞机时挡着要打的楼——挪到屏幕最底下（机枪状态条下面） */
+.is-touch .jm-riding .comms { top: auto !important; bottom: calc(8px + var(--sab, 0px)) !important; }
 .jm-doorgun { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px;
   padding: 7px 14px; border-radius: 10px; background: rgba(10, 14, 12, .55); color: #e8efe2; font: 600 13px/1 system-ui, sans-serif; letter-spacing: .04em; pointer-events: none; }
 .jm-doorgun .inf { color: #9fe3a8; }
