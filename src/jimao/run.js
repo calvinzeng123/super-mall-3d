@@ -224,7 +224,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const director = createMissionDirector(G, { scene, layout: ctx.layout, nav, J, camera, letterbox: cuts.letterbox,
     force: { type: params.mission, exit: params.exit } });
   // 弹药补给（ammo.js）：备弹打完不会自动补，只能捡敌人掉的弹匣、开弹药箱、完成目标；坐车时击倒敌人补车里的弹药
-  const ammo = createAmmoSupply(G, { scene, layout: ctx.layout, nav, isRiding: () => director.riding, rideKind: () => director.rideKind });
+  const ammo = createAmmoSupply(G, { scene, layout: ctx.layout, nav, isRiding: () => director.riding || !!G.roofGun?.active, rideKind: () => director.rideKind });
   // 地面路线指引（guide.js）：脚下一串淡蓝色小箭头指向最近的目标 / 撤离点，坐载具时不画
   const guide = createRouteGuide(G, { scene, layout: ctx.layout, nav, hidden: () => director.riding, pathfinder });
   // 坐电梯（lift.js）：走到电梯门口，按 Z / X（手机上 ▲ ▼）选楼层，停手就出发，真的走进轿厢坐过去；坐载具时不显示

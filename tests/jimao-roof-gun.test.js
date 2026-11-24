@@ -229,7 +229,11 @@ test('自动下来：直升机落稳（开始登机）、坐上飞机、阵亡�
     up(); director.riding = true; w.frame(); assert.equal(rg.active, false, '坐上飞机'); director.riding = false;
     up(); player.alive = false; G.events.emit('player:dead', {}); w.frame(); assert.equal(rg.active, false, '阵亡'); player.alive = true;
     up(); rg.reset(); assert.equal(rg.active, false, '读档 / 重来'); assert.equal(player.mounted, false); assert.equal(G.weaponHold, false); assert.equal(e.gun.heat, 0);
-    up(); G.events.emit('zombie:knock', { power: 12 }); assert.equal(rg.active, false); assert.match(w.msgs.at(-1), /拍下来/);
+    // 胖尸炸开：架着枪时挡板挡掉一半（气浪照样把人掀下来）；平时照实算
+    up(); w.hurt.length = 0; G.events.emit('zombie:burst', {}); player.damage(30); player.damage(14);
+    assert.deepEqual(w.hurt, [30 * ROOF_GUN.burst, 14], '炸开那一下打折，后面咬的照实');
+    G.events.emit('zombie:knock', { power: 5, burst: true }); assert.equal(rg.active, false); w.hurt.length = 0; G.events.emit('zombie:burst', {}); player.damage(30); assert.deepEqual(w.hurt, [30], '不在台上照实算');
+    w.run(1.6); up(); G.events.emit('zombie:knock', { power: 12 }); assert.equal(rg.active, false); assert.match(w.msgs.at(-1), /拍下来/);
     up(); G.events.emit('zombie:pin', { enemy: {} }); assert.equal(rg.active, false);
     up(); siege.demo.running = true; w.frame(); assert.equal(rg.active, false, '看炸楼'); assert.ok(!e.group.visible, '炸楼时台子跟着没了'); siege.demo.running = false;
   } finally { w.dispose(); }

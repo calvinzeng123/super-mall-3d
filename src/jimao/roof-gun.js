@@ -18,6 +18,7 @@ import { createDoorGun } from './door-gun.js';
  * deck：台面边长、高度、护栏高、梯子口宽；ring：环形枪架半径、导轨离台面多高（贴着护栏顶，往下看台脚不挡）、枪的转轴再高出导轨 gun 米
  *   （眼睛离台面 eye 米，转轴在眼睛下面 0.3 米——和接应车那挺一样，整挺枪都在视野里）；traverse：枪架最快每秒转多少弧度（重机枪转得慢：转身打背后的要一秒多）；
  * foot：梯子口那一点离台边多远（丧尸、队友都认这一点是「你」）；use：离梯子口多近能上；climb / down：上、下台子的镜头过渡几秒；
+ * burst：站在台上挨胖尸炸开的那一下打几折（挡板挡掉一半；气浪照样把人掀下台）。台下的酸液够不着台上的人（siege.js acidTick）；架着枪时也不捡弹匣、不掉弹匣（run.js 的 isRiding）；
  * band：台子挡子弹 / 视线的方盒从多高到多高（下面那截导航障碍自己挡到 1.15 米）；
  * gun：重机枪（改 door-gun.js 的 DOOR_GUN）——每秒 13 发、一发 40（奔尸一发、行尸两发），能穿 1 只（穿过去打 0.6 折），
  *   热量 0.018 一发（连打 5 秒多锁死）、每秒散 0.3、冷到 0.35 才能再打（锁两秒多）；左右不限、往上 0.55、往下 1.35 弧度（压得到台脚）；
@@ -27,7 +28,7 @@ import { createDoorGun } from './door-gun.js';
 export const ROOF_GUN = Object.freeze({
   deck: Object.freeze({ size: 2.4, h: 1.6, rail: 1.0, gap: 0.72 }),
   ring: Object.freeze({ r: 0.9, y: 1.02, gun: 0.3 }), eye: 1.62, ladder: 0.15, traverse: 2.0,
-  foot: 0.7, use: 1.8, climb: 0.45, down: 0.3,
+  foot: 0.7, use: 1.8, climb: 0.45, down: 0.3, burst: 0.5,
   band: Object.freeze([1.15, 1.5]),
   gun: Object.freeze({ rate: 13, damage: 40, spread: 0.018, heatPerShot: 0.018, cool: 0.3, unlock: 0.35, spinUp: 0.35, range: 160,
     yaw: Infinity, pitchUp: 0.55, pitchDown: 1.35, pierce: 1, pierceMul: 0.6 }),
@@ -167,7 +168,11 @@ export function createRoofGun(G, { scene, nav, siege, director = null, camera, u
     rail: new THREE.MeshStandardMaterial({ color: '#c9a136', metalness: 0.35, roughness: 0.55 }), // 黄色安全漆
   };
   const towers = new Map(); // 楼 id → [台子]（第一次轮到这栋楼才建）
-  let on = null, cur = null, k = 0, said = false, sig = '', saidWhy = 0, lastNear = null, yaw0 = 0;
+  let on = null, cur = null, k = 0, said = false, sig = '', saidWhy = 0, lastNear = null, yaw0 = 0, burstNow = false;
+  // 胖尸炸开（zombie:burst 先发、紧接着扣血）：架着枪时这一下打 burst 折
+  const baseDamage = G.player?.damage?.bind?.(G.player);
+  if (baseDamage) G.player.damage = (n, ...rest) => { const b = burstNow; burstNow = false; return baseDamage(cur && b ? n * R.burst : n, ...rest); };
+  const onBurst = () => { burstNow = true; };
   const S = () => siege?.state || {};
   const P = () => G.player;
   const roofY = (T) => nav.floors.get(T.roof)?.y ?? 0;
@@ -271,7 +276,7 @@ export function createRoofGun(G, { scene, nav, siege, director = null, camera, u
   }
 
   function update(dt) {
-    sync();
+    sync(); burstNow = false;
     saidWhy -= dt;
     const live = list(), demo = !!siege?.demo?.running, inp = G.input, ok = usable();
     for (const e of live) e.group.visible = !demo;
@@ -313,7 +318,7 @@ export function createRoofGun(G, { scene, nav, siege, director = null, camera, u
   const onKnock = (ev) => { if (cur) dismount(ev?.burst ? '被气浪掀下了机枪台！' : '被巨尸从台上拍下来了！'); };
   const onPin = () => { if (cur) dismount('扑袭者把你从台上拽下来了！'); };
   const onDead = () => { if (cur) dismount(); k = 0; };
-  G.events?.on?.('zombie:knock', onKnock); G.events?.on?.('zombie:pin', onPin); G.events?.on?.('player:dead', onDead);
+  G.events?.on?.('zombie:knock', onKnock); G.events?.on?.('zombie:pin', onPin); G.events?.on?.('player:dead', onDead); G.events?.on?.('zombie:burst', onBurst);
 
   return {
     update, mount, dismount, sync,
@@ -324,7 +329,7 @@ export function createRoofGun(G, { scene, nav, siege, director = null, camera, u
     reset() { if (cur) dismount(); k = 0; said = false; sig = ''; G.weaponHold = false; ui?.classList?.remove('jm-mg'); for (const L of towers.values()) for (const e of L) e.gun.reset(); sync(); },
     dispose() {
       if (cur) dismount(); for (const L of towers.values()) for (const e of [...L].reverse()) { place(e, false); e.gun.dispose(); e.deck.dispose(); }
-      root.removeFromParent(); M.rail.dispose(); G.events?.off?.('zombie:knock', onKnock); G.events?.off?.('zombie:pin', onPin); G.events?.off?.('player:dead', onDead);
+      root.removeFromParent(); M.rail.dispose(); G.events?.off?.('zombie:knock', onKnock); G.events?.off?.('zombie:pin', onPin); G.events?.off?.('player:dead', onDead); G.events?.off?.('zombie:burst', onBurst); if (baseDamage) G.player.damage = baseDamage;
     },
   };
 }
