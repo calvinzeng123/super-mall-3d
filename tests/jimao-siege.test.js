@@ -22,6 +22,7 @@ import { SPECIALS } from '../src/jimao/zombie.js';
 import { ZOMBIE, KINDS, pickKind, zombieParts, addZombies } from '../src/jimao/zombie.js';
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
 import { createPathfinder } from '../src/jimao/pathfinder.js';
+import { ROOF_GUN, siteGeom, blockNav, unblockNav, segDist2 } from '../src/jimao/roof-gun.js';
 
 // 游戏里用的是门禁全开的导航（run.js）：北区塔楼的楼梯间、电梯厅要过门禁
 const L = buildPlayableLayout({ mode: 'arcade' }), nav = buildNav(L, { gates: 'open' }), runs = stairRuns(nav);
@@ -1466,7 +1467,7 @@ test('清扫的屋顶是一大群、一直在动：守屋顶剩下的接着当�
     };
     step(15, look);
     assert.ok(most >= 20 && mostAt <= 15, `${tower} 屋顶上最多同时 ${most} 只（${mostAt.toFixed(1)} 秒）`);
-    assert.ok(poured >= 8, `${tower} 从门里涌出来 ${poured} 只`);
+    assert.ok(poured >= Math.min(8, U.peak - U.start - 2), `${tower} 从门里涌出来 ${poured} 只`); // 起飞时当场补到 start 只，门里再涌到 peak 只
     // 一直在动：接下来 8 秒里大多数走了好几米（每 0.5 秒量一次、加起来），公寓屋面大、离开原地也有好几米
     const p0 = new Map(top().map((z) => [z, z.pos.clone()])), last = new Map(top().map((z) => [z, z.pos.clone()])), walk = new Map();
     step(8, (t) => { look(t); if (Math.round(t * 30) % 15) return; for (const [z, p] of last) { walk.set(z, (walk.get(z) || 0) + Math.hypot(z.pos.x - p.x, z.pos.z - p.z)); p.copy(z.pos); } });
@@ -1494,6 +1495,32 @@ function holdWorld(tower, at = null, seed = 7) {
 }
 /** 楼梯间里（屋面上的楼梯间盒子里，或者通到屋顶的那几跑楼梯、休息平台、下一层的楼梯口上） */
 const inStairs = (siege, roof, q) => q.y < roof - 0.3 || siege.housings().some((b) => inBox(b, q));
+test('清扫时楼顶摆着机枪阵地（台子、沙袋墙在导航里）：屋顶那一拨照样一大群——起飞时露天的屋面上就有 26 只以上、一拨一共 40 只左右、同时最多 34 只；都在屋面上、不在台子和沙袋墙里，跟着飞机挤成几堆', () => {
+  const U = SIEGE.sweep.surge;
+  assert.ok(SIEGE.sweep.roof >= 40 && U.peak >= 34 && U.start >= 26, `一拨 ${SIEGE.sweep.roof}、同时 ${U.peak}、起飞时 ${U.start}`);
+  assert.ok(ZOMBIE.pool >= U.peak + SIEGE.sweep.window + Math.ceil(SIEGE.sweep.ground / 2), `池子 ${ZOMBIE.pool} 放得下屋顶 + 阳台 + 楼下第一批`);
+  for (const tower of ['A', 'T1']) {
+    const T = TOWERS[tower], g = siteGeom(ROOF_GUN.sites[tower][0], elev(T.roof));
+    const bl = [blockNav(nav, T.roof, g.poly, ROOF_GUN.deck.h), ...g.walls.map((w) => blockNav(nav, T.roof, w.poly, ROOF_GUN.bags.top))];
+    try {
+      const { sw, step } = fakeRide(tower, { clear: true });
+      const top = () => sw.list.filter((z) => z.alive && z.active && z.sweep === 'roof' && !z.pouring);
+      const inWorks = (z) => (z.pos.x > g.bb.x0 && z.pos.x < g.bb.x1 && z.pos.z > g.bb.z0 && z.pos.z < g.bb.z1) || g.walls.some((w) => { let pos = 0, neg = 0; for (let i = 0; i < 4; i++) { const a = w.poly[i], b = w.poly[(i + 1) % 4], c = (b[0] - a[0]) * (z.pos.z - a[1]) - (b[1] - a[1]) * (z.pos.x - a[0]); if (c > 0) pos++; else neg++; } return !pos || !neg; });
+      assert.ok(top().length >= U.start, `${tower} 起飞时屋面上 ${top().length} 只`);
+      assert.ok(sw.total.roof >= SIEGE.sweep.roof && sw.total.roof <= U.max, `${tower} 这一拨一共 ${sw.total.roof} 只`);
+      let most = 0, bad = 0, n = 0, clump = 0, wired = 0;
+      step(20, (t) => {
+        if (Math.round(t * 30) % 15) return;
+        const l = top(); most = Math.max(most, l.length);
+        for (const z of l) { n++; if (inWorks(z)) bad++; if (g.wire.some((w) => segDist2(z.pos.x, z.pos.z, w.a, w.b) < ROOF_GUN.wire.r)) wired++; clump = Math.max(clump, l.filter((o) => o !== z && Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z) < 3).length); }
+      });
+      assert.ok(most >= U.peak - 6, `${tower} 屋顶上最多同时 ${most} 只`);
+      assert.equal(bad, 0, `${tower} 没有一只在台子 / 沙袋墙里（${n} 次）`);
+      assert.ok(clump >= 6, `${tower} 挤成堆：一只身边 3 米里最多 ${clump} 只`);
+    } finally { for (const b of bl.reverse()) unblockNav(nav, b); }
+  }
+});
+
 
 test('只挡跨楼层射线的方盒（清扫时的阳台）：castAcross / sightAcross 挡、法线朝来的方向；raycast（走路、丧尸看人、平时的子弹）照旧不挡；撤掉就不挡。打在楼板上的法线朝上', () => {
   const P = createMapPhysics(nav), roof = elev('A-RF'), sky = new THREE.Vector3(SIEGE.pad.x + 80, 400, SIEGE.pad.z), east = new THREE.Vector3(1, 0, 0);
@@ -1676,7 +1703,8 @@ test('守屋顶：人隔 0.7 秒打死一只，每一波都出得满、最后那
     const byT = {}; for (const q of born) { const key = Math.round(q.t * 30); byT[key] = (byT[key] || 0) + 1; }
     assert.ok(Math.max(...Object.values(byT)) <= 10, `${tower} 同一帧出来 ${Math.max(...Object.values(byT))} 只`);
     // 喊「第几波」要真出来了才喊（最后一两波池子里全是活着的、一只都出不来就不喊）
-    for (let i = 1; i <= 5; i++) assert.ok(msgs.some((t) => String(t).startsWith(`第 ${i} 波`)), `${tower} 喊了第 ${i} 波`);
+    // 北区一波 26–30 只、人打得慢的时候池子满了，后面那一波排在队里出不来——那就不喊（照样只许在池子满了的时候）
+    for (let i = 1; i <= 5; i++) assert.ok(msgs.some((t) => String(t).startsWith(`第 ${i} 波`)) || (tower === 'T1' && packed(SIEGE.waves[i - 1], SIEGE.hold)), `${tower} 喊了第 ${i} 波`);
     SIEGE.waves.forEach((w, i) => { if (msgs.some((t) => String(t).startsWith(`第 ${i + 1} 波`))) assert.ok(born.some((q) => q.t >= w), `${tower} 第 ${i + 1} 波喊了就有出来的`); });
     assert.ok(siege.onRoof(player.pos), '人在露天的屋面上（雾退远）');
   }

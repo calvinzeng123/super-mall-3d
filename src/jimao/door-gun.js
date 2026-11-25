@@ -274,7 +274,7 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
 }
 
 /** 屏幕下方的机枪状态条：名字、弹药不限、温度条、过热 / 超出射界提示 */
-function makeHud(label = 'M134 舱门机枪') {
+export function makeHud(label = 'M134 舱门机枪') {
   if (typeof document === 'undefined') return { show() {}, set() {}, remove() {} };
   const el = document.createElement('div');
   el.className = 'jm-doorgun';

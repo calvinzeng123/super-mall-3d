@@ -41,8 +41,16 @@ export function createMapPhysics(nav) {
     return s;
   }
   function floorAt(x, y, z) {
-    const s = locate(x, y, z);
-    return s ? nav.floors.get(s.floor) : null;
+    const s = locate(x, y, z), F0 = s ? nav.floors.get(s.floor) : null;
+    // 站在实心障碍上面（楼顶机枪台：台子在导航里是一块实心障碍）：landAt 按「站不站得住」找，会掉到下面一层去，
+    // 射线就按下面那一层的墙算了（顶层的墙比屋面还高一截，台上往外打被看不见的墙挡住，屋面上的沙袋墙反倒不挡）。脚下有楼板的更高的那一层优先
+    const byY = floorsByHeight(nav);
+    if (byY) for (let i = byY.first(y + 0.6); i < byY.floors.length; i++) {
+      const e = byY.floors[i]; if (F0 && e.F.y <= F0.y + 1e-6) break;
+      if (x < e.x0 || x > e.x1 || z < e.z0 || z > e.z1) continue;
+      if (supported(e.F, x, z)) return e.F;
+    }
+    return F0;
   }
 
   const ray = { o: new THREE.Vector3(), d: new THREE.Vector3() }, across = { o: new THREE.Vector3(), d: new THREE.Vector3(), n: new THREE.Vector3(), maxH: 0 };
@@ -159,7 +167,7 @@ export function createMapPhysics(nav) {
           const p = o.outer;
           if (!p || !b) continue;
           if (!physics.bruteRays && missesBox(b, Math.min(maxDist, out.dist))) continue;
-          for (let i = 0; i < p.length; i++) { const a = p[i], c = p[(i + 1) % p.length]; hitSegment(a[0], a[1], c[0], c[1], F.y, OBSTACLE_HEIGHT, maxDist, out); }
+          for (let i = 0; i < p.length; i++) { const a = p[i], c = p[(i + 1) % p.length]; hitSegment(a[0], a[1], c[0], c[1], F.y, o.top ?? OBSTACLE_HEIGHT, maxDist, out); } // 矮障碍（楼顶机枪阵地的沙袋墙）只挡到它的顶高
         }
       }
       // 楼板：射线穿过某个楼面高度处，那里若是楼板实体就挡住
@@ -232,7 +240,7 @@ export function createMapPhysics(nav) {
           for (const ob of F.obstacles) {
             const p = ob.outer, b = ob.bb;
             if (!p || !b || missesBox(b, Math.min(len, sub.dist))) continue;
-            for (let k = 0; k < p.length; k++) { const a = p[k], c = p[(k + 1) % p.length]; hitSegment(a[0], a[1], c[0], c[1], F.y, OBSTACLE_HEIGHT, len, sub); }
+            for (let k = 0; k < p.length; k++) { const a = p[k], c = p[(k + 1) % p.length]; hitSegment(a[0], a[1], c[0], c[1], F.y, ob.top ?? OBSTACLE_HEIGHT, len, sub); }
           }
           if (!(sub.dist < Infinity)) break;
           const t = from + sub.dist, y = o.y + d.y * t;

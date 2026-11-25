@@ -31,7 +31,7 @@ function capsule(a, b, r0, r1, hex) {
 export const ZOMBIE = Object.freeze({
   hp: 60, speed: 1.3, bite: 14, reach: 1.3, windup: 0.42, cooldown: 0.95,
   sense: 15, senseBlind: 5.5, hear: 36, lose: 30, loseSeconds: 9,
-  accel: 6, turnRate: 3.4, corpseSeconds: 6, pool: 48, replan: [1.4, 2.6], direct: 7,
+  accel: 6, turnRate: 3.4, corpseSeconds: 6, pool: 64, replan: [1.4, 2.6], direct: 7,
   farUpdate: 34, // 离人这么远以外的，隔帧才动一次（省 CPU）
 });
 export const KINDS = Object.freeze({
@@ -163,7 +163,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         if (skin) { skin.setLook(lookI, lookOf(kind)); skin.group.scale.set(K.girth || 1, 1, K.girth || 1); }
         m.special = SPECIALS.includes(kind); m.pounceT = K.pounce ? 0.25 + rng() * 0.45 : 0; m.spitT = K.spit ? K.spit.first + rng() : 0; m.pinT = 0; m.leap = null;
         m.active = true; m.alive = true; m.passive = !!opts.passive; m.sink = 0; m.hunt = !!opts.hunt; m.target = opts.targetPos || null; m.noPath = 0;
-        m.lureT = 0; m.pushT = 0;
+        m.lureT = 0; m.pushT = 0; m.snare = 1; // snare：踩在铁丝网里走多快（roof-gun.js 每帧按它的铁丝网给）
         m.fixed = !!opts.fixed; m.sweep = null; m.bit = false; // fixed：钉在原地（阳台玻璃后面拍玻璃的那几只），不走、不追
         m.pos.copy(at);
         const g = G.physics.groundHeight?.(at.x, at.z, at.y + 1);
@@ -266,7 +266,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         }
         if (m.zs === 'idle' && alivePl && !m.passive && Math.abs(dy) < 3.2 && (dist < ZOMBIE.senseBlind || (dist < ZOMBIE.sense && m.los))) notice(pl.pos, false);
       }
-      const speed = C.speed * (m.stagger > 0 ? 0.35 : 1);
+      const speed = C.speed * (m.stagger > 0 ? 0.35 : 1) * (m.snare || 1);
       // 直升机在飞：尖叫者不管人在哪一层，站住冲着飞机叫（heliRange 米内、飞机上看得见它才叫），每叫一声掉机体耐久
       const heliAt = C.scream && G.missions?.rideKind === 'helicopter' ? G.missions.vehicleCenter?.() : null;
       if (m.lureT > 0 && (m.lureT -= dt) <= 0 && m.zs === 'idle') { m.home.copy(m.pos); m.hasGoal = false; }
@@ -317,7 +317,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
           else if (dist < C.keep - 3) want.set(-dx / (dist || 1) * speed, 0, -dz / (dist || 1) * speed);
           if ((m.screamT -= dt) <= 0) { m.screamT = C.scream.every * (0.85 + rng() * 0.3); m.zs = 'scream'; m.zsT = 0; scream(pl.pos); }
         } else {
-          const direct = m.los && dist < ZOMBIE.direct && Math.abs(dy) < 1.2;
+          // 中间隔着矮墙（楼顶机枪阵地的沙袋墙：看得见人、过不去）就不直着扑，跟着寻路绕到缺口（G.lowCover，roof-gun.js 给）
+          const direct = m.los && dist < ZOMBIE.direct && Math.abs(dy) < 1.2 && !G.lowCover?.(m.pos, pl.pos);
           steer(dt, m.lastKnown, speed, direct);
           if (alivePl && C.bite > 0 && dist < C.reach * scale && Math.abs(dy) < 1.3 && m.cool <= 0) { m.zs = 'attack'; m.zsT = 0; G.events.emit('enemy:telegraph', { enemy: m, pos: m.pos, type: 'soldier', melee: true }); }
           if (dist < 2.2 && alivePl) faceYaw = Math.atan2(dx, dz);
@@ -497,6 +498,13 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       if (m.zs === 'pin') { m.pinned = false; m.pounceT = C.pounce.every; G.events.emit('zombie:unpin', { enemy: m }); }
       if (m.zs === 'attack' || m.zs === 'crouch' || m.zs === 'leap' || m.zs === 'pin') { m.zs = 'chase'; m.bit = false; m.lunge = 0; m.leaping = false; }
       m.stagger = Math.max(m.stagger, 0.9); m.cool = Math.max(m.cool, 0.9); m.pushT = 0.22; m.pushX = dx * power; m.pushZ = dz * power;
+      return true;
+    };
+    /** 被重机枪打得往后一退（twin-hmg.js：打中的那只、落点旁边炸到的）：往 (dx, dz) 方向退 0.14 秒、脚下一软；不打断正在抡的那一下（推开了就咬空）、不叠成一直定身；巨尸只顿一下 */
+    m.knock = (dx, dz, power = 5) => {
+      if (!m.alive || !m.active || m.fixed || m.zs === 'pin' || m.zs === 'leap') return false;
+      if (C.sturdy) { m.stagger = Math.max(m.stagger, 0.12); return false; }
+      m.pushT = Math.max(m.pushT, 0.14); m.pushX = dx * power; m.pushZ = dz * power; m.stagger = Math.max(m.stagger, 0.2);
       return true;
     };
     // 改成守点的（直升机清扫：守屋顶剩下的、从楼梯间涌出来的接着当屋顶那一拨）：不再追人，只在 anchor 那一层走，走到 p
