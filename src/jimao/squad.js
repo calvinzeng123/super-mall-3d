@@ -369,10 +369,13 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       // 队友倒了：林医生去扶
       const fallen = member.trait === 'medic' ? others.find((o) => o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < 18 && Math.abs(o.pos.y - m.pos.y) < 1.5) : null;
       let goal = null, stopAt = 0;
+      // 你架着楼顶机枪（roof-gun.js）：站到机枪阵地里给他留的那一处（沙袋墙里、台子边上），不跟着枪口转来转去
+      const post = G.roofGun?.active ? G.roofGun.matePost?.(member.id) : null;
       if (needHeal) { goal = p.pos; stopAt = H.reach * 0.8; }
       else if (fallen) { goal = fallen.pos; stopAt = P.down.reach * 0.7; }
       else if (m.exitTo) { goal = m.exitTo; stopAt = 0.4; }
       else if (m.hide) { goal = m.hide; stopAt = 0.35; } // 小许：身边有丧尸，躲到你身后
+      else if (post) { goal = post; stopAt = 0.35; }
       else {
         // 站位：你身后偏一侧；那一点站不住（墙里、栏杆外）或者你看不见（隔着玻璃、墙）就换一个（SLOT_ALTS，挑哪个按节奏重查）；都不行才直接朝你靠
         const yaw = trail.ready ? trail.yaw : (p.yaw || 0);
@@ -385,12 +388,12 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       // 到没到位要看得见那一点：隔着店面玻璃离站位一米多不算到（小许以前就这样站在店里的玻璃后面不出来）
       if (sensed) m.goalSeen = gd >= 1.6 || !G.physics?.lineOfSight || G.physics.lineOfSight(tmp.set(m.pos.x, m.pos.y + 0.9, m.pos.z), tmp2.set(goal.x, goal.y + 0.9, goal.z));
       // 在位置上（离你不远、离站位不远）就不动；有目标时也不追着站位小碎步挪。站位都不行时：队友离你不远就站着，小许（没枪）一直走到你跟前
-      const settle = !needHeal && !fallen && !m.exitTo && !m.hide && dist < P.follow.far + 0.6 && ((gd < 1.6 && m.goalSeen) || !!t || (goal === p.pos && !member.guest));
+      const settle = !needHeal && !fallen && !m.exitTo && !m.hide && (post ? gd < 0.6 : dist < P.follow.far + 0.6 && ((gd < 1.6 && m.goalSeen) || !!t || (goal === p.pos && !member.guest)));
       if (gd > stopAt && !settle) steer(dt, goal, hurry ? P.follow.sprint : m.hide ? P.guest.run : P.follow.walk, gd < 7 && Math.abs(goal.y - m.pos.y) < 0.8 && (!G.physics?.lineOfSight || G.physics.lineOfSight(tmp.set(m.pos.x, m.pos.y + 0.9, m.pos.z), new THREE.Vector3(goal.x, goal.y + 0.9, goal.z))));
       // 别挡枪口：站在你正前方四米内就往旁边让（包扎、扶人的时候除外）。小许没枪、也不用给你让枪线——以前他从店门出来正对着你，
       // 一让就让到门边的玻璃后面、站住六秒，再出来又正对着你……一直出不来
       m.dodgeT -= dt; m.holdT -= dt;
-      if (!member.guest && !needHeal && !fallen && dist < 3.6 && dist > 0.2) {
+      if (!member.guest && !needHeal && !fallen && !post && dist < 3.6 && dist > 0.2) { // 架着楼顶机枪时不用让：枪口在台子上，从头顶上打过去
         const yaw = p.yaw || 0, fx = -Math.sin(yaw), fz = -Math.cos(yaw), ax = -dx / dist, az = -dz / dist; // 你 → 他
         if (m.dodgeT <= 0 && fx * ax + fz * az > 0.965) { m.dodgeT = 0.7; m.dodgeSide = fx * az - fz * ax >= 0 ? 1 : -1; }
         // 往旁边横着让开一步；让开以后先站着别动（你走远了再跟），免得又走回枪口前

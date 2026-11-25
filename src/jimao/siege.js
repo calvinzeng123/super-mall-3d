@@ -36,9 +36,9 @@ export const SIEGE = Object.freeze({
   // 能走的范围：商场只有这几层，加上这一局那栋楼；别的地方走不出去（楼梯间 / 电梯厅经过别的楼层时，离这栋楼的楼梯口、电梯口 core 米以内不算）
   area: Object.freeze({ mall: Object.freeze(['P1-1F', 'P1-B1M', 'P1-B1']), core: 8 }),
   gates: Object.freeze([[4, 6], [9, 12], [15, 18]]), // 三道关各在哪几层里抽（公寓；别的楼见 TOWERS）
-  // 楼顶死守：每 10 秒一波（六波，最后 surge 秒接着不停地涌），一半从楼梯口冲上来、一半翻女儿墙上来（rim）；第 brutes 波各带一只巨尸（血量按 bruteHp 折——守屋顶时一波接一波，
+  // 楼顶死守：每 10 秒一波（六波、每波 17–22 只——第五轮加了两成，楼顶的机枪阵地、铁丝网顶得住；最后 surge 秒接着不停地涌），一半从楼梯口冲上来、一半翻女儿墙上来（rim）；第 brutes 波各带一只巨尸（血量按 bruteHp 折——守屋顶时一波接一波，
   // 步枪打满血的巨尸要五十来枪），单数波再加一只特殊感染者。第二只巨尸放在第 5 波：别和最后那阵一起压上来。楼顶小的楼另有一份（TOWERS.*.hold）
-  hold: 70, waves: Object.freeze([2, 12, 22, 32, 42, 52]), waveSize: [14, 18], rim: 0.35, brutes: Object.freeze([3, 5]), bruteHp: 0.65, land: 6,
+  hold: 70, waves: Object.freeze([2, 12, 22, 32, 42, 52]), waveSize: [17, 22], rim: 0.35, brutes: Object.freeze([3, 5]), bruteHp: 0.65, land: 6,
   // 楼梯口那一份排队出来：每个口子第一只马上、之后隔 pour 秒一只（一秒四只）；点着信号弹时楼里比屋面低 below 米以上的收掉
   pour: 0.25, below: 7,
   // 守屋顶时从哪儿冒出来（不在人眼皮底下凭空冒出来）：
@@ -56,7 +56,7 @@ export const SIEGE = Object.freeze({
   // 信号弹的红光（借灯池里的一盏）：亮度、照多远、衰减、离地多高、颜色
   flare: Object.freeze({ intensity: 5, distance: 24, decay: 1, y: 0.6, color: 0xff3524 }),
   // 最后 surge 秒：不再一波一波，隔 every 秒从楼梯口和女儿墙一起涌上来 each 只（行尸多一点：慢慢压上来，屋面上看得见一大片），直到直升机落下
-  surge: Object.freeze({ last: 16, every: 1.4, each: 4, mix: Object.freeze({ walker: 0.4, runner: 0.55, bloater: 0.05, screamer: 0 }) }),
+  surge: Object.freeze({ last: 16, every: 1.2, each: 4, mix: Object.freeze({ walker: 0.4, runner: 0.55, bloater: 0.05, screamer: 0 }) }),
   // 直升机落稳以后（跑去登机那几步）：排着队还没出来的那几波收掉，不再来新的一波、不催尸潮、不放特殊感染者（以前一落地节奏器接着走，一下在眼前冒出十九只）；
   // 楼梯间门里隔 every 秒零零星星出来一只（屋顶上活着的不到 alive 只才放），贴着人同时咬的照样最多 crowd.bite 只——压力还在，跑到登机门是公平的
   board: Object.freeze({ every: 2.5, alive: 10, mix: Object.freeze({ walker: 0.6, runner: 0.4, bloater: 0, screamer: 0 }) }),
@@ -95,8 +95,9 @@ export const SIEGE = Object.freeze({
   //   每一轮（post.every 秒）按 post.lead 秒以后飞机的位置，在看得见的点里挑离飞机（水平）最接近 near 米的 rally 处集结点（隔 gap 米，一处大约 per 只；飞机在楼外时就是离它最近的），
   //   每只冲向离自己近的那一处、在它周围 r 米里挤着（每轮有 churn 成的换个位置挤、swap 成的换到最远那一处），跟着飞机绕楼转；在楼梯间盒子里待了 house 秒的收回重放。mix：涌出来的是哪几种；
   //   降到低空时屋顶上剩下的最多 down 只下到楼下（别的收掉、从总数里去掉）
-  sweep: Object.freeze({ roof: 30, window: 12, ground: 18, screamers: 3, cap: 150, throw: Object.freeze({ range: 85, every: 0.6, flight: 1.5, hit: 0.8, hits: 1.5, first: 9, crowd: 5 }),
-    surge: Object.freeze({ start: 12, peak: 26, min: 6, max: 34, down: 10, every: 0.3, first: 0.3, rally: 3, gap: 5, per: 9, near: 14, r: 2.6, churn: 0.4, swap: 0.15, house: 2.5, mix: Object.freeze({ walker: 0.5, runner: 0.45, bloater: 0.05, screamer: 0 }) }),
+  //   第五轮（用户：「上飞机之前的丧尸可以再多一点」）：一拨 roof 40 只、屋顶同时最多 peak 34 只、起飞时屋顶上至少 start 26 只（以前 30 / 26 / 12）；池子跟着加到 64（zombie.js）
+  sweep: Object.freeze({ roof: 40, window: 12, ground: 18, screamers: 3, cap: 150, throw: Object.freeze({ range: 85, every: 0.6, flight: 1.5, hit: 0.8, hits: 1.5, first: 9, crowd: 5 }),
+    surge: Object.freeze({ start: 26, peak: 34, min: 6, max: 46, down: 10, every: 0.3, first: 0.3, rally: 3, gap: 5, per: 9, near: 14, r: 2.6, churn: 0.4, swap: 0.15, house: 2.5, mix: Object.freeze({ walker: 0.5, runner: 0.45, bloater: 0.05, screamer: 0 }) }),
     post: Object.freeze({ every: 1, lead: 3, groundWalk: 30, roofPool: 80, groundPool: 72, off: 1, spread: 0.8, ms: 1.2 }),
     expose: Object.freeze({ every: 0.25, on: 0.3, off: 0.5 }), refill: Object.freeze({ left: 2, quiet: 2, lull: 3 }), balcony: Object.freeze({ front: 0.4, low: 0.15 }), prep: 2 }),
   ammo: Object.freeze({ rifle: 30, reserve: 90 }),
@@ -119,10 +120,10 @@ export const TOWERS = Object.freeze({
   T1: Object.freeze({ id: 'T1', name: '北区 1 号楼', roof: 'T1-RF', roofName: '北区 1 号楼楼顶', power: 'P1-B1', powerName: '北区 1 号楼地下一层电梯厅', lift: 'T1-ST-A', stair: 'T1-ST', mall: true,
     pad: Object.freeze({ kind: 'helicopter', x: -249.2, z: -232, yaw: Math.PI / 2 }), gates: Object.freeze([[9, 11], [14, 17], [20, 23]]), around: 'T2', weight: 0.35, parapet: 1.25,
     // 屋顶只有 36 × 16 米、唯一的出口离信号弹 11 米：门口正对着人，一只只出来就在门口被点名打掉（以前站桩打一整场不掉血）。所以楼梯口出来得密
-    // （隔 pour 秒一只、每波 22–25 只，门洞里 lanes 条道并排挤出来）；只有这一个口子，一个口子能排 queue 只（公寓两个口子各 16 只，北区以前一波排不下、多的扔掉了）；
+    // （隔 pour 秒一只、每波 26–30 只（第五轮：用户要更多，楼顶有了机枪阵地和铁丝网），门洞里 lanes 条道并排挤出来）；只有这一个口子，一个口子能排 queue 只（公寓两个口子各 16 只，北区以前一波排不下、多的扔掉了）；
     // 最后那阵每 1.4 秒 surgeEach 只。女儿墙那边离人 10 米外、视野外的地方几乎没有（东半边就 14 × 16 米），翻墙上来的很少，压力全在门口。
     // 巨尸只来一只、晚一点（第 5 波）、血再少一点（一冒头就到跟前了）
-    hold: Object.freeze({ waveSize: Object.freeze([22, 25]), brutes: Object.freeze([5]), bruteHp: 0.5, pour: 0.1, lanes: 3, queue: 32, surgeEach: 6 }) }),
+    hold: Object.freeze({ waveSize: Object.freeze([26, 30]), brutes: Object.freeze([5]), bruteHp: 0.5, pour: 0.1, lanes: 3, queue: 32, surgeEach: 6 }) }),
 });
 // parapet：女儿墙（画面上有、导航里没有）顶比屋面高多少（公寓 1.8 米 + 压顶；北区 1.15 米 + 压顶），清扫时看屋顶上的丧尸要越过它
 /** 抽一栋楼。r ∈ [0, 1)；force 是楼的 id */
