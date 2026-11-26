@@ -28,6 +28,7 @@ import { createTuning, TUNING_CSS } from './tuning.js';
 import { createActions, ACTIONS_CSS } from './actions.js';
 import { createMinimap, MINIMAP_CSS } from './minimap.js';
 import { createScore, SCORE_CSS } from './score.js';
+import { createPickupFx, PICKUP_CSS } from './pickup.js';
 import { registerDressing, buildDressing } from './dressing.js';
 import { createArsenal, ARSENAL_CSS } from './arsenal.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -48,7 +49,7 @@ import { HELI_ORBIT } from './ride-paths.js';
 import { DOOR_GUN_CSS } from './door-gun.js';
 import { createRoofGun, ROOF_GUN_CSS } from './roof-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
-import { MOBILE } from '../render/device.js';
+import { MOBILE, MEM } from '../render/device.js';
 
 /** 标题是四个字（原游戏是两个字）：字号收小、不换行，手机横屏按高度算 */
 const TITLE_CSS = `
@@ -102,7 +103,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS + ROOF_GUN_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS + ROOF_GUN_CSS + PICKUP_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -276,6 +277,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   // 得分和连杀奖励（score.js）：菜单建好以后搭（结算页要加一行）
   const score = createScore(G, { ui });
   G.score = score;
+  const pickup = createPickupFx(G, { scene, camera, ui }); // 拿东西点一下就行：拿到手的小动作（pickup.js）
   { const reset0 = G.level.onReset; G.level.onReset = () => { reset0(); score.reset(); }; }
   locCard(document, director.state.mission);
   // 封面上的模式切换：零点突围（打武装劫持者，任务随机）/ 丧尸围城（从商场突围到公寓楼顶）
@@ -365,6 +367,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       if (active) { stepPlayer(dt, gap); if (!director.gunActive && !roofGun?.active) run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { try { actions.update(dt); } catch (e) { fail('actions', e, '手雷出错'); } }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
+      if (G.game.state !== 'paused') { try { pickup.update(dt); } catch (e) { fail('pickup', e, '拿东西的动作出错'); } }
       if (siege && G.game.state !== 'paused') { try { siege.update(dt); } catch (e) { fail('siege', e, '丧尸围城出错'); } }
       if (roofGun && G.game.state !== 'paused') { try { roofGun.update(dt); } catch (e) { fail('roofgun', e, '楼顶重机枪出错'); } }
       if (supplies && G.game.state !== 'paused') { try { supplies.update(dt); } catch (e) { fail('supplies', e, '补给出错'); } }
@@ -486,9 +489,10 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     camera.traverse((o) => { if (!o.visible) { o.visible = true; shown.push(o); } });
     renderer.compile(scene, camera);
     renderer.compile(scene, viewCamera);
-    for (const tex of textures) { try { renderer.initTexture(tex); } catch { /* 还没准备好的贴图等用到时再传 */ } }
+    // 贴图预先上传只在电脑（原始大小档）上做：手机 / 平板一进来就把所有贴图（载具、直升机、另一个模式的敌人……）一口气传上去，正是开局那一下内存的尖峰，iOS 会直接关掉网页；用到时再传
+    if (!MEM.lite) for (const tex of textures) { try { renderer.initTexture(tex); } catch { /* 还没准备好的贴图等用到时再传 */ } }
     for (const o of shown) o.visible = false;
-    G.warm = { objects: shown.length, textures: textures.size, programs: renderer.info.programs?.length || 0 };
+    G.warm = { objects: shown.length, textures: MEM.lite ? 0 : textures.size, skipped: MEM.lite ? textures.size : 0, programs: renderer.info.programs?.length || 0 };
   } catch (e) { console.error('[零点突围] 预热着色器出错', e); }
 
   if (params.autostart || params.shot) G.game.start({ skipIntro: true });

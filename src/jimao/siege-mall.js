@@ -17,8 +17,12 @@ import { storeStyle, doorGaps } from '../layout/frontage.js';
  */
 export const MALL = Object.freeze({
   floors: Object.freeze({ top: 'P1-3F', mid: 'P1-2F', ground: 'P1-1F' }),
-  shop: Object.freeze({ start: '意食', crowbar: '骑行家', pistol: '冲浪者', note: '风格志', card: '小确幸饰品', gen: '盲盒星球' }),
+  // 三层：撬棍在西头的影城（出门往西走一趟），被困的人在南边那排的绘本馆（再往东走回来），护送到东边的扶梯口——每一步都是一小段路，不挤在开局那家店门口
+  shop: Object.freeze({ start: '意食', crowbar: '云澜影城', rescue: '绘本馆', pistol: '冲浪者', note: '风格志', card: '小确幸饰品', gen: '盲盒星球' }),
   stairs: Object.freeze({ down3: 'P1-K6', down2: 'P1-K3' }),
+  // 相邻两步之间至少走多远（米，按寻路的路程；测试用它验）。same 里的那几步本来就在上一步跟前：出店门（摇柄在店里）、撬扶梯口（护送到了就撬）、捡手枪（摸到门口就进店）
+  spread: Object.freeze({ min: 25, same: Object.freeze(['exit', 'pry', 'pistol']) }),
+  lobby: 3,
   zone: 46, lockers: 1.25,
   // 卷帘拉下的店：人走到离卷帘 leash 米就停（再往前镜头就站进卷帘那一层里、看不见它，像一堵空气墙）；寻路（路线指引、队友、丧尸）离它 path 米以外绕过去
   pad: Object.freeze({ leash: 0.35, path: 0.5, hose: 0.3 }),
@@ -140,21 +144,30 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
     }
     return null;
   };
-  /** 同一层、还没用过的店里，门外那一点离 at 的距离最接近 best（在 lo–hi 之间；都不在就取最接近的）、离 avoid 里每一点都至少 near 米 */
-  const near = (floor, at, { best, lo = 0, hi = Infinity, avoid = [], minAway = 0 }) => {
+  /** 同一层、还没用过的店里，门外那一点离 at 的距离最接近 best（在 lo–hi 之间；都不在就取最接近的）、离 avoid 里每一点都至少 minAway 米、离 far 里每一点（[点, 米]）至少那么远 */
+  const near = (floor, at, { best, lo = 0, hi = Infinity, avoid = [], minAway = 0, far = [] }) => {
     const lv = layout.levels.find((l) => l.id === floor); let pickQ = null, score = Infinity;
     for (const u of lv.units) {
       if (u.residence || used.has(u.id)) continue;
       const q = frontOf(lv, u); if (!q) continue;
       const d = Math.hypot(q.out.x - at.x, q.out.z - at.z);
-      if (avoid.some((a) => Math.hypot(q.out.x - a.x, q.out.z - a.z) < minAway)) continue;
+      if (avoid.some((a) => Math.hypot(q.out.x - a.x, q.out.z - a.z) < minAway) || far.some(([a, m]) => Math.hypot(q.out.x - a.x, q.out.z - a.z) < m)) continue;
       const sc = Math.abs(d - best) + (d < lo || d > hi ? 1000 : 0);
       if (sc < score) { score = sc; pickQ = q; }
     }
     if (pickQ) used.add(pickQ.u.id);
     return pickQ;
   };
-  const bike = take(F.top, M.shop.crowbar), gun = take(F.mid, M.shop.pistol), note = take(F.mid, M.shop.note), gen = take(F.mid, M.shop.gen);
+  // 撬棍：大店（影城）正中离门十来米，放在离你最近的那道门进去 lobby 米的大堂里；找不到就按老办法放店里正中
+  const lobbyOf = (floor, name, inn, from) => {
+    const lv = layout.levels.find((l) => l.id === floor), u0 = unitOf(layout, floor, name); if (!u0 || used.has(u0.id)) return null;
+    let best = null;
+    for (const f of u0.wfronts || []) { const { len, gaps } = gapsOf(lv, u0, f), tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len;
+      for (const [a, b] of gaps) { const c = (a + b) / 2, q = landAt(nav, f.x0 + tx * c - f.nx * inn, f.z0 + tz * c - f.nz * inn, lv.elev + 0.6);
+        if (!q || q.floor !== floor || !clear(nav, q)) continue; const d = Math.hypot(q.x - from.x, q.z - from.z); if (!best || d < best.d) best = { d, q }; } }
+    if (!best) return null; used.add(u0.id); return { floor, x: best.q.x, y: lv.elev, z: best.q.z, unit: u0.id, name: u0.brand?.name || '商铺', u: u0 };
+  };
+  const bike = lobbyOf(F.top, M.shop.crowbar, M.lobby, door) || take(F.top, M.shop.crowbar), gun = take(F.mid, M.shop.pistol), note = take(F.mid, M.shop.note), gen = take(F.mid, M.shop.gen);
   const axe = (door && doorF && (() => { const { len, gaps } = gapsOf(lv3, u, doorF), g = gaps.find(([a, b]) => { const c = (a + b) / 2, x = doorF.x0 + (doorF.x1 - doorF.x0) / len * c, z = doorF.z0 + (doorF.z1 - doorF.z0) / len * c; return Math.hypot(x - door.x, z - door.z) < (b - a) / 2 + 1.5; }); return g ? cabinetAcross(nav, lv3, doorF, g, door, bike, M.axe) : null; })()) || cabinetSpot(nav, lv3, u, doorF, bike, M.axe);
   // 三个储物柜：在那家店里沿长边排开，抽一个是对的
   const cardShop = take(F.mid, M.shop.card), cu = cardShop.u, r = cu.rects[0], lv2 = layout.levels.find((l) => l.id === F.mid);
@@ -169,13 +182,16 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   const d3 = top(M.stairs.down3, F.mid, F.top), d2 = top(M.stairs.down2, F.ground, F.mid);
   // 三层：被困的店员在撬棍那家和扶梯口之间的一家店里
   const mid3 = { x: (bike.x + d3.x) / 2, z: (bike.z + d3.z) / 2 };
-  const trap = near(F.top, mid3, { best: 0, avoid: [bike, d3, home], minAway: M.rescue.near });
+  /** 指名的那家店（门外、店里各一点；用过了或站不住返回 null） */
+  const named = (floor, name) => { const lv = layout.levels.find((l) => l.id === floor), q0 = name && unitOf(layout, floor, name); if (!q0 || used.has(q0.id)) return null; const q = frontOf(lv, q0); if (q) used.add(q0.id); return q; };
+  const trap = named(F.top, M.shop.rescue) || near(F.top, mid3, { best: 0, avoid: [bike, d3, home], minAway: M.rescue.near });
   // 二层：下了扶梯（坡道低的那一头）到手枪那家店门口，中间一路是发呆的尸群
   const s3 = nav.slopes.find((q) => q.id === d3.id), [lx, lz] = s3 ? toW(s3.F, -1.6, 0) : [d3.x, d3.z];
   const gunFront = (() => { const lv = layout.levels.find((l) => l.id === F.mid), u = lv.units.find((x) => x.id === gun.unit); return u ? frontOf(lv, u) : null; })();
   const sneakTo = gunFront?.out || gun;
   // 二层：油桶在离发电机二三十米的一家店里（得抬着跑一段）
-  const can = near(F.mid, gen, { best: M.fuel.best, lo: M.fuel.lo, hi: M.fuel.hi, avoid: [gun, note, gen], minAway: 6 });
+  // 油桶那家离储物柜也要隔开一段（以前挑中的就在储物柜隔壁，拿完卡转身就到）
+  const can = near(F.mid, gen, { best: M.fuel.best, lo: M.fuel.lo, hi: M.fuel.hi, avoid: [gun, note, gen], minAway: 6, far: [[win, M.spread.min]] });
   const stages = [
     st('crank', 'crank', 'item', crank, `手摇柄 · ${home.name}`, '拿手摇柄', `你们被锁在三层的「${home.name}」里，卷帘落着。先在店里把卷帘的手摇柄找出来`, '在店里找卷帘的手摇柄'),
     st('exit', 'shutter', 'relay', door, `卷帘 · ${home.name}`, '摇开卷帘', '到门边把卷帘摇起来——外面有东西在拍门，手里只有刀和两颗手雷', '到门边摇开卷帘', 12),

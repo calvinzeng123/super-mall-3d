@@ -9158,13 +9158,13 @@ function hM(i) {
         let ve = li("div", "h-cm " + (ce.kind || "relay"), `<i></i><b>${ce.short || ""}</b><span></span>`), _e = li("div", "h-wm " + (ce.kind || "relay"), `<i></i><b>${ce.short || ""}</b><span></span>`);
         return a.appendChild(ve), G.appendChild(_e), { ...ce, cEl: ve, wEl: _e, cDist: ve.querySelector("span"), wDist: _e.querySelector("span"), lastD: -1, lastC: 1e9, lastW: "", vis: null };
       });
-    }, setPrompt(k, ce = 0) {
+    }, setPrompt(k, ce = 0, tp = false) {
       let ve = !!k;
       if (ve !== X.promptOn && (X.promptOn = ve, m.classList.toggle("on", ve), i.input.setPrompt && i.input.setPrompt(ve)), !ve) return;
       let _e = i.input.touch ? "\u4EA4\u4E92" : i.input.gamepad && !i.input.locked ? "Y" : "E";
       _e !== X.promptKey && (X.promptKey = _e, _.textContent = _e, _.classList.toggle("wide", _e.length > 1));
-      let Te = `\u6309\u4F4F ${_e} \xB7 ${k}`;
-      Te !== X.promptText && (X.promptText = Te, M.textContent = Te);
+      let Te = `${tp ? "\u6309" : "\u6309\u4F4F"} ${_e} \xB7 ${k}`;
+      Te !== X.promptText && (X.promptText = Te, M.textContent = Te, m.classList.toggle("tap", !!tp));
       let Pe = Math.round(ce * 200) / 200;
       Pe !== X.promptT && (X.promptT = Pe, A.setAttribute("stroke-dashoffset", (ix * (1 - Pe)).toFixed(2)), m.classList.toggle("busy", Pe > 0));
     }, radio(k, ce = 4.5) {
@@ -9794,8 +9794,8 @@ function mM(i) {
     }
     function ue(P) {
       let V = n.alive ? $() : null;
-      for (let L of c.relays) L.cut || (L === V && r.down("interact") ? (L.cutting || (L.cutting = true, O(L.o, "cutting")), L.t += P / Yi.cutSeconds, i.events.emit("objective:progress", { id: L.id, t: Math.min(1, L.t) }), L.t >= 1 && me(L)) : L.t > 0 && (L.t = Math.max(0, L.t - P * 1.6), L.cutting && (L.cutting = false, O(L.o, "live"), i.events.emit("objective:progress", { id: L.id, t: 0 }))));
-      V && !V.cut ? o.setPrompt && o.setPrompt((V.o.verb || "\u5207\u65AD\u4E2D\u7EE7") + " " + V.short, Fo(V.t)) : o.setPrompt && o.setPrompt(null);
+      for (let L of c.relays) L.cut || (L === V && (L.o.tap ? r.pressed("interact") : r.down("interact")) ? (L.cutting || (L.cutting = true, O(L.o, "cutting")), L.t += L.o.tap ? 1 : P / Yi.cutSeconds, i.events.emit("objective:progress", { id: L.id, t: Math.min(1, L.t) }), L.t >= 1 && me(L)) : L.t > 0 && (L.t = Math.max(0, L.t - P * 1.6), L.cutting && (L.cutting = false, O(L.o, "live"), i.events.emit("objective:progress", { id: L.id, t: 0 }))));
+      V && !V.cut ? o.setPrompt && o.setPrompt((V.o.verb || "\u5207\u65AD\u4E2D\u7EE7") + " " + V.short, Fo(V.t), !!V.o.tap) : o.setPrompt && o.setPrompt(null);
       let Y = s.extraction;
       if (Y && Y.pos) {
         let L = Math.hypot(Y.pos.x - n.pos.x, Y.pos.z - n.pos.z), Z = L < (Y.radius || 2.5) && Math.abs(Y.pos.y - n.pos.y) < 3.5;

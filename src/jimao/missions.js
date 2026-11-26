@@ -18,6 +18,7 @@ import { CAR_ROUTE, sampleRoute, carPoseAt, carSpeedAt, HELI_ORBIT, heliPoseAt, 
 import { CUT, carOutroPose, outroCamera, outroFade } from './cutscene.js';
 import { createDoorGun } from './door-gun.js';
 import { VEHICLE_HP, rayMiss, crashPose, makeDurabilityHud } from './vehicle-damage.js';
+import { tapObjective } from './pickup.js';
 
 export const MISSION_TYPES = Object.freeze(['relay', 'eliminate', 'rooms', 'hotel', 'hold', 'bomb', 'hvt']);
 export const ELIMINATE_TARGET = 12;
@@ -171,7 +172,7 @@ export function itemModel() {
   const M = mats(), g = new THREE.Group();
   add(g, new THREE.BoxGeometry(0.9, 0.06, 0.6), M.metal, 0, 0.74, 0);
   for (const x of [-0.4, 0.4]) for (const z of [-0.25, 0.25]) add(g, new THREE.BoxGeometry(0.04, 0.74, 0.04), M.metal, x, 0.37, z);
-  const box = new THREE.Group(); g.add(box);
+  const box = new THREE.Group(); box.userData.pickup = true; g.add(box); // pickup：取回时这只箱子飞到镜头前（pickup.js）
   add(box, new THREE.BoxGeometry(0.6, 0.18, 0.42), M.case, 0, 0.86, 0);
   add(box, new THREE.BoxGeometry(0.2, 0.05, 0.04), M.brass, 0, 0.98, 0.0);
   for (const x of [-0.2, 0.2]) add(box, new THREE.BoxGeometry(0.05, 0.05, 0.03), M.brass, x, 0.88, 0.22);
@@ -409,7 +410,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       const y = o.site.y ?? elev(o.site.floor);
       g.position.set(o.site.x, y, o.site.z);
       root.add(g);
-      o.object = g; o.pos = v({ ...o.site, y }); o.zone = o.site.floor;
+      o.object = g; o.pos = v({ ...o.site, y }); o.zone = o.site.floor; o.tap = tapObjective(o); // 取回箱子点一下就行；切中继、拆炸弹要按住（pickup.js）
       return g;
     });
     if (mission.hold) {
