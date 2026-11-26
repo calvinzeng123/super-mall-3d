@@ -14,7 +14,7 @@ const ease = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
  * a fixed presentation FOV; weapon visibility never depends on nearby walls.
  * No downloads happen until this factory is called.
  */
-export async function createViewmodel({ camera, renderer, onProgress, assets = FPS_MODEL_ASSETS } = {}) {
+export async function createViewmodel({ camera, renderer, onProgress, assets = FPS_MODEL_ASSETS.filter((a) => ['rifle', 'pistolHands', 'pistol'].includes(a.id)) } = {}) {
   if (!camera || !renderer) throw new Error('createViewmodel requires camera and renderer');
   if (!['rifle', 'pistolHands', 'pistol'].every(id => assets.some(asset => asset.id === id)))
     throw new Error('Missing licensed FPS model manifest entry');

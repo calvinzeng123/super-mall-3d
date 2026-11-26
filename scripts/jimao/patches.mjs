@@ -181,6 +181,10 @@ export const PATCHES = [
   ['丧尸围城里不自动回血（G.noRegen）：血只能靠急救包、止痛药补',
     'E += F, E > Mt.regenDelay && C.health < C.maxHealth &&',
     'E += F, !i.noRegen && E > Mt.regenDelay && C.health < C.maxHealth &&'],
+  // ---- 新步枪（rifle-view.js）----
+  ['步枪露出内部状态（换弹进度、开镜、冲刺、扳机、拉机柄）和枪的参数（枪口、抛壳口），换上的新模型照着它摆动作',
+    'root: e, debug: ce, info: {',
+    'root: e, debug: ce, anim: k, spec: mi, info: {'],
 ];
 
 /** 打补丁；返回 { code, applied }。有一条没命中或命中不止一次就抛错。 */

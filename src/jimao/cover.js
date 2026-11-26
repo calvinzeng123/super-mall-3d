@@ -51,6 +51,7 @@ export const ABOUT_COPY = Object.freeze([
   '项目还在持续开发，手感、难度和画面都在调。玩的时候觉得哪里不对，欢迎直接告诉我们。',
   '素材：手枪模型改编自 ELIZION 的「Desert Eagle」（Sketchfab，<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>）——缩小了尺寸、压暗了表面、抹掉了铭文。',
   '丧尸围城里的冲锋枪和握枪的手臂、换弹动画来自 DJMaesen 的「fps animated smg」（Sketchfab，<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>），压缩了贴图。丧尸的人形改自 Microsoft Rocketbox 的行人模型（MIT），重画了贴图。',
+  '步枪是 nisu 的「M4A1 Assault Rifle」（OpenGameArt，<a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0</a>），去掉了几个外加的配件、压缩了贴图；握枪的手臂也是上面冲锋枪模型里那双，换弹、切枪的动作是我们按原游戏的节拍重新摆的。',
 ]);
 
 /** 操作说明里补一段（原游戏的说明里没有电梯） */

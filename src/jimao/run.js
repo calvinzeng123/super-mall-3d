@@ -30,6 +30,8 @@ import { createMinimap, MINIMAP_CSS } from './minimap.js';
 import { createScore, SCORE_CSS } from './score.js';
 import { registerDressing, buildDressing } from './dressing.js';
 import { createArsenal, ARSENAL_CSS } from './arsenal.js';
+import { rifleTextureCap } from './rifle-view.js';
+import { MEM } from '../render/device.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FPS_MODEL_ASSETS } from '../fps/model-data.js';
 import { fetchBinary } from '../render/fetch-binary.js';
@@ -205,6 +207,12 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     if (rec) fetchBinary(rec.url, { label: '手枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
       .then((gltf) => { if (G.weapon === arsenal) arsenal.skinPistol(gltf.scene, undefined, { sliced: true }); }) // sliced：贴图一帧处理一种材质，不卡一下长的
       .catch((e) => console.warn('[零点突围] 手枪模型没加载出来，用简化模型', e)); }
+  // 新步枪（rifle-view.js）：M4A1 真模型（0.8 MB），手臂借下面冲锋枪模型上那双——两个都加载好才换上，之前是原来那把步枪。
+  // 贴图按内存档位：电脑 1024，手机省内存 / 标准档 512。?oldrifle=1 不换（对比用）
+  { const rec = !params.boxgun && !params.oldrifle && FPS_MODEL_ASSETS.find((a) => a.id === 'm4a1'), arsenal = G.weapon;
+    if (rec) fetchBinary(rec.url, { label: '步枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+      .then((gltf) => { if (G.weapon === arsenal) arsenal.skinRifle(gltf, { textureCap: rifleTextureCap(MEM, G.quality) }); })
+      .catch((e) => console.warn('[零点突围] 新步枪模型没加载出来，用原来那把', e)); }
   // 冲锋枪（丧尸围城里捡得到的第四把）：带手臂和换弹动画的真模型，2.9 MB，手枪之后再加载；加载不出来就没有这把枪
   { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'rifle'), arsenal = G.weapon;
     if (rec) setTimeout(() => fetchBinary(rec.url, { label: '冲锋枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))

@@ -293,6 +293,60 @@
           "bytes": 41554
         }
       ]
+    },
+    {
+      "file": "m4a1-mobile.glb",
+      "bytes": 801192,
+      "sha256": "fd757d7405e80cbd71b40ed96d64c9d5176c5ba175ca484edfe068bfd4fef5d3",
+      "sourceFile": "steel_tide_m4a1.glb",
+      "sourceBytes": 5302740,
+      "sourceSha256": "3c0fe733d6e298c94be66accb5ab579317eeb027e349af60f95c618610c0811c",
+      "triangles": 9220,
+      "meshes": 15,
+      "animations": [],
+      "license": "CC0-1.0",
+      "author": "nisu",
+      "textures": [
+        {
+          "name": "M4A1_Normal",
+          "kind": "normal",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 39282
+        },
+        {
+          "name": "M4A1_Base_Color",
+          "kind": "color",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 50649
+        },
+        {
+          "name": "M4A1_Metallic-M4A1_Roughness",
+          "kind": "mr",
+          "source": [
+            2048,
+            2048
+          ],
+          "runtime": [
+            1024,
+            1024
+          ],
+          "bytes": 303773
+        }
+      ]
     }
   ]
 }
