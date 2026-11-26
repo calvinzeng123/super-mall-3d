@@ -753,6 +753,9 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   // 尸潮的节奏（pacing.js）：平静 → 升温 → 尸潮 → 喘息；特殊感染者按名额放
   const pacing = createPacing(rng);
   let enabled = false, noiseEl = null, clockEl = null, savedFlow = null;
+  // 联机（coop/coop.js）：follow = 客户端跟着主机走（不放丧尸、不跑节奏、不守屋顶，步数和几样状态照主机的快照）；
+  // nextRng：下一局抽关卡用的随机数（主机发种子，大家抽到同一局）
+  let follow = false, nextRng = null;
   try { enabled = storage?.getItem?.('jimao-siege') === '1'; } catch { enabled = false; }
   if (enabled) warmProps(); // 物件的几何体趁加载时分帧建好（见 siege-props.js warmProps）
   if (ui && typeof document !== 'undefined') {
@@ -1007,6 +1010,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   };
   /** 任务系统每局来要一次 */
   function mission(r = rng) {
+    if (nextRng) { r = nextRng; nextRng = null; } // 联机：这一局按主机给的种子抽
     const T = pickTower(r(), forceTower), plan = siegePlan(r, layout, nav, runs, T), pad = plan.pad;
     S.plan = plan;
     const flight = siegeFlight(pad, padY(), { box: flightBox(layout, T) });
@@ -1090,7 +1094,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     }
     G.liftAllow = enabled ? (link, from, to) => (S.plan ? liftRule(S.plan, S.stage, nav, link.id, from, to) : null) : null;
     // 往上的楼梯（快速上楼也一样）：关卡拦着、或者这一层还没清干净（逐层破楼）都不让走；往下照走
-    G.stairBlock = enabled ? (run, dir) => { if (!S.plan || dir !== 'up') return null; const g = stairRule(S.plan, S.stage, run); if (g) return g; const c = climbRule(run); if (c) wake(run.from); return c; } : null;
+    G.stairBlock = enabled ? (run, dir) => { if (!S.plan || dir !== 'up') return null; const g = stairRule(S.plan, S.stage, run); if (g) return g; if (follow) return null; const c = climbRule(run); if (c) wake(run.from); return c; } : null;
     // 路线指引也得知道哪些电梯、楼梯现在走不了（不然会指你去坐一部到不了那层的电梯）
     G.physics?.pathfinder?.setBlocked?.(enabled ? (c) => {
       if (!S.plan) return false;
@@ -2414,6 +2418,27 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
   const api = {
     get enabled() { return enabled; },
     set enabled(v) { enabled = !!v; if (enabled) warmProps(); try { storage?.setItem?.('jimao-siege', enabled ? '1' : '0'); } catch { /* 存不了就不存 */ } },
+    /** 联机客户端：跟着主机走（见上面 follow） */
+    get follow() { return follow; }, set follow(v) { follow = !!v; },
+    /** 联机：下一局抽关卡用这个随机数（一次性） */
+    useRng(r) { nextRng = typeof r === 'function' ? r : null; },
+    /** 联机：指定撤离哪栋楼（'A' / 'T1'；null = 按比例抽），和网址 ?tower= 一样；主机把自己的设置发给大家 */
+    get towerPick() { return forceTower; }, set towerPick(v) { forceTower = v || null; },
+    /**
+     * 联机客户端收到主机的关卡状态：守屋顶的计时、直升机落没落、发电机 / 一层守点的倒计时、抬没抬着油桶、爬楼那句提示。
+     * 直升机刚落稳（landed 从 false 变 true）：和主机一样把它摆好、开放登机门
+     */
+    followState(v) {
+      if (!follow || !v || !S.plan) return;
+      const was = S.landed;
+      for (const k of ['hold', 'landed', 'waveI', 'genT', 'holdT', 'carry', 'climbText', 'land']) if (v[k] !== undefined) S[k] = v[k];
+      const heli = director.vehicles?.heli;
+      if (S.hold >= 0 && !S.landed && clockEl) { const left = Math.max(0, SIEGE.hold - S.hold); clockEl.classList.remove('off'); clockEl.textContent = S.land >= 0 ? '直升机降落中' : `直升机 ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(Math.ceil(left % 60)).padStart(2, '0')}`; }
+      if (S.land >= 0 && !S.landed && heli) { heli.root.visible = true; const k = Math.min(1, S.land / SIEGE.land), e = 1 - (1 - k) * (1 - k), pad = S.plan.pad; heli.setPose?.({ x: pad.x, y: padY() + 45 * (1 - e), z: pad.z, yaw: pad.yaw, pitch: 0, roll: 0 }, 0); }
+      if (S.landed && !was) { clockEl?.classList.add('off'); if (heli) { heli.root.visible = true; heli.reset?.(); } director.openExtraction?.(); G.game?.refreshObjective?.(); }
+    },
+    /** 主机这边：要发给客户端的那几样关卡状态（和 followState 对应） */
+    followOut() { return { hold: +S.hold.toFixed(1), landed: S.landed, waveI: S.waveI, genT: +(S.genT || 0).toFixed(1), holdT: +(S.holdT || 0).toFixed(1), carry: !!S.carry, climbText: S.climbText || '', land: +(S.land ?? -1).toFixed(1) }; },
     mission, reset, state: S, walls, demo, get seals() { return seals; }, addNoise, horde, pacing, spawnSpecial, spawnBrute, supplies, inArea, climbRule, mustClear, onRoof, roofExits, roofRim, roofOpen, housings, exposedNow, mateBites, guestHurt, refuge, makeRoom, inView,
     /** 爬楼那几层的落点一口气算完（测试、调试跳关用；游戏里开局起分帧算） */
     prepareFloors() { while (S.spotJob) if (S.spotJob.next().done) S.spotJob = null; return S.spots; },
@@ -2436,6 +2461,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       S.tellT -= dt;
       syncStage();
       if (director.riding) { clockEl?.classList.add('off'); return; }
+      // 联机客户端：只管自己走不走得过去（关卡、范围），丧尸、尸潮、守屋顶都在主机上算
+      if (follow) { wall(); leash(); noiseEl?.classList.add('off'); return; }
       wall(); leash(); genTick(dt); lockersTick(); escortTick(dt); sneakTick(dt); carryTick(dt); holdoutTick(dt); pinTick(); flingTick(dt); acidTick(dt); recycle(dt); floorsTick(dt); ambient(dt); holdTick(dt); safeTalkTick(dt);
       // 响动：安静一会儿才开始往下掉；攒满会把下一波尸潮催来
       S.hordeCool -= dt;

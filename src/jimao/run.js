@@ -49,6 +49,7 @@ import { DOOR_GUN_CSS } from './door-gun.js';
 import { createRoofGun, ROOF_GUN_CSS } from './roof-gun.js';
 import { VEHICLE_HP_CSS } from './vehicle-damage.js';
 import { MOBILE } from '../render/device.js';
+import { createCoop, LOBBY_CSS } from './coop/coop.js';
 
 /** 标题是四个字（原游戏是两个字）：字号收小、不换行，手机横屏按高度算 */
 const TITLE_CSS = `
@@ -102,7 +103,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS + ROOF_GUN_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS + ROOF_GUN_CSS + LOBBY_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -278,13 +279,20 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.score = score;
   { const reset0 = G.level.onReset; G.level.onReset = () => { reset0(); score.reset(); }; }
   locCard(document, director.state.mission);
+  // 三人联机（coop/）：只在丧尸围城里。不进房间时什么都不变；进了房间，主机照常跑整局、发快照，客户端的丧尸和队友当木偶（见 coop/coop.js）
+  const coop = siege ? createCoop(G, { squad, zombies, siege, director, ui, params, storage: safeStorage(), scene }) : null;
+  G.coop = coop;
   // 封面上的模式切换：零点突围（打武装劫持者，任务随机）/ 丧尸围城（从商场突围到公寓楼顶）
   if (siege) {
     const box = document.querySelector('[data-s="title"] [data-zh="actions"]') || document.querySelector('[data-s="title"] .m-actions');
     const b = document.createElement('button'); b.type = 'button'; b.className = 'jm-mode';
     const paint = () => { b.innerHTML = `<small>模式</small><b>${siege.enabled ? '丧尸围城' : '零点突围'}</b><i>点一下切换</i>`; b.classList.toggle('on', siege.enabled); };
-    b.addEventListener('click', (e) => { e.stopPropagation(); siege.enabled = !siege.enabled; siegeRoofProps(); director.roll(); siege.reset(); roofGun?.reset(); squad?.reset(); locCard(document, director.state.mission); paint(); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); if (coop?.inRoom) { G.hud?.message?.('联机房间里只能玩丧尸围城', 2.5); return; } siege.enabled = !siege.enabled; siegeRoofProps(); director.roll(); siege.reset(); roofGun?.reset(); squad?.reset(); locCard(document, director.state.mission); paint(); });
     paint(); box?.parentElement?.insertBefore(b, box);
+    // 联机入口：模式按钮旁边一个「联机（三人）」（打开大厅；网址带 ?room=房间码 直接进）
+    coop?.entry(box);
+    // 暂停菜单里也放一个（开打以后再把房间码发给朋友、离开房间）
+    { const r = document.querySelector('[data-s="paused"] [data-act="restart"]'); if (r) coop?.entry(r); }
   }
   // 备用摇杆（touch-stick.js）：Pointer Events 再跟一遍左半边的拇指，原游戏的摇杆这一帧没给出移动时顶上；没按时左下角显示摇杆的位置
   const stick = createTouchStick({ canvas: renderer.domElement, input: G.input, active: () => G.game?.state === 'playing' && !director.riding, root: ui, geometry: () => G.stickGeo?.() });
@@ -362,6 +370,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       // 寻路每帧最多算 PATH.budget 毫秒（帧率很低时减半，别再雪上加霜）
       if (active) { try { pathfinder.update(rawDt > 0.05 ? PATH.budget / 2 : PATH.budget); } catch (e) { fail('path', e, '寻路出错'); } }
       if (active) { try { actions.pre(dt); } catch (e) { fail('actions', e, '操作补强出错'); } }
+      // 联机：客户端把丧尸、队友摆到主机快照插值好的位置（之后它们的更新只摆姿势）；主机把远程玩家的位置插值好（之后队友按它走）
+      if (coop) { try { coop.pre(dt); } catch (e) { fail('coop', e, '联机出错'); } }
       if (active) { stepPlayer(dt, gap); if (!director.gunActive && !roofGun?.active) run('weapon', dt); run('enemies', dt); }
       if (G.game.state !== 'paused') { try { actions.update(dt); } catch (e) { fail('actions', e, '手雷出错'); } }
       if (G.game.state !== 'paused') { try { ammo.update(dt); } catch (e) { fail('ammo', e, '弹药补给出错'); } }
@@ -402,6 +412,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       try { cover.tick(); } catch (e) { fail('cover', e, '封面出错'); }
       lightPool.update(dt);
       syncVisibility();
+      if (coop) { try { coop.post(dt); } catch (e) { fail('coop', e, '联机出错'); } }
       G.input.endFrame?.();
     },
   };
@@ -501,7 +512,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); roofGun?.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); roofGun?.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); coop?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }
