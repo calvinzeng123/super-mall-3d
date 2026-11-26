@@ -42,8 +42,10 @@ export async function startRuntime(mode,onProgress=()=>{}) {
     ]);
     const ui=createUI(app,layout);attachExplore(app,ui);
     // 小游戏版没有二期、三期，不挂全园导览；挂小游戏外壳
-    if(mode==='arcade'){const {attachArcade}=await import('./arcade/shell.js');window.__arcade=attachArcade(app,ui);}
-    else attachTour(app,ui);
+    // 园区导览：小游戏嵌在里面（工具栏「小游戏」、地图标记），就在完整园区上玩；封面带 ?play=<游戏> 进来直接打开它的关卡
+    const {attachArcade}=await import('./arcade/shell.js');
+    if(mode==='arcade')window.__arcade=attachArcade(app,ui);
+    else{attachTour(app,ui);window.__arcade=attachArcade(app,ui,{embedded:true,focus:new URLSearchParams(location.search).get('play')});}
     const back=document.createElement('button');back.id='modeBack';back.textContent='返回封面';
     back.className='mode-back';back.onclick=()=>location.reload();document.body.append(back);
   }
