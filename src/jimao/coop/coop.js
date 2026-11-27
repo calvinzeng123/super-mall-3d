@@ -6,7 +6,9 @@
 //         关卡跟着主机的步数走（siege.follow），按交互键做目标做到最后一下停住、请主机定。血量、倒地听主机的。
 //   座位 → 角色：0 主角、1 阿哲、2 林医生（sync.js 的 ROLES）。没人坐的座位是电脑队友；有人走了，那个角色从他站的地方接着由电脑开。
 //   中途加入：拿开局信息（种子、哪栋楼）抽同一局，按主机的步数补上前面的目标，站到自己那个角色现在的位置上（倒着的就倒着进来）。
-//   主机走了：服务器把下一个人提成主机，他接着跑这一局（木偶接着当真丧尸跑）。
+//   主机走了：服务器把下一个人提成主机，他接着跑这一局（木偶接着当真丧尸跑）；别的客户端不重开（开局消息带 mig，同一局不再 start）。
+//   回血：客户端自己用了医疗包 / 止痛药，报给主机（操作里带 heal：[第几次, 多少]），主机核对上限后加到他那个人身上；主机回执（快照的 ha）以前本地先不被快照的血量顶回去。
+//   只听主机的：客户端只认房主座位（msg.f）发来的规则消息（结束、投票、登机……）；别人的名字显示前再过一遍 clean()。
 // 给后面的玩法规则留的口子（hooks）：rewardMul（多人资源翻倍）、players()、on(type, fn) / send(type, data)（自定义消息）、
 //   extend(name, { write, read })（往快照里加字段：直升机第二挺机枪、第三个人在机上……）、events 'coop:*'。
 import * as THREE from 'three';
@@ -14,19 +16,24 @@ import { NET, ROLES, CHARS, PART_CODES, WEAPON_CODES, encodeZombie, encodeChar, 
 import { createRoomClient, serverUrl, randomCode } from './net.js';
 import { createLobby, LOBBY_CSS } from './lobby.js';
 import { SIEGE } from '../siege.js';
+import { clean } from '../../../cloud/rooms/room-core.js';
 
 export { LOBBY_CSS };
 /**
  * reward：多人（房间里不止你一个真人）时资源乘几（玩法规则那边接）；cutHold：客户端做目标做到这个进度停住，等主机定；
  * cutReach：主机认客户端完成目标时，他离目标多远以内；cutEvery：多久重发一次请求；
  * targetEvery：主机多久给每只丧尸重挑一次追谁；stick：换目标要近多少米才换（不来回摇摆）；
- * down：客户端倒地时多久提示一次；shotRange：别人开枪的弹道画多长
+ * cutWait：客户端请了以后多久之内那个目标一直显示「正在拿」（等主机定；过了还没定就松开）；
+ * down：客户端倒地时多久提示一次；shotRange：别人开枪的弹道画多长；
+ * heal：客户端回血——一次最多报 max、主机那边每 every 秒最多认 budget（医疗包 + 止痛药）；wait：多久没回执就不等了；ack：主机回执在快照里带几秒
  */
 export const COOP = Object.freeze({
-  reward: 2, cutHold: 0.97, cutReach: 4.5, cutEvery: 0.6, targetEvery: 0.5, stick: 3, down: 3, shotRange: 30,
+  reward: 2, cutHold: 0.97, cutReach: 4.5, cutEvery: 0.6, cutWait: 1.5, targetEvery: 0.5, stick: 3, down: 3, shotRange: 30,
+  heal: Object.freeze({ max: 80, budget: 110, every: 10, wait: 2.5, ack: 3 }),
   noise: Object.freeze({ rifle: SIEGE.noise.rifle, pistol: SIEGE.noise.pistol, smg: SIEGE.noise.smg, launcher: SIEGE.noise.launcher, knife: 0, axe: 0 }),
 });
 const ROLE_NAME = Object.freeze({ lead: '主角', zhe: '阿哲', lin: '林医生', xu: '小许' });
+const RELAY_GUARD = Symbol('coop-relay');
 const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 
 /**
@@ -45,6 +52,10 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     frame: { worst: 0, sum: 0, n: 0 }, lastTarget: new Map(),
     // self：主机这台机器上的你倒地了没有、被扶到几成（联机玩法规则 rules.js 写，快照照它发；单人时一直是没倒）
     self: { down: false, revive: 0 }, boardHook: null,
+    // 回血（客户端）：hpSet 上一帧这边定下的血量（比它高了就是本地回了血）、out 还没报的、seq 报到第几次、pend 报了还没回执的 [{ seq, n, t }]
+    heal: { hpSet: null, out: 0, seq: 0, pend: [] },
+    healAck: new Map(), // 主机：座位 → { seq, t }（快照里带回执）
+    liveSnap: false, // 客户端：开局以后收到过主机发来的快照了（欢迎消息里那帧是旧的，不拿它定自己站哪）
   };
   const inputExt = new Map(); // 客户端的操作里带的自定义字段（rules.js：直升机上的机枪朝向、机舱里站在哪）
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
@@ -134,6 +145,14 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       try { h.z.damage(h.damage, null, null, h.part, 'squad'); } catch (e) { console.error('[联机] 命中出错', e); }
       h.z.netBy = null;
     }
+    // 他自己回了血（医疗包、止痛药）：次数往前走才认，一次、一段时间里都有上限；倒着的不回
+    if (Array.isArray(msg.heal) && Number.isInteger(msg.heal[0]) && msg.heal[0] > (rec.healSeq || 0)) {
+      const now = G.time?.t || 0, H = COOP.heal;
+      rec.healBudget = Math.min(H.budget, (rec.healBudget ?? H.budget) + (now - (rec.healAt ?? now)) * H.budget / H.every); rec.healAt = now;
+      const n = Math.min(Number(msg.heal[1]) || 0, H.max, rec.healBudget, Math.max(0, m.maxHp - m.hp));
+      if (n > 0 && !m.down && m.hp > 0) { m.hp += n; rec.healBudget -= n; }
+      rec.healSeq = msg.heal[0]; C.healAck.set(seat, { seq: msg.heal[0], t: now });
+    }
     // 他做完了一个目标（按交互键做到最后一下）：是眼下这一步、人在跟前，就算
     if (Number.isInteger(msg.cut)) {
       const relays = G.game?.run?.relays || [], i = relays.findIndex((r) => !r.cut), o = relays[i]?.o;
@@ -169,6 +188,8 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (C.shots.length) msg.sh = C.shots.splice(0, 40);
     if (C.radio.length) msg.r = C.radio.splice(0, 6);
     if (director?.riding) msg.ride = 1;
+    // 回血回执：哪个座位报的第几次已经加上了（带几秒，丢一帧也收得到）
+    for (const [seat, a] of C.healAck) { if ((G.time?.t || 0) - a.t > COOP.heal.ack) C.healAck.delete(seat); else (msg.ha ||= {})[seat] = a.seq; }
     for (const [name, ext] of extensions) { try { const v = ext.write?.(); if (v !== undefined) (msg.x ||= {})[name] = v; } catch (e) { console.error('[联机] 快照字段出错', name, e); } }
     C.room.send(msg);
   }
@@ -176,10 +197,12 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   // ---- 客户端：照快照摆 ----
   const zState = {};
   let tellRide = 0;
-  function onSnap(msg) {
+  function onSnap(msg, stale = false) {
     if (!C.started || (msg.round !== undefined && msg.round !== C.round)) return; // 还没开局 / 上一局的
     const res = C.mirror.ingest(msg, G.time?.t || 0);
     if (!C.mirror.keyed) return;
+    if (!stale) C.liveSnap = true;
+    const ack = msg.ha?.[C.seat]; if (Number.isInteger(ack)) C.heal.pend = C.heal.pend.filter((q) => q.seq > ack);
     C.hostStage = msg.stage ?? C.hostStage;
     for (const idx of res.gone) { const z = pool[idx]; if (z?.active) z._deactivate(); }
     for (const idx of res.spawn) {
@@ -255,12 +278,19 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     // 自己：血量、倒地
     const me = C.mirror.chars.get(local())?.st, p = G.player;
     if (me && p) {
-      if (!C.placed && G.game?.state === 'playing') placeMe(me);
+      // 站到自己那个角色身上：要等开局以后主机发来的快照（欢迎消息里那帧可能是好几秒前的）；站好以前也不发操作（不然主机把那个角色拉到你的出生点）
+      if (!C.placed && C.liveSnap && G.game?.state === 'playing') placeMe(me);
       if (me.down && !C.down) { C.down = true; C.downPos.copy(p.pos); C.downSay = 0; G.arms?.setLowered?.(1); emit('down', { seat: C.seat }); }
       else if (!me.down && C.down) { C.down = false; G.arms?.setLowered?.(0); G.hud?.message?.('你被扶起来了', 2); emit('up', { seat: C.seat }); }
-      const want = Math.max(C.down ? 1 : 0, Math.min(p.maxHealth || 100, me.hp));
+      // 本地回了血（医疗包、止痛药……）：记下来报给主机；主机回执以前血量按「主机的 + 还没回执的」算，不被快照顶回去
+      const H = C.heal;
+      if (H.hpSet !== null && !C.down && p.alive !== false && p.health > H.hpSet + 0.5) H.out += p.health - H.hpSet;
+      H.pend = H.pend.filter((q) => t - q.t < COOP.heal.wait);
+      const extra = C.down ? 0 : H.out + H.pend.reduce((a, q) => a + q.n, 0);
+      const want = Math.max(C.down ? 1 : 0, Math.min(p.maxHealth || 100, me.hp + extra));
       if (want < p.health - 0.5 && want > 0) { const d = p.health - want; p.invulnerable = false; p.damage?.(d, null); }
       else if (want > 0) p.health = want;
+      H.hpSet = p.health;
       p.invulnerable = true; // 本地不掉血：伤害都是主机算的（不然自己扔的手雷、摔一下就把本地的人「打死」了）
     }
     if (C.down && p && !director?.riding) { // 坐上飞机了（登机时大家都扶起来了，快照还没跟上）：不再按在地上
@@ -269,14 +299,39 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     }
     // 跟上主机的步数（中途加入、主机做完了一步）：一帧补一步
     if (siege?.state && G.game?.state === 'playing' && (siege.state.stage < C.hostStage)) G.game.debugCut?.();
-    // 自己按交互键做目标：做到最后一下停住，请主机定（主机认了，下一帧快照的步数就过去了）
-    const relays = G.game?.run?.relays || [];
+    // 自己按交互键做目标（按住的、点一下的都一样）：本地做不完——进度卡在 cutHold（guardRelays），请主机定；
+    // 请了以后 cutWait 秒里一直显示「正在拿」（点一下的不会马上退回去），主机认了，下一帧快照的步数就过去了
+    const relays = guardRelays();
     C.cutT -= dt;
-    relays.forEach((r, i) => { if (!r.cut && r.t >= COOP.cutHold) { r.t = COOP.cutHold; if (C.cutT <= 0) { C.cutReq = i; C.cutT = COOP.cutEvery; } } });
+    relays.forEach((r, i) => {
+      if (r.cut) { r.cutWant = null; return; }
+      if (r.cutWant == null || t - r.cutWant > COOP.cutWait) { r.cutWant = null; return; }
+      holdQuiet = true; try { r.t = COOP.cutHold; } finally { holdQuiet = false; }
+      if (C.cutT <= 0) { C.cutReq = i; C.cutT = COOP.cutEvery; }
+    });
+  }
+  /**
+   * 客户端上的目标进度：给每个目标的 t 换成存取器——客户端模式下还没做完的，进度一到 cutHold 就卡住并记下「想做完」（cutWant），
+   * 原游戏「t += 1（点一下的）/ t += dt / 秒数（按住的）、t >= 1 就做完」在本地永远到不了 1；主机定了（debugCut：先 cut = true 再 t = 1）照常过去。
+   * 新开一局原游戏会换一批目标对象：每帧看一眼，没换过的换上。返回目标列表
+   */
+  let holdQuiet = false;
+  function guardRelays() {
+    const relays = G.game?.run?.relays || [];
+    for (const r of relays) {
+      if (!r || r[RELAY_GUARD]) continue;
+      let raw = Number(r.t) || 0;
+      Object.defineProperty(r, 't', {
+        configurable: true, enumerable: true, get: () => raw,
+        set: (v) => { if (C.mode === 'client' && !r.cut && v >= COOP.cutHold) { raw = COOP.cutHold; if (!holdQuiet) r.cutWant = G.time?.t || 0; } else raw = v; },
+      });
+      r[RELAY_GUARD] = true;
+    }
+    return relays;
   }
   /** 中途加入 / 开局：站到自己扮演的那个角色现在的位置（主机那边电脑开着他走到哪儿了）；他倒着就倒着进来 */
   function placeMe(st) {
-    C.placed = true;
+    C.placed = true; C.heal.hpSet = null;
     if (!st.on || !G.player) return;
     C.placedAt = { x: +st.x.toFixed(2), y: +st.y.toFixed(2), z: +st.z.toFixed(2), down: !!st.down };
     G.player.pos.set(st.x, st.y, st.z); G.player.yaw = wrapA(st.yaw - Math.PI); G.player.vel?.set?.(0, 0, 0); G.physics?.forget?.(G.player.pos);
@@ -284,6 +339,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     emit('placed', st);
   }
   function clientPost(dt) {
+    if (!C.placed) return; // 还没站到自己那个角色身上：先别报位置（主机会照它把角色拉过来）
     if ((C.inputT += dt) < 1 / NET.inputHz - 1e-6) return;
     C.inputT = Math.min(C.inputT - 1 / NET.inputHz, 1 / NET.inputHz); // 减掉而不是清零：帧率不整除时也是每秒 inputHz 次
     const p = G.player; if (!p) return;
@@ -292,6 +348,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (C.outShots.length) msg.sh = C.outShots.splice(0, 12);
     if (C.hits.length) msg.hit = C.hits.splice(0);
     if (C.cutReq >= 0) { msg.cut = C.cutReq; C.cutReq = -1; }
+    { const H = C.heal; if (H.out >= 1) { const n = Math.round(H.out); H.seq++; msg.heal = [H.seq, n]; H.pend.push({ seq: H.seq, n: H.out, t: G.time?.t || 0 }); H.out = 0; } }
     for (const [name, ext] of inputExt) { try { const v = ext.write?.(); if (v !== undefined) (msg.x ||= {})[name] = v; } catch (e) { console.error('[联机] 操作字段出错', name, e); } }
     C.room?.send(msg);
   }
@@ -306,8 +363,10 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     G.zombieTarget = null;
     for (let i = 0; i < pool.length; i++) if (pool[i].active) pool[i]._deactivate(); // 本地已经放出来的（标题画面背后、单人时的）收起来，等主机的快照
     for (let i = 0; i < pool.length; i++) puppetDamage(pool[i], i);
+    resetHeal();
     applyRoles();
   }
+  function resetHeal() { Object.assign(C.heal, { hpSet: null, out: 0, pend: [] }); }
   /** 当主机（建房、主机迁移、离开房间以后自己接着玩）：木偶接着当真丧尸跑，关卡自己导演 */
   function becomeHost(solo = false) {
     C.mode = solo ? 'off' : 'host';
@@ -316,6 +375,8 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (siege) siege.follow = false;
     if (squad) { squad.net.puppet = false; for (const m of squad.everyone) m.remote = null; }
     if (G.player) { G.player.invulnerable = false; if (C.down) { C.down = false; G.arms?.setLowered?.(0); } }
+    restoreExtract(); resetHeal(); C.healAck.clear();
+    for (const r of G.game?.run?.relays || []) r.cutWant = null;
     G.zombieTarget = solo ? null : zombieTarget;
     C.inputs.clear(); C.writer.keyNow(); C.mirror.reset();
     if (solo) { C.seat = -1; C.players = []; C.started = false; }
@@ -329,17 +390,21 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (siege && !siege.enabled) { siege.enabled = true; }
     G.game?.start?.({ skipIntro: true }); // onReset（下面包的那一层）会发 start
   }
-  function startMsg(stage = 0) { return { t: 'start', seed: C.seed, tower: siege?.towerPick || null, round: C.round, stage }; }
+  // mig：换了主机，新主机接着这一局发的（别的客户端不重开，只对一下步数；中途加入的照常拿它开局）
+  function startMsg(stage = 0, mig = false) { return { t: 'start', seed: C.seed, tower: siege?.towerPick || null, round: C.round, stage, ...(mig ? { mig: 1 } : {}) }; }
   /** 客户端收到开局（含中途加入）：按种子抽同一局、开打，步数跟上主机 */
   function clientStart(st, snap = null) {
     if (!st) return;
-    C.seed = st.seed >>> 0; C.round = st.round ?? C.round; C.hostStage = st.stage || 0; C.placed = false; C.down = false;
-    C.mirror.reset();
+    // 换主机：还是同一局（同一个种子、同一回）——接着打，不重开（背包、弹药、站的位置都不动）
+    if (st.mig && C.started && (st.seed >>> 0) === C.seed && (st.round ?? C.round) === C.round && G.game?.state !== 'title') { C.hostStage = Math.max(C.hostStage, st.stage || 0); emit('migrate', st); return; }
+    C.seed = st.seed >>> 0; C.round = st.round ?? C.round; C.hostStage = st.stage || 0; C.placed = false; C.down = false; C.liveSnap = false;
+    C.mirror.reset(); resetHeal();
     if (siege) { siege.enabled = true; siege.towerPick = st.tower || null; }
     C.started = true;
     G.game?.start?.({ skipIntro: true });
+    guardRelays();
     lobby?.close(); // 开打了：大厅收起来（还在房间里，标题菜单 / 暂停里随时能再打开）
-    if (snap) { try { onSnap(JSON.parse(snap)); } catch { /* 完整帧坏了：等下一帧 */ } }
+    if (snap) { try { onSnap(JSON.parse(snap), true); } catch { /* 完整帧坏了：等下一帧 */ } }
     emit('start', st);
   }
   // 每局开始（含重开、读档）：主机抽种子发给大家；客户端用同一个种子（自己点了重开也还是主机那一局）
@@ -354,16 +419,24 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       C.room.send(startMsg(keep ? siege?.state?.stage || 0 : 0)); C.started = true;
       return;
     }
-    if (C.mode === 'client') { siege?.useRng?.(seededRng(C.seed)); baseReset?.(); for (const z of pool) if (z.active) z._deactivate(); C.mirror.reset(); C.placed = false; return; }
+    if (C.mode === 'client') { siege?.useRng?.(seededRng(C.seed)); baseReset?.(); for (const z of pool) if (z.active) z._deactivate(); C.mirror.reset(); C.placed = false; C.liveSnap = false; resetHeal(); return; }
     // 不在房间里：和以前一样；联机时换过的角色换回主角
     if (squad && (squad.net.local !== 'lead' || squad.net.force)) { squad.net.local = 'lead'; squad.net.force = false; if (G.player) G.player.maxHealth = 100; }
     baseReset?.();
   };
-  // 客户端：到了登机门先不上（第三个人上机还没做）——主机上机清扫
-  const baseExtract = () => G.level?.onExtract;
-  // 客户端走到登机门：交给 boardHook（rules.js：请主机让大家一起登机）；没接规则时只提示
-  const clientExtractGuard = () => { if (C.mode === 'client' && G.level && G.level.onExtract && !G.level.onExtract.coop) { const f = () => { if (C.boardHook) C.boardHook(); else if ((C.boardSay = (C.boardSay || 0) - 1) <= 0) { C.boardSay = 120; G.hud?.message?.('联机时由房主登机清扫；你守住屋顶', 3); } emit('board', {}); }; f.coop = true; G.level.onExtract = f; } };
-  void baseExtract;
+  // 客户端走到登机门：交给 boardHook（rules.js：请主机让大家一起登机）；没接规则时只提示。
+  // 原来的登机（G.level.onExtract）留着：不当客户端了（离开房间、断线、提成主机）换回去；换回去以前万一被调到，也照原来的走
+  const clientExtractGuard = () => {
+    const L = G.level; if (C.mode !== 'client' || !L || !L.onExtract || L.onExtract.coop) return;
+    const base = L.onExtract;
+    const f = () => {
+      if (C.mode !== 'client') { if (L.onExtract === f) L.onExtract = base; return base(); }
+      if (C.boardHook) C.boardHook(); else if ((C.boardSay = (C.boardSay || 0) - 1) <= 0) { C.boardSay = 120; G.hud?.message?.('联机时由房主登机清扫；你守住屋顶', 3); }
+      emit('board', {});
+    };
+    f.coop = true; f.base = base; L.onExtract = f;
+  };
+  function restoreExtract() { const L = G.level; if (L?.onExtract?.coop) L.onExtract = L.onExtract.base || null; }
 
   // ---- 网络 ----
   function connect(want, code, name) {
@@ -376,7 +449,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     room.on('fail', ({ why }) => { if (C.room !== room) return; C.room = null; lobby?.status(why === 'offline' ? (url ? 'offline' : 'noserver') : why); emit('fail', { why }); });
     room.on('welcome', (w) => {
       if (C.room !== room) return;
-      C.seat = w.seat; C.host = w.host; C.players = w.players; C.code = w.code || code;
+      C.seat = w.seat; C.host = w.host; C.players = cleanPlayers(w.players); C.code = w.code || code;
       if (w.host === w.seat) becomeHost(false); else becomeClient();
       lobby?.status('in'); lobby?.render();
       emit('join', { seat: w.seat, host: w.host });
@@ -391,25 +464,34 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       emit('leave', { why });
     });
   }
+  /** 名单上的名字再过一遍 clean()（服务器已经洗过；这边显示前再洗一遍） */
+  function cleanPlayers(list) { return Array.isArray(list) ? list.filter((p) => p && Number.isInteger(p.seat)).map((p) => ({ ...p, name: clean(p.name) })) : C.players; }
+  // 只有主机能发的（客户端只认房主座位发来的）：开局、结束，以及规则那边的自定义消息（over / votes / boardAll ……：客户端收到的自定义消息都该是主机发的）
+  const fromHost = (msg) => Number.isInteger(msg.f) && msg.f === C.host && msg.f !== C.seat;
   function onMessage(msg) {
+    if (!msg || typeof msg.t !== 'string') return;
     switch (msg.t) {
-      case 's': if (C.mode === 'client') onSnap(msg); return;
+      case 's': if (C.mode === 'client') onSnap(msg); return; // 快照：服务器只转主机的（原样转、不带 f）
       case 'i': if (C.mode === 'host') onInput(msg); return;
-      case 'start': if (C.mode === 'client') clientStart(msg); return;
+      case 'heal': if (C.mode === 'host') onInput({ f: msg.f, heal: msg.heal }); return; // 单独发的回血（平时随 i 一起发）
+      case 'start': if (C.mode === 'client' && fromHost(msg)) clientStart(msg); return;
       case 'need': C.writer.keyNow(); return;
       case 'peer': {
-        C.players = msg.players || C.players; C.host = msg.host ?? C.host;
-        if (msg.ev === 'join') { G.hud?.message?.(`${msg.name} 加入了（扮演${ROLE_NAME[roleOf(msg.seat)] || ''}）`, 3); if (C.mode === 'host') C.writer.keyNow(); }
-        if (msg.ev === 'leave') { G.hud?.message?.(`${msg.name} 离开了${C.mode === 'host' ? '，由电脑接手' : ''}`, 3); C.inputs.delete(msg.seat); }
+        C.players = cleanPlayers(msg.players); C.host = msg.host ?? C.host;
+        const who = clean(msg.name);
+        if (msg.ev === 'join') { G.hud?.message?.(`${who} 加入了（扮演${ROLE_NAME[roleOf(msg.seat)] || ''}）`, 3); if (C.mode === 'host') C.writer.keyNow(); }
+        if (msg.ev === 'leave') { G.hud?.message?.(`${who} 离开了${C.mode === 'host' ? '，由电脑接手' : ''}`, 3); C.inputs.delete(msg.seat); C.healAck.delete(msg.seat); }
         applyRoles(); lobby?.render(); emit('peer', msg); return;
       }
       case 'host': {
         C.host = msg.seat;
-        if (msg.seat === C.seat && C.mode === 'client') { becomeHost(false); G.hud?.message?.('房主走了：现在由你主持这一局', 3.5); C.room?.send(startMsg(siege?.state?.stage || 0)); }
+        if (msg.seat === C.seat && C.mode === 'client') { becomeHost(false); G.hud?.message?.('房主走了：现在由你主持这一局', 3.5); C.room?.send(startMsg(siege?.state?.stage || 0, true)); } // 接着这一局：别人不重开
         lobby?.render(); emit('host', msg); return;
       }
       case 'end': return;
-      default: for (const f of handlers[msg.t] || []) { try { f(msg); } catch (e) { console.error('[联机]', msg.t, e); } }
+      default:
+        if (C.mode === 'client' && !fromHost(msg)) return; // 客户端：别人冒充主机发的规则消息不认
+        for (const f of handlers[msg.t] || []) { try { f(msg); } catch (e) { console.error('[联机]', msg.t, e); } }
     }
   }
   function leave(quiet = false) {
@@ -518,11 +600,12 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
         else if (G.game?.state === 'playing' || G.game?.state === 'paused') { if (C.down && G.player && !director?.riding) { G.player.pos.copy(C.downPos); G.player.vel?.set?.(0, 0, 0); } clientPost(dt); }
       } finally { const ms = performance.now() - t0 + (C.preMs || 0); C.frame.sum += ms; C.frame.n++; C.frame.worst = Math.max(C.frame.worst, ms); }
     },
-    dispose() { leave(true); lobby?.dispose(); if (G.enemies && baseSpawn) G.enemies.spawn = baseSpawn; if (G.level && baseReset) G.level.onReset = baseReset; if (G.hud && origRadio) G.hud.radio = origRadio; G.zombieTarget = null; },
+    dispose() { leave(true); restoreExtract(); lobby?.dispose(); if (G.enemies && baseSpawn) G.enemies.spawn = baseSpawn; if (G.level && baseReset) G.level.onReset = baseReset; if (G.hud && origRadio) G.hud.radio = origRadio; G.zombieTarget = null; },
   };
   // 网址带 ?room=CODE：打开大厅、直接加入
   if (params.room && lobby) setTimeout(() => lobby.autoJoin(params.room), 1500); // 等加载画面后面那几帧（预热着色器、传贴图）过去再连
   // 封面「联机（三人）」入口带 ?mp=1（见 src/cover-options.js 的 MP_ENTRY）：没带房间码时进来就把大厅打开
-  else if (params.mp === '1' && lobby) setTimeout(() => lobby.open(), 1500);
+  // mp=1 或者别的不是地址的值都算「打开大厅」；?mp=ws(s)://… 只是指定连哪台服务器，不自动打开
+  else if (params.mp && !/^(wss?|https?):\/\//i.test(String(params.mp).trim()) && lobby) setTimeout(() => lobby.open(), 1500);
   return api;
 }

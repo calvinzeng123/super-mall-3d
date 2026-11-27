@@ -1,10 +1,11 @@
 // 丧尸围城联机：连房间服务器（cloud/rooms/，Cloudflare Worker + Durable Object）的那一层。只管连、收、发、统计流量。
-// 服务器地址：网址 ?mp=<地址> > 本机存的（localStorage jimao-mp-server）> 本机开发（localhost / 127.0.0.1 时连 wrangler dev 的 8787）> COOP_SERVER.url。
-// 服务器部署好以后把 COOP_SERVER.url 填上（见 cloud/rooms/README.md）；没填、或者连不上，大厅里显示「联机服务器还没上线」。
+// 服务器地址：网址 ?mp=<ws(s):// 或 http(s):// 地址> > 本机存的（localStorage jimao-mp-server）> 本机开发（localhost / 127.0.0.1 时连 wrangler dev 的 8787）> COOP_SERVER.url。
+// ?mp=1（封面「联机（三人）」入口、邀请链接都带）只是「进来就打开大厅」，不是地址：照下面的顺序往下找。
+// 正式服务器已经部署（见 cloud/rooms/README.md）；连不上时大厅里显示「联机服务器还没上线（连不上）」。
 
 export const COOP_SERVER = Object.freeze({
-  // 正式服务器（部署以后填 wss://yunlan-mall-rooms.<你的子域>.workers.dev；空 = 还没上线）
-  url: '',
+  // 正式服务器（Cloudflare Worker，已部署；本机开发时 dev 优先，要连正式的用 ?mp=wss://…）
+  url: 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev',
   dev: 'ws://127.0.0.1:8787',
   timeout: 6000, // 连多久没连上算失败（毫秒）
   ping: 5000, // 多久发一次心跳（毫秒；服务器直接回 pong，不叫醒房间）
@@ -13,20 +14,23 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** 用哪个服务器：返回 ws(s):// 开头的地址，没有就是 null（还没上线） */
 export function serverUrl({ params = {}, loc = globalThis.location, storage = null } = {}) {
-  const fix = (u) => { u = String(u || '').trim().replace(/\/+$/, ''); if (!u) return null; if (/^https?:\/\//.test(u)) u = u.replace(/^http/, 'ws'); return /^wss?:\/\//.test(u) ? u : null; };
-  if (params.mp) return fix(params.mp);
+  const fix = (u) => { u = String(u || '').trim().replace(/\/+$/, ''); if (!u) return null; if (/^https?:\/\//i.test(u)) u = u.replace(/^http/i, 'ws'); return /^wss?:\/\/[^/\s]/i.test(u) ? u : null; };
+  // ?mp= 只有是地址的时候才顶替；mp=1 之类（只是打开大厅）往下找
+  const over = params.mp ? fix(params.mp) : null;
+  if (over) return over;
   try { const s = storage?.getItem?.('jimao-mp-server'); if (s) return fix(s); } catch { /* 读不了就算了 */ }
   if (loc && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(loc.hostname)) return COOP_SERVER.dev;
   return fix(COOP_SERVER.url);
 }
-/** 房间码：四位（去掉了 0 / O / 1 / I）；规整用户输入的（小写、空格、全角都认） */
-export function randomCode(rng = Math.random, n = 4) { let s = ''; for (let i = 0; i < n; i++) s += CODE_CHARS[Math.floor(rng() * CODE_CHARS.length)]; return s; }
+/** 房间码：新建的是六位（32^6 种，不好猜；去掉了 0 / O / 1 / I）；输入时 4–6 位都认（以前的四位码）。规整用户输入的（小写、空格、全角都认） */
+export const CODE_LEN = 6;
+export function randomCode(rng = Math.random, n = CODE_LEN) { let s = ''; for (let i = 0; i < n; i++) s += CODE_CHARS[Math.floor(rng() * CODE_CHARS.length)]; return s; }
 export function normCode(s) { const c = String(s || '').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-HJ-NP-Z2-9]{4,6}$/.test(c) ? c : null; }
 
 /**
  * 连进一个房间。want：'create' / 'join'。返回 { on(type, fn), send(obj), close(), stats, ready }。
  * 事件：welcome（进来了：座位、主机、谁在、开局信息、最近一帧完整快照）、msg（其余消息，原样）、closed（断了：{ code, why }）、fail（没连上：{ why }）
- * why：'offline'（服务器连不上）/ 'full' / 'taken'（房间码被用了）/ 'nope'（没有这个房间）/ 'closed'
+ * why：'offline'（服务器连不上）/ 'full' / 'taken'（房间码被用了）/ 'nope'（没有这个房间）/ 'slow'（猜错房间码太多次，过一分钟再试）/ 'closed'
  */
 export function createRoomClient({ url, code, name = '', id = '', want = 'join', WS = globalThis.WebSocket, P = COOP_SERVER } = {}) {
   const handlers = {}, stats = { sent: 0, recv: 0, bytesOut: 0, bytesIn: 0, byType: {}, since: Date.now() };
@@ -49,7 +53,7 @@ export function createRoomClient({ url, code, name = '', id = '', want = 'join',
       stats.recv++; stats.bytesIn += text.length;
       let msg; try { msg = JSON.parse(text); } catch { return; }
       (stats.byType[msg.t] ||= { n: 0, bytes: 0, dir: 'in' }); stats.byType[msg.t].n++; stats.byType[msg.t].bytes += text.length;
-      if (msg.t === 'full' || msg.t === 'taken' || msg.t === 'nope') { why = msg.t; return; }
+      if (msg.t === 'full' || msg.t === 'taken' || msg.t === 'nope' || msg.t === 'slow') { why = msg.t; return; }
       if (msg.t === 'welcome') { welcomed = true; clearInterval(failT); emit('welcome', msg); return; }
       emit('msg', msg);
     };

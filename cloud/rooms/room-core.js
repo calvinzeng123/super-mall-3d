@@ -3,8 +3,9 @@
 // 主机跑整局模拟，别人只发自己的操作；这里只做转发、记座位、记最近一帧完整快照（中途加入的人先拿它），
 // 主机走了把下一个人提成主机（没人了房间就散）。消息都是 JSON 文本：
 //   客户端 → 服务器：{ t: 'start', ... }（主机开局）、{ t: 's', k?, ... }（主机的快照，k = 完整帧）、
-//                     其余任何 t（玩家的操作、事件）：默认发给主机；带 to: 'all' / 座位号 的照发。服务器补上 f（谁发的）。
-//   服务器 → 客户端：welcome / peer / host / full / taken / nope / err / pong。
+//                     主机发的其余 t（规则消息：over / votes / boardAll ……）：带 to: 'all' / 座位号 的照发；
+//                     不是主机的人只能发 ROOM.peer 里那几种（操作、投票、请登机、回血），只发给主机。服务器补上 f（谁发的）。
+//   服务器 → 客户端：welcome / peer / host / full / taken / nope / err / pong / need——这些谁也不能冒充（客户端发来的直接丢掉）。
 // conn：{ send(text), close(code, reason), save(meta)（存到连接上，休眠醒来还在） }。
 
 export const ROOM = Object.freeze({
@@ -15,11 +16,16 @@ export const ROOM = Object.freeze({
   rate: 45, burst: 90, drop: 400,
   // 单条消息多大：主机的完整快照最大 host 字节，别人的操作 peer 字节
   size: Object.freeze({ host: 64 * 1024, peer: 8 * 1024 }),
+  // 不是主机的人能发哪几种（都只发给主机）：i 操作（位置、开枪、命中、做目标、回血）、vote 投票重来、boardReq 请登机、heal 回血
+  peer: Object.freeze(['i', 'vote', 'boardReq', 'heal']),
+  // 只有服务器能发的：谁发来的都丢掉（不然别人能冒充「换主机」「有人进来了」）
+  server: Object.freeze(['welcome', 'peer', 'host', 'full', 'taken', 'nope', 'slow', 'err', 'pong', 'need']),
 });
 
 const ROLES = ['主角', '阿哲', '林医生'];
 export const roleName = (seat) => ROLES[seat] || `座位${seat}`;
-const clean = (s, n = ROOM.name) => String(s ?? '').replace(/[\u0000-\u001f<>&"'`]/g, '').trim().slice(0, n) || '玩家';
+/** 昵称规整：去掉控制字符和 < > & 引号，最多 n 个字；空的叫「玩家」（客户端显示别人的名字前也过一遍） */
+export const clean = (s, n = ROOM.name) => String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069<>&"'`]/g, '').trim().slice(0, n) || '玩家';
 const cleanId = (s) => String(s ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
 
 /**
@@ -81,7 +87,10 @@ export function createRoomCore({ code = '', now = () => Date.now(), persist = ()
     if (text === 'ping') { send(c, 'pong'); return; }
     if (!allow(m)) { if (m.drops > P.drop) c.close?.(1008, 'rate'); return; }
     let msg; try { msg = JSON.parse(text); } catch { send(c, { t: 'err', why: 'json' }); return; }
-    if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return;
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.t !== 'string') return;
+    if (P.server.includes(msg.t)) return; // 冒充服务器的
+    // 不是主机：只认那几种操作，只发给主机（不许广播、不许点名发给别人）
+    if (!isHost && msg.t !== 'ping' && msg.t !== 'name' && !P.peer.includes(msg.t)) return;
     switch (msg.t) {
       case 'ping': send(c, { t: 'pong', c: msg.c ?? 0, s: now() }); return;
       case 'name': { m.name = clean(msg.name); save(c); all({ t: 'peer', ev: 'name', seat: m.seat, name: m.name, players: players(), host: S.host }); return; }
@@ -97,11 +106,12 @@ export function createRoomCore({ code = '', now = () => Date.now(), persist = ()
         for (const o of seats) if (o && o !== c) send(o, text);
         return;
       }
-      default: { // 其他消息：默认发给主机；to: 'all' 发给除自己以外的所有人；to: 座位号 只发给那个人
-        msg.f = m.seat; const out = JSON.stringify(msg);
+      default: { // 其他消息：主机的照 to 发（'all' 除自己以外的所有人、座位号只发那个人）；别人的只发给主机
+        msg.f = m.seat;
+        if (!isHost) { delete msg.to; const h = seats[S.host]; if (h) send(h, JSON.stringify(msg)); return; }
+        const out = JSON.stringify(msg);
         if (msg.to === 'all') { for (const o of seats) if (o && o !== c) send(o, out); }
         else if (Number.isInteger(msg.to)) { const o = seats[msg.to]; if (o && o !== c) send(o, out); }
-        else if (!isHost) { const h = seats[S.host]; if (h) send(h, out); }
       }
     }
   }

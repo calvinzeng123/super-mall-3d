@@ -6,7 +6,7 @@ export const LOBBY_CSS = `
 .jm-mp-btn { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 0 10px 10px 0; padding: 9px 16px 10px; min-height: 44px; border: 1px solid rgba(255, 214, 150, .55); background: rgba(16, 14, 10, .62); color: var(--bone, #e8e4da); font: 600 15px/1.1 var(--f-label, sans-serif); letter-spacing: .12em; cursor: pointer; pointer-events: auto; }
 .jm-mp-btn small { font-size: 10px; letter-spacing: .2em; opacity: .7; font-weight: 500; }
 .jm-mp-btn:hover, .jm-mp-btn:focus-visible { background: rgba(60, 40, 14, .8); outline: none; border-color: #ffd28a; }
-.jm-lobby { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(4, 4, 6, .62); pointer-events: auto; padding: calc(12px + var(--sat, 0px)) calc(16px + var(--sar, 0px)) calc(12px + var(--sab, 0px)) calc(16px + var(--sal, 0px)); }
+.jm-lobby { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(4, 4, 6, .88); pointer-events: auto; padding: calc(12px + var(--sat, 0px)) calc(16px + var(--sar, 0px)) calc(12px + var(--sab, 0px)) calc(16px + var(--sal, 0px)); }
 .jm-lobby[hidden] { display: none; }
 .jm-lobby .box { width: min(460px, 100%); max-height: 100%; overflow: auto; background: rgba(18, 17, 15, .96); border: 1px solid rgba(255, 214, 150, .35); color: var(--bone, #e8e4da); font: 500 14px/1.5 var(--f-label, sans-serif); padding: 18px 18px 16px; box-shadow: 0 18px 60px rgba(0, 0, 0, .6); }
 .jm-lobby h3 { margin: 0 0 4px; font-size: 18px; letter-spacing: .16em; color: #ffd28a; }
@@ -30,7 +30,7 @@ export const LOBBY_CSS = `
 .jm-lobby .seat em { font-style: normal; font-size: 12px; opacity: .7; }
 .jm-lobby .seat i { font-style: normal; font-size: 11px; opacity: .7; letter-spacing: .1em; }
 .jm-lobby .close { float: right; margin: -6px -6px 0 0; min-width: 40px; min-height: 40px; background: none; border: 0; color: inherit; font-size: 22px; cursor: pointer; opacity: .7; }
-@media (max-height: 500px) { .jm-lobby .box { padding: 12px 14px; } .jm-lobby .codebig { font-size: 26px; } .jm-lobby label { margin-top: 6px; } }
+@media (max-height: 500px) { .jm-lobby { background: rgba(4, 4, 6, .95); } .jm-lobby .box { padding: 12px 14px; background: rgb(18, 17, 15); } .jm-lobby .codebig { font-size: 26px; } .jm-lobby label { margin-top: 6px; } }
 `;
 
 const MSG = Object.freeze({
@@ -39,6 +39,7 @@ const MSG = Object.freeze({
   offline: ['联机服务器还没上线（连不上）。现在可以先一个人玩，电脑队友会跟着你。', true],
   full: ['房间满了（最多三人）。', true],
   nope: ['没有这个房间：房间码不对，或者房主已经走了。', true],
+  slow: ['房间码试错太多次了，过一分钟再试。', true],
   closed: ['和房间断开了，接着一个人打。', true],
   left: ['已经离开房间。', false],
   in: ['', false],
@@ -56,7 +57,7 @@ export function createLobby({ ui, storage = null, params = {}, state, create, jo
     <div data-v="home"><label for="jm-mp-name">昵称</label><input id="jm-mp-name" maxlength="16" autocomplete="nickname" placeholder="起个名字">
       <div class="row"><button class="b main" data-a="create">创建房间</button></div>
       <div class="or">或者</div>
-      <label for="jm-mp-code">输入房间码加入</label><div class="row"><input id="jm-mp-code" class="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD"><button class="b" data-a="join">加入</button></div></div>
+      <label for="jm-mp-code">输入房间码加入</label><div class="row"><input id="jm-mp-code" class="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="六位房间码"><button class="b" data-a="join">加入</button></div></div>
     <div data-v="room" hidden><label>房间码</label><div class="codebig" data-v="code"></div>
       <div class="row"><button class="b" data-a="copy">复制邀请链接</button></div>
       <div class="seats" data-v="seats"></div>

@@ -24,25 +24,28 @@ CI=1 WRANGLER_SEND_METRICS=false npx -y wrangler@4.166.0 dev --port 8787 --ip 12
 
 ## 部署
 
-需要一个有 **Workers Scripts: Edit** 和 **Durable Objects** 权限的令牌（现在环境里那个「云澜汇」令牌只有 Pages 权限，上传脚本会被拒——试过）。
+**已经部署、在线：`wss://yunlan-mall-rooms.45q6mmm655.workers.dev`**（`/health` 返回 `ok`），`src/jimao/coop/net.js` 的 `COOP_SERVER.url` 已经填上。
+正式站（`yunlan-mall.pages.dev` 和它的预览分支）打开就连它；本机开发（`localhost` / `127.0.0.1`）还是先连 `ws://127.0.0.1:8787`，要连正式的加 `?mp=wss://yunlan-mall-rooms.45q6mmm655.workers.dev`。
+改了 `cloud/rooms/` 以后要重新部署一次（下面的命令），客户端改动照常重新打包发 Pages。
+
+需要一个有 **Workers Scripts: Edit** 和 **Durable Objects** 权限的令牌。
 
 ```bash
 cd cloud/rooms
 CLOUDFLARE_ACCOUNT_ID=<账号 ID> CLOUDFLARE_API_TOKEN=<令牌> WRANGLER_SEND_METRICS=false npx -y wrangler@4.166.0 deploy
 ```
 
-第一次部署会让账号开 `workers.dev` 子域（Dashboard → Workers & Pages → 右侧 Subdomain）。部署完拿到地址
-`https://yunlan-mall-rooms.<子域>.workers.dev`，先确认 `https://yunlan-mall-rooms.<子域>.workers.dev/health` 返回 `ok`，然后：
+部署完确认 `https://yunlan-mall-rooms.45q6mmm655.workers.dev/health` 返回 `ok`。换了账号 / 子域的话，把 `COOP_SERVER.url` 改成新地址，重新打包发 Pages。
 
-1. 把 `src/jimao/coop/net.js` 里 `COOP_SERVER.url` 填成 `wss://yunlan-mall-rooms.<子域>.workers.dev`；
-2. 重新打包、照常发布 Pages（见 HANDOFF「发布到 Cloudflare Pages」）。
-
-没填之前（或者服务器连不上），大厅里显示「联机服务器还没上线」，单人照常玩。临时试线上服务器不用改代码：网址加 `?mp=wss://...`。
+服务器连不上时大厅里显示「联机服务器还没上线（连不上）」，单人照常玩。
+网址参数 `?mp=` 只有是 `ws(s)://` / `http(s)://` 地址时才顶替服务器地址；`?mp=1`（封面「联机（三人）」入口、邀请链接都带）只是「进来就打开大厅」。
 
 ## 规则（room-core.js 的 `ROOM`）
 
-- 房间码 4–6 位，服务器认 `A–Z` 和 `2–9`（客户端生成的不带 O、I）；`want=create` 时房间里已经有人回 `taken`（客户端自动换一个码重建），`want=join` 时房间是空的回 `nope`。
+- 房间码 4–6 位，服务器认 `A–Z` 和 `2–9`（客户端新建的是 6 位、不带 O、I；以前的 4 位码照样认）；`want=create` 时房间里已经有人回 `taken`（客户端自动换一个码重建），`want=join` 时房间是空的回 `nope`。
 - 最多 3 人，第四个回 `full`。第一个进来的是主机；主机走了，座位号最小的人提成主机（广播 `{ t: 'host' }`），没人了房间清空。
+- 猜房间码：同一个 IP（`CF-Connecting-IP`）一分钟里加入空房间（`nope`）超过 20 次，这一分钟里再加入直接回 `slow`（大厅显示「试错太多次了」）。记在 Worker 实例的内存里，尽力而为（`worker.js` 的 `JOIN_LIMIT`）；DO 用响应头 `X-Room-Join: nope` 告诉 Worker 这次没进去。
+- 谁能发什么：`welcome / peer / host / full / taken / nope / slow / err / pong / need` 只有服务器发，客户端发来的直接丢掉；不是主机的人只能发 `ROOM.peer` 里的 `i / vote / boardReq / heal`（外加 `name`、`ping`），只转给主机（带了 `to` 也只给主机）；主机的其他消息照 `to` 转。客户端那边也只认房主座位（`f`）发来的开局和规则消息。
 - 来源只认 `https://yunlan-mall.pages.dev`、它的预览分支 `https://*.yunlan-mall.pages.dev`、本机 `http://localhost:*` / `http://127.0.0.1:*`，再加 `EXTRA_ORIGINS`。
 - 限流：每条连接每秒补 45 条、最多攒 90 条，超了丢掉，丢了 400 条以上断开；主机单条最大 64 KB（完整快照），别人 8 KB。
 - 心跳：客户端发文本 `ping`，运行时直接回 `pong`（`setWebSocketAutoResponse`，不叫醒房间）。
@@ -54,10 +57,12 @@ CLOUDFLARE_ACCOUNT_ID=<账号 ID> CLOUDFLARE_API_TOKEN=<令牌> WRANGLER_SEND_ME
 
 | 方向 | `t` | 内容 |
 | --- | --- | --- |
+| 服务器 → 想加入的 | `full` / `taken` / `nope` / `slow` | 进不来：满了 / 房间码被占了 / 没有这个房间 / 猜错太多次 |
 | 服务器 → 新来的 | `welcome` | `seat`、`host`、`players`、`started`、`start`（开局信息）、`snap`（最近一帧完整快照的原文） |
 | 服务器 → 大家 | `peer` | `ev: 'join' / 'leave' / 'name'`、`seat`、`name`、`players`、`host` |
 | 服务器 → 大家 | `host` | 新主机的座位号（主机迁移） |
-| 主机 → 大家 | `start` | `seed`、`tower`、`round`、`stage`（读档 / 主机迁移时的步数） |
-| 主机 → 大家 | `s` | 快照：`ht` 主机时间、`k` 完整帧、`z` 丧尸、`rm` 收起的、`c` 人物、`sv` 关卡状态、`kill`、`sh` 弹道、`r` 无线电、`h` 直升机、`x` 扩展字段 |
-| 客户端 → 主机 | `i` | `ct` 客户端时间、`p` 自己的位置朝向、`sh` 开的枪、`hit` 命中、`cut` 做完的目标 |
-| 任意 | 其他 | 默认发给主机；`to: 'all'` 发给除自己以外所有人；`to: 座位号` 只发给那个人（玩法规则用 `coop.send()` / `coop.on()`） |
+| 主机 → 大家 | `start` | `seed`、`tower`、`round`、`stage`（读档 / 主机迁移时的步数）、`mig: 1`（换了主机、还是这一局：已经在打的客户端不重开） |
+| 主机 → 大家 | `s` | 快照：`ht` 主机时间、`k` 完整帧、`z` 丧尸、`rm` 收起的、`c` 人物、`sv` 关卡状态、`kill`、`sh` 弹道、`r` 无线电、`h` 直升机、`ha` 回血回执（座位 → 第几次）、`x` 扩展字段 |
+| 客户端 → 主机 | `i` | `ct` 客户端时间、`p` 自己的位置朝向、`sh` 开的枪、`hit` 命中、`cut` 请主机定的目标、`heal` 自己回的血 `[第几次, 多少]` |
+| 客户端 → 主机 | `vote` / `boardReq` / `heal` | 玩法规则：投票重来、请大家登机（`heal` 现在随 `i` 发，单独发也认） |
+| 主机 → 大家 / 某人 | 其他（`over`、`votes`、`boardAll` ……） | `to: 'all'` 发给除自己以外所有人；`to: 座位号` 只发给那个人（玩法规则用 `coop.send()` / `coop.on()`） |

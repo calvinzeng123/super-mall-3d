@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRoomCore, ROOM, roleName } from '../cloud/rooms/room-core.js';
-import { originAllowed } from '../cloud/rooms/worker.js';
+import worker, { originAllowed, createJoinLimiter, JOIN_LIMIT } from '../cloud/rooms/worker.js';
 
 function fake(name) {
   const c = { name, out: [], closed: null, saved: null, send(t) { if (c.closed) throw new Error('closed'); c.out.push(t === 'pong' ? 'pong' : JSON.parse(t)); }, close(code, why) { c.closed = { code, why }; }, save(m) { c.saved = m; } };
@@ -38,7 +38,7 @@ test('转发：主机的快照发给别人（完整帧留一份）；玩家的�
   room.message(a, JSON.stringify({ t: 's', k: 1, z: [[9]] })); assert.ok(room.state.key.includes('[[9]]'));
   room.message(b, JSON.stringify({ t: 'i', p: [1, 2] }));
   assert.equal(a.last('i').f, 1); assert.equal(c.out.filter((m) => m.t === 'i').length, 0, '操作只给主机');
-  room.message(b, JSON.stringify({ t: 'chat', to: 'all', x: 1 })); assert.equal(c.last('chat').f, 1); assert.equal(a.last('chat').f, 1);
+  room.message(a, JSON.stringify({ t: 'chat', to: 'all', x: 1 })); assert.equal(c.last('chat').f, 0); assert.equal(b.last('chat').f, 0);
   room.message(a, JSON.stringify({ t: 'ev', to: 2, x: 2 })); assert.equal(c.last('ev').x, 2); assert.equal(b.out.filter((m) => m.t === 'ev').length, 0);
   room.message(b, JSON.stringify({ t: 's', k: 1, z: 'fake' })); assert.ok(!room.state.key.includes('fake'), '不是主机的快照扔掉');
   room.message(b, JSON.stringify({ t: 'start', seed: 1 })); assert.equal(room.state.started, false, '不是主机不能开局');
@@ -104,4 +104,57 @@ test('来源：正式站、预览分支、本机能连；别的网站、没有�
   assert.ok(!originAllowed('https://evil.example')); assert.ok(!originAllowed('https://yunlan-mall.pages.dev.evil.example')); assert.ok(!originAllowed(''));
   assert.ok(!originAllowed('http://yunlan-mall.pages.dev'), '正式站只认 https');
   assert.ok(originAllowed('https://game.example.com', 'https://a.b, https://game.example.com'));
+});
+
+test('冒充：谁也不能发服务器才发的（换主机、有人进来、欢迎……）；不是主机的只能发操作 / 投票 / 请登机 / 回血，只发给主机；主机的规则消息照发', () => {
+  const room = createRoomCore({ code: 'ABCDEF' }), a = fake('a'), b = fake('b'), c = fake('c');
+  room.join(a); room.join(b); room.join(c);
+  const n = (x, t) => x.out.filter((m) => m.t === t).length;
+  for (const t of ROOM.server) {
+    const before = [a, b, c].map((x) => n(x, t));
+    room.message(b, JSON.stringify({ t, seat: 1, to: 'all', ev: 'join', name: '假的', players: [] }));
+    room.message(a, JSON.stringify({ t, seat: 2, to: 'all' }));
+    assert.deepEqual([a, b, c].map((x) => n(x, t)), before, `${t}：客户端（包括主机）发来的都不转`);
+  }
+  assert.equal(room.state.host, 0, '主机没被换掉');
+  // 不是主机：规则消息（结束、投票结果、全员登机、开局、快照）一律不转
+  for (const t of ['over', 'boardAll', 'votes', 'start', 'end', 's', 'chat', 'snap']) {
+    room.message(b, JSON.stringify({ t, to: 'all', k: 1, n: [0, 1, 2] }));
+    assert.equal(n(a, t) + n(c, t), 0, `${t}：不是主机发的不转`);
+  }
+  assert.equal(room.state.started, false); assert.equal(room.state.key, null);
+  // 允许的那几种：只给主机（带了 to 也只给主机），补上 f
+  for (const t of ROOM.peer) {
+    room.message(b, JSON.stringify({ t, to: 2, x: 1 }));
+    assert.equal(a.last(t)?.f, 1, `${t} 发给了主机`); assert.equal(n(c, t), 0, `${t} 没发给别人`); assert.equal(a.last(t).to, undefined);
+  }
+  // 主机的规则消息：照 to 发，f 是主机的座位
+  room.message(a, JSON.stringify({ t: 'over', why: 'down', to: 'all' }));
+  assert.equal(b.last('over').f, 0); assert.equal(c.last('over').f, 0);
+  room.message(a, JSON.stringify({ t: 'boardAll', twin: true, to: 2 })); assert.equal(c.last('boardAll').f, 0); assert.equal(n(b, 'boardAll'), 0);
+  // 名字照样洗
+  room.message(b, JSON.stringify({ t: 'name', name: '<img src=x>\u202e坏' })); assert.equal(a.last('peer').name, 'img src=x坏');
+  // 主机走了：新主机发的才算
+  room.leave(a); assert.equal(room.state.host, 1); room.message(c, JSON.stringify({ t: 'over', to: 'all' })); assert.equal(n(b, 'over'), 1, '老客户端发的不算');
+  room.message(b, JSON.stringify({ t: 'over', to: 'all' })); assert.equal(c.last('over').f, 1);
+});
+
+test('猜房间码：同一个 IP 一分钟里加入不存在的房间 20 次以后，这一分钟里再加入回 slow；过了一分钟重新算；建房不受影响', async () => {
+  const now = clock(), L = createJoinLimiter({ now });
+  for (let i = 0; i < JOIN_LIMIT.max - 1; i++) L.fail('1.2.3.4');
+  assert.equal(L.blocked('1.2.3.4'), false); L.fail('1.2.3.4'); assert.equal(L.blocked('1.2.3.4'), true);
+  assert.equal(L.blocked('5.6.7.8'), false, '别的 IP 不受影响'); assert.equal(L.blocked(''), false);
+  now.add(JOIN_LIMIT.windowMs); assert.equal(L.blocked('1.2.3.4'), false, '过了一分钟');
+  // 走一遍 Worker：房间（DO）回 X-Room-Join: nope 的记一次；到了上限不再去敲房间
+  const L2 = createJoinLimiter({ now }); let hits = 0;
+  const env = { ROOMS: { idFromName: (c) => c, get: () => ({ fetch: async () => { hits++; return { status: 101, headers: new Headers({ 'X-Room-Join': 'nope' }) }; } }) } };
+  const req = (code, want = 'join') => new Request(`https://rooms.test/room/${code}?want=${want}`, { headers: { Upgrade: 'websocket', Origin: 'https://yunlan-mall.pages.dev', 'CF-Connecting-IP': '9.9.9.9' } });
+  for (let i = 0; i < JOIN_LIMIT.max; i++) await worker.fetch(req('ABCD' + 'FGHJKLMNPQRSTUVWXYZ23456789'[i % 27] + 'FGHJK'[i % 5]), env, null, L2);
+  assert.equal(hits, JOIN_LIMIT.max); assert.equal(L2.blocked('9.9.9.9'), true);
+  const WP = globalThis.WebSocketPair, R = globalThis.Response, sent = [];
+  globalThis.WebSocketPair = class { constructor() { this[0] = {}; this[1] = { accept() {}, send: (t) => sent.push(t), close: (c) => sent.push(c) }; } };
+  globalThis.Response = class { constructor(body, init) { this.status = init?.status; } };
+  try { const r = await worker.fetch(req('ZZZZZZ'), env, null, L2); assert.equal(r.status, 101); } finally { globalThis.WebSocketPair = WP; globalThis.Response = R; }
+  assert.equal(hits, JOIN_LIMIT.max, '到了上限不再去敲房间'); assert.deepEqual(sent, ['{"t":"slow"}', 4029]);
+  await worker.fetch(req('ABCDEF', 'create'), env, null, L2); assert.equal(hits, JOIN_LIMIT.max + 1, '建房照常');
 });
