@@ -279,7 +279,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     const end = new THREE.Vector3(dp(sh[1]), dp(sh[2]), dp(sh[3])), from = m.muzzle?.lengthSq?.() ? m.muzzle.clone() : new THREE.Vector3(m.pos.x, m.pos.y + 1.4, m.pos.z);
     shotFx(m, from, end, WEAPON_CODES[sh[4]] || m.weapon || 'rifle');
   }
-  // 别人开的一枪：弹道、枪口火光、枪口那儿闪一下光、枪声（按武器换音调；同一个人一帧里连着几发只响一声）、人形往后一顿
+  // 别人开的一枪：弹道、枪口火光、枪口那儿闪一下光、枪声（真人的；按武器换音调；同一个人一帧里连着几发只响一声）、人形往后一顿
   const SHOT_SOUND = Object.freeze({ rifle: [1, 1], smg: [0.85, 1.18], pistol: [0.8, 1.4], launcher: [1, 0.55] });
   function shotFx(m, from, end, kind) {
     if (kind === 'knife' || kind === 'axe') return;
@@ -288,7 +288,8 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     G.fx?.muzzleFlash?.(from, dir, { scale: kind === 'pistol' ? 0.38 : kind === 'launcher' ? 0.7 : 0.5 });
     G.render?.lightPool?.flash?.(from, 0xffc080, 12, 6, 0.04);
     const now = G.time?.t || 0, [gain, pitch] = SHOT_SOUND[kind] || SHOT_SOUND.rifle;
-    if (!(now - (m.shotSndT ?? -9) < 0.05)) { m.shotSndT = now; G.audio?.play?.('soldier_fire', { pos: from, gain: 0.85 * gain, pitch, jitter: 0.04 }); }
+    // 只有真人的枪声（电脑队友单人时就不出声，两边一样）
+    if ((m.human || m.remote) && !(now - (m.shotSndT ?? -9) < 0.05)) { m.shotSndT = now; G.audio?.play?.('soldier_fire', { pos: from, gain: 0.85 * gain, pitch, jitter: 0.04 }); }
     m.recoil = 1; m.shotT = now;
   }
   /** 主机转来的一下子的动作：别人扔的东西照着画一颗（只画）、人形挥刀 / 扔东西 */
