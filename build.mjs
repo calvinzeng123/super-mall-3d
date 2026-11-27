@@ -9,7 +9,7 @@ import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { FPS_MODEL_ASSETS } from './src/fps/model-data.js';
 import { geometryLicenses } from './scripts/geometry-licenses.mjs';
-import { COVER_SOURCE, COVER_MIME } from './src/cover-data.js';
+import { COVER_SOURCE, COVER_MIME, FPS_COVER_SOURCE } from './src/cover-data.js';
 import { packProps } from './scripts/props/pack.mjs';
 
 const shell = await readFile('src/shell.html', 'utf8');
@@ -64,6 +64,7 @@ await writeFile('index.html', wrap(shell.replace('<!--APP-->', '<script type="mo
 
 const embeddedFPS = await Promise.all(FPS_MODEL_ASSETS.map(async a=>({...a,url:`data:model/gltf-binary;base64,${(await readFile(a.url.replace(/^\.\//,''))).toString('base64')}`})));
 const coverURL = `data:${COVER_MIME};base64,${(await readFile(COVER_SOURCE)).toString('base64')}`;
+const fpsCoverURL = `data:image/jpeg;base64,${(await readFile(FPS_COVER_SOURCE)).toString('base64')}`; // 封面枪战框的背景
 // 贴图小模型：所有 GLB 首尾相接打成一包，内嵌成一段 base64。
 const props = await packProps();
 const propModule = `export const PROP_ASSETS = ${JSON.stringify(props.assets)};\nexport const PROP_PACK = ${JSON.stringify({ url: `data:application/octet-stream;base64,${props.bytes.toString('base64')}` })};`;
@@ -84,7 +85,7 @@ const out = await build({
   define: { __JM_BUILD__: JSON.stringify(buildId()) },
   plugins:[{name:'phone-offline-assets',setup(b){
     b.onLoad({filter:/[\\/]fps[\\/]model-data\.js$/},()=>({contents:`export const FPS_MODEL_ASSETS = ${JSON.stringify(embeddedFPS)};`,loader:'js'}));
-    b.onLoad({filter:/[\\/]cover-data\.js$/},()=>({contents:`export const COVER_URL = ${JSON.stringify(coverURL)};`,loader:'js'}));
+    b.onLoad({filter:/[\\/]cover-data\.js$/},()=>({contents:`export const COVER_URL = ${JSON.stringify(coverURL)};\nexport const FPS_COVER_URL = ${JSON.stringify(fpsCoverURL)};`,loader:'js'}));
     b.onLoad({filter:/[\\/]props[\\/]prop-data\.js$/},()=>({contents:propModule,loader:'js'}));
     b.onLoad({filter:/[\\/]render[\\/]sky-data\.js$/},()=>({contents:skyModule,loader:'js'}));
   }}],

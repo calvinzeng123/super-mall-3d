@@ -86,7 +86,8 @@ test('改名：游戏里不再出现「几猫」，标题是「零点突围 ZERO
   assert.ok(!code.includes(escapeLikeEsbuild('几猫')));
   assert.ok(code.includes(escapeLikeEsbuild('零点突围<span class="m-subtitle">ZERO HOUR</span>')));
   for (const [, to] of REBRAND) assert.ok(code.includes(escapeLikeEsbuild(to)), to);
-  assert.match(readFileSync('src/launcher.js', 'utf8'), /data-mode="jimao"><b>零点突围 · ZERO HOUR<\/b>/);
+  // 2026-11-26 封面改成多方案：入口文字在 cover-options.js 的 FPS_ENTRIES 里，各方案的 FPS 框共用
+  assert.match(readFileSync('src/cover-options.js', 'utf8'), /id: 'zero', mode: 'jimao', query: 'siege=0', title: '零点突围 · ZERO HOUR'/);
 });
 
 test('补丁：每一条都打上了；关卡流程和敌人参数导出来了', async () => {

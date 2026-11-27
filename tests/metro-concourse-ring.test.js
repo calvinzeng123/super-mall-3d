@@ -40,8 +40,13 @@ test('闸机 64 条通道：长边栏杆上 8 组，从栏杆外能穿过闸机�
   assert.ok(!reach([-46, 23], [-46, 17]), '南侧栏杆不该能穿过去');
 });
 
-test('封面去掉竞技 FPS 入口，保留园区、零点突围和小游戏', () => {
-  const src = readFileSync(new URL('../src/launcher.js', import.meta.url), 'utf8');
-  assert.ok(!/data-mode="fps"/.test(src), '封面不该再有竞技 FPS 按钮');
-  for (const m of ['tour', 'jimao', 'arcade']) assert.ok(src.includes(`data-mode="${m}"`), `封面缺 ${m}`);
+test('封面去掉竞技 FPS 入口，保留园区和零点突围；小游戏嵌进园区导览（2026-11-26）', async () => {
+  const { renderCover } = await import('../src/launcher.js');
+  const { COVER_OPTIONS } = await import('../src/cover-options.js');
+  for (const { id } of COVER_OPTIONS) {
+    const html = renderCover(id);
+    assert.ok(!/data-mode="fps"/.test(html), `${id}：封面不该再有竞技 FPS 按钮`);
+    for (const m of ['tour', 'jimao']) assert.ok(html.includes(`data-mode="${m}"`), `${id}：封面缺 ${m}`);
+    assert.ok(!html.includes('data-mode="arcade"'), `${id}：小游戏在园区导览里，不再单列`);
+  }
 });

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { FPS_MODEL_ASSETS } from '../src/fps/model-data.js';
 import { geometryLicenses } from './geometry-licenses.mjs';
-import { COVER_SOURCE, COVER_MIME } from '../src/cover-data.js';
+import { COVER_SOURCE, COVER_MIME, FPS_COVER_SOURCE } from '../src/cover-data.js';
 import { packProps } from './props/pack.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -61,6 +61,7 @@ const fpsAssets = await Promise.all(FPS_MODEL_ASSETS.map(async a=>({...a,
   url:await emitAsset(a.id==='rifle'?'smg45':a.id==='pistol'?'deagle':'fps-hands','glb',await readFile(a.url.replace(/^\.\//,'')),'fps-model'),
 })));
 const coverURL = await emitAsset('cover',COVER_MIME.split('/')[1],await readFile(COVER_SOURCE),'cover');
+const fpsCoverURL = await emitAsset('cover-fps','jpg',await readFile(FPS_COVER_SOURCE),'cover'); // 封面枪战框的背景
 // 贴图小模型：打成一个文件，开场下载一次；各模型按偏移量取用。
 const props = await packProps();
 const propPackURL = await emitAsset('props', 'bin', props.bytes, 'prop-pack');
@@ -75,7 +76,7 @@ const replacements = new Map([
   ['suite-data.js', `export const SUITE_MODEL_URL = ${JSON.stringify(suiteURL)};`],
   ['residential-data.js', `export const RESIDENTIAL_ASSETS = ${JSON.stringify(residences)};`],
   ['model-data.js', `export const FPS_MODEL_ASSETS = ${JSON.stringify(fpsAssets)};`],
-  ['cover-data.js', `export const COVER_URL = ${JSON.stringify(coverURL)};`],
+  ['cover-data.js', `export const COVER_URL = ${JSON.stringify(coverURL)};\nexport const FPS_COVER_URL = ${JSON.stringify(fpsCoverURL)};`],
   ['prop-data.js', `export const PROP_ASSETS = ${JSON.stringify(props.assets)};\nexport const PROP_PACK = ${JSON.stringify({ url: propPackURL })};`],
   ['sky-data.js', `export const SKY_ASSETS = ${JSON.stringify(skyAssets)};`],
 ]);
