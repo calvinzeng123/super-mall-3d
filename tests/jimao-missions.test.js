@@ -333,9 +333,9 @@ test('接应车：舱盖翻平不挡后方视线；车顶机枪架在环上、�
   assert.ok(box.min.y > -0.4 && box.max.y < 0.35, `机枪高度范围 ${box.min.y.toFixed(2)}…${box.max.y.toFixed(2)}`);
   assert.ok(ry + box.min.y > 2.0, '机枪最低点不低于车顶');
   g.dispose();
-  // 乘坐时步枪停用（两种载具都用车载机枪）
+  // 乘坐时步枪停用（两种载具都用车载机枪）；只有联机时机舱里那个人（crew.seat = cabin）坐直升机时照常用步枪
   const src = readFileSync(new URL('../src/jimao/missions.js', import.meta.url), 'utf8');
-  assert.match(src, /state\.phase === 'crash' \|\| state\.phase === 'ride' \|\| state\.phase === 'outro'; \}/);
+  assert.match(src, /state\.phase === 'crash' \|\| \(state\.phase === 'ride' && !\(crew\.seat === 'cabin' && veh\(\)\?\.kind === 'helicopter'\)\) \|\| state\.phase === 'outro'; \}/);
   assert.match(src, /createDoorGun\(G, carMount, \{ label: 'M134 车顶机枪', post: 0\.24, drop: 0\.24, flash: 0\.7 \}\)/);
 });
 

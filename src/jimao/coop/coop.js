@@ -43,7 +43,10 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     inputs: new Map(), // 主机：座位 → { clock, buf, last }
     kills: [], shots: [], radio: [], hits: [], outShots: [], cutReq: -1, sv: '', extOut: {},
     frame: { worst: 0, sum: 0, n: 0 }, lastTarget: new Map(),
+    // self：主机这台机器上的你倒地了没有、被扶到几成（联机玩法规则 rules.js 写，快照照它发；单人时一直是没倒）
+    self: { down: false, revive: 0 }, boardHook: null,
   };
+  const inputExt = new Map(); // 客户端的操作里带的自定义字段（rules.js：直升机上的机枪朝向、机舱里站在哪）
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const pool = zombies?.pool || [];
   const emit = (t, e) => { for (const f of handlers[t] || []) { try { f(e); } catch (err) { console.error('[联机]', t, err); } } G.events?.emit?.(`coop:${t}`, e); };
@@ -79,15 +82,24 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       damage(n) { if (m.down || !(n > 0)) return; m.hp -= n; m.hurtT = 0.6; G.events?.emit?.('squad:bite', { mate: m, damage: n }); }, addShake() {} };
     proxies.set(m, p); return p;
   }
+  // 主机上的你倒地了、真人又都倒了：丧尸去扑还站着的电脑队友（代理不扣血——队友挨咬照 squad.js 自己那套「贴着就掉血」算）
+  const npcProxies = new Map();
+  function npcProxy(m) {
+    let p = npcProxies.get(m); if (p) return p;
+    p = { vel: new THREE.Vector3(), get pos() { return m.pos; }, get alive() { return !m.down && m.hp > 0; }, get yaw() { return m.yaw + Math.PI; }, mate: m, damage() {}, addShake() {} };
+    npcProxies.set(m, p); return p;
+  }
+  const selfUp = () => G.player?.alive !== false && !C.self.down;
   function zombieTarget(z) {
     const remotes = squad?.everyone?.filter((m) => m.remote && !m.down) || [];
-    if (!remotes.length) return null;
+    if (!remotes.length && selfUp()) return null;
     const now = G.time?.t || 0, rec = C.lastTarget.get(z);
-    if (rec && now - rec.t < COOP.targetEvery && (rec.p === G.player || rec.p.alive)) return rec.p;
+    if (rec && now - rec.t < COOP.targetEvery && (rec.p === G.player ? selfUp() : rec.p.alive)) return rec.p;
     // 离得近的优先（隔层的算远很多）；正在追的那个让 stick 米——别人近不了这么多就不换（免得两个人中间来回摇摆）
     const score = (p, alive) => (alive ? Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z) + Math.abs(p.pos.y - z.pos.y) * 4 - (rec?.p === p ? COOP.stick : 0) : Infinity);
-    let best = G.player, bs = score(G.player, G.player.alive !== false);
+    let best = G.player, bs = score(G.player, selfUp());
     for (const m of remotes) { const pr = proxyOf(m), s = score(pr, true); if (s < bs) { best = pr; bs = s; } }
+    if (bs === Infinity) for (const m of squad?.mates || []) { if (m.remote || m.down || !squad.isOn(m)) continue; const pr = npcProxy(m), s = score(pr, true); if (s < bs) { best = pr; bs = s; } }
     C.lastTarget.set(z, { p: best, t: now });
     return best;
   }
@@ -114,7 +126,10 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       C.shots.push([CHARS.indexOf(role), qp(end.x), qp(end.y), qp(end.z)]);
     }
     // 他报的命中：核对完打上去（记在他名下：netBy）
-    for (const h of validateHits(msg.hit, (i) => pool[i], m.pos)) {
+    // 坐直升机清扫时：从机身中心量（楼顶、楼下的离飞机一百多米；他的人这会儿收起来了，位置不准）
+    const ride = director?.riding ? director.vehicleCenter?.() : null;
+    for (const [name, v] of Object.entries(msg.x || {})) { try { inputExt.get(name)?.read?.(seat, v); } catch (e) { console.error('[联机] 操作字段出错', name, e); } }
+    for (const h of validateHits(msg.hit, (i) => pool[i], ride || m.pos, ride ? { range: NET.rideRange } : undefined)) {
       h.z.netBy = seat;
       try { h.z.damage(h.damage, null, null, h.part, 'squad'); } catch (e) { console.error('[联机] 命中出错', e); }
       h.z.netBy = null;
@@ -131,13 +146,13 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   function charOf(m, role) {
     if (role === local()) { // 这台机器上的你：照你自己的人
       const p = G.player, v = p.vel || tmp.set(0, 0, 0);
-      return { role, x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: wrapA((p.yaw || 0) + Math.PI), pitch: p.pitch || 0, speed: Math.hypot(v.x, v.z), down: p.alive === false, on: true, crouch: !!p.crouching, hp: p.health, human: true, weapon: G.weapon?.current };
+      return { role, x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: wrapA((p.yaw || 0) + Math.PI), pitch: p.pitch || 0, speed: Math.hypot(v.x, v.z), down: p.alive === false || C.self.down, revive: C.self.revive, on: true, crouch: !!p.crouching, hp: C.self.down ? 0 : p.health, human: true, weapon: G.weapon?.current };
     }
     if (!m) return null;
     return { role, x: m.pos.x, y: m.pos.y, z: m.pos.z, yaw: m.yaw, pitch: m.pitch || 0, speed: m.speed || 0, down: !!m.down, on: !!squad.isOn(m), crouch: !!m.remote?.crouch, healing: m.healing > 0, hp: m.hp, revive: m.reviveT, human: !!m.remote, weapon: m.remote?.weapon };
   }
   function snapshot(dt, force = false) {
-    const people = [G.player.pos, ...(squad?.everyone || []).filter((m) => m.remote).map((m) => m.pos)], R = NET.near;
+    const people = [G.player.pos, ...(squad?.everyone || []).filter((m) => m.remote).map((m) => m.pos)], R = director?.riding ? NET.rideNear : NET.near;
     const entries = [];
     for (let i = 0; i < pool.length; i++) {
       const z = pool[i]; if (!z.active) continue;
@@ -182,7 +197,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (msg.h) { const h = director?.vehicles?.heli?.root; if (h && !director.riding) { h.visible = true; h.position.set(dp(msg.h[0]), dp(msg.h[1]), dp(msg.h[2])); h.rotation.y = msg.h[3] / 100; } }
     for (const sh of msg.sh || []) drawShot(sh);
     for (const [text, secs] of msg.r || []) hostRadio(text, secs);
-    if (msg.ride && (tellRide -= 1) <= 0) { tellRide = 60; G.hud?.message?.('房主上了直升机，正在清扫', 3); }
+    if (msg.ride && !director?.riding && (tellRide -= 1) <= 0) { tellRide = 60; G.hud?.message?.('房主上了直升机，正在清扫', 3); }
     if (msg.x) for (const [name, v] of Object.entries(msg.x)) { try { extensions.get(name)?.read?.(v); } catch (e) { console.error('[联机] 快照字段出错', name, e); } }
     emit('snap', msg);
   }
@@ -248,7 +263,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       else if (want > 0) p.health = want;
       p.invulnerable = true; // 本地不掉血：伤害都是主机算的（不然自己扔的手雷、摔一下就把本地的人「打死」了）
     }
-    if (C.down && p) {
+    if (C.down && p && !director?.riding) { // 坐上飞机了（登机时大家都扶起来了，快照还没跟上）：不再按在地上
       p.pos.copy(C.downPos); p.vel?.set?.(0, 0, 0);
       if ((C.downSay -= dt) <= 0) { C.downSay = COOP.down; G.hud?.message?.('你倒下了——等队友过来，站到你跟前三秒把你扶起来', COOP.down); }
     }
@@ -277,6 +292,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (C.outShots.length) msg.sh = C.outShots.splice(0, 12);
     if (C.hits.length) msg.hit = C.hits.splice(0);
     if (C.cutReq >= 0) { msg.cut = C.cutReq; C.cutReq = -1; }
+    for (const [name, ext] of inputExt) { try { const v = ext.write?.(); if (v !== undefined) (msg.x ||= {})[name] = v; } catch (e) { console.error('[联机] 操作字段出错', name, e); } }
     C.room?.send(msg);
   }
 
@@ -345,7 +361,8 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   };
   // 客户端：到了登机门先不上（第三个人上机还没做）——主机上机清扫
   const baseExtract = () => G.level?.onExtract;
-  const clientExtractGuard = () => { if (C.mode === 'client' && G.level && G.level.onExtract && !G.level.onExtract.coop) { const f = () => { if ((C.boardSay = (C.boardSay || 0) - 1) <= 0) { C.boardSay = 120; G.hud?.message?.('联机时由房主登机清扫；你守住屋顶', 3); } emit('board', {}); }; f.coop = true; G.level.onExtract = f; } };
+  // 客户端走到登机门：交给 boardHook（rules.js：请主机让大家一起登机）；没接规则时只提示
+  const clientExtractGuard = () => { if (C.mode === 'client' && G.level && G.level.onExtract && !G.level.onExtract.coop) { const f = () => { if (C.boardHook) C.boardHook(); else if ((C.boardSay = (C.boardSay || 0) - 1) <= 0) { C.boardSay = 120; G.hud?.message?.('联机时由房主登机清扫；你守住屋顶', 3); } emit('board', {}); }; f.coop = true; G.level.onExtract = f; } };
   void baseExtract;
 
   // ---- 网络 ----
@@ -416,7 +433,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (seat >= 0 && seat !== C.seat) { const m = squad?.byId(roleOf(seat)); if (m) m.kills++; }
   });
   on('weapon:fire', (e) => {
-    if (!C.room || director?.riding || !e?.dir) return;
+    if (!C.room || !e?.dir || e.doorGun || (director?.riding && director.crew?.seat !== 'cabin')) return; // 坐飞机时只有机舱里拿步枪的照常报弹道（舱门机枪的另外同步，见 rules.js）
     if (C.mode === 'client') { if (C.outShots.length < 12) C.outShots.push([Math.round(e.dir.x * 100), Math.round(e.dir.y * 100), Math.round(e.dir.z * 100), Math.max(0, WEAPON_CODES.indexOf(e.kind || 'rifle'))]); return; }
     if (C.mode === 'host') { const o = e.muzzle || e.origin; if (!o) return; const end = tmp.copy(o).addScaledVector(e.dir, COOP.shotRange); C.shots.push([CHARS.indexOf(local()), qp(end.x), qp(end.y), qp(end.z)]); }
   });
@@ -445,6 +462,14 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   const api = {
     get mode() { return C.mode; }, get seat() { return C.seat; }, get host() { return C.host; }, get code() { return C.code; }, get round() { return C.round; },
     get inRoom() { return !!C.room; }, get room() { return C.room; }, get down() { return C.down; },
+    /** 房间里几个真人 */
+    get humans() { return C.room ? humans() : 0; },
+    /** 主机这台机器上的你：{ down, revive }（rules.js 写，快照照它发、丧尸照它挑目标） */
+    get self() { return C.self; },
+    /** 客户端走到登机门时调（rules.js 接：请主机全员登机） */
+    set boardHook(f) { C.boardHook = f || null; },
+    /** 客户端每次发操作时带上的自定义字段：write() 在客户端调（返回 undefined 不带），read(seat, v) 在主机收到时调 */
+    extendInput(name, ext) { inputExt.set(name, ext); return api; },
     /** 多人（房间里不止你一个真人）时资源乘几；单人 1 */
     get rewardMul() { return C.room && humans() > 1 ? COOP.reward : 1; },
     /** 三个座位现在是谁：{ seat, role, name, human, host, me, pos, hp, down } */
@@ -490,7 +515,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       const t0 = performance.now();
       try {
         if (C.mode === 'host') { if (C.started && humans() > 1 && G.game?.state !== 'title' && (C.snapT += dt) >= 1 / NET.snapHz - 1e-6) { C.snapT = Math.min(C.snapT - 1 / NET.snapHz, 1 / NET.snapHz); snapshot(1 / NET.snapHz); } }
-        else if (G.game?.state === 'playing' || G.game?.state === 'paused') { if (C.down && G.player) { G.player.pos.copy(C.downPos); G.player.vel?.set?.(0, 0, 0); } clientPost(dt); }
+        else if (G.game?.state === 'playing' || G.game?.state === 'paused') { if (C.down && G.player && !director?.riding) { G.player.pos.copy(C.downPos); G.player.vel?.set?.(0, 0, 0); } clientPost(dt); }
       } finally { const ms = performance.now() - t0 + (C.preMs || 0); C.frame.sum += ms; C.frame.n++; C.frame.worst = Math.max(C.frame.worst, ms); }
     },
     dispose() { leave(true); lobby?.dispose(); if (G.enemies && baseSpawn) G.enemies.spawn = baseSpawn; if (G.level && baseReset) G.level.onReset = baseReset; if (G.hud && origRadio) G.hud.radio = origRadio; G.zombieTarget = null; },

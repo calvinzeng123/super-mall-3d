@@ -44,6 +44,7 @@ export function createScore(G, { ui = null, onSupply = null } = {}) {
   }
   const paint = () => { if (totalEl) totalEl.textContent = `得分 ${state.total}`; for (const dd of rows) dd.textContent = `${state.total}${state.best >= 3 ? ` · 最高 ${state.best} 连杀` : ''}`; };
   function pop(text, points) {
+    points = Math.round(points * (G.rewardMul || 1)); // 联机多人时得分翻倍（coop/rules.js 给 G.rewardMul）
     state.total += points;
     if (stack) {
       const el = document.createElement('div'); el.className = 'jm-score-pop'; el.textContent = `+${points} ${text}`;
@@ -54,7 +55,7 @@ export function createScore(G, { ui = null, onSupply = null } = {}) {
   }
   function reward(r) {
     if (r.id === 'uav') state.uav = r.seconds;
-    else if (r.id === 'supply') { try { G.weapon?.addAmmo?.(r.ammo); G.actions?.give?.(1); onSupply?.(r); } catch { /* 补给失败不影响计分 */ } }
+    else if (r.id === 'supply') { try { const k = G.rewardMul || 1; G.weapon?.addAmmo?.(r.ammo * k); G.actions?.give?.(k); onSupply?.(r); } catch { /* 补给失败不影响计分 */ } }
     else if (r.id === 'medic' && G.player) G.player.health = G.player.maxHealth ?? 100;
     if (banner) { banner.innerHTML = `<b>${state.streak} 连杀 · ${r.name}</b><span>${r.line}</span>`; banner.classList.add('on'); bannerT = 3.2; }
     G.audio?.play?.('objective', { gain: 0.8 });

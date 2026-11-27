@@ -25,6 +25,11 @@ export const ELIMINATE_TARGET = 12;
 export const HOLD = Object.freeze({ radius: 6, need: 75, alive: 7, every: 2.2 });
 /** 歼灭 / 坚守的增援：同时在场上限、间隔、离玩家多远刷（米）、多久把玩家位置告诉一次敌人（秒） */
 export const HUNT = Object.freeze({ alive: 6, every: 2.2, near: 20, far: 50, tell: 3 });
+/**
+ * 联机（丧尸围城三人）坐直升机：机舱里能走的那一块（机身局部坐标，x 左右、z 前后；两边舱门之间、后排座椅之前），
+ * 眼睛离机身原点多高（舱顶 2.25 米：半蹲着）、走多快、两个机枪手各占多大一圈（走不进去）。
+ */
+export const CABIN = Object.freeze({ x0: -0.74, x1: 0.74, z0: -0.92, z1: 0.48, eye: 1.92, speed: 1.6, gunner: 0.36 });
 
 /** 坚守的控制点：导航上能站、四周 6 米基本是空地，同一层 20–50 米内有 20 个以上的刷兵点（实测；车库那一层没有刷兵点，不用） */
 export const HOLD_SITES = Object.freeze([
@@ -349,6 +354,30 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   gunMount.position.set(...RIDE_SPECS.helicopter.gunMount); gunMount.rotation.y = RIDE_SPECS.helicopter.gunYaw;
   vehicles.heli.body.add(gunMount);
   const doorGun = createDoorGun(G, gunMount);
+  // 右舷第二挺（联机才用：阿哲那一侧，和左舷那挺对称地挂在另一边舱门）。单人不造：要的时候 ensureGun2()
+  let doorGun2 = null, gunMount2 = null;
+  function ensureGun2() {
+    if (doorGun2) return doorGun2;
+    const H = RIDE_SPECS.helicopter; gunMount2 = new THREE.Object3D();
+    gunMount2.position.set(-H.gunMount[0], H.gunMount[1], H.gunMount[2]); gunMount2.rotation.y = -H.gunYaw;
+    vehicles.heli.body.add(gunMount2);
+    doorGun2 = createDoorGun(G, gunMount2, { label: 'M134 右舷机枪' });
+    return doorGun2;
+  }
+  // 联机时这台机器上的你坐哪：left 左舷机枪（单人、主角）、right 右舷机枪（阿哲）、cabin 机舱里拿步枪走动（林医生）。
+  // twin：右舷那挺装上；follow：客户端（飞机怎么飞照主机：hostT 是主机这一刻的乘坐时间，coop/rules.js 每帧给）；
+  // guns：别人在用的那几挺朝哪、开没开火（{ yaw, pitch, firing }，rules.js 照快照给），cab：机舱里你站在哪（机身局部坐标）
+  const crew = { seat: 'left', twin: false, follow: false, hostT: null, guns: { left: null, right: null }, cab: { x: 0, z: -0.5 } };
+  const RIGHT_SEAT = Object.freeze({ seat: [-RIDE_SPECS.helicopter.seat[0], RIDE_SPECS.helicopter.seat[1], RIDE_SPECS.helicopter.seat[2]], yaw: -RIDE_SPECS.helicopter.seatYaw });
+  const seatLocal = (vv) => (vv.kind !== 'helicopter' || crew.seat === 'left' ? vv.spec.seat : crew.seat === 'right' ? RIGHT_SEAT.seat : [crew.cab.x, CABIN.eye, crew.cab.z]);
+  const _sq = new THREE.Quaternion(), _se = new THREE.Euler();
+  /** 坐好时的人眼位置和朝向：左舷照载具自己的；右舷朝右边舱门外；机舱里朝左边舱门 */
+  function seatPoseOf(vv) {
+    if (vv.kind !== 'helicopter' || crew.seat === 'left') return vv.seatPose(0, 0);
+    vv.body.getWorldQuaternion(_sq);
+    const yaw = crew.seat === 'right' ? RIGHT_SEAT.yaw : RIDE_SPECS.helicopter.seatYaw;
+    return { position: vv.toWorld(seatLocal(vv)), quaternion: _sq.clone().multiply(new THREE.Quaternion().setFromEuler(_se.set(0, Math.PI + yaw, 0))) };
+  }
   // 装甲车的车顶机枪（同一挺 M134）：不用换弹、只会过热。环形枪架：圆心在射击口正中，枪挂在环上跟着视线绕人转一整圈
   // （用户反馈：车上用步枪，换弹耽误太久）
   const carRing = new THREE.Object3D(), carMount = new THREE.Object3D();
@@ -403,7 +432,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (G.level) G.level.playerStart = keep ? (keep.kind === 'safe' ? keep.start : checkpointStart(mission.extraction)) : (mission.start || home); // 丧尸围城有自己的开局点（mission.start）
     vhud.show(false); deadTitle(null, null); deadActions(false);
     if (G.player) G.player.mounted = false;
-    doorGun.reset(); roofGun.reset();
+    doorGun.reset(); doorGun2?.reset(); roofGun.reset();
     models = mission.objectives.map((o) => {
       const g = o.model ? o.model() : o.kind === 'relay' ? relayModel() : o.kind === 'bomb' ? bombModel() : itemModel();
       const y = o.site.y ?? elev(o.site.floor);
@@ -477,7 +506,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   const lookQuat = (eyeP, target) => new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(eyeP, target, new THREE.Vector3(0, 1, 0)));
   /** 登机：0–1 秒走到门口（看着舱里），1–1.9 秒钻进去到位（直升机坐到机枪后面，接应车站到车顶射击口） */
   function boardingView(vv, t) {
-    const sp = vv.spec, D = vv.toWorld(sp.doorOut), I = vv.toWorld(sp.doorIn), seat = vv.seatPose(0, 0);
+    const sp = vv.spec, D = vv.toWorld(sp.doorOut), I = vv.toWorld(sp.doorIn), seat = seatPoseOf(vv);
     if (t < 1) return { position: from.pos.clone().lerp(D, smooth(t)), quaternion: from.quat.clone().slerp(lookQuat(D, I.clone().lerp(seat.position, 0.5)), smooth(t * 1.3)) };
     const k = smooth((t - 1) / 0.9), a = D.clone().lerp(I, k), b = I.clone().lerp(seat.position, k), position = a.lerp(b, k);
     position.y += Math.sin(k * Math.PI) * -0.12;
@@ -486,7 +515,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
 
   /** 玩家每帧被摆到座位上（脚底 = 眼睛 − 眼高），原游戏照常算视角和开枪 */
   function pin(vv) {
-    const e = vv.toWorld(vv.spec.seat);
+    const e = vv.toWorld(seatLocal(vv));
     G.player.pos.set(e.x, e.y - eye, e.z);
     G.player.vel?.set?.(0, 0, 0);
   }
@@ -498,6 +527,9 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.phase === 'ride') {
       if (vv.kind === 'helicopter') {
         state.rideT += dt;
+        // 客户端：飞机照主机的时刻飞（差得多直接跳过去，差一点慢慢追上，免得一顿一顿）
+        if (crew.follow && crew.hostT !== null) { const d = crew.hostT - state.rideT; if (Math.abs(d) > 0.5) state.rideT = crew.hostT; else state.rideT += d * Math.min(1, dt * 3); }
+        if (crew.seat === 'cabin') cabinStep(vv, dt);
         vv.setPose(state.pose = heliPose(state.rideT), Math.sin(state.rideT * 7) * 0.025);
         if (state.rideT >= heliEnd() - CUT.heliLead) startOutro(vv);
       } else {
@@ -527,6 +559,27 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
       if (p.landed && !state.boom) boom(vv, 1);
     }
     pin(vv);
+  }
+
+  /** 机舱里走动（联机的第三个人）：照原游戏的走法（摇杆 / WASD 跟着视线方向）换到机身坐标里挪，出不了舱门、穿不过两个机枪手 */
+  const _cv = new THREE.Vector3(), _cq = new THREE.Quaternion();
+  function cabinStep(vv, dt) {
+    const mv = G.input?.move, p = G.player; if (!mv || !p) return;
+    const sx = Math.sin(p.yaw || 0), cx = Math.cos(p.yaw || 0), mx = mv.x || 0, my = mv.y || 0;
+    _cv.set(mx * cx - my * sx, 0, -mx * sx - my * cx).multiplyScalar(CABIN.speed);
+    vv.body.getWorldQuaternion(_cq).invert(); _cv.applyQuaternion(_cq);
+    const c = crew.cab; c.x += _cv.x * dt; c.z += _cv.z * dt;
+    const inX = (x) => Math.max(CABIN.x0, Math.min(CABIN.x1, x)), inZ = (z) => Math.max(CABIN.z0, Math.min(CABIN.z1, z)), sz = RIDE_SPECS.helicopter.seat[2], r = CABIN.gunner;
+    c.x = inX(c.x); c.z = inZ(c.z);
+    for (const gx of [RIDE_SPECS.helicopter.seat[0], -RIDE_SPECS.helicopter.seat[0]]) { // 两个机枪手坐的地方走不进去：推出来
+      const dx = c.x - gx, dz = c.z - sz, d = Math.hypot(dx, dz);
+      if (d >= r) continue;
+      // 先沿着离开机枪手的方向推；推出去就出了机舱（机枪手挨着舱壁），改成只往前、往后推（贴着舱壁绕过去）
+      const k = r / Math.max(d, 1e-4), nx = gx + (d > 1e-4 ? dx : -Math.sign(gx) * 1e-4) * k, nz = sz + dz * k;
+      if (nx === inX(nx) && nz === inZ(nz)) { c.x = nx; c.z = nz; continue; }
+      const h = Math.sqrt(Math.max(0, r * r - dx * dx)) + 1e-4, up = sz + h, dn = sz - h;
+      c.z = inZ(dz >= 0 ? (up <= CABIN.z1 ? up : dn) : (dn >= CABIN.z0 ? dn : up));
+    }
   }
 
   // ---- 载具耐久：敌人的子弹擦过机身 / 车身就掉，打光了坠毁 ----
@@ -598,7 +651,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function crash(vv) {
     if (state.phase !== 'ride') return;
     state.phase = 'crash'; state.crashT = 0; state.boom = false; state.crashStart = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0 }) };
-    doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
+    doorGun.update(0, { active: false }); doorGun2?.update(0, { active: false }); roofGun.update(0, { active: false });
     G.weapon?.setVisible?.(false);
     G.fx?.explosion?.(vv.toWorld(VEHICLE_HP.engine[vv.kind]), 1.4);
     G.player?.addShake?.(0.5);
@@ -610,10 +663,13 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function startRide(vv) {
     state.phase = 'ride'; state.rideT = 0; state.carS = 0; state.rideKills = 0; state.spawnT = 1;
     // 视角接上座位朝向（直升机朝舱门外，车上朝前）
-    const q = vv.seatPose(0, 0).quaternion, d = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+    const q = seatPoseOf(vv).quaternion, d = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
     G.player.yaw = Math.atan2(-d.x, -d.z); G.player.pitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
     if (vv.kind === 'helicopter') G.player.pitch = -0.42; // 坐好先往下看楼顶
-    G.weapon?.setVisible?.(false); // 两种载具都用车载机枪，步枪收起来
+    const cabin = vv.kind === 'helicopter' && crew.seat === 'cabin';
+    // 两种载具都用车载机枪，步枪收起来；联机的第三个人在机舱里拿步枪（备弹补到 240：飞机上没地方捡）
+    G.weapon?.setVisible?.(cabin);
+    if (cabin) { crew.cab.x = 0; crew.cab.z = -0.5; if (G.weapon?.owns?.rifle !== false) G.weapon?.select?.('rifle'); G.weapon?.addAmmo?.(Math.max(0, 240 - (G.weapon?.reserve | 0))); } // 备弹补到 240（不是再加 240：重来、读档再上机不越补越多）
     // 原游戏的追兵波次停掉，地图别处的敌人收掉，敌人池（18 人）留给沿路 / 楼顶刷出来的
     const run = G.game?.run;
     if (run) { run.pursuitLeft = 0; run.pursuitT = 0; if (run.queue) run.queue.length = 0; run.waveHot = 0; }
@@ -634,7 +690,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
   function startOutro(vv) {
     if (state.phase !== 'ride') return;
     state.phase = 'outro'; state.outT = 0;
-    doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
+    doorGun.update(0, { active: false }); doorGun2?.update(0, { active: false }); roofGun.update(0, { active: false });
     state.pose0 = { ...(state.pose || { x: vv.root.position.x, y: vv.root.position.y, z: vv.root.position.z, yaw: vv.root.rotation.y, pitch: 0, roll: 0, dir: { x: 0, z: -1 } }) };
     const t0 = state.rideT;
     // 机外镜头的机位：任务可以自己定（丧尸围城定在公寓楼顶边上——周围楼太密，按「航线外侧让开 17 米」会架到别的楼里去）
@@ -650,7 +706,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.phase !== 'ride' && state.phase !== 'outro') return;
     if (state.phase === 'outro') { G.player.invulnerable = !!state.wasInv; letterbox?.(false); }
     state.phase = 'end'; state.endT = 0;
-    doorGun.update(0, { active: false }); roofGun.update(0, { active: false });
+    doorGun.update(0, { active: false }); doorGun2?.update(0, { active: false }); roofGun.update(0, { active: false });
     G.game?.finish?.();
   }
 
@@ -872,7 +928,16 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     const heliGun = vv.kind === 'helicopter' && state.phase === 'ride' && G.game?.state === 'playing';
     // 舱门机枪的辅助瞄准目标：楼顶上活着的敌人（瞄胸口）；HUD 上给它们标红点
     const targets = heliGun ? roofEnemies().map((e) => (e._aim ||= new THREE.Vector3()).set(e.pos.x, e.pos.y + 1.15, e.pos.z)) : null;
-    doorGun.update(dt, { active: heliGun, firing: heliGun && !!(G.input?.down?.('fire') || G.input?.fire), camera, targets });
+    // 两挺舱门机枪：自己坐的那挺照手上的操作打；别人坐的那挺（联机）照他报的角度转、冒火（只是画面）
+    const pull = !!(G.input?.down?.('fire') || G.input?.fire);
+    if (heliGun && crew.seat !== 'left' && crew.guns.left) doorGun.puppet(dt, crew.guns.left);
+    else doorGun.update(dt, { active: heliGun && crew.seat === 'left', firing: heliGun && crew.seat === 'left' && pull, camera, targets });
+    if (gunMount2) gunMount2.visible = crew.twin;
+    if (doorGun2) {
+      if (heliGun && crew.twin && crew.seat === 'right') doorGun2.update(dt, { active: true, firing: pull, camera, targets });
+      else if (heliGun && crew.twin && crew.guns.right) doorGun2.puppet(dt, crew.guns.right);
+      else doorGun2.update(dt, { active: false });
+    }
     // 车顶机枪：先把环形枪架转到视线方向（枪始终在人前面），再按舱门机枪同一套开火、过热、辅助瞄准；目标是车周围所有敌人
     const carGun = vv.kind === 'car' && state.phase === 'ride' && G.game?.state === 'playing';
     if (carGun) {
@@ -891,7 +956,7 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     if (state.phase === 'board') {
       state.t += dt;
       if (state.t >= BOARD_TIME) { startRide(vv); return null; }
-      return { ...(state.t < 1.9 ? boardingView(vv, state.t) : vv.seatPose(0, 0)), fade: 0 };
+      return { ...(state.t < 1.9 ? boardingView(vv, state.t) : seatPoseOf(vv)), fade: 0 };
     }
     // 耐久条、受损冒烟起火
     vhud.show(state.phase === 'ride' || state.phase === 'crash', vv.kind === 'helicopter' ? '机体耐久' : '车辆耐久');
@@ -939,9 +1004,15 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     return null;
   }
 
-  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun, checkpointStart, deadActions, deadTitle,
-    /** 步枪停用：登车、乘坐（直升机舱门机枪 / 装甲车车顶机枪）、结算、坠毁 */
-    get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || state.phase === 'ride' || state.phase === 'outro'; },
+  return { roll, prePlayer, update, markers, state, sites, vehicles, root, doorGun, roofGun, checkpointStart, deadActions, deadTitle, crew, ensureGun2,
+    /** 右舷第二挺（联机才有；没造过是 null） */
+    get doorGun2() { return doorGun2; },
+    /** 这台机器上的你用的是哪挺（机舱里拿步枪的是 null） */
+    get myGun() { return crew.seat === 'cabin' && veh()?.kind === 'helicopter' ? null : crew.seat === 'right' && doorGun2 && veh()?.kind === 'helicopter' ? doorGun2 : doorGun; },
+    /** 走到登机门那一下（联机：主机让大家一起登机） */
+    board: () => board(),
+    /** 步枪停用：登车、乘坐（直升机舱门机枪 / 装甲车车顶机枪）、结算、坠毁。联机时机舱里那个人坐飞机时照常用步枪 */
+    get gunActive() { return state.phase === 'board' || state.phase === 'end' || state.phase === 'crash' || (state.phase === 'ride' && !(crew.seat === 'cabin' && veh()?.kind === 'helicopter')) || state.phase === 'outro'; },
     get riding() { return riding(); },
     get rideKind() { return riding() ? veh()?.kind === 'helicopter' ? 'helicopter' : 'car' : null; },
     get phase() { return state.phase; }, get rideT() { return state.rideT; },
@@ -951,5 +1022,5 @@ export function createMissionDirector(G, { scene, layout, nav, J, camera = null,
     rideCanAttack(enemy, fresh = false) { const hook = rideHooks()?.canAttack; return hook ? !!hook(enemy, fresh) : true; },
     /** 开放撤离点（closed 的任务用）：从这一刻起走到登机门就能上 */
     openExtraction() { const x = state.mission?.extraction; if (!x || G.level.extraction) return; G.level.extraction = { pos: v({ ...x, y: elev(x.floor) }), radius: x.radius, label: x.label, blocked: x.blocked }; G.game?.refreshObjective?.(); },
-    dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); roofGun.dispose(); vhud.remove(); } };
+    dispose() { root.removeFromParent(); for (const vv of Object.values(vehicles)) vv.dispose(); doorGun.dispose(); doorGun2?.dispose(); roofGun.dispose(); vhud.remove(); } };
 }

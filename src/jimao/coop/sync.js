@@ -7,10 +7,11 @@
  * snapHz / inputHz：主机快照、客户端操作每秒发几次；keyEvery：几秒一帧完整快照；near：离真人多远以内的丧尸才发；
  * delay：客户端画面比主机晚多少秒（插值用）；extrap：快照断了最多往前推几秒；q：位置的量化（每米几格，20 = 5 厘米）；
  * claim：一次命中最多算多少伤害（榴弹 230、斧子 200），每包最多 claimPack；claimRange：离自己多远的丧尸才认（米）。
+ * rideNear / rideRange：坐直升机清扫时（楼顶、阳台、楼下的离飞机一百多米）快照发多远以内的丧尸、命中认多远（从机身中心量）。
  */
 export const NET = Object.freeze({
   snapHz: 12, inputHz: 15, keyEvery: 2, near: 55, delay: 0.12, extrap: 0.25, q: 20,
-  claim: 400, claimPack: 1600, claimRange: 90, hitsPerPack: 24,
+  claim: 400, claimPack: 1600, claimRange: 90, hitsPerPack: 24, rideNear: 170, rideRange: 200,
 });
 /** 座位 → 扮演的角色：0 主角（单人时的你）、1 阿哲、2 林医生；小许不是座位，是被救出来的人 */
 export const ROLES = Object.freeze(['lead', 'zhe', 'lin']);

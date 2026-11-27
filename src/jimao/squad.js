@@ -136,7 +136,8 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
   let enabled = false, hud = null, sayT = 0, wanted = true;
   // 联机（coop/coop.js）：local 是这台机器上的你扮演谁（'lead' 主角 / 'zhe' / 'lin'），那个角色不再画成队友；
   // puppet：客户端上所有人形都是木偶（位置、血量、倒地照主机的快照，不跑 AI、不开枪）；force：房间里有人时不管设置里关没关队友都出场
-  const net = { local: 'lead', puppet: false, force: false };
+  // selfDown：联机时这台机器上的你倒地了（coop/rules.js 管；倒着的你扶不了别人、林医生不来包扎而是来扶你）；medicMul：真人林医生扶人快几倍
+  const net = { local: 'lead', puppet: false, force: false, selfDown: false, medicMul: 1 };
   // 你最近是朝哪边走的（不是朝哪边看）：站位按这个方向排在你身后。原地转头不会让他们跟着绕圈
   const trail = { x: 0, z: 0, yaw: 0, ready: false };
   function track() {
@@ -304,11 +305,15 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
      */
     function downTick(dt, others, p, dist, dy, zs) {
       const B = P.guest, reach = member.guest ? B.reach : P.down.reach;
-      const near = (p.alive !== false && dist < reach && Math.abs(dy) < 1.5) || others.some((o) => o !== m && o.remote && !o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < reach && Math.abs(o.pos.y - m.pos.y) < 1.5);
+      const meNear = p.alive !== false && !net.selfDown && dist < reach && Math.abs(dy) < 1.5;
+      const helper = meNear ? null : others.find((o) => o !== m && o.remote && !o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < reach && Math.abs(o.pos.y - m.pos.y) < 1.5);
+      const near = meNear || !!helper;
+      // 联机：扶人的是真人扮演的林医生（你自己、或者别人）——快一些（net.medicMul）
+      const fast = !member.guest && ((meNear && net.local === 'lin') || helper?.member.trait === 'medic') ? net.medicMul : 1;
       const busy = member.guest && near && zs.some((z) => z.zs !== 'idle' && !z.fixed && !z.passive && Math.abs(z.pos.y - p.pos.y) < 1.6 && Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) < B.busy);
       const medic = others.find((o) => o !== m && !o.down && !o.remote && o.member.trait === 'medic' && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < P.down.reach && Math.abs(o.pos.y - m.pos.y) < 1.5);
       m.help = !near ? 'far' : busy ? 'busy' : 'up'; // siege 的护送提示按这个说
-      if (near && !busy) m.reviveT += dt / (member.guest ? B.revive : P.down.revive); else if (medic) m.reviveT += dt / P.down.medic; else if (!busy) m.reviveT = Math.max(0, m.reviveT - dt * (member.guest ? 0.2 : 0.5));
+      if (near && !busy) m.reviveT += dt * fast / (member.guest ? B.revive : P.down.revive); else if (medic) m.reviveT += dt / P.down.medic; else if (!busy) m.reviveT = Math.max(0, m.reviveT - dt * (member.guest ? 0.2 : 0.5));
       if (m.reviveT >= 1) getUp();
       m.fallK = Math.min(1, m.fallK + dt * 3); m.speed = 0; pose(dt);
     }
@@ -404,9 +409,9 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       const t = m.target && m.target.alive && m.target.active ? m.target : (m.target = null);
       // 林医生：你血量见底，跑过来包扎
       const H = member.heal;
-      const needHeal = H && m.healT <= 0 && p.alive !== false && (p.health ?? 100) < H.below && dist < H.range && Math.abs(dy) < 1.5;
-      // 队友倒了：林医生去扶
-      const fallen = member.trait === 'medic' ? others.find((o) => o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < 18 && Math.abs(o.pos.y - m.pos.y) < 1.5) : null;
+      const needHeal = H && m.healT <= 0 && p.alive !== false && !net.selfDown && (p.health ?? 100) < H.below && dist < H.range && Math.abs(dy) < 1.5;
+      // 队友倒了：林医生去扶（联机时你自己倒了也来扶你：rules.js 按她站在你跟前多久算）
+      const fallen = member.trait === 'medic' ? (others.find((o) => o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < 18 && Math.abs(o.pos.y - m.pos.y) < 1.5) || (net.selfDown && dist < 30 && Math.abs(dy) < 1.5 ? p : null)) : null;
       let goal = null, stopAt = 0;
       // 你架着楼顶机枪（roof-gun.js）：站到机枪阵地里给他留的那一处（沙袋墙里、台子边上），不跟着枪口转来转去
       const post = G.roofGun?.active ? G.roofGun.matePost?.(member.id) : null;
