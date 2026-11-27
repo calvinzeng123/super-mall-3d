@@ -5,12 +5,14 @@
 // 画法：路线上每 1.4 米一个贴地的淡蓝色小箭头（加色、半透明），一道流光沿路往目标方向推；只画眼前 45 米左右。
 // 每 1.5 秒最多重算一次路线，只在目标换了、或玩家离开路线 5 米以上时才重算。坐载具时不画。
 import * as THREE from 'three';
-import { findPath } from '../fps/pathfinding.js';
+import { findPath, traceMotion } from '../fps/pathfinding.js';
 import { landAt, clear } from '../layout/nav.js';
 import { pointInPoly } from '../layout/geom.js';
+import { storeStyle, doorGaps } from '../layout/frontage.js';
 import { routeHint } from './minimap.js';
 
-export const GUIDE = Object.freeze({ spacing: 1.4, ahead: 45, count: 34, recompute: 1.5, stray: 5, speed: 7, color: '#9fe8ff' });
+// door：穿店门时门里门外各这么远一个点（从门洞正中直进直出）；landing：上下扶梯 / 楼梯、过门洞，两头先顺着梯子方向直走这么远再拐；bend：拐点往弯外挪这么远（照着箭头走的人会抄近路，贴着门框、店角、卷帘拐弯就蹭上去卡住）
+export const GUIDE = Object.freeze({ spacing: 1.4, ahead: 45, count: 34, recompute: 1.5, stray: 5, speed: 7, color: '#9fe8ff', landing: 1.3, bend: 0.7, door: 1.0 });
 
 /**
  * 物品在房间里：返回这一户入户门外的一点（走廊里、正对着门），没有入户门（复式上层）返回 null。
@@ -57,6 +59,119 @@ export function resample(points, spacing = GUIDE.spacing) {
   return out;
 }
 
+/**
+ * 寻路给的路线（导航状态，拐点和拐点之间是能直走的直线）照着箭头走得顺一点：
+ * ① 上下扶梯 / 楼梯、过门洞（相邻两点不在同一层）：落地那头顺着梯子的方向再直走 landing 米才拐，上去那头也先对直了再上——
+ *    以前一下扶梯就九十度拐弯，人还站在梯子尾巴上，往旁边一迈就被扶手挡住；
+ * ② 拐点往弯外挪 bend 米（挪不动就少挪点）：箭头是贴着门框、店角拐的，人跟着走会抄近路，蹭到门框、卷帘就卡住。
+ * 挪过、加过的点前后两段都要真走得通（walk：默认用玩家的碰撞试走；寻路服务给的还要绕开锁着的店）。纯函数，返回新的一串
+ */
+const doorCache = new WeakMap();
+/** 这一层商铺门面上的门洞：[{ x0, z0, x1, z1（门洞两头）, cx, cz（中点）, nx, nz（门面法线）, w（宽） }]（和导航在门面上开的洞一样：nav.js） */
+export function doorwaysOf(layout, floor) {
+  if (!layout) return [];
+  let byFloor = doorCache.get(layout); if (!byFloor) doorCache.set(layout, byFloor = new Map());
+  let list = byFloor.get(floor); if (list) return list;
+  list = [];
+  const lv = layout.levels?.find((l) => l.id === floor);
+  for (const u of lv?.units || []) {
+    if (u.residence) continue;
+    let style = null; try { style = storeStyle(lv, u); } catch { continue; }
+    for (const f of u.wfronts || []) {
+      const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0); if (len < 0.5) continue;
+      const tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len;
+      for (const [a, b] of doorGaps(style, len)) list.push({ x0: f.x0 + tx * a, z0: f.z0 + tz * a, x1: f.x0 + tx * b, z1: f.z0 + tz * b, cx: f.x0 + tx * (a + b) / 2, cz: f.z0 + tz * (a + b) / 2, nx: f.nx, nz: f.nz, w: b - a });
+    }
+  }
+  byFloor.set(floor, list);
+  return list;
+}
+const crossT = (a, b, d) => {
+  const dx = b.x - a.x, dz = b.z - a.z, ex = d.x1 - d.x0, ez = d.z1 - d.z0, den = dx * ez - dz * ex;
+  if (Math.abs(den) < 1e-9) return -1;
+  const t = ((d.x0 - a.x) * ez - (d.z0 - a.z) * ex) / den, u = ((d.x0 - a.x) * dz - (d.z0 - a.z) * dx) / den;
+  return t > 0 && t < 1 && u >= -0.05 && u <= 1.05 ? t : -1;
+};
+
+/**
+ * layout：给了就把穿过店门的那一段改成从门洞正中间直着进出（门里门外各 GUIDE.door 米一个点）——
+ * 以前寻路是贴着门框斜着穿的，出门就拐，人跟着走蹭上门框、被卷帘挡住（意食、影城的门口都卡过）
+ */
+export function easeRoute(nav, pts, walk = (a, b) => !!traceMotion(nav, a, b), { landing = GUIDE.landing, bend = GUIDE.bend, layout = null, door = GUIDE.door } = {}) {
+  if (!pts || pts.length < 2) return pts;
+  const out = pts.slice(), flat = (q) => q && !q.via && !q.slope && !q.door;
+  const ok = (q) => { const st = clear(nav, q); return !!st; };
+  // ⓪ 过店门：从门洞正中直进直出
+  if (layout) for (let k = 1; k < out.length; k++) {
+    const a = out[k - 1], b = out[k];
+    if (a.floor !== b.floor || a.via || b.via || a.door) continue;
+    let best = null, bt = 2;
+    for (const d of doorwaysOf(layout, a.floor)) { const t = crossT(a, b, d); if (t >= 0 && t < bt) { bt = t; best = d; } }
+    if (!best) continue;
+    const side = Math.sign((a.x - best.cx) * best.nx + (a.z - best.cz) * best.nz) || 1;
+    // 从哪儿穿门洞：原来穿的那一点，但离门框至少 1.1 米（门洞窄就走正中）；
+    // 进门 / 出门以后马上顺着门面往一边拐（拐过去的那一点在门洞外头）：从门洞离那一边远的那半边穿过去，拐个大弯，里侧的门框离得远
+    const tx = (best.x1 - best.x0) / best.w, tz = (best.z1 - best.z0) / best.w, half = best.w / 2, m = Math.min(1.1, half);
+    const tc = (q) => (q.x - best.cx) * tx + (q.z - best.cz) * tz, ta = tc(a), tb = tc(b), u0 = ta + (tb - ta) * bt;
+    const clampU = (u) => Math.max(-half + m, Math.min(half - m, u)), off = Math.max(0, Math.min(1, half - 0.7));
+    const big = Math.abs(tb) >= Math.abs(ta) ? tb : ta, small = big === tb ? ta : tb;
+    const wide = Math.abs(big) > half && !(Math.sign(small) === Math.sign(big) && Math.abs(small) > 0.4) ? -Math.sign(big) * off : clampU(u0);
+    let done = false;
+    for (const [dd, u] of [[door, wide], [door * 0.7, wide], [door, clampU(u0)], [door * 0.7, clampU(u0)], [door * 0.7, 0]]) {
+      const ox = best.cx + tx * u, oz = best.cz + tz * u;
+      const p = { ...a, x: ox + best.nx * side * dd, z: oz + best.nz * side * dd, door: true }, q = { ...a, x: ox - best.nx * side * dd, z: oz - best.nz * side * dd, door: true };
+      delete p.via; delete q.via;
+      if (!(ok(p) && ok(q) && walk(a, p) && walk(p, q) && walk(q, b))) continue;
+      out.splice(k, 0, p, q); k += 2; done = true;
+      // 门洞前后贴着门面的那两个拐点（比门里门外那两点还靠门面）：去掉，不然出了门又往回折一下
+      const nd = (r) => Math.abs((r.x - best.cx) * best.nx + (r.z - best.cz) * best.nz);
+      // 现在 out[k - 3] = a、out[k - 2] = p（门这边）、out[k - 1] = q（门那边）、out[k] = b
+      const nb = out[k + 1];
+      if (nb && nb.floor === b.floor && !nb.via && nd(b) < dd && walk(q, nb)) out.splice(k, 1);
+      const pa = out[k - 4];
+      if (pa && pa.floor === a.floor && !pa.via && !pa.door && nd(a) < dd && walk(pa, p)) { out.splice(k - 3, 1); k--; }
+      break;
+    }
+    void done;
+  }
+  for (let k = 1; k < out.length; k++) {
+    const p = out[k - 1], q = out[k];
+    if (p.floor === q.floor || q.via === 'lift' || p.via === 'lift') continue;
+    const dx = q.x - p.x, dz = q.z - p.z, len = Math.hypot(dx, dz); if (len < 0.3) continue;
+    const ux = dx / len, uz = dz / len;
+    // 落地那头
+    const n = out[k + 1];
+    if (flat(n) && n.floor === q.floor && Math.hypot(n.x - q.x, n.z - q.z) > 0.5) {
+      for (const d of [landing, landing * 0.6]) {
+        const e = { ...q, x: q.x + ux * d, z: q.z + uz * d, slope: null }; delete e.via;
+        if (ok(e) && walk(q, e) && walk(e, n)) { out.splice(k + 1, 0, e); break; }
+      }
+    }
+    // 上去那头
+    const b = out[k - 2];
+    if (flat(b) && b.floor === p.floor && Math.hypot(b.x - p.x, b.z - p.z) > 0.5) {
+      for (const d of [landing, landing * 0.6]) {
+        const e = { ...p, x: p.x - ux * d, z: p.z - uz * d, slope: null }; delete e.via;
+        if (ok(e) && walk(b, e) && walk(e, p)) { out.splice(k - 1, 0, e); k++; break; }
+      }
+    }
+  }
+  for (let i = 1; i < out.length - 1; i++) {
+    const a = out[i - 1], p = out[i], c = out[i + 1];
+    if (!flat(p) || a.floor !== p.floor || c.floor !== p.floor || a.via || c.via || a.door || c.door) continue; // 门洞前后那两点不动（已经对直了）
+    let ux = p.x - a.x, uz = p.z - a.z, vx = c.x - p.x, vz = c.z - p.z; const lu = Math.hypot(ux, uz), lv = Math.hypot(vx, vz);
+    if (lu < 0.3 || lv < 0.3) continue;
+    ux /= lu; uz /= lu; vx /= lv; vz /= lv;
+    if (ux * vx + uz * vz > 0.94) continue; // 拐得不到 20°
+    let ox = ux - vx, oz = uz - vz; const lo = Math.hypot(ox, oz); if (lo < 1e-6) continue; ox /= lo; oz /= lo; // 弯外：拐弯那一侧的反方向
+    for (const d of [bend, bend * 0.6, bend * 0.3]) {
+      const q = { ...p, x: p.x + ox * d, z: p.z + oz * d };
+      if (ok(q) && walk(a, q) && walk(q, c)) { out[i] = q; break; }
+    }
+  }
+  return out;
+}
+
 export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, pathfinder = null }) {
   // 贴地小箭头：朝 +z，双面
   const shape = new THREE.Shape();
@@ -69,7 +184,7 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
   for (let i = 0; i < GUIDE.count; i++) mesh.setColorAt(i, base);
   scene.add(mesh);
 
-  let route = [], key = '', wait = 0, t = 0, job = null, hint = null, last = null, nextStep = null, planAt = null, planFloor = null, nearS = 0;
+  let route = [], routeKey = null, key = '', wait = 0, t = 0, job = null, hint = null, last = null, nextStep = null, planAt = null, planFloor = null, nearS = 0;
 
   /** 现在该去哪：没完成的目标里离玩家最近的；都完成了去撤离点 */
   function target() {
@@ -103,12 +218,12 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
       // 路线里有电梯：箭头只画到电梯门口，后面的等坐上去、到了那一层再重新算
       // 下一步怎么走（小地图下面那行字）：第一次换楼层的地方、怎么换、还有多远
       nextStep = routeHint(nav, layout, pts, tg.name || '目标');
-      const cut = pts.findIndex((p) => p.via === 'lift'), list = (cut >= 0 ? pts.slice(0, cut) : pts).map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
+      const cut = pts.findIndex((p) => p.via === 'lift'), list = easeRoute(nav, cut >= 0 ? pts.slice(0, cut) : pts, pathfinder?.walkable, { layout }).map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
       hint = cut >= 0 ? { kind: 'lift', name: pts[cut].lift, from: pts[cut].from, to: pts[cut].to, x: pts[cut - 1].x, y: pts[cut - 1].y ?? 0, z: pts[cut - 1].z } : null;
       if (cut < 0 && tg.door) list.push({ x: tg.x, y: tg.y, z: tg.z });
       // 起点离电梯门口不到一步远时路线只有一个点：补一个点，照样画得出来
       if (list.length === 1) list.unshift({ x: from.x, y: from.y ?? list[0].y, z: from.z });
-      route = resample(list);
+      route = resample(list); routeKey = tg.key;
     };
     if (pathfinder) job = pathfinder.request(from, goal, done, { lifts: true, urgent: true });
     else done(findPath(nav, from, goal));
@@ -150,6 +265,8 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
   }
 
   return { mesh, update, get route() { return route; }, get target() { return last; },
+    /** 现在这条路线是给哪个目标算的（target().key）；刚换了目标、新路线还没算出来时还是上一个 */
+    get planned() { return routeKey; },
     /** 路线要坐电梯时：{ kind: 'lift', name, from, to, x, y, z }（电梯门口），否则 null */
     get hint() { return hint; },
     /** 下一步：{ kind: 'goal' | 'slope' | 'lift', dist, text, x, y, z }，距离随人往前走实时扣掉 */
@@ -159,6 +276,6 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
       const moved = route.length ? nearS : Math.hypot(G.player.pos.x - planAt.x, G.player.pos.z - planAt.z), left = Math.max(0, nextStep.dist - moved);
       return { ...nextStep, dist: left, text: nextStep.text.replace(/· \d+ 米$/, `· ${Math.max(1, Math.round(left))} 米`) };
     },
-    reset() { job?.cancel(); job = null; route = []; hint = null; nextStep = null; key = ''; wait = 0; mesh.count = 0; },
+    reset() { job?.cancel(); job = null; route = []; routeKey = null; hint = null; nextStep = null; key = ''; wait = 0; mesh.count = 0; },
     dispose() { mesh.removeFromParent(); geo.dispose(); mat.dispose(); } };
 }

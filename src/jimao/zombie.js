@@ -112,7 +112,8 @@ export function zombieParts(look, { girth = 1, screamer = false } = {}) {
  * hunt: true 的丧尸认定了人，隔多远、隔几层都追（尸潮用）。
  */
 export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } = {}) {
-  const ctx = enemies.debug.ctx, rng = ctx.rng || Math.random;
+  // 每次现取 ctx.rng（测试里换一串随机数，前面商场段用掉多少不影响后面）
+  const ctx = enemies.debug.ctx, rng = () => (ctx.rng || Math.random)();
   const group = new THREE.Group(); group.name = 'zombies'; scene?.add(group);
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, name: 'zombie' });
   const sets = { normal: LOOKS.map((l) => zombieParts(l)), fat: LOOKS.map((l) => zombieParts(l, { girth: KINDS.bloater.girth })), scream: LOOKS.map((l) => zombieParts({ ...l, shirt: 0xcfcabb, hair: 0x8a8578 }, { screamer: true })) };
