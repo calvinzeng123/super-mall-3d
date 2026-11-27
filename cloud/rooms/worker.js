@@ -2,21 +2,24 @@
 // 入口：GET /room/<房间码>?name=<昵称>&want=create|join&id=<本机随机 id>  （升级成 WebSocket）
 //       GET /health  → ok
 // 房间逻辑在 room-core.js（node 测试也用它）。部署见 README.md。
-// 猜房间码：同一个 IP 一分钟里加入不存在的房间（nope）超过 JOIN_LIMIT.max 次，这一分钟里再加入直接回 slow（尽力而为：记在这个 Worker 实例的内存里）。
+// 猜房间码（房间码只有 4 位数字，一万个）：同一个 IP「加入了没人的房间（nope）」或者「建房撞上了有人的房间（taken：建房也能用来探哪些码有人）」
+// 一分钟里超过 JOIN_LIMIT.max 次、或者一刻钟里超过 JOIN_LIMIT.longMax 次，之后再加入 / 建房直接回 slow（尽力而为：记在这个 Worker 实例的内存里）。
 import { createRoomCore, ROOM } from './room-core.js';
 
-export const JOIN_LIMIT = Object.freeze({ max: 20, windowMs: 60_000, keep: 5000 });
+export const JOIN_LIMIT = Object.freeze({ max: 10, windowMs: 60_000, longMax: 30, longMs: 15 * 60_000, keep: 5000 });
 
-/** 按 IP 记「加入了不存在的房间」几次：fail(ip) 记一次，blocked(ip) 这一分钟里还能不能再试 */
+/** 按 IP 记猜错了几次（短窗口、长窗口各一个）：fail(ip) 记一次，blocked(ip) 现在还能不能再试 */
 export function createJoinLimiter({ P = JOIN_LIMIT, now = () => Date.now() } = {}) {
-  const map = new Map(); // ip → { n, t0 }
-  const rec = (ip) => { const t = now(); let r = map.get(ip); if (!r || t - r.t0 >= P.windowMs) { r = { n: 0, t0: t }; map.set(ip, r); } return r; };
+  const map = new Map(); // ip → { n, t0, ln, lt0 }
+  const roll = (r, t) => { if (t - r.t0 >= P.windowMs) { r.n = 0; r.t0 = t; } if (t - r.lt0 >= P.longMs) { r.ln = 0; r.lt0 = t; } return r; };
   return {
-    blocked(ip) { if (!ip) return false; const r = map.get(ip); return !!r && now() - r.t0 < P.windowMs && r.n >= P.max; },
+    blocked(ip) { if (!ip) return false; const r = map.get(ip); if (!r) return false; roll(r, now()); return r.n >= P.max || r.ln >= P.longMax; },
     fail(ip) {
       if (!ip) return;
-      if (map.size > P.keep) { const t = now(); for (const [k, r] of map) if (t - r.t0 >= P.windowMs) map.delete(k); if (map.size > P.keep) map.clear(); }
-      rec(ip).n++;
+      const t = now();
+      if (map.size > P.keep) { for (const [k, r] of map) if (t - r.lt0 >= P.longMs) map.delete(k); if (map.size > P.keep) map.clear(); }
+      let r = map.get(ip); if (!r) { r = { n: 0, t0: t, ln: 0, lt0: t }; map.set(ip, r); }
+      roll(r, t); r.n++; r.ln++;
     },
     get size() { return map.size; },
   };
@@ -43,17 +46,18 @@ export default {
   async fetch(request, env, _ctx, L = limiter) {
     const url = new URL(request.url);
     if (url.pathname === '/health') return new Response('ok', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
-    const m = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,6})$/);
+    const m = url.pathname.match(/^\/room\/([A-Za-z0-9]{1,8})$/);
     if (!m) return new Response('not found', { status: 404 });
-    const code = m[1].toUpperCase();
+    const code = m[1];
     if (!ROOM.code.test(code)) return new Response('bad room code', { status: 400 });
     if (request.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
     if (!originAllowed(request.headers.get('Origin'), env.EXTRA_ORIGINS)) return new Response('origin not allowed', { status: 403 });
-    const ip = request.headers.get('CF-Connecting-IP') || '', joining = url.searchParams.get('want') !== 'create';
-    if (joining && L.blocked(ip)) return reply('slow', 4029, 'slow');
+    const ip = request.headers.get('CF-Connecting-IP') || '';
+    if (L.blocked(ip)) return reply('slow', 4029, 'slow'); // 加入、建房都挡（建房撞号也能用来探哪些码有人）
     const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
     const res = await stub.fetch(request);
-    if (res?.headers?.get?.('X-Room-Join') === 'nope') L.fail(ip); // 房间里没人：猜错了一次
+    const miss = res?.headers?.get?.('X-Room-Join');
+    if (miss === 'nope' || miss === 'taken') L.fail(ip); // 加入了没人的房间 / 建房撞上了有人的：猜错了一次
     return res;
   },
 };
@@ -82,7 +86,7 @@ export class Room {
     return core;
   }
   async fetch(request) {
-    const url = new URL(request.url), code = (url.pathname.split('/').pop() || '').toUpperCase();
+    const url = new URL(request.url), code = url.pathname.split('/').pop() || '';
     const core = this.ensure(code);
     const pair = new WebSocketPair(), [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
@@ -90,8 +94,8 @@ export class Room {
     const want = ['create', 'join'].includes(url.searchParams.get('want')) ? url.searchParams.get('want') : 'any';
     const before = core.count, seat = core.join(c, { name: url.searchParams.get('name') || '', id: url.searchParams.get('id') || '', want });
     if (seat < 0) this.conns.delete(server);
-    // 告诉外面的 Worker 这次是不是加入了一个没人的房间（它按 IP 记次数，防猜房间码）
-    const headers = seat < 0 && want === 'join' && before === 0 ? { 'X-Room-Join': 'nope' } : undefined;
+    // 告诉外面的 Worker 这次是不是加入了一个没人的房间 / 建房撞上了有人的房间（它按 IP 记次数，防猜房间码）
+    const headers = seat < 0 && want === 'join' && before === 0 ? { 'X-Room-Join': 'nope' } : seat < 0 && want === 'create' && before > 0 ? { 'X-Room-Join': 'taken' } : undefined;
     return new Response(null, { status: 101, webSocket: client, headers });
   }
   async webSocketMessage(ws, data) {

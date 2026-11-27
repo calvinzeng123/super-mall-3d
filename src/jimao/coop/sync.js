@@ -20,6 +20,15 @@ export const KIND_CODES = Object.freeze(['walker', 'runner', 'bloater', 'screame
 export const ZS_CODES = Object.freeze(['idle', 'chase', 'attack', 'scream', 'crouch', 'leap', 'pin']);
 export const PART_CODES = Object.freeze(['body', 'weak']);
 export const WEAPON_CODES = Object.freeze(['knife', 'pistol', 'rifle', 'smg', 'launcher', 'axe']);
+/** 投掷物（手雷、燃烧瓶、诱饵弹、榴弹枪的榴弹）：联机事件里的编号 */
+export const THROW_CODES = Object.freeze(['frag', 'fire', 'lure', 'shell']);
+/** 一下子的动作（事件）：扔东西 / 榴弹出膛、挥刀 */
+export const EV_CODES = Object.freeze(['throw', 'swing']);
+/**
+ * 事件的上限：nadeSpeed 扔出去 / 打出去最快多少米每秒（榴弹 44 + 人在跑）、nadeReach 离扔的人多远以内出手（米）、nadeFuse 引信最长几秒；
+ * nadeRate / nadeBurst：主机那边每个座位每秒认几颗、最多攒几颗（榴弹枪 0.35 秒一发、手雷 0.8 秒一颗）；perPack：一包最多几条事件
+ */
+export const EVT = Object.freeze({ nadeSpeed: 60, nadeReach: 4, nadeFuse: 12, nadeRate: 3, nadeBurst: 4, perPack: 8 });
 
 const TAU = Math.PI * 2;
 export const qp = (v, q = NET.q) => Math.round(v * q);
@@ -47,22 +56,51 @@ export function decodeZombie(a) {
   return { idx: a[0], gen: a[1], kind: KIND_CODES[a[2]] || 'walker', x: dp(a[3]), y: dp(a[4]), z: dp(a[5]), yaw: da(a[6]), zs: ZS_CODES[a[7]] || 'chase', hp: a[8] / 255, alive: !!(a[9] & 1), fixed: !!(a[9] & 2), sweep: !!(a[9] & 4), post: !!(a[9] & 8), lunge: (a[10] || 0) / 10 };
 }
 // ---- 人物（主角、阿哲、林医生、小许）----
-// [角色编号, x, y, z, 朝向, 俯仰（×100）, 速度（×10）, 标记, 血, 扶起进度（0–100）, 武器]；标记：1 倒地、2 在场、4 蹲着、8 在包扎、16 真人在操控
+// [角色编号, x, y, z, 朝向, 俯仰（×100）, 速度（×10）, 标记, 血, 扶起进度（0–100）, 武器]；标记：1 倒地、2 在场、4 蹲着、8 在包扎、16 真人在操控、32 冲刺、64 在换弹
 export function encodeChar(c) {
-  const flags = (c.down ? 1 : 0) | (c.on ? 2 : 0) | (c.crouch ? 4 : 0) | (c.healing ? 8 : 0) | (c.human ? 16 : 0);
+  const flags = (c.down ? 1 : 0) | (c.on ? 2 : 0) | (c.crouch ? 4 : 0) | (c.healing ? 8 : 0) | (c.human ? 16 : 0) | (c.sprint ? 32 : 0) | (c.reload ? 64 : 0);
   return [Math.max(0, CHARS.indexOf(c.role)), qp(c.x), qp(c.y), qp(c.z), qa(c.yaw || 0), Math.round((c.pitch || 0) * 100), Math.round(Math.min(25, c.speed || 0) * 10), flags, Math.max(0, Math.round(c.hp || 0)), Math.round(Math.max(0, Math.min(1, c.revive || 0)) * 100), Math.max(0, WEAPON_CODES.indexOf(c.weapon || 'rifle'))];
 }
 export function decodeChar(a) {
-  return { role: CHARS[a[0]] || 'lead', x: dp(a[1]), y: dp(a[2]), z: dp(a[3]), yaw: da(a[4]), pitch: a[5] / 100, speed: a[6] / 10, down: !!(a[7] & 1), on: !!(a[7] & 2), crouch: !!(a[7] & 4), healing: !!(a[7] & 8), human: !!(a[7] & 16), hp: a[8], revive: a[9] / 100, weapon: WEAPON_CODES[a[10]] || 'rifle' };
+  return { role: CHARS[a[0]] || 'lead', x: dp(a[1]), y: dp(a[2]), z: dp(a[3]), yaw: da(a[4]), pitch: a[5] / 100, speed: a[6] / 10, down: !!(a[7] & 1), on: !!(a[7] & 2), crouch: !!(a[7] & 4), healing: !!(a[7] & 8), human: !!(a[7] & 16), sprint: !!(a[7] & 32), reload: !!(a[7] & 64), hp: a[8], revive: a[9] / 100, weapon: WEAPON_CODES[a[10]] || 'rifle' };
 }
 // ---- 客户端的操作 ----
-// p：[x, y, z, 朝向, 俯仰（×100）, 速度（×10）, 标记（4 蹲着）, 武器]
+// p：[x, y, z, 朝向, 俯仰（×100）, 速度（×10）, 标记（4 蹲着、8 在包扎 / 吃药、32 冲刺、64 在换弹）, 武器]
 export function encodeInput(s) {
-  return [qp(s.x), qp(s.y), qp(s.z), qa(s.yaw || 0), Math.round((s.pitch || 0) * 100), Math.round(Math.min(25, s.speed || 0) * 10), (s.crouch ? 4 : 0) | (s.sprint ? 32 : 0), Math.max(0, WEAPON_CODES.indexOf(s.weapon || 'rifle'))];
+  return [qp(s.x), qp(s.y), qp(s.z), qa(s.yaw || 0), Math.round((s.pitch || 0) * 100), Math.round(Math.min(25, s.speed || 0) * 10), (s.crouch ? 4 : 0) | (s.healing ? 8 : 0) | (s.sprint ? 32 : 0) | (s.reload ? 64 : 0), Math.max(0, WEAPON_CODES.indexOf(s.weapon || 'rifle'))];
 }
 export function decodeInput(a) {
   if (!Array.isArray(a) || a.length < 8 || !a.slice(0, 7).every(Number.isFinite)) return null;
-  return { x: dp(a[0]), y: dp(a[1]), z: dp(a[2]), yaw: da(a[3]), pitch: Math.max(-1.6, Math.min(1.6, a[4] / 100)), speed: a[5] / 10, crouch: !!(a[6] & 4), sprint: !!(a[6] & 32), weapon: WEAPON_CODES[a[7]] || 'rifle' };
+  return { x: dp(a[0]), y: dp(a[1]), z: dp(a[2]), yaw: da(a[3]), pitch: Math.max(-1.6, Math.min(1.6, a[4] / 100)), speed: a[5] / 10, crouch: !!(a[6] & 4), healing: !!(a[6] & 8), sprint: !!(a[6] & 32), reload: !!(a[6] & 64), weapon: WEAPON_CODES[a[7]] || 'rifle' };
+}
+
+// ---- 事件（一下子的动作）----
+// 扔东西：[0, 角色, 种类, x, y, z（出手的地方，×20）, vx, vy, vz（×20，米每秒）, 引信（×100 秒）]；挥刀：[1, 角色]
+// 客户端发给主机时「角色」那一位不算数（主机按座位填）；主机转给大家时填上是谁
+export function encodeEvent(e) {
+  const role = Math.max(0, CHARS.indexOf(e.role || 'lead'));
+  if (e.type === 'throw') return [0, role, Math.max(0, THROW_CODES.indexOf(e.kind || 'frag')), qp(e.pos.x), qp(e.pos.y), qp(e.pos.z), qp(e.vel.x), qp(e.vel.y), qp(e.vel.z), Math.round(Math.max(0, e.fuse || 0) * 100)];
+  if (e.type === 'swing') return [1, role];
+  return null;
+}
+export function decodeEvent(a) {
+  if (!Array.isArray(a) || a.length < 2 || !Number.isInteger(a[0]) || !Number.isInteger(a[1])) return null;
+  const type = EV_CODES[a[0]], role = CHARS[a[1]]; if (!type || !role) return null;
+  if (type === 'swing') return { type, role };
+  if (a.length < 10 || !a.slice(2, 10).every(Number.isFinite)) return null;
+  const kind = THROW_CODES[a[2]]; if (!kind) return null;
+  return { type, role, kind, pos: { x: dp(a[3]), y: dp(a[4]), z: dp(a[5]) }, vel: { x: dp(a[6]), y: dp(a[7]), z: dp(a[8]) }, fuse: a[9] / 100 };
+}
+/**
+ * 主机核对客户端报的一颗投掷物：出手的地方离他（from）不远、速度不离谱、引信不离谱。通过返回 true。
+ * 次数另算（coop.js 里每个座位一个令牌桶：EVT.nadeRate / nadeBurst）
+ */
+export function validThrow(e, from, { reach = EVT.nadeReach, speed = EVT.nadeSpeed, fuse = EVT.nadeFuse } = {}) {
+  if (!e || e.type !== 'throw') return false;
+  const v = Math.hypot(e.vel.x, e.vel.y, e.vel.z);
+  if (!(v <= speed) || !(e.fuse > 0 && e.fuse <= fuse)) return false;
+  if (from && !(Math.hypot(e.pos.x - from.x, e.pos.y - from.y - 1.2, e.pos.z - from.z) <= reach)) return false;
+  return true;
 }
 
 /**

@@ -188,7 +188,7 @@ test('不进房间时和以前一样：丧尸不是木偶、照常放；主角�
   const d0 = z.pos.distanceTo(A.player.pos); for (let i = 0; i < 60; i++) A.step(); assert.ok(z.pos.distanceTo(A.player.pos) < d0 - 1, '丧尸照常追你');
   // 服务器连不上：报个错就完了，人还是单人
   const B = world({ FakeWS: class { constructor() { setTimeout(() => { this.onerror?.(); this.onclose?.({ code: 1006 }); }, 0); } send() {} close() {} } }, 'nonet');
-  const fails = []; B.coop.on('fail', (e) => fails.push(e.why)); B.coop.join('ABCD', '我'); await new Promise((r) => setTimeout(r, 10));
+  const fails = []; B.coop.on('fail', (e) => fails.push(e.why)); B.coop.join('4821', '我'); await new Promise((r) => setTimeout(r, 10));
   assert.deepEqual(fails, ['offline']); assert.equal(B.coop.mode, 'off'); assert.equal(B.coop.inRoom, false);
 });
 

@@ -7,7 +7,7 @@
 // 这里的开火不走原游戏的「敌人开火」那条路（那条路会算进直升机挨打），直接结算伤害、画弹道。
 import * as THREE from 'three';
 import { landAt, clear } from '../layout/nav.js';
-import { buildParts, RIG } from './soldier.js';
+import { buildParts, RIG, HELD_POSES } from './soldier.js';
 import { SURF, createRigMaterial } from './skins/rig-skin.js';
 
 /**
@@ -30,7 +30,7 @@ export const SQUAD = Object.freeze({
   guest: Object.freeze({ cap: 2, hit: 8, every: 1.4, windup: 0.5, flee: 3, run: 4.2, revive: 1.4, reach: 2.6, busy: 1.6, guard: 2.4 }),
   horde: 1.25,
   members: Object.freeze([
-    Object.freeze({ id: 'zhe', name: '阿哲', role: '夜班保安', hp: 130, side: -1, back: 2.6, trait: 'spotter',
+    Object.freeze({ id: 'zhe', name: '阿哲', role: '夜班保安', hp: 130, side: -1, back: 2.6, trait: 'spotter', weapon: 'smg',
       gun: Object.freeze({ name: '冲锋枪', interval: 0.11, burst: [4, 7], rest: [0.55, 1.1], damage: 9, hit: 0.78, falloff: 0.012, head: 0.08, range: 22 }),
       // 阿哲：藏青保安制服 + 荧光黄的贴身网布背心（V 领、拉链、包边；银灰反光条手电一照就亮，背后印「保安」）、黄色安全帽带帽灯、
       // 黑皮手套和工装靴；寸头、胡茬。打了两个钟头：裤腿和靴子一层灰；右手套抹过血、右袖口溅上一道、左大腿蹭了一道、背心前面淌下来一道
@@ -38,7 +38,7 @@ export const SQUAD = Object.freeze({
         tape: 0xb4b8bb, bind: 0x8d962c, nameTape: 0x232a3a, patch: 0x3a4660, cuffButton: true, gloveCuff: 0x121212, shirtSurf: SURF.CLOTH, vestSurf: SURF.HIVIS, pads: false, heavy: false, who: 0, grime: 0.85,
         blood: Object.freeze([Object.freeze({ c: [-0.1, 1.35, 0.29], r: 0.045, k: 0.95, e: 2.2, a: 0.5 }), Object.freeze({ c: [-0.19, 1.3, 0.17], r: 0.035, k: 0.8, e: 2.5, a: 0.2 }), Object.freeze({ c: [0.11, 0.95, 0.12], r: 0.03, k: 0.6, e: 2.5, a: -0.1 }),
           Object.freeze({ c: [-0.06, 1.24, 0.13], r: 0.035, k: 0.75, e: 3.2, a: 0.08 }), Object.freeze({ c: [0.15, 1.15, 0.1], r: 0.03, k: 0.6, e: 3, a: 0.05 }), Object.freeze({ c: [0.09, 0.05, 0.15], r: 0.035, k: 0.7, e: 1.4, a: 0 })]) }) }),
-    Object.freeze({ id: 'lin', name: '林医生', role: '急诊科医生', hp: 90, side: 1, back: 4, trait: 'medic',
+    Object.freeze({ id: 'lin', name: '林医生', role: '急诊科医生', hp: 90, side: 1, back: 4, trait: 'medic', weapon: 'pistol',
       gun: Object.freeze({ name: '手枪', interval: 0.5, burst: [1, 3], rest: [0.35, 0.7], damage: 24, hit: 0.9, falloff: 0.008, head: 0.3, range: 26 }),
       heal: Object.freeze({ below: 45, amount: 35, cooldown: 55, reach: 2.2, time: 1.4, range: 16 }),
       // 林医生：墨绿刷手服（短袖露小臂）、灰白的贴身急救背心（绿十字、红色止血带包、急救包，挂着工作证）、蓝色丁腈手套、
@@ -49,14 +49,14 @@ export const SQUAD = Object.freeze({
         blood: Object.freeze([Object.freeze({ c: [-0.1, 1.35, 0.29], r: 0.055, k: 1, e: 1.8, a: 0.4 }), Object.freeze({ c: [-0.07, 1.38, 0.44], r: 0.055, k: 1, e: 1.6, a: -0.3 }), Object.freeze({ c: [0.035, 1.2, 0.135], r: 0.04, k: 0.85, e: 3.4, a: 0.06 }),
           Object.freeze({ c: [-0.02, 0.5, 0.09], r: 0.045, k: 0.65, e: 1.3, a: 0 }), Object.freeze({ c: [0.17, 1.45, 0.07], r: 0.022, k: 0.8, e: 2.2, a: -0.2 }), Object.freeze({ c: [-0.08, 0.06, 0.14], r: 0.03, k: 0.8, e: 1.6, a: 0 })]) }) }),
     // 小许：三层奶茶店的店员，被锁在店里，救出来以后跟着你走一段（护送）。不开枪（射程 0 就不找目标），丧尸会优先扑他。guest：救出来之前不出现、不算队友
-    Object.freeze({ id: 'xu', name: '小许', role: '奶茶店店员', hp: 80, side: 1, back: 1.8, trait: 'guest', guest: true,
+    Object.freeze({ id: 'xu', name: '小许', role: '奶茶店店员', hp: 80, side: 1, back: 1.8, trait: 'guest', guest: true, weapon: 'none',
       gun: Object.freeze({ name: '', interval: 1, burst: [0, 0], rest: [1, 1], damage: 0, hit: 0, falloff: 0, head: 0, range: 0 }),
       look: Object.freeze({ face: 'zhe', skin: 0xc59a7a, lip: 0x9a6052, hair: 0x241a12, iris: 0x2a1c12, shirt: 0xd9d4c8, pants: 0x2e3036, vest: 0x8a4a2c, strap: 0x6b3a22, pouch: 0x7a4428, helmet: 0x241a12, mask: 0x2a2a2e, glove: 0xc59a7a, boot: 0x3a3632, pad: 0x2e3036,
         tape: 0xd9d4c8, bind: 0x6b3a22, nameTape: 0x8a4a2c, patch: 0x8a4a2c, sleeve: 'short', pads: false, heavy: false, who: 2, grime: 0.7,
         blood: Object.freeze([]) }) }), // 血迹的格子（12 个）已经被两个队友占满了：小许身上不加
   ]),
   // 主角（单人时的你）：只在联机时作为别人眼里的人形出现——你扮演阿哲 / 林医生时主角是别人（或者主机走了以后由电脑接手）。不在 members 里（单人永远用不到）
-  lead: Object.freeze({ id: 'lead', name: '主角', role: '特勤队员', hp: 100, side: 1, back: 1.7, trait: 'lead', lead: true,
+  lead: Object.freeze({ id: 'lead', name: '主角', role: '特勤队员', hp: 100, side: 1, back: 1.7, trait: 'lead', lead: true, weapon: 'rifle',
     gun: Object.freeze({ name: '步枪', interval: 0.13, burst: [3, 5], rest: [0.45, 0.9], damage: 15, hit: 0.84, falloff: 0.01, head: 0.15, range: 26 }),
     // 黑灰作训服 + 橄榄色板甲背心、深色头盔、战术手套；和两名队友一眼分得开
     look: Object.freeze({ face: 'zhe', skin: 0xb88a6c, lip: 0x8f5a4b, hair: 0x15110e, iris: 0x22160e, shirt: 0x2a2d2b, pants: 0x2b2e2a, vest: 0x4a5137, strap: 0x3a3f2c, pouch: 0x3f4530, helmet: 0x30342e, mask: 0x202224, glove: 0x1c1c1b, boot: 0x1a1918, pad: 0x2f342a,
@@ -64,6 +64,16 @@ export const SQUAD = Object.freeze({
 });
 
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
+/**
+ * 人形手里拿的东西 → 显示哪几副手臂（soldier.js 的 HELD_POSES）、哪一把武器。联机时别人拿刀你看见的就是刀
+ * crouch：蹲下时髋往下压多少米、腿怎么折（大腿往前、小腿往后，弧度）；act：一下子的动作多长（秒）——挥刀、扔手雷、榴弹出膛
+ */
+export const HELD = Object.freeze({
+  rifle: Object.freeze({ arms: ['rifle'], gun: 'rifle' }), smg: Object.freeze({ arms: ['rifle'], gun: 'smg' }), launcher: Object.freeze({ arms: ['rifle'], gun: 'launcher' }),
+  pistol: Object.freeze({ arms: ['pistol'], gun: 'pistol' }), knife: Object.freeze({ arms: ['knifeL', 'knifeR'], gun: 'knife' }), axe: Object.freeze({ arms: ['knifeL', 'axeR'], gun: 'axe' }),
+  none: Object.freeze({ arms: ['none'], gun: null }),
+});
+export const POSE = Object.freeze({ crouch: Object.freeze({ drop: 0.4, thigh: 1.15, shin: 2.0, lean: 0.22 }), act: Object.freeze({ swing: 0.34, throw: 0.6, shell: 0.25 }) });
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 /**
@@ -152,15 +162,30 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
   const say = (who, text, secs = 3) => { if (sayT > 0) return false; sayT = 2.4; G.hud?.radio?.(`${who.name}：${text}`, secs); return true; };
 
   function make(member, index) {
-    const parts = buildParts(member.look);
+    const parts = buildParts(member.look, { held: true });
     const mk = (geo) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = false; return m; };
     const root = new THREE.Group(); root.name = 'squad-' + member.id; root.visible = false;
     const body = new THREE.Group(); root.add(body);
     const hips = new THREE.Group(); hips.position.y = RIG.HIP_Y; body.add(hips); hips.add(mk(parts.pelvis));
     const spine = new THREE.Group(); spine.position.y = 0.1; hips.add(spine); spine.add(mk(parts.torso));
     const head = new THREE.Group(); head.position.y = 0.5; spine.add(head); head.add(mk(parts.head));
-    const aim = new THREE.Group(); aim.position.set(0, 0.42, 0.02); spine.add(aim); aim.add(mk(parts.aim));
+    const aim = new THREE.Group(); aim.position.set(0, 0.42, 0.02); spine.add(aim);
     const muzzle = new THREE.Object3D(); muzzle.position.set(-0.1, -0.08, 0.78); aim.add(muzzle);
+    // 手里拿的：几副手臂、几把武器都挂上，按 m.weapon 换着显示（setHeld）；刀 / 斧子那条右胳膊单独一组，挥刀时绕右肩转
+    const H = parts.held, rArm = new THREE.Group(), heldMesh = { arms: {}, guns: {} };
+    if (H) {
+      rArm.position.fromArray(H.pivot); aim.add(rArm);
+      for (const [k, g] of Object.entries(H.arms)) { const o = mk(g); o.visible = false; (k.endsWith('R') ? rArm : aim).add(o); heldMesh.arms[k] = o; }
+      for (const [k, g] of Object.entries(H.guns)) { const o = mk(g); o.visible = false; (k === 'knife' || k === 'axe' ? rArm : aim).add(o); heldMesh.guns[k] = o; }
+    } else aim.add(mk(parts.aim));
+    let heldNow = null;
+    function setHeld(w) {
+      const key = HELD[w] ? w : 'rifle'; if (!H || key === heldNow) return; heldNow = key;
+      const P0 = HELD[key];
+      for (const [k, o] of Object.entries(heldMesh.arms)) o.visible = P0.arms.includes(k);
+      for (const [k, o] of Object.entries(heldMesh.guns)) o.visible = k === P0.gun;
+      muzzle.position.fromArray(H.muzzle[P0.gun] || H.muzzle.rifle);
+    }
     const lamp = new THREE.Mesh(lampGeo, lampMat); lamp.position.set(0.1, 0.36, 0.16); spine.add(lamp); // 胸前一盏小灯：黑里看得出人在哪
     const legs = [0.092, -0.092].map((x) => {
       const thigh = new THREE.Group(); thigh.position.set(x, -0.07, 0); hips.add(thigh); thigh.add(mk(parts.thigh));
@@ -176,7 +201,11 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       target: null, senseT: rng() * 0.3, cool: 0.6, burst: 0, shots: 0, kills: 0, path: null, wp: 0, planT: 0, pathJob: null, awayT: 0, gait: 0, pitch: 0, recoil: 0, lowReady: 1,
       reviveT: 0, flingT: 0, stun: 0, flingX: 0, flingZ: 0, dodgeT: 0, dodgeSide: 1, holdT: 0, slotK: 0, goalSeen: true, seenP: true, offArea: false, lostT: 0, exitTo: null, exitT: 0, healT: 12 + rng() * 8, healing: 0, fallK: 0, muzzle: new THREE.Vector3(), chest: new THREE.Vector3(), parts, hurtT: 0, stuckT: 0, biteSay: 0,
       biters: [], biteAt: new Map(), clock: 0, hide: null, bitten: 0, // 小许：正在咬他的（最多 P.guest.cap 只）、每只下一口的时刻、往哪儿躲、挨了几口
+      // 姿势（联机时照真人的状态摆）：weapon 手里拿的（HELD 的键）、crouch 蹲着、sprint 冲刺、reloading 换弹、kneel 跪下扶人；
+      // crouchK / reloadK / kneelK 是过渡（0–1）；act / actT：一下子的动作（'swing' 挥刀 / 'throw' 扔东西 / 'shell' 榴弹出膛）放到第几秒
+      weapon: member.weapon || 'rifle', crouch: false, sprint: false, reloading: false, kneel: false, crouchK: 0, reloadK: 0, actKind: null, actT: 0, human: false,
     };
+    setHeld(m.weapon);
 
     function place(at, yaw = 0) {
       m.pos.set(at.x, at.y, at.z); m.yaw = yaw; vel.set(0, 0, 0); m.path = null; m.pathJob?.cancel?.(); m.pathJob = null; m.awayT = 0; m.planT = 0;
@@ -328,19 +357,33 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       if (m.down) { downTick(dt, others, p, Math.hypot(p.pos.x - m.pos.x, p.pos.z - m.pos.z), p.pos.y - m.pos.y, zombies?.alive?.() || []); return; }
       m.fallK = Math.max(0, m.fallK - dt * 4); m.help = null; m.target = null; m.healing = 0;
       m.pos.set(R.x, R.y, R.z); m.yaw = wrap((R.yaw || 0) + Math.PI); m.pitch = R.pitch || 0; m.speed = R.speed || 0;
-      m.lowReady = R.sprint ? 1 : Math.max(0, m.lowReady - dt * 6);
+      m.human = true; m.crouch = !!R.crouch; m.sprint = !!R.sprint; m.reloading = !!R.reload; m.healing = R.healing ? 1 : 0; if (R.weapon) m.weapon = R.weapon;
+      m.kneel = kneelNear(others);
+      m.lowReady = R.sprint || R.healing ? Math.min(1, m.lowReady + dt * 5) : Math.max(0, m.lowReady - dt * 6);
       pose(dt);
     }
     /** 客户端的木偶：coop.js 已经把位置、朝向、速度、血、倒地写好了，这里只摆姿势 */
-    function puppetPose(dt) {
+    function puppetPose(dt, others) {
       m.fallK = m.down ? Math.min(1, m.fallK + dt * 3) : Math.max(0, m.fallK - dt * 4);
-      m.lowReady = m.speed > 4.5 ? Math.min(1, m.lowReady + dt * 2.5) : Math.max(0, m.lowReady - dt * 4);
+      const low = m.human ? m.sprint || m.healing > 0 : m.speed > 4.5;
+      m.lowReady = low ? Math.min(1, m.lowReady + dt * (m.human ? 5 : 2.5)) : Math.max(0, m.lowReady - dt * (m.human ? 6 : 4));
+      m.kneel = m.human && kneelNear(others);
       pose(dt);
     }
+    /** 真人蹲在倒地的人跟前不动：在扶人（跪下去） */
+    function kneelNear(others) {
+      if (m.down || m.speed > 0.6) return false;
+      const near = (o) => o !== m && o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < P.down.reach && Math.abs(o.pos.y - m.pos.y) < 1.5;
+      if (others?.some(near)) return true;
+      const p = G.player; return !!(net.selfDown && p?.pos && Math.hypot(p.pos.x - m.pos.x, p.pos.z - m.pos.z) < P.down.reach && Math.abs(p.pos.y - m.pos.y) < 1.5);
+    }
+    /** 一下子的动作（联机：别人挥刀、扔手雷、打榴弹） */
+    m.act = (kind) => { if (!POSE.act[kind]) return; m.actKind = kind; m.actT = 0; if (kind === 'shell') m.recoil = 2; };
     function update(dt, others) {
       const p = G.player; if (!p?.pos) return;
-      if (net.puppet) { puppetPose(dt); return; }
+      if (net.puppet) { puppetPose(dt, others); return; }
       if (m.remote) { remoteUpdate(dt, others); return; }
+      m.weapon = member.weapon || 'rifle'; m.crouch = false; m.sprint = false; m.reloading = false; m.kneel = false; m.human = false; // 电脑开的：拿自己那把，站着打
       const dx = p.pos.x - m.pos.x, dz = p.pos.z - m.pos.z, dy = p.pos.y - m.pos.y, dist = Math.hypot(dx, dz);
       m.cool -= dt; m.hurtT -= dt; m.biteSay -= dt; m.healT -= dt;
       want.set(0, 0, 0);
@@ -485,24 +528,46 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     }
 
     function pose(dt) {
-      const sp = m.speed, amp = Math.min(0.55, sp * 0.14), stride = 1.3 + sp * 0.15;
+      setHeld(m.weapon);
+      const sp = m.speed, CR = POSE.crouch;
+      // 蹲（蹲着、跪下扶人、包扎时半蹲）：髋往下压、大腿往前、小腿往后折，上身往前探；倒地时不蹲
+      const wantC = m.down ? 0 : m.crouch || m.kneel ? 1 : m.healing > 0 && m.human ? 0.45 : 0;
+      m.crouchK += (wantC - m.crouchK) * Math.min(1, dt * 12); const ck = m.crouchK;
+      m.reloadK += ((m.reloading && !m.down ? 1 : 0) - m.reloadK) * Math.min(1, dt * 10);
+      const amp = Math.min(0.55, sp * 0.14) * (1 - 0.45 * ck), stride = (1.3 + sp * 0.15) * (1 - 0.35 * ck);
       m.gait += dt * sp / stride * Math.PI * 2; m.recoil = Math.max(0, m.recoil - dt * 12);
-      const run = Math.min(1, sp / P.follow.sprint), f = m.fallK;
+      const run = Math.min(1, sp / P.follow.sprint) * (1 - ck), f = m.fallK;
+      // 一下子的动作：k 是 0–1 的进度，没有就是 -1
+      let ak = -1; if (m.actKind) { m.actT += dt; const T = POSE.act[m.actKind]; ak = m.actT / T; if (ak >= 1) { m.actKind = null; ak = -1; } }
+      const swing = m.actKind === 'swing' ? ak : -1, toss = m.actKind === 'throw' ? ak : -1;
       root.rotation.y = m.yaw;
       // 倒地：坐倒下去、上身后仰靠着
       body.rotation.x = -1.15 * f; body.position.y = 0.06 * f; body.position.z = -0.35 * f;
-      hips.position.y = RIG.HIP_Y - Math.abs(Math.cos(m.gait)) * 0.035 * Math.min(1, sp / 2) - 0.12 * f;
-      spine.rotation.set(0.12 * run - m.pitch * 0.15 + 0.5 * f, 0, 0);
-      head.rotation.set(-m.pitch * 0.4 - 0.06 * run + 0.4 * f, 0, 0);
-      aim.rotation.set(-m.pitch + m.lowReady * 0.55 - m.recoil * 0.03 - spine.rotation.x + 0.5 * f, m.lowReady * 0.35, 0);
-      for (let i = 0; i < 2; i++) { const ph = m.gait + i * Math.PI, L = legs[i]; L.thigh.rotation.x = -amp * Math.sin(ph) * (1 - f) - 1.2 * f * (i ? 0.7 : 1); L.shin.rotation.x = amp * 1.4 * Math.max(0, Math.cos(ph)) * (1 - f) + 0.05 + 0.9 * f * (i ? 1 : 0.3); }
+      hips.position.y = RIG.HIP_Y - Math.abs(Math.cos(m.gait)) * 0.035 * Math.min(1, sp / 2) - 0.12 * f - CR.drop * ck;
+      // 上身跟着瞄的方向俯仰（一部分在腰上、其余在肩上）；冲刺往前倾；蹲着往前探；扔东西时先往后仰再甩过来
+      const tossLean = toss >= 0 ? (toss < 0.4 ? -0.18 * toss / 0.4 : -0.18 + 0.45 * (toss - 0.4) / 0.6) : 0;
+      spine.rotation.set(0.12 * run - m.pitch * 0.3 + CR.lean * ck + 0.5 * f + tossLean + 0.12 * m.reloadK, 0, 0);
+      head.rotation.set(-m.pitch * 0.35 - 0.06 * run - CR.lean * ck * 0.6 + 0.4 * f + (m.healing > 0 && m.human ? 0.35 : 0) + 0.25 * m.reloadK, 0, 0);
+      // 枪：瞄的方向（减掉腰上那一截）、低持枪、后坐；换弹时枪口往下压、往里歪；扔东西时整组举过头再甩下来
+      const tossArm = toss >= 0 ? (toss < 0.4 ? -1.5 * toss / 0.4 : -1.5 + 2.2 * (toss - 0.4) / 0.6) : 0;
+      aim.rotation.set(-m.pitch + m.lowReady * 0.55 - m.recoil * 0.03 - spine.rotation.x + 0.5 * f + 0.5 * m.reloadK + tossArm, m.lowReady * 0.35 + 0.25 * m.reloadK, -0.45 * m.reloadK);
+      aim.position.z = 0.02 - m.recoil * 0.025;
+      // 挥刀：右胳膊绕右肩先往外上方抬（蓄力），再往里下方劈过去
+      if (swing >= 0) { const w = swing < 0.3 ? swing / 0.3 : 1 - (swing - 0.3) / 0.7, cut = swing < 0.3 ? 0 : Math.sin((swing - 0.3) / 0.7 * Math.PI); rArm.rotation.set(-1.2 * w + 0.5 * cut, 0.7 * w - 0.9 * cut, 0.5 * w); }
+      else rArm.rotation.set(0, 0, 0);
+      for (let i = 0; i < 2; i++) {
+        const ph = m.gait + i * Math.PI, L = legs[i], walkT = -amp * Math.sin(ph), walkS = amp * 1.4 * Math.max(0, Math.cos(ph)) + 0.05;
+        L.thigh.rotation.x = (walkT - CR.thigh * ck * (i ? 0.78 : 1.08)) * (1 - f) - 1.2 * f * (i ? 0.7 : 1);
+        L.shin.rotation.x = (walkS + CR.shin * ck * (i ? 1.05 : 0.92)) * (1 - f) + 0.9 * f * (i ? 1 : 0.3);
+      }
+      if (tag) tag.position.y = 2.02 - CR.drop * ck - 0.6 * f;
       if (tag) tag.visible = !G.player?.pos || G.player.pos.distanceTo(m.pos) < (m.remote || net.puppet ? 60 : 32); // 联机：真人的名牌远一点也看得见
       root.updateMatrixWorld(true);
       muzzle.getWorldPosition(m.muzzle); spine.localToWorld(m.chest.set(0, 0.36, 0));
     }
     /** 名牌（和队友栏）上显示的名字：联机时换成玩家的昵称，走了换回角色名 */
     m.rename = (text) => { const t = text || member.name; if (t === m.label) return; m.label = t; tag?.userData.rename?.(t); const row = hud?.children?.[everyone.indexOf(m)]?.querySelector?.('em'); if (row) row.textContent = t; };
-    Object.assign(m, { place, warp, update, pose, goDown, getUp, fire, sees });
+    Object.assign(m, { place, warp, update, pose, goDown, getUp, fire, sees, setHeld, held: heldMesh, rArm });
     return m;
   }
 
@@ -576,7 +641,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     },
     dispose() {
       group.removeFromParent(); mat.dispose(); lampMat.dispose(); lampGeo.dispose(); hud?.remove(); for (const row of statRows) row.remove();
-      for (const m of everyone) { m.pathJob?.cancel?.(); for (const g of Object.values(m.parts)) g.dispose?.(); m.root.traverse((o) => { if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } }); }
+      for (const m of everyone) { m.pathJob?.cancel?.(); for (const g of Object.values(m.parts)) g?.dispose?.(); for (const set of Object.values(m.parts.held || {})) for (const g of Object.values(set || {})) g?.dispose?.(); m.root.traverse((o) => { if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } }); }
     },
   };
   return api;

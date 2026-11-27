@@ -42,10 +42,12 @@ CLOUDFLARE_ACCOUNT_ID=<账号 ID> CLOUDFLARE_API_TOKEN=<令牌> WRANGLER_SEND_ME
 
 ## 规则（room-core.js 的 `ROOM`）
 
-- 房间码 4–6 位，服务器认 `A–Z` 和 `2–9`（客户端新建的是 6 位、不带 O、I；以前的 4 位码照样认）；`want=create` 时房间里已经有人回 `taken`（客户端自动换一个码重建），`want=join` 时房间是空的回 `nope`。
+- 房间码是 **4 位数字**（`0000`–`9999`，手机上弹数字键盘；别的一律 400）；`want=create` 时房间里已经有人回 `taken`（客户端自动换一个码重建，撞过的不再抽），`want=join` 时房间是空的回 `nope`。
 - 最多 3 人，第四个回 `full`。第一个进来的是主机；主机走了，座位号最小的人提成主机（广播 `{ t: 'host' }`），没人了房间清空。
-- 猜房间码：同一个 IP（`CF-Connecting-IP`）一分钟里加入空房间（`nope`）超过 20 次，这一分钟里再加入直接回 `slow`（大厅显示「试错太多次了」）。记在 Worker 实例的内存里，尽力而为（`worker.js` 的 `JOIN_LIMIT`）；DO 用响应头 `X-Room-Join: nope` 告诉 Worker 这次没进去。
-- 谁能发什么：`welcome / peer / host / full / taken / nope / slow / err / pong / need` 只有服务器发，客户端发来的直接丢掉；不是主机的人只能发 `ROOM.peer` 里的 `i / vote / boardReq / heal`（外加 `name`、`ping`），只转给主机（带了 `to` 也只给主机）；主机的其他消息照 `to` 转。客户端那边也只认房主座位（`f`）发来的开局和规则消息。
+- 猜房间码（4 位只有一万个，限流收紧了）：同一个 IP（`CF-Connecting-IP`）加入空房间（`nope`）或者建房撞上有人的房间（`taken`，建房也能用来探哪些码有人）一分钟里满 10 次、或一刻钟里满 30 次，之后再加入 / 建房直接回 `slow`（大厅显示「试错太多次了」）。记在 Worker 实例的内存里，尽力而为（`worker.js` 的 `JOIN_LIMIT`）；DO 用响应头 `X-Room-Join: nope / taken` 告诉 Worker 这次没进去。
+- 大厅：谁都能发 `{ t: 'meta', ready?: 布尔, ping?: 毫秒 }`（准备 / 自己量的延迟），服务器洗过（延迟取整、上限 9999，不是布尔的准备不认）记在名单上，广播 `{ t: 'peer', ev: 'meta', players }`；准备变了马上广播，只变延迟的同一个人隔 3 秒才广播一次；开局时准备清掉。
+- 一下子的动作（扔手雷 / 燃烧瓶 / 诱饵弹、榴弹、挥刀）和开枪都随操作 `i` 发给主机（`ev` / `sh`），主机核对后随快照 `s` 转给大家；客户端发不了 `s`，所以冒充不了别人扔的东西。
+- 谁能发什么：`welcome / peer / host / full / taken / nope / slow / err / pong / need` 只有服务器发，客户端发来的直接丢掉；不是主机的人只能发 `ROOM.peer` 里的 `i / vote / boardReq / heal`（外加 `name`、`meta`、`ping`），只转给主机（带了 `to` 也只给主机）；主机的其他消息照 `to` 转。客户端那边也只认房主座位（`f`）发来的开局和规则消息。
 - 来源只认 `https://yunlan-mall.pages.dev`、它的预览分支 `https://*.yunlan-mall.pages.dev`、本机 `http://localhost:*` / `http://127.0.0.1:*`，再加 `EXTRA_ORIGINS`。
 - 限流：每条连接每秒补 45 条、最多攒 90 条，超了丢掉，丢了 400 条以上断开；主机单条最大 64 KB（完整快照），别人 8 KB。
 - 心跳：客户端发文本 `ping`，运行时直接回 `pong`（`setWebSocketAutoResponse`，不叫醒房间）。

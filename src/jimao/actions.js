@@ -24,6 +24,7 @@ export const THROWABLES = Object.freeze({
 });
 const FIRE_LIGHT = 60; // 火光的亮度（坎德拉）
 export const THROW_ORDER = Object.freeze(['frag', 'fire', 'lure']);
+const THROW_KINDS = Object.freeze(['frag', 'fire', 'lure', 'shell']);
 export const ASSIST = Object.freeze({ cone: 0.16, sticky: 0.062, slow: 0.55, pullFire: 2.2, pullAds: 1.2, snap: 0.7, snapCone: 0.19, range: 60, fireCone: 0.03, fireDelay: 0.12, fireHold: 0.18 });
 /** 翻越：前面多近算顶到掩体、掩体最厚多少、翻过去用多久、镜头抬多高、自动翻越要顶住多久 */
 export const VAULT = Object.freeze({ reach: 1.15, depth: 2.2, time: 0.55, rise: 0.5, lean: 0.16, clearance: 1.35, auto: 0.18 });
@@ -135,27 +136,37 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
   function makeNade() {
     const g = new THREE.Group(); g.add(new THREE.Mesh(nadeGeo, nadeMat)); const pin = new THREE.Mesh(pinGeo, pinMat); pin.position.y = 0.08; g.add(pin);
     g.visible = false; scene.add(g);
-    return { mesh: g, vel: new THREE.Vector3(), fuse: 0, live: false, rest: false, kind: 'frag', beep: 0, age: 0 };
+    return { mesh: g, vel: new THREE.Vector3(), fuse: 0, live: false, rest: false, kind: 'frag', beep: 0, age: 0, owner: null, visual: false };
   }
   for (let i = 0; i < 4; i++) nades.push(makeNade());
+  // 联机（coop.js）：visualOnly——这台机器是客户端，自己扔的只是画给自己看（伤害由主机那份算）；
+  // 别人扔的（spawn）：owner 是扔的人的座位号（主机上真算伤害，记在他名下），visual 只画不算（客户端上看别人扔的）
+  let visualOnly = false;
+  const freeNade = () => nades.find((q) => !q.live) || (nades.push(makeNade()), nades[nades.length - 1]);
+  function arm(n, k, { owner = null, visual = false } = {}) {
+    n.kind = k; n.beep = 0; n.age = 0; n.rest = false; n.live = true; n.owner = owner; n.visual = visual;
+    const shell = k === 'shell';
+    n.mesh.children[0].material = shell ? pinMat : k === 'fire' ? bottleMat : k === 'lure' ? lureMat : nadeMat; n.mesh.children[1].visible = k === 'frag';
+    n.mesh.scale.setScalar(shell ? 0.62 : 1); n.mesh.visible = true;
+  }
+  const fuseOf = (k) => (k === 'shell' ? SHELL.fuse : k === 'fire' ? 9 : k === 'lure' ? THROWABLES.lure.time : GRENADE.fuse);
   function throwNade() {
     const p = G.player, n = nades.find((q) => !q.live);
     const k = pickKind();
     if (!n || countOf(k) <= 0 || throwCool > 0 || !p?.alive) return false;
     if (k === 'frag') stock--; else extra[k]--;
-    throwCool = GRENADE.cooldown; n.kind = k; n.beep = 0; n.age = 0; n.mesh.scale.setScalar(1);
-    n.mesh.children[0].material = k === 'fire' ? bottleMat : k === 'lure' ? lureMat : nadeMat; n.mesh.children[1].visible = k === 'frag';
+    throwCool = GRENADE.cooldown; arm(n, k, { visual: visualOnly });
     const cy = Math.cos(p.pitch), dir = v1.set(-Math.sin(p.yaw) * cy, Math.sin(p.pitch), -Math.cos(p.yaw) * cy);
     n.mesh.position.copy(p.eye || p.pos).addScaledVector(dir, 0.45); n.mesh.position.y -= 0.12;
     n.vel.copy(dir).multiplyScalar(GRENADE.speed); n.vel.y += GRENADE.lift; n.vel.x += p.vel.x * 0.6; n.vel.z += p.vel.z * 0.6;
-    n.fuse = k === 'fire' ? 9 : k === 'lure' ? THROWABLES.lure.time : GRENADE.fuse; n.live = true; n.rest = false; n.mesh.visible = true;
+    n.fuse = fuseOf(k);
     G.audio?.play?.('reload_magout', { gain: 0.7, pitch: 1.4 });
-    G.events?.emit?.('grenade:throw', { pos: n.mesh.position.clone(), kind: k });
+    G.events?.emit?.('grenade:throw', { pos: n.mesh.position.clone(), vel: n.vel.clone(), fuse: n.fuse, kind: k, local: true });
     pickKind(); paintHud();
     return true;
   }
   /** 燃烧瓶碎了：在 at 烧出一片火 */
-  function ignite(at) {
+  function ignite(at, n = null) {
     // 砸在墙上的：火落到墙根的地面上
     at = at.clone(); const gy = G.physics?.groundHeight?.(at.x, at.z, at.y + 0.3); if (gy > -40 && at.y - gy < 6) at.y = gy;
     const F = THROWABLES.fire, g = new THREE.Group(); g.position.copy(at); g.position.y += 0.05;
@@ -165,9 +176,9 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
     // 火光：占一盏常亮的灯（池里没空的就算了，火照样烧）
     const glow = G.render?.lightPool?.acquire?.() || null;
     if (glow) { glow.light.position.set(at.x, at.y + 1.1, at.z); glow.light.color.set(0xff8a30); glow.light.distance = 14; }
-    fires.push({ at, g, flames, t: 0, tick: 0, glow });
+    fires.push({ at, g, flames, t: 0, tick: 0, glow, owner: n?.owner ?? null, visual: !!n?.visual });
     G.audio?.play?.('explosion', { pos: at, gain: 0.5, pitch: 1.7 });
-    G.events?.emit?.('grenade:fire', { pos: at.clone(), radius: F.radius, seconds: F.seconds });
+    if (!n?.visual) G.events?.emit?.('grenade:fire', { pos: at.clone(), radius: F.radius, seconds: F.seconds });
   }
   function stepFires(dt) {
     const F = THROWABLES.fire, p = G.player;
@@ -181,54 +192,72 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       if ((f.tick -= dt) > 0) continue;
       f.tick = F.tick;
       G.fx?.smoke?.(v3.set(f.at.x + (Math.random() - 0.5) * F.radius, f.at.y + 0.8, f.at.z + (Math.random() - 0.5) * F.radius), { size: 0.5, life: 0.9, color: 0x2a2018, rise: 1.4 });
+      if (f.visual) continue; // 联机客户端：火照样烧给你看，伤害主机那份算
       for (const e of G.enemies?.list || []) {
         if (!e.alive || !e.active || Math.abs(e.pos.y - f.at.y) > 1.6 || Math.hypot(e.pos.x - f.at.x, e.pos.z - f.at.z) > F.radius) continue;
-        try { e.damage(F.dps * F.tick, v2.set(e.pos.x, e.pos.y + 1, e.pos.z).clone(), null, 'body'); } catch (err) { console.error('[零点突围] 燃烧伤害出错', err); }
+        if (f.owner !== null) e.netBy = f.owner;
+        try { e.damage(F.dps * F.tick, v2.set(e.pos.x, e.pos.y + 1, e.pos.z).clone(), null, 'body', f.owner !== null ? 'squad' : undefined); } catch (err) { console.error('[零点突围] 燃烧伤害出错', err); }
+        if (f.owner !== null) e.netBy = null;
       }
+      if (f.owner !== null) continue; // 别人扔的火不烧你（联机不算误伤）
       if (p?.alive && !p.invulnerable && Math.abs(p.pos.y - f.at.y) < 1.6 && Math.hypot(p.pos.x - f.at.x, p.pos.z - f.at.z) < F.radius * 0.9) p.damage(F.selfDps * F.tick, { pos: f.at.clone(), type: 'fire' });
     }
   }
   /** 榴弹枪开火（launcher.js 调）：从 origin 朝 dir 打一发榴弹。池里没空位返回 false */
   function launch(origin, dir) {
     const n = nades.find((q) => !q.live); if (!n) return false;
-    n.kind = 'shell'; n.beep = 0; n.age = 0; n.rest = false; n.live = true; n.fuse = SHELL.fuse;
-    n.mesh.children[0].material = pinMat; n.mesh.children[1].visible = false; n.mesh.scale.setScalar(0.62); n.mesh.visible = true;
+    arm(n, 'shell', { visual: visualOnly }); n.fuse = SHELL.fuse;
     n.mesh.position.copy(origin).addScaledVector(dir, 0.35); n.vel.copy(dir).multiplyScalar(SHELL.speed);
-    G.events?.emit?.('grenade:throw', { pos: n.mesh.position.clone(), kind: 'shell' });
+    G.events?.emit?.('grenade:throw', { pos: n.mesh.position.clone(), vel: n.vel.clone(), fuse: n.fuse, kind: 'shell', local: true });
     return true;
+  }
+  /**
+   * 别人扔的（联机，coop.js 调）：从 pos 以 vel 飞出去，fuse 秒后炸（手雷 / 燃烧瓶 / 诱饵弹 / 榴弹，同一套弹跳和爆炸）。
+   * owner：扔的人的座位号（主机上真算伤害、算他的击倒，不炸你）；visual：只画不算（客户端看别人扔的）。返回那一颗
+   */
+  function spawn({ kind = 'frag', pos, vel, fuse = null, owner = null, visual = false } = {}) {
+    if (!pos || !vel || !THROW_KINDS.includes(kind)) return null;
+    const n = freeNade(); arm(n, kind, { owner, visual });
+    n.mesh.position.set(pos.x, pos.y, pos.z); n.vel.set(vel.x, vel.y, vel.z); n.fuse = fuse > 0 ? fuse : fuseOf(kind);
+    if (kind !== 'shell') G.audio?.play?.('reload_magout', { pos: n.mesh.position, gain: 0.6, pitch: 1.4 });
+    return n;
   }
   function explode(n) {
     n.live = false; n.mesh.visible = false;
     const c = n.mesh.position, X = n.kind === 'shell' ? SHELL : GRENADE;
     G.fx?.explosion?.(c, n.kind === 'shell' ? 1.9 : 1.6); G.audio?.play?.('explosion', { pos: c, gain: 1 });
     G.render?.lightPool?.flash?.(c, 0xffb060, 60, 18, 0.18);
-    const from = v2.set(c.x, c.y + 0.35, c.z);
+    const from = v2.set(c.x, c.y + 0.35, c.z), p = G.player;
+    if (n.visual) { const d = p?.pos ? from.distanceTo(p.eye || p.pos) : 99; if (d < 14) p.addShake?.(0.5 * (1 - d / 14)); return; } // 联机客户端：只画、只响，伤害主机那份算
+    const mine = n.owner === null;
     let hits = 0;
     for (const e of G.enemies?.list || []) {
       if (!e.alive || !e.active) continue;
       const chest = v3.set(e.pos.x, e.pos.y + 1.1, e.pos.z), d = chest.distanceTo(from), dmg = blastDamage(d, X.radius, X.damage);
       if (dmg <= 0 || (d > 1.2 && !G.physics.lineOfSight(from, chest))) continue;
+      if (!mine) e.netBy = n.owner; // 别人扔的（联机主机上）：击倒记在他名下
       try {
-        const dead = e.damage(dmg, chest.clone(), chest.clone().sub(from).normalize(), 'body') === true; hits++;
+        const dead = e.damage(dmg, chest.clone(), chest.clone().sub(from).normalize(), 'body', mine ? undefined : 'squad') === true; hits++;
         // 没炸死的被气浪掀开（丧尸才有 shove；巨尸掀不动）
         if (!dead && e.shove) { const hx = e.pos.x - c.x, hz = e.pos.z - c.z, hd = Math.hypot(hx, hz) || 1; e.shove(hx / hd, hz / hd, (X.push || 7) * (1 - d / X.radius * 0.6)); }
       } catch (err) { console.error('[零点突围] 手雷伤害出错', err); }
+      if (!mine) e.netBy = null;
     }
-    const p = G.player;
-    if (p?.alive && !p.invulnerable) {
+    if (p?.alive && !p.invulnerable && !mine) { const d = from.distanceTo(p.eye || p.pos); if (d < 14) p.addShake?.(0.5 * (1 - d / 14)); } // 别人扔的不炸你（联机不算误伤）
+    else if (p?.alive && !p.invulnerable) {
       const d = from.distanceTo(p.eye || p.pos);
       if (d < X.selfRadius && (d < 1.2 || G.physics.lineOfSight(from, p.eye || p.pos))) p.damage(X.selfDamage * (1 - d / X.selfRadius), { pos: c.clone(), type: 'grenade' });
       else if (d < 14) p.addShake?.(0.5 * (1 - d / 14));
     }
-    if (hits) G.hud?.hitmarker?.(false);
-    G.events?.emit?.('grenade:explode', { pos: c.clone(), hits, kind: n.kind, radius: X.radius });
+    if (hits && mine) G.hud?.hitmarker?.(false);
+    G.events?.emit?.('grenade:explode', { pos: c.clone(), hits, kind: n.kind, radius: X.radius, owner: n.owner });
   }
   function stepNade(n, dt) {
     n.fuse -= dt;
-    if (n.fuse <= 0) { if (n.kind === 'fire') { n.live = false; n.mesh.visible = false; ignite(n.mesh.position); } else explode(n); return; }
+    if (n.fuse <= 0) { if (n.kind === 'fire') { n.live = false; n.mesh.visible = false; ignite(n.mesh.position, n); } else explode(n); return; }
     if (n.kind === 'lure') {
       // 诱饵弹：落地以后每隔一会儿响一声、闪一下红灯，把丧尸往这儿引
-      if ((n.beep -= dt) <= 0) { n.beep = THROWABLES.lure.every * Math.max(0.35, n.fuse / THROWABLES.lure.time); G.audio?.play?.('shell_bounce', { pos: n.mesh.position, gain: 1.3, pitch: 2.4 }); G.events?.emit?.('grenade:lure', { pos: n.mesh.position.clone(), left: n.fuse, range: THROWABLES.lure.range }); lureMat.emissiveIntensity = 3; }
+      if ((n.beep -= dt) <= 0) { n.beep = THROWABLES.lure.every * Math.max(0.35, n.fuse / THROWABLES.lure.time); G.audio?.play?.('shell_bounce', { pos: n.mesh.position, gain: 1.3, pitch: 2.4 }); if (!n.visual) G.events?.emit?.('grenade:lure', { pos: n.mesh.position.clone(), left: n.fuse, range: THROWABLES.lure.range }); lureMat.emissiveIntensity = 3; }
       else lureMat.emissiveIntensity = Math.max(0, lureMat.emissiveIntensity - dt * 9);
     }
     if (n.rest) return;
@@ -240,7 +269,7 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       const dir = v1.copy(n.vel).normalize(), hit = G.physics.raycast(p, dir, len + 0.07);
       if (hit && hit.dist <= len + 0.07) {
         p.addScaledVector(dir, Math.max(0, hit.dist - 0.07));
-        if (n.kind === 'fire') { n.live = false; n.mesh.visible = false; ignite(p); return; } // 燃烧瓶：一碰就碎
+        if (n.kind === 'fire') { n.live = false; n.mesh.visible = false; ignite(p, n); return; } // 燃烧瓶：一碰就碎
         if (shell && n.age >= SHELL.arm) { explode(n); return; } // 榴弹：过了保险距离，碰到就炸
         const vn = n.vel.dot(hit.normal);
         n.vel.addScaledVector(hit.normal, -(1 + GRENADE.bounce) * vn);
@@ -415,7 +444,10 @@ export function createActions(G, { scene, nav = null, ui = null, storage = null,
       if (k === 'frag') stock = Math.min(GRENADE.max, stock + n); else if (k in extra) extra[k] = Math.min(max, extra[k] + n);
       pickKind(); paintHud(); return countOf(k) - before;
     },
-    countOf, cycleKind, launch, get kind() { return pickKind(); }, get fires() { return fires; },
+    countOf, cycleKind, launch, spawn, get nades() { return nades; },
+    /** 联机客户端：自己扔的只画（伤害、诱饵、点火由主机那份算） */
+    get visualOnly() { return visualOnly; }, set visualOnly(v) { visualOnly = !!v; },
+    get kind() { return pickKind(); }, get fires() { return fires; },
     reset() { stock = GRENADE.count; throwCool = 0; wantThrow = false; slide.t = -1; slide.cool = 0; if (vault.t >= 0 && G.player) G.player.mounted = false; vault.t = -1; vault.cool = 0; vault.push = 0; crouchLatch = false; btns?.crouch?.classList.remove('latched'); target = null; onTargetT = 0; fireHold = 0;
       for (const n of nades) { n.live = false; n.mesh.visible = false; } for (const f of fires.splice(0)) { f.g.removeFromParent(); f.glow?.release?.(); } extra.fire = 0; extra.lure = 0; kind = 'frag'; paintHud(); },
     buildUi,

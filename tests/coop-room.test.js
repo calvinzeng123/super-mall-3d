@@ -24,7 +24,7 @@ test('座位：第一个进来的是主机坐 0 号（主角），后来的依�
   assert.equal(a.last('peer').ev, 'join'); assert.equal(a.last('peer').seat, 2);
   const e = fake('e'); assert.equal(createRoomCore().join(e, { want: 'join' }), -1); assert.equal(e.out[0].t, 'nope');
   const f = fake('f'); assert.equal(room.join(f, { want: 'create' }), -1); assert.equal(f.out[0].t, 'taken');
-  assert.equal(roleName(1), '阿哲'); assert.ok(ROOM.code.test('K7QX') && !ROOM.code.test('AB0D') && !ROOM.code.test('ABC'));
+  assert.equal(roleName(1), '阿哲'); assert.ok(ROOM.code.test('4821') && ROOM.code.test('0007') && !ROOM.code.test('K7QX') && !ROOM.code.test('482') && !ROOM.code.test('48210'), '房间码 4 位数字');
   // 连接上存了座位和主机标记（休眠醒来用）
   assert.equal(a.saved.seat, 0); assert.equal(a.saved.host, true); assert.equal(b.saved.host, false);
 });
@@ -139,22 +139,37 @@ test('冒充：谁也不能发服务器才发的（换主机、有人进来、�
   room.message(b, JSON.stringify({ t: 'over', to: 'all' })); assert.equal(c.last('over').f, 1);
 });
 
-test('猜房间码：同一个 IP 一分钟里加入不存在的房间 20 次以后，这一分钟里再加入回 slow；过了一分钟重新算；建房不受影响', async () => {
+test('猜房间码：同一个 IP 一分钟里加入不存在的房间（或建房撞上有人的房间）10 次以后，再加入 / 建房都回 slow；过了一分钟重新算；一刻钟里 30 次也挡', async () => {
   const now = clock(), L = createJoinLimiter({ now });
   for (let i = 0; i < JOIN_LIMIT.max - 1; i++) L.fail('1.2.3.4');
   assert.equal(L.blocked('1.2.3.4'), false); L.fail('1.2.3.4'); assert.equal(L.blocked('1.2.3.4'), true);
   assert.equal(L.blocked('5.6.7.8'), false, '别的 IP 不受影响'); assert.equal(L.blocked(''), false);
   now.add(JOIN_LIMIT.windowMs); assert.equal(L.blocked('1.2.3.4'), false, '过了一分钟');
+  // 长窗口：每分钟都只差一次没到上限，一刻钟里攒够 longMax 次也挡
+  const L3 = createJoinLimiter({ now }); let n3 = 0;
+  while (!L3.blocked('7.7.7.7') && n3 < 200) { for (let i = 0; i < JOIN_LIMIT.max - 1 && !L3.blocked('7.7.7.7'); i++) { L3.fail('7.7.7.7'); n3++; } now.add(JOIN_LIMIT.windowMs); }
+  assert.equal(n3, JOIN_LIMIT.longMax, `一刻钟里 ${JOIN_LIMIT.longMax} 次就挡`); assert.ok(JOIN_LIMIT.max <= 10 && JOIN_LIMIT.longMax <= 30, '4 位码：限流收紧了');
+  now.add(JOIN_LIMIT.longMs); assert.equal(L3.blocked('7.7.7.7'), false, '过了一刻钟');
   // 走一遍 Worker：房间（DO）回 X-Room-Join: nope 的记一次；到了上限不再去敲房间
   const L2 = createJoinLimiter({ now }); let hits = 0;
   const env = { ROOMS: { idFromName: (c) => c, get: () => ({ fetch: async () => { hits++; return { status: 101, headers: new Headers({ 'X-Room-Join': 'nope' }) }; } }) } };
   const req = (code, want = 'join') => new Request(`https://rooms.test/room/${code}?want=${want}`, { headers: { Upgrade: 'websocket', Origin: 'https://yunlan-mall.pages.dev', 'CF-Connecting-IP': '9.9.9.9' } });
-  for (let i = 0; i < JOIN_LIMIT.max; i++) await worker.fetch(req('ABCD' + 'FGHJKLMNPQRSTUVWXYZ23456789'[i % 27] + 'FGHJK'[i % 5]), env, null, L2);
+  for (let i = 0; i < JOIN_LIMIT.max; i++) await worker.fetch(req(String(1000 + i * 37)), env, null, L2);
   assert.equal(hits, JOIN_LIMIT.max); assert.equal(L2.blocked('9.9.9.9'), true);
   const WP = globalThis.WebSocketPair, R = globalThis.Response, sent = [];
   globalThis.WebSocketPair = class { constructor() { this[0] = {}; this[1] = { accept() {}, send: (t) => sent.push(t), close: (c) => sent.push(c) }; } };
   globalThis.Response = class { constructor(body, init) { this.status = init?.status; } };
-  try { const r = await worker.fetch(req('ZZZZZZ'), env, null, L2); assert.equal(r.status, 101); } finally { globalThis.WebSocketPair = WP; globalThis.Response = R; }
-  assert.equal(hits, JOIN_LIMIT.max, '到了上限不再去敲房间'); assert.deepEqual(sent, ['{"t":"slow"}', 4029]);
-  await worker.fetch(req('ABCDEF', 'create'), env, null, L2); assert.equal(hits, JOIN_LIMIT.max + 1, '建房照常');
+  try {
+    const r = await worker.fetch(req('9999'), env, null, L2); assert.equal(r.status, 101);
+    await worker.fetch(req('4821', 'create'), env, null, L2);
+  } finally { globalThis.WebSocketPair = WP; globalThis.Response = R; }
+  assert.equal(hits, JOIN_LIMIT.max, '到了上限不再去敲房间（建房也挡：撞号能探出哪些码有人）'); assert.deepEqual(sent, ['{"t":"slow"}', 4029, '{"t":"slow"}', 4029]);
+  // 建房撞上有人的房间（taken）也算一次
+  const L4 = createJoinLimiter({ now }), env4 = { ROOMS: { idFromName: (c) => c, get: () => ({ fetch: async () => ({ status: 101, headers: new Headers({ 'X-Room-Join': 'taken' }) }) }) } };
+  for (let i = 0; i < JOIN_LIMIT.max; i++) await worker.fetch(req(String(2000 + i), 'create'), env4, null, L4);
+  assert.equal(L4.blocked('9.9.9.9'), true, '建房撞号也记');
+  // 房间码不是 4 位数字：直接 400，不敲房间
+  const before = hits, L5 = createJoinLimiter({ now });
+  for (const bad of ['K7QX2M', 'ABCD', '482', '48210']) { const r = await worker.fetch(req(bad), env, null, L5); assert.equal(r.status, 400, `${bad} 不认`); }
+  assert.equal(hits, before);
 });

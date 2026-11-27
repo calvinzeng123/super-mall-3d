@@ -98,15 +98,17 @@ test('服务器地址：网址 ?mp= 最优先（http 换成 ws）、再是本机
   assert.equal(COOP_SERVER.url, 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev');
   // ?mp=1（封面入口、邀请链接）不是地址：只是打开大厅，照常往下找（以前把它当地址，结果显示「还没上线」）
   assert.equal(serverUrl({ params: { mp: '1' }, loc: loc('yunlan-mall.pages.dev') }), COOP_SERVER.url);
-  assert.equal(serverUrl({ params: { mp: '1', room: 'ABCDEF' }, loc: loc('yunlan-mall-abc.yunlan-mall.pages.dev') }), COOP_SERVER.url);
+  assert.equal(serverUrl({ params: { mp: '1', room: '4821' }, loc: loc('yunlan-mall-abc.yunlan-mall.pages.dev') }), COOP_SERVER.url);
   assert.equal(serverUrl({ params: { mp: '1' }, loc: loc('127.0.0.1') }), COOP_SERVER.dev, '本机开发：mp=1 还是连 8787');
   assert.equal(serverUrl({ params: { mp: '1' }, loc: loc('yunlan-mall.pages.dev'), storage: { getItem: () => 'wss://x.y' } }), 'wss://x.y');
   assert.equal(serverUrl({ params: { mp: 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev' }, loc: loc('127.0.0.1') }), 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev', '本机开发也能用 ?mp=wss://… 连正式的');
   assert.equal(serverUrl({ params: { mp: 'ftp://nope' }, loc: loc('a') }), COOP_SERVER.url, '不是 ws / http 地址：不顶替');
   assert.equal(serverUrl({ params: { mp: 'ws://' }, loc: loc('a') }), COOP_SERVER.url);
-  assert.match(randomCode(), /^[A-HJ-NP-Z2-9]{6}$/, '新建的房间码六位');
-  assert.equal(normCode('k7qx2m'), 'K7QX2M');
-  assert.equal(normCode(' ab cd '), 'ABCD'); assert.equal(normCode('ＡＢＣＤ'), 'ABCD', '全角'); assert.equal(normCode('AB0D'), null); assert.equal(normCode('ABC'), null);
+  assert.match(randomCode(), /^[0-9]{4}$/, '新建的房间码 4 位数字');
+  assert.equal(randomCode(() => 0), '0000', '前面补 0'); assert.equal(randomCode(() => 0.48215), '4821');
+  { let k = 0; const r = () => [0.1111, 0.1111, 0.2222][k++ % 3]; assert.equal(randomCode(r, new Set(['1111'])), '2222', '撞过的码不再抽'); }
+  assert.equal(normCode('4821'), '4821'); assert.equal(normCode(' 48 21 '), '4821'); assert.equal(normCode('４８２１'), '4821', '全角数字');
+  assert.equal(normCode('K7QX'), null); assert.equal(normCode('482'), null); assert.equal(normCode('48210'), null);
 });
 
 test('连房间：没有服务器地址、连不上都报 offline（大厅显示「联机服务器还没上线」）；进来了报 welcome；房间满了报 full；统计收发字节', async () => {

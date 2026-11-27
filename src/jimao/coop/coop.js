@@ -9,11 +9,15 @@
 //   主机走了：服务器把下一个人提成主机，他接着跑这一局（木偶接着当真丧尸跑）；别的客户端不重开（开局消息带 mig，同一局不再 start）。
 //   回血：客户端自己用了医疗包 / 止痛药，报给主机（操作里带 heal：[第几次, 多少]），主机核对上限后加到他那个人身上；主机回执（快照的 ha）以前本地先不被快照的血量顶回去。
 //   只听主机的：客户端只认房主座位（msg.f）发来的规则消息（结束、投票、登机……）；别人的名字显示前再过一遍 clean()。
+//   别人看得见你在干什么：持续的状态（拿的什么武器、蹲着、冲刺、在换弹、在包扎、倒地）跟着操作 / 快照的人物标记走，人形照着摆姿势（squad.js 的 pose）；
+//   一下子的动作走事件（sync.js 的 encodeEvent）：扔手雷 / 燃烧瓶 / 诱饵弹、榴弹出膛、挥刀。客户端的随操作报给主机（ev），主机核对（validThrow + 每座位令牌桶）后
+//   在自己那边真扔一颗（伤害、诱饵、点火都在主机上算，击倒记在他名下），再随快照转给所有人（ev）；客户端只画（actions.visualOnly / spawn visual），自己扔的那颗也只画。
+//   开枪：弹道、枪口火光、枪声画在开枪那个人形的枪口上（快照 sh 带武器，按武器换音调）。
 // 给后面的玩法规则留的口子（hooks）：rewardMul（多人资源翻倍）、players()、on(type, fn) / send(type, data)（自定义消息）、
 //   extend(name, { write, read })（往快照里加字段：直升机第二挺机枪、第三个人在机上……）、events 'coop:*'。
 import * as THREE from 'three';
-import { NET, ROLES, CHARS, PART_CODES, WEAPON_CODES, encodeZombie, encodeChar, encodeInput, decodeInput, createDeltaWriter, createMirror, createInterp, createNetClock, validateHits, seededRng, qp, dp } from './sync.js';
-import { createRoomClient, serverUrl, randomCode } from './net.js';
+import { NET, EVT, ROLES, CHARS, PART_CODES, WEAPON_CODES, encodeZombie, encodeChar, encodeInput, decodeInput, encodeEvent, decodeEvent, validThrow, createDeltaWriter, createMirror, createInterp, createNetClock, validateHits, seededRng, qp, dp } from './sync.js';
+import { createRoomClient, serverUrl, randomCode, randomId, normCode } from './net.js';
 import { createLobby, LOBBY_CSS } from './lobby.js';
 import { SIEGE } from '../siege.js';
 import { clean } from '../../../cloud/rooms/room-core.js';
@@ -49,6 +53,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     snapT: 0, inputT: 0, cutT: 0, mirror: createMirror(), writer: createDeltaWriter(),
     inputs: new Map(), // 主机：座位 → { clock, buf, last }
     kills: [], shots: [], radio: [], hits: [], outShots: [], cutReq: -1, sv: '', extOut: {},
+    evs: [], outEv: [], // 事件：主机攒着随快照发给大家的 / 客户端攒着随操作报给主机的（编码好的数组）
     frame: { worst: 0, sum: 0, n: 0 }, lastTarget: new Map(),
     // self：主机这台机器上的你倒地了没有、被扶到几成（联机玩法规则 rules.js 写，快照照它发；单人时一直是没倒）
     self: { down: false, revive: 0 }, boardHook: null,
@@ -56,6 +61,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     heal: { hpSet: null, out: 0, seq: 0, pend: [] },
     healAck: new Map(), // 主机：座位 → { seq, t }（快照里带回执）
     liveSnap: false, // 客户端：开局以后收到过主机发来的快照了（欢迎消息里那帧是旧的，不拿它定自己站哪）
+    taken: new Set(), readyLog: new Map(), // 建房撞过的码（换码时不再抽）；大厅动态里记过的准备状态
   };
   const inputExt = new Map(); // 客户端的操作里带的自定义字段（rules.js：直升机上的机枪朝向、机舱里站在哪）
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
@@ -132,9 +138,26 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       if (!Array.isArray(sh) || sh.length < 4) continue;
       const kind = WEAPON_CODES[sh[3]] || 'rifle', dir = tmp.set(sh[0] / 100, sh[1] / 100, sh[2] / 100); if (dir.lengthSq() < 0.5) continue; dir.normalize();
       const from = m.muzzle?.lengthSq?.() ? m.muzzle : tmp2.set(m.pos.x, m.pos.y + 1.4, m.pos.z), end = from.clone().addScaledVector(dir, COOP.shotRange);
-      G.fx?.tracer?.(from.clone(), end, { color: 0xffe0a0, speed: 260, width: 0.025 }); G.fx?.muzzleFlash?.(from.clone(), dir.clone(), { scale: 0.5 });
+      shotFx(m, from.clone(), end, kind);
       if (COOP.noise[kind]) siege?.addNoise?.(COOP.noise[kind], m.pos);
-      C.shots.push([CHARS.indexOf(role), qp(end.x), qp(end.y), qp(end.z)]);
+      C.shots.push([CHARS.indexOf(role), qp(end.x), qp(end.y), qp(end.z), Math.max(0, WEAPON_CODES.indexOf(kind))]);
+    }
+    // 他的一下子的动作：扔东西（核对位置、速度、引信、次数，主机这边真扔一颗）、挥刀；转给所有人
+    if (Array.isArray(msg.ev)) {
+      const now = G.time?.t || 0;
+      rec.nadeTok = Math.min(EVT.nadeBurst, (rec.nadeTok ?? EVT.nadeBurst) + (now - (rec.nadeAt ?? now)) * EVT.nadeRate); rec.nadeAt = now;
+      for (const a of msg.ev.slice(0, EVT.perPack)) {
+        const e = decodeEvent(a); if (!e) continue;
+        e.role = role;
+        if (e.type === 'throw') {
+          if (rec.nadeTok < 1 || !validThrow(e, director?.riding ? null : m.pos)) continue;
+          rec.nadeTok -= 1;
+          G.actions?.spawn?.({ kind: e.kind, pos: e.pos, vel: e.vel, fuse: e.fuse, owner: seat });
+        }
+        m.act?.(e.type === 'throw' ? (e.kind === 'shell' ? 'shell' : 'throw') : 'swing');
+        if (e.type === 'swing') G.audio?.play?.('jump', { pos: m.pos, gain: 0.7, pitch: 1.2 });
+        if (C.evs.length < 32) C.evs.push(encodeEvent(e));
+      }
     }
     // 他报的命中：核对完打上去（记在他名下：netBy）
     // 坐直升机清扫时：从机身中心量（楼顶、楼下的离飞机一百多米；他的人这会儿收起来了，位置不准）
@@ -165,10 +188,16 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   function charOf(m, role) {
     if (role === local()) { // 这台机器上的你：照你自己的人
       const p = G.player, v = p.vel || tmp.set(0, 0, 0);
-      return { role, x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: wrapA((p.yaw || 0) + Math.PI), pitch: p.pitch || 0, speed: Math.hypot(v.x, v.z), down: p.alive === false || C.self.down, revive: C.self.revive, on: true, crouch: !!p.crouching, hp: C.self.down ? 0 : p.health, human: true, weapon: G.weapon?.current };
+      return { role, x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: wrapA((p.yaw || 0) + Math.PI), pitch: p.pitch || 0, speed: Math.hypot(v.x, v.z), down: p.alive === false || C.self.down, revive: C.self.revive, on: true, hp: C.self.down ? 0 : p.health, human: true, ...selfState() };
     }
     if (!m) return null;
-    return { role, x: m.pos.x, y: m.pos.y, z: m.pos.z, yaw: m.yaw, pitch: m.pitch || 0, speed: m.speed || 0, down: !!m.down, on: !!squad.isOn(m), crouch: !!m.remote?.crouch, healing: m.healing > 0, hp: m.hp, revive: m.reviveT, human: !!m.remote, weapon: m.remote?.weapon };
+    const R = m.remote;
+    return { role, x: m.pos.x, y: m.pos.y, z: m.pos.z, yaw: m.yaw, pitch: m.pitch || 0, speed: m.speed || 0, down: !!m.down, on: !!squad.isOn(m), crouch: !!R?.crouch, sprint: !!R?.sprint, reload: !!R?.reload, healing: m.healing > 0 || !!R?.healing, hp: m.hp, revive: m.reviveT, human: !!R, weapon: R?.weapon || m.weapon };
+  }
+  /** 这台机器上的你在干什么（别人眼里的人形照它摆）：拿的什么、蹲着、冲刺、换弹、包扎 / 吃药 */
+  function selfState() {
+    const p = G.player, w = G.weapon, cur = w?.current || 'rifle';
+    return { weapon: cur === 'knife' && w?.melee === 'axe' ? 'axe' : cur, crouch: !!p?.crouching, sprint: !!p?.sprinting, reload: w?.state === 'reloading', healing: !!G.supplies?.busy };
   }
   function snapshot(dt, force = false) {
     const people = [G.player.pos, ...(squad?.everyone || []).filter((m) => m.remote).map((m) => m.pos)], R = director?.riding ? NET.rideNear : NET.near;
@@ -186,6 +215,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     const heli = director?.vehicles?.heli?.root; if (heli?.visible) msg.h = [qp(heli.position.x), qp(heli.position.y), qp(heli.position.z), Math.round(heli.rotation.y * 100)];
     if (C.kills.length) msg.kill = C.kills.splice(0);
     if (C.shots.length) msg.sh = C.shots.splice(0, 40);
+    if (C.evs.length) msg.ev = C.evs.splice(0, 24);
     if (C.radio.length) msg.r = C.radio.splice(0, 6);
     if (director?.riding) msg.ride = 1;
     // 回血回执：哪个座位报的第几次已经加上了（带几秒，丢一帧也收得到）
@@ -219,6 +249,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (msg.sv) siege?.followState?.(msg.sv);
     if (msg.h) { const h = director?.vehicles?.heli?.root; if (h && !director.riding) { h.visible = true; h.position.set(dp(msg.h[0]), dp(msg.h[1]), dp(msg.h[2])); h.rotation.y = msg.h[3] / 100; } }
     for (const sh of msg.sh || []) drawShot(sh);
+    for (const a of msg.ev || []) playEvent(a);
     for (const [text, secs] of msg.r || []) hostRadio(text, secs);
     if (msg.ride && !director?.riding && (tellRide -= 1) <= 0) { tellRide = 60; G.hud?.message?.('房主上了直升机，正在清扫', 3); }
     if (msg.x) for (const [name, v] of Object.entries(msg.x)) { try { extensions.get(name)?.read?.(v); } catch (e) { console.error('[联机] 快照字段出错', name, e); } }
@@ -246,8 +277,26 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     const role = CHARS[sh[0]]; if (!role || role === local()) return;
     const m = squad?.byId(role); if (!m || !squad.isOn(m)) return;
     const end = new THREE.Vector3(dp(sh[1]), dp(sh[2]), dp(sh[3])), from = m.muzzle?.lengthSq?.() ? m.muzzle.clone() : new THREE.Vector3(m.pos.x, m.pos.y + 1.4, m.pos.z);
-    G.fx?.tracer?.(from, end, { color: 0xffe0a0, speed: 260, width: 0.025 }); G.fx?.muzzleFlash?.(from, end.clone().sub(from).normalize(), { scale: 0.45 });
-    m.recoil = 1;
+    shotFx(m, from, end, WEAPON_CODES[sh[4]] || m.weapon || 'rifle');
+  }
+  // 别人开的一枪：弹道、枪口火光、枪口那儿闪一下光、枪声（按武器换音调；同一个人一帧里连着几发只响一声）、人形往后一顿
+  const SHOT_SOUND = Object.freeze({ rifle: [1, 1], smg: [0.85, 1.18], pistol: [0.8, 1.4], launcher: [1, 0.55] });
+  function shotFx(m, from, end, kind) {
+    if (kind === 'knife' || kind === 'axe') return;
+    const dir = end.clone().sub(from).normalize();
+    if (kind !== 'launcher') G.fx?.tracer?.(from, end, { color: 0xffe0a0, speed: 260, width: 0.025 });
+    G.fx?.muzzleFlash?.(from, dir, { scale: kind === 'pistol' ? 0.38 : kind === 'launcher' ? 0.7 : 0.5 });
+    G.render?.lightPool?.flash?.(from, 0xffc080, 12, 6, 0.04);
+    const now = G.time?.t || 0, [gain, pitch] = SHOT_SOUND[kind] || SHOT_SOUND.rifle;
+    if (!(now - (m.shotSndT ?? -9) < 0.05)) { m.shotSndT = now; G.audio?.play?.('soldier_fire', { pos: from, gain: 0.85 * gain, pitch, jitter: 0.04 }); }
+    m.recoil = 1; m.shotT = now;
+  }
+  /** 主机转来的一下子的动作：别人扔的东西照着画一颗（只画）、人形挥刀 / 扔东西 */
+  function playEvent(a) {
+    const e = decodeEvent(a); if (!e || e.role === local()) return;
+    const m = squad?.byId(e.role);
+    if (e.type === 'throw') { G.actions?.spawn?.({ kind: e.kind, pos: e.pos, vel: e.vel, fuse: e.fuse, visual: true }); m?.act?.(e.kind === 'shell' ? 'shell' : 'throw'); }
+    else if (e.type === 'swing') { m?.act?.('swing'); if (m) G.audio?.play?.('jump', { pos: m.pos, gain: 0.7, pitch: 1.2 }); }
   }
   const recentRadio = [];
   function hostRadio(text, secs) {
@@ -274,6 +323,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       const d = Math.hypot(s.x - m.pos.x, s.z - m.pos.z);
       m.speed = d < 3 && dt > 0 ? m.speed + (d / dt - m.speed) * Math.min(1, dt * 8) : s.speed;
       m.pos.set(s.x, s.y, s.z); m.yaw = s.yaw; m.pitch = s.pitch; m.down = e.st.down; m.hp = e.st.hp; m.reviveT = e.st.revive; m.healing = e.st.healing ? 1 : 0;
+      m.crouch = !!s.crouch; m.sprint = !!s.sprint; m.reloading = !!s.reload; m.human = !!s.human; if (s.weapon) m.weapon = s.weapon;
     }
     // 自己：血量、倒地
     const me = C.mirror.chars.get(local())?.st, p = G.player;
@@ -344,8 +394,9 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     C.inputT = Math.min(C.inputT - 1 / NET.inputHz, 1 / NET.inputHz); // 减掉而不是清零：帧率不整除时也是每秒 inputHz 次
     const p = G.player; if (!p) return;
     const v = p.vel || tmp.set(0, 0, 0);
-    const msg = { t: 'i', ct: +(G.time?.t || 0).toFixed(3), p: encodeInput({ x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, pitch: p.pitch, speed: Math.hypot(v.x, v.z), crouch: !!p.crouching, sprint: !!p.sprinting, weapon: G.weapon?.current }) };
+    const msg = { t: 'i', ct: +(G.time?.t || 0).toFixed(3), p: encodeInput({ x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, pitch: p.pitch, speed: Math.hypot(v.x, v.z), ...selfState() }) };
     if (C.outShots.length) msg.sh = C.outShots.splice(0, 12);
+    if (C.outEv.length) msg.ev = C.outEv.splice(0, EVT.perPack);
     if (C.hits.length) msg.hit = C.hits.splice(0);
     if (C.cutReq >= 0) { msg.cut = C.cutReq; C.cutReq = -1; }
     { const H = C.heal; if (H.out >= 1) { const n = Math.round(H.out); H.seq++; msg.heal = [H.seq, n]; H.pend.push({ seq: H.seq, n: H.out, t: G.time?.t || 0 }); H.out = 0; } }
@@ -360,6 +411,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     if (zombies) zombies.puppet = true;
     if (siege) siege.follow = true;
     if (squad) squad.net.puppet = true;
+    if (G.actions) G.actions.visualOnly = true; // 自己扔的只画（主机那份算伤害）
     G.zombieTarget = null;
     for (let i = 0; i < pool.length; i++) if (pool[i].active) pool[i]._deactivate(); // 本地已经放出来的（标题画面背后、单人时的）收起来，等主机的快照
     for (let i = 0; i < pool.length; i++) puppetDamage(pool[i], i);
@@ -374,6 +426,8 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     for (const z of pool) if (z._hostDamage) { z.damage = z._hostDamage; z._hostDamage = null; }
     if (siege) siege.follow = false;
     if (squad) { squad.net.puppet = false; for (const m of squad.everyone) m.remote = null; }
+    if (G.actions) G.actions.visualOnly = false;
+    C.evs.length = 0; C.outEv.length = 0;
     if (G.player) { G.player.invulnerable = false; if (C.down) { C.down = false; G.arms?.setLowered?.(0); } }
     restoreExtract(); resetHeal(); C.healAck.clear();
     for (const r of G.game?.run?.relays || []) r.cutWant = null;
@@ -400,7 +454,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     C.seed = st.seed >>> 0; C.round = st.round ?? C.round; C.hostStage = st.stage || 0; C.placed = false; C.down = false; C.liveSnap = false;
     C.mirror.reset(); resetHeal();
     if (siege) { siege.enabled = true; siege.towerPick = st.tower || null; }
-    C.started = true;
+    C.started = true; for (const p of C.players) p.ready = false; // 服务器开局时清掉了「准备」
     G.game?.start?.({ skipIntro: true });
     guardRelays();
     lobby?.close(); // 开打了：大厅收起来（还在房间里，标题菜单 / 暂停里随时能再打开）
@@ -416,7 +470,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       siege?.useRng?.(seededRng(C.seed));
       baseReset?.();
       C.writer.keyNow(); C.lastTarget.clear();
-      C.room.send(startMsg(keep ? siege?.state?.stage || 0 : 0)); C.started = true;
+      C.room.send(startMsg(keep ? siege?.state?.stage || 0 : 0)); C.started = true; for (const p of C.players) p.ready = false;
       return;
     }
     if (C.mode === 'client') { siege?.useRng?.(seededRng(C.seed)); baseReset?.(); for (const z of pool) if (z.active) z._deactivate(); C.mirror.reset(); C.placed = false; C.liveSnap = false; resetHeal(); return; }
@@ -443,15 +497,17 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     leave(true);
     C.code = code; C.name = name;
     const url = serverUrl({ params, storage });
-    const id = (() => { try { let v = storage?.getItem?.('jimao-mp-id'); if (!v) { v = randomCode(Math.random, 6) + Date.now().toString(36).slice(-4); storage?.setItem?.('jimao-mp-id', v); } return v; } catch { return ''; } })();
+    const id = (() => { try { let v = storage?.getItem?.('jimao-mp-id'); if (!v) { v = randomId() + Date.now().toString(36).slice(-4); storage?.setItem?.('jimao-mp-id', v); } return v; } catch { return ''; } })();
     const room = createRoomClient({ url, code, name, id, want, WS });
     C.room = room; lobby?.status('connecting');
-    room.on('fail', ({ why }) => { if (C.room !== room) return; C.room = null; lobby?.status(why === 'offline' ? (url ? 'offline' : 'noserver') : why); emit('fail', { why }); });
+    room.on('fail', ({ why }) => { if (C.room !== room) return; C.room = null; if (why === 'taken') C.taken.add(code); lobby?.status(why === 'offline' ? (url ? 'offline' : 'noserver') : why); emit('fail', { why }); });
+    room.on('rtt', () => { if (C.room === room && lobby?.isOpen) lobby.render(); });
     room.on('welcome', (w) => {
       if (C.room !== room) return;
       C.seat = w.seat; C.host = w.host; C.players = cleanPlayers(w.players); C.code = w.code || code;
       if (w.host === w.seat) becomeHost(false); else becomeClient();
       lobby?.status('in'); lobby?.render();
+      lobby?.log(w.seat === w.host ? `建好了房间 ${C.code}，你是房主（${ROLE_NAME[roleOf(w.seat)]}）` : `进了房间 ${C.code}，你扮演${ROLE_NAME[roleOf(w.seat)]}`, true);
       emit('join', { seat: w.seat, host: w.host });
       if (w.started && w.host !== w.seat) clientStart(w.start, w.snap);
     });
@@ -479,12 +535,14 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
       case 'peer': {
         C.players = cleanPlayers(msg.players); C.host = msg.host ?? C.host;
         const who = clean(msg.name);
-        if (msg.ev === 'join') { G.hud?.message?.(`${who} 加入了（扮演${ROLE_NAME[roleOf(msg.seat)] || ''}）`, 3); if (C.mode === 'host') C.writer.keyNow(); }
-        if (msg.ev === 'leave') { G.hud?.message?.(`${who} 离开了${C.mode === 'host' ? '，由电脑接手' : ''}`, 3); C.inputs.delete(msg.seat); C.healAck.delete(msg.seat); }
+        if (msg.ev === 'join') { G.hud?.message?.(`${who} 加入了（扮演${ROLE_NAME[roleOf(msg.seat)] || ''}）`, 3); lobby?.log(`${who} 加入了，扮演${ROLE_NAME[roleOf(msg.seat)] || ''}`); if (C.mode === 'host') C.writer.keyNow(); }
+        if (msg.ev === 'leave') { G.hud?.message?.(`${who} 离开了${C.mode === 'host' ? '，由电脑接手' : ''}`, 3); lobby?.log(`${who} 离开了`); C.inputs.delete(msg.seat); C.healAck.delete(msg.seat); }
+        if (msg.ev === 'meta') { const p = C.players.find((q) => q.seat === msg.seat), was = C.readyLog.get(msg.seat); if (p && !!p.ready !== !!was) { C.readyLog.set(msg.seat, !!p.ready); if (msg.seat !== C.host) lobby?.log(`${who} ${p.ready ? '准备好了' : '取消了准备'}`); } }
+        if (msg.ev === 'name') lobby?.log(`有人改名为 ${who}`);
         applyRoles(); lobby?.render(); emit('peer', msg); return;
       }
       case 'host': {
-        C.host = msg.seat;
+        C.host = msg.seat; lobby?.log(`房主换成了 ${nameOf(msg.seat) || '下一个人'}`, true);
         if (msg.seat === C.seat && C.mode === 'client') { becomeHost(false); G.hud?.message?.('房主走了：现在由你主持这一局', 3.5); C.room?.send(startMsg(siege?.state?.stage || 0, true)); } // 接着这一局：别人不重开
         lobby?.render(); emit('host', msg); return;
       }
@@ -517,12 +575,20 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   on('weapon:fire', (e) => {
     if (!C.room || !e?.dir || e.doorGun || (director?.riding && director.crew?.seat !== 'cabin')) return; // 坐飞机时只有机舱里拿步枪的照常报弹道（舱门机枪的另外同步，见 rules.js）
     if (C.mode === 'client') { if (C.outShots.length < 12) C.outShots.push([Math.round(e.dir.x * 100), Math.round(e.dir.y * 100), Math.round(e.dir.z * 100), Math.max(0, WEAPON_CODES.indexOf(e.kind || 'rifle'))]); return; }
-    if (C.mode === 'host') { const o = e.muzzle || e.origin; if (!o) return; const end = tmp.copy(o).addScaledVector(e.dir, COOP.shotRange); C.shots.push([CHARS.indexOf(local()), qp(end.x), qp(end.y), qp(end.z)]); }
+    if (C.mode === 'host') { const o = e.muzzle || e.origin; if (!o || C.shots.length >= 60) return; const end = tmp.copy(o).addScaledVector(e.dir, COOP.shotRange); C.shots.push([CHARS.indexOf(local()), qp(end.x), qp(end.y), qp(end.z), Math.max(0, WEAPON_CODES.indexOf(e.kind || 'rifle'))]); }
   });
   on('squad:fire', (e) => {
-    if (C.mode !== 'host' || !C.room || !e?.mate || !e.dir) return;
-    const end = tmp.copy(e.pos).addScaledVector(e.dir, COOP.shotRange); C.shots.push([CHARS.indexOf(e.mate.id), qp(end.x), qp(end.y), qp(end.z)]);
+    if (C.mode !== 'host' || !C.room || !e?.mate || !e.dir || C.shots.length >= 60) return;
+    const end = tmp.copy(e.pos).addScaledVector(e.dir, COOP.shotRange); C.shots.push([CHARS.indexOf(e.mate.id), qp(end.x), qp(end.y), qp(end.z), Math.max(0, WEAPON_CODES.indexOf(e.mate.weapon || 'rifle'))]);
   });
+  // 一下子的动作：自己扔的东西（手雷、燃烧瓶、诱饵弹、榴弹）、挥刀——客户端报给主机，主机自己的直接随快照发
+  function pushEvent(e) {
+    if (!C.room || C.mode === 'off') return;
+    const a = encodeEvent({ ...e, role: local() }); if (!a) return;
+    if (C.mode === 'client') { if (C.placed && C.outEv.length < 16) C.outEv.push(a); } else if (C.evs.length < 32) C.evs.push(a);
+  }
+  on('grenade:throw', (e) => { if (e?.local && e.pos && e.vel) pushEvent({ type: 'throw', kind: e.kind, pos: e.pos, vel: e.vel, fuse: e.fuse }); });
+  on('weapon:melee', () => pushEvent({ type: 'swing' }));
   // 无线电：主机说的转给大家（守屋顶的「第几波」、队友喊话）；客户端自己这边说过的记下来，免得说两遍
   const origRadio = G.hud?.radio?.bind(G.hud);
   if (G.hud && origRadio) G.hud.radio = (text, secs, ...rest) => {
@@ -533,9 +599,10 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
 
   // ---- 大厅 ----
   lobby = ui ? createLobby({ ui, storage, params,
-    state: () => ({ mode: C.mode, seat: C.seat, host: C.host, players: C.players, code: C.code, started: C.started || G.game?.state === 'playing', name: C.name, connected: !!C.room?.ready, roles: ROLES.map((r) => ROLE_NAME[r]) }),
-    create: (name) => { const code = randomCode(); connect('create', code, name); },
-    join: (code, name) => connect('join', code, name),
+    state: () => ({ mode: C.mode, seat: C.seat, host: C.host, players: C.players, code: C.code, started: C.started || G.game?.state === 'playing', name: C.name, connected: !!C.room?.ready, roles: ROLES.map((r) => ROLE_NAME[r]), rtt: C.room?.stats?.rtt ?? null }),
+    create: (name) => { const code = randomCode(Math.random, C.taken); connect('create', code, name); },
+    join: (code, name) => { const c = normCode(code); if (c) connect('join', c, name); },
+    ready: (on) => { C.room?.send({ t: 'meta', ready: !!on }); },
     start: () => hostStart(),
     leave: () => leave(false),
     rename: (name) => { C.name = name; C.room?.send({ t: 'name', name }); },
@@ -572,8 +639,10 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     /** 在标题菜单上放「联机（三人）」按钮（box 前面） */
     entry(box) { return lobby?.entry(box) || null; },
     /** 直接进房间（测试 / 自动化用；界面上走大厅） */
-    create(name = '玩家', code = randomCode()) { connect('create', code, name); return code; },
-    join(code, name = '玩家') { connect('join', code, name); },
+    create(name = '玩家', code = randomCode(Math.random, C.taken)) { connect('create', code, name); return code; },
+    join(code, name = '玩家') { connect('join', normCode(code) || String(code), name); },
+    /** 大厅里的「准备」（别人眼里名单上那一格；房主开局时清掉） */
+    ready(on = true) { return C.room?.send({ t: 'meta', ready: !!on }) || false; },
     start: hostStart, leave: () => leave(false),
     /** 网络和每帧开销：发了 / 收了多少条、多少字节，同步这一层每帧花了多少毫秒 */
     stats() { const s = C.room?.stats; const f = C.frame; return { mode: C.mode, seat: C.seat, net: s ? { sent: s.sent, recv: s.recv, bytesOut: s.bytesOut, bytesIn: s.bytesIn, byType: s.byType, secs: (Date.now() - s.since) / 1000 } : null, frameMs: { avg: f.n ? f.sum / f.n : 0, worst: f.worst, n: f.n }, zombies: C.mirror.zombies.size, keyed: C.mirror.keyed, hostStage: C.hostStage, stage: siege?.state?.stage, placedAt: C.placedAt || null }; },
@@ -602,7 +671,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
     },
     dispose() { leave(true); restoreExtract(); lobby?.dispose(); if (G.enemies && baseSpawn) G.enemies.spawn = baseSpawn; if (G.level && baseReset) G.level.onReset = baseReset; if (G.hud && origRadio) G.hud.radio = origRadio; G.zombieTarget = null; },
   };
-  // 网址带 ?room=CODE：打开大厅、直接加入
+  // 网址带 ?room=1234：打开大厅、直接加入
   if (params.room && lobby) setTimeout(() => lobby.autoJoin(params.room), 1500); // 等加载画面后面那几帧（预热着色器、传贴图）过去再连
   // 封面「联机（三人）」入口带 ?mp=1（见 src/cover-options.js 的 MP_ENTRY）：没带房间码时进来就把大厅打开
   // mp=1 或者别的不是地址的值都算「打开大厅」；?mp=ws(s)://… 只是指定连哪台服务器，不自动打开
