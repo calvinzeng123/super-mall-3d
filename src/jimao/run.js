@@ -273,7 +273,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.siege = siege; G.zombies = zombies;
   // 枪的真模型什么时候加载（见上面 loadGuns）：不是丧尸围城、从存档点回来、开局玩了 settle 秒、走到第 stage 步，哪个先到算哪个
   let gunTimer = null;
-  if (!siege?.enabled) loadGuns();
+  if (!siege?.enabled || params.guns === 'now') loadGuns(); // ?guns=now：照旧马上加载（量内存对比用）
   else { let played = 0; gunTimer = setInterval(() => {
     if (gunsLoaded) { clearInterval(gunTimer); gunTimer = null; return; }
     if (G.game?.state === 'playing') played++;

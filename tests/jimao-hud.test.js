@@ -26,7 +26,7 @@ test('丧尸围城开局只有刀：手枪 / 步枪 / 冲锋枪的真模型不�
   const run = readFileSync('src/jimao/run.js', 'utf8');
   const { GUN_DEFER } = await import('../src/jimao/run.js').catch(() => ({ GUN_DEFER: null }));
   if (GUN_DEFER) { assert.ok(GUN_DEFER.settle >= 10 && GUN_DEFER.settle <= 40); assert.ok(GUN_DEFER.stage >= 1 && GUN_DEFER.stage <= 7, '手枪（第 8 步）之前就加载好'); }
-  const load = run.indexOf('const loadGuns = () => {'), sched = run.indexOf('if (!siege?.enabled) loadGuns();');
+  const load = run.indexOf('const loadGuns = () => {'), sched = run.indexOf('if (!siege?.enabled || params.guns === \'now\') loadGuns();');
   assert.ok(load > 0 && sched > load, '先定义、siege 建好以后再决定什么时候加载');
   for (const label of ['手枪模型', '步枪模型', '冲锋枪模型']) { const at = run.indexOf(`label: '${label}'`); assert.ok(at > load && at < sched, `${label}在 loadGuns 里`); }
   assert.match(run, /if \(!siege\.enabled \|\| director\.state\.restore \|\| played >= GUN_DEFER\.settle \|\| \(siege\.state\?\.stage \?\? 0\) >= GUN_DEFER\.stage\) loadGuns\(\);/);
