@@ -1927,7 +1927,7 @@ test('救出来的小许从店里走出来跟着你：不给你让枪线、不�
     walk(player, routes[name], tick);
     // 撬卷帘：对着店门站两秒多
     player.yaw = Math.atan2(-(R.inside.x - player.pos.x), -(R.inside.z - player.pos.z)); run(2.4);
-    const at = start === 'glass' ? { x: -132.13, y: R.inside.y, z: -112.15 } : R.inside; // glass：贴着店面玻璃里侧（以前就在这儿站住不动了）
+    const at = start === 'glass' ? { x: f.x0 + (f.x1 - f.x0) * 0.18 - f.nx * 0.3, y: R.inside.y, z: f.z0 + (f.z1 - f.z0) * 0.18 - f.nz * 0.3 } : R.inside; // glass：贴着店面玻璃里侧（以前就在这儿站住不动了；救人那家换了店，按门面算）
     assert.ok(pointInPoly([at.x, at.z], poly));
     const xu = squad.join('xu', at, start === 'exit' || start === 'mates' ? { exit: R.exit } : {});
     let out = null;
@@ -1988,7 +1988,7 @@ test('护送：你走到扶梯口差一步（1.5 米）没踩到点上，小许�
   squad.dispose();
 });
 
-test('骑行家 → 救人那家：路线指引绕着锁着的店走（不从店角穿），照着走一路不被退回来；顶着卷帘时说「卷帘锁着」，斜着推顺着卷帘滑过去；寻路的人（队友、丧尸）也绕开', async () => {
+test('撬棍那家（以前是骑行家，现在是影城）→ 救人那家：路线指引绕着锁着的店走（不从店角穿），照着走一路不被退回来；顶着卷帘时说「卷帘锁着」，斜着推顺着卷帘滑过去；寻路的人（队友、丧尸）也绕开', async () => {
   const { createRouteGuide } = await import('../src/jimao/guide.js');
   for (const tower of ['A', 'T1']) {
     const { G, siege, begin, cut, run, player, msgs } = sworld({ tower });
@@ -2096,7 +2096,8 @@ test('护送：附近一群离小许比离你近的，最多两只（MALL.rescue
   for (let k = 0; k < 6; k++) { const a = Math.atan2(dz, dx) + (k - 2.5) * 0.35, r = 3 + (k % 2) * 1.2; pack.push([enemies.spawn('zombie', at.clone(), { kind: 'walker', hunt: true, state: 'alert' }), at.x + Math.cos(a) * r, at.z + Math.sin(a) * r]); }
   for (const [, x, z] of pack) assert.ok(Math.hypot(x - at.x, z - at.z) < Math.hypot(x - player.pos.x, z - player.pos.z) - 0.5, '离他比离你近');
   run(1.5, () => { xu.pos.copy(at); for (const [z, x, zz] of pack) z.pos.set(x, at.y, zz); G.squad.update(1 / 30); });
-  const lured = pack.filter(([z]) => z.lureT > 0 && Math.hypot(z.lure.x - at.x, z.lure.z - at.z) < 0.5).length;
+  // 1.2 米：小许这一帧可能已经往你身后躲了一步（救人那家换到南边那排以后，他身后有地方躲）——引过去的点跟着他走
+  const lured = pack.filter(([z]) => z.lureT > 0 && Math.hypot(z.lure.x - at.x, z.lure.z - at.z) < 1.2).length;
   assert.ok(lured >= 1 && lured <= MALL.rescue.mob, `扑他的有 ${lured} 只`);
   G.squad.dispose();
 });

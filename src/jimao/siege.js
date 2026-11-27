@@ -19,11 +19,13 @@ import { toW } from '../layout/geom.js';
 import { RIDE_SPECS, rideLocalToWorld } from './ride-vehicles.js';
 import { aimAngles, inGunArc } from './door-gun.js';
 import { MALL, mallStages, inMallZone } from './siege-mall.js';
+import { tapStage } from './pickup.js';
 import { SQUAD } from './squad.js';
 import { pointInPoly } from '../layout/geom.js';
 import { PATH, createPathfinder } from './pathfinder.js';
 import { DEFENSE, DEFENSE_CSS, sealSegments, buildSeals, createBarricades, segDist } from './siege-defense.js';
 import { DEMOLISH, DEMOLISH_CSS, createDemolition } from './siege-demolish.js';
+import { buildMallProp, buildMallLocker } from './siege-props.js';
 import { buildHoseCabinet, HOSE_BOX, propMats, buildLocker, lockerDoors, buildSwitchCabinet, switchLever, buildTable, buildTool, buildFuseBox, fuseInserts, buildFlareKit, litFlare, buildDebris, buildFire, buildFireStatic, powderSheet, buildShutterFrame, buildShutterCurtain, buildDoorFrame, buildDoorLeaf, fireStep, SHUTTER, DOOR, FIRE, nosingY, propTop, beaconMesh, pickGlow, faceYaw, warmProps } from './siege-props.js';
 
 export const SIEGE = Object.freeze({
@@ -539,41 +541,24 @@ const pbox = (g, w, h, d, x, y, z, m, ry = 0, rz = 0) => { const q = new THREE.M
 export function mallModel(kind, st = null, plan = null) {
   const g = new THREE.Group(); g.name = st?.label || kind;
   const item = new THREE.Group(); item.userData.cutHide = true; g.add(item);
-  const steel = pm(0x8b9299, { metalness: 0.7, roughness: 0.4 }), dark = pm(0x1e2024), red = pm(0xb3261e), yellow = pm(0xd9a521), paper = pm(0xe9e4d4, { metalness: 0 });
-  if (kind === 'crank') { // 手摇柄：一根 Z 形的曲柄，搁在小桌上
-    buildTable(g); item.position.y = 0.7175;
-    pbox(item, 0.3, 0.022, 0.022, 0, 0.012, 0, steel); pbox(item, 0.022, 0.022, 0.14, 0.15, 0.012, 0.06, steel); pbox(item, 0.12, 0.03, 0.03, 0.2, 0.014, 0.13, dark); pbox(item, 0.04, 0.03, 0.04, -0.15, 0.014, 0, dark);
-  } else if (kind === 'shutter' || kind === 'open') { // 门边墙上的一个盒子：卷帘的摇把座 / 按钮盒
-    const box = pbox(g, 0.2, 0.26, 0.1, 0, 1.2, 0, kind === 'open' ? yellow : steel);
-    box.userData.keep = true; pbox(g, 0.05, 1.1, 0.05, 0, 0.55, 0, dark);
-    pbox(item, 0.06, 0.06, 0.03, 0, 1.24, 0.06, kind === 'open' ? red : dark); const on = pbox(g, 0.06, 0.06, 0.03, 0, 1.24, 0.06, pm(0x35d07f, { emissive: 0x1c8a4c })); on.userData.cutShow = true; on.visible = false;
-  } else if (kind === 'pry') { // 防火卷帘的锁座：地上一个挂锁盒
-    pbox(g, 0.3, 0.14, 0.18, 0, 0.07, 0, dark); pbox(item, 0.12, 0.1, 0.05, 0, 0.19, 0, yellow);
-  } else if (kind === 'note') { // 收银台上的值班表：一块写字板
-    buildTable(g); item.position.y = 0.7175;
-    pbox(item, 0.24, 0.012, 0.32, 0, 0.008, 0, pm(0x5b3d24, { metalness: 0 })); pbox(item, 0.2, 0.004, 0.27, 0, 0.017, 0.005, paper); pbox(item, 0.08, 0.02, 0.03, 0, 0.022, -0.14, steel);
-  } else if (kind === 'rescue' || kind === 'holdout') { // 卷帘底下的锁座：撬的地方（地上一个挂锁盒，旁边一根撬棍）
-    pbox(g, 0.34, 0.14, 0.18, 0, 0.07, 0, dark); pbox(item, 0.12, 0.1, 0.05, 0, 0.19, 0, red); pbox(g, 0.03, 0.03, 0.8, 0.28, 0.02, 0.1, steel, 0.4);
-  } else if (kind === 'fuel') { // 油桶：一个红色的方桶，带提手和桶嘴
-    pbox(item, 0.36, 0.46, 0.18, 0, 0.23, 0, red); pbox(item, 0.2, 0.04, 0.04, 0, 0.5, 0, dark); pbox(item, 0.05, 0.08, 0.05, 0.13, 0.5, 0, steel);
-  } else if (kind === 'gen') { // 备用发电机：一个带把手的机箱，启动以后顶上的灯亮
-    pbox(g, 0.9, 0.55, 0.55, 0, 0.36, 0, yellow); pbox(g, 0.96, 0.08, 0.6, 0, 0.05, 0, dark); pbox(g, 0.5, 0.2, 0.4, -0.1, 0.72, 0, dark); pbox(g, 0.06, 0.3, 0.06, 0.34, 0.78, 0.15, steel);
-    pbox(item, 0.08, 0.05, 0.02, 0.2, 0.45, 0.285, red); const on = pbox(g, 0.1, 0.06, 0.1, 0.34, 0.96, 0.15, pm(0x35d07f, { emissive: 0x1c8a4c })); on.userData.cutShow = true; on.visible = false;
-  }
   if (kind === 'card') return lockersModel(plan, g);
+  // 物件本身见 siege-props.js 的 mallPropParts（按材质合并、共用图集）：手摇柄、值班表搁在小桌上（item 的原点是桌面）
+  if (kind === 'crank' || kind === 'note') { buildTable(g); item.position.y = 0.7175; }
+  const on = new THREE.Group(); on.userData.cutShow = true; on.visible = false; g.add(on);
+  buildMallProp(kind, g, item, on);
   beacon(g, 'glow', 2.6, 0.05);
   g.userData.setState = (q) => setState(g, q); return g;
 }
 /** 三个储物柜：模型的原点在对的那个柜子上（它是这一步的交互点），另外两个按 plan.mall.lockers 摆在旁边。柜门上各有一块号牌 */
 function lockersModel(plan, g) {
   const L = plan?.mall?.lockers || [{ x: 0, z: 0, n: 1, right: true }], win = L.find((q) => q.right) || L[0];
-  const body = pm(0x4f6b7a), door = pm(0x5f8194), plate = pm(0xf2efe6, { metalness: 0 });
+  const plate = pm(0xf2efe6, { metalness: 0 });
   g.userData.lockers = [];
   for (const q of L) {
     const one = new THREE.Group(); one.position.set(q.x - win.x, 0, q.z - win.z); g.add(one);
-    pbox(one, 0.5, 1.8, 0.45, 0, 0.9, 0, body); const d = pbox(one, 0.44, 1.7, 0.03, 0, 0.9, 0.235, door); pbox(one, 0.03, 0.12, 0.03, 0.16, 0.95, 0.26, pm(0x1e2024));
+    const d = buildMallLocker(one); // 柜体 + 门（钢门压纹、通风缝、拉手、号牌框；共用图集，见 siege-props.js）
     // 号牌：几个小点（1、2、3 号各 1、2、3 个点；没有贴图也认得出）
-    pbox(one, 0.2, 0.11, 0.01, 0, 1.5, 0.255, plate); for (let i = 0; i < q.n; i++) pbox(one, 0.03, 0.05, 0.012, (i - (q.n - 1) / 2) * 0.05, 1.5, 0.262, pm(0x1e2024));
+    pbox(d, 0.2, 0.11, 0.01, 0, 1.5, 0.259, plate); for (let i = 0; i < q.n; i++) pbox(d, 0.03, 0.05, 0.012, (i - (q.n - 1) / 2) * 0.05, 1.5, 0.266, pm(0x1e2024));
     if (q.right) d.userData.cutHide = true; // 对的那个：拿了卡柜门开着
     g.userData.lockers.push({ group: one, door: d, n: q.n, right: q.right });
   }
@@ -1011,7 +996,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     S.plan = plan;
     const flight = siegeFlight(pad, padY(), { box: flightBox(layout, T) });
     const door = rideLocalToWorld(pad, 0, RIDE_SPECS.helicopter.doorOut);
-    const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: (st.obj || (st.kind === 'tool' ? 'item' : 'relay')) === 'item' ? 'item' : 'relay', site: st.site, locked: i > 0,
+    const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: (st.obj || (st.kind === 'tool' ? 'item' : 'relay')) === 'item' ? 'item' : 'relay', site: st.site, locked: i > 0, stageKind: st.kind, tap: tapStage(st), // tap：拿东西、按开关点一下就行（pickup.js）
       model: () => (st.kind === 'card' ? mallModel('card', st, plan) : ['crank', 'shutter', 'open', 'pry', 'note', 'gen', 'rescue', 'holdout', 'fuel', 'escort', 'sneak'].includes(st.kind) ? orient(mallModel(st.kind, st, plan), st.site, cameFrom(plan, st)) : st.kind === 'crowbar' ? orient(toolModel('撬棍'), st.site, cameFrom(plan, st)) : null) || orient(st.kind === 'pistol' ? pistolModel() : st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel(), st.site, cameFrom(plan, st)) }));
     const s0 = plan.mall.start;
     const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan, start: { pos: new THREE.Vector3(s0.x, s0.y, s0.z), yaw: Math.atan2(-(plan.stages[1].site.x - s0.x), -(plan.stages[1].site.z - s0.z)) },

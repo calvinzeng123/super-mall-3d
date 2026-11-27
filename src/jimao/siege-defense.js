@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toW } from '../layout/geom.js';
 import { sandbagGeometry, DRESS } from './dressing.js';
+import { MEM } from '../render/device.js';
 
 /**
  * seal：卷帘的高度、厚度、离门洞线往里缩多少；slat：一条帘片多高。
@@ -41,14 +42,26 @@ export function sealSegments(nav, inside, S = DEFENSE.seal) {
   return out;
 }
 
-/** 帘片的贴图：一条条横的帘片（上亮下暗的弧面），竖向平铺。没有 document 返回 null */
-function slatTexture() {
+/**
+ * 帘片的贴图：横向是整道卷帘的宽（0–1 铺满），纵向一条帘片（按实际高度平铺）。
+ * 以前是 8 × 32 的一条渐变，几十道卷帘看着一模一样、像新的；现在每条帘片的弧面上叠一层「竖着的」脏东西——
+ * 横向位置固定，所以一条条帘片对齐成从上往下的锈水、灰道、刮痕，再撒些锈点和磕掉漆的亮点。宽度按内存档位：电脑 256、手机 128。
+ * 没有 document 返回 null
+ */
+export function slatTexture(width = MEM.name === 'full' ? 256 : 128, seed = 7) {
   if (typeof document === 'undefined') return null;
-  const c = document.createElement('canvas'); c.width = 8; c.height = 32;
-  const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 32);
+  const W = width, H = 32, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); if (!g) return null;
+  const gr = g.createLinearGradient(0, 0, 0, H);
   gr.addColorStop(0, '#3b3f44'); gr.addColorStop(0.15, '#b9bec4'); gr.addColorStop(0.6, '#858b92'); gr.addColorStop(0.93, '#4a4f55'); gr.addColorStop(1, '#22252a');
-  g.fillStyle = gr; g.fillRect(0, 0, 8, 32);
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  let s = seed; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  // 竖向的灰道 / 锈水（每条帘片同一处 → 连成整片卷帘上的竖条）
+  for (let i = 0; i < W / 5; i++) { const x = r() * W, w = 1 + r() * (W / 40), rust = r() < 0.35; g.fillStyle = rust ? `rgba(110,58,24,${(0.12 + r() * 0.22).toFixed(3)})` : `rgba(20,20,18,${(0.08 + r() * 0.18).toFixed(3)})`; g.fillRect(x, 0, w, H); }
+  // 锈点、磕掉漆的亮点、细刮痕
+  for (let i = 0; i < W * 1.2; i++) { const x = r() * W, y = r() * H, k = r(); g.fillStyle = k < 0.45 ? `rgba(120,60,22,${(0.2 + r() * 0.4).toFixed(2)})` : k < 0.75 ? `rgba(230,232,235,${(0.15 + r() * 0.3).toFixed(2)})` : `rgba(10,10,10,${(0.15 + r() * 0.3).toFixed(2)})`; g.fillRect(x, y, 1 + r() * 1.5, 1 + r()); }
+  for (let i = 0; i < W / 16; i++) { const x = r() * W, y = 4 + r() * (H - 8); g.strokeStyle = `rgba(225,228,232,${(0.18 + r() * 0.25).toFixed(2)})`; g.lineWidth = 0.7; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 4 + r() * 14, y + (r() - 0.5) * 2); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.name = 'siege-seal-slat';
   return t;
 }
 

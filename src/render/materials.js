@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { floorTexture, stepTexture, chevronTexture } from './textures.js';
 import { FLOOR_SURFACES, pbrOptions, metricFloor, detailFor, worldWear, uvDetail, setWorldGrime } from './pbr.js';
 import { createFacadeMaterials } from './facade-materials.js';
+import { MEM } from './device.js';
 
 /** 让 emissive 乘以顶点色：夜间每个表面按自身颜色"亮起来" */
 function patchVertexEmissive(mat) {
@@ -17,6 +18,45 @@ function patchVertexEmissive(mat) {
 }
 
 const WARM = new THREE.Color(1.0, 0.9, 0.76);
+
+/**
+ * 绿植叶团、花球的细节（不用贴图、不多占内存）：以前是 flatShading 的二十面体，一块块平面像宝石。现在法线是圆的（batch.js 的 SOFT_TEMPLATES），
+ * 片元里按世界坐标取两层值噪声：cluster（米⁻¹）一簇簇叶子的深浅、leaf 细碎的叶片明暗，亮过 glint 阈值的是向光的嫩叶（偏黄绿）；
+ * bump：叶簇的凹凸（按噪声的屏幕导数扰动法线）只在非省内存档做（MEM.decor）。
+ */
+export const LEAF = Object.freeze({ cluster: 2.3, leaf: 9, depth: 0.34, fine: 0.32, glint: 0.86, glintGain: 0.12, bump: 0.45 });
+// 着色器里先把世界坐标转一个角度再取噪声（值噪声的格子不和楼的轴线对齐，近看不出方块）；细叶两层频率叠，
+// 远处一个像素跨过好几片叶子时细叶淡成平均值（按 fwidth），不闪成一片噪点
+export function leafDetail(mat, bump = MEM.decor, L = LEAF) {
+  if (!mat?.isMeshStandardMaterial) return mat;
+  mat.flatShading = false;
+  const f = (x) => Number(x).toFixed(3);
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLeafPos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvLeafPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vLeafPos;
+float leafHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float leafNoise(vec3 x) { vec3 i = floor(x), u = fract(x); u = u * u * (3.0 - 2.0 * u);
+  return mix(mix(mix(leafHash(i), leafHash(i + vec3(1, 0, 0)), u.x), mix(leafHash(i + vec3(0, 1, 0)), leafHash(i + vec3(1, 1, 0)), u.x), u.y),
+             mix(mix(leafHash(i + vec3(0, 0, 1)), leafHash(i + vec3(1, 0, 1)), u.x), mix(leafHash(i + vec3(0, 1, 1)), leafHash(i + vec3(1, 1, 1)), u.x), u.y), u.z); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+vec3 leafQ = mat3(0.8, 0.36, -0.48, -0.6, 0.48, -0.64, 0.0, 0.8, 0.6) * vLeafPos;
+float leafC = leafNoise(leafQ * ${f(L.cluster)}), leafF = leafNoise(leafQ * ${f(L.leaf)} + 7.1) * 0.65 + leafNoise(leafQ * ${f(L.leaf * 1.9)} + 3.7) * 0.35;
+leafF = mix(leafF, 0.5, clamp(length(fwidth(leafQ)) * ${f(L.leaf * 1.2)} - 0.3, 0.0, 1.0));
+diffuseColor.rgb *= (1.0 - ${f(L.depth)} + ${f(L.depth * 1.4)} * leafC) * (1.0 - ${f(L.fine)} * 0.5 + ${f(L.fine)} * leafF);
+diffuseColor.rgb += smoothstep(${f(L.glint)}, 1.0, leafF) * ${f(L.glintGain)} * vec3(0.55, 0.62, 0.18) * diffuseColor.rgb / max(0.05, dot(diffuseColor.rgb, vec3(0.33)));`)
+      .replace('#include <normal_fragment_maps>', bump ? `#include <normal_fragment_maps>
+{ vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition), r1 = cross(sy, normal), r2 = cross(normal, sx);
+  float det = dot(sx, r1), h = leafF * 0.6 + leafC * 0.4; vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+  normal = normalize(abs(det) * normal - ${f(L.bump)} * grad); }` : '#include <normal_fragment_maps>');
+  };
+  mat.customProgramCacheKey = () => `leaf-${bump ? 'b' : 'c'}`;
+  mat.userData.leaf = bump ? 'bump' : 'color';
+  // 各栋楼克隆共享材质（带自己的剖切面）：three 的 clone 不带 onBeforeCompile，克隆出来的再挂一遍
+  const clone = mat.clone; mat.clone = function () { return leafDetail(clone.call(this), bump, L); };
+  return mat;
+}
 
 /**
  * 「HDR 光影」下的面层做法：数值是粗糙度（越小越反光）。只换这几种本来就该亮的面——抛光石材、清漆木地板、
@@ -98,7 +138,7 @@ export class MaterialLib {
       ext: std({ vertexColors: true, roughness: 0.78, metalness: 0 }),
       extSatin: std({ vertexColors: true, roughness: 0.35, metalness: 0.1 }),
       extMetal: std({ vertexColors: true, roughness: 0.3, metalness: 0.85 }),
-      foliage: std({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true }),
+      foliage: leafDetail(std({ vertexColors: true, roughness: 0.92, metalness: 0 })), // 圆法线 + 叶簇噪声（见 leafDetail；以前 flatShading）
       glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
       glowSoft: new THREE.MeshBasicMaterial({ vertexColors: true }),
       glass: std({ color: 0xc9e2ea, roughness: 0.05, metalness: 0.15, transparent: true, opacity: 0.24, depthWrite: false, envMapIntensity: 1.6 }),

@@ -1047,11 +1047,131 @@ let WARM = false;
  * 丧尸围城开着的时候，提前把各种物件的几何体建好（每帧只建一件）：一局开始时武器柜、配电柜、三件工具、三道关、信号弹一下子全建，
  * 合起来要几十毫秒，手机上会卡一下；建好的几何体全局缓存（cached），开局时只剩挂网格。没有 requestAnimationFrame（节点测试）就不做。
  */
+// ---------- 商场段的小物件 ----------
+// 手摇柄、值班表、油桶、发电机、卷帘控制盒、卷帘的地锁座、储物柜：以前在 siege.js 里是几个纯色方块，拿手电一照就穿帮（停电的头几分钟最常看到的就是它们）。
+// 和上面的物件一样：按材质合并、共用那一张图集（漆面的磨损污渍、拉丝金属、钢门的压纹、警示条、资产编号、表盘），不另外加贴图；省内存档只剩顶点色。
+// 每个物件分三份：base（一直在）、item（拿走 / 用掉就藏：cutHide）、on（做完才亮的那盏灯：cutShow），各自一组网格。
+const MALL_C = Object.freeze({ crankSteel: 0x9aa0a6, grip: 0x161616, board: 0x6b4a2c, paper: 0xe9e4d4, can: 0xb0231a, genYellow: 0xd29a1c, boxGrey: 0x8b9299, boxYellow: 0xd3a326, lockBody: 0x2a2c30, padYellow: 0xd9a521, padRed: 0xb3261e,
+  locker: 0x4f6b7a, lockerDoor: 0x5f8194 });
+/** kind：'crank' | 'note' | 'fuel' | 'gen' | 'shutter' | 'open' | 'pry' | 'rescue' | 'holdout'。返回 { base, item, on }（几何体，按材质分好；没有的那份不给） */
+export function mallPropParts(kind) {
+  const part = (name, build) => cached(`mall:${kind}:${name}`, build);
+  const dark = { color: C.dark, region: 'metal' }, steel = { color: MALL_C.crankSteel, region: 'metal' };
+  if (kind === 'crank') return { // 手摇柄：一根带六角套头的钢曲柄、胶皮握把，搁在桌上（原点在桌面）
+    item: part('item', (k) => {
+      k.cyl('metal', 0.011, 0.011, 0.3, 8, { ...steel, p: [0, 0.012, 0], r: [0, 0, Math.PI / 2] });
+      k.cyl('metal', 0.011, 0.011, 0.15, 8, { ...steel, p: [0.15, 0.012, 0.065], r: [Math.PI / 2, 0, 0] });
+      k.cyl('metal', 0.016, 0.016, 0.03, 8, { ...steel, p: [0.15, 0.012, 0], r: [0, 0, Math.PI / 2] }); // 弯头
+      k.cyl('gloss', 0.017, 0.017, 0.11, 10, { color: MALL_C.grip, p: [0.21, 0.017, 0.14], r: [0, 0, Math.PI / 2] });
+      k.cyl('metal', 0.022, 0.022, 0.05, 6, { ...dark, p: [-0.165, 0.022, 0], r: [0, 0, Math.PI / 2] }); // 六角套头
+      k.box('paint', 0.1, 0.004, 0.06, { color: MALL_C.paper, region: 'stencil', label: true, p: [0.02, 0.002, -0.07], r: [0, 0.3, 0] }); // 压在底下的一张维修单
+    }),
+  };
+  if (kind === 'note') return { // 值班表：硬木写字板 + 夹子 + 几页纸，旁边一支笔（原点在桌面）
+    item: part('item', (k) => {
+      k.box('paint', 0.24, 0.012, 0.32, { color: MALL_C.board, region: 'woodDark', p: [0, 0.006, 0] });
+      for (let i = 0; i < 3; i++) k.box('paint', 0.2, 0.002, 0.27, { color: i ? 0xd8d2c0 : MALL_C.paper, region: 'stencil', label: !i, p: [0.004 * i, 0.013 + i * 0.0015, 0.008 - 0.004 * i], r: [0, 0.02 * i, 0] });
+      k.box('metal', 0.1, 0.018, 0.035, { color: C.steel, region: 'metal', p: [0, 0.022, -0.135] }); k.cyl('metal', 0.006, 0.006, 0.1, 6, { color: C.steel, p: [0, 0.03, -0.12], r: [0, 0, Math.PI / 2] });
+      k.cyl('gloss', 0.0045, 0.0045, 0.14, 6, { color: 0x1f3d7a, p: [0.16, 0.006, 0.05], r: [Math.PI / 2, 0, 0.35] });
+    }),
+  };
+  if (kind === 'fuel') return { // 油桶：20 升的方形油桶（两侧压出 X 形加强筋）、三道提手、带盖的桶嘴，漆面磨得发亮
+    item: part('item', (k) => {
+      const red = { color: MALL_C.can, region: 'paint' };
+      k.box('paint', 0.36, 0.44, 0.17, { ...red, p: [0, 0.23, 0] });
+      for (const z of [-0.087, 0.087]) for (const a of [0.88, -0.88]) k.box('paint', 0.42, 0.024, 0.008, { color: 0x9a1d16, region: 'paint', p: [0, 0.23, z], r: [0, 0, a] });
+      for (const z of [-0.087, 0.087]) { k.box('paint', 0.33, 0.012, 0.008, { color: 0x9a1d16, p: [0, 0.43, z] }); k.box('paint', 0.33, 0.012, 0.008, { color: 0x9a1d16, p: [0, 0.03, z] }); }
+      for (const x of [-0.1, 0, 0.1]) k.box('paint', 0.02, 0.05, 0.03, { ...red, p: [x - 0.04, 0.47, 0] });
+      k.box('paint', 0.24, 0.02, 0.03, { ...red, p: [-0.04, 0.5, 0] }); // 提手横梁
+      k.cyl('metal', 0.024, 0.024, 0.06, 10, { color: C.galv, region: 'metal', p: [0.13, 0.48, 0] }); k.cyl('gloss', 0.03, 0.03, 0.025, 10, { color: C.dark, p: [0.13, 0.52, 0] });
+      k.box('paint', 0.36, 0.025, 0.17, { color: 0x5a120e, p: [0, 0.012, 0] }); // 桶底磨黑的一圈
+    }),
+  };
+  if (kind === 'gen') return { // 备用发电机：管架框着的机身（黄漆）、发动机缸体、油箱、消声器、控制面板（启动钮 / 运行灯）、两个轮子；正面贴着「当心触电」
+    base: part('base', (k) => {
+      const y = { color: MALL_C.genYellow, region: 'paint' };
+      k.box('paint', 0.82, 0.3, 0.46, { ...y, p: [0, 0.38, 0] }); // 机身
+      k.box('paint', 0.5, 0.16, 0.36, { ...y, p: [-0.12, 0.62, 0] }); // 油箱
+      k.cyl('metal', 0.07, 0.07, 0.03, 12, { color: C.dark, p: [-0.12, 0.71, 0] }); // 油箱盖
+      k.box('metal', 0.26, 0.22, 0.3, { color: 0x2c2e31, region: 'metal', p: [0.24, 0.63, 0] }); // 缸体
+      for (let i = 0; i < 5; i++) k.box('metal', 0.27, 0.012, 0.31, { color: 0x3a3d40, p: [0.24, 0.55 + i * 0.035, 0] }); // 散热片
+      k.cyl('metal', 0.055, 0.055, 0.3, 12, { color: 0x6f6a62, region: 'metal', p: [0.05, 0.5, -0.27], r: [0, 0, Math.PI / 2] }); // 消声器
+      // 管架：四根立柱 + 上下两圈横管
+      for (const [x, z] of [[-0.43, -0.25], [0.43, -0.25], [-0.43, 0.25], [0.43, 0.25]]) k.cyl('metal', 0.018, 0.018, 0.76, 8, { ...dark, p: [x, 0.42, z] });
+      for (const yy of [0.06, 0.8]) { for (const z of [-0.25, 0.25]) k.cyl('metal', 0.018, 0.018, 0.86, 8, { ...dark, p: [0, yy, z], r: [0, 0, Math.PI / 2] }); for (const x of [-0.43, 0.43]) k.cyl('metal', 0.018, 0.018, 0.5, 8, { ...dark, p: [x, yy, 0], r: [Math.PI / 2, 0, 0] }); }
+      for (const z of [-0.27, 0.27]) k.cyl('gloss', 0.09, 0.09, 0.05, 14, { color: C.rubber, p: [-0.33, 0.09, z], r: [Math.PI / 2, 0, 0] }); // 轮子
+      // 控制面板（正面 +z）：深色面板、电压表、插座
+      k.box('paint', 0.3, 0.2, 0.02, { color: 0x1e2024, region: 'metal', p: [0.2, 0.44, 0.235] });
+      k.plane('paint', 0.09, 0.09, { region: 'gauge', label: true, color: C.white, p: [0.12, 0.47, 0.247] });
+      k.cyl('gloss', 0.022, 0.022, 0.02, 10, { color: 0x30343a, p: [0.27, 0.39, 0.248], r: [Math.PI / 2, 0, 0] });
+      k.plane('paint', 0.16, 0.16, { region: 'warn', label: true, color: C.white, p: [-0.2, 0.4, 0.232] }); // 当心触电
+      k.plane('paint', 0.8, 0.05, { region: 'hazard', label: true, color: C.yellow, p: [0, 0.255, 0.232] }); // 底边的警示条
+      k.plane('paint', 0.3, 0.15, { region: 'stencil', label: true, color: C.cream, p: [-0.15, 0.4, -0.232], r: [0, Math.PI, 0] }); // 背面的资产编号
+    }),
+    item: part('item', (k) => k.box('gloss', 0.07, 0.05, 0.025, { color: MALL_C.padRed, p: [0.2, 0.45, 0.25] })), // 红色的启动钮
+    on: part('on', (k) => k.cyl('gloss', 0.02, 0.02, 0.02, 10, { color: 0x35d07f, p: [0.32, 0.49, 0.248], r: [Math.PI / 2, 0, 0] })),
+  };
+  if (kind === 'shutter' || kind === 'open') { // 门边墙上的卷帘控制盒：一根穿线管下到地面、盒子上一块「当心触电」、钥匙孔、按钮 / 摇把座
+    const body = kind === 'open' ? { color: MALL_C.boxYellow, region: 'paint' } : { color: MALL_C.boxGrey, region: 'paint' };
+    return {
+      base: part('base', (k) => {
+        k.box('paint', 0.22, 0.28, 0.1, { ...body, p: [0, 1.2, 0] });
+        k.box('paint', 0.24, 0.02, 0.11, { color: 0x3a3d40, p: [0, 1.35, 0] }); // 防雨檐
+        k.cyl('metal', 0.018, 0.018, 1.06, 8, { color: C.galv, region: 'metal', p: [0, 0.53, -0.02] }); // 穿线管
+        for (const yy of [0.3, 0.8]) k.box('metal', 0.06, 0.02, 0.05, { color: C.steel, p: [0, yy, -0.02] }); // 管卡
+        k.plane('paint', 0.1, 0.1, { region: 'warn', label: true, color: C.white, p: [0, 1.29, 0.051] });
+        k.cyl('metal', 0.012, 0.012, 0.012, 8, { color: C.brass, p: [0.07, 1.14, 0.054], r: [Math.PI / 2, 0, 0] }); // 钥匙孔
+        if (kind === 'shutter') k.cyl('metal', 0.02, 0.02, 0.05, 6, { color: C.dark, p: [-0.05, 1.12, 0.07], r: [Math.PI / 2, 0, 0] }); // 摇把的六角座
+      }),
+      item: part('item', (k) => k.box('gloss', 0.06, 0.06, 0.03, { color: kind === 'open' ? MALL_C.padRed : C.dark, p: [0, 1.24, 0.06] })),
+      on: part('on', (k) => k.box('gloss', 0.06, 0.06, 0.03, { color: 0x35d07f, p: [0, 1.24, 0.06] })),
+    };
+  }
+  if (kind === 'pry' || kind === 'rescue' || kind === 'holdout') return { // 卷帘底下的地锁座：铸铁底座、两颗膨胀螺栓、挂着一把挂锁；救人 / 后门的那把是红的，旁边一根撬棍
+    base: part('base', (k) => {
+      k.box('metal', kind === 'pry' ? 0.3 : 0.34, 0.12, 0.18, { color: MALL_C.lockBody, region: 'metal', p: [0, 0.06, 0] });
+      k.box('metal', 0.36, 0.02, 0.22, { color: 0x1a1b1d, p: [0, 0.01, 0] });
+      for (const x of [-0.13, 0.13]) k.cyl('metal', 0.016, 0.016, 0.02, 6, { color: C.galv, p: [x, 0.125, 0.05] });
+      k.torus('metal', 0.025, 0.006, 6, 12, Math.PI * 2, { color: C.steel, p: [0, 0.14, 0], r: [0, Math.PI / 2, 0] }); // 锁环
+      if (kind !== 'pry') { k.cyl('metal', 0.014, 0.014, 0.8, 8, { color: C.red, region: 'metal', p: [0.28, 0.02, 0.1], r: [Math.PI / 2, 0, 0.4] }); k.cyl('metal', 0.014, 0.014, 0.08, 8, { color: C.red, p: [0.13, 0.03, -0.25], r: [0, 0, Math.PI / 2] }); }
+    }),
+    item: part('item', (k) => { // 挂锁：锁体 + U 形锁梁
+      const col = kind === 'pry' ? MALL_C.padYellow : MALL_C.padRed;
+      k.box('paint', 0.1, 0.08, 0.04, { color: col, region: 'paint', p: [0, 0.19, 0] }); k.box('metal', 0.1, 0.012, 0.042, { color: C.galv, p: [0, 0.15, 0] });
+      k.torus('metal', 0.03, 0.007, 6, 12, Math.PI, { color: C.galv, p: [0, 0.23, 0] });
+    }),
+  };
+  return {};
+}
+/** 把 mallPropParts 挂到 g（base）、item、on 三个组上；返回 { base, item, on } 网格 */
+export function buildMallProp(kind, g, item, on = null) {
+  const P = mallPropParts(kind);
+  return { base: P.base ? meshes(g, P.base) : null, item: P.item ? meshes(item, P.item, { shadow: false }) : null, on: P.on && on ? meshes(on, P.on, { shadow: false }) : null };
+}
+/** 储物柜（门禁卡那一步，三个一排）的柜体：漆面、侧面百叶、顶上通风孔、里面一层隔板 */
+export function lockerBody() { return cached('mall:locker:body', (k) => {
+  const o = { color: MALL_C.locker, region: 'paint' };
+  k.box('paint', 0.5, 1.8, 0.02, { ...o, p: [0, 0.9, -0.215] }); for (const x of [-0.24, 0.24]) k.box('paint', 0.02, 1.8, 0.45, { ...o, p: [x, 0.9, 0] });
+  k.box('paint', 0.5, 0.02, 0.45, { ...o, p: [0, 1.79, 0] }); k.box('paint', 0.5, 0.08, 0.45, { color: 0x2b3a42, region: 'paint', p: [0, 0.04, 0] });
+  k.box('paint', 0.46, 0.02, 0.4, { color: 0x3d5562, p: [0, 1.35, -0.01] });
+  for (const x of [-0.252, 0.252]) for (let i = 0; i < 5; i++) k.box('paint', 0.006, 0.012, 0.22, { color: 0x34474f, p: [x, 1.55 + i * 0.035, 0] });
+  for (let i = 0; i < 4; i++) k.box('paint', 0.3, 0.006, 0.02, { color: 0x34474f, p: [0, 1.802, -0.12 + i * 0.07] });
+}); }
+/** 储物柜的门：钢门的压纹、门上方的通风缝、拉手和锁扣、号牌框 */
+export function lockerDoor() { return cached('mall:locker:door', (k) => {
+  k.box('paint', 0.44, 1.7, 0.025, { color: MALL_C.lockerDoor, region: 'door', p: [0, 0.9, 0.235] });
+  for (let i = 0; i < 5; i++) k.box('paint', 0.24, 0.01, 0.008, { color: 0x3e5b6a, p: [0, 1.62 - i * 0.03, 0.25] });
+  k.box('metal', 0.03, 0.14, 0.035, { color: C.steel, region: 'metal', p: [0.16, 0.95, 0.26] }); k.box('metal', 0.05, 0.06, 0.012, { color: C.galv, p: [0.16, 1.05, 0.252] });
+  k.box('paint', 0.22, 0.13, 0.008, { color: C.steel, region: 'metal', p: [0, 1.5, 0.25] });
+}); }
+/** 储物柜挂成网格：柜体挂在 one 上，门挂在 one 下面一个新组里（返回这个组，好给它打 cutHide） */
+export function buildMallLocker(one) { meshes(one, lockerBody()); const d = new THREE.Group(); d.name = '储物柜门'; meshes(d, lockerDoor()); one.add(d); return d; }
+
 export function warmProps() {
   if (WARM || typeof requestAnimationFrame !== 'function') return false;
   WARM = true;
   const q = slices(), grp = () => new THREE.Group();
-  const jobs = [() => buildLocker(grp()), () => lockerDoors(), () => buildSwitchCabinet(grp()), () => switchLever(false), () => buildTable(grp()),
+  const jobs = [() => buildLocker(grp()), () => lockerDoors(), ...['crank', 'note', 'fuel', 'gen', 'shutter', 'open', 'pry', 'rescue', 'holdout'].map((k) => () => mallPropParts(k)), () => lockerBody(), () => lockerDoor(), () => buildSwitchCabinet(grp()), () => switchLever(false), () => buildTable(grp()),
     ...['撬棍', '保险丝', '灭火器', '门禁卡'].map((t) => () => buildTool(grp(), t)), () => buildFuseBox(grp()), () => fuseInserts(), () => buildFlareKit(grp()), () => litFlare(), () => buildHoseCabinet(grp()),
     () => buildDebris(grp()), () => buildFire(grp()), () => buildFireStatic(grp()), () => powderSheet(), () => buildShutterFrame(grp()), () => buildShutterCurtain(grp()), () => buildDoorFrame(grp()), () => buildDoorLeaf(grp())];
   for (const j of jobs) q.add(j);

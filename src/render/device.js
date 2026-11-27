@@ -25,6 +25,35 @@ export const CONTEXT_LOSSES = readLossCount();
 /** 省显存档：手机、平板，或上次被回收过的电脑——画质自动档从「流畅」起、楼层细节少留几层、
  * 装饰性的小几何（垂藤、小花、绿墙叶团）不做。 */
 export const LITE = MOBILE || AFTER_CONTEXT_LOSS;
+// 进模式时页面被系统直接关掉：iOS / iPadOS 的 Safari 内存超限时直接结束网页进程，不给任何事件，下次打开只是重新载入。
+// 进入一个模式前记一笔「正在进入」（markBootStart），进去玩稳了 / 正常离开 / 切到后台时擦掉（markBootDone）；
+// 下次打开时还在 → 上次没进成，算一次「被回收」：和显存被回收一样，内存档位降一档，两次以上直接用最省的一档（7 天内有效）。
+export const BOOT = Object.freeze({ key: 'yunlan-boot', crash: 'yunlan-boot-crash', count: 'yunlan-boot-crash-n', days: 7, settle: 20 });
+let bootLost = 0;
+/** 7 天内进模式时被关掉过几次（纯读） */
+export function bootCrashes(storage = globalThis.localStorage) {
+  try {
+    const t = Number(storage?.getItem(BOOT.crash));
+    return Number.isFinite(t) && t > 0 && Date.now() - t < BOOT.days * 864e5 ? Math.max(1, Number(storage?.getItem(BOOT.count)) || 1) : 0;
+  } catch { return 0; }
+}
+/** 进入模式前调：上次的「正在进入」还在就记一次被关掉。返回 { crashed（上次没进成）, crashes（7 天内一共几次） } */
+export function markBootStart(mode, storage = globalThis.localStorage, now = Date.now()) {
+  let crashes = bootCrashes(storage), crashed = false;
+  try {
+    const prev = storage?.getItem(BOOT.key);
+    if (prev) { crashed = true; crashes += 1; storage.setItem(BOOT.crash, String(now)); storage.setItem(BOOT.count, String(crashes)); }
+    storage?.setItem(BOOT.key, JSON.stringify({ mode, t: now }));
+  } catch { /* 存不了就不记 */ }
+  bootLost = crashes;
+  return { crashed, crashes };
+}
+/** 进去玩稳了、正常离开、切到后台：擦掉「正在进入」 */
+export function markBootDone(storage = globalThis.localStorage) { try { storage?.removeItem(BOOT.key); } catch { /* 存不了就算了 */ } }
+/** 一共算几次「被回收」：显存被回收 + 进模式时被关掉 */
+export const lostCount = () => CONTEXT_LOSSES + bootLost;
+/** 内存小的电脑（Chromium 的 navigator.deviceMemory，单位 GB，Safari 没有）：≤ 2 用省内存档，≤ 4 用标准档 */
+export const DEVICE_RAM = typeof navigator !== 'undefined' && Number.isFinite(navigator.deviceMemory) ? navigator.deviceMemory : null;
 /** 记一笔：显示资源被回收了，下次打开走省显存档 */
 export function markContextLoss() {
   try {
@@ -50,13 +79,14 @@ const ORDER = ['compact', 'standard', 'rich', 'full'];
 
 /**
  * 这个画质档位该用哪个内存档位。tier: 'auto' | 'low' | 'balanced' | 'high' | 'ultra'。纯函数（测试直接用）。
- * lost：这台设备 7 天内被系统回收过几次显存——一次：在原来的基础上降一档；两次以上：直接用省内存档。
+ * lost：这台设备 7 天内被系统回收过几次显存（或进模式时整页被关掉）——一次：在原来的基础上降一档；两次以上：直接用省内存档。
+ * ram：电脑的内存（GB）：≤ 2 省内存档、≤ 4 标准档（精细 / 极致用高清贴图档）；不知道就按原始大小。
  */
-export function memoryProfileFor(tier, { mobile = MOBILE, lost = CONTEXT_LOSSES } = {}) {
+export function memoryProfileFor(tier, { mobile = MOBILE, lost = lostCount(), ram = DEVICE_RAM } = {}) {
   let name;
   if (+lost >= 2) return 'compact';
   if (mobile) name = tier === 'high' || tier === 'ultra' ? 'rich' : tier === 'balanced' ? 'standard' : 'compact';
-  else name = 'full';
+  else name = ram && ram <= 2 ? 'compact' : ram && ram <= 4 ? (tier === 'high' || tier === 'ultra' ? 'rich' : 'standard') : 'full';
   if (lost) name = mobile ? (name === 'rich' ? 'standard' : 'compact') : (tier === 'low' ? 'compact' : 'standard');
   return name;
 }
