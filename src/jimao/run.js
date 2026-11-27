@@ -256,6 +256,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.supplies = supplies;
   const siege = zombies ? createSiege(G, { layout: ctx.layout, nav, scene, ui, zombies, director, runs: stairs.runs, flow: J.GAME_FLOW, storage: safeStorage(), tower: params.tower || null, supplies }) : null;
   if (siege && params.siege !== undefined) siege.enabled = params.siege !== '0';
+  if (siege && (params.room || params.mp === '1')) siege.enabled = true; // 联机只在丧尸围城里：带房间码 / 封面联机入口进来时不管 siege 参数
   // 撤离楼顶上只画给看的机房、屋顶花园（markSiegeRoofs 登记的 ctx.siegeRoofProps）：开着丧尸围城时藏起来，零点突围照旧
   const siegeRoofProps = () => { for (const g of ctx.siegeRoofProps || []) g.visible = !siege?.enabled; };
   siegeRoofProps();

@@ -83,7 +83,7 @@ export function createLobby({ ui, storage = null, params = {}, state, create, jo
     if (a === 'leave') leave();
     if (a === 'copy') copyLink();
   });
-  function link() { const L = globalThis.location; return L ? `${L.origin}${L.pathname}?room=${state().code}` : `?room=${state().code}`; }
+  function link() { const q = `?siege=1&mp=1&room=${state().code}`; const L = globalThis.location; return L ? `${L.origin}${L.pathname}${q}` : q; } // 带上 siege=1&mp=1：朋友从封面点任何枪战入口都进丧尸围城联机（封面不覆盖地址栏已有的键）
   async function copyLink() {
     const url = link();
     try { await navigator.clipboard.writeText(url); say(`邀请链接已复制：${url}`); }

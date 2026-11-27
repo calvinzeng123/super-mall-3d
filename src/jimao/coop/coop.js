@@ -522,5 +522,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   };
   // 网址带 ?room=CODE：打开大厅、直接加入
   if (params.room && lobby) setTimeout(() => lobby.autoJoin(params.room), 1500); // 等加载画面后面那几帧（预热着色器、传贴图）过去再连
+  // 封面「联机（三人）」入口带 ?mp=1（见 src/cover-options.js 的 MP_ENTRY）：没带房间码时进来就把大厅打开
+  else if (params.mp === '1' && lobby) setTimeout(() => lobby.open(), 1500);
   return api;
 }
