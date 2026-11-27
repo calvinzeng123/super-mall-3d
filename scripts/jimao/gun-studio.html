@@ -3,8 +3,9 @@
   枪械预览台（开发工具，不进构建）：只加载枪和它的贴图，两三秒出图——调贴图、材质、摆位不用每次等整个商场加载。
   用法：在仓库根目录起一个静态服务器（python3 -m http.server 5174），打开
     /scripts/jimao/gun-studio.html?gun=smg&pose=hip&light=dark
-  gun   = rifle 以外的四把：smg（冲锋枪）| launcher（榴弹枪）| pistol（手枪）| knife（刀）| axe（消防斧：近战槽换成斧子）
-  pose  = hip（腰射）| ads（开镜）| reload（换弹到一半，t=0–1 指定进度）| left / right（枪的左、右侧面，整把入画）|
+  gun   = rifle（新步枪：原游戏的步枪 + rifle-view.js 换上的 M4A1 和手臂；old=1 看原来那把）| smg（冲锋枪）| launcher（榴弹枪）| pistol（手枪）| knife（刀）| axe（消防斧：近战槽换成斧子）
+  pose  = hip（腰射）| ads（开镜）| reload（换弹到一半，t=0–1 指定进度；步枪 empty=1 打空了再换）| sprint（冲刺）| draw / holster（步枪：掏出 / 放下到一半，t 指定）|
+          fire（步枪：开一枪后 0.03 秒）| left / right（枪的左、右侧面，整把入画）|
           close（侧面贴近看机匣，查贴图细节）| top（从上往下）| q（四分之三侧）| swing（刀 / 斧子挥到一半，t=0–1 指定进度）
   light = dark（停电：和游戏里丧尸围城的亮度相当）| day（白天）
   rig   = 0 关掉枪的专用打光（view-light.js），看没有它的时候什么样
@@ -52,7 +53,7 @@ const rig = createViewLight({ camera }); if (q.get('rig') === '0') rig.scale = 0
 
 // 假的游戏上下文：够 arsenal.js 跑起来就行
 const pressed = new Set();
-const rifle = { name: '九式突击步枪', ammo: 30, magSize: 30, reserve: 150, state: 'idle', ads: 0, spread: 0.0125, update() {}, reset() {}, setVisible() {}, addAmmo() {}, snap() {} };
+let rifle = { name: '九式突击步枪', ammo: 30, magSize: 30, reserve: 150, state: 'idle', ads: 0, spread: 0.0125, update() {}, reset() {}, setVisible() {}, addAmmo() {}, snap() {} };
 const G = {
   weapon: rifle, game: { state: 'playing' }, enemies: { list: [] }, physics: { lineOfSight: () => true },
   player: { pos: new THREE.Vector3(), vel: new THREE.Vector3(), onGround: true, sprinting: false, addRecoil() {}, addShake() {} },
@@ -60,17 +61,33 @@ const G = {
   events: { emit() {}, on() {} }, combat: { playerShot: () => null }, fx: { tracer() {}, shell() {}, smoke() {} }, render: { lightPool: { flash() {} } },
   actions: { launch: () => true },
 };
+// 步枪：用原游戏真的那把（它自己摆腰射 / 开镜 / 换弹的位置），材质随便给一个（反正要被新模型换掉）
+if (gun === 'rifle') {
+  const J = await import('/src/jimao/vendor/game.js');
+  Object.assign(G, { camera, viewCamera: camera, mats: { get: () => new THREE.MeshStandardMaterial({ color: 0x333333 }) } });
+  Object.assign(G.player, { alive: true, speed: 0, eye: new THREE.Vector3() });
+  G.weapon = rifle = await J.createWeapon(G);
+}
 const arsenal = createArsenal(G, { camera }); G.rifle = rifle; G.weapon = arsenal;
 const load = async (file) => new GLTFLoader().loadAsync(`/assets/models/fps/${file}`);
 const step = (secs) => { for (let t = 0; t < secs - 1e-9; t += 1 / 60) { arsenal.update(1 / 60); pressed.clear(); } };
 
 if (gun === 'smg') { arsenal.skinSmg(await load('smg45-mobile.glb')); arsenal.grant('smg'); }
+else if (gun === 'rifle' && q.get('old') !== '1') { arsenal.skinRifle(await load('m4a1-mobile.glb'), { textureCap: +(q.get('tex') || 1024), view: q.get('view') ? JSON.parse(q.get('view')) : undefined, keys: q.get('keys') ? JSON.parse(q.get('keys')) : undefined }); arsenal.skinSmg(await load('smg45-mobile.glb')); }
 else if (gun === 'launcher') arsenal.grant('launcher');
 else if (gun === 'pistol') { arsenal.skinPistol((await load('desert-eagle-mobile.glb')).scene); arsenal.select('pistol', { plain: true }); }
 else if (gun === 'knife') arsenal.select('knife', { plain: true });
 else if (gun === 'axe') { arsenal.setMelee('axe'); arsenal.select('knife', { plain: true }); }
 step(2);
 if (pose === 'ads') { G.input.ads = true; step(0.9); }
+if (gun === 'rifle') {
+  const t = +(q.get('t') || 0.45);
+  if (pose === 'reload') { rifle.ammo = q.get('empty') === '1' ? 0 : 5; rifle.reloadNow(); step((rifle.ammo ? 2.1 : 2.72) * t); }
+  if (pose === 'sprint') { G.player.sprinting = true; G.player.speed = 6; step(1); }
+  if (pose === 'fire') { G.input.fire = true; step(1 / 60); G.input.fire = false; step(0.02); }
+  if (pose === 'draw') { arsenal.select('pistol'); step(1.2); arsenal.select('rifle'); step(0.17 + 0.46 * t); }
+  if (pose === 'holster') { arsenal.select('pistol'); step(0.17 * t); }
+}
 if (pose === 'reload') {
   const t = +(q.get('t') || 0.45);
   if (gun === 'smg') { arsenal.smg.state.ammo = 5; arsenal.reloadNow(); step(arsenal.smg.spec.reload * t); }
@@ -78,19 +95,22 @@ if (pose === 'reload') {
   else if (gun === 'pistol') { arsenal.pistol.ammo = 5; arsenal.startReload(); step(1.45 * t); }
 }
 if (pose === 'swing') { arsenal.slash(); step((gun === 'axe' ? 0.8 : 0.5) * +(q.get('t') || 0.3)); }
-const root = arsenal.roots[gun === 'axe' ? 'knife' : gun];
+const root = gun === 'rifle' ? rifle.root : arsenal.roots[gun === 'axe' ? 'knife' : gun];
 // 看侧面 / 俯视 / 特写：把枪从握姿里拿出来，摆到镜头正前方转一个角度
 const INSPECT = { left: [0, Math.PI / 2, 1], right: [0, -Math.PI / 2, 1], top: [Math.PI / 2, Math.PI / 2, 1], q: [0.18, Math.PI / 2 - 0.75, 1.05], close: [0, Math.PI / 2, 0.42] };
-if (INSPECT[pose]) {
+// insp=left|right|…：先按 pose 摆好（比如换弹到一半），再把整把枪拿出来从这个角度看
+const insp = q.get('insp') || pose;
+if (INSPECT[insp]) {
   root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
   // 只按枪本身量大小（冲锋枪的模型带两条手臂，手臂不算）
-  const focus = q.get('focus') ? new RegExp(q.get('focus'), 'i') : gun === 'smg' ? /smg/i : null, box = new THREE.Box3();
+  const focus = q.get('focus') ? new RegExp(q.get('focus'), 'i') : gun === 'smg' ? /smg/i : gun === 'rifle' ? /nisu/i : null, box = new THREE.Box3();
   root.traverse((o) => { if (!o.isMesh || !o.visible) return; const name = `${o.name} ${[].concat(o.material).map((m) => m?.name).join(' ')}`; if (focus && !focus.test(name)) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); });
-  const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()), [rx, ry, k] = INSPECT[pose];
+  const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()), [rx, ry, k] = INSPECT[insp];
   const len = Math.max(size.x, size.y, size.z), dist = (len / 2) / Math.tan(THREE.MathUtils.degToRad(54 / 2)) / (innerWidth / innerHeight) * 1.25 * k + len * 0.2;
   const rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, 0, 'YXZ'));
   root.quaternion.copy(rot); root.position.copy(c).applyQuaternion(rot).multiplyScalar(-1).add(new THREE.Vector3(+(q.get('dx') || 0), +(q.get('dy') || 0), -dist));
 }
+if (q.get('noarms') === '1' && arsenal.rifleView?.arms) arsenal.rifleView.arms.visible = false; // 只看枪（查零件位置）
 root.updateMatrixWorld(true);
 renderer.render(scene, camera);
 window.__studio = { THREE, G, arsenal, root, renderer, scene, camera, rig, render: () => renderer.render(scene, camera) };

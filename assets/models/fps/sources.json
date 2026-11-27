@@ -56,5 +56,41 @@
       }
     }
   ],
-  "changes": "1024px maximum hand/SMG maps; 512px pistol maps; JPEG quality 92; unchanged original mesh topology, skin and SMG reload animation. Runtime presentation, recoil, pistol reload and weapon switching by Yunlan."
+  "changes": "1024px maximum hand/SMG maps; 512px pistol maps; JPEG quality 92; unchanged original mesh topology, skin and SMG reload animation. Runtime presentation, recoil, pistol reload and weapon switching by Yunlan.",
+  "rifleDownloads": [
+    {
+      "sourceFile": "steel_tide_m4a1.glb",
+      "acquired": "2026-11-26",
+      "url": "https://cdn.jsdelivr.net/gh/AetherRadar/operation-steel-tide@d6a33b932e00fb9016dea407eca3f909aeaf2dcb/assets/models/steel_tide_m4a1/steel_tide_m4a1.glb",
+      "upstreamPath": "assets/models/steel_tide_m4a1/steel_tide_m4a1.glb (same pinned upstream commit as above)",
+      "bytes": 5302740,
+      "sha256": "3c0fe733d6e298c94be66accb5ab579317eeb027e349af60f95c618610c0811c",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "upstreamLicenseRecord": "assets/models/steel_tide_m4a1/LICENSE.md upstream: a composite of nisu's CC0 M4A1 and CC0 parts from Quaternius' Ultimate Guns Pack; the composite output is not relicensed. Only the nisu parts are kept here."
+    },
+    {
+      "sourceFile": "m4a1_0.zip",
+      "acquired": "2026-11-26",
+      "role": "original work, checked but not shipped: FBX + five 2048 PNG maps (the glb above embeds the same maps)",
+      "url": "https://opengameart.org/sites/default/files/m4a1_0.zip",
+      "bytes": 3631284,
+      "sha256": "ed5779ec82718861964227e2aad2a900978ea087081154365d6d86246be62f0d"
+    }
+  ],
+  "rifleSourceEvidence": [
+    {
+      "title": "M4A1 Assault Rifle",
+      "author": "nisu",
+      "authorUrl": "https://opengameart.org/users/nisu",
+      "sourceUrl": "https://opengameart.org/content/m4a1-assault-rifle",
+      "published": "2022-04-24",
+      "license": {
+        "label": "CC0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      "checked": "2026-11-26: the OpenGameArt page lists License(s): CC0; the download's SHA-256 matches the upstream record."
+    }
+  ],
+  "rifleChanges": "Quaternius foregrip/suppressor/optic/spare magazine removed; 2048 PNG maps resized to 1024 JPEG (runtime further to 512 on low memory tiers). Geometry, UVs and the Magazine/ChargingHandle hierarchy unchanged. First-person arms are the DJMaesen SMG arms (CC BY 4.0, credited above) cloned and posed in code."
 }

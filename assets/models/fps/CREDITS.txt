@@ -23,6 +23,21 @@ authored component-based slide/magazine movement. Source geometry retained.
 base colour is darkened to a blued finish and the factory lettering, serial and grip emblems are painted out
 of the colour, roughness and normal maps (src/jimao/arsenal.js, PISTOL_SKIN). The file itself is unchanged.
 
-The art above remains under CC BY 4.0, not the software repository's code license.
+零点突围 / 丧尸围城 (2026-11-26): the same SMG file also supplies the first-person arms of the new rifle —
+the arm mesh and skeleton are cloned at runtime (the SMG itself is removed from the clone) and posed in code
+(src/jimao/rifle-view.js). The file itself is unchanged.
+
+“M4A1 Assault Rifle” by nisu
+https://opengameart.org/content/m4a1-assault-rifle
+https://opengameart.org/users/nisu
+CC0 1.0 Universal (public domain dedication) — no attribution required; credited as provenance.
+https://creativecommons.org/publicdomain/zero/1.0/
+Used for the M4A1 rifle of 零点突围 / 丧尸围城 (m4a1-mobile.glb). Taken from the glTF conversion in the same pinned
+Operation Steel Tide commit (steel_tide_m4a1.glb, itself CC0); the Quaternius parts that version adds (foregrip,
+suppressor, optic, spare magazine) are removed and the maps are resized to 1024 px JPEG
+(scripts/fps-assets/prepare-rifle.py). At load time the rear sight aperture is widened, the surface is darkened
+and the magazine, dust cover, bolt and trigger are animated. Hashes and URLs: sources.json (rifleDownloads).
+
+The CC BY 4.0 art above remains under CC BY 4.0 (the nisu rifle under CC0), not the software repository's code license.
 Retrieved from a pinned Operation Steel Tide commit; exact URLs and hashes: sources.json.
 Both original author pages were verified through Sketchfab's public model API on 2026-10-19.
