@@ -93,6 +93,9 @@ const VIEW_LAYER = 3;
 /** 原游戏的灯光按它自己的亮度标定（太阳 9）；我们的太阳是 2.1，枪口闪光等点光源按这个比例缩。 */
 const LIGHT_SCALE = 2.1 / 9;
 
+/** 丧尸围城里枪的真模型晚点加载：开局玩稳了 settle 秒（和 render/device.js 的 BOOT.settle 一样），或者走到第 stage 步（拿撬棍那一步；手枪在第 8 步） */
+export const GUN_DEFER = Object.freeze({ settle: 20, stage: 2 });
+
 export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const { camera, renderer, ctx, scene } = app;
   const params = Object.fromEntries(new URLSearchParams(location.search));
@@ -204,22 +207,29 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   if (params.gunlight !== undefined) viewLight.scale = +params.gunlight || 0; // ?gunlight=0 关掉对比
   G.viewLight = viewLight;
   G.arms = G.weapon;
-  // 手枪换上带贴图的真模型（2 MB，后台加载；加载不出来就用 arsenal.js 里手搭的那把，不影响开打）
-  { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'pistol'), arsenal = G.weapon;
-    if (rec) fetchBinary(rec.url, { label: '手枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
-      .then((gltf) => { if (G.weapon === arsenal) arsenal.skinPistol(gltf.scene, undefined, { sliced: true }); }) // sliced：贴图一帧处理一种材质，不卡一下长的
-      .catch((e) => console.warn('[零点突围] 手枪模型没加载出来，用简化模型', e)); }
-  // 新步枪（rifle-view.js）：M4A1 真模型（0.8 MB），手臂借下面冲锋枪模型上那双——两个都加载好才换上，之前是原来那把步枪。
-  // 贴图按内存档位：电脑 1024，手机省内存 / 标准档 512。?oldrifle=1 不换（对比用）
-  { const rec = !params.boxgun && !params.oldrifle && FPS_MODEL_ASSETS.find((a) => a.id === 'm4a1'), arsenal = G.weapon;
-    if (rec) fetchBinary(rec.url, { label: '步枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
-      .then((gltf) => { if (G.weapon === arsenal) arsenal.skinRifle(gltf, { textureCap: rifleTextureCap(MEM, G.quality) }); })
-      .catch((e) => console.warn('[零点突围] 新步枪模型没加载出来，用原来那把', e)); }
-  // 冲锋枪（丧尸围城里捡得到的第四把）：带手臂和换弹动画的真模型，2.9 MB，手枪之后再加载；加载不出来就没有这把枪
-  { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'rifle'), arsenal = G.weapon;
-    if (rec) setTimeout(() => fetchBinary(rec.url, { label: '冲锋枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
-      .then((gltf) => { if (G.weapon === arsenal) arsenal.skinSmg(gltf); })
-      .catch((e) => console.warn('[零点突围] 冲锋枪模型没加载出来', e)), 1500); }
+  // 三把枪的真模型（手枪、M4A1 步枪、冲锋枪，GLB 一共 5.7 MB，贴图解开二十多张）：零点突围开局就要用，马上加载；
+  // 丧尸围城开局手里只有刀（手枪在二层、步枪在一层武器柜），等开局玩稳了（GUN_DEFER.settle 秒）或者走到 GUN_DEFER.stage 那一步再加载——
+  // 不跟着进场那一下一起解贴图，手机上进模式的内存峰值低一截（iOS 内存超限直接关页面）。见下面 siege 建好以后的 scheduleGuns
+  let gunsLoaded = false;
+  const loadGuns = () => {
+    if (gunsLoaded) return; gunsLoaded = true;
+    // 手枪换上带贴图的真模型（2 MB，后台加载；加载不出来就用 arsenal.js 里手搭的那把，不影响开打）
+    { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'pistol'), arsenal = G.weapon;
+      if (rec) fetchBinary(rec.url, { label: '手枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+        .then((gltf) => { if (G.weapon === arsenal) arsenal.skinPistol(gltf.scene, undefined, { sliced: true }); }) // sliced：贴图一帧处理一种材质，不卡一下长的
+        .catch((e) => console.warn('[零点突围] 手枪模型没加载出来，用简化模型', e)); }
+    // 新步枪（rifle-view.js）：M4A1 真模型（0.8 MB），手臂借下面冲锋枪模型上那双——两个都加载好才换上，之前是原来那把步枪。
+    // 贴图按内存档位：电脑 1024，手机省内存 / 标准档 512。?oldrifle=1 不换（对比用）
+    { const rec = !params.boxgun && !params.oldrifle && FPS_MODEL_ASSETS.find((a) => a.id === 'm4a1'), arsenal = G.weapon;
+      if (rec) fetchBinary(rec.url, { label: '步枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+        .then((gltf) => { if (G.weapon === arsenal) arsenal.skinRifle(gltf, { textureCap: rifleTextureCap(MEM, G.quality) }); })
+        .catch((e) => console.warn('[零点突围] 新步枪模型没加载出来，用原来那把', e)); }
+    // 冲锋枪（丧尸围城里捡得到的第四把）：带手臂和换弹动画的真模型，2.9 MB，手枪之后再加载；加载不出来就没有这把枪
+    { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'rifle'), arsenal = G.weapon;
+      if (rec) setTimeout(() => fetchBinary(rec.url, { label: '冲锋枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+        .then((gltf) => { if (G.weapon === arsenal) arsenal.skinSmg(gltf); })
+        .catch((e) => console.warn('[零点突围] 冲锋枪模型没加载出来', e)), 1500); }
+  };
   // 敌人：原游戏的机械飞鸥、机械猎犬，加上真人敌人「武装劫持者」（soldier.js，登记进同一个敌人模块）
   onProgress('正在部署敌人', 0.85);
   G.enemies = await guarded('enemies', () => J.createEnemies(G));
@@ -261,6 +271,14 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const siegeRoofProps = () => { for (const g of ctx.siegeRoofProps || []) g.visible = !siege?.enabled; };
   siegeRoofProps();
   G.siege = siege; G.zombies = zombies;
+  // 枪的真模型什么时候加载（见上面 loadGuns）：不是丧尸围城、从存档点回来、开局玩了 settle 秒、走到第 stage 步，哪个先到算哪个
+  let gunTimer = null;
+  if (!siege?.enabled) loadGuns();
+  else { let played = 0; gunTimer = setInterval(() => {
+    if (gunsLoaded) { clearInterval(gunTimer); gunTimer = null; return; }
+    if (G.game?.state === 'playing') played++;
+    if (!siege.enabled || director.state.restore || played >= GUN_DEFER.settle || (siege.state?.stage ?? 0) >= GUN_DEFER.stage) loadGuns();
+  }, 1000); }
   // 两名电脑队友（squad.js）：只在丧尸围城里出场。网址带 ?squad=0 关掉（一个人闯）
   const squad = siege ? createSquad(G, { scene, nav, zombies, siege, director, ui }) : null;
   if (squad) { try { if (safeStorage()?.getItem('jimao-squad') === '0') squad.wanted = false; } catch { /* 读不了就按默认 */ } if (params.squad !== undefined) squad.wanted = params.squad !== '0'; }
@@ -527,7 +545,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
       env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
-      ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); roofGun?.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); coopRules?.dispose(); coop?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
+      if (gunTimer) clearInterval(gunTimer); ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); roofGun?.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); coopRules?.dispose(); coop?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };
 }
