@@ -102,16 +102,16 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
     if (btn) { btn.classList.toggle('off', !enabled); btn.classList.toggle('empty', !any); btn.querySelector('span').textContent = `治疗 ${inv.medkit + inv.pills}`; }
   }
 
-  /** 拿到一样东西（走过去捡 / 安全点发的）。返回实际拿了几个（带满了是 0） */
+  /** 拿到一样东西（走过去捡 / 安全点发的）。返回实际拿了几个（带满了是 0）。联机多人时（G.rewardMul）医疗用品、投掷物、榴弹翻倍，带得下的也翻倍；弹匣在 ammo.give 里翻 */
   function give(kind, n = 1) {
-    let got = 0;
-    if (kind === 'medkit' || kind === 'pills') { const before = inv[kind]; inv[kind] = Math.min(P[kind].max, before + n); got = inv[kind] - before; }
+    let got = 0; const mul = G.rewardMul || 1;
+    if (kind === 'medkit' || kind === 'pills') { const before = inv[kind]; inv[kind] = Math.min(P[kind].max * mul, before + n * mul); got = inv[kind] - before; }
     else if (kind === 'ammo') { const w = G.weapon; got = ammo?.give && !(w && !w.stub && (w.reserve | 0) >= AMMO.cap) && ammo.give(P.ammo.give * n, '捡到弹匣') > 0 ? 1 : 0; }
     else if (kind === 'smg') got = G.weapon?.grant?.('smg') ? 1 : 0; // 第一次捡：换到手上；已经有了：当两个弹匣
     else if (kind === 'launcher') got = G.weapon?.grant?.('launcher') ? 1 : 0;
-    else if (kind === 'shell') got = G.weapon?.owns?.launcher && G.weapon.launcher.addShells(P.shell.give * n) > 0 ? 1 : 0; // 没有榴弹枪的时候捡不了，留在原地
+    else if (kind === 'shell') got = G.weapon?.owns?.launcher && G.weapon.launcher.addShells(P.shell.give * n * mul) > 0 ? 1 : 0; // 没有榴弹枪的时候捡不了，留在原地
     else if (kind === 'axe') { got = G.weapon?.setMelee && G.weapon.melee !== 'axe' ? 1 : 0; if (got) G.weapon.setMelee('axe'); } // 近战从刀换成斧子（已经是斧子了就不捡）
-    else got = actions?.give?.(n, kind) || 0;
+    else got = actions?.give?.(n * mul, kind) || 0;
     paint();
     return got;
   }
@@ -172,7 +172,7 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
     /** 从存档点重来：身上的东西照存档时的来，血量至少 restoreHp */
     restore(snap) {
       if (!snap) return;
-      inv.medkit = Math.min(P.medkit.max, snap.medkit | 0); inv.pills = Math.min(P.pills.max, snap.pills | 0);
+      const mul = G.rewardMul || 1; inv.medkit = Math.min(P.medkit.max * mul, snap.medkit | 0); inv.pills = Math.min(P.pills.max * mul, snap.pills | 0);
       if (actions?.give) { for (const k of ['fire', 'lure']) if (snap[k] > 0) actions.give(snap[k], k); }
       if (snap.smg) G.weapon?.grant?.('smg', { equip: false });
       if (snap.shells >= 0 && G.weapon?.grant?.('launcher', { equip: false })) { const st = G.weapon.launcher.state; st.ammo = Math.min(1, snap.shells); st.reserve = Math.max(0, snap.shells - st.ammo); }
@@ -198,11 +198,12 @@ export function createSupplies(G, { scene, ui = null, actions = null, ammo = nul
         d.halo.scale.setScalar(1 + Math.sin(d.t * 3) * 0.12);
         if (!playing || Math.abs(d.pos.y - p.pos.y) > 1.7 || Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) > P.pickR || (d.ready && !d.ready())) continue;
         const had = d.kind === 'launcher' && !!G.weapon?.owns?.launcher, touch = !!G.input?.touch; // 已经有榴弹枪：再捡一把只算两发榴弹
-        if (give(d.kind, 1) > 0) {
+        const got = give(d.kind, 1), x2 = got > 1 ? ` ×${got}` : ''; // 联机多人时一次捡两份
+        if (got > 0) {
           d.g.removeFromParent(); drops.splice(i, 1);
           if (d.kind === 'smg') say(`捡到冲锋枪 · 动静小，${touch ? '点换枪键切换' : '按 4 换'}`, 3); else if (d.kind === 'launcher') say(had ? `榴弹 +${P.shell.give}` : `捡到榴弹枪 · 一发一装，${touch ? '点换枪键切换' : '按 5 换'}`, had ? 1.8 : 3);
           else if (d.kind === 'axe') say(`捡到消防斧 · 近战换成斧子：抡得开，一下能砍倒两只（${touch ? '近战键' : 'V / F'}）`, 3.2);
-          else if (d.kind === 'shell') say(`榴弹 +${P.shell.give}`, 1.8); else if (d.kind !== 'ammo') say(`捡到${P[d.kind].name}`, 1.8);
+          else if (d.kind === 'shell') say(`榴弹 +${P.shell.give * (G.rewardMul || 1)}`, 1.8); else if (d.kind !== 'ammo') say(`捡到${P[d.kind].name}${x2}`, 1.8);
           G.audio?.play?.('reload', { gain: 0.4, pitch: 1.3 });
           G.events?.emit?.('supply:pickup', { kind: d.kind });
         } else if (d.fullT <= 0) { d.fullT = 4; if (d.kind !== 'smg' && d.kind !== 'axe' && !(d.kind === 'shell' && !G.weapon?.owns?.launcher)) say(`${P[d.kind].name}带满了`, 1.5); } // 冲锋枪捡不起来只会是模型还没加载好：不吭声，等一下就能捡

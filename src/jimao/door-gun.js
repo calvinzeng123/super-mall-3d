@@ -165,10 +165,10 @@ function mergeByMaterial(group, geos) {
  * cfg：改掉 DOOR_GUN 里的哪几项（楼顶重机枪：左右不限 yaw: Infinity、往下压得更低、辅助瞄准弱一点、子弹能穿 pierce 只）。tune(over) 开打以后再改（键鼠 / 触屏换辅助瞄准）
  */
 export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, drop, flash = 1.5, cfg = null } = {}) {
-  const C = { pierce: 0, pierceMul: 0.6, ...DOOR_GUN, ...(cfg || {}) };
+  const C = { pierce: 0, pierceMul: 0.6, puppetRate: 8, ...DOOR_GUN, ...(cfg || {}) };
   const gun = buildDoorGun(G, { ...(post == null ? {} : { post }), ...(drop == null ? {} : { drop }) });
   mount.add(gun.root);
-  let heat = 0, overheated = false, spin = 0, spinAngle = 0, cooldown = 0, active = false;
+  let heat = 0, overheated = false, spin = 0, spinAngle = 0, cooldown = 0, active = false, shooting = false;
   const q = new THREE.Quaternion(), d = new THREE.Vector3(), dir = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vector3(), mz = new THREE.Vector3(), ej = new THREE.Vector3(), vel = new THREE.Vector3();
   let inArc = true;
   const hud = makeHud(label);
@@ -224,7 +224,8 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
     spin += (want - spin) * Math.min(1, dt / (want ? C.spinUp : 0.9));
     spinAngle += dt * spin * 60; gun.barrels.rotation.z = spinAngle;
     cooldown -= dt;
-    if (on && firing && !overheated && inArc && spin > 0.6 && camera) {
+    shooting = !!(on && firing && !overheated && inArc && spin > 0.6 && camera);
+    if (shooting) {
       while (cooldown <= 0) { cooldown += 1 / C.rate; shoot(camera); }
     } else cooldown = Math.max(cooldown, 0);
     gun.mats.hot.emissiveIntensity = Math.max(0, heat - 0.25) * 2.2;
@@ -267,7 +268,29 @@ export function createDoorGun(G, mount, { label = 'M134 舱门机枪', post, dro
     if (heat >= 1) { overheated = true; G.hud?.message?.('机枪过热！松开扳机冷却', 1.6); }
   }
 
-  return { gun, update, canAim, eye, get heat() { return heat; }, get overheated() { return overheated; }, get active() { return active; },
+  /**
+   * 别人在用这挺枪（联机：右舷那挺是阿哲的、左舷是主角的）：枪口转到他报的角度（枪架坐标：yaw 左右、pitch 往下为正），
+   * 他在开火就转枪管、隔 1 / puppetRate 秒画一发曳光弹和枪口焰——只是画面，不打伤害、不出响动（命中由他那边报给主机）
+   */
+  let puppetT = 0;
+  function puppet(dt, { yaw = 0, pitch = 0, firing = false } = {}) {
+    active = false; hud.show(false);
+    gun.yawG.rotation.y += (Math.max(-C.yaw, Math.min(C.yaw, yaw)) - gun.yawG.rotation.y) * Math.min(1, dt * 12);
+    gun.pitchG.rotation.x += (Math.max(-C.pitchUp, Math.min(C.pitchDown, pitch)) - gun.pitchG.rotation.x) * Math.min(1, dt * 12);
+    spin += ((firing ? 1 : 0) - spin) * Math.min(1, dt / (firing ? C.spinUp : 0.9));
+    spinAngle += dt * spin * 60; gun.barrels.rotation.z = spinAngle;
+    shooting = false;
+    if (!firing || spin < 0.6) { puppetT = 0; return; }
+    if ((puppetT -= dt) > 0) return;
+    puppetT = 1 / C.puppetRate;
+    gun.muzzle.getWorldPosition(mz); gun.muzzle.getWorldQuaternion(q); dir.set(0, 0, 1).applyQuaternion(q);
+    G.fx?.tracer?.(mz.clone(), mz.clone().addScaledVector(dir, 160), { color: 0xffb35a, speed: 720, width: 0.05 });
+    G.fx?.muzzleFlash?.(mz.clone(), dir.clone(), { scale: flash * 0.8 });
+  }
+
+  return { gun, update, puppet, canAim, eye, get heat() { return heat; }, get overheated() { return overheated; }, get active() { return active; },
+    /** 这一帧枪口朝哪（枪架坐标）、是不是正在出弹：联机时发给别人，别人那边的这挺枪照着转、照着冒火 */
+    get aim() { return { yaw: gun.yawG.rotation.y, pitch: gun.pitchG.rotation.x, firing: shooting }; },
     reset() { heat = 0; overheated = false; spin = 0; cooldown = 0; gun.mats.hot.emissiveIntensity = 0; hud.show(false); },
     cfg: C, tune(over) { Object.assign(C, over || {}); },
     dispose() { gun.dispose(); hud.remove(); } };
@@ -296,8 +319,9 @@ export function makeHud(label = 'M134 舱门机枪') {
 
 export const DOOR_GUN_CSS = `
 /* 坐在载具上用的是车载机枪：手雷、切枪、换弹、跳、蹲、近战、瞄准、交互这些键用不着，还会压住机枪的状态条（用户截图）；步枪的子弹数也不该显示 */
-.jm-riding .t-reload, .jm-riding .t-jump, .jm-riding .t-ads, .jm-riding .t-crouch, .jm-riding .t-melee, .jm-riding .t-nade, .jm-riding .t-swap, .jm-riding .t-interact { display: none !important; }
-.jm-riding .h-ammo { display: none !important; }
+/* 联机时机舱里拿步枪的那个人（.jm-cabin）：换弹、瞄准键和子弹数照常留着 */
+.jm-riding:not(.jm-cabin) .t-reload, .jm-riding .t-jump, .jm-riding:not(.jm-cabin) .t-ads, .jm-riding .t-crouch, .jm-riding .t-melee, .jm-riding .t-nade, .jm-riding .t-swap, .jm-riding .t-interact { display: none !important; }
+.jm-riding:not(.jm-cabin) .h-ammo { display: none !important; }
 /* 治疗、路障在飞机上用不着（看炸楼那一段也是），手机上这两个键正好在中间偏右、拖着转视角老按到它们（测试：一趟飞下来「不用治——血是满的」十七遍） */
 .jm-riding .t-heal, .jm-riding .t-wall, .jm-riding .jm-heal, .jm-riding .jm-walls { display: none !important; }
 /* 手机上无线电字幕平时在准星正下方（minimap.js），坐飞机时挡着要打的楼——挪到屏幕最底下（机枪状态条下面） */

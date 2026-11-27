@@ -102,8 +102,10 @@ export function createAmmoSupply(G, { scene, layout, nav, rng = Math.random, isR
   const weapon = () => G.weapon && !G.weapon.stub ? G.weapon : null;
   const total = () => { const w = weapon(); return w ? (w.ammo | 0) + (w.reserve | 0) : 999; };
 
+  // 联机多人时资源翻倍（G.rewardMul，coop/rules.js 给；单人 1）
   function give(n, why) {
     const w = weapon(); if (!w) return 0;
+    n = Math.round(n * (G.rewardMul || 1));
     const add = Math.max(0, Math.min(n, AMMO.cap - (w.reserve | 0)));
     if (add > 0) w.addAmmo(add);
     G.hud?.message?.(add > 0 ? `${why} · 弹药 +${add}` : `${why} · 备弹已满`, 2.2);

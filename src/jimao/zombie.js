@@ -117,6 +117,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, name: 'zombie' });
   const sets = { normal: LOOKS.map((l) => zombieParts(l)), fat: LOOKS.map((l) => zombieParts(l, { girth: KINDS.bloater.girth })), scream: LOOKS.map((l) => zombieParts({ ...l, shirt: 0xcfcabb, hair: 0x8a8578 }, { screamer: true })) };
   const pool = [], planFrame = { n: -1 };
+  // 联机的客户端（coop/coop.js）：池子里的丧尸都是木偶——不跑 AI，位置、动作、血量照主机的快照摆（m.net），死也听主机的（netKill）
+  let puppet = false;
   for (let i = 0; i < count; i++) { const z = make(i); pool.push(z); group.add(z.rig.group); }
   ctx.pools = Object.assign(ctx.pools || {}, { zombie: pool });
   enemies.debug.zombies = pool;
@@ -155,6 +157,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         const K = KINDS[kind];
         C = { ...ZOMBIE, ...K }; scale = K.scale || 1;
         m.kind = kind; m.name = K.name; m.feedName = K.name; m.maxHp = C.hp; m.hp = C.hp; m.role = kind;
+        m.gen = (m.gen | 0) + 1; m.net = null; m.netBy = null; // gen：这只是第几回出场（联机时主机和客户端对号：命中报的是哪一回的它）
         const look = Math.floor(rng() * LOOKS.length) % LOOKS.length, set = (kind === 'bloater' ? sets.fat : kind === 'screamer' ? sets.scream : sets.normal)[look];
         torso.geometry = set.body; for (const a of arms) a.geometry = set.arm; for (const l of legs) l.geometry = set.leg;
         arms[0].position.x = 0.21 * (K.girth || 1); arms[1].position.x = -0.21 * (K.girth || 1);
@@ -193,6 +196,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       },
       _update(dt) {
         if (!m.active) return;
+        if (puppet) { puppetStep(dt); return; }
         if (!m.alive) { dead(dt); return; }
         // 离得远的隔帧才动一次（步长翻倍，走得一样快）
         const pl = G.player, far = pl ? Math.hypot(pl.pos.x - m.pos.x, pl.pos.z - m.pos.z) > ZOMBIE.farUpdate : true;
@@ -250,7 +254,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         m.mode = 'engage'; m.speed = 0; m.lunge = Math.max(0, Math.sin(m.phase * 3.2)) * 0.8; m.fwd.set(Math.sin(m.yaw), 0, Math.cos(m.yaw));
         pose(dt); return;
       }
-      const pl = G.player, alivePl = pl && pl.alive !== false;
+      // 追谁：平时是你；联机时主机按 G.zombieTarget 挑离它最近的真人（远程玩家是一个代理对象：pos / vel / alive / damage，见 coop.js）
+      const pl = (G.zombieTarget && G.zombieTarget(m)) || G.player, alivePl = pl && pl.alive !== false, proxy = pl !== G.player;
       m.fwd.set(Math.sin(m.yaw), 0, Math.cos(m.yaw)); m.sensor.copy(headPos);
       const dx = pl ? pl.pos.x - m.pos.x : 99, dz = pl ? pl.pos.z - m.pos.z : 99, dy = pl ? pl.pos.y - m.pos.y : 0, dist = Math.hypot(dx, dz);
       m.cool -= dt; m.stagger = Math.max(0, m.stagger - dt);
@@ -296,7 +301,7 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
         const near = alivePl && Math.abs(dy) < 3.2 && dist < ZOMBIE.lose;
         if (near && (m.los || dist < ZOMBIE.senseBlind)) { m.lastKnown.copy(pl.pos); m.loseT = 0; } else if (m.hunt && alivePl) m.lastKnown.copy(pl.pos); else m.loseT += dt;
         if (!alivePl || (!m.hunt && m.loseT > ZOMBIE.loseSeconds)) { m.zs = 'idle'; m.home.copy(m.pos); m.hasGoal = false; m.path = null; }
-        else if (C.pounce && near && m.los && Math.abs(dy) < 1.4 && (m.pounceT -= dt) <= 0 && dist > C.pounce.min && dist < C.pounce.max) {
+        else if (C.pounce && !proxy && near && m.los && Math.abs(dy) < 1.4 && (m.pounceT -= dt) <= 0 && dist > C.pounce.min && dist < C.pounce.max) {
           // 扑袭者：够得着的距离上先蹲一下（有一声低吼，给人反应的时间），再扑
           m.zs = 'crouch'; m.zsT = 0; faceYaw = Math.atan2(dx, dz);
           G.events.emit('enemy:telegraph', { enemy: m, pos: m.pos, type: 'soldier', scream: true, pounce: true });
@@ -433,19 +438,20 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       if (heli) { tmp.copy(heli).sub(headPos).normalize(); G.events.emit('enemy:fire', { enemy: m, pos: headPos.clone(), dir: tmp.clone(), type: 'screamer', scream: true, hits: C.scream.heli }); }
     }
 
-    function die(dir, part) {
+    function die(dir, part, fxOnly = false) {
       if (m.zs === 'pin') G.events.emit('zombie:unpin', { enemy: m });
       m.alive = false; m.dieT = 0; m.fall = 0; m.fallV = 0; m.pathJob?.cancel?.(); m.pathJob = null;
       const f = dir ? dir.x * Math.sin(m.yaw) + dir.z * Math.cos(m.yaw) : -1;
       m.fallSign = f > 0 ? 1 : -1;
       G.events.emit('enemy:killed', { enemy: m, pos: m.pos, type: 'soldier', part, zombie: true, kind: m.kind, by: m.by || null });
-      if (C.burst) burst();
+      if (C.burst) burst(fxOnly);
     }
     /** 胖尸炸开：范围内的人和别的丧尸都掉血（离得越近越多） */
-    function burst() {
+    function burst(fxOnly = false) {
       const B = C.burst, at = tmp.set(m.pos.x, m.pos.y + 1, m.pos.z).clone();
       G.fx?.explosion?.(at, 0.9); G.fx?.smoke?.(at, { size: 1.6, life: 1.4, color: 0x3c4a1e, rise: 0.6 });
       G.events.emit('zombie:burst', { enemy: m, pos: at });
+      if (fxOnly) return; // 联机客户端：炸开的伤害主机算过了，这里只放特效
       const pl = G.player;
       if (pl && pl.alive !== false) { const d = Math.hypot(pl.pos.x - m.pos.x, pl.pos.z - m.pos.z, pl.pos.y - m.pos.y); if (d < B.radius) {
           pl.damage?.(Math.round(B.damage * (1 - d / B.radius * 0.7)), m.pos); pl.addShake?.(0.5);
@@ -463,6 +469,19 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       if (m.dieT > ZOMBIE.corpseSeconds) m.sink = 1e-3;
     }
 
+    /**
+     * 木偶（联机客户端）：位置、朝向、动作照 m.net（coop.js 每帧按主机快照插值好的 { x, y, z, yaw, zs, lunge }）摆，速度按这一帧挪了多远算（走路姿势跟着转）。
+     * 死了的照常倒下、躺一会儿、沉下去、收回池子（倒下由 netKill 触发）
+     */
+    function puppetStep(dt) {
+      if (!m.alive) { dead(dt); return; }
+      const n = m.net; if (!n) { pose(dt); return; }
+      const d = Math.hypot(n.x - m.pos.x, n.z - m.pos.z);
+      m.speed = dt > 0 && d < 3 ? m.speed + (d / dt - m.speed) * Math.min(1, dt * 8) : 0;
+      m.pos.set(n.x, n.y, n.z); m.yaw = n.yaw; m.zs = n.zs || 'chase'; m.lunge = n.lunge || 0;
+      m.fwd.set(Math.sin(m.yaw), 0, Math.cos(m.yaw));
+      pose(dt);
+    }
     function pose(dt) {
       const sp = m.speed, run = Math.min(1, sp / 4), before = Math.sin(m.gait);
       if (skin && m.alive) walk += sp * dt * SKIN_CYCLES;
@@ -490,6 +509,8 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
       feet.set(m.pos.x, m.pos.y + 0.08, m.pos.z);
       m.muzzle.copy(headPos);
     }
+    /** 联机客户端：主机说这只死了（by：'squad' = 不是你打的，不算你的分）。倒下、出 enemy:killed；胖尸炸开只放特效（伤害主机算过了） */
+    m.netKill = (dir = null, part = 'body', by = 'squad') => { if (!m.alive) return false; m.by = by; m.hp = 0; die(dir, part, true); return true; };
     /** 换上贴图外形（kit.create() 的返回值）；null = 换回方块人 */
     /** 被推了一把（近战键）：往 (dx, dz) 方向退一步、趔趄不到一秒，正要咬 / 正按着人的被打断；巨尸推不动，只顿一下 */
     m.shove = (dx, dz, power = 7) => {
@@ -536,6 +557,17 @@ export function addZombies(G, enemies, { count = ZOMBIE.pool, scene = G.scene } 
     /** 贴图外形加载好了：池子里每只都换上（方块人藏起来） */
     useSkin(k) { if (kit === k) return; kit = k; for (const z of pool) z._skin(k ? k.create() : null); },
     get skinned() { return !!kit; },
+    /** 联机客户端：池子里的丧尸都当木偶（不跑 AI、不咬人，照 m.net 摆）；关掉以后从木偶当时的样子接着跑 AI（主机迁移、离开房间） */
+    get puppet() { return puppet; },
+    set puppet(v) { puppet = !!v; if (!puppet) for (const z of pool) if (z.active) { z.net = null; z.path = null; z.planT = 0; z.senseT = 0; z.cool = Math.max(z.cool || 0, 0.4); } },
+    /** 把池子里第 index 只放出来（联机客户端照主机的编号摆木偶）：登记进原游戏的活动列表，和 enemies.spawn 一样 */
+    activate(index, at, opts = {}) {
+      const z = pool[index]; if (!z) return null;
+      if (z.active) z._deactivate();
+      z.id = (ctx.nextId = (ctx.nextId || 1e6) + 1); ctx.list.push(z); z._activate(at, opts);
+      G.events.emit('enemy:spawn', { enemy: z });
+      return z;
+    },
     alive: () => pool.filter((z) => z.active && z.alive),
     /** at 这一点有动静（枪声、拉闸、尖叫）：radius 米内、高度差 dy 米内（默认上下一层）的丧尸都扑过来；hunt 表示认定了人，不会跟丢 */
     alert(at, radius, hunt = false, dy = 7) {

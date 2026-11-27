@@ -55,6 +55,12 @@ export const SQUAD = Object.freeze({
         tape: 0xd9d4c8, bind: 0x6b3a22, nameTape: 0x8a4a2c, patch: 0x8a4a2c, sleeve: 'short', pads: false, heavy: false, who: 2, grime: 0.7,
         blood: Object.freeze([]) }) }), // 血迹的格子（12 个）已经被两个队友占满了：小许身上不加
   ]),
+  // 主角（单人时的你）：只在联机时作为别人眼里的人形出现——你扮演阿哲 / 林医生时主角是别人（或者主机走了以后由电脑接手）。不在 members 里（单人永远用不到）
+  lead: Object.freeze({ id: 'lead', name: '主角', role: '特勤队员', hp: 100, side: 1, back: 1.7, trait: 'lead', lead: true,
+    gun: Object.freeze({ name: '步枪', interval: 0.13, burst: [3, 5], rest: [0.45, 0.9], damage: 15, hit: 0.84, falloff: 0.01, head: 0.15, range: 26 }),
+    // 黑灰作训服 + 橄榄色板甲背心、深色头盔、战术手套；和两名队友一眼分得开
+    look: Object.freeze({ face: 'zhe', skin: 0xb88a6c, lip: 0x8f5a4b, hair: 0x15110e, iris: 0x22160e, shirt: 0x2a2d2b, pants: 0x2b2e2a, vest: 0x4a5137, strap: 0x3a3f2c, pouch: 0x3f4530, helmet: 0x30342e, mask: 0x202224, glove: 0x1c1c1b, boot: 0x1a1918, pad: 0x2f342a,
+      tape: 0x8a8e7a, bind: 0x3a402c, nameTape: 0x353b2a, patch: 0x56604a, pads: true, heavy: false, who: 3, grime: 0.6, blood: Object.freeze([]) }) }),
 });
 
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
@@ -105,11 +111,13 @@ export const SQUAD_CSS = `
 function nameTag(text, color) {
   if (typeof document === 'undefined') return null;
   const c = document.createElement('canvas'); c.width = 160; c.height = 40;
-  const g = c.getContext('2d'); g.font = '600 24px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(18, 4, 124, 32); g.fillStyle = color; g.fillText(text, 80, 21);
+  const g = c.getContext('2d');
+  const draw = (t) => { g.clearRect(0, 0, 160, 40); g.font = '600 24px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(18, 4, 124, 32); g.fillStyle = color; g.fillText(t, 80, 21, 120); };
+  draw(text);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false, fog: false }));
   sp.scale.set(0.62, 0.155, 1); sp.position.y = 2.02; sp.renderOrder = 5;
+  sp.userData.rename = (t) => { draw(t); tex.needsUpdate = true; }; // 联机时名牌换成玩家的昵称
   return sp;
 }
 
@@ -120,12 +128,16 @@ function nameTag(text, color) {
 export function createSquad(G, { scene, nav, zombies, siege = null, director = null, ui = null, rng = Math.random, P = SQUAD } = {}) {
   const group = new THREE.Group(); group.name = 'squad'; scene?.add(group);
   // 两人共用一个材质（rig-skin.js：顶点色 + 表面种类 + 细节图）；自发光按颜色走，停电里认得出人，黑衣服不会被抬成一层灰
-  const mat = createRigMaterial({ name: 'squad', emissive: 0x16181a, looks: P.members.map((m) => m.look) });
+  const mat = createRigMaterial({ name: 'squad', emissive: 0x16181a, looks: [...P.members, P.lead].filter(Boolean).map((m) => m.look) });
   // 胸前小手电的镜头（灯体在 buildParts 里）：一片发光的小圆，不是以前那个浮在胸口的亮球
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xf2e6cc, fog: false });
   const lampGeo = new THREE.CylinderGeometry(0.0105, 0.0105, 0.004, 14); lampGeo.rotateX(Math.PI / 2);
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), dir = new THREE.Vector3();
   let enabled = false, hud = null, sayT = 0, wanted = true;
+  // 联机（coop/coop.js）：local 是这台机器上的你扮演谁（'lead' 主角 / 'zhe' / 'lin'），那个角色不再画成队友；
+  // puppet：客户端上所有人形都是木偶（位置、血量、倒地照主机的快照，不跑 AI、不开枪）；force：房间里有人时不管设置里关没关队友都出场
+  // selfDown：联机时这台机器上的你倒地了（coop/rules.js 管；倒着的你扶不了别人、林医生不来包扎而是来扶你）；medicMul：真人林医生扶人快几倍
+  const net = { local: 'lead', puppet: false, force: false, selfDown: false, medicMul: 1 };
   // 你最近是朝哪边走的（不是朝哪边看）：站位按这个方向排在你身后。原地转头不会让他们跟着绕圈
   const trail = { x: 0, z: 0, yaw: 0, ready: false };
   function track() {
@@ -155,11 +167,12 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       const shin = new THREE.Group(); shin.position.y = -RIG.THIGH; thigh.add(shin); shin.add(mk(parts.shin));
       return { thigh, shin };
     });
-    const tag = nameTag(member.name, index ? '#bfeee8' : '#ffe98a'); if (tag) root.add(tag);
+    const tag = nameTag(member.name, member.lead ? '#ffd2a8' : index ? '#bfeee8' : '#ffe98a'); if (tag) root.add(tag);
     group.add(root);
     const vel = new THREE.Vector3(), want = new THREE.Vector3();
     const m = {
-      member, id: member.id, name: member.name, pos: root.position, root, yaw: 0, speed: 0, hp: member.hp, maxHp: member.hp, alive: true, down: false, active: false,
+      // label：名牌上的名字（联机时是玩家昵称）；remote：主机上由真人操控时，coop.js 每帧给的 { x, y, z, yaw, pitch, speed, crouch, sprint }
+      member, id: member.id, name: member.name, label: member.name, remote: null, pos: root.position, root, yaw: 0, speed: 0, hp: member.hp, maxHp: member.hp, alive: true, down: false, active: false,
       target: null, senseT: rng() * 0.3, cool: 0.6, burst: 0, shots: 0, kills: 0, path: null, wp: 0, planT: 0, pathJob: null, awayT: 0, gait: 0, pitch: 0, recoil: 0, lowReady: 1,
       reviveT: 0, flingT: 0, stun: 0, flingX: 0, flingZ: 0, dodgeT: 0, dodgeSide: 1, holdT: 0, slotK: 0, goalSeen: true, seenP: true, offArea: false, lostT: 0, exitTo: null, exitT: 0, healT: 12 + rng() * 8, healing: 0, fallK: 0, muzzle: new THREE.Vector3(), chest: new THREE.Vector3(), parts, hurtT: 0, stuckT: 0, biteSay: 0,
       biters: [], biteAt: new Map(), clock: 0, hide: null, bitten: 0, // 小许：正在咬他的（最多 P.guest.cap 只）、每只下一口的时刻、往哪儿躲、挨了几口
@@ -277,17 +290,57 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
     function goDown() {
       m.down = true; m.hp = 0; m.target = null; m.reviveT = 0; m.burst = 0; m.path = null; want.set(0, 0, 0); vel.set(0, 0, 0);
       m.biters = []; m.hide = null;
-      G.hud?.radio?.(member.guest ? `${member.name}倒下了！把你身边的丧尸砍开，站到他跟前一秒多就能扶起来（倒着的时候它们不咬他）。` : `${member.name}倒下了！走到跟前把人扶起来。`, 4);
+      G.hud?.radio?.(member.guest ? `${member.name}倒下了！把你身边的丧尸砍开，站到他跟前一秒多就能扶起来（倒着的时候它们不咬他）。` : `${m.label}倒下了！走到跟前把人扶起来。`, 4);
       G.events?.emit?.('squad:down', { mate: m });
     }
     function getUp(hp = P.down.hp, quiet = false) {
       m.down = false; m.hp = Math.min(m.maxHp, Math.max(m.hp, hp)); m.reviveT = 0; m.cool = 0.8;
-      if (!quiet) G.hud?.message?.(`${member.name}站起来了`, 2);
+      if (!quiet) G.hud?.message?.(`${m.label}站起来了`, 2);
       G.events?.emit?.('squad:up', { mate: m });
     }
 
+    /**
+     * 倒地：等人来扶（你站在跟前三秒；林医生过来四秒半；联机时别的真人站到跟前也算）。小许：你站到 P.guest.reach 米内 P.guest.revive 秒就起来，
+     * 但你身边 busy 米内有醒着的丧尸时扶不了（先腾出手）——光站着不打就扶不起来；扶了一半走开，进度慢慢退
+     */
+    function downTick(dt, others, p, dist, dy, zs) {
+      const B = P.guest, reach = member.guest ? B.reach : P.down.reach;
+      const meNear = p.alive !== false && !net.selfDown && dist < reach && Math.abs(dy) < 1.5;
+      const helper = meNear ? null : others.find((o) => o !== m && o.remote && !o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < reach && Math.abs(o.pos.y - m.pos.y) < 1.5);
+      const near = meNear || !!helper;
+      // 联机：扶人的是真人扮演的林医生（你自己、或者别人）——快一些（net.medicMul）
+      const fast = !member.guest && ((meNear && net.local === 'lin') || helper?.member.trait === 'medic') ? net.medicMul : 1;
+      const busy = member.guest && near && zs.some((z) => z.zs !== 'idle' && !z.fixed && !z.passive && Math.abs(z.pos.y - p.pos.y) < 1.6 && Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) < B.busy);
+      const medic = others.find((o) => o !== m && !o.down && !o.remote && o.member.trait === 'medic' && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < P.down.reach && Math.abs(o.pos.y - m.pos.y) < 1.5);
+      m.help = !near ? 'far' : busy ? 'busy' : 'up'; // siege 的护送提示按这个说
+      if (near && !busy) m.reviveT += dt * fast / (member.guest ? B.revive : P.down.revive); else if (medic) m.reviveT += dt / P.down.medic; else if (!busy) m.reviveT = Math.max(0, m.reviveT - dt * (member.guest ? 0.2 : 0.5));
+      if (m.reviveT >= 1) getUp();
+      m.fallK = Math.min(1, m.fallK + dt * 3); m.speed = 0; pose(dt);
+    }
+    /**
+     * 主机上由真人操控（联机）：位置、朝向、俯仰照对方报的（coop.js 已经插值好放在 m.remote），不找目标、不开枪（他自己开枪，命中报给主机）；
+     * 挨咬由丧尸的普通扑咬结算（G.zombieTarget 把他当成目标），这里不再按「贴着就掉血」另算；血打空照样倒地、等人扶
+     */
+    function remoteUpdate(dt, others) {
+      const p = G.player, R = m.remote;
+      m.hurtT -= dt; m.flingT -= dt;
+      if (m.hp <= 0 && !m.down) goDown();
+      if (m.down) { downTick(dt, others, p, Math.hypot(p.pos.x - m.pos.x, p.pos.z - m.pos.z), p.pos.y - m.pos.y, zombies?.alive?.() || []); return; }
+      m.fallK = Math.max(0, m.fallK - dt * 4); m.help = null; m.target = null; m.healing = 0;
+      m.pos.set(R.x, R.y, R.z); m.yaw = wrap((R.yaw || 0) + Math.PI); m.pitch = R.pitch || 0; m.speed = R.speed || 0;
+      m.lowReady = R.sprint ? 1 : Math.max(0, m.lowReady - dt * 6);
+      pose(dt);
+    }
+    /** 客户端的木偶：coop.js 已经把位置、朝向、速度、血、倒地写好了，这里只摆姿势 */
+    function puppetPose(dt) {
+      m.fallK = m.down ? Math.min(1, m.fallK + dt * 3) : Math.max(0, m.fallK - dt * 4);
+      m.lowReady = m.speed > 4.5 ? Math.min(1, m.lowReady + dt * 2.5) : Math.max(0, m.lowReady - dt * 4);
+      pose(dt);
+    }
     function update(dt, others) {
       const p = G.player; if (!p?.pos) return;
+      if (net.puppet) { puppetPose(dt); return; }
+      if (m.remote) { remoteUpdate(dt, others); return; }
       const dx = p.pos.x - m.pos.x, dz = p.pos.z - m.pos.z, dy = p.pos.y - m.pos.y, dist = Math.hypot(dx, dz);
       m.cool -= dt; m.hurtT -= dt; m.biteSay -= dt; m.healT -= dt;
       want.set(0, 0, 0);
@@ -324,16 +377,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
         m.fallK = Math.min(1, m.fallK + dt * 5); m.speed = 0; pose(dt); return;
       }
       if (m.down) {
-        // 倒地：等人来扶（你站在跟前三秒；林医生过来四秒半）。小许：你站到 P.guest.reach 米内 P.guest.revive 秒就起来，
-        // 但你身边 busy 米内有醒着的丧尸时扶不了（先腾出手）——光站着不打就扶不起来；扶了一半走开，进度慢慢退
-        const B = P.guest, reach = member.guest ? B.reach : P.down.reach;
-        const near = p.alive !== false && dist < reach && Math.abs(dy) < 1.5;
-        const busy = member.guest && near && zs.some((z) => z.zs !== 'idle' && !z.fixed && !z.passive && Math.abs(z.pos.y - p.pos.y) < 1.6 && Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) < B.busy);
-        const medic = others.find((o) => o !== m && !o.down && o.member.trait === 'medic' && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < P.down.reach && Math.abs(o.pos.y - m.pos.y) < 1.5);
-        m.help = !near ? 'far' : busy ? 'busy' : 'up'; // siege 的护送提示按这个说
-        if (near && !busy) m.reviveT += dt / (member.guest ? B.revive : P.down.revive); else if (medic) m.reviveT += dt / P.down.medic; else if (!busy) m.reviveT = Math.max(0, m.reviveT - dt * (member.guest ? 0.2 : 0.5));
-        if (m.reviveT >= 1) getUp();
-        m.fallK = Math.min(1, m.fallK + dt * 3); m.speed = 0; pose(dt); return;
+        downTick(dt, others, p, dist, dy, zs); return;
       }
       m.fallK = Math.max(0, m.fallK - dt * 4); m.help = null;
       if (member.guest) { if (guestBites(dt, close)) { goDown(); pose(dt); return; } }
@@ -365,9 +409,9 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       const t = m.target && m.target.alive && m.target.active ? m.target : (m.target = null);
       // 林医生：你血量见底，跑过来包扎
       const H = member.heal;
-      const needHeal = H && m.healT <= 0 && p.alive !== false && (p.health ?? 100) < H.below && dist < H.range && Math.abs(dy) < 1.5;
-      // 队友倒了：林医生去扶
-      const fallen = member.trait === 'medic' ? others.find((o) => o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < 18 && Math.abs(o.pos.y - m.pos.y) < 1.5) : null;
+      const needHeal = H && m.healT <= 0 && p.alive !== false && !net.selfDown && (p.health ?? 100) < H.below && dist < H.range && Math.abs(dy) < 1.5;
+      // 队友倒了：林医生去扶（联机时你自己倒了也来扶你：rules.js 按她站在你跟前多久算）
+      const fallen = member.trait === 'medic' ? (others.find((o) => o.down && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < 18 && Math.abs(o.pos.y - m.pos.y) < 1.5) || (net.selfDown && dist < 30 && Math.abs(dy) < 1.5 ? p : null)) : null;
       let goal = null, stopAt = 0;
       // 你架着楼顶机枪（roof-gun.js）：站到机枪阵地里给他留的那一处（沙袋墙里、台子边上），不跟着枪口转来转去
       const post = G.roofGun?.active ? G.roofGun.matePost?.(member.id) : null;
@@ -452,17 +496,22 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       head.rotation.set(-m.pitch * 0.4 - 0.06 * run + 0.4 * f, 0, 0);
       aim.rotation.set(-m.pitch + m.lowReady * 0.55 - m.recoil * 0.03 - spine.rotation.x + 0.5 * f, m.lowReady * 0.35, 0);
       for (let i = 0; i < 2; i++) { const ph = m.gait + i * Math.PI, L = legs[i]; L.thigh.rotation.x = -amp * Math.sin(ph) * (1 - f) - 1.2 * f * (i ? 0.7 : 1); L.shin.rotation.x = amp * 1.4 * Math.max(0, Math.cos(ph)) * (1 - f) + 0.05 + 0.9 * f * (i ? 1 : 0.3); }
-      if (tag) tag.visible = !G.player?.pos || G.player.pos.distanceTo(m.pos) < 32;
+      if (tag) tag.visible = !G.player?.pos || G.player.pos.distanceTo(m.pos) < (m.remote || net.puppet ? 60 : 32); // 联机：真人的名牌远一点也看得见
       root.updateMatrixWorld(true);
       muzzle.getWorldPosition(m.muzzle); spine.localToWorld(m.chest.set(0, 0.36, 0));
     }
+    /** 名牌（和队友栏）上显示的名字：联机时换成玩家的昵称，走了换回角色名 */
+    m.rename = (text) => { const t = text || member.name; if (t === m.label) return; m.label = t; tag?.userData.rename?.(t); const row = hud?.children?.[everyone.indexOf(m)]?.querySelector?.('em'); if (row) row.textContent = t; };
     Object.assign(m, { place, warp, update, pose, goDown, getUp, fire, sees });
     return m;
   }
 
   // 队友（mates）和救出来的人（guests：小许）分开放：队友的血条、站位、击杀统计只管队友
-  const everyone = P.members.map(make), mates = everyone.filter((m) => !m.member.guest), guests = everyone.filter((m) => m.member.guest);
-  const on = (m) => (m.member.guest ? !!m.joined : enabled); // 小许救出来才算；两个队友看设置
+  // 主角（P.lead）排在最后：只在联机、你扮演别人的时候出场
+  const everyone = [...P.members, ...(P.lead ? [P.lead] : [])].map(make), mates = everyone.filter((m) => !m.member.guest && !m.member.lead), guests = everyone.filter((m) => m.member.guest);
+  const lead = everyone.find((m) => m.member.lead) || null;
+  // 小许救出来才算；两个队友看设置（联机时你扮演的那个不画）；主角只在你不是主角的时候出场
+  const on = (m) => (m.member.guest ? !!m.joined : m.member.lead ? enabled && net.local !== 'lead' : enabled && net.local !== m.id);
   const show = (v) => { for (const m of everyone) { m.root.visible = v && on(m); m.active = v && on(m); } hud?.classList.toggle('off', !v); };
 
   function paint() {
@@ -479,14 +528,22 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
   }
 
   const api = {
-    mates,
+    mates, lead, everyone,
     get enabled() { return enabled; },
+    /** 联机（coop.js）：local 你扮演谁、puppet 客户端木偶模式、force 不看设置都出场。改了以后调 refresh() */
+    net,
+    /** 按角色 id 拿人（'lead' / 'zhe' / 'lin' / 'xu'） */
+    byId: (id) => everyone.find((m) => m.id === id) || null,
+    /** 这个人现在在不在场（画不画、算不算） */
+    isOn: (m) => !!m && on(m),
+    /** 联机里换了谁扮演谁（有人进来 / 走了）：重新算谁出场 */
+    refresh() { enabled = (wanted || net.force) && !!siege?.enabled; if (api.spawned) show(true); paint(); },
     /** 设置里关掉队友（单人）：want = false */
     get wanted() { return wanted; }, set wanted(v) { wanted = !!v; },
     /** 每局开始 / 重来：站到你身后，血回满 */
     reset() {
-      enabled = wanted && !!siege?.enabled; sayT = 0;
-      for (const m of everyone) { m.joined = false; m.hp = m.maxHp; m.down = false; m.fallK = 0; m.target = null; m.reviveT = 0; m.kills = 0; m.shots = 0; m.cool = 1; m.healT = 12; m.healing = 0; m.pathJob?.cancel?.(); m.pathJob = null; m.path = null; }
+      enabled = (wanted || net.force) && !!siege?.enabled; sayT = 0;
+      for (const m of everyone) { m.joined = false; m.hp = m.maxHp; m.remote = null; m.down = false; m.fallK = 0; m.target = null; m.reviveT = 0; m.kills = 0; m.shots = 0; m.cool = 1; m.healT = 12; m.healing = 0; m.pathJob?.cancel?.(); m.pathJob = null; m.path = null; }
       show(false); api.spawned = false; trail.ready = false;
       paint();
     },
@@ -505,7 +562,7 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       if (!enabled && !joined.length) { if (api.spawned) { show(false); api.spawned = false; } return; }
       const playing = G.game?.state === 'playing' && G.player?.alive !== false, riding = !!director?.riding;
       if (!playing || riding) { if (api.spawned && riding) show(false); if (riding) api.spawned = false; return; }
-      if (!api.spawned) { api.spawned = true; show(true); for (const m of mates) if (on(m)) { m.warp(); m.pose(0.016); } }
+      if (!api.spawned) { api.spawned = true; show(true); if (!net.puppet) for (const m of [...mates, lead]) if (m && on(m) && !m.remote) { m.warp(); m.pose(0.016); } }
       track();
       for (const m of everyone) { if (!on(m)) continue; try { m.update(Math.min(dt, 0.05), everyone.filter(on)); } catch (e) { console.error('[零点突围] 队友出错', e); } }
       paint();

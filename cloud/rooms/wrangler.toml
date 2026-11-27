@@ -1,0 +1,17 @@
+# 丧尸围城联机服务器（Cloudflare Worker + Durable Object）。部署说明见 README.md
+name = "yunlan-mall-rooms"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[vars]
+# 额外允许的页面来源（逗号分隔，完整的 https://域名）；正式站 yunlan-mall.pages.dev 和本机已经内置
+EXTRA_ORIGINS = ""
