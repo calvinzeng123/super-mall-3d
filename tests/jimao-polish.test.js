@@ -135,3 +135,31 @@ test('商场段的小物件不再是纯色方块：按材质合并（每件两�
   const lk = mallModel('card', null, { mall: { lockers: [{ x: 0, z: 0, n: 1 }, { x: 1.25, z: 0, n: 2, right: true }, { x: 2.5, z: 0, n: 3 }] } });
   assert.equal(lk.userData.lockers.length, 3); assert.equal(lk.userData.lockers.filter((q) => q.door.userData.cutHide).length, 1, '只有对的那个拿了卡柜门开着');
 });
+
+test('绿植叶团、花球不再是一块块平面的「宝石」：绿植批次用球心放射的圆法线（顶点数不变），材质去掉 flatShading，片元按世界坐标叠叶簇噪声；省内存档不做凹凸；克隆出来的材质也带着', async () => {
+  const THREE = await import('three');
+  const { tpl, SOFT_TEMPLATES, BatchSet } = await import('../src/render/batch.js');
+  const { leafDetail, LEAF } = await import('../src/render/materials.js');
+  for (const name of SOFT_TEMPLATES) {
+    const t = tpl(name); assert.ok(t.soft && t.soft.count === t.count && t.soft.pos === t.pos, `${name}：同一份顶点`);
+    for (let i = 0; i < t.count; i++) { const [x, y, z] = [0, 1, 2].map((k) => t.pos[i * 3 + k]), [a, b, c] = [0, 1, 2].map((k) => t.soft.nor[i * 3 + k]), r = Math.hypot(x, y, z);
+      assert.ok(Math.abs(a * x + b * y + c * z - r) < 1e-4, `${name} 第 ${i} 个法线朝外`); }
+  }
+  // 绿植批次：叶团每个顶点的法线都从球心朝外（圆的）；别的批次照旧是平的
+  const set = new BatchSet({ foliage: new THREE.MeshStandardMaterial(), matte: new THREE.MeshStandardMaterial() });
+  set.get('foliage').sphere(3, 1, -2, 0.5, '#5f9447', 0.5, 0.5, 'ico0'); set.get('matte').sphere(3, 1, -2, 0.5, '#5f9447', 0.5, 0.5, 'ico0');
+  const radial = (b) => { let ok = 0; for (let i = 0; i < b.n; i++) { const p = [0, 1, 2].map((k) => b.pos[i * 3 + k] - [3, 1, -2][k]), n = [0, 1, 2].map((k) => b.nor[i * 3 + k] / 127), r = Math.hypot(...p); if (Math.abs((p[0] * n[0] + p[1] * n[1] + p[2] * n[2]) / r - 1) < 0.02) ok++; } return ok / b.n; };
+  assert.ok(radial(set.sets.foliage) > 0.99); assert.ok(radial(set.sets.matte) < 0.5);
+  // 材质：着色器补丁接得上 three 自带的标准材质着色器
+  for (const bump of [true, false]) {
+    const m = leafDetail(new THREE.MeshStandardMaterial({ flatShading: true, vertexColors: true }), bump);
+    assert.equal(m.flatShading, false); assert.equal(m.customProgramCacheKey(), `leaf-${bump ? 'b' : 'c'}`);
+    const sh = { vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader, uniforms: {} };
+    m.onBeforeCompile(sh);
+    assert.match(sh.vertexShader, /vLeafPos = \(modelMatrix \* vec4\(transformed, 1\.0\)\)\.xyz;/);
+    assert.match(sh.fragmentShader, /float leafNoise\(vec3 x\)/); assert.match(sh.fragmentShader, new RegExp(`leafQ \\* ${LEAF.cluster.toFixed(3)}`));
+    assert.equal(/dFdx\(h\)/.test(sh.fragmentShader), bump, '凹凸只在非省内存档');
+    assert.ok(!/[^\x00-\x7f]/.test(sh.fragmentShader), '着色器里不夹中文');
+    const c = m.clone(); assert.equal(c.customProgramCacheKey(), m.customProgramCacheKey()); assert.equal(c.flatShading, false);
+  }
+});

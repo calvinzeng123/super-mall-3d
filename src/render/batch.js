@@ -19,6 +19,8 @@ const _c = new THREE.Color();
 const Y = new THREE.Vector3(0, 1, 0);
 
 const TEMPLATES = {};
+/** 有「圆」法线备份的多面体模板（见 softNormals） */
+export const SOFT_TEMPLATES = Object.freeze(['ico', 'ico0', 'octa', 'tet']);
 function fromGeometry(geo) {
   const g = geo.index ? geo.toNonIndexed() : geo;
   return {
@@ -62,7 +64,17 @@ export function tpl(name) {
     default: throw new Error('unknown template ' + name);
   }
   TEMPLATES[name] = fromGeometry(g);
+  if (SOFT_TEMPLATES.includes(name)) TEMPLATES[name].soft = softNormals(TEMPLATES[name]);
   return TEMPLATES[name];
+}
+/**
+ * 叶团、花球这几种多面体模板另备一份「圆」的：法线从球心放射出去（顶点、三角形都不变）。绿植批次（BatchSet 的 foliage）用它，
+ * 不再是一块块平面的「宝石」；墙角的石块、货架上的小球照旧用平的。
+ */
+export function softNormals(t) {
+  const nor = new Float32Array(t.pos.length);
+  for (let i = 0; i < t.pos.length; i += 3) { const x = t.pos[i], y = t.pos[i + 1], z = t.pos[i + 2], k = 1 / (Math.hypot(x, y, z) || 1); nor[i] = x * k; nor[i + 1] = y * k; nor[i + 2] = z * k; }
+  return { ...t, nor };
 }
 
 /** 局部坐标系 frame → 变换矩阵（平移到原点 + 绕 Y 旋转 −a，使局部 u 轴对准世界方向） */
@@ -111,6 +123,7 @@ export class Batcher {
   /** 写入一个模板，按矩阵变换，颜色可为 THREE.Color / 十六进制数 / CSS 字符串 */
   push(t, m, color, uvMap) {
     if (this.thin && (this.seq = (this.seq || 0) + 1) % this.thin !== 1) return;
+    if (this.soft && t.soft) t = t.soft; // 绿植：圆的法线（见 SOFT_TEMPLATES）
     const xf = this.owner ? this.owner.xf : this.xf;
     if (xf) m = _mf.multiplyMatrices(xf, m);
     if (this.n + t.count > this.cap) this.grow(this.n + t.count);
@@ -376,6 +389,7 @@ export class BatchSet {
       // 贴花（假阴影）用模板自带的 UV；其余带贴图的批次按世界坐标投影 UV
       this.sets[key] = new Batcher(this, textured, textured && !mat.userData?.decal);
       if (key === 'foliage' && !MEM.decor) this.sets[key].thin = FOLIAGE_THIN;
+      if (key === 'foliage') this.sets[key].soft = true; // 叶团、花球按球心放射的法线（materials.js 的 leafDetail 不再用 flatShading）
     }
     return this.sets[key];
   }
