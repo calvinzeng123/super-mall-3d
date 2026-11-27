@@ -30,7 +30,7 @@ export const LOBBY_CSS = `
 .jm-lobby .seat em { font-style: normal; font-size: 12px; opacity: .7; }
 .jm-lobby .seat i { font-style: normal; font-size: 11px; opacity: .7; letter-spacing: .1em; }
 .jm-lobby .close { float: right; margin: -6px -6px 0 0; min-width: 40px; min-height: 40px; background: none; border: 0; color: inherit; font-size: 22px; cursor: pointer; opacity: .7; }
-@media (max-height: 500px) { .jm-lobby { background: rgba(4, 4, 6, .95); } .jm-lobby .box { padding: 12px 14px; background: rgb(18, 17, 15); } .jm-lobby .codebig { font-size: 26px; } .jm-lobby label { margin-top: 6px; } }
+@media (max-height: 500px) { .jm-lobby { background: rgba(4, 4, 6, .98); } .jm-lobby .box { padding: 12px 14px; background: rgb(18, 17, 15); } .jm-lobby .codebig { font-size: 26px; } .jm-lobby label { margin-top: 6px; } }
 `;
 
 const MSG = Object.freeze({
