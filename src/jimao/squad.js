@@ -535,7 +535,9 @@ export function createSquad(G, { scene, nav, zombies, siege = null, director = n
       m.crouchK += (wantC - m.crouchK) * Math.min(1, dt * 12); const ck = m.crouchK;
       m.reloadK += ((m.reloading && !m.down ? 1 : 0) - m.reloadK) * Math.min(1, dt * 10);
       const amp = Math.min(0.55, sp * 0.14) * (1 - 0.45 * ck), stride = (1.3 + sp * 0.15) * (1 - 0.35 * ck);
-      m.gait += dt * sp / stride * Math.PI * 2; m.recoil = Math.max(0, m.recoil - dt * 12);
+      const g0 = m.gait; m.gait += dt * sp / stride * Math.PI * 2; m.recoil = Math.max(0, m.recoil - dt * 12);
+      // 真人（联机）的脚步声：每落一步响一下（蹲着走轻、跑起来重）；电脑队友不响（以前就不响，免得一屋子脚步声）
+      if (m.human && sp > 0.8 && !m.down && Math.floor(g0 / Math.PI) !== Math.floor(m.gait / Math.PI) && G.player?.pos && G.player.pos.distanceTo(m.pos) < 30) G.audio?.play?.('soldier_step', { pos: m.pos, gain: Math.min(0.8, 0.25 + sp * 0.09) * (1 - 0.6 * ck), jitter: 0.08 });
       const run = Math.min(1, sp / P.follow.sprint) * (1 - ck), f = m.fallK;
       // 一下子的动作：k 是 0–1 的进度，没有就是 -1
       let ak = -1; if (m.actKind) { m.actT += dt; const T = POSE.act[m.actKind]; ak = m.actT / T; if (ak >= 1) { m.actKind = null; ak = -1; } }

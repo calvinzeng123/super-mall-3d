@@ -69,12 +69,16 @@ export const LOBBY_CSS = `
 .jm-lobby .st.ready { color: var(--lb-green); }
 .jm-lobby .st.wait { color: var(--lb-amber); }
 .jm-lobby .st.bot { color: var(--lb-faint); font-weight: 400; }
-.jm-lobby .ping.g { color: var(--lb-green); } .jm-lobby .ping.y { color: var(--lb-amber); } .jm-lobby .ping.r { color: var(--lb-red); }
+.jm-lobby .ping.pg { color: var(--lb-green); } .jm-lobby .ping.py { color: var(--lb-amber); } .jm-lobby .ping.pr { color: var(--lb-red); }
+.jm-lobby tbody tr.sel td.ping, .jm-lobby tbody tr.sel td .st { color: #fffbe0; text-shadow: 0 1px 0 rgba(40, 34, 6, .45); }
 .jm-lobby .bars { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; margin-right: 6px; vertical-align: -1px; }
 .jm-lobby .bars u { display: block; width: 3px; background: #4e5845; text-decoration: none; }
 .jm-lobby .bars u:nth-child(1) { height: 4px; } .jm-lobby .bars u:nth-child(2) { height: 7px; } .jm-lobby .bars u:nth-child(3) { height: 10px; }
-.jm-lobby .ping.g .bars u { background: var(--lb-green); } .jm-lobby .ping.y .bars u:nth-child(-n+2) { background: var(--lb-amber); } .jm-lobby .ping.r .bars u:nth-child(1) { background: var(--lb-red); }
-.jm-lobby td .rj { display: none; }
+.jm-lobby .ping.pg .bars u { background: var(--lb-green); } .jm-lobby .ping.py .bars u:nth-child(-n+2) { background: var(--lb-amber); } .jm-lobby .ping.pr .bars u:nth-child(1) { background: var(--lb-red); }
+.jm-lobby tbody tr.sel td.ping .bars u { box-shadow: 0 0 0 1px rgba(40, 34, 6, .5); }
+.jm-lobby .jc { display: none; }
+.jm-lobby .main.inroom .grid { flex: none; }
+.jm-lobby .main.inroom .log { flex: 1 1 auto; height: auto; min-height: 92px; }
 /* 动态（谁进来了、谁准备了） */
 .jm-lobby .log { flex: 0 0 auto; height: 92px; overflow: auto; padding: 6px 8px; font: 12px/1.55 var(--lb-mono); color: var(--lb-dim); background: var(--lb-well); box-shadow: inset 1px 1px 0 var(--lb-lo), inset -1px -1px 0 var(--lb-hi); }
 .jm-lobby .log p { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -129,7 +133,7 @@ export const LOBBY_CSS = `
 .jm-lobby .foot .msg.bad { color: #ffb19c; }
 .jm-lobby .foot .msg:empty::before { content: '就绪'; color: var(--lb-faint); }
 .jm-lobby .foot .ver { font: 11px/1 var(--lb-mono); color: var(--lb-faint); white-space: nowrap; }
-.jm-lobby [data-v][hidden], .jm-lobby .hide { display: none !important; }
+.jm-lobby [hidden], .jm-lobby .hide { display: none !important; }
 
 /* 窄屏（手机竖屏）：操作栏放到表格上面，整页滚 */
 @media (max-width: 720px) {
@@ -147,8 +151,9 @@ export const LOBBY_CSS = `
   .jm-lobby input.txt { height: 40px; font-size: 16px; }
   .jm-lobby td { height: 40px; }
   .jm-lobby .hm { display: none; }
-  .jm-lobby td .rj { display: inline-flex; min-height: 28px; padding: 0 10px; font-size: 12px; }
-  .jm-lobby .log { height: 84px; }
+  .jm-lobby th.jc, .jm-lobby td.jc { display: table-cell; width: 72px; padding: 0 6px 0 0; }
+  .jm-lobby td.jc .btn { min-height: 30px; padding: 0 12px; font-size: 12px; }
+  .jm-lobby .log, .jm-lobby .main.inroom .log { height: 96px; flex: none; }
   .jm-lobby .foot { padding: 6px 8px 8px; }
   .jm-lobby .foot .ver { display: none; }
 }
@@ -168,7 +173,8 @@ export const LOBBY_CSS = `
   .jm-lobby input.txt { height: 34px; }
   .jm-lobby td { height: 32px; }
   .jm-lobby .code b { font-size: 32px; }
-  .jm-lobby .log { height: 56px; }
+  .jm-lobby .main.inroom .log { min-height: 48px; }
+  .jm-lobby .hint, .jm-lobby .or { display: none; }
   .jm-lobby .hm { display: none; }
   .jm-lobby .foot { padding: 4px 6px 6px; min-height: 0; }
   .jm-lobby .foot .ver { display: none; }
@@ -274,7 +280,7 @@ export function createLobby({ ui, storage = null, params = {}, state, create, jo
     try { storage?.setItem?.(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX))); } catch { /* */ }
   }
   const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚才' : s < 3600 ? `${Math.floor(s / 60)} 分钟前` : s < 86400 ? `${Math.floor(s / 3600)} 小时前` : `${Math.floor(s / 86400)} 天前`; };
-  const pingCell = (ms) => { if (!Number.isFinite(ms)) return '<td class="r m d">—</td>'; const k = ms < 90 ? 'g' : ms < 180 ? 'y' : 'r'; return `<td class="r m ping ${k}"><span class="bars"><u></u><u></u><u></u></span>${Math.round(ms)}</td>`; };
+  const pingCell = (ms) => { if (!Number.isFinite(ms)) return '<td class="r m d">—</td>'; const k = ms < 90 ? 'pg' : ms < 180 ? 'py' : 'pr'; return `<td class="r m ping ${k}"><span class="bars"><u></u><u></u><u></u></span>${Math.round(ms)}</td>`; };
 
   el.addEventListener('click', (e) => {
     const row = e.target.closest('tr[data-code]');
@@ -313,10 +319,10 @@ export function createLobby({ ui, storage = null, params = {}, state, create, jo
     }
     const list = recent();
     cap.innerHTML = `<b>最近的房间</b><span>本机记录</span><i>${list.length}</i>`;
-    head.innerHTML = '<tr><th style="width:26px"></th><th style="width:84px">房间码</th><th>房主</th><th style="width:60px" class="r">人数</th><th style="width:96px" class="r hm">上次</th><th class="r" style="width:0;padding:0"></th></tr>';
+    head.innerHTML = '<tr><th style="width:26px"></th><th style="width:84px">房间码</th><th>房主</th><th style="width:60px" class="r">人数</th><th style="width:96px" class="r hm">上次</th><th class="jc"></th></tr>';
     const blank = Math.max(0, 6 - list.length);
-    rows.innerHTML = list.map((r, i) => `<tr class="pick${i === pick ? ' sel' : ''}" data-code="${r.code}" data-i="${i}"><td class="c d">▸</td><td class="m">${r.code}</td><td>${escape(r.host || '—')}</td><td class="r m">${Math.max(1, Math.min(3, r.n | 0))}/3</td><td class="r d hm">${ago(r.t)}</td><td class="r" style="width:0;padding:0 6px 0 0;overflow:visible"><button class="btn rj" data-a="rjoin">加入</button></td></tr>`).join('')
-      + Array.from({ length: blank }, (_, i) => `<tr class="blank"><td></td><td class="m">${!list.length && i === 0 ? '' : ''}</td><td>${!list.length && i === 0 ? '还没有记录：加入或创建一个房间以后会出现在这里' : ''}</td><td></td><td class="hm"></td><td style="width:0;padding:0"></td></tr>`).join('');
+    rows.innerHTML = list.map((r, i) => `<tr class="pick${i === pick ? ' sel' : ''}" data-code="${r.code}" data-i="${i}"><td class="c d">▸</td><td class="m">${r.code}</td><td>${escape(r.host || '—')}</td><td class="r m">${Math.max(1, Math.min(3, r.n | 0))}/3</td><td class="r d hm">${ago(r.t)}</td><td class="r jc"><button class="btn" data-a="rjoin">加入</button></td></tr>`).join('')
+      + Array.from({ length: blank }, (_, i) => `<tr class="blank"><td></td><td class="m">${!list.length && i === 0 ? '' : ''}</td><td>${!list.length && i === 0 ? '还没有记录：加入或创建一个房间以后会出现在这里' : ''}</td><td></td><td class="hm"></td><td class="jc"></td></tr>`).join('');
   }
   function paintLog() { logEl.innerHTML = lines.map((l) => `<p class="${l.hi ? 'hi' : ''}"><em>${l.at}</em>${escape(l.text)}</p>`).join(''); logEl.scrollTop = logEl.scrollHeight; }
 
@@ -334,7 +340,7 @@ export function createLobby({ ui, storage = null, params = {}, state, create, jo
     log(text, hi = false) { const d = new Date(), at = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; lines.push({ text: String(text), hi, at }); while (lines.length > 30) lines.shift(); paintLog(); },
     render() {
       const s = state(), inRoom = !!s.code && (s.connected || lastStatus === 'in');
-      $('[data-v="home"]').hidden = inRoom; $('[data-v="room"]').hidden = !inRoom; logEl.hidden = !inRoom;
+      $('[data-v="home"]').hidden = inRoom; $('[data-v="room"]').hidden = !inRoom; logEl.hidden = !inRoom; $('.main').classList.toggle('inroom', inRoom);
       $('[data-v="tab"]').textContent = inRoom ? `房间 ${s.code}` : '服务器浏览';
       const dot = $('[data-v="dot"]'), net = $('[data-v="net"]'), connecting = lastStatus === 'connecting';
       dot.className = `dot ${s.connected ? 'ok' : connecting ? 'wait' : MSG[lastStatus]?.[1] ? 'bad' : ''}`;

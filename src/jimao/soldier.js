@@ -444,7 +444,7 @@ function buildParts(look, opts = {}) {
     rbox(0.07, 0.05, 0.1, 0, -SHIN + 0.025, 0.1, P(dk(L.boot, 0.7), L.bootSurf ?? S.LEATHER), 0.012), // 鞋带那一条
     rbox(0.12, 0.022, 0.28, 0, -SHIN - 0.085, 0.04, sole, 0.008), // 鞋底
   ]), AT.shin);
-  return { pelvis, torso, head, visor, aim, thigh, shin, held };
+  return held ? { pelvis, torso, head, visor, aim, thigh, shin, held } : { pelvis, torso, head, visor, aim, thigh, shin };
 }
 /**
  * 联机人形按手里拿的换的几副手臂（aim 的坐标：肩线中点为原点，+Z 朝前，右手在 -X）：r / l = [肩, 肘, 手]。
