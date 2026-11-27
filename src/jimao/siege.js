@@ -1036,7 +1036,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const objectives = plan.stages.map((st, i) => ({ id: st.id, label: st.label, verb: st.verb, kind: (st.obj || (st.kind === 'tool' ? 'item' : 'relay')) === 'item' ? 'item' : 'relay', site: st.site, locked: i > 0, stageKind: st.kind, tap: tapStage(st), // tap：拿东西、按开关点一下就行（pickup.js）
       model: () => (st.kind === 'card' ? mallModel('card', st, plan) : ['crank', 'shutter', 'open', 'pry', 'note', 'gen', 'rescue', 'holdout', 'fuel', 'escort', 'sneak'].includes(st.kind) ? orient(mallModel(st.kind, st, plan), st.site, cameFrom(plan, st)) : st.kind === 'crowbar' ? orient(toolModel('撬棍'), st.site, cameFrom(plan, st)) : null) || orient(st.kind === 'pistol' ? pistolModel() : st.kind === 'locker' ? lockerModel() : st.kind === 'switch' ? switchModel() : st.kind === 'tool' ? toolModel(st.tool) : st.kind === 'gate' ? gateModel(st.type) : flareModel(), st.site, cameFrom(plan, st)) }));
     const s0 = plan.mall.start;
-    const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan, start: { pos: new THREE.Vector3(s0.x, s0.y, s0.z), yaw: Math.atan2(-(plan.stages[1].site.x - s0.x), -(plan.stages[1].site.z - s0.z)) },
+    const m = { type: 'siege', title: '丧尸围城', objectives, kills: 0, plan, start: { pos: new THREE.Vector3(s0.x, s0.y, s0.z), yaw: Math.atan2(-(plan.stages[0].site.x - s0.x), -(plan.stages[0].site.z - s0.z)) }, // 开局面朝手摇柄（店里另一头）
       extraction: { id: 'heli', label: '直升机', where: T.roofName, floor: T.roof, x: +door.x.toFixed(2), z: +door.z.toFixed(2), radius: 1.7, vehicle: pad, closed: true,
         blocked: '直升机还没到', orbit: { center: flight.center, pad }, flight,
         ride: { boardRadio: '上机！机枪交给你：屋顶上的、阳台玻璃后面的、楼下冲出来的，全部清掉。它们会朝飞机扔东西，尖叫的伤得最重，先打。', onBoard: startSweep, spawns: sweepTick, targets: () => (S.sweep ? S.sweep.list.filter((z) => z.alive && z.active) : follow ? puppetTargets() : []), keep: () => true,
@@ -1047,7 +1047,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
           outroTick: (dt) => { if (demo.running) demo.tick(dt); }, outroTitle: () => (demo.chosen ? '<b>大楼已炸毁</b>直升机已离开云澜汇上空' : null),
           ground: (s0) => landAt(nav, s0.x, s0.z, s0.y)?.y ?? 0 } }, // 坠机落在哪：正下方最高的那层楼面（楼顶 / 商场屋面 / 街上）
       text: (c, ride) => textNow(c, ride), markers: () => guestMarks(),
-      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你们被困在三层的店里，手上只有一把刀、两颗手雷。先想办法出去，一层一层往下摸到保安室拿枪，再上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName) + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
+      radio: { intro: '这里是指挥中心。商场已经沦陷，地面出不去。你们被困在三层的影城里，手上只有一把刀、两颗手雷。先想办法出去，一层一层往下摸到保安室拿枪，再上公寓楼顶，直升机到那儿接你。'.replace('公寓楼顶', T.roofName).replace('影城', plan.mall.shop.name || '店') + (G.squad?.wanted ? '保安阿哲和林医生跟你一起走，互相照应。' : ''),
         contact: '它们发现你了！', cut: plan.stages.slice(0, -1).map((st, i) => cutLine(plan, i)), all: `信号弹点着了！直升机 ${holdPlan().hold} 秒后到，守住屋顶！`, low: '你被咬伤了，拉开距离。', done: '指挥中心收到。幸存者已撤离云澜汇——干得漂亮。' } };
     S.plan = plan; S.mission = m; S.flight = flight; flight.twin = twin;
     // 爬楼那几层的落点：从现在起分帧算（商场那段要走好几分钟，进楼时早算好了）
@@ -2213,8 +2213,18 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     // 分阶段的卷帘：这一步做完，对应的那一道收起来
     for (const q of steps) if (q.until === st.id && q.seal.mesh) q.seal.mesh.visible = false;
     if (st.kind === 'shutter') { // 门外拍门的那几只进来了
+      // 门外拍门的：站在大门外头那一段（门脸那一面、门洞两边几米内）真站得住的地方——影城大门外只有一条窄走道，再往外是中庭的洞口，以前按门脸往外 2.5 米摆，摆进洞里掉到一层去了
       const sh = S.plan.mall.shop, f = sh.fronts[0];
-      if (f) for (let i = 0; i < MALL.out; i++) { const t = (i + 1) / (MALL.out + 1); spawn({ x: f.x0 + (f.x1 - f.x0) * t + f.nx * (2.5 + i * 0.6), y: st.site.y, z: f.z0 + (f.z1 - f.z0) * t + f.nz * (2.5 + i * 0.6) }, { kind: 'walker', hunt: true, state: 'alert' }); }
+      if (f) {
+        const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0) || 1, tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len, s0 = st.site, c = (s0.x + f.nx * 1.1 - f.x0) * tx + (s0.z + f.nz * 1.1 - f.z0) * tz;
+        let n = 0;
+        for (const along of [0, -1.2, 1.2, -2.4, 2.4, -3.4, 3.4]) for (const out of [2.5, 1.7, 1.0]) {
+          if (n >= MALL.out) break;
+          const x = f.x0 + tx * (c + along) + f.nx * out, z = f.z0 + tz * (c + along) + f.nz * out, q = landAt(nav, x, z, s0.y + 0.6);
+          if (!q || q.floor !== s0.floor || Math.abs(q.y - s0.y) > 0.3 || !clear(nav, q)) continue;
+          spawn({ x, y: s0.y, z }, { kind: 'walker', hunt: true, state: 'alert' }); n++; break;
+        }
+      }
       say('它们进来了！', 2.2);
       if (S.plan.mall.axe && G.weapon?.melee !== 'axe') G.hud?.radio?.(S.plan.mall.axe.across ? '门对面栏杆边上那个消防箱里有把消防斧——比刀好使，先去拿上。' : '门外墙上的消防箱里有把消防斧——比刀好使，先去拿上。', 4.5);
     }
