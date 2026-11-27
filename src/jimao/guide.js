@@ -25,6 +25,23 @@ export function doorOutside(layout, site, nav = null) {
   if (!f) return null;
   // 目标本来就在店门外（丧尸围城撬卷帘救人：站在店门口撬）：不用先找门。以前照样取「离落点远的那一侧」，反倒取到了店里面，路线从锁着的店里穿
   if (!u.residence && u.polys?.length && !u.polys.some((p) => pointInPoly([site.x, site.z], p))) return null;
+  // 商铺：门脸上真开着的门洞（和导航开的洞一样），挑离物品最近、门外站得住的那一个——以前取第一面门脸的中点，
+  // 骑行家这种四面门脸的店，那一点外面可能是实墙，从那儿直线进店就顶在墙上
+  if (!u.residence && nav) {
+    let best = null;
+    for (const d of doorwaysOf(layout, site.floor)) {
+      if (!u.wfronts.some((w) => Math.abs((d.cx - w.x0) * w.nz - (d.cz - w.z0) * w.nx) < 0.05 && Math.min(w.x0, w.x1) - 0.05 <= d.cx && d.cx <= Math.max(w.x0, w.x1) + 0.05 && Math.min(w.z0, w.z1) - 0.05 <= d.cz && d.cz <= Math.max(w.z0, w.z1) + 0.05)) continue;
+      const out = Math.hypot(d.cx + d.nx - site.x, d.cz + d.nz - site.z) > Math.hypot(d.cx - d.nx - site.x, d.cz - d.nz - site.z) ? 1 : -1;
+      for (const k of [1.3, 1.0, 1.7]) {
+        const st = landAt(nav, d.cx + d.nx * k * out, d.cz + d.nz * k * out, lv.elev + 0.6);
+        if (!st || st.floor !== site.floor || !clear(nav, st)) continue;
+        const dist = Math.hypot(d.cx - site.x, d.cz - site.z);
+        if (!best || dist < best.dist) best = { dist, q: { floor: site.floor, x: st.x, z: st.z, y: lv.elev, slope: null } };
+        break;
+      }
+    }
+    if (best) return best.q;
+  }
   const at = u.residence?.entryDoor?.at, L = Math.hypot(f.x1 - f.x0, f.z1 - f.z0) || 1;
   // 门脸在世界里是 (x0,z0) → (x1,z1)，对应户内坐标沿门脸从 fronts[0].x0 到 x1
   const lf = u.fronts?.[0], k = typeof at === 'number' && lf ? (at - lf.x0) / ((lf.x1 - lf.x0) || 1) : 0.5;
@@ -218,9 +235,11 @@ export function createRouteGuide(G, { scene, layout, nav, hidden = () => false, 
       // 路线里有电梯：箭头只画到电梯门口，后面的等坐上去、到了那一层再重新算
       // 下一步怎么走（小地图下面那行字）：第一次换楼层的地方、怎么换、还有多远
       nextStep = routeHint(nav, layout, pts, tg.name || '目标');
-      const cut = pts.findIndex((p) => p.via === 'lift'), list = easeRoute(nav, cut >= 0 ? pts.slice(0, cut) : pts, pathfinder?.walkable, { layout }).map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
+      const cut = pts.findIndex((p) => p.via === 'lift'), head = cut >= 0 ? pts.slice(0, cut) : pts.slice();
+      // 物品在店里 / 户里：寻路到门外，再从门口直线进去（这一段也一起顺：穿门洞从正中过）
+      if (cut < 0 && tg.door) head.push({ floor: tg.floor, x: tg.x, y: tg.y, z: tg.z, slope: null });
+      const list = easeRoute(nav, head, pathfinder?.walkable, { layout }).map((s) => ({ x: s.x, y: s.y ?? 0, z: s.z }));
       hint = cut >= 0 ? { kind: 'lift', name: pts[cut].lift, from: pts[cut].from, to: pts[cut].to, x: pts[cut - 1].x, y: pts[cut - 1].y ?? 0, z: pts[cut - 1].z } : null;
-      if (cut < 0 && tg.door) list.push({ x: tg.x, y: tg.y, z: tg.z });
       // 起点离电梯门口不到一步远时路线只有一个点：补一个点，照样画得出来
       if (list.length === 1) list.unshift({ x: from.x, y: from.y ?? list[0].y, z: from.z });
       route = resample(list); routeKey = tg.key;

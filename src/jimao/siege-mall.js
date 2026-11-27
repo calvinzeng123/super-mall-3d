@@ -148,7 +148,7 @@ export function openSteps(nav, lv, u, door, P = MALL.spread) {
     }
   }
   if (!best) return null;
-  const at = (q) => ({ floor: lv.id, x: q.x, y: lv.elev, z: q.z, unit: u.id });
+  const at = (q) => ({ floor: lv.id, x: q.x, y: lv.elev, z: q.z }); // 不带 unit：人本来就在这家店里，路线指引不用先绕到门外
   return { spawn: at(best.spawn), crank: at(best.crank) };
 }
 
