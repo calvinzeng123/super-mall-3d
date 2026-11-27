@@ -18,15 +18,17 @@ const L = buildPlayableLayout({ mode: 'arcade' }), nav = buildNav(L, { gates: 'o
 const seq = (seed) => { let s = seed; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647); for (let i = 0; i < 5; i++) r(); return r; };
 const walk = (a, b) => { const p = findPath(nav, a, b); if (!p) return null; let d = 0; for (let i = 1; i < p.length; i++) d += Math.hypot(p[i].x - p[i - 1].x, p[i].z - p[i - 1].z); return d; };
 
-test('商场段：相邻两步至少隔开 MALL.spread.min 米的路（摇柄在店里、撬扶梯口、捡手枪这几步本来就在上一步跟前），每一步都走得到；三层的头几步不再挤在开局那家店门口', () => {
-  for (const seed of [3, 99]) {
+test('商场段：相邻两步至少隔开 MALL.spread.min 米的路（撬扶梯口、捡手枪这两步本来就在上一步跟前；开局店里出生点 → 手摇柄 → 大门各二十来米），每一步都走得到；三层的头几步不再挤在开局那家店门口', () => {
+  for (const seed of [1, 2, 3, 4, 5, 99]) {
     const plan = siegePlan(seq(seed), L, nav, runs, TOWERS.A), M = plan.mall, upto = plan.stageOf('arms');
     let prev = M.start, total = 0; const legs = {};
     for (const st of plan.stages.slice(0, upto + 1)) {
       const q = landAt(nav, st.site.x, st.site.z, st.site.y + 0.6); assert.ok(q && q.floor === st.floor && clear(nav, q), `${st.id} 站得住`);
       const d = walk(prev, st.site); assert.ok(d !== null, `${st.id}：从上一步走得到`);
       legs[st.id] = d; total += d;
-      if (!MALL.spread.same.includes(st.id) && st.id !== 'crank') assert.ok(d >= MALL.spread.min, `${st.id} 离上一步只有 ${d.toFixed(1)} 米`);
+      // 开局店里那两步（出生点 → 手摇柄 → 大门）：各是 open–cap 米的一段真路（以前 4 米、9 米，就在店中间转个身）
+      if (st.id === 'crank' || st.id === 'exit') assert.ok(d >= MALL.spread.open && d <= MALL.spread.cap + 3, `${st.id} 离上一步 ${d.toFixed(1)} 米`);
+      else if (!MALL.spread.same.includes(st.id)) assert.ok(d >= MALL.spread.min, `${st.id} 离上一步只有 ${d.toFixed(1)} 米`);
       prev = st.site;
     }
     // 三层：撬棍、救人、护送各是一小段路（以前 19 / 28 / 14 米，一共 60 米，都挤在开局那家店周围）
@@ -117,7 +119,7 @@ test('内存小的电脑（navigator.deviceMemory）：≤ 2 GB 省内存档、�
 test('手机 / 平板进零点突围、丧尸围城：加载时不再把所有贴图一口气传上显卡（预热只编着色器）；进去以后「站稳」才擦掉「正在进入」', () => {
   const run = readFileSync('src/jimao/run.js', 'utf8'), rt = readFileSync('src/runtime.js', 'utf8');
   assert.match(run, /if \(!MEM\.lite\) for \(const tex of textures\) \{ try \{ renderer\.initTexture\(tex\)/);
-  assert.match(rt, /const boot=markBootStart\(mode\)/); assert.match(rt, /settleBoot\(mode,boot,window\.__memory\.profile\)/);
+  assert.match(rt, /const boot=markBootStart\(mode\)/); assert.match(rt, /settleBoot\(mode,boot,window\.__memory\.profile,\{guard:bootGuard\}\)/);
 });
 
 test('商场段的小物件不再是纯色方块：按材质合并（每件两三次绘制）、用的是共用图集的分区（漆面、金属、钢门压纹、警示）；拿走的部分（item）和做完才亮的灯（on）各自分开', async () => {

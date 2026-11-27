@@ -50,6 +50,28 @@ export function markBootStart(mode, storage = globalThis.localStorage, now = Dat
 }
 /** 进去玩稳了、正常离开、切到后台：擦掉「正在进入」 */
 export function markBootDone(storage = globalThis.localStorage) { try { storage?.removeItem(BOOT.key); } catch { /* 存不了就算了 */ } }
+/**
+ * 记下「正在进入」的那一刻就挂上：载到一半正常关掉页面（pagehide）、切到后台（visibilitychange → hidden）都擦掉，不算被系统关掉；
+ * 切回来还没载完 / 没站稳，再记上（不算次数）。fail()：载入出错（main.js 显示错误、点一下整页刷新）也擦掉——那不是内存超限。
+ * settle()：站稳了，擦掉、以后切前后台不再记。返回 { settle, fail, settled() }
+ */
+export function armBootGuard(mode, { win = globalThis.window, doc = globalThis.document, storage = globalThis.localStorage } = {}) {
+  let settled = false;
+  const clear = () => markBootDone(storage);
+  const onHide = () => clear();
+  const onVis = () => {
+    if (doc?.visibilityState === 'hidden') clear();
+    else if (!settled) { try { storage?.setItem(BOOT.key, JSON.stringify({ mode, t: Date.now() })); } catch { /* 存不了就不记 */ } }
+  };
+  win?.addEventListener?.('pagehide', onHide);
+  doc?.addEventListener?.('visibilitychange', onVis);
+  const off = () => { win?.removeEventListener?.('pagehide', onHide); doc?.removeEventListener?.('visibilitychange', onVis); };
+  return {
+    settle() { settled = true; clear(); off(); },
+    fail() { settled = true; clear(); off(); },
+    settled: () => settled,
+  };
+}
 /** 一共算几次「被回收」：显存被回收 + 进模式时被关掉 */
 export const lostCount = () => CONTEXT_LOSSES + bootLost;
 /** 内存小的电脑（Chromium 的 navigator.deviceMemory，单位 GB，Safari 没有）：≤ 2 用省内存档，≤ 4 用标准档 */

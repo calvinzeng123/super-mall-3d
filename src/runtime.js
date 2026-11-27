@@ -1,6 +1,6 @@
 import { buildPlayableLayout, markSiegeRoofs } from './layout/playable.js';
 import { createApp } from './render/app.js';
-import { configureMemory, markBootStart, markBootDone, BOOT } from './render/device.js';
+import { configureMemory, markBootStart, armBootGuard, BOOT } from './render/device.js';
 import { QUALITY_STORAGE_KEY } from './render/quality.js';
 
 /** 这个模式上次存的画质档位：漫游 / 小游戏读我们自己的设置，零点突围读原游戏的设置（低 / 中 / 高 / 极致）。没存过是 'auto' */
@@ -15,6 +15,10 @@ export function savedTier(mode,storage=globalThis.localStorage){
   }catch{return 'auto';}
 }
 
+let bootGuard=null;
+/** 载入出错（main.js 的 catch，之后点一下整页刷新）：擦掉「正在进入」，下次不当成被系统关掉 */
+export function bootFailed(){bootGuard?.fail();}
+
 export async function startRuntime(mode,onProgress=()=>{}) {
   if(!['tour','fps','arcade','jimao'].includes(mode))throw new Error('未知模式');
   document.body.dataset.mode=mode;
@@ -24,6 +28,8 @@ export async function startRuntime(mode,onProgress=()=>{}) {
   // 内存档位跟着这个模式存下来的画质走（贴图多大、装饰几何做不做）：要在建场景、加载贴图之前定下来
   // 上次进来时整页被系统关掉了（iOS 内存超限）：这次内存档位降一档，进去以后说一声（见 device.js 的 markBootStart）
   const boot=markBootStart(mode);
+  // 记下的同时就挂上「正常关页面 / 切后台 / 载入出错就擦掉」：以前要等载完才挂，载到一半关掉、出错刷新，下次都被当成内存超限、降档 7 天
+  bootGuard=armBootGuard(mode);
   const tier=savedTier(mode);
   window.__memory={profile:configureMemory(tier),tier,boot};
   const layout=buildPlayableLayout({mode:mode==='jimao'?'arcade':mode});
@@ -52,7 +58,7 @@ export async function startRuntime(mode,onProgress=()=>{}) {
     back.className='mode-back';back.onclick=()=>location.reload();document.body.append(back);
   }
   document.getElementById('loading').hidden=true;
-  settleBoot(mode,boot,window.__memory.profile);
+  settleBoot(mode,boot,window.__memory.profile,{guard:bootGuard});
   onProgress('准备就绪',1);return app;
 }
 
@@ -60,15 +66,15 @@ export async function startRuntime(mode,onProgress=()=>{}) {
  * 进去以后「站稳了」才擦掉「正在进入」：零点突围要真开局玩上 BOOT.settle 秒（开局一刷丧尸、队友，内存还要涨一截），别的模式载完 BOOT.settle 秒；
  * 正常离开、切到后台也擦掉（后台被系统收掉不算没进成）。上次没进成的话，屏幕下方说一声这次用的是哪一档、怎么调回去。
  */
-export function settleBoot(mode,boot,profile,{win=globalThis.window,doc=globalThis.document}={}){
+export function settleBoot(mode,boot,profile,{win=globalThis.window,doc=globalThis.document,guard=null}={}){
   if(!win)return;
-  const done=()=>{markBootDone();clearInterval(timer);};
+  guard||=armBootGuard(mode,{win,doc});
+  // 正常离开、切到后台：guard 早就挂着了（armBootGuard）；这里只管「站稳了」
+  const done=()=>{guard.settle();clearInterval(timer);};
   let played=0;const timer=setInterval(()=>{
     const playing=mode!=='jimao'||win.__G?.game?.state==='playing';
     if(playing&&(played+=2)>=BOOT.settle)done();
   },2000);
-  win.addEventListener?.('pagehide',done);
-  doc?.addEventListener?.('visibilitychange',()=>{if(doc.visibilityState==='hidden')done();});
   if(boot?.crashed&&doc?.body){
     const el=doc.createElement('div');el.className='boot-notice';
     el.style.cssText='position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:80;max-width:min(92vw,560px);padding:9px 14px;border-radius:12px;background:rgba(18,24,30,.92);color:#eef2f4;font:13px/1.5 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);pointer-events:none';

@@ -1489,6 +1489,7 @@ function holdWorld(tower, at = null, seed = 7) {
   const w = sworld({ tower, seed }), { siege, zombies, player, begin, cut, run } = w;
   const m = begin(), T = TOWERS[tower], roof = elev(T.roof), f = m.plan.flare;
   cut(m.plan.stages.length - 1); run(0.1); for (const z of zombies.alive()) z._deactivate();
+  w.ctx.rng = seq(seed * 13 + 1); // 楼顶这一段换一串新的随机数：商场段（前面一口气做完的那二十几步）刷了几只、用掉多少随机数不影响楼顶
   Object.assign(siege.state, { genT: 0, holdT: 0, bruteT: -1 }); // 一口气做完前面几步：商场段发电机、一层守点的倒计时别带到楼顶上来
   const px = at ? at.x : f.x + (m.plan.pad.x - f.x) * 0.15, pz = at ? at.z : f.z + (m.plan.pad.z - f.z) * 0.15; player.pos.set(px, roof, pz);
   return { ...w, m, T, roof, px, pz, S: siege.state, light: () => { cut(1); run(1 / 30); } };
@@ -1988,7 +1989,7 @@ test('护送：你走到扶梯口差一步（1.5 米）没踩到点上，小许�
   squad.dispose();
 });
 
-test('撬棍那家（以前是骑行家，现在是影城）→ 救人那家：路线指引绕着锁着的店走（不从店角穿），照着走一路不被退回来；顶着卷帘时说「卷帘锁着」，斜着推顺着卷帘滑过去；寻路的人（队友、丧尸）也绕开', async () => {
+test('撬棍那家（骑行家）→ 救人那家：路线指引绕着锁着的店走（不从店角穿），照着走一路不被退回来；顶着卷帘时说「卷帘锁着」，斜着推顺着卷帘滑过去；寻路的人（队友、丧尸）也绕开', async () => {
   const { createRouteGuide } = await import('../src/jimao/guide.js');
   for (const tower of ['A', 'T1']) {
     const { G, siege, begin, cut, run, player, msgs } = sworld({ tower });
@@ -2011,7 +2012,8 @@ test('撬棍那家（以前是骑行家，现在是影城）→ 救人那家：�
       vel.set((q.x - player.pos.x) / d * 4.5, 0, (q.z - player.pos.z) / d * 4.5); G.physics.moveCapsule(player.pos, vel, 1 / 30, 0.32, 1.8); siege.update(1 / 30);
       if (player.pos.distanceTo(p0) < 1e-3) stuck++;
     }
-    assert.ok(t < 12, `${tower}：${t.toFixed(1)} 秒走到卷帘跟前`); assert.equal(stuck, 0, '一帧都没被钉在原地'); assert.ok(!msgs.some((x) => /这边出不去/.test(x)), msgs.join(' | '));
+    let len = 0; for (let i = 1; i < route.length; i++) len += Math.hypot(route[i].x - route[i - 1].x, route[i].z - route[i - 1].z);
+    assert.ok(t < len / 4.5 + 2.5, `${tower}：${t.toFixed(1)} 秒走到卷帘跟前（路线 ${len.toFixed(0)} 米）`); assert.equal(stuck, 0, '一帧都没被钉在原地'); assert.ok(!msgs.some((x) => /这边出不去/.test(x)), msgs.join(' | '));
     // 直直地往卷帘里推：停在卷帘外面一点（不站进卷帘里），说「卷帘锁着」
     const f = R.front, mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2, inward = pointInPoly([mx - f.nx * 0.5, mz - f.nz * 0.5], poly) ? -1 : 1;
     player.pos.set(mx + f.nx * inward * -1.2, site.y, mz + f.nz * inward * -1.2); run(0.1); msgs.length = 0; siege.state.tellT = 0;
@@ -2160,12 +2162,20 @@ test('消防斧：开局店门对面（栏杆边）立着消火栓箱，正面�
   const m = begin(), at = m.plan.stageOf, M = m.plan.mall, A = M.axe, S = siege.state;
   run(0.1); assert.equal(G.weapon.melee, 'knife', '开局只有刀');
   assert.ok(A && A.wall && G.scene.getObjectByName('消火栓箱'), '箱子挂上了');
-  // 改过：以前挂在门洞旁边的实墙上，从门里看被门框挡住；现在在门对面、正面朝门
+  // 门对面有地方（栏杆在门外两米多）：立在门对面、正面朝门，从门里就看得见。开局那家店现在是影城，大门外只有一条一米多的窄走道、再往外是中庭栏杆：
+  // 挂在门洞旁边的实墙上，挂在不去撬棍的那一边（不把出门那条窄道挤窄），一出门转身就看得见
   const door = m.plan.stages[at('exit')].site, ds = landAt(nav, door.x, door.z, door.y + 0.6), as = landAt(nav, A.x, A.z, A.y + 0.6);
-  assert.ok(A.across && !pointInPoly([A.x, A.z], M.shop.poly), '在店门对面'); assert.ok(Math.hypot(A.wall.x - door.x, A.wall.z - door.z) < 6.5, '出门几步就到');
+  assert.ok(!pointInPoly([A.x, A.z], M.shop.poly), '在店门外'); assert.ok(Math.hypot(A.wall.x - door.x, A.wall.z - door.z) < 6.5, '出门几步就到');
   const face = new THREE.Vector3(A.wall.x + Math.sin(A.wall.yaw) * 0.3, door.y + 1.2, A.wall.z + Math.cos(A.wall.yaw) * 0.3);
-  assert.ok(G.physics.lineOfSight(new THREE.Vector3(door.x, door.y + 1.6, door.z), face), '卷帘一起来，从门里（摇卷帘那一点）看得见箱子正面');
-  assert.ok((door.x - A.wall.x) * Math.sin(A.wall.yaw) + (door.z - A.wall.z) * Math.cos(A.wall.yaw) > 2, '正面朝着门');
+  const df = M.shop.fronts[0], outside = new THREE.Vector3(door.x + df.nx * 2.2, door.y + 1.6, door.z + df.nz * 2.2);
+  if (A.across) {
+    assert.ok(G.physics.lineOfSight(new THREE.Vector3(door.x, door.y + 1.6, door.z), face), '卷帘一起来，从门里（摇卷帘那一点）看得见箱子正面');
+    assert.ok((door.x - A.wall.x) * Math.sin(A.wall.yaw) + (door.z - A.wall.z) * Math.cos(A.wall.yaw) > 2, '正面朝着门');
+  } else {
+    assert.ok(G.physics.lineOfSight(outside, face), '一出门就看得见箱子正面');
+    const bike = m.plan.stages[at('crowbar')].site;
+    assert.ok(Math.hypot(A.wall.x - bike.x, A.wall.z - bike.z) > Math.hypot(door.x - bike.x, door.z - bike.z), '挂在不去撬棍的那一边');
+  }
   assert.ok(as && clear(nav, as) && findPath(nav, ds, as), '从门口走得到');
   const drop = supplies.drops.find((d) => d.kind === 'axe'); assert.ok(drop, '斧子挂在箱子里');
   assert.ok(Math.hypot(drop.pos.x - A.x, drop.pos.z - A.z) < 1e-6 && drop.model.position.y > 0.8, '人站在箱子跟前捡，斧子挂在箱子里（离地一米上下）');
@@ -2229,5 +2239,46 @@ test('逐层破楼只拦关卡那几层：中间的楼层还剩一群也能直�
     const up = runs.find((r) => r.from === mid && r.id.startsWith(T.stair));
     assert.equal(siege.climbRule(up), null, `${mid} 还剩 ${left} 只也不拦`); assert.equal(G.stairBlock(up, 'up'), null);
     assert.ok(F.corridor + F.gate + F.landing + F.flats > F.pass.corridor + F.pass.landing + F.pass.flats, '关卡那层摆得多');
+  }
+});
+
+test('商场段从开局走到武器柜：照着路线指引走（真碰撞、往前看 1.3 米抄近路、卡住了左右横移），一次都不用传送——出店门从门洞正中直进直出、下扶梯先直走再拐，不再贴着门框 / 卷帘卡住', async () => {
+  const { createRouteGuide } = await import('../src/jimao/guide.js');
+  for (const seed of [1, 4]) {
+    const { G, siege, player, zombies, ctx } = sworld();
+    const ph = createMapPhysics(nav); Object.assign(G.physics, { stateOf: ph.stateOf, moveCapsule: ph.moveCapsule, forget: ph.forget }); // 真的跟踪脚下（站在扶梯上算扶梯）
+    const pf = createPathfinder(nav); pf.prepare(); G.physics.pathfinder = pf;
+    const m = siege.mission(seq(seed)); m.objectives.forEach((o) => { o.object = o.model(); o.pos = new THREE.Vector3(o.site.x, o.site.y, o.site.z); });
+    G.game.run.relays = m.objectives.map((o) => ({ id: o.id, o, cut: false })); siege.reset();
+    const guide = createRouteGuide(G, { scene: G.scene, layout: L, nav, pathfinder: pf }), S = siege.state, plan = m.plan;
+    player.pos.set(m.start.pos.x, m.start.pos.y, m.start.pos.z);
+    const tick = () => { G.time.frame++; for (const z of zombies.alive()) z._deactivate(); siege.update(1 / 30); for (const q of [...ctx.list]) q._update(1 / 30); guide.update(1 / 30); pf.update(8); };
+    for (let k = 0; k < 10; k++) tick();
+    const vel = new THREE.Vector3(), stuck = [];
+    while (S.stage <= plan.armsStage) {
+      const i0 = S.stage, st = plan.stages[i0], rel = G.game.run.relays[i0];
+      m.objectives.forEach((o, i) => { o.locked = i > i0; });
+      let t = 0, last = { x: player.pos.x, z: player.pos.z }, still = 0, ph2 = -1;
+      for (; t < 120; t += 1 / 30) {
+        const site = st.site, d = Math.hypot(site.x - player.pos.x, site.z - player.pos.z), same = Math.abs(site.y - player.pos.y) < 1.5;
+        if (same && d < 1.6) break;
+        // 只跟着指向这一步的那条路线（刚换目标、新路线还没算出来先站着）
+        const fresh = guide.target?.key === st.id && guide.planned === st.id, r = fresh ? guide.route : [];
+        let i1 = 0, nd = Infinity, tgt = null;
+        r.forEach((q, i) => { const dd = Math.hypot(q.x - player.pos.x, q.z - player.pos.z) + Math.abs(q.y - player.pos.y) * 2; if (dd < nd) { nd = dd; i1 = i; } });
+        for (let i = i1; i < r.length; i++) if (Math.hypot(r[i].x - player.pos.x, r[i].z - player.pos.z) > 1.3) { tgt = r[i]; break; }
+        if (!tgt && same && (fresh || t > 2)) tgt = site;
+        let fx = 0, fz = 0; if (tgt) { const a = Math.atan2(tgt.x - player.pos.x, tgt.z - player.pos.z); fx = Math.sin(a); fz = Math.cos(a); }
+        let sx = 0, sz = 0;
+        if (still > 1.5) { const k = Math.floor((still - 1.5) / 0.7) % 4, side = k === 0 ? 1 : k === 2 ? -1 : 0; sx = -fz * side; sz = fx * side; ph2 = k; }
+        vel.set((fx + sx) * 4.6, 0, (fz + sz) * 4.6); G.physics.moveCapsule(player.pos, vel, 1 / 30, 0.32, 1.8); tick();
+        if (Math.hypot(player.pos.x - last.x, player.pos.z - last.z) > 2) { last = { x: player.pos.x, z: player.pos.z }; still = 0; }
+        else if ((still += 1 / 30) > 12) { stuck.push(`${st.id} @(${player.pos.x.toFixed(1)}, ${player.pos.z.toFixed(1)})`); player.pos.set(site.x, site.y, site.z); still = 0; }
+      }
+      void ph2;
+      rel.cut = true; for (let k = 0; k < 60 && S.stage === i0; k++) tick();
+      if (S.stage === i0) S.stage++; // 护送 / 潜行 / 守发电机这些要等的：直接推进
+    }
+    assert.deepEqual(stuck, [], `seed ${seed}：卡住要传送的地方`);
   }
 });

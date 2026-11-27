@@ -30,14 +30,17 @@ let failed = false;
 const launcher = mountLauncher({ backgroundUrl:COVER_URL, fpsUrl:FPS_COVER_URL, async onSelect(mode, { query = '' } = {}) {
   if (failed) { location.reload(); return; }
   launcher.setLoading('准备进入云澜汇',0);
+  let runtime = null;
   try {
     applyLaunchQuery(query);
-    const { startRuntime } = await import('./runtime.js');
-    await startRuntime(mode,(label,p)=>launcher.setLoading(label,p));
+    runtime = await import('./runtime.js');
+    await runtime.startRuntime(mode,(label,p)=>launcher.setLoading(label,p));
     launcher.dispose();
   } catch(error) {
     failed = true;
     console.error(error);
+    // 载入出错不是被系统关掉：擦掉「正在进入」，刷新重试时不降内存档、不提示「上次被关掉」
+    try { runtime?.bootFailed?.(); } catch { /* 擦不掉就算了 */ }
     // Retry creates a fresh document, releasing any partially built GPU scene.
     launcher.showError(`加载未完成：${error.message || error}。点击任一模式刷新后重试。`);
   }

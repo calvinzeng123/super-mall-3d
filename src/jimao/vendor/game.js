@@ -6620,6 +6620,13 @@ var If = 58;
 // ---- g_  (bundle line 26650)
 var g_ = { pause: 1 };
 // ---- v_  (bundle line 26651–26865)
+/** 触屏为主的设备（手机、平板）：主指针是粗的，或者有触点、没有细指针 */
+function coarseTouch() {
+  try {
+    if (typeof matchMedia !== "function") return false;
+    return matchMedia("(pointer: coarse)").matches || (navigator.maxTouchPoints || 0) > 0 && !matchMedia("(any-pointer: fine)").matches;
+  } catch { return false; }
+}
 function v_(i) {
     let e = i.renderer && i.renderer.domElement || document.getElementById("view"), t = document.getElementById("ui"), n = /* @__PURE__ */ new Set(), s = /* @__PURE__ */ new Set(), o = { key: /* @__PURE__ */ new Set(), mouse: /* @__PURE__ */ new Set(), touch: /* @__PURE__ */ new Set(), pad: /* @__PURE__ */ new Set() }, r = false, a = false, l = 0, c = 0, u = 0, h = [], f = { move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 }, fire: false, ads: false, sprint: false, crouch: false, locked: false, touch: false, gamepad: false, sensitivity: 1, invertY: false, mode: "lock", keyMap: h_, down(P) {
       return n.has(P) && (r || g_[P] === 1);
@@ -6632,6 +6639,8 @@ function v_(i) {
     }, onModeChange(P) {
       h.push(P);
     }, describeMode() {
+      // 触屏设备（手机、平板）还没碰屏幕之前也是 lock 模式：不提示「点击画面捕获鼠标」
+      if (f.mode === "lock" && !f.locked && coarseTouch()) return "";
       return f.mode === "touch" ? "\u89E6\u5C4F\u64CD\u4F5C\u5DF2\u542F\u7528" : f.mode === "drag" ? "\u9F20\u6807\u6355\u83B7\u4E0D\u53EF\u7528\uFF1A\u79FB\u52A8\u9F20\u6807\u8C03\u6574\u89C6\u89D2\uFF0C\u505C\u5728\u5C4F\u5E55\u8FB9\u7F18\u6301\u7EED\u8F6C\u5411\uFF1B\u70B9\u51FB\u5F00\u706B\uFF1B\u65B9\u5411\u952E\u6216 IJKL \u4E5F\u53EF\u8F6C\u5411" : f.locked ? "\u9F20\u6807\u5DF2\u6355\u83B7\uFF0C\u6309 Esc \u91CA\u653E" : "\u70B9\u51FB\u6E38\u620F\u753B\u9762\u4EE5\u6355\u83B7\u9F20\u6807";
     } };
     function p(P) {
@@ -9104,7 +9113,7 @@ function hM(i) {
     r.appendChild(s);
     let a = li("div", "h-cmarks"), l = li("div", "h-heading", "000");
     n.append(r, li("i", "h-needle"), a, l);
-    let c = li("div", "h-obj", '<div class="h-k">\u4EFB\u52A1\u76EE\u6807</div><div class="h-obj-t"></div><div class="h-relays"><span>\u76EE\u6807</span><i></i><i></i><i></i><b>0/3</b></div>'), u = c.querySelector(".h-obj-t"), h = c.querySelector(".h-relays"), f = h.querySelector("b"), p = [...h.querySelectorAll("i")], d = li("div", "h-warn"), v = li("div", "h-cross", '<i class="c-t"></i><i class="c-b"></i><i class="c-l"></i><i class="c-r"></i><i class="c-dot"></i>'), g = v.querySelectorAll("i"), x = li("div", "h-hit", "<i></i><i></i><i></i><i></i>"), y = li("div", "h-arcs"), b = [];
+    let c = li("div", "h-obj", '<div class="h-k">\u4EFB\u52A1\u76EE\u6807</div><div class="h-obj-t"></div><div class="h-relays"><span>\u76EE\u6807</span><i></i><i></i><i></i><b>0/3</b></div>'), u = c.querySelector(".h-obj-t"), h = c.querySelector(".h-relays"), f = h.querySelector("b"), p = [...h.querySelectorAll("i")], rbar = null, d = li("div", "h-warn"), v = li("div", "h-cross", '<i class="c-t"></i><i class="c-b"></i><i class="c-l"></i><i class="c-r"></i><i class="c-dot"></i>'), g = v.querySelectorAll("i"), x = li("div", "h-hit", "<i></i><i></i><i></i><i></i>"), y = li("div", "h-arcs"), b = [];
     for (let k = 0; k < 4; k++) {
       let ce = li("div", "h-arc", '<svg viewBox="-100 -100 200 200"><path d="M -38 -84 A 92 92 0 0 1 38 -84" /><path class="tip" d="M -7 -97 L 0 -106 L 7 -97" /></svg>');
       y.appendChild(ce), b.push({ el: ce, life: 0, src: new W(), op: -1, rot: 1e9 });
@@ -9143,14 +9152,17 @@ function hM(i) {
       k = k || "", k !== re && (re = k, $ = 0, ue = 0, u.textContent = "", c.classList.toggle("has", !!k), c.classList.remove("flash"), c.offsetWidth, c.classList.add("flash"));
     }, setRelays(k, ce) {
       if (!(k === X.done && ce === X.total)) {
+        // 步数多（丧尸围城商场段二十几步）：不排一长串小方块（会把「目标」两个字挤成竖排），改成「第 3/23 步」+ 一根短进度条
+        let long = ce > 8;
         if (ce !== X.total) {
-          p.forEach((ve) => ve.remove()), p = [];
-          for (let ve = 0; ve < ce; ve++) {
+          p.forEach((ve) => ve.remove()), p = [], rbar && (rbar.remove(), rbar = null);
+          if (long) rbar = document.createElement("em"), rbar.className = "h-rbar", rbar.appendChild(document.createElement("u")), h.insertBefore(rbar, f);
+          else for (let ve = 0; ve < ce; ve++) {
             let _e = document.createElement("i");
             h.insertBefore(_e, f), p.push(_e);
           }
         }
-        X.done = k, X.total = ce, p.forEach((ve, _e) => ve.classList.toggle("cut", _e < k)), f.textContent = `${k}/${ce}`, h.classList.toggle("all", k >= ce && ce > 0);
+        X.done = k, X.total = ce, h.classList.toggle("long", long), p.forEach((ve, _e) => ve.classList.toggle("cut", _e < k)), rbar && (rbar.firstChild.style.width = `${(ce > 0 ? Math.min(1, k / ce) : 0) * 100}%`), f.textContent = long ? k >= ce ? `${ce}/${ce}` : `\u7B2C ${k + 1}/${ce} \u6B65` : `${k}/${ce}`, h.classList.toggle("all", k >= ce && ce > 0);
       }
     }, setMarkers(k) {
       for (let ce of J) ce.cEl.remove(), ce.wEl.remove();
@@ -9655,7 +9667,7 @@ function mM(i) {
     }
     function C(P) {
       let V = r.describeMode ? r.describeMode() : "";
-      l.setLookMode(V), !(!P && V === x) && (x = V, _.state === "playing" && (r.mode === "drag" || r.mode === "lock" && !r.locked && !i.params.shot && !i.params.autostart) ? o.message(V, r.mode === "drag" ? 7 : 4) : _.state === "playing" && r.locked && o.message("", 0));
+      l.setLookMode(V), !(!P && V === x) && (x = V, _.state === "playing" && V && (r.mode === "drag" || r.mode === "lock" && !r.locked && !i.params.shot && !i.params.autostart) ? o.message(V, r.mode === "drag" ? 7 : 4) : _.state === "playing" && r.locked && o.message("", 0));
     }
     r.onModeChange && r.onModeChange(() => C(false)), i.events.on("input:lock", (P) => {
       if (P.locked) {
@@ -9669,7 +9681,7 @@ function mM(i) {
       _.state !== "title" || l.panelOpen || P.code !== "Enter" && P.code !== "NumpadEnter" || P.target && P.target.tagName === "BUTTON" || (a(i.audio, "resume"), r.requestLock(), U({}));
     });
     function G() {
-      _.state === "playing" && (r.setGameplay && r.setGameplay(false), r.exitLock(), a(i.audio, "setPaused", true), l.setLookMode(r.mode === "drag" ? r.describeMode() : r.touch ? "" : "\u7EE7\u7EED\u6E38\u620F\u540E\u5C06\u91CD\u65B0\u6355\u83B7\u9F20\u6807\u3002"), o.show(false), l.show("paused"), d = 0.35, M("paused"));
+      _.state === "playing" && (r.setGameplay && r.setGameplay(false), r.exitLock(), a(i.audio, "setPaused", true), l.setLookMode(r.mode === "drag" ? r.describeMode() : r.touch || coarseTouch() ? "" : "\u7EE7\u7EED\u6E38\u620F\u540E\u5C06\u91CD\u65B0\u6355\u83B7\u9F20\u6807\u3002"), o.show(false), l.show("paused"), d = 0.35, M("paused"));
     }
     function j(P) {
       _.state === "paused" && (l.show("none"), a(i.audio, "setPaused", false), o.show(true), r.setGameplay && r.setGameplay(true), g = false, r.requestLock(), M("playing"), setTimeout(() => C(true), 700));

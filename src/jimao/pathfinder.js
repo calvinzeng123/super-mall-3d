@@ -197,6 +197,8 @@ export function createPathfinder(nav, { cell = PATH.cell, maxNodes = PATH.maxNod
   const api = {
     stats, cell,
     get pending() { return queue.length; },
+    /** 同一层 a → b 能不能直走：玩家的碰撞试走得通，也不从要绕开的地方（锁着的店）穿（路线指引挪拐点时用） */
+    walkable: (a, b) => !!traceMotion(nav, a, b) && !(avoid && a.floor === b.floor && !core(a.floor, a.x, a.z) && !core(b.floor, b.x, b.z) && crosses(a, b, avoid)),
     /** fn(connector) 返回 true 的连接，给玩家排路线时不走（connector: { id, kind, link?, from?, to? }）；传 null 取消 */
     setBlocked(fn) { blocked = typeof fn === 'function' ? fn : null; },
     /** fn(floor, x, z) 返回 true 的地方寻路绕开（谁的路都绕：人、队友、丧尸），inner 是不带余量的里圈（默认同 fn）；传 null 取消。范围变了（比如一家店的卷帘撬开了）再调一次：缓存清掉重算 */
