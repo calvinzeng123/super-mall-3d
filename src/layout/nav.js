@@ -12,6 +12,7 @@ import {
   polySamples, polyCentroid, polyArea, polyBounds, dist,
 } from './geom.js';
 import { storeStyle, doorGaps } from './frontage.js';
+import { cinemaPlan } from './cinema.js';
 import { ESC } from './constants.js';
 import { gantryPosts } from './west-parking.js';
 import { EXIT } from './metro.js';
@@ -207,6 +208,13 @@ export function buildNav(layout, options = {}) {
         }
       }
       for (const s of subtractOpenings(mergeSegments(unionOutline(u.rects)), openings)) wallL(F, u.frame, s);
+      // 影城的放映厅：厅墙（扣掉门洞）、一排排座椅（矮墙：挡人，站着能从上面开枪）、卖品台——和 interiors.js 画的是同一份（cinema.js）
+      if (u.brand?.cat === 'cinema' && !u.residence) {
+        const C = cinemaPlan(u);
+        for (const w of C.walls) wallL(F, u.frame, w);
+        for (const w of C.rows) { const n = F.walls.length; wallL(F, u.frame, w); if (F.walls.length > n) F.walls[n].top = w.top; }
+        if (C.counter) obstacle(F, u.frame, C.counter);
+      }
       for (const p of u.residence?.partitions || []) partition(F, u.frame, p);
       for (const o of u.residence?.obstacles || []) obstacle(F, u.frame, o.rect);
       // Furniture placed by the renderer (options.unitSolids(u) → unit-local rects): tall cabinets are solid too.

@@ -13,6 +13,7 @@ import { aimAngles, inGunArc, createDoorGun, DOOR_GUN, DOOR_GUN_CSS, impactAt } 
 import { createSupplies, SUPPLY, healChoice, MEDIC_CSS } from '../src/jimao/supplies.js';
 import { createSquad, SQUAD, pickTarget, shotHits, slotOf, SQUAD_CSS } from '../src/jimao/squad.js';
 import { DEFENSE } from '../src/jimao/siege-defense.js';
+import { BARRIER, releaseBarrierWalls } from '../src/jimao/siege-barriers.js';
 import { createHealthBars, BARS, barWidth, pickBars, BARS_CSS } from '../src/jimao/healthbars.js';
 import { doorOutside } from '../src/jimao/guide.js';
 import { PACING, createPacing } from '../src/jimao/pacing.js';
@@ -120,6 +121,7 @@ test('清扫的目标位置：楼下的一半在街上（室外地面）、一�
 
 // ---- 丧尸 ----
 function zworld({ count = 12 } = {}) {
+  releaseBarrierWalls(nav); // 同一张导航网格前面的局落下的卷帘墙放开（每个世界从没有卷帘的地图开始）
   const physics = createMapPhysics(nav), scene = new THREE.Scene(), events = [], hurt = [];
   const handlers = {};
   const ctx = { rng: seq(11), list: [], retire(m) { m._deactivate(); const i = ctx.list.indexOf(m); if (i >= 0) ctx.list.splice(i, 1); }, releaseToken() {} };
@@ -1896,6 +1898,7 @@ test('直升机落稳以后（跑去登机那几步）：排着队的那几波�
 // ---- 救人：小许出得来、跟得上 ----
 /** 被困的那家店：店面多边形、门面、开局 / 撬棍 / 救人 / 扶梯口几处地点 */
 function rescueScene() {
+  releaseBarrierWalls(nav);
   const plan = siegePlan(seq(7), L, nav, runs), M = plan.mall, R = M.rescue, at = plan.stageOf;
   const poly = L.levels.find((l) => l.id === 'P1-3F').units.find((u) => u.id === R.unit).polys[0];
   return { plan, M, R, poly, site: plan.stages[at('rescue')].site, bike: plan.stages[at('crowbar')].site, mark: plan.stages[at('escort')].site };
@@ -2027,21 +2030,24 @@ test('撬棍那家（骑行家）→ 救人那家：路线指引绕着锁着的�
     // 别人的寻路也绕开（队友、丧尸都走 pathfinder）；撬开以后就不绕了
     const a = landAt(nav, bike.x, bike.z, bike.y + 0.6), b = landAt(nav, R.inside.x + (site.x - R.inside.x) * 0.2, R.inside.z + (site.z - R.inside.z) * 0.2, site.y + 0.6);
     const p1 = pf.findNow(a, landAt(nav, site.x, site.z, site.y + 0.6)); assert.ok(p1 && p1.every((q) => !pointInPoly([q.x, q.z], poly)), '绕着店走');
-    cut(1); run(0.1); assert.equal(siege.state.stage, at('escort')); assert.ok(pf.findNow(a, b), '撬开了：店里也能去');
+    cut(1); run(0.1); assert.equal(siege.state.stage, at('escort')); assert.equal(pf.findNow(a, b), null, '卷帘还在往上卷：还进不去');
+    run(BARRIER.rise + 0.3); assert.ok(pf.findNow(a, b), '撬开了、卷到顶：店里也能去');
   }
 });
 
 test('读档回到配电室：前面已经过去的那几道分阶段卷帘（开局店面、救人那家、两处扶梯口）都收起来——不会看着落着、人却走得过去', () => {
   const { siege, begin, director, G } = sworld();
   const m = begin(), at = m.plan.stageOf, R = m.plan.mall.rescue, f = R.front, mx = (f.x0 + f.x1) / 2, mz = (f.z0 + f.z1) / 2;
-  const seals = () => { const out = []; G.scene.traverse((o) => { if (o.name === '丧尸围城 · 卷帘') out.push(o); }); return out; };
-  const over = (x, z) => seals().filter((o) => { o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox; return x > b.min.x - 0.2 && x < b.max.x + 0.2 && z > b.min.z - 0.2 && z < b.max.z + 0.2 && b.max.x - b.min.x < 15 && b.max.z - b.min.z < 15; });
-  assert.ok(over(mx, mz).length && over(mx, mz).every((o) => o.visible), '新开一局：救人那家的卷帘落着');
+  // 分阶段的卷帘是会动的真东西（siege-barriers.js）：按 id 找；墙（gate）关着挡人
+  const bars = (p) => siege.doors.list.filter((b) => b.id.startsWith(p)), shut = (p) => bars(p).length > 0 && bars(p).every((b) => b.state === 'closed' && b.k === 0 && b.gates.every((g) => !g.open));
+  const open = (p) => bars(p).length > 0 && bars(p).every((b) => b.state === 'open' && b.k === 1 && b.gates.every((g) => g.open));
+  assert.ok(shut('rescue') && shut('exit') && shut('pry') && shut('open'), '新开一局：救人那家、开局店面、两处扶梯口的卷帘落着');
   director.state.restore = { kind: 'safe', stage: m.plan.powerStage + 1, kit: null }; siege.reset(); siege.update(1 / 30);
   assert.ok(siege.state.stage > at('rescue') && siege.inArea({ floor: 'P1-3F', x: R.inside.x, z: R.inside.z }), '读档以后救人那家进得去');
-  assert.ok(over(mx, mz).length && over(mx, mz).every((o) => !o.visible), '……它的卷帘也收起来了');
-  const shop = m.plan.mall.shop.fronts[0]; assert.ok(over((shop.x0 + shop.x1) / 2, (shop.z0 + shop.z1) / 2).every((o) => !o.visible), '开局那家店的卷帘也收了');
-  director.state.restore = false; siege.reset(); assert.ok(over(mx, mz).every((o) => o.visible), '再新开一局又落下来');
+  assert.ok(open('rescue'), '……它的卷帘也收起来了（一下子到位，碰撞也放开了）');
+  assert.ok(open('exit') && open('pry') && open('open'), '开局那家店、两处扶梯口的卷帘也收了');
+  void mx; void mz; void f;
+  director.state.restore = false; siege.reset(); assert.ok(shut('rescue') && shut('exit'), '再新开一局又落下来');
 });
 
 test('小许跟丢了直接跟到你身后时，不落在去不了的地方（楼梯顶、锁着的店里、范围外）；都不行就落在你脚下', () => {
@@ -2067,7 +2073,7 @@ function escortWorld({ tower = 'A' } = {}) {
   const m = begin(), at = m.plan.stageOf, site = m.plan.stages[at('rescue')].site, mark = m.plan.stages[at('escort')].site;
   const calm = () => { for (const z of zombies.alive()) z._deactivate(); squad.update(1 / 30); };
   run(0.1, calm); cut(at('crowbar') + 1); run(0.1, calm);
-  player.pos.set(site.x, site.y, site.z); run(0.3, calm); cut(1); run(1.5, calm);
+  player.pos.set(site.x, site.y, site.z); run(0.3, calm); cut(1); run(BARRIER.rise + 1.5, calm); // 卷帘卷到顶小许才出来
   assert.equal(siege.state.stage, at('escort')); siege.state.escortT = 999;
   return { ...w, squad, m, at, site, mark, xu: squad.guest, calm };
 }
@@ -2164,7 +2170,8 @@ test('消防斧：开局店门对面（栏杆边）立着消火栓箱，正面�
   assert.ok(A && A.wall && G.scene.getObjectByName('消火栓箱'), '箱子挂上了');
   // 门对面有地方（栏杆在门外两米多）：立在门对面、正面朝门，从门里就看得见。开局那家店现在是影城，大门外只有一条一米多的窄走道、再往外是中庭栏杆：
   // 挂在门洞旁边的实墙上，挂在不去撬棍的那一边（不把出门那条窄道挤窄），一出门转身就看得见
-  const door = m.plan.stages[at('exit')].site, ds = landAt(nav, door.x, door.z, door.y + 0.6), as = landAt(nav, A.x, A.z, A.y + 0.6);
+  // 门口：大门门脸正中往里 1.1 米（摇卷帘的那一点现在挪到门洞旁边的开关跟前了）
+  const df0 = M.shop.fronts[0], ex0 = m.plan.stages[at('exit')].site, door = { ...ex0, x: (df0.x0 + df0.x1) / 2 - df0.nx * 1.1, z: (df0.z0 + df0.z1) / 2 - df0.nz * 1.1 }, ds = landAt(nav, door.x, door.z, door.y + 0.6), as = landAt(nav, A.x, A.z, A.y + 0.6);
   assert.ok(!pointInPoly([A.x, A.z], M.shop.poly), '在店门外'); assert.ok(Math.hypot(A.wall.x - door.x, A.wall.z - door.z) < 6.5, '出门几步就到');
   const face = new THREE.Vector3(A.wall.x + Math.sin(A.wall.yaw) * 0.3, door.y + 1.2, A.wall.z + Math.cos(A.wall.yaw) * 0.3);
   const df = M.shop.fronts[0], outside = new THREE.Vector3(door.x + df.nx * 2.2, door.y + 1.6, door.z + df.nz * 2.2);

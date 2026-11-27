@@ -42,6 +42,9 @@ export const MALL = Object.freeze({
   sneak: Object.freeze({ count: 14, band: 6, gap: 2.4, wake: 60, close: 2.4, closeCrouch: 1.3, group: 5, run: 22, walk: 7, arrive: 2.6 }),
   // 搬油桶：抬着跑多快、离发电机最好多远（取 lo–hi 米之间最接近 best 的那家）、隔几秒来几只
   fuel: Object.freeze({ speed: 0.62, lo: 16, hi: 40, best: 26, every: 6, each: 2, pick: 1.3 }),
+  // 卷帘的开关：店门里头门洞旁边那段实墙上的控制盒（离门洞边 off 米、贴墙往里 inset 米，人站在它前面 stand 米摇）；
+  // 扶梯口：防火卷帘一侧立一根带按钮盒的立杆（离梯边 side 米、在卷帘外 out 米，人站在它前面 stand 米按）；撬的地锁在卷帘底梁外 lock 米
+  panel: Object.freeze({ off: 0.55, inset: 0.08, stand: 0.85, side: 0.55, out: 0.35, lock: 0.32 }),
 });
 
 /** 门面 f（世界坐标）上能走过去的门洞 [[a, b], ...]（从 f 的起点量，米）：和导航网格在门面上开的洞一样（nav.js） */
@@ -107,6 +110,44 @@ export function exitSpot(nav, lv, q, R = MALL.rescue) {
   return null;
 }
 
+/**
+ * 店门（门脸 f）里头卷帘开关挂在哪：门洞旁边那段实墙（玻璃）里侧，离门洞边 off 米；toward 给了就先试离它近的那一边。
+ * 返回 { site（人站着摇的地方，在店里）, mount（控制盒贴墙的那一点和朝向：{ x, z, yaw }，正面朝店里）}；两边都不行返回 null
+ */
+export function switchBeside(nav, lv, u, f, toward = null, A = MALL.panel) {
+  if (!f) return null;
+  const { len, gaps } = gapsOf(lv, u, f), tx = (f.x1 - f.x0) / len, tz = (f.z1 - f.z0) / len, poly = u.polys?.[0];
+  const g = [...gaps].sort((p, q) => Math.abs((p[0] + p[1]) / 2 - len / 2) - Math.abs((q[0] + q[1]) / 2 - len / 2))[0]; if (!g) return null;
+  const at = (c) => ({ x: f.x0 + tx * c, z: f.z0 + tz * c });
+  let sides = [g[1] + A.off, g[0] - A.off];
+  if (toward) sides.sort((p, q) => Math.hypot(at(p).x - toward.x, at(p).z - toward.z) - Math.hypot(at(q).x - toward.x, at(q).z - toward.z));
+  for (const c of sides) {
+    if (c < 0.35 || c > len - 0.35 || gaps.some(([a, b]) => c > a - 0.25 && c < b + 0.25)) continue;
+    const w = at(c), sx = w.x - f.nx * A.stand, sz = w.z - f.nz * A.stand, st = landAt(nav, sx, sz, lv.elev + 0.6);
+    if (!st || st.floor !== lv.id || Math.abs(st.y - lv.elev) > 0.3 || !clear(nav, st) || (poly && !inPoly(poly, st.x, st.z))) continue;
+    return { site: { floor: lv.id, x: st.x, y: lv.elev, z: st.z }, mount: { x: w.x - f.nx * A.inset, z: w.z - f.nz * A.inset, yaw: Math.atan2(-f.nx, -f.nz) } };
+  }
+  return null;
+}
+/** 扶梯口（坡道 s 的高端 / 低端）的防火卷帘：按钮立杆立在哪一侧（site：人站的地方；mount：立杆，正面朝来人那边）。没地方返回 null */
+export function panelBySlope(nav, s, top = true, A = MALL.panel) {
+  const floor = top ? s.high : s.low, y = nav.floors.get(floor)?.y ?? 0, dir = top ? 1 : -1, end = top ? s.len : 0;
+  const [ax, az] = toW(s.F, 0, 0), [bx, bz] = toW(s.F, dir, 0), yaw = Math.atan2(bx - ax, bz - az);
+  for (const side of [1, -1]) {
+    const v = side * (s.hw + A.side), [mx, mz] = toW(s.F, end + dir * A.out, v), [sx, sz] = toW(s.F, end + dir * (A.out + A.stand), v);
+    const m = landAt(nav, mx, mz, y + 0.6), st = landAt(nav, sx, sz, y + 0.6);
+    if (!m || m.floor !== floor || !st || st.floor !== floor || Math.abs(st.y - y) > 0.3 || !clear(nav, st)) continue;
+    return { site: { floor, x: st.x, y, z: st.z }, mount: { x: mx, z: mz, yaw } };
+  }
+  return null;
+}
+/** 扶梯口防火卷帘底下的地锁（撬棍撬的那个）：卷帘外 lock 米、梯宽正中，朝来人那边 */
+export function lockBySlope(s, top = true, A = MALL.panel) {
+  const dir = top ? 1 : -1, end = top ? s.len : 0, [x, z] = toW(s.F, end + dir * A.lock, 0), [ax, az] = toW(s.F, 0, 0), [bx, bz] = toW(s.F, dir, 0);
+  return { x, z, yaw: Math.atan2(bx - ax, bz - az) };
+}
+function inPoly(poly, x, z) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; }
+
 /** 同一层两点之间按寻路走多远（米）；走不通算很远 */
 function walk(nav, a, b) {
   const p = findPath(nav, a, { floor: b.floor, x: b.x, y: b.y, z: b.z }); if (!p) return 1e9;
@@ -134,8 +175,9 @@ function pick(layout, nav, floor, name, tries = [[0.5, 0.5]], skip = new Set()) 
 export function openSteps(nav, lv, u, door, P = MALL.spread) {
   const r = u.rects?.[0]; if (!r || !door) return null;
   const pts = [], roomy = (q) => [[0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]].every(([dx, dz]) => { const s = landAt(nav, q.x + dx, q.z + dz, lv.elev + 0.6); return s && s.floor === lv.id && clear(nav, s); });
-  for (let i = 0; i <= 8; i++) for (let j = 0; j <= 16; j++) {
-    const q = spotIn(nav, lv, u, 0.15 + 0.7 * i / 8, 0.06 + 0.88 * j / 16);
+  // 横向从 6% 采到 94%：影城两边的大堂只有三米多宽（中间是放映厅），采窄了大堂里一个点都没有
+  for (let i = 0; i <= 16; i++) for (let j = 0; j <= 16; j++) {
+    const q = spotIn(nav, lv, u, 0.06 + 0.88 * i / 16, 0.06 + 0.88 * j / 16);
     if (q && roomy(q)) pts.push(q);
   }
   const d = (a, b) => Math.hypot(a.x - b.x, a.z - b.z), ok = (x) => x >= P.open && x <= P.cap;
@@ -161,7 +203,7 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   const F = M.floors, yOf = (f) => nav.floors.get(f)?.y ?? 0;
   const st = (id, kind, obj, site, label, verb, text, hud, noise = 0) => ({ id, kind, obj, floor: site.floor, site: { floor: site.floor, x: site.x, y: site.y, z: site.z, ...(site.unit ? { unit: site.unit } : {}) }, label, verb, text, hud, noise });
   // 开局那家店（影城）：先挑大门（门外到撬棍那家最近的那道门），再在店里挑出生点和手摇柄——出生点 → 手摇柄 → 大门两段都是 open–cap 米的路
-  const home = pick(layout, nav, F.top, M.shop.start), u = home.u, lv3 = layout.levels.find((l) => l.id === F.top);
+  const home = pick(layout, nav, F.top, M.shop.start, [[0.5, 0.5], [0.5, 0.85], [0.5, 0.92], [0.2, 0.9], [0.8, 0.9]]), u = home.u, lv3 = layout.levels.find((l) => l.id === F.top);
   const fronts0 = u.wfronts || [], toolShop = unitOf(layout, F.top, M.shop.crowbar), toolAt = toolShop ? spotIn(nav, lv3, toolShop, 0.5, 0.5) : null;
   const doors = [];
   for (const f of fronts0) { const mx = (f.x0 + f.x1) / 2 - f.nx * 1.1, mz = (f.z0 + f.z1) / 2 - f.nz * 1.1, q = landAt(nav, mx, mz, lv3.elev + 0.6); if (q && q.floor === F.top && clear(nav, q)) doors.push({ f, at: { floor: F.top, x: mx, y: lv3.elev, z: mz, nx: f.nx, nz: f.nz }, d: toolAt ? walk(nav, { floor: F.top, x: q.x, y: lv3.elev, z: q.z }, toolAt) : 0 }); }
@@ -170,7 +212,14 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   door ||= { ...home, nx: fronts0[0]?.nx || 0, nz: fronts0[0]?.nz || 1 };
   // 门脸排一下：大门那一面放第一个（摇开卷帘时门外那几只从这儿进来，见 siege.js）
   const fronts = doorF ? [doorF, ...fronts0.filter((f) => f !== doorF)] : fronts0;
-  const { spawn: spawnAt, crank } = openSteps(nav, lv3, u, door, M.spread) || { spawn: home, crank: home };
+  // 卷帘的开关：大门里侧门洞旁边墙上的控制盒，人站在盒子跟前摇。门洞两边都试，出生点 → 手摇柄 → 开关两段都要够长
+  let exitSw = null, steps0 = null;
+  for (const side of [-1, 1]) {
+    const sw = doorF && switchBeside(nav, lv3, u, doorF, { x: door.x + side * (doorF.x1 - doorF.x0) * 10, z: door.z + side * (doorF.z1 - doorF.z0) * 10 }, M.panel);
+    const o = sw && openSteps(nav, lv3, u, sw.site, M.spread);
+    if (o) { exitSw = sw; steps0 = o; break; }
+  }
+  const { spawn: spawnAt, crank } = steps0 || openSteps(nav, lv3, u, door, M.spread) || { spawn: home, crank: home };
   const used = new Set([u.id]);
   const take = (floor, name, tries) => { const q = pick(layout, nav, floor, name, tries, used); if (q) used.add(q.unit); return q; };
   /** 店门外一点（门脸中点往外 out 米）和店里一点（往里 inn 米）：都站得住才算 */
@@ -224,7 +273,7 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   const can = near(F.mid, gen, { best: M.fuel.best, lo: M.fuel.lo, hi: M.fuel.hi, avoid: [gun, note, gen], minAway: 6, far: [[win, M.spread.min]] });
   const stages = [
     st('crank', 'crank', 'item', crank, `手摇柄 · ${home.name}`, '拿手摇柄', `你们躲在三层的「${home.name}」里过了一夜，大门的卷帘落着。卷帘的手摇柄在店里另一头的值班台上，先去拿`, '到值班台拿卷帘的手摇柄'),
-    st('exit', 'shutter', 'relay', door, `卷帘 · ${home.name}`, '摇开卷帘', '拿着手摇柄走到大门，把卷帘摇起来——外面有东西在拍门，手里只有刀和两颗手雷', '到大门摇开卷帘', 12),
+    st('exit', 'shutter', 'relay', exitSw?.site || door, `卷帘 · ${home.name}`, '摇开卷帘', '拿着手摇柄走到大门，把卷帘摇起来——外面有东西在拍门，手里只有刀和两颗手雷', '到大门摇开卷帘', 12),
     st('crowbar', 'crowbar', 'item', bike, `撬棍 · 三层 ${bike.name}`, '拿撬棍', `下二层的扶梯口被防火卷帘挡着。去「${bike.name}」找根撬棍`, `到「${bike.name}」找撬棍`),
     ...(trap ? [
       st('rescue', 'rescue', 'relay', trap.out, `求救 · 三层 ${trap.name}`, '撬开卷帘', `「${trap.name}」的卷帘后面有人在拍门喊救命。用撬棍把卷帘撬开`, `撬开「${trap.name}」的卷帘救人`, 15),
@@ -239,6 +288,14 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
     st('gen', 'gen', 'relay', gen, `发电机 · 二层 ${gen.name}`, '加油、启动', can ? `把油桶抬到「${gen.name}」，加满油、把发电机打着` : `下一层的卷帘是电动的，没电。去「${gen.name}」后面把备用发电机打着`, can ? `抬着油桶到「${gen.name}」` : `到「${gen.name}」启动发电机`, 30),
     st('open', 'open', 'relay', d2, '卷帘开关 · 二层扶梯口', '按开卷帘', '发电机带起来了，回扶梯口按开卷帘，下一层', '回扶梯口按开卷帘', 10),
   ];
+  // 开关、地锁贴在哪（mount：{ x, z, yaw }，siege.js 照它摆模型；交互点还是 site）
+  const S3 = nav.slopes.find((q) => q.id === d3?.id), S2 = nav.slopes.find((q) => q.id === d2?.id), p2 = S2 ? panelBySlope(nav, S2, true, M.panel) : null;
+  for (const q of stages) {
+    if (q.id === 'exit' && exitSw) q.mount = exitSw.mount;
+    if (q.id === 'pry' && S3) q.mount = lockBySlope(S3, true, M.panel);
+    if (q.id === 'open' && p2) { q.mount = p2.mount; q.site = { ...p2.site }; }
+    if (q.id === 'rescue' && trap) { const f = trap.front, mx = (f.x0 + f.x1) / 2 + f.nx * M.panel.lock, mz = (f.z0 + f.z1) / 2 + f.nz * M.panel.lock; q.mount = { x: mx, z: mz, yaw: Math.atan2(f.nx, f.nz) }; }
+  }
   const shops = [...used]; // 这一局用到的店（别的店卷帘都拉下来）
   return { stages, start: { floor: F.top, x: spawnAt.x, y: spawnAt.y, z: spawnAt.z }, shop: { id: u.id, name: home.name, poly: u.polys?.[0] || null, fronts }, lockers, cardShop: cardShop.name, down3: d3?.id || null, down2: d2?.id || null,
     rescue: trap ? { name: trap.name, inside: trap.inside, exit: exitSpot(nav, lv3, trap, M.rescue), front: trap.front, unit: trap.u.id } : null, axe,
