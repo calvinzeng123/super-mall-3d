@@ -94,9 +94,18 @@ test('服务器地址：网址 ?mp= 最优先（http 换成 ws）、再是本机
   assert.equal(serverUrl({ params: { mp: 'https://rooms.example.workers.dev/' }, loc: loc('yunlan-mall.pages.dev') }), 'wss://rooms.example.workers.dev');
   assert.equal(serverUrl({ params: {}, loc: loc('127.0.0.1') }), COOP_SERVER.dev);
   assert.equal(serverUrl({ params: {}, loc: loc('yunlan-mall.pages.dev'), storage: { getItem: () => 'wss://x.y' } }), 'wss://x.y');
-  assert.equal(serverUrl({ params: {}, loc: loc('yunlan-mall.pages.dev') }), COOP_SERVER.url ? COOP_SERVER.url : null);
-  assert.equal(serverUrl({ params: { mp: 'ftp://nope' }, loc: loc('a') }), null);
-  assert.match(randomCode(), /^[A-HJ-NP-Z2-9]{4}$/);
+  assert.equal(serverUrl({ params: {}, loc: loc('yunlan-mall.pages.dev') }), 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev', '正式服务器已经上线');
+  assert.equal(COOP_SERVER.url, 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev');
+  // ?mp=1（封面入口、邀请链接）不是地址：只是打开大厅，照常往下找（以前把它当地址，结果显示「还没上线」）
+  assert.equal(serverUrl({ params: { mp: '1' }, loc: loc('yunlan-mall.pages.dev') }), COOP_SERVER.url);
+  assert.equal(serverUrl({ params: { mp: '1', room: 'ABCDEF' }, loc: loc('yunlan-mall-abc.yunlan-mall.pages.dev') }), COOP_SERVER.url);
+  assert.equal(serverUrl({ params: { mp: '1' }, loc: loc('127.0.0.1') }), COOP_SERVER.dev, '本机开发：mp=1 还是连 8787');
+  assert.equal(serverUrl({ params: { mp: '1' }, loc: loc('yunlan-mall.pages.dev'), storage: { getItem: () => 'wss://x.y' } }), 'wss://x.y');
+  assert.equal(serverUrl({ params: { mp: 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev' }, loc: loc('127.0.0.1') }), 'wss://yunlan-mall-rooms.45q6mmm655.workers.dev', '本机开发也能用 ?mp=wss://… 连正式的');
+  assert.equal(serverUrl({ params: { mp: 'ftp://nope' }, loc: loc('a') }), COOP_SERVER.url, '不是 ws / http 地址：不顶替');
+  assert.equal(serverUrl({ params: { mp: 'ws://' }, loc: loc('a') }), COOP_SERVER.url);
+  assert.match(randomCode(), /^[A-HJ-NP-Z2-9]{6}$/, '新建的房间码六位');
+  assert.equal(normCode('k7qx2m'), 'K7QX2M');
   assert.equal(normCode(' ab cd '), 'ABCD'); assert.equal(normCode('ＡＢＣＤ'), 'ABCD', '全角'); assert.equal(normCode('AB0D'), null); assert.equal(normCode('ABC'), null);
 });
 
