@@ -213,22 +213,25 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   let gunsLoaded = false;
   const loadGuns = () => {
     if (gunsLoaded) return; gunsLoaded = true;
+    // 一把一把来：上一把解完、换上了再取下一把（以前手枪、步枪一起解，冲锋枪 1.5 秒后跟上，几份贴图、GLB 同时摊在内存里，峰值高一截）
+    let line = Promise.resolve();
+    const next = (job) => { line = line.then(job).catch(() => {}).then(() => new Promise((r) => setTimeout(r, 250))); };
     // 手枪换上带贴图的真模型（2 MB，后台加载；加载不出来就用 arsenal.js 里手搭的那把，不影响开打）
     { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'pistol'), arsenal = G.weapon;
-      if (rec) fetchBinary(rec.url, { label: '手枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+      if (rec) next(() => fetchBinary(rec.url, { label: '手枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
         .then((gltf) => { if (G.weapon === arsenal) arsenal.skinPistol(gltf.scene, undefined, { sliced: true }); }) // sliced：贴图一帧处理一种材质，不卡一下长的
-        .catch((e) => console.warn('[零点突围] 手枪模型没加载出来，用简化模型', e)); }
+        .catch((e) => console.warn('[零点突围] 手枪模型没加载出来，用简化模型', e))); }
     // 新步枪（rifle-view.js）：M4A1 真模型（0.8 MB），手臂借下面冲锋枪模型上那双——两个都加载好才换上，之前是原来那把步枪。
     // 贴图按内存档位：电脑 1024，手机省内存 / 标准档 512。?oldrifle=1 不换（对比用）
     { const rec = !params.boxgun && !params.oldrifle && FPS_MODEL_ASSETS.find((a) => a.id === 'm4a1'), arsenal = G.weapon;
-      if (rec) fetchBinary(rec.url, { label: '步枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+      if (rec) next(() => fetchBinary(rec.url, { label: '步枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
         .then((gltf) => { if (G.weapon === arsenal) arsenal.skinRifle(gltf, { textureCap: rifleTextureCap(MEM, G.quality) }); })
-        .catch((e) => console.warn('[零点突围] 新步枪模型没加载出来，用原来那把', e)); }
-    // 冲锋枪（丧尸围城里捡得到的第四把）：带手臂和换弹动画的真模型，2.9 MB，手枪之后再加载；加载不出来就没有这把枪
+        .catch((e) => console.warn('[零点突围] 新步枪模型没加载出来，用原来那把', e))); }
+    // 冲锋枪（丧尸围城里捡得到的第四把）：带手臂和换弹动画的真模型，2.9 MB，排在最后；加载不出来就没有这把枪
     { const rec = !params.boxgun && FPS_MODEL_ASSETS.find((a) => a.id === 'rifle'), arsenal = G.weapon;
-      if (rec) setTimeout(() => fetchBinary(rec.url, { label: '冲锋枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
+      if (rec) next(() => fetchBinary(rec.url, { label: '冲锋枪模型' }).then((data) => new GLTFLoader().parseAsync(data, ''))
         .then((gltf) => { if (G.weapon === arsenal) arsenal.skinSmg(gltf); })
-        .catch((e) => console.warn('[零点突围] 冲锋枪模型没加载出来', e)), 1500); }
+        .catch((e) => console.warn('[零点突围] 冲锋枪模型没加载出来', e))); }
   };
   // 敌人：原游戏的机械飞鸥、机械猎犬，加上真人敌人「武装劫持者」（soldier.js，登记进同一个敌人模块）
   onProgress('正在部署敌人', 0.85);

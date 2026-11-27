@@ -31,4 +31,6 @@ test('丧尸围城开局只有刀：手枪 / 步枪 / 冲锋枪的真模型不�
   for (const label of ['手枪模型', '步枪模型', '冲锋枪模型']) { const at = run.indexOf(`label: '${label}'`); assert.ok(at > load && at < sched, `${label}在 loadGuns 里`); }
   assert.match(run, /if \(!siege\.enabled \|\| director\.state\.restore \|\| played >= GUN_DEFER\.settle \|\| \(siege\.state\?\.stage \?\? 0\) >= GUN_DEFER\.stage\) loadGuns\(\);/);
   assert.match(run, /if \(gunTimer\) clearInterval\(gunTimer\);/, '关掉时停表');
+  // 一把一把解：三把都排进同一条队（next），不再一起解、也不再定时 1.5 秒后叠上冲锋枪
+  assert.equal((run.slice(load, sched).match(/if \(rec\) next\(\(\) => fetchBinary\(/g) || []).length, 3); assert.ok(!/1500\); \}/.test(run.slice(load, sched)));
 });
