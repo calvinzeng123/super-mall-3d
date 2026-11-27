@@ -1,0 +1,1276 @@
+{
+ "towers": {
+  "key": "c147940824a895281479",
+  "data": [
+   {
+    "id": "P1",
+    "kind": "mall",
+    "x": -155.2,
+    "z": -135.2,
+    "w": 249.7,
+    "d": 209.7,
+    "h": 40,
+    "y": 0,
+    "rot": 0,
+    "outline": [
+     [
+      -280,
+      -240
+     ],
+     [
+      -160,
+      -240
+     ],
+     [
+      -160,
+      -207
+     ],
+     [
+      -104,
+      -207
+     ],
+     [
+      -102.9,
+      -196.3
+     ],
+     [
+      -105.4,
+      -197
+     ],
+     [
+      -105.4,
+      -196.9
+     ],
+     [
+      -61,
+      -185
+     ],
+     [
+      -77.3,
+      -124.2
+     ],
+     [
+      -76.6,
+      -123
+     ],
+     [
+      -75.7,
+      -121.4
+     ],
+     [
+      -74.9,
+      -119.8
+     ],
+     [
+      -74.3,
+      -118.2
+     ],
+     [
+      -73.7,
+      -116.5
+     ],
+     [
+      -73.2,
+      -114.8
+     ],
+     [
+      -72.7,
+      -113.1
+     ],
+     [
+      -72.4,
+      -111.3
+     ],
+     [
+      -72.2,
+      -109.6
+     ],
+     [
+      -72,
+      -107.8
+     ],
+     [
+      -72,
+      -106
+     ],
+     [
+      -72,
+      -104.6
+     ],
+     [
+      -30.3,
+      -62.9
+     ],
+     [
+      -62.9,
+      -30.3
+     ],
+     [
+      -104.6,
+      -72
+     ],
+     [
+      -106,
+      -72
+     ],
+     [
+      -107.8,
+      -72
+     ],
+     [
+      -109.6,
+      -72.2
+     ],
+     [
+      -111.3,
+      -72.4
+     ],
+     [
+      -113.1,
+      -72.7
+     ],
+     [
+      -114.8,
+      -73.2
+     ],
+     [
+      -116.5,
+      -73.7
+     ],
+     [
+      -118.2,
+      -74.3
+     ],
+     [
+      -119.8,
+      -74.9
+     ],
+     [
+      -121.4,
+      -75.7
+     ],
+     [
+      -123,
+      -76.6
+     ],
+     [
+      -124.2,
+      -77.3
+     ],
+     [
+      -192.8,
+      -58.9
+     ],
+     [
+      -204.7,
+      -103.4
+     ],
+     [
+      -166.2,
+      -113.7
+     ],
+     [
+      -204.7,
+      -103.4
+     ],
+     [
+      -203.8,
+      -100
+     ],
+     [
+      -210,
+      -100
+     ],
+     [
+      -210,
+      -160
+     ],
+     [
+      -280,
+      -160
+     ]
+    ]
+   },
+   {
+    "id": "P2",
+    "kind": "mall",
+    "x": 154.9,
+    "z": -80.1,
+    "w": 125.8,
+    "d": 244.8,
+    "h": 29,
+    "y": 0,
+    "rot": -1.4399,
+    "outline": [
+     [
+      76.2,
+      -109.2
+     ],
+     [
+      76.4,
+      -110.8
+     ],
+     [
+      76.7,
+      -112.3
+     ],
+     [
+      77.1,
+      -113.8
+     ],
+     [
+      77.5,
+      -115.3
+     ],
+     [
+      78.1,
+      -116.8
+     ],
+     [
+      78.7,
+      -118.3
+     ],
+     [
+      79.3,
+      -119.7
+     ],
+     [
+      80.1,
+      -121.1
+     ],
+     [
+      80.9,
+      -122.4
+     ],
+     [
+      81.8,
+      -123.7
+     ],
+     [
+      82.8,
+      -124.9
+     ],
+     [
+      83.8,
+      -126.1
+     ],
+     [
+      84.9,
+      -127.3
+     ],
+     [
+      86,
+      -128.4
+     ],
+     [
+      87.2,
+      -129.4
+     ],
+     [
+      88.4,
+      -130.3
+     ],
+     [
+      89.7,
+      -131.2
+     ],
+     [
+      91.1,
+      -132
+     ],
+     [
+      92.4,
+      -132.8
+     ],
+     [
+      93.9,
+      -133.5
+     ],
+     [
+      95.3,
+      -134.1
+     ],
+     [
+      96.8,
+      -134.6
+     ],
+     [
+      98.3,
+      -135
+     ],
+     [
+      99.8,
+      -135.4
+     ],
+     [
+      101.4,
+      -135.7
+     ],
+     [
+      102.9,
+      -135.9
+     ],
+     [
+      104.5,
+      -136
+     ],
+     [
+      106.1,
+      -136.1
+     ],
+     [
+      107.6,
+      -136
+     ],
+     [
+      109.2,
+      -135.9
+     ],
+     [
+      110.8,
+      -135.7
+     ],
+     [
+      112.3,
+      -135.4
+     ],
+     [
+      113.8,
+      -135
+     ],
+     [
+      115.3,
+      -134.6
+     ],
+     [
+      116.8,
+      -134.1
+     ],
+     [
+      118.3,
+      -133.5
+     ],
+     [
+      119.7,
+      -132.8
+     ],
+     [
+      121.1,
+      -132
+     ],
+     [
+      122.4,
+      -131.2
+     ],
+     [
+      123.7,
+      -130.3
+     ],
+     [
+      124.9,
+      -129.4
+     ],
+     [
+      125.3,
+      -129.1
+     ],
+     [
+      190.8,
+      -129.1
+     ],
+     [
+      191.2,
+      -129.4
+     ],
+     [
+      192.4,
+      -130.3
+     ],
+     [
+      193.7,
+      -131.2
+     ],
+     [
+      195.1,
+      -132
+     ],
+     [
+      196.4,
+      -132.8
+     ],
+     [
+      197.9,
+      -133.5
+     ],
+     [
+      199.3,
+      -134.1
+     ],
+     [
+      200.8,
+      -134.6
+     ],
+     [
+      202.3,
+      -135
+     ],
+     [
+      203.8,
+      -135.4
+     ],
+     [
+      205.4,
+      -135.7
+     ],
+     [
+      206.9,
+      -135.9
+     ],
+     [
+      208.5,
+      -136
+     ],
+     [
+      210.1,
+      -136.1
+     ],
+     [
+      211.6,
+      -136
+     ],
+     [
+      213.2,
+      -135.9
+     ],
+     [
+      214.8,
+      -135.7
+     ],
+     [
+      216.3,
+      -135.4
+     ],
+     [
+      217.8,
+      -135
+     ],
+     [
+      219.3,
+      -134.6
+     ],
+     [
+      220.8,
+      -134.1
+     ],
+     [
+      222.3,
+      -133.5
+     ],
+     [
+      223.7,
+      -132.8
+     ],
+     [
+      225.1,
+      -132
+     ],
+     [
+      226.4,
+      -131.2
+     ],
+     [
+      227.7,
+      -130.3
+     ],
+     [
+      228.9,
+      -129.4
+     ],
+     [
+      230.1,
+      -128.4
+     ],
+     [
+      231.3,
+      -127.3
+     ],
+     [
+      232.4,
+      -126.1
+     ],
+     [
+      233.4,
+      -124.9
+     ],
+     [
+      234.3,
+      -123.7
+     ],
+     [
+      235.2,
+      -122.4
+     ],
+     [
+      236,
+      -121.1
+     ],
+     [
+      236.8,
+      -119.7
+     ],
+     [
+      237.5,
+      -118.3
+     ],
+     [
+      238.1,
+      -116.8
+     ],
+     [
+      238.6,
+      -115.3
+     ],
+     [
+      239,
+      -113.8
+     ],
+     [
+      239.4,
+      -112.3
+     ],
+     [
+      239.7,
+      -110.8
+     ],
+     [
+      239.9,
+      -109.2
+     ],
+     [
+      239.9,
+      -108.7
+     ],
+     [
+      277.2,
+      -71.4
+     ],
+     [
+      244.7,
+      -38.9
+     ],
+     [
+      207.4,
+      -76.2
+     ],
+     [
+      206.9,
+      -76.2
+     ],
+     [
+      205.4,
+      -76.4
+     ],
+     [
+      203.8,
+      -76.7
+     ],
+     [
+      202.3,
+      -77.1
+     ],
+     [
+      200.8,
+      -77.5
+     ],
+     [
+      199.3,
+      -78.1
+     ],
+     [
+      197.9,
+      -78.7
+     ],
+     [
+      196.4,
+      -79.3
+     ],
+     [
+      195.1,
+      -80.1
+     ],
+     [
+      193.7,
+      -80.9
+     ],
+     [
+      192.4,
+      -81.8
+     ],
+     [
+      191.2,
+      -82.8
+     ],
+     [
+      190.8,
+      -83.1
+     ],
+     [
+      125.3,
+      -83.1
+     ],
+     [
+      124.9,
+      -82.8
+     ],
+     [
+      123.7,
+      -81.8
+     ],
+     [
+      122.4,
+      -80.9
+     ],
+     [
+      121.1,
+      -80.1
+     ],
+     [
+      119.7,
+      -79.3
+     ],
+     [
+      118.3,
+      -78.7
+     ],
+     [
+      116.8,
+      -78.1
+     ],
+     [
+      115.3,
+      -77.5
+     ],
+     [
+      113.8,
+      -77.1
+     ],
+     [
+      112.3,
+      -76.7
+     ],
+     [
+      110.8,
+      -76.4
+     ],
+     [
+      109.2,
+      -76.2
+     ],
+     [
+      108.7,
+      -76.2
+     ],
+     [
+      61.5,
+      -29
+     ],
+     [
+      29,
+      -61.5
+     ],
+     [
+      76.2,
+      -108.7
+     ]
+    ]
+   },
+   {
+    "id": "H",
+    "kind": "tower",
+    "x": -247,
+    "z": -81.2,
+    "w": 74,
+    "d": 38,
+    "h": 74.3,
+    "y": 0,
+    "rot": 0
+   },
+   {
+    "id": "A",
+    "kind": "tower",
+    "x": -35,
+    "z": -214,
+    "w": 74,
+    "d": 38,
+    "h": 77.4,
+    "y": 0,
+    "rot": 1.5708
+   },
+   {
+    "id": "R1",
+    "kind": "tower",
+    "x": 49,
+    "z": -218,
+    "w": 42,
+    "d": 33.2,
+    "h": 106.6,
+    "y": 0,
+    "rot": 0
+   },
+   {
+    "id": "R2",
+    "kind": "tower",
+    "x": 115,
+    "z": -218,
+    "w": 42,
+    "d": 33.2,
+    "h": 106.6,
+    "y": 0,
+    "rot": 0
+   },
+   {
+    "id": "R3",
+    "kind": "tower",
+    "x": 181,
+    "z": -218,
+    "w": 42,
+    "d": 33.2,
+    "h": 106.6,
+    "y": 0,
+    "rot": 0
+   },
+   {
+    "id": "R4",
+    "kind": "tower",
+    "x": 247,
+    "z": -218,
+    "w": 42,
+    "d": 33.2,
+    "h": 106.6,
+    "y": 0,
+    "rot": 0
+   },
+   {
+    "id": "W1",
+    "kind": "tower",
+    "x": -458.3,
+    "z": -236.4,
+    "w": 43.4,
+    "d": 19.2,
+    "h": 88.7,
+    "y": 0,
+    "rot": 0
+   },
+   {
+    "id": "W2",
+    "kind": "tower",
+    "x": -392.3,
+    "z": -236.4,
+    "w": 43.4,
+    "d": 19.2,
+    "h": 88.7,
+    "y": 0,
+    "rot": 0
+   },
+   {
+    "id": "T1",
+    "kind": "tower",
+    "x": -260,
+    "z": -232,
+    "w": 36,
+    "d": 16,
+    "h": 66.1,
+    "y": 34,
+    "rot": 0
+   },
+   {
+    "id": "T2",
+    "kind": "tower",
+    "x": -212,
+    "z": -232,
+    "w": 32,
+    "d": 16,
+    "h": 66.1,
+    "y": 34,
+    "rot": 0
+   }
+  ]
+ },
+ "zombies": {
+  "key": "f29b25f9a3a36bcf9801",
+  "files": [
+   {
+    "id": "zombie-hi-0-normal",
+    "set": "hi",
+    "body": 0,
+    "kind": "normal",
+    "look": null,
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-normal.jpg"
+   },
+   {
+    "id": "zombie-hi-0-rough",
+    "set": "hi",
+    "body": 0,
+    "kind": "rough",
+    "look": null,
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-rough.jpg"
+   },
+   {
+    "id": "zombie-hi-0-walker-0-colour",
+    "set": "hi",
+    "body": 0,
+    "kind": "colour",
+    "look": "walker-0",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-0-walker-0-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-0-walker-0-wet",
+    "set": "hi",
+    "body": 0,
+    "kind": "wet",
+    "look": "walker-0",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-walker-0-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-0-walker-1-colour",
+    "set": "hi",
+    "body": 0,
+    "kind": "colour",
+    "look": "walker-1",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-0-walker-1-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-0-walker-1-wet",
+    "set": "hi",
+    "body": 0,
+    "kind": "wet",
+    "look": "walker-1",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-walker-1-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-0-walker-2-colour",
+    "set": "hi",
+    "body": 0,
+    "kind": "colour",
+    "look": "walker-2",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-0-walker-2-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-0-walker-2-wet",
+    "set": "hi",
+    "body": 0,
+    "kind": "wet",
+    "look": "walker-2",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-walker-2-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-0-pale-colour",
+    "set": "hi",
+    "body": 0,
+    "kind": "colour",
+    "look": "pale",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-0-pale-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-0-pale-wet",
+    "set": "hi",
+    "body": 0,
+    "kind": "wet",
+    "look": "pale",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-pale-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-0-lunger-colour",
+    "set": "hi",
+    "body": 0,
+    "kind": "colour",
+    "look": "lunger",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-0-lunger-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-0-lunger-wet",
+    "set": "hi",
+    "body": 0,
+    "kind": "wet",
+    "look": "lunger",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-lunger-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-0-brute-colour",
+    "set": "hi",
+    "body": 0,
+    "kind": "colour",
+    "look": "brute",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-0-brute-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-0-brute-wet",
+    "set": "hi",
+    "body": 0,
+    "kind": "wet",
+    "look": "brute",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-0-brute-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-1-normal",
+    "set": "hi",
+    "body": 1,
+    "kind": "normal",
+    "look": null,
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-1-normal.jpg"
+   },
+   {
+    "id": "zombie-hi-1-rough",
+    "set": "hi",
+    "body": 1,
+    "kind": "rough",
+    "look": null,
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-1-rough.jpg"
+   },
+   {
+    "id": "zombie-hi-1-walker-0-colour",
+    "set": "hi",
+    "body": 1,
+    "kind": "colour",
+    "look": "walker-0",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-1-walker-0-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-1-walker-0-wet",
+    "set": "hi",
+    "body": 1,
+    "kind": "wet",
+    "look": "walker-0",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-1-walker-0-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-1-walker-1-colour",
+    "set": "hi",
+    "body": 1,
+    "kind": "colour",
+    "look": "walker-1",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-1-walker-1-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-1-walker-1-wet",
+    "set": "hi",
+    "body": 1,
+    "kind": "wet",
+    "look": "walker-1",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-1-walker-1-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-1-walker-2-colour",
+    "set": "hi",
+    "body": 1,
+    "kind": "colour",
+    "look": "walker-2",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-1-walker-2-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-1-walker-2-wet",
+    "set": "hi",
+    "body": 1,
+    "kind": "wet",
+    "look": "walker-2",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-1-walker-2-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-1-pale-colour",
+    "set": "hi",
+    "body": 1,
+    "kind": "colour",
+    "look": "pale",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-1-pale-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-1-pale-wet",
+    "set": "hi",
+    "body": 1,
+    "kind": "wet",
+    "look": "pale",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-1-pale-wet.jpg"
+   },
+   {
+    "id": "zombie-hi-1-spitter-colour",
+    "set": "hi",
+    "body": 1,
+    "kind": "colour",
+    "look": "spitter",
+    "size": 1024,
+    "url": "./assets/title/zombies/zombie-hi-1-spitter-colour.jpg"
+   },
+   {
+    "id": "zombie-hi-1-spitter-wet",
+    "set": "hi",
+    "body": 1,
+    "kind": "wet",
+    "look": "spitter",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-hi-1-spitter-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-0-normal",
+    "set": "lo",
+    "body": 0,
+    "kind": "normal",
+    "look": null,
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-normal.jpg"
+   },
+   {
+    "id": "zombie-lo-0-rough",
+    "set": "lo",
+    "body": 0,
+    "kind": "rough",
+    "look": null,
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-rough.jpg"
+   },
+   {
+    "id": "zombie-lo-0-walker-0-colour",
+    "set": "lo",
+    "body": 0,
+    "kind": "colour",
+    "look": "walker-0",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-0-walker-0-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-0-walker-0-wet",
+    "set": "lo",
+    "body": 0,
+    "kind": "wet",
+    "look": "walker-0",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-walker-0-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-0-walker-1-colour",
+    "set": "lo",
+    "body": 0,
+    "kind": "colour",
+    "look": "walker-1",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-0-walker-1-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-0-walker-1-wet",
+    "set": "lo",
+    "body": 0,
+    "kind": "wet",
+    "look": "walker-1",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-walker-1-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-0-walker-2-colour",
+    "set": "lo",
+    "body": 0,
+    "kind": "colour",
+    "look": "walker-2",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-0-walker-2-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-0-walker-2-wet",
+    "set": "lo",
+    "body": 0,
+    "kind": "wet",
+    "look": "walker-2",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-walker-2-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-0-pale-colour",
+    "set": "lo",
+    "body": 0,
+    "kind": "colour",
+    "look": "pale",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-0-pale-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-0-pale-wet",
+    "set": "lo",
+    "body": 0,
+    "kind": "wet",
+    "look": "pale",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-pale-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-0-lunger-colour",
+    "set": "lo",
+    "body": 0,
+    "kind": "colour",
+    "look": "lunger",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-0-lunger-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-0-lunger-wet",
+    "set": "lo",
+    "body": 0,
+    "kind": "wet",
+    "look": "lunger",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-lunger-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-0-brute-colour",
+    "set": "lo",
+    "body": 0,
+    "kind": "colour",
+    "look": "brute",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-0-brute-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-0-brute-wet",
+    "set": "lo",
+    "body": 0,
+    "kind": "wet",
+    "look": "brute",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-0-brute-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-1-normal",
+    "set": "lo",
+    "body": 1,
+    "kind": "normal",
+    "look": null,
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-1-normal.jpg"
+   },
+   {
+    "id": "zombie-lo-1-rough",
+    "set": "lo",
+    "body": 1,
+    "kind": "rough",
+    "look": null,
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-1-rough.jpg"
+   },
+   {
+    "id": "zombie-lo-1-walker-0-colour",
+    "set": "lo",
+    "body": 1,
+    "kind": "colour",
+    "look": "walker-0",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-1-walker-0-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-1-walker-0-wet",
+    "set": "lo",
+    "body": 1,
+    "kind": "wet",
+    "look": "walker-0",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-1-walker-0-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-1-walker-1-colour",
+    "set": "lo",
+    "body": 1,
+    "kind": "colour",
+    "look": "walker-1",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-1-walker-1-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-1-walker-1-wet",
+    "set": "lo",
+    "body": 1,
+    "kind": "wet",
+    "look": "walker-1",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-1-walker-1-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-1-walker-2-colour",
+    "set": "lo",
+    "body": 1,
+    "kind": "colour",
+    "look": "walker-2",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-1-walker-2-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-1-walker-2-wet",
+    "set": "lo",
+    "body": 1,
+    "kind": "wet",
+    "look": "walker-2",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-1-walker-2-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-1-pale-colour",
+    "set": "lo",
+    "body": 1,
+    "kind": "colour",
+    "look": "pale",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-1-pale-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-1-pale-wet",
+    "set": "lo",
+    "body": 1,
+    "kind": "wet",
+    "look": "pale",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-1-pale-wet.jpg"
+   },
+   {
+    "id": "zombie-lo-1-spitter-colour",
+    "set": "lo",
+    "body": 1,
+    "kind": "colour",
+    "look": "spitter",
+    "size": 512,
+    "url": "./assets/title/zombies/zombie-lo-1-spitter-colour.jpg"
+   },
+   {
+    "id": "zombie-lo-1-spitter-wet",
+    "set": "lo",
+    "body": 1,
+    "kind": "wet",
+    "look": "spitter",
+    "size": 256,
+    "url": "./assets/title/zombies/zombie-lo-1-spitter-wet.jpg"
+   }
+  ]
+ },
+ "fonts": {
+  "key": "48dfff7b64bfe0fc1caf",
+  "chars": 207
+ }
+}

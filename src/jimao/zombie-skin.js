@@ -16,6 +16,9 @@ import { fetchBinary } from '../render/fetch-binary.js';
 import { MEM } from '../render/device.js';
 import { LOOKS, PAINT, noiseTableSteps, rasterBodySteps, bodyFrame, planFace, planLook, bodyTears, bloodField, prepareLayers, paintColour, paintSurface } from './skins/zombie-paint.js';
 
+// 画贴图要用的几个函数：收在一处，测试可以整个换掉（看预画贴图那条路是不是一次都没调）
+const PAINTER = Object.freeze({ noiseTableSteps, rasterBodySteps, bodyFrame, planFace, planLook, bodyTears, bloodField, prepareLayers, paintColour, paintSurface });
+
 /**
  * tones：几套色调 [衣服去色后乘上的 R, G, B, 保留多少原来的颜色]（皮肤、伤、血、脏怎么画见 zombie-paint.js 的 LOOKS.walker，一一对应）；
  * special：特殊感染者的（body：用哪个模型，0 男 1 女，不写两个都做；eye：眼睛的颜色；optional：省内存档不做，用普通的那套顶上；env：环境反射多强，不写用 envMapIntensity）。
@@ -70,7 +73,7 @@ export async function decodeBase64(b64, clock = { t: now(), budget: Infinity, sl
   return o === out.length ? out.buffer : out.buffer.slice(0, o); // 末尾的补位（= / ==）少出一两个字节
 }
 
-async function parsePerson(record, clock) {
+async function parsePerson(record, clock = { t: now(), budget: Infinity, slices: 0, worst: [0, ''] }) {
   const bytes = record.url.startsWith('data:')
     ? await decodeBase64(record.url.slice(record.url.indexOf(',') + 1), clock)
     : await fetchBinary(record.url, { label: '丧尸模型' });
@@ -174,19 +177,27 @@ export function zombieTexSizes(mem = MEM) {
  * 中途出错时已经建好的贴图、材质、几何都释放掉再往外抛（调用的地方接住、继续用方块人）。
  * budget 取 10：一段画完要隔一帧，总共要多少帧 ≈ 总活 / budget，机器不忙时整个生成是按帧数算时间的。
  * 试过 8：最长的一段只短几毫秒（主线程上十三四毫秒 vs 十七到二十来毫秒，离 50 都远），段数却多了两三成，丧尸换上贴图晚一两秒。
+ * prebaked：预画好的贴图清单（src/title/title-data.js 的 TITLE_ZOMBIE_TEX），给了就不现画，只读 set 那一档（'hi' / 'lo'），
+ *   people 换掉 PEOPLE_ASSETS（开场传 TITLE_PEOPLE）；不需要 document 和画布。
+ * sizes：{ colour, surface } 不按内存档位、直接指定贴图大小（scripts/title/bake.mjs 预画时用）；
+ * capture：每画完一张就回调 { body, kind: 'colour' | 'normal' | 'rough', look, size, pixels }（预画时用来存图）。
+ * deps：{ parse, paint, loadTexture } 换掉解析模型、画图函数、读贴图（测试用）。
  */
-export async function loadZombieKit({ seed = 20261120, budget = 10, trace = null } = {}) {
+export async function loadZombieKit({ seed = 20261120, budget = 10, trace = null, prebaked = null, set = 'hi', people = null, sizes = null, capture = null, deps = {} } = {}) {
+  const parse = deps.parse || parsePerson, P = deps.paint || PAINTER;
+  const t0 = now(), clock = { t: now(), budget, slices: 0, worst: [0, ''], trace };
+  // 预画好的贴图（开场用，scripts/title/bake.mjs 打包时画）：只解析模型、读图，不在主线程上现画
+  if (prebaked) return finishKit(await prebakedBodies(prebaked, people || PEOPLE_ASSETS, set, parse, deps.loadTexture || loadTextureURL, clock), { ms: Math.round(now() - t0), prebaked: true, set });
   // 没有 document（node 测试）就画不了贴图：直接拒绝，调用的地方（run.js）会接住、继续用方块人
   if (typeof document === 'undefined') throw new Error('没有 document，画不了丧尸贴图');
-  const t0 = now(), clock = { t: now(), budget, slices: 0, worst: [0, ''], trace };
-  const { colour: size, surface } = zombieTexSizes(MEM), compact = MEM.name === 'compact';
-  const tables = { n: 256, a: await drain(noiseTableSteps(256, seed ^ 0x51), clock, 'noise'), b: await drain(noiseTableSteps(256, seed ^ 0xa3, 4, 16), clock, 'noise') };
+  const { colour: size, surface } = sizes || zombieTexSizes(MEM), compact = MEM.name === 'compact' && !sizes;
+  const tables = { n: 256, a: await drain(P.noiseTableSteps(256, seed ^ 0x51), clock, 'noise'), b: await drain(P.noiseTableSteps(256, seed ^ 0xa3, 4, 16), clock, 'noise') };
   const bodies = [], shared = []; let bytes = 0, maps = 0;
   const count = (s) => { maps++; bytes += s * s * 4 * 4 / 3; }; // RGBA + mipmap
   try {
   for (const record of PEOPLE_ASSETS) {
     await pause(clock, 'start');
-    const bi = bodies.length, source = await parsePerson(record, clock), image = source.material.map.image, geo = source.geometry;
+    const bi = bodies.length, source = await parse(record, clock), image = source.material.map.image, geo = source.geometry;
     shared.push(geo);
     // 等图片解码的那段时间主线程是空着的：从这里重新计时。量脸、读原贴图（缩放 + 取像素，一两毫秒到十几毫秒）各自开一段
     clock.t = now();
@@ -198,38 +209,39 @@ export async function loadZombieKit({ seed = 20261120, budget = 10, trace = null
     const src = g2.getImageData(0, 0, size, size).data; canvas.width = canvas.height = 1;
     source.material.map?.dispose(); source.material.dispose(); image.close?.();
     await pause(clock, 'read');
-    const body = await drain(rasterBodySteps({ position: geo.attributes.position.array, uv: geo.attributes.uv.array, normal: geo.attributes.normal?.array, index: geo.index?.array }), clock, 'raster');
+    const body = await drain(P.rasterBodySteps({ position: geo.attributes.position.array, uv: geo.attributes.uv.array, normal: geo.attributes.normal?.array, index: geo.index?.array }), clock, 'raster');
     await pause(clock, 'plan', clock.budget * 0.5);
-    const frame = bodyFrame(geo.attributes.position.array), fp = planFace(body, frame, face);
+    const frame = P.bodyFrame(geo.attributes.position.array), fp = P.planFace(body, frame, face);
     await pause(clock, 'plan');
-    const layers = await drain(prepareLayers(src, size, body, fp, tables), clock, 'layers');
+    const layers = await drain(P.prepareLayers(src, size, body, fp, tables), clock, 'layers');
     // 网格第 k 格是身体哪部分（伤口、破口挑落点用：破口只开在衣服上，烂疮只长在皮上）
     const L = body.L, partAt = (k) => layers.part[Math.min(size - 1, Math.floor(((Math.floor(k / L) + 0.5) * size) / L)) * size + Math.min(size - 1, Math.floor((((k % L) + 0.5) * size) / L))];
     // 这个模型固定的几处破口：各外观从里面挑，共用的法线图里全压出来
     await pause(clock, 'plan', clock.budget * 0.5);
-    const tears = bodyTears(body, frame, fp, partAt, seed + bi);
+    const tears = P.bodyTears(body, frame, fp, partAt, seed + bi);
     await pause(clock, 'plan');
     // 法线和粗糙度：每个模型一张，各外观共用
     let normalMap = null, roughnessMap = null;
     if (surface) {
       const nPix = new Uint8ClampedArray(surface * surface * 4), rPix = new Uint8ClampedArray(surface * surface * 4);
-      await drain(paintSurface(src, layers, tables, nPix, rPix, body, tears), clock, 'surface');
+      await drain(P.paintSurface(src, layers, tables, nPix, rPix, body, tears), clock, 'surface');
       await pause(clock, 'surface');
+      capture?.({ body: bi, kind: 'normal', look: null, size: surface, pixels: nPix }); capture?.({ body: bi, kind: 'rough', look: null, size: surface, pixels: rPix });
       normalMap = toTexture(nPix, surface, false); await pause(clock, 'upload'); roughnessMap = toTexture(rPix, surface, false); count(surface); count(surface);
       shared.push(normalMap, roughnessMap);
     }
     // 一种外观：伤按 (模型, 外观) 定——同一个模型的几套色调伤口各不相同，主伤口按外观轮换（rot 让男女两个模型错开）
-    const paint = async (look, tone, key, env = ZOMBIE_SKIN.envMapIntensity) => {
+    const paint = async (look, tone, key, env = ZOMBIE_SKIN.envMapIntensity, name = `walker-${key}`) => {
       await pause(clock, 'plan', clock.budget * 0.6); // 定伤口（在身体网格上找几十处落点）一口气五到十毫秒
-      const plan = planLook(body, frame, fp, seed + bi * 101 + key * 131, look, key, partAt, bi * 2, tears);
+      const plan = P.planLook(body, frame, fp, seed + bi * 101 + key * 131, look, key, partAt, bi * 2, tears);
       await pause(clock, 'plan');
-      const field = await drain(bloodField(body, plan, frame), clock, 'blood');
+      const field = await drain(P.bloodField(body, plan, frame), clock, 'blood');
       const pix = new Uint8ClampedArray(size * size * 4);
-      await drain(paintColour(src, layers, look, tone, plan, field, body, tables, pix), clock, 'colour');
+      await drain(P.paintColour(src, layers, look, tone, plan, field, body, tables, pix), clock, 'colour');
       await pause(clock, 'colour');
+      capture?.({ body: bi, kind: 'colour', look: name, size, pixels: pix });
       const map = toTexture(pix, size, true); count(size);
-      const m = new THREE.MeshStandardMaterial({ map, normalMap, roughnessMap, roughness: roughnessMap ? 1 : 0.86, alphaTest: 0.225, side: THREE.DoubleSide, metalness: 0, envMapIntensity: env, name: 'zombie-skin' });
-      m.onBeforeCompile = wetShader; m.customProgramCacheKey = () => 'zombie-wet-2';
+      const m = skinMaterial({ map, normalMap, roughnessMap, env });
       shared.push(map, m);
       await pause(clock, 'upload');
       return m;
@@ -238,7 +250,7 @@ export async function loadZombieKit({ seed = 20261120, budget = 10, trace = null
     const special = {};
     for (const [name, sp] of Object.entries(ZOMBIE_SKIN.special)) {
       if ((sp.body != null && sp.body !== bi) || (sp.optional && compact)) continue; // 省内存档不多做胖尸那两张，和以前一样多
-      special[name] = await paint(LOOKS[name], sp.tone, 10 + Object.keys(special).length, sp.env);
+      special[name] = await paint(LOOKS[name], sp.tone, 10 + Object.keys(special).length, sp.env, name);
     }
     bodies.push({ geometry: geo, poses: record.poses, face, materials, special });
   }
@@ -246,12 +258,67 @@ export async function loadZombieKit({ seed = 20261120, budget = 10, trace = null
     for (const item of shared) item.dispose();
     throw e;
   }
+  { const d = now() - clock.t; if (d > clock.worst[0]) clock.worst = [d, 'end']; trace?.push([Math.round(clock.t), +d.toFixed(1), 'end']); } // 最后一段
+  const stats = { ms: Math.round(now() - t0), longest: Math.round(clock.worst[0]), longestIn: clock.worst[1], slices: clock.slices, maps, mb: +(bytes / 1048576).toFixed(1), size, surface };
+  return finishKit({ bodies, shared }, stats);
+}
+
+/** 丧尸皮肤材质（现画、预画两条路一样）：湿度在颜色图的透明通道里，或在单独一张湿度图（alphaMap，读绿通道）里 */
+function skinMaterial({ map, alphaMap = null, normalMap, roughnessMap, env }) {
+  const m = new THREE.MeshStandardMaterial({ map, alphaMap, normalMap, roughnessMap, roughness: roughnessMap ? 1 : 0.86, alphaTest: 0.225, side: THREE.DoubleSide, metalness: 0, envMapIntensity: env, name: 'zombie-skin' });
+  m.onBeforeCompile = wetShader; m.customProgramCacheKey = () => 'zombie-wet-2';
+  return m;
+}
+
+// 预画贴图默认用图片地址读（浏览器里；测试换成假的）
+const loadTextureURL = (url) => new THREE.TextureLoader().loadAsync(url);
+
+/**
+ * 预画好的贴图 → 各模型的材质。entries：title-data.js 的 TITLE_ZOMBIE_TEX（{ set, body, kind, look, url }），
+ * 只读 set 那一档；records：模型（开场传 TITLE_PEOPLE：去掉原贴图的行人模型，顺序和 PEOPLE_ASSETS 一样）。颜色图是 JPEG（没有透明通道），湿度 / 头发透明度单独一张灰度图，当 alphaMap 用：
+ * 着色器里 alphamap 先乘进 diffuseColor.a，wetShader 再从那里读湿度，和现画时颜色图自带透明通道是一回事。
+ */
+async function prebakedBodies(entries, records, set, parse, loadTexture, clock) {
+  const list = entries.filter((e) => e.set === set), bodies = [], shared = [];
+  const tex = async (e, srgb) => {
+    if (!e) return null;
+    const t = await loadTexture(e.url);
+    t.flipY = false; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
+    t.anisotropy = srgb ? 4 : 2; if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true; shared.push(t);
+    return t;
+  };
+  try {
+    for (const record of records) {
+      const bi = bodies.length, mine = list.filter((e) => e.body === bi);
+      const source = await parse(record, clock), geo = source.geometry;
+      shared.push(geo); source.material?.map?.dispose(); source.material?.dispose?.(); source.material?.map?.image?.close?.();
+      const face = faceOf(geo);
+      const [normalMap, roughnessMap] = await Promise.all([tex(mine.find((e) => e.kind === 'normal'), false), tex(mine.find((e) => e.kind === 'rough'), false)]);
+      const looks = await Promise.all(mine.filter((e) => e.kind === 'colour').map(async (e) => {
+        const [map, alphaMap] = await Promise.all([tex(e, true), tex(mine.find((w) => w.kind === 'wet' && w.look === e.look), false)]);
+        const env = ZOMBIE_SKIN.special[e.look]?.env ?? ZOMBIE_SKIN.envMapIntensity, m = skinMaterial({ map, alphaMap, normalMap, roughnessMap, env });
+        shared.push(m);
+        return [e.look, m];
+      }));
+      const byLook = Object.fromEntries(looks), materials = ZOMBIE_SKIN.tones.map((_, i) => byLook[`walker-${i}`]);
+      if (materials.some((m) => !m)) throw new Error(`预画丧尸贴图缺外观：模型 ${bi}`);
+      const special = Object.fromEntries(looks.filter(([k]) => ZOMBIE_SKIN.special[k]));
+      bodies.push({ geometry: geo, poses: record.poses, face, materials, special });
+    }
+  } catch (e) {
+    for (const item of shared) item.dispose();
+    throw e;
+  }
+  return { bodies, shared };
+}
+
+/** 建好的几个模型（几何、脸、各外观的材质）→ 丧尸套件：眼睛、create()、dispose()。两条路（现画 / 预画）共用 */
+function finishKit({ bodies, shared }, stats) {
   const E = ZOMBIE_SKIN.eyes, eyeGeo = new THREE.SphereGeometry(E.radius, 8, 6);
   const eyeOf = (color) => { const m = new THREE.MeshBasicMaterial({ color, toneMapped: false, fog: false }); shared.push(m); return m; };
   const eyeMat = eyeOf(E.color), eyeSpecial = Object.fromEntries(Object.entries(ZOMBIE_SKIN.special).map(([k, sp]) => [k, eyeOf(sp.eye)]));
   shared.push(eyeGeo);
-  { const d = now() - clock.t; if (d > clock.worst[0]) clock.worst = [d, 'end']; trace?.push([Math.round(clock.t), +d.toFixed(1), 'end']); } // 最后一段
-  const stats = { ms: Math.round(now() - t0), longest: Math.round(clock.worst[0]), longestIn: clock.worst[1], slices: clock.slices, maps, mb: +(bytes / 1048576).toFixed(1), size, surface };
 
   return {
     looks: bodies.length * ZOMBIE_SKIN.tones.length,

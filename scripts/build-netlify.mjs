@@ -70,6 +70,11 @@ const propPackURL = await emitAsset('props', 'bin', props.bytes, 'prop-pack');
 const skyAssets = { radiance: await emitAsset('sky-radiance', 'hdr', await readFile('assets/sky/day-radiance.hdr'), 'sky'),
   photo: await emitAsset('sky', 'jpg', await readFile('assets/sky/day-sky.jpg'), 'sky') };
 
+// 开场资源：丧尸贴图、去掉原贴图的行人模型、字体各出一个带哈希的文件（进度条阶段按需读），楼型直接内联在模块里
+const { TITLE_TOWERS, TITLE_ZOMBIE_TEX, TITLE_PEOPLE, TITLE_FONTS, TITLE_FONT_FAMILIES } = await import(`../src/title/title-data.js?${Date.now()}`);
+const titleZombies = await Promise.all(TITLE_ZOMBIE_TEX.map(async (e) => ({ ...e, url: await emitAsset(e.id, 'jpg', await readFile(e.url.replace(/^\.\//, '')), 'title-texture') })));
+const titlePeople = await Promise.all(TITLE_PEOPLE.map(async (m) => ({ ...m, url: await emitAsset(`title-person-${m.id}`, 'glb', await readFile(m.url.replace(/^\.\//, '')), 'title-model') })));
+const titleFonts = Object.fromEntries(await Promise.all(Object.entries(TITLE_FONTS).map(async ([k, u]) => [k, await emitAsset(`title-${k}`, 'woff2', await readFile(u.replace(/^\.\//, '')), 'title-font')])));
 const replacements = new Map([
   ['people-data.js', `export const PEOPLE_ASSETS = ${JSON.stringify(people)};`],
   ['pbr-data.js', `export const SURFACE_ASSETS = ${JSON.stringify(surfaces)};`],
@@ -79,6 +84,8 @@ const replacements = new Map([
   ['cover-data.js', `export const COVER_URL = ${JSON.stringify(coverURL)};\nexport const FPS_COVER_URL = ${JSON.stringify(fpsCoverURL)};`],
   ['prop-data.js', `export const PROP_ASSETS = ${JSON.stringify(props.assets)};\nexport const PROP_PACK = ${JSON.stringify({ url: propPackURL })};`],
   ['sky-data.js', `export const SKY_ASSETS = ${JSON.stringify(skyAssets)};`],
+  ['title-data.js', `export const TITLE_TOWERS = ${JSON.stringify(TITLE_TOWERS)};\nexport const TITLE_ZOMBIE_TEX = ${JSON.stringify(titleZombies)};\nexport const TITLE_PEOPLE = ${JSON.stringify(titlePeople)};\n`
+    + `export const TITLE_FONTS = ${JSON.stringify(titleFonts)};\nexport const TITLE_FONT_FAMILIES = ${JSON.stringify(TITLE_FONT_FAMILIES)};`],
 ]);
 const bundled = await build({
   entryPoints: ['src/main.js'], bundle: true, splitting:true, format: 'esm', minify: true,
@@ -87,7 +94,7 @@ const bundled = await build({
   // 诊断面板里显示的版本号（构建时间 + 提交），用来确认手机上跑的是不是新版本
   define: { __JM_BUILD__: JSON.stringify(buildId()) },
   plugins: [{ name: 'local-runtime-assets', setup(builder) {
-    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people|model|cover|prop|sky)-data\.js$/ }, args => ({
+    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people|model|cover|prop|sky|title)-data\.js$/ }, args => ({
       contents: replacements.get(path.basename(args.path)), loader: 'js',
     }));
   } }],
@@ -109,6 +116,12 @@ files.push({path:'credits.html',bytes:Buffer.byteLength(creditsPage),sha256:sha2
 await mkdir(path.join(output,'assets/models/fps'),{recursive:true});
 for(const name of ['CREDITS.txt','UPSTREAM-SMG-LICENSE.md','UPSTREAM-DESERT-EAGLE-LICENSE.md','UPSTREAM-MIT-LICENSE.txt','sources.json']){
   const bytes=await readFile(`assets/models/fps/${name}`),relative=`assets/models/fps/${name}`;
+  await writeFile(path.join(output,relative),bytes);files.push({path:relative,bytes:bytes.length,sha256:sha256(bytes),kind:'license'});
+}
+// 开场字体（SIL OFL 1.1）的许可随字体一起发布
+await mkdir(path.join(output,'assets/fonts'),{recursive:true});
+for(const name of ['OFL-MaShanZheng.txt','OFL-Oswald.txt','SOURCES.txt']){
+  const bytes=await readFile(`assets/fonts/${name}`),relative=`assets/fonts/${name}`;
   await writeFile(path.join(output,relative),bytes);files.push({path:relative,bytes:bytes.length,sha256:sha256(bytes),kind:'license'});
 }
 const license = await readFile('node_modules/three/LICENSE', 'utf8');

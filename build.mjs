@@ -11,7 +11,10 @@ import { FPS_MODEL_ASSETS } from './src/fps/model-data.js';
 import { geometryLicenses } from './scripts/geometry-licenses.mjs';
 import { COVER_SOURCE, COVER_MIME, FPS_COVER_SOURCE } from './src/cover-data.js';
 import { packProps } from './scripts/props/pack.mjs';
+import { bake as bakeTitle } from './scripts/title/bake.mjs';
 
+// 开场资源（楼型、预画丧尸贴图、子集字体）：输入没变就用上次的产物，见 scripts/title/bake.mjs
+const titleAssets = await bakeTitle();
 const shell = await readFile('src/shell.html', 'utf8');
 if (!shell.includes('<!--APP-->')) throw new Error('src/shell.html 缺少 <!--APP--> 占位');
 
@@ -73,6 +76,13 @@ const skyModule = `export const SKY_ASSETS = ${JSON.stringify({
   radiance: `data:application/octet-stream;base64,${(await readFile('assets/sky/day-radiance.hdr')).toString('base64')}`,
   photo: `data:image/jpeg;base64,${(await readFile('assets/sky/day-sky.jpg')).toString('base64')}`,
 })};`;
+// 开场资源内嵌成 data: 地址（单文件版不受加载预算约束）
+const dataURL = async (url, mime) => `data:${mime};base64,${(await readFile(url.replace(/^\.\//, ''))).toString('base64')}`;
+const titleModule = `export const TITLE_TOWERS = ${JSON.stringify(titleAssets.towers)};\n`
+  + `export const TITLE_ZOMBIE_TEX = ${JSON.stringify(await Promise.all(titleAssets.zombies.map(async (e) => ({ ...e, url: await dataURL(e.url, 'image/jpeg') }))))};\n`
+  + `export const TITLE_PEOPLE = ${JSON.stringify(await Promise.all(titleAssets.people.map(async (m) => ({ ...m, url: await dataURL(m.url, 'model/gltf-binary') }))))};\n`
+  + `export const TITLE_FONTS = ${JSON.stringify(Object.fromEntries(await Promise.all(Object.entries(titleAssets.fonts).map(async ([k, u]) => [k, await dataURL(u, 'font/woff2')]))))};\n`
+  + `export const TITLE_FONT_FAMILIES = ${JSON.stringify(titleAssets.families)};\n`;
 const out = await build({
   entryPoints: ['src/main.js'],
   bundle: true,
@@ -88,6 +98,7 @@ const out = await build({
     b.onLoad({filter:/[\\/]cover-data\.js$/},()=>({contents:`export const COVER_URL = ${JSON.stringify(coverURL)};\nexport const FPS_COVER_URL = ${JSON.stringify(fpsCoverURL)};`,loader:'js'}));
     b.onLoad({filter:/[\\/]props[\\/]prop-data\.js$/},()=>({contents:propModule,loader:'js'}));
     b.onLoad({filter:/[\\/]render[\\/]sky-data\.js$/},()=>({contents:skyModule,loader:'js'}));
+    b.onLoad({filter:/[\\/]title[\\/]title-data\.js$/},()=>({contents:titleModule,loader:'js'}));
   }}],
 });
 const code = out.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
