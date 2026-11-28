@@ -20,12 +20,27 @@ const ease = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 
 /**
- * 换弹进行到 k（0–1）：open = 枪管撅开多少（0–1），hand = 左手离开护木去拿弹、塞弹（0–1），loaded = 弹已经塞进去了。纯函数。
+ * 换弹进行到 k（0–1）。撅把式单发：
+ *   0.06–0.22 枪管往下撅开（open），0.18–0.32 弹壳被抽壳钩顶出来、往后掉出画面（eject）；
+ *   0.20–0.34 左手离开护木去腰间拿弹（hand 0 → 1，fetch 还是 0：手在画面外）、0.34–0.46 捏着一发 40 毫米榴弹送到药室口后面（fetch 0 → 1）；
+ *   0.46–0.58 拇指把弹推进药室（insert 1 → 0，loaded 在 0.58）；0.58–0.72 手回到护木（hand → 0）；
+ *   0.72–0.82 托着护木把枪管往上一甩合上（open → 0，close：合上那一下 0.82 发 bolt）。
+ * 返回 { open, hand, fetch, insert, eject, roundShown, loaded, closed, tilt }。纯函数。
  */
-export function breakPose(k) {
-  const seg = (a, b) => clamp01((k - a) / (b - a));
-  return { open: ease(seg(0.06, 0.22)) * (1 - ease(seg(0.72, 0.9))), hand: ease(seg(0.2, 0.36)) * (1 - ease(seg(0.56, 0.72))), loaded: k >= 0.6, tilt: ease(seg(0, 0.16)) * (1 - ease(seg(0.84, 1))) };
+export const BREAK = Object.freeze({ open: [0.06, 0.22], eject: [0.18, 0.32], away: [0.2, 0.34], fetch: [0.34, 0.46], insert: [0.46, 0.58], back: [0.58, 0.72], close: [0.72, 0.82] });
+export function breakPose(k, B = BREAK) {
+  const seg = (r) => clamp01((k - r[0]) / (r[1] - r[0]));
+  const closeK = seg(B.close), open = ease(seg(B.open)) * (1 - closeK * closeK * closeK); // 合上是一甩：越来越快
+  const hand = ease(seg(B.away)) * (1 - ease(seg(B.back)));
+  const fetch = ease(seg(B.fetch)), insert = 1 - ease(seg(B.insert));
+  return { open, hand, fetch, insert, eject: seg(B.eject), roundShown: k >= B.fetch[0] && k < B.insert[1], loaded: k >= B.insert[1], closed: k >= B.close[1],
+    tilt: ease(clamp01(k / 0.16)) * (1 - ease(clamp01((k - 0.84) / 0.16))) };
 }
+/**
+ * 换弹时左手的姿势（相对平时托护木的左手位置，枪的坐标，米 / 弧度）：pouch 腰间（画面外左下），
+ * hold 捏着榴弹弹底（相对榴弹在药室口外时弹底中心）。roundOut：榴弹送到药室口外面多远开始往里推（米）
+ */
+export const LAUNCHER_HANDS = Object.freeze({ pouch: Object.freeze([-0.16, -0.3, 0.16]), hold: Object.freeze({ p: Object.freeze([-0.004, -0.052, 0.05]), r: Object.freeze([0.55, 0.15, 0.25]) }), roundOut: 0.085 });
 
 /**
  * camera：镜头；layer：枪那一层；cloneHand(i, parent)：把步枪上的第 i 只手搬一份过来（0 右、1 左；测试环境可以没有）。
@@ -47,9 +62,20 @@ export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAU
   for (const [k, g] of Object.entries(model.tube)) if (g) add(g, M[k], tube).name = `g40-tube-${k}`;
   const shell = add(model.shell, M.brass, tube); shell.name = 'g40-shell'; shell.visible = false; // 撅开时露出来的弹底
   const flash = add(new THREE.CircleGeometry(0.05, 14), flashMat, root, V.muzzle[0], V.muzzle[1], V.muzzle[2] - 0.02); flash.visible = false;
+  // 新的一发：还是弹底那个网格（打空的弹壳先被抽出来掉出画面，它再当新弹用），加一个橄榄色的弹头（只在拿在手里、往里推的时候露出来）
+  const noseMat = new THREE.MeshStandardMaterial({ color: 0x4d5536, metalness: 0.2, roughness: 0.55 });
+  let nose = null;
+  { model.shell.computeBoundingBox(); const bb = model.shell.boundingBox, c = bb.getCenter(new THREE.Vector3()), r = (bb.max.x - bb.min.x) / 2 * 0.95;
+    const g = new THREE.LatheGeometry([[0, 0], [r, 0], [r, 0.012], [r * 0.93, 0.024], [r * 0.7, 0.036], [r * 0.38, 0.044], [0, 0.047]].map(([x, y]) => new THREE.Vector2(x, y)), 18);
+    g.rotateX(-Math.PI / 2); g.translate(c.x, c.y, bb.min.z + 0.001);
+    nose = add(g, noseMat, shell); nose.name = 'g40-round-nose'; nose.visible = false; }
+  const shellRest = new THREE.Vector3();
   const right = cloneHand?.(0, root) || null, left = cloneHand?.(1, root) || null, leftBase = left ? left.position.clone() : null;
+  const leftQ = left ? left.quaternion.clone() : null, vA = new THREE.Vector3(), vB = new THREE.Vector3(), qA = new THREE.Quaternion(), eA = new THREE.Euler();
   root.traverse((o) => { if (layer) o.layers.set(layer); });
 
+  const m4 = new THREE.Matrix4();
+  shellRest.copy(shell.position);
   const S = { ammo: W.mag, reserve: W.reserve, cool: 0, ads: 0, adsLin: 0, spread: W.spreadHip, reload: null, lastShot: -9, kick: 0, kickV: 0, flashT: 0, bob: 0, swayX: 0, swayY: 0, sprint: 0, time: 0 };
   const e1 = new THREE.Euler();
 
@@ -70,13 +96,13 @@ export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAU
   }
   function startReload() {
     if (S.reload || S.ammo >= W.mag || S.reserve <= 0) return false;
-    S.reload = { t: 0, in: false, open: false };
+    S.reload = { t: 0, in: false, open: false, closed: false };
     G.events?.emit?.('weapon:reload', { phase: 'start', kind: 'launcher', empty: true });
     return true;
   }
 
   return {
-    root, state: S, spec: W, parts: { tube, body, left, right, shell },
+    root, state: S, spec: W, parts: { tube, body, left, right, shell, nose },
     muzzleWorld, startReload,
     /** 把推迟的贴图做掉（做过了返回 false） */
     prepare: () => look.dress(),
@@ -100,15 +126,34 @@ export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAU
         const r = S.reload; r.t += dt; const k = r.t / W.reload; pose = breakPose(k);
         if (!r.open && k >= 0.14) { r.open = true; G.events?.emit?.('weapon:reload', { phase: 'magout', kind: 'launcher' }); }
         if (!r.in && pose.loaded) { r.in = true; const take = Math.min(W.mag - S.ammo, S.reserve); S.ammo += take; S.reserve -= take; G.events?.emit?.('weapon:reload', { phase: 'magin', kind: 'launcher' }); }
+        if (!r.closed && pose.closed) { r.closed = true; G.events?.emit?.('weapon:reload', { phase: 'bolt', kind: 'launcher' }); }
         if (k >= 1) { S.reload = null; pose = null; G.events?.emit?.('weapon:reload', { phase: 'done', kind: 'launcher' }); }
       }
       S.ads = ease(S.adsLin);
       for (let n = Math.max(1, Math.ceil(dt * 240)), h = dt / n, i = 0; i < n; i++) { S.kickV += (-S.kick * 300 - S.kickV * 24) * h; S.kick += S.kickV * h; }
       S.spread = W.spreadHip + (W.spreadAds - W.spreadHip) * S.ads;
       // 枪管撅开、露出弹底；左手离开护木去塞弹
-      const open = pose?.open || 0, hand = pose?.hand || 0;
-      tube.rotation.x = -V.open * open; shell.visible = open > 0.2 && (!pose || !pose.loaded || hand > 0.05);
-      if (left && leftBase) { left.position.copy(leftBase); left.position.y -= 0.1 * hand + 0.05 * open; left.position.z += 0.2 * hand - 0.02 * open; left.position.x += 0.02 * hand; }
+      const open = pose?.open || 0, hand = pose?.hand || 0, H = LAUNCHER_HANDS;
+      tube.rotation.x = -V.open * open; tube.updateMatrix();
+      // 打空的弹壳：撅开时被抽壳钩顶出来、往后翻着掉出画面；之后同一个网格当新的一发：先在左手里（从腰间拿上来），送到药室口后面，再沿枪膛推进去
+      const ej = pose && !pose.roundShown && !pose.loaded ? pose.eject : 0, fresh = !!pose?.roundShown;
+      if (fresh) { shell.position.set(shellRest.x, shellRest.y, shellRest.z + H.roundOut * pose.insert); shell.rotation.x = 0; }
+      else { shell.position.set(shellRest.x, shellRest.y - 0.25 * ej * ej, shellRest.z + 0.11 * ej); shell.rotation.x = 1.6 * ej * ej; }
+      shell.visible = !!pose && (fresh || (open > 0.15 && (pose.loaded || (ej > 0 && ej < 1))));
+      nose.visible = fresh;
+      if (left && leftBase) {
+        left.position.copy(leftBase); left.position.y -= 0.05 * open; left.position.z -= 0.02 * open; left.quaternion.copy(leftQ);
+        if (pose && hand > 0) {
+          // 捏着弹底的位置（枪坐标）：弹在枪管坐标里的位置 → 枪坐标，再加上手的偏移
+          vA.copy(shell.position).applyMatrix4(tube.matrix).add(vB.set(...H.hold.p));
+          vB.set(...H.pouch).add(leftBase);
+          const at = vB.lerp(vA, pose.fetch);
+          left.position.lerp(at, hand);
+          qA.setFromEuler(eA.set(...H.hold.r)).multiply(leftQ); left.quaternion.slerp(qA, hand);
+          // 拿着弹从腰间上来时弹跟着手走（还没对上药室口）
+          if (pose.fetch < 1 && fresh) { vB.copy(left.position).sub(vA.set(...H.hold.p)); shell.position.copy(vB.applyMatrix4(m4.copy(tube.matrix).invert())); }
+        }
+      }
       if (!active) return;
       const moving = p?.vel ? Math.hypot(p.vel.x, p.vel.z) : 0, amt = Math.min(1, moving / 4) * (p?.onGround === false ? 0.2 : 1) * (1 - 0.8 * S.ads);
       S.bob += moving * dt * 1.9;
@@ -123,9 +168,9 @@ export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAU
       e1.set(0.09 * S.kick + 0.3 * S.sprint + 0.22 * tilt - S.swayY * 0.6, S.swayX * 0.9 + 0.3 * S.sprint + 0.04 * (1 - S.ads), -0.35 * tilt + S.swayX * 0.4 - 0.12 * S.sprint);
       root.quaternion.setFromEuler(e1);
     },
-    reset() { Object.assign(S, { ammo: W.mag, reserve: W.reserve, cool: 0, ads: 0, adsLin: 0, reload: null, lastShot: -9, kick: 0, kickV: 0, flashT: 0, sprint: 0 }); flash.visible = false; tube.rotation.x = 0; shell.visible = false; },
+    reset() { Object.assign(S, { ammo: W.mag, reserve: W.reserve, cool: 0, ads: 0, adsLin: 0, reload: null, lastShot: -9, kick: 0, kickV: 0, flashT: 0, sprint: 0 }); flash.visible = false; tube.rotation.x = 0; shell.visible = false; nose.visible = false; shell.position.copy(shellRest); shell.rotation.x = 0; },
     /** 捡到榴弹：加 n 发（封顶）。返回实际加了几发 */
     addShells(n) { const b = S.reserve; S.reserve = Math.min(W.reserveMax, S.reserve + n); return S.reserve - b; },
-    dispose() { root.removeFromParent(); for (const g of geos) g.dispose(); flashMat.dispose(); look.dispose(); },
+    dispose() { root.removeFromParent(); for (const g of geos) g.dispose(); flashMat.dispose(); noseMat.dispose(); look.dispose(); },
   };
 }

@@ -2,12 +2,14 @@
 // 移动摇杆有两种：跟随拇指（默认，左半边哪里按下哪里就是摇杆中心）和固定位置（摇杆钉在设定的位置，只认摇杆附近的触摸）。
 // 原游戏的按键和 HUD 位置写在它的样式里；这里只在那个位置上叠加偏移（CSS 的 translate）和缩放（scale），
 // 不改它的样式和事件，所以「恢复默认」就是把偏移清零。
-export const LAYOUT_KEY = 'yunlan.jimao.layout.v1';
+// v2：按键整体按手游惯例重新排过（hud-layout.js），旧的偏移是相对旧位置的，不再沿用
+export const LAYOUT_KEY = 'yunlan.jimao.layout.v2';
 
 /** 能调的东西：选择器、名字、是不是触屏按键（触屏按键只在手机上出现）。 */
 export const LAYOUT_ITEMS = Object.freeze([
   { key: 'stick', sel: '.jm-stick-home', label: '移动摇杆', touch: true, ours: true },
   { key: 'fire', sel: '.t-fire', label: '开火', touch: true },
+  { key: 'fire2', sel: '.t-fire2', label: '左手开火', touch: true, ours: true },
   { key: 'ads', sel: '.t-ads', label: '瞄准', touch: true },
   { key: 'reload', sel: '.t-reload', label: '换弹', touch: true },
   { key: 'jump', sel: '.t-jump', label: '跳跃', touch: true },

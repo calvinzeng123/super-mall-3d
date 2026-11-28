@@ -27,6 +27,7 @@ import { createPathfinder, PATH } from './pathfinder.js';
 import { createTuning, TUNING_CSS } from './tuning.js';
 import { createActions, ACTIONS_CSS } from './actions.js';
 import { createMinimap, MINIMAP_CSS } from './minimap.js';
+import { createHudLayout, HUD_LAYOUT_CSS } from './hud-layout.js';
 import { createScore, SCORE_CSS } from './score.js';
 import { createPickupFx, PICKUP_CSS } from './pickup.js';
 import { registerDressing, buildDressing } from './dressing.js';
@@ -109,7 +110,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const mallChildren = new Set(scene.children);
 
   // ---- 界面层 ----
-  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS + ROOF_GUN_CSS + PICKUP_CSS + LOBBY_CSS + RULES_CSS; document.head.append(style);
+  const style = document.createElement('style'); style.textContent = UI_CSS + LAYOUT_CSS + TITLE_CSS + DOOR_GUN_CSS + SUPPLY_CSS + MEDIC_CSS + SQUAD_CSS + BARS_CSS + VEHICLE_HP_CSS + TOUCH_STICK_CSS + DIAG_CSS + KEYS_CSS + LIFT_CSS + COVER_CSS + TUNING_CSS + ACTIONS_CSS + MINIMAP_CSS + SCORE_CSS + ARSENAL_CSS + CUTSCENE_CSS + STAIRS_CSS + SIEGE_CSS + ROOF_GUN_CSS + PICKUP_CSS + LOBBY_CSS + RULES_CSS + HUD_LAYOUT_CSS; document.head.append(style);
   const ui = document.createElement('div'); ui.id = 'ui'; document.body.append(ui);
 
   // ---- 共享上下文 ----
@@ -261,6 +262,8 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   G.actions = actions;
   // 小地图 + 下一步提示（minimap.js）：左上角；坐载具时不显示
   const minimap = createMinimap(G, { nav, layout: ctx.layout, ui, guide, hidden: () => director.riding });
+  // 手机按键和 HUD 的统一排布（hud-layout.js）：按键图标、左手开火键、目标标记不叠、没有分步时不显示「0/0」
+  const hudLayout = createHudLayout(G, ui); G.hudLayout = hudLayout;
   G.minimap = minimap;
   // 丧尸围城（zombie.js、siege.js）：封面上切模式；丧尸另有一池（34 只），任务系统改抽「从商场突围到公寓楼顶」这一局
   const zombies = G.enemies.debug ? addZombies(G, G.enemies) : null;
@@ -444,6 +447,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       // 坐在载具上（含登机、返航的过场）：界面换成只有开火键和机枪状态条
       { const riding = !!director.riding; if (riding !== ridingUi) { ridingUi = riding; ui.classList.toggle('jm-riding', riding); } }
       run('audio', dt); run('hud', dt);
+      try { hudLayout.update(); } catch (e) { fail('hudlayout', e, '界面排布出错'); }
       try { cover.tick(); } catch (e) { fail('cover', e, '封面出错'); }
       lightPool.update(dt);
       syncVisibility();
@@ -547,7 +551,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
     dispose() {
       ctx.dynamic.splice(ctx.dynamic.indexOf(dynamic), 1);
       for (const f of [drawView, finish]) ctx.afterRender.splice(ctx.afterRender.indexOf(f), 1);
-      env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
+      env.render = baseRender; grade.dispose(); tuning.dispose(); layoutEditor.dispose(); hudLayout.dispose(); keybinds.dispose(); diag.dispose(); stick.dispose();
       if (gunTimer) clearInterval(gunTimer); ui.remove(); style.remove(); for (const l of lights) l.removeFromParent(); actions.dispose(); minimap.dispose(); cuts.dispose(); stairs.dispose(); roofGun?.dispose(); siege?.dispose(); squad?.dispose(); bars?.dispose(); routeDress?.dispose(); viewLight.dispose(); supplies?.dispose(); coopRules?.dispose(); coop?.dispose(); blackout.dispose(); zombies?.dispose(); G.score?.dispose(); dressing.dispose(); G.arms?.dispose?.(); director.dispose(); ammo.dispose(); guide.dispose();
     },
   };

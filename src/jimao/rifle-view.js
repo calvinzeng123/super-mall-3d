@@ -27,7 +27,7 @@ export const RIFLE_VIEW = Object.freeze({
   name: 'M4A1 突击步枪', scale: 1 / 2.36,
   rear: Object.freeze([-0.0019, 0.18, 0.163]), front: Object.freeze([-0.0018, 0.1985, -0.8135]), eyeZ: 0.075,
   muzzle: Object.freeze([-0.002, 0.0493, -1.27]), eject: Object.freeze([0.05, 0.04, -0.1]), trigger: Object.freeze([-0.002, -0.1, 0.053]),
-  arms: Object.freeze({ p: Object.freeze([0, 0, 0]), r: Object.freeze([0, 0, 0]) }),
+  arms: Object.freeze({ p: Object.freeze([0, 0, 0]), r: Object.freeze([0, 0, 0]) }), armScale: 0.84,
   boltTravel: 0.07, dustCover: 1.9,
   // 表面：原贴图是中灰的钢（金属度 1），在商场灯下像没上漆的铁——颜色乘 tint 压成深灰黑的阳极氧化色。
   // （试过叠一层平铺的颗粒法线：这个模型的 UV 是小零件占大块，照门这种小件上颗粒大得像海绵，去掉了）
@@ -231,8 +231,11 @@ export function createRifleView(rifle, { layer = 0, V = RIFLE_VIEW, KEYS = HAND_
       // 冲锋枪模型枪口朝 +z：转半圈；扳机对到新枪的扳机上，再按 arms 微调
       const turn = new THREE.Quaternion().setFromEuler(new THREE.Euler(V.arms.r[0], Math.PI + V.arms.r[1], V.arms.r[2]));
       const tg = toGun(V.trigger);
-      arms.quaternion.copy(turn);
-      arms.position.copy(tg).sub((trig || new THREE.Vector3()).applyQuaternion(turn)).add(v1.set(...V.arms.p));
+      // armScale：手臂整体缩一点（以扳机为中心缩，右手还扣在扳机上）——冲锋枪那双手套是按它自己那把短枪配的，
+      // 托在这把长枪上、又离镜头这么近，手掌比护木还宽、把枪口一带都挡住（用户：「手太大了，只要体现那个枪就好」）
+      const as = V.armScale ?? 1;
+      arms.quaternion.copy(turn); arms.scale.setScalar(as);
+      arms.position.copy(tg).sub((trig || new THREE.Vector3()).multiplyScalar(as).applyQuaternion(turn)).add(v1.set(...V.arms.p));
       rig.add(arms);
       arms.updateMatrixWorld(true);
       if (bones.L_arm && bones.L_elbow && bones.L_wrist) {

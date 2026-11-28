@@ -87,7 +87,7 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
   }
   function startReload() {
     if (S.reload || S.ammo >= W.mag || S.reserve <= 0) return false;
-    S.reload = { t: 0, out: false, in: false };
+    S.reload = { t: 0, out: false, in: false, bolt: false };
     G.events?.emit?.('weapon:reload', { phase: 'start', kind: 'smg', empty: S.ammo <= 0 });
     return true;
   }
@@ -95,6 +95,8 @@ export function createSmg(G, { camera, layer = 0, V = SMG_VIEW, W = SMG } = {}) 
     const r = S.reload; r.t += dt; const k = r.t / W.reload;
     if (!r.out && k >= 0.2) { r.out = true; G.events?.emit?.('weapon:reload', { phase: 'magout', kind: 'smg' }); }
     if (!r.in && k >= 0.62) { r.in = true; const take = Math.min(W.mag - S.ammo, S.reserve); S.ammo += take; S.reserve -= take; G.events?.emit?.('weapon:reload', { phase: 'magin', kind: 'smg' }); }
+    // 换弹动画 2.04 / 2.667 秒左右左手捏住拉机柄往后一拉（RIFLE_VIEW.fingers.pinch）：松手那一下是 bolt（声音、枪身一顶）
+    if (!r.bolt && k >= 0.8) { r.bolt = true; G.events?.emit?.('weapon:reload', { phase: 'bolt', kind: 'smg' }); }
     if (k >= 1) { S.reload = null; G.events?.emit?.('weapon:reload', { phase: 'done', kind: 'smg' }); }
   }
 

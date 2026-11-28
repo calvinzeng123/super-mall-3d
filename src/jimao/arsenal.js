@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { SMG, createSmg } from './smg.js';
 import { LAUNCHER, createLauncher } from './launcher.js';
 import { createRifleView, rifleTextureCap } from './rifle-view.js';
+import { createReloadFeel } from './reload-feel.js';
 import { createPistolSkin, scrubMarkings as scrubPistolMarkings, addSightDots } from './skins/pistol-skin.js';
 import { buildKnife, createKnifeMaterials } from './skins/knife-skin.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -55,6 +56,14 @@ const GRIP = Object.freeze([0, -0.1, 0.073]);
 const GRIP_TILT = -0.3; // 握把往前倾的角度（弧度）：步枪握把大约这么斜
 /** 托枪的左手相对握把中心的位置和偏转（照着截图调出来的） */
 const LEFT_HAND = { x: 0, y: 0.035, z: -0.014, yaw: 0.15 };
+/**
+ * 手枪换弹时左手的两个姿势（相对平时托枪的左手位置 leftBase，手枪自己的坐标，米 / 弧度）：
+ *   mag：手心托在弹匣底下（弹匣插到底时），之后沿弹匣井方向跟着弹匣走；rack：翻到套筒后部上方捏住锯齿（打空时拉套筒）
+ */
+export const PISTOL_HANDS = Object.freeze({ mag: Object.freeze({ p: Object.freeze([0.004, -0.07, 0.022]), r: Object.freeze([0.35, 0, 0]) }),
+  rack: Object.freeze({ p: Object.freeze([0.012, 0.07, 0.07]), r: Object.freeze([-0.2, 0, -1.4]) }) });
+/** 弹匣长（米）：手搭的方块枪 */
+const MAG_LEN = Object.freeze({ box: 0.1 });
 /** 右手肘在枪模型里大概的位置（小臂从握把往后、往右下伸到这里） */
 const ELBOW = new THREE.Vector3(0.15, -0.33, 0.48);
 
@@ -238,12 +247,37 @@ const ease = (k) => k * k * (3 - 2 * k);
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
 
-/** 换弹进行到 k（0–1）时各部件在哪：{ tilt, magDrop, hand, slide }，都是 0–1。empty：打空了，最后要释放套筒 */
-export function reloadPose(k, empty = false) {
-  const seg = (a, b) => clamp01((k - a) / (b - a));
-  const tilt = ease(seg(0, 0.14)) * (1 - ease(seg(0.82, 1)));
-  const out = ease(seg(0.14, 0.3)), back = ease(seg(0.34, 0.62));
-  return { tilt, magDrop: out * (1 - back), hand: out * (1 - ease(seg(0.56, 0.74))), slide: empty ? 1 - ease(seg(0.72, 0.78)) : 0, magIn: k >= 0.62 };
+/**
+ * 手枪换弹进行到 k（0–1）时各部件在哪（empty：打空了，最后要拉一下套筒）。时间轴：
+ *   0–0.12 枪往里侧一歪（tilt）；0.12–0.30 拇指按弹匣卡笋，旧弹匣顺着弹匣井滑出、自己掉出画面（magDrop 越来越快，掉远了 magShown 关掉）；
+ *   0.34–0.40 左手从画面下方捏着新弹匣上来（handOn），0.40–0.60 弹匣对准握把底部往里送（magDrop 和左手一起从 2.6 → 0.15），
+ *   0.60–0.66 掌根往上一拍到底（magIn，0.62）；
+ *   不打空：0.68–0.86 左手放下去；打空：0.68–0.76 左手翻到套筒后部上方捏住（rack），0.76–0.84 往后一拉（slide 1 → 1.12），0.84 松手套筒复进（bolt），0.86–1 左手放下去。
+ * 返回 { tilt, magDrop（弹匣离开弹匣井多远，单位：一个弹匣长）, magShown, handOn（左手在画面里 0–1）, handTravel（左手跟着弹匣底走到哪，单位同 magDrop）,
+ *        rack（左手在套筒上 0–1）, slide（套筒往后多少，1 = 挂机位）, magIn, bolt, hand（旧字段：左手离开平时位置的量） }
+ */
+export const PISTOL_RELOAD = Object.freeze({ out: [0.12, 0.30], fall: 3.2, fetch: [0.34, 0.40], insert: [0.40, 0.60], from: 2.6, start: 0.15, slap: [0.60, 0.66], magIn: 0.62,
+  leave: [0.68, 0.86], rack: [0.68, 0.76], pull: [0.76, 0.84], release: 0.84, leaveEmpty: [0.86, 1] });
+export function reloadPose(k, empty = false, R = PISTOL_RELOAD) {
+  const seg = (a, b) => clamp01((k - a) / (b - a)), S = (r) => seg(r[0], r[1]);
+  const tilt = ease(seg(0, 0.12)) * (1 - ease(seg(0.84, 1)));
+  const fallK = S(R.out), insK = ease(S(R.insert)), slapK = S(R.slap);
+  // 旧弹匣：自由落体（越掉越快）；新弹匣：送进来，最后一拍到底
+  let magDrop = 0, magShown = true;
+  if (k < R.out[0]) magDrop = 0;
+  else if (k < R.fetch[1]) { magDrop = fallK * fallK * R.fall; magShown = magDrop < R.fall - 1e-6; if (k >= R.out[1]) magShown = false; }
+  else if (k < R.slap[0]) magDrop = R.from + (R.start - R.from) * insK;
+  else magDrop = R.start * (1 - ease(slapK));
+  if (k >= 1) { magDrop = 0; magShown = true; }
+  // 左手：从下面捏着新弹匣上来，拍完离开（打空的先去拉套筒）
+  const up = ease(S(R.fetch)), leaveK = empty ? ease(S(R.leaveEmpty)) : ease(S(R.leave));
+  const rack = empty ? ease(S(R.rack)) * (1 - ease(seg(R.release + 0.01, R.release + 0.06))) : 0;
+  const pull = empty ? ease(S(R.pull)) : 0;
+  const handOn = k <= 0 || k >= 1 ? 0 : up * (1 - leaveK);
+  let handTravel = k < R.fetch[1] ? R.from + 0.6 * (1 - up) : k < R.slap[1] ? magDrop - 0.08 * Math.sin(Math.PI * slapK) : leaveK * R.from;
+  if (k >= 1) handTravel = R.from;
+  const slide = empty ? (k < R.release ? 1 + 0.12 * pull : 0) : 0;
+  return { tilt, magDrop, magShown, handOn, handTravel, rack, slide, magIn: k >= R.magIn, bolt: empty && k >= R.release, hand: handOn };
 }
 /**
  * 掏枪 / 掏刀进行到 k（0–1）时的姿势。都从「在下面」（drop = 1）开始，k = 1 时全部归零。
@@ -351,7 +385,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   }
   // 左手从护木挪到握把左前方托住右手。步枪上左手是掌心朝上托着护木（手指绕着枪管方向弯）；
   // 托手枪要掌心朝右贴住握把、手指绕着握把弯、小臂从左下后方伸过来——整体转一下：x → −z，y → +x，z → −y，再跟着握把的倾角斜过去。
-  const leftBase = new THREE.Vector3();
+  const leftBase = new THREE.Vector3(), leftQ = new THREE.Quaternion();
   if (pLeft) {
     const R = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, -1, 0));
     pLeft.updateMatrix();
@@ -359,7 +393,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       .multiply(new THREE.Matrix4().makeRotationX(GRIP_TILT)).multiply(new THREE.Matrix4().makeRotationY(LEFT_HAND.yaw)).multiply(R)
       .multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.255)).multiply(pLeft.matrix);
     m.decompose(pLeft.position, pLeft.quaternion, pLeft.scale);
-    leftBase.copy(pLeft.position);
+    leftBase.copy(pLeft.position); leftQ.copy(pLeft.quaternion);
   }
 
   // ---- 刀 ----
@@ -395,14 +429,16 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
   // ---- 状态 ----
   const P = { ammo: PISTOL.mag, reserve: PISTOL.reserve, cool: 0, held: 0, ads: 0, adsLin: 0, slide: 0, locked: false, reload: null, kick: 0, kickV: 0, flip: 0, flipV: 0, twist: 0, twistV: 0, lean: 0, flashT: 0, spread: PISTOL.spreadHip, lastShot: -9, bob: 0, swayX: 0, swayY: 0, sprint: 0, finger: 0, left: 0 };
   const K = { t: -1, cool: 0, hit: false, marks: null, bob: 0, swayX: 0, swayY: 0, sprint: 0 };
-  const S = { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, shown: true, quick: null, plain: false, pose: null, racked: false, time: 0 };
-  const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q1 = new THREE.Quaternion(), e1 = new THREE.Euler();
+  const S = { cur: 'rifle', prev: 'pistol', next: null, phase: null, t: 0, drop: 0, lowered: 0, shown: true, quick: null, plain: false, pose: null, racked: false, time: 0, tapT: -1 };
+  const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), e1 = new THREE.Euler();
   const X_AXIS = new THREE.Vector3(1, 0, 0);
   // 冲锋枪（smg.js）：模型后台加载，加载好、并且这一局捡到了才换得过去
   const smg = createSmg(G, { camera, layer }), Q = smg.state;
   // 榴弹枪（launcher.js）：手搭的模型，步枪上的两只手原样搬过去
   const gl = createLauncher(G, { camera, layer, cloneHand, defer: true }), L = gl.state; later.add(() => gl.prepare());
   let hasSmg = false, hasGl = false;
+  // 换弹的分量（reload-feel.js）：弹匣拔出 / 拍进、拉机柄那几下枪身一顶、镜头一磕
+  const feel = createReloadFeel(G);
   // 新步枪：M4A1 模型（m4Gltf）和冲锋枪模型（借它的手臂，smgGltf）都到了才换上
   let rifleView = null, m4Gltf = null, smgGltf = null, rifleOpts = {};
   function dressRifle() {
@@ -461,7 +497,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       r.in = true; const take = Math.min(PISTOL.mag - P.ammo, P.reserve); P.ammo += take; P.reserve -= take;
       G.events?.emit?.('weapon:reload', { phase: 'magin', empty: r.empty });
     }
-    if (r.empty && !r.bolt && k >= 0.75) { r.bolt = true; P.locked = false; G.events?.emit?.('weapon:reload', { phase: 'bolt', empty: true }); }
+    if (r.empty && !r.bolt && pose.bolt) { r.bolt = true; P.locked = false; G.events?.emit?.('weapon:reload', { phase: 'bolt', empty: true }); }
     if (k >= 1) { P.reload = null; P.locked = false; G.events?.emit?.('weapon:reload', { phase: 'done' }); return reloadPose(1, false); }
     return pose;
   }
@@ -633,16 +669,32 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       P.swayX * 0.9 + 0.25 * P.sprint + HOLD.yaw * oneHand - 0.12 * P.twist + Math.sin(bt * 0.6) * 0.002 * calm,
       -0.62 * tilt + P.swayX * 0.4 + HOLD.cant * oneHand - 0.3 * P.twist - P.lean * 0.03);
     pistolRoot.quaternion.setFromEuler(e1);
-    pMag.position.y = -0.17 * (pose?.magDrop || 0); pMag.visible = !skin && !(pose && pose.magDrop > 0.97);
-    if (skin) {
-      // 弹匣顺着握把里的弹匣井滑出去（握把是斜的，直上直下会从握把背后穿出来）
-      const d = PISTOL_SKIN.magDrop * (pose?.magDrop || 0), shown = !(pose && pose.magDrop > 0.97);
-      for (const q of skin.mags) { q.object.position.copy(q.base).addScaledVector(skin.magAxis, -d); q.object.visible = shown; }
+    // 弹匣：顺着握把里的弹匣井滑出去（握把是斜的，直上直下会从握把背后穿出来）——旧的自己掉出画面，新的由左手从下面送进来、一拍到底
+    const shown = !pose || pose.magShown !== false;
+    pMag.position.y = -MAG_LEN.box * (pose?.magDrop || 0); pMag.visible = !skin && shown;
+    if (skin) { const d = PISTOL_SKIN.magDrop * (pose?.magDrop || 0); for (const q of skin.mags) { q.object.position.copy(q.base).addScaledVector(skin.magAxis, -d); q.object.visible = shown; } }
+    // 左手平时不在枪上（单手持枪）：换弹时捏着新弹匣从下面上来、掌根拍底，打空的再翻上去拉一下套筒；掏枪拉套筒时也上来
+    if (pLeft) {
+      const axis = magAxisLocal(v1), len = skin ? PISTOL_SKIN.magDrop * PISTOL_SKIN.scale : MAG_LEN.box;
+      if (pose) {
+        const H = PISTOL_HANDS.mag, Rk = PISTOL_HANDS.rack, rk = pose.rack || 0;
+        // 托弹匣：手心在弹匣底下，跟着弹匣（handTravel）一起走
+        v2.set(...H.p).addScaledVector(axis, -len * pose.handTravel).add(leftBase);
+        v3.set(...Rk.p).add(leftBase); v3.z += 0.026 * Math.max(0, (pose.slide || 0) - 1) / 0.12; // 拉套筒：手跟着往后走
+        pLeft.position.lerpVectors(v2, v3, rk);
+        q1.setFromEuler(e1.set(...H.r)); q2.setFromEuler(e1.set(...Rk.r)); q1.slerp(q2, rk);
+        pLeft.quaternion.copy(leftQ).premultiply(q1);
+        pLeft.visible = pose.handOn > 0.02 || rk > 0.02;
+        P.left = 1;
+      } else {
+        P.left = damp(P.left, dr && dr.hand < 1 ? 1 : 0, 13, dt);
+        pLeft.quaternion.copy(leftQ);
+        pLeft.visible = P.left > 0.04; pLeft.position.copy(leftBase); pLeft.position.y -= 0.21 * hand + 0.32 * (1 - P.left); pLeft.position.z += 0.05 * hand + 0.07 * (1 - P.left);
+      }
     }
-    // 左手平时不在枪上：换弹（送弹匣）和掏枪拉套筒的时候才从下面上来，做完又放下去
-    P.left = damp(P.left, P.reload || (dr && dr.hand < 1) ? 1 : 0, 13, dt);
-    if (pLeft) { pLeft.visible = P.left > 0.04; pLeft.position.copy(leftBase); pLeft.position.y -= 0.21 * hand + 0.32 * (1 - P.left); pLeft.position.z += 0.05 * hand + 0.07 * (1 - P.left); }
   }
+  /** 弹匣井的方向（往握把里插的方向，手枪自己的坐标；模型里在 skin.magAxis，转半圈） */
+  function magAxisLocal(out) { if (skin) return out.set(-skin.magAxis.x, skin.magAxis.y, -skin.magAxis.z).applyAxisAngle(X_AXIS, pBody.rotation.x).normalize(); return out.set(0, Math.cos(GRIP_TILT), -Math.sin(GRIP_TILT)); }
   function updateKnife(dt, active, busy) {
     if (active && !KM.ready) KM.dress();
     const inp = G.input;
@@ -707,7 +759,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     skinSmg(gltf) { const ok = smg.attach(gltf); if (ok) { smg.root.visible = false; paintBtn(); smgGltf = gltf; dressRifle(); } return ok; },
     /** 新步枪（rifle-view.js）：M4A1 模型加载好了交进来；手臂用冲锋枪模型上那双，两个都到了才换上（之前一直是原来那把） */
     skinRifle(gltf, opts = {}) { if (!gltf?.scene || rifleView) return false; m4Gltf = gltf; rifleOpts = opts; return dressRifle(); },
-    get rifleView() { return rifleView; },
+    get rifleView() { return rifleView; }, get feel() { return feel; },
     grant(slot = 'smg', { equip = true } = {}) {
       // 榴弹枪：第一次捡换到手上（带 4 发备弹）；已经有了就当两发榴弹
       if (slot === 'launcher') { const fresh = !hasGl; hasGl = true; if (fresh) gl.reset(); else if (gl.addShells(2) <= 0) return false; if (equip && fresh) select('launcher'); paintBtn(); return true; }
@@ -754,6 +806,11 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
         const rk = S.phase === 'lower' ? clamp01(S.t / (S.quick ? SWAP.lower * 0.6 : SWAP.lower)) : S.phase === 'draw' ? clamp01(S.t / (S.plain ? DRAW.quick : DRAW.rifle)) : 1;
         rifleView.update(dt, { phase: S.phase, k: rk });
       }
+      // 步枪拍弹匣底座那一下（原游戏 1.5 秒弹一下，不发事件）：补一个 tap
+      { const rl = S.cur === 'rifle' ? rifle?.anim?.reload : null, t = rl ? rl.t : -1;
+        if (rl && S.tapT < 1.5 && t >= 1.5) feel.kick('rifle', 'tap'); S.tapT = t; }
+      feel.update(dt);
+      if (root && S.shown) { feel.apply(root); if (G.game?.state === 'playing') feel.camera(camera); }
     },
     reset() {
       rifle?.reset?.(); rifleView?.reset();
@@ -850,7 +907,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     setLowered(k) { S.lowered = clamp01(k); },
     dispose() {
       if (typeof removeEventListener === 'function') { removeEventListener('keydown', onKey); removeEventListener('wheel', onWheel); }
-      for (const r of [pistolRoot, knifeRoot]) r.removeFromParent(); rifleView?.dispose(); rifleView = null; smg.dispose(); gl.dispose();
+      feel.dispose(); for (const r of [pistolRoot, knifeRoot]) r.removeFromParent(); rifleView?.dispose(); rifleView = null; smg.dispose(); gl.dispose();
       for (const g of [pg.frame, pg.slide, pg.dark, pg.mag, pg.trigger, pg.dots, kg.blade, kg.fuller, kg.handle, kg.guard, ...Object.values(ag)]) g.dispose();
       M.flash.map?.dispose?.(); for (const m of [...Object.values(M), ...Object.values(AM)]) m.dispose(); KM.dispose();
       later.stop();
