@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { RELOAD_FEEL, createReloadFeel, feelFor } from '../src/jimao/reload-feel.js';
 import { reloadPose, PISTOL_RELOAD } from '../src/jimao/arsenal.js';
 import { breakPose, BREAK } from '../src/jimao/launcher.js';
-import { TOUCH_SLOTS, SWAP_SLOT, BUTTON_ICONS, ICONS, HUD_LAYOUT_CSS, TYPE, HUD_COLORS, MARKERS, markerRole, planMarkers, compassX, COMPASS_PX } from '../src/jimao/hud-layout.js';
+import { TOUCH_SLOTS, SWAP_SLOT, BUTTON_ICONS, ICONS, HUD_LAYOUT_CSS, TYPE, HUD_COLORS, MARKERS, markerRole, planMarkers, compassX, COMPASS_PX, RADIO_HOLD, createHudLayout } from '../src/jimao/hud-layout.js';
 import { LAYOUT_ITEMS } from '../src/jimao/layout-editor.js';
 
 function events() { const map = new Map(); return { on(n, f) { if (!map.has(n)) map.set(n, []); map.get(n).push(f); return () => map.set(n, map.get(n).filter((g) => g !== f)); }, emit(n, e) { for (const f of map.get(n) || []) f(e); } }; }
@@ -144,4 +144,21 @@ test('HUD 排版：字号只用 TYPE 那几档、颜色只用 HUD_COLORS；指�
   assert.match(css, /#ui:not\(\.jm-stick-fixed\):not\(\.jm-editing\) \.jm-stick-home \{ display: none/, '跟随拇指的摇杆不按时不画圈');
   assert.match(css, /\.is-touch \.h-pips \{ display: none/, '手机上弹药块不画子弹格');
   assert.match(css, /\.h-cue\.urgent \{[^}]*animation: none/, '弹药耗尽是一枚不闪的小签');
+});
+
+test('无线电字幕：一句话打完、停 RADIO_HOLD 秒（游戏时间）就淡掉；字幕在的时候提示条让到上面一行；换一句又亮', () => {
+  const cls = () => { const s = new Set(); return { contains: (c) => s.has(c), toggle: (c, on) => { if (on ?? !s.has(c)) s.add(c); else s.delete(c); }, add: (c) => s.add(c), remove: (c) => s.delete(c) }; };
+  const t = { textContent: '' }, comms = { classList: cls(), querySelector: () => t }, ui = { classList: cls(), querySelector: (q) => (q === '.comms' ? comms : null), querySelectorAll: () => [] };
+  const keep = { document: globalThis.document, MutationObserver: globalThis.MutationObserver, innerWidth: globalThis.innerWidth, innerHeight: globalThis.innerHeight };
+  Object.assign(globalThis, { document: {}, MutationObserver: class { observe() {} disconnect() {} }, innerWidth: 844, innerHeight: 390 });
+  try {
+    const L = createHudLayout({ input: {} }, ui), step = (s) => { for (let k = 0; k < Math.round(s * 60); k++) L.update(1 / 60); };
+    comms.classList.add('on'); t.textContent = '弹药不多了'; step(0.5);
+    assert.ok(ui.classList.contains('jm-radio') && !comms.classList.contains('jm-fade'), '字幕在：提示条让开');
+    step(RADIO_HOLD + 0.2);
+    assert.ok(comms.classList.contains('jm-fade') && !ui.classList.contains('jm-radio'), '停够了就淡掉，提示条回原位');
+    t.textContent = '下一句'; step(0.1);
+    assert.ok(!comms.classList.contains('jm-fade'), '换一句又亮');
+    L.dispose();
+  } finally { Object.assign(globalThis, keep); }
 });
