@@ -75,16 +75,16 @@ function grimeTex(S = 256) {
  * amt 污渍深浅、edge 划痕 / 掉漆露出的亮色、panel 面板缝的深浅、rough 粗糙度跟着污渍变多少。
  * 没有 uv 的合并网格也能用；同一个着色器，参数走 uniforms（不同材质不重复编译）。
  */
-export function grime(m, { scale = 1, amt = 0.5, edge = 0.15, panel = 0, rough = 0.3, wet = 0 } = {}) {
+export function grime(m, { scale = 1, amt = 0.5, edge = 0.15, panel = 0, rough = 0.3, wet = 0, streak = 0 } = {}) {
   const tex = (GRIME_TEX ||= grimeTex());
-  const U = { tGrime: { value: tex }, uGS: { value: scale }, uGA: { value: amt }, uGE: { value: edge }, uGP: { value: panel }, uGR: { value: rough }, uGW: { value: wet } };
+  const U = { tGrime: { value: tex }, uGS: { value: scale }, uGA: { value: amt }, uGE: { value: edge }, uGP: { value: panel }, uGR: { value: rough }, uGW: { value: wet }, uGT: { value: streak } };
   m.userData.grime = U;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP; varying vec3 vGN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGP = position; vGN = normal;');
     // 着色器里：三个方向各采一次，按法线权重混合；污渍压暗、划痕提亮、面板缝压暗；雨水让上表面更光
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP; varying vec3 vGN; uniform sampler2D tGrime; uniform float uGS, uGA, uGE, uGP, uGR, uGW;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP; varying vec3 vGN; uniform sampler2D tGrime; uniform float uGS, uGA, uGE, uGP, uGR, uGW, uGT;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         vec3 gw = pow(abs(normalize(vGN)), vec3(4.)); gw /= dot(gw, vec3(1.));
         vec3 gp = vGP * uGS;
@@ -93,11 +93,14 @@ export function grime(m, { scale = 1, amt = 0.5, edge = 0.15, panel = 0, rough =
         float gDirt = gG.r * 0.55 + gG2.r * 0.45;
         diffuseColor.rgb *= mix(1., 0.45 + 1.1 * gDirt, uGA);
         diffuseColor.rgb *= 1. - gG.b * uGP;
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.6 + 0.12, gG.g * uGE);`)
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.6 + 0.12, gG.g * uGE);
+        // 竖面上往下拖的雨水痕（横向细、竖向拉长地采同一张污渍图）
+        float gSt = texture2D(tGrime, vec2((vGP.x + vGP.z) * uGS * 1.7, vGP.y * uGS * 0.07)).r;
+        diffuseColor.rgb *= 1. - uGT * smoothstep(0.42, 0.78, gSt) * (1. - abs(normalize(vGN).y));`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = clamp(roughnessFactor + (gDirt - 0.5) * uGR + gG.g * 0.08 - uGW * smoothstep(0.3, 0.9, normalize(vGN).y) * 0.4, 0.04, 1.);`);
   };
-  m.customProgramCacheKey = () => 'grime1';
+  m.customProgramCacheKey = () => 'grime2';
   return m;
 }
 
@@ -242,6 +245,9 @@ export function facadeTex(seed, kind = 'res', S = 512) {
   for (let i = 0; i < 900; i++) { const v = r(); g.fillStyle = `rgba(${v < 0.5 ? '0,0,0' : '255,255,255'},${0.02 + r() * 0.05})`; g.fillRect(r() * S, r() * H, 2 + r() * 10, 2 + r() * 10); }
   for (let j = 0; j < floors; j++) {
     const y = j * fh;
+    // 亮灯按层成片：有的层整层黑着（停电 / 没人），有的层亮一串（一户人家几扇窗一起亮）
+    const floorLit = r() < 0.3 ? 0.15 : r() < 0.25 ? 3.2 : 1;
+    let run = 0;
     // 楼层带（楼板）：比墙亮一点，下沿一道阴影
     const band = kind === 'office' ? 0.26 : 0.14;
     g.fillStyle = `rgba(150,150,145,${kind === 'mall' ? 0.15 : 0.22})`; g.fillRect(0, y + fh * (1 - band), S, fh * band);
@@ -261,8 +267,9 @@ export function facadeTex(seed, kind = 'res', S = 512) {
       // 竖梃
       g.fillStyle = '#15181b'; const m = kind === 'office' ? 3 : kind === 'mall' ? 2 : 1;
       for (let k = 1; k <= m; k++) g.fillRect(wx + (ww * k) / (m + 1) - 1, wy, 2, wh);
-      const k = r();
-      if (k < spec.lit && kind !== 'mall') {
+      let k = r();
+      if (run > 0) { k = 0; run--; } else if (k < spec.lit * floorLit * 0.6 && r() < 0.45) run = 1 + Math.floor(r() * 2);
+      if (k < spec.lit * floorLit && kind !== 'mall') {
         // 亮灯：钨丝暖黄或者暖白日光灯；拉了一半窗帘的只亮一截
         const warm = r() < 0.7, w = 0.55 + r() * 0.45, half = r() < 0.4;
         const col = warm ? [255 * w, 176 * w, 96 * w] : [255 * w, 228 * w, 188 * w];
@@ -271,7 +278,7 @@ export function facadeTex(seed, kind = 'res', S = 512) {
         ge.fillRect(cx, wy, half ? ww * 0.3 : ww, wh);
         ge.fillStyle = 'rgba(0,0,0,0.5)'; for (let q = 1; q <= m; q++) ge.fillRect(wx + (ww * q) / (m + 1) - 1, wy, 2, wh);
         g.fillStyle = `rgba(${col.map((v) => v | 0)},0.35)`; g.fillRect(cx, wy, half ? ww * 0.3 : ww, wh);
-      } else if (k < spec.lit + 0.06 && kind !== 'mall') {
+      } else if (k < spec.lit * floorLit + 0.06 && kind !== 'mall') {
         // 窗帘（米色、灰），不发光
         g.fillStyle = `rgba(${r() < 0.5 ? '120,108,92' : '86,88,90'},0.7)`; g.fillRect(wx + (r() < 0.5 ? 0 : ww * 0.5), wy, ww * 0.5, wh);
       } else if (k > 0.985 && kind !== 'mall') {
@@ -294,12 +301,13 @@ export function facadeTex(seed, kind = 'res', S = 512) {
 }
 
 /** 盒子楼：侧面按真实尺寸铺立面贴图（窗不会被拉长），顶上是屋面 */
-function towerGeometry(w, h, d, tex, y0 = 0) {
+function towerGeometry(w, h, d, tex, y0 = 0, ou = 0, ov = 0) {
   const g = new THREE.BoxGeometry(w, h, d), p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.uv;
   const tw = tex.bays * tex.bayW, th = tex.floors * tex.floorH;
+  // ou / ov：整跨、整层地错开贴图（每栋楼的亮灯、窗帘排布不一样，远看不是同一张图贴满城）
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i) + w / 2, y = p.getY(i) + h / 2 + y0, z = p.getZ(i) + d / 2;
-    if (Math.abs(n.getX(i)) > 0.5) uv.setXY(i, z / tw, y / th); else if (Math.abs(n.getZ(i)) > 0.5) uv.setXY(i, x / tw, y / th); else uv.setXY(i, x / 40, z / 40);
+    if (Math.abs(n.getX(i)) > 0.5) uv.setXY(i, z / tw + ou, y / th + ov); else if (Math.abs(n.getZ(i)) > 0.5) uv.setXY(i, x / tw + ou * 1.37, y / th + ov); else uv.setXY(i, x / 40, z / 40);
   }
   return g;
 }
@@ -341,7 +349,7 @@ export function buildCity(group, { fillers = 150, fires = 40 } = {}) {
   const tex = { res: facadeTex(11, 'res', 256), office: facadeTex(23, 'office', 256), old: facadeTex(37, 'old', 256), mall: facadeTex(31, 'mall', 256) };
   const mats = Object.fromEntries(Object.entries(tex).map(([k, t]) => [k, heightFog(facadeMaterial(t, k === 'mall' ? 0.8 : 1.7))]));
   const roofMat = heightFog(new THREE.MeshStandardMaterial({ color: 0x2a2d30, roughness: 0.85 }));
-  const crownMat = heightFog(new THREE.MeshStandardMaterial({ color: 0x2c3034, roughness: 0.7, metalness: 0.3 }));
+  const crownMat = heightFog(new THREE.MeshStandardMaterial({ color: 0x4a5056, roughness: 0.72, metalness: 0.25, envMapIntensity: 1.3 })); // 线脚、女儿墙比墙面亮一档：月光下勾出楼的一层层轮廓
   const beacons = [];
   // 几百栋楼按材质合并成几个大网格（一栋一个网格要上千次绘制调用）
   const sides = { res: [], office: [], old: [], mall: [] }, roofs = [], crowns = [];
@@ -354,18 +362,39 @@ export function buildCity(group, { fillers = 150, fires = 40 } = {}) {
       crowns.push(place(new THREE.BoxGeometry(bw + 0.2, ph, bd + 0.2), x + lx * c + lz * s2, top + ph / 2, z - lx * s2 + lz * c, rot));
   };
   /** 一栋楼：高的有一半做退台（上面一截收进去），每一段顶上都有女儿墙 */
+  /**
+   * 楼身的线脚：住宅 / 老楼每四层一道外挑的楼板线（阳台板），写字楼四角一根竖向的壁柱、底下两层一圈裙房檐口。
+   * 远看楼不再是一根光滑的挤出方柱，剪影和明暗上都有一层层的横线 / 竖线。
+   */
+  const trim = (x, z, w, d, y, h, rot, kind) => {
+    const c = Math.cos(rot), s2 = Math.sin(rot), at = (lx, lz) => [x + lx * c + lz * s2, z - lx * s2 + lz * c];
+    if (kind === 'office') {
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const [px, pz] = at(sx * (w / 2 - 0.2), sz * (d / 2 - 0.2)); crowns.push(place(new THREE.BoxGeometry(1.1, h, 1.1), px, y + h / 2, pz, rot)); }
+      crowns.push(place(new THREE.BoxGeometry(w + 1.4, 0.9, d + 1.4), x, y + 7.2, z, rot));
+    } else {
+      for (let yy = y + 12.4; yy < y + h - 4; yy += 12.4) crowns.push(place(new THREE.BoxGeometry(w + 0.7, 0.32, d + 0.7), x, yy, z, rot));
+    }
+  };
+  const vr = rng(131);
   const addTower = (x, z, w, d, h, y, rot, kind, setback = 0) => {
-    if (setback > 0 && h > 55) {
-      const h1 = Math.round(h * (0.58 + setback * 0.25)), w2 = w * (0.66 + setback * 0.12), d2 = d * (0.72 + setback * 0.1);
-      addBlock(x, z, w, d, h1, y, rot, kind, 0); parapet(x, y + h1, z, w, d, rot);
-      addBlock(x, z, w2, d2, h - h1, y + h1, rot, kind, h1); parapet(x, y + h, z, w2, d2, rot);
+    if (setback > 0 && h > 45) {
+      const h1 = Math.round(h * (0.55 + setback * 0.25)), w2 = w * (0.62 + setback * 0.14), d2 = d * (0.7 + setback * 0.12);
+      addBlock(x, z, w, d, h1, y, rot, kind, 0); parapet(x, y + h1, z, w, d, rot); trim(x, z, w, d, y, h1, rot, kind);
+      // 高的再收一截（三段式：裙楼身、塔身、顶冠）
+      if (h > 120) {
+        const h2 = Math.round((h - h1) * 0.72), w3 = w2 * 0.74, d3 = d2 * 0.8;
+        addBlock(x, z, w2, d2, h2, y + h1, rot, kind, h1); parapet(x, y + h1 + h2, z, w2, d2, rot); trim(x, z, w2, d2, y + h1, h2, rot, kind);
+        addBlock(x, z, w3, d3, h - h1 - h2, y + h1 + h2, rot, kind, h1 + h2); parapet(x, y + h, z, w3, d3, rot);
+        return { w: w3, d: d3 };
+      }
+      addBlock(x, z, w2, d2, h - h1, y + h1, rot, kind, h1); parapet(x, y + h, z, w2, d2, rot); trim(x, z, w2, d2, y + h1, h - h1, rot, kind);
       return { w: w2, d: d2 };
     }
-    addBlock(x, z, w, d, h, y, rot, kind, 0); parapet(x, y + h, z, w, d, rot);
+    addBlock(x, z, w, d, h, y, rot, kind, 0); parapet(x, y + h, z, w, d, rot); trim(x, z, w, d, y, h, rot, kind);
     return { w, d };
   };
   const addBlock = (x, z, w, d, h, y, rot, kind, y0) => {
-    const g = towerGeometry(w, h, d, tex[kind], y0);
+    const T = tex[kind], g = towerGeometry(w, h, d, T, y0, Math.floor(vr() * T.bays) / T.bays, Math.floor(vr() * T.floors) / T.floors);
     // 盒子的 6 个面分两份：四个侧面（立面贴图）、顶和底（屋面）
     const idx = g.index.array, side = [], top = [];
     for (const gr of g.groups) for (let i = gr.start; i < gr.start + gr.count; i++) (gr.materialIndex === 2 || gr.materialIndex === 3 ? top : side).push(idx[i]);
@@ -395,7 +424,7 @@ export function buildCity(group, { fillers = 150, fires = 40 } = {}) {
     }
     const kind = t.id.startsWith('R') ? 'office' : t.id.startsWith('W') ? 'old' : 'res';
     const k = t.id.length + (t.id.charCodeAt(t.id.length - 1) || 0);
-    const top = addTower(x, z, t.w, t.d, t.h, t.y || 0, t.rot, kind, k % 3 === 0 ? 0.5 : 0);
+    const top = addTower(x, z, t.w, t.d, t.h, t.y || 0, t.rot, kind, k % 3 === 2 ? 0 : 0.3 + (k % 5) * 0.12);
     crown(x, (t.y || 0) + t.h, z, top.w, top.d, t.rot, k);
   }
   // 外围填充：一圈圈的城市楼群（只看剪影 + 窗灯），空出航拍镜头的飞行路线
@@ -404,7 +433,7 @@ export function buildCity(group, { fillers = 150, fires = 40 } = {}) {
     const a = r() * Math.PI * 2, dd = 360 + r() * 1100, w = 22 + r() * 40, d = 18 + r() * 36, h = 28 + Math.pow(r(), 1.5) * 170;
     if (Math.abs(((a - 2.33 + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.42 && dd < 900) continue;
     const kind = kinds[i % kinds.length], x = Math.cos(a) * dd, z = Math.sin(a) * dd, rot = r() * 0.5;
-    const top = addTower(x, z, w, d, h, 0, rot, kind, r() < 0.5 ? r() : 0);
+    const top = addTower(x, z, w, d, h, 0, rot, kind, r() < 0.75 ? 0.15 + r() * 0.85 : 0);
     if (h > 40) crown(x, h, z, top.w, top.d, rot, i, false);
     if (h > 110 && r() < 0.6) beacons.push({ p: V(x, h + 1.5, z), color: 0xff2a1a, size: 5, blink: 1 });
   }
@@ -470,12 +499,14 @@ export function buildApartment(group, scans) {
   const slab = new THREE.Mesh(new THREE.PlaneGeometry(38, 74), wetMat); slab.rotation.x = -Math.PI / 2; slab.position.y = R0; slab.receiveShadow = true; group.add(slab);
   // 女儿墙、楼梯间：清水混凝土扫描贴图，uv 按米铺（2.5 米一块，不拉长）+ 雨水污渍、往下拖的水痕
   const wallSet = withRepeat(scans.formed, 1, 1);
-  const con = grime(new THREE.MeshStandardMaterial({ ...wallSet, color: 0xb4b0a8, roughness: 0.86, envMapIntensity: 1 }), { scale: 0.35, amt: 0.65, edge: 0.05, rough: 0.3, wet: 0.4 });
+  const con = grime(new THREE.MeshStandardMaterial({ ...wallSet, color: 0x8e8b85, roughness: 0.86, envMapIntensity: 1 }), { scale: 0.35, amt: 0.8, edge: 0.05, rough: 0.3, wet: 0.4, streak: 0.65 });
   const metal = grime(new THREE.MeshStandardMaterial({ color: 0x7c8286, roughness: 0.46, metalness: 0.5, envMapIntensity: 1.3 }), { scale: 0.8, amt: 0.7, edge: 0.35, panel: 0.25, rough: 0.35, wet: 0.5 });
   const rust = grime(new THREE.MeshStandardMaterial({ color: 0x7a6a5a, roughness: 0.62, metalness: 0.3, envMapIntensity: 1.1 }), { scale: 1.2, amt: 0.9, edge: 0.25, rough: 0.4 });
   const merge = (list, mat, shadow = true) => { const g = mergeGeometries(list.map((x) => (x.index ? x.toNonIndexed() : x))); list.forEach((x) => x.dispose()); const m = new THREE.Mesh(g, mat); m.castShadow = shadow; m.receiveShadow = true; group.add(m); return m; };
   const at = (geo, x, y, z, ry = 0, rx = 0, rz = 0) => { geo.rotateX(rx); geo.rotateZ(rz); geo.rotateY(ry); geo.translate(x, y, z); return geo; };
-  const conParts = [], metParts = [], rustParts = [];
+  // 水箱：镀锌钢板（亮一点的灰，接缝、铆钉、锈水往下淌），逆光里也认得出是个罐子，不是一块黑方块
+  const galv = grime(new THREE.MeshStandardMaterial({ color: 0xa4aaac, roughness: 0.42, metalness: 0.55, envMapIntensity: 1.8 }), { scale: 0.9, amt: 0.55, edge: 0.2, panel: 0.35, rough: 0.3, wet: 0.5, streak: 0.55 });
+  const conParts = [], metParts = [], rustParts = [], galvParts = [];
   // 女儿墙：墙身 + 压顶（外挑、带滴水）+ 内侧泛水台阶；压顶上一圈钢栏杆
   const pw = (w, d, x, z) => {
     conParts.push(at(boxM(w, PARA, d, 2.5), x, R0 + PARA / 2, z));
@@ -484,7 +515,10 @@ export function buildApartment(group, scans) {
     conParts.push(at(boxM(w > d ? w : 0.5, 0.3, w > d ? 0.5 : d, 2.5), x - (w > d ? 0 : Math.sign(x) * 0.3), R0 + 0.15, z - (w > d ? Math.sign(z) * 0.3 : 0)));
     const L = Math.max(w, d), n = Math.floor(L / 1.6);
     for (let i = 0; i <= n; i++) { const t = -L / 2 + (i / n) * L; metParts.push(at(new THREE.CylinderGeometry(0.025, 0.025, 1.0, 6), x + (w > d ? t : 0), R0 + PARA + 0.62, z + (w > d ? 0 : t))); }
-    for (const y of [0.55, 1.08]) metParts.push(at(new THREE.CylinderGeometry(0.03, 0.03, L, 8), x, R0 + PARA + 0.12 + y, z, 0, w > d ? 0 : Math.PI / 2, w > d ? Math.PI / 2 : 0));
+    // 中间一道圆管，顶上是一根扁方的扶手（带一道下沿），近看是型材不是一根光棍
+    metParts.push(at(new THREE.CylinderGeometry(0.022, 0.022, L, 8), x, R0 + PARA + 0.67, z, 0, w > d ? 0 : Math.PI / 2, w > d ? Math.PI / 2 : 0));
+    metParts.push(at(new THREE.BoxGeometry(w > d ? L : 0.07, 0.045, w > d ? 0.07 : L), x, R0 + PARA + 1.2, z));
+    metParts.push(at(new THREE.BoxGeometry(w > d ? L : 0.012, 0.05, w > d ? 0.012 : L), x, R0 + PARA + 1.155, z));
   };
   pw(38, 0.3, 0, -37); pw(38, 0.3, 0, 37); pw(0.3, 74, -19, 0); pw(0.3, 74, 19, 0);
   // 停机坪：画在屋面上的圆圈和 H（旧、斑驳）
@@ -528,8 +562,10 @@ export function buildApartment(group, scans) {
     for (let k = 0; k < 4; k++) rustParts.push(at(new THREE.BoxGeometry(fr * 2, 0.02, 0.03), x, R0 + h + 0.22, z, k * 0.785));
   }
   // 水箱：罐身、加强箍、锥顶、检修梯、四条腿 + 斜撑
-  rustParts.push(at(new THREE.CylinderGeometry(2.2, 2.2, 3.5, 32), -13, R0 + 3.8, -12));
-  rustParts.push(at(new THREE.ConeGeometry(2.3, 0.7, 32), -13, R0 + 5.9, -12));
+  galvParts.push(at(new THREE.CylinderGeometry(2.2, 2.2, 3.5, 40, 4), -13, R0 + 3.8, -12));
+  galvParts.push(at(new THREE.ConeGeometry(2.3, 0.7, 40), -13, R0 + 5.9, -12));
+  galvParts.push(at(new THREE.CylinderGeometry(0.35, 0.35, 0.25, 16), -13, R0 + 6.3, -12)); // 顶上的检修口
+  rustParts.push(at(new THREE.CylinderGeometry(2.3, 2.3, 0.25, 40), -13, R0 + 2.15, -12)); // 罐底托盘
   for (const y of [2.4, 3.6, 4.8]) metParts.push(at(new THREE.TorusGeometry(2.22, 0.05, 6, 40), -13, R0 + y, -12, 0, Math.PI / 2));
   for (const [x, z] of [[-14.5, -13.5], [-11.5, -13.5], [-14.5, -10.5], [-11.5, -10.5]]) metParts.push(at(new THREE.BoxGeometry(0.2, 2.1, 0.2), x, R0 + 1.05, z));
   for (const [x, z, ry] of [[-13, -13.5, 0], [-13, -10.5, 0], [-14.5, -12, Math.PI / 2], [-11.5, -12, Math.PI / 2]]) metParts.push(at(new THREE.BoxGeometry(0.06, 3.6, 0.08), x, R0 + 1.05, z, ry, 0, 0.98));
@@ -537,65 +573,112 @@ export function buildApartment(group, scans) {
   for (let k = 0; k < 16; k++) metParts.push(at(new THREE.BoxGeometry(0.03, 0.03, 0.5), -10.75, R0 + 0.3 + k * 0.34, -12));
   // 天线杆
   metParts.push(at(new THREE.CylinderGeometry(0.08, 0.12, 12, 8), 15, R0 + 6, -33));
-  merge(conParts, con); merge(metParts, metal); merge(rustParts, rust);
+  merge(conParts, con); merge(metParts, metal); merge(rustParts, rust); merge(galvParts, galv);
   const ml = glowSprite(0xff2a1a, 1.6, 2); ml.position.set(15, R0 + 12.2, -33); group.add(ml);
   return { beacons: [ml, lamp], slab, wetMat };
 }
 
-// ---------------------------------------------------------------- 沙袋：压扁的袋形（不是球），两头收口、中间鼓、表面有褶，麻布贴图
-/** 一只沙袋的几何：长 len、宽 wid、高 hgt；局部原点在袋底中心 */
-export function sandbagGeometry(len = 0.62, wid = 0.36, hgt = 0.2, seed = 1) {
-  const r = rng(seed), g = new THREE.BoxGeometry(1, 1, 1, 14, 5, 8), p = g.attributes.position;
-  const v = new THREE.Vector3();
+// ---------------------------------------------------------------- 沙袋：装满压实的长方枕头（底平、顶微鼓、四角揪出「狗耳朵」、侧面被压得鼓出来），麻布贴图
+/**
+ * 一只沙袋的几何：长 len、宽 wid、高 hgt；局部原点在袋底中心。
+ * 从细分的方块出发：脚印是圆角长方形（不是两头尖的面包），顶面高度 = 长向、宽向两个「平顶」曲线相乘，
+ * 于是四个角塌下去成了沙袋特有的揪角；侧面按高度鼓出来；扎口的一头（+x）收得更扁、有几道褶。
+ */
+export function sandbagGeometry(len = 0.62, wid = 0.36, hgt = 0.17, seed = 1) {
+  const r = rng(seed), g = new THREE.BoxGeometry(1, 1, 1, 18, 5, 10), p = g.attributes.position;
+  const v = new THREE.Vector3(), sag = 0.55 + r() * 0.3, tw = (r() - 0.5) * 0.25;
+  const flat = (a, e) => Math.pow(Math.max(0, 1 - Math.pow(Math.abs(a), e)), 1 / e * 1.6);
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
-    // 先把方块揉成圆角枕头：越靠边越往里收
-    const ax = Math.abs(v.x) * 2, az = Math.abs(v.z) * 2, ay = v.y * 2; // -1..1
-    const pinch = 1 - 0.55 * Math.pow(ax, 4);             // 两头收口
-    const belly = 1 - 0.35 * Math.pow(Math.abs(ay), 2);   // 上下压扁后侧面鼓出来
-    let x = v.x * (1 - 0.08 * Math.pow(Math.abs(ay), 2));
-    let z = v.z * pinch * belly;
-    let y = v.y * pinch * (1 - 0.25 * Math.pow(az, 3)) + (v.y > 0 ? 0.1 * (1 - ax * ax) * (1 - az * az) : 0);
-    // 褶皱 + 一点随机的鼓包
-    const wr = 0.035 * Math.sin(x * 28 + seed) * Math.cos(z * 19) + 0.02 * (r() - 0.5);
-    p.setXYZ(i, x * len, (y + 0.5) * hgt + wr * hgt * 0.6, z * wid + wr * wid * 0.3);
+    const nx = v.x * 2, nz = v.z * 2, k = v.y + 0.5; // nx、nz：-1..1；k：0 底 .. 1 顶
+    const tie = nx > 0 ? Math.pow(Math.max(0, nx), 3) : 0;         // 扎口那头
+    const top = flat(nx, nx > 0 ? 3.2 : 4.5) * flat(nz, 3.4);       // 顶面高度（四角塌成揪角）
+    const h = (0.16 + 0.84 * top) * (1 - 0.3 * tie);
+    const y = k < 0.5 ? k * 0.12 : 0.06 + (k - 0.5) * 2 * (h - 0.06); // 底几乎是平的（压在下面那层上）
+    const bulge = 1 + 0.1 * Math.sin(Math.min(1, y / Math.max(h, 0.2)) * Math.PI) * (1 - tie);
+    let x = nx * (1 - 0.04 * k), z = nz * bulge * (1 - 0.18 * tie);
+    // 褶：扎口那头的放射状褶 + 顶上几道浅的布纹起伏；整只袋子一点扭
+    const fold = 0.05 * tie * Math.sin(nz * 11 + seed) + 0.018 * Math.sin(nx * 9 + nz * 4 + seed) * top;
+    z += tw * nx * 0.1;
+    p.setXYZ(i, x * len * 0.5, (y + fold * k) * hgt, z * wid * 0.5 + (r() - 0.5) * 0.004);
   }
   g.computeVertexNormals();
+  // 每只袋子各自一点颜色：新旧、干湿、沾泥（顶点色），底下一圈更暗（吸水、沾地上的泥）
+  const c = new THREE.Color().setHSL(0.09 + (r() - 0.5) * 0.03, 0.22 + r() * 0.12, 0.42 + r() * 0.12), col = new Float32Array(p.count * 3);
+  if (r() < 0.22) c.setHSL(0.17, 0.2, 0.32 + r() * 0.06); // 少数是军绿色的编织袋
+  c.multiplyScalar(sag);
+  for (let i = 0; i < p.count; i++) { const y = p.getY(i) / hgt, d = 0.62 + 0.38 * Math.min(1, y * 2.2); col[i * 3] = c.r * d; col[i * 3 + 1] = c.g * d; col[i * 3 + 2] = c.b * d; }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return g;
 }
-/** 麻布贴图：编织纹理（颜色 + 法线），沙袋共用 */
+/** 麻布贴图：编织纹理（颜色 + 法线）+ 一道缝线、一块印字，沙袋共用 */
 function burlapTex(S = 256) {
   const [c, g] = canvas2d(S), [n, gn] = canvas2d(S), r = rng(17), img = g.createImageData(S, S), ni = gn.createImageData(S, S);
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const wx = Math.sin((x / S) * Math.PI * 2 * 48), wy = Math.sin((y / S) * Math.PI * 2 * 48);
-    const weave = (wx * wy) * 0.6, k = (y * S + x) * 4, noise = r() * 0.18, dirt = Math.sin(x * 0.05 + y * 0.03) * 0.08;
-    const v = 0.62 + weave * 0.12 + noise + dirt;
-    img.data[k] = 118 * v; img.data[k + 1] = 104 * v; img.data[k + 2] = 78 * v; img.data[k + 3] = 255;
-    ni.data[k] = 128 + wx * 60; ni.data[k + 1] = 128 + wy * 60; ni.data[k + 2] = 230; ni.data[k + 3] = 255;
+    const wx = Math.sin((x / S) * Math.PI * 2 * 40), wy = Math.sin((y / S) * Math.PI * 2 * 40);
+    const weave = (wx * wy) * 0.6, k = (y * S + x) * 4, noise = r() * 0.14, dirt = Math.sin(x * 0.05 + y * 0.03) * 0.06 + Math.sin(x * 0.011 - y * 0.017) * 0.08;
+    const v = 0.9 + weave * 0.14 + noise + dirt;
+    img.data[k] = Math.min(255, 205 * v); img.data[k + 1] = Math.min(255, 190 * v); img.data[k + 2] = Math.min(255, 160 * v); img.data[k + 3] = 255;
+    ni.data[k] = 128 + wx * 70; ni.data[k + 1] = 128 + wy * 70; ni.data[k + 2] = 225; ni.data[k + 3] = 255;
   }
   g.putImageData(img, 0, 0); gn.putImageData(ni, 0, 0);
-  const map = canvasTex(c, true, true), normalMap = canvasTex(n, false, true); map.repeat.set(2, 1); normalMap.repeat.set(2, 1);
+  // 缝线：沿袋边一圈针脚；袋身一块褪了色的印字
+  g.strokeStyle = 'rgba(40,30,20,0.55)'; g.lineWidth = 2; g.setLineDash([5, 4]); g.strokeRect(6, 6, S - 12, S - 12); g.setLineDash([]);
+  g.fillStyle = 'rgba(30,26,20,0.32)'; g.font = 'bold 26px sans-serif'; g.textAlign = 'center'; g.fillText('防汛专用', S / 2, S * 0.56);
+  const map = canvasTex(c, true, true), normalMap = canvasTex(n, false, true);
   return { map, normalMap };
 }
-/** 马蹄形沙袋墙（后面开口），三层错缝；返回 Mesh（合并成一个几何） */
-export function buildSandbagWall({ radius = 2.4, arc = Math.PI * 1.55, rows = 3, seed = 8 } = {}) {
-  const parts = [], r = rng(seed), L = 0.62, W = 0.36, H = 0.2;
+/** 马蹄形沙袋墙（后面开口），错缝码放、一层比一层往里收、袋子之间挤着（不留缝）；返回 Mesh（合并成一个几何） */
+export function buildSandbagWall({ radius = 2.4, arc = Math.PI * 1.55, rows = 4, seed = 8 } = {}) {
+  const parts = [], r = rng(seed), L = 0.6, W = 0.34, H = 0.16;
   for (let row = 0; row < rows; row++) {
-    const rad = radius - row * 0.06, n = Math.floor((arc * rad) / (L * 0.92));
-    for (let i = 0; i < n; i++) {
-      const a = -arc / 2 + ((i + (row % 2 ? 0.5 : 0)) / n) * arc;
-      if (row % 2 && i === n - 1) continue;
-      const g = sandbagGeometry(L * (0.94 + r() * 0.1), W, H * (0.9 + r() * 0.2), seed * 100 + row * 31 + i);
-      g.rotateY(-a + Math.PI / 2 + (r() - 0.5) * 0.12); g.rotateZ((r() - 0.5) * 0.06);
-      g.translate(Math.sin(a) * rad, row * H * 0.82, -Math.cos(a) * rad);
-      parts.push(g);
+    // 每层两排（里外各一圈，外圈压着里圈半只），最上一层只有一排
+    for (const ring of row === rows - 1 ? [0] : [0, 1]) {
+      const rad = radius - row * 0.07 + ring * 0.3, n = Math.floor((arc * rad) / (L * 0.86));
+      for (let i = 0; i < n; i++) {
+        const a = -arc / 2 + ((i + ((row + ring) % 2 ? 0.5 : 0)) / n) * arc;
+        if ((row + ring) % 2 && i === n - 1) continue;
+        const g = sandbagGeometry(L * (0.94 + r() * 0.1), W * (0.95 + r() * 0.1), H * (0.9 + r() * 0.2), seed * 100 + row * 31 + ring * 977 + i);
+        if (r() < 0.5) g.rotateY(Math.PI); // 扎口朝哪头随机
+        g.rotateY(-a + Math.PI / 2 + (r() - 0.5) * 0.1); g.rotateZ((r() - 0.5) * 0.05); g.rotateX((r() - 0.5) * 0.05);
+        g.translate(Math.sin(a) * rad, row * H * 0.78 + (ring ? -0.01 : 0), -Math.cos(a) * rad);
+        parts.push(g);
+      }
     }
   }
   const geo = mergeGeometries(parts); parts.forEach((p) => p.dispose());
   const { map, normalMap } = burlapTex();
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, normalMap, normalScale: new THREE.Vector2(0.45, 0.45), color: 0xeee2c6, roughness: 0.85, metalness: 0, envMapIntensity: 1.3 }));
+  map.repeat.set(1, 1); normalMap.repeat.set(1, 1);
+  const m = new THREE.Mesh(geo, grime(new THREE.MeshStandardMaterial({ map, normalMap, normalScale: new THREE.Vector2(0.6, 0.6), vertexColors: true, roughness: 0.92, metalness: 0, envMapIntensity: 1.1 }), { scale: 2.2, amt: 0.45, edge: 0, rough: 0.15, wet: 0.35 }));
   m.castShadow = m.receiveShadow = true;
   return m;
+}
+
+/**
+ * 弹药箱贴图：橄榄绿漆的钢箱，边角磨出金属、喷的黄字和批号、铆钉和锁扣的阴影；返回 { map, normalMap, roughnessMap }。
+ * 盒子每个面的 uv 是 0..1（整张贴一面）。
+ */
+export function crateTex(S = 256) {
+  const [c, g] = canvas2d(S), [n, gn] = canvas2d(S), [ro, gr] = canvas2d(S), r = rng(43);
+  g.fillStyle = '#5a6340'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 1400; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '20,22,12' : '150,150,110'},${r() * 0.08})`; g.fillRect(r() * S, r() * S, 1 + r() * 6, 1 + r() * 6); }
+  // 往下淌的锈水、雨痕
+  for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(${r() < 0.4 ? '90,50,20' : '20,20,10'},${0.06 + r() * 0.1})`; g.fillRect(r() * S, r() * S * 0.4, 1 + r() * 3, 20 + r() * 80); }
+  // 压筋：横两道（亮边 + 暗边）
+  for (const y of [S * 0.3, S * 0.7]) { g.fillStyle = 'rgba(255,255,220,0.12)'; g.fillRect(0, y - 4, S, 2); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, y + 2, S, 3); }
+  // 喷字
+  g.fillStyle = 'rgba(222,196,92,0.85)'; g.font = 'bold 30px sans-serif'; g.textAlign = 'center'; g.fillText('12.7 × 108', S / 2, S * 0.5);
+  g.font = 'bold 18px sans-serif'; g.fillText('穿甲燃烧 · 150 发', S / 2, S * 0.62); g.font = '14px monospace'; g.fillText('批号 21-07-033', S / 2, S * 0.85);
+  // 边角掉漆（露出亮钢）
+  for (let i = 0; i < 260; i++) { const e = r() < 0.5, x = e ? (r() < 0.5 ? r() * 8 : S - r() * 8) : r() * S, y = e ? r() * S : (r() < 0.5 ? r() * 8 : S - r() * 8); g.fillStyle = `rgba(150,148,135,${0.4 + r() * 0.5})`; g.fillRect(x, y, 1 + r() * 4, 1 + r() * 3); }
+  g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 3; g.strokeRect(1.5, 1.5, S - 3, S - 3);
+  // 法线：压筋、边框；粗糙度：漆面中等、掉漆的地方更光
+  gn.fillStyle = 'rgb(128,128,255)'; gn.fillRect(0, 0, S, S);
+  for (const y of [S * 0.3, S * 0.7]) { gn.fillStyle = 'rgb(128,180,240)'; gn.fillRect(0, y - 4, S, 3); gn.fillStyle = 'rgb(128,76,240)'; gn.fillRect(0, y + 1, S, 3); }
+  gn.fillStyle = 'rgb(180,128,240)'; gn.fillRect(0, 0, 4, S); gn.fillStyle = 'rgb(76,128,240)'; gn.fillRect(S - 4, 0, 4, S);
+  gr.fillStyle = 'rgb(170,170,170)'; gr.fillRect(0, 0, S, S);
+  for (let i = 0; i < 500; i++) { gr.fillStyle = `rgba(${r() < 0.5 ? '90,90,90' : '220,220,220'},0.25)`; gr.fillRect(r() * S, r() * S, 2 + r() * 8, 2 + r() * 8); }
+  return { map: canvasTex(c), normalMap: canvasTex(n, false), roughnessMap: canvasTex(ro, false) };
 }
 
 // ---------------------------------------------------------------- 雨：屏幕空间保底宽度的雨丝（2 倍像素密度下也看得见），被探照灯和警灯照亮
@@ -786,9 +869,10 @@ export function upgradeHeli(heli) {
         float ph = mod(a - uT * 41.0, 1.5708) / 1.5708;
         float smear = smoothstep(0.0, 0.04, ph) * pow(1.0 - ph, 5.0) + smoothstep(0.985, 1.0, ph);
         float hub = smoothstep(0.1, 0.06, r);
-        float tip = smoothstep(0.02, 0.0, abs(r - 0.975)) * 0.1;
-        float alpha = (0.18 + smear * 0.5 * (0.6 + 0.4 * r) + tip) * smoothstep(1.0, 0.965, r) * smoothstep(0.04, 0.1, r) + hub * 0.7;
-        vec3 c = mix(vec3(0.02,0.024,0.028), vec3(0.3,0.34,0.38) * uLit, tip + smear * 0.1);
+        // 整盘只是一层很淡的暗灰（不是一张发白的大椭圆）；拖影集中在桨叶附近，桨尖不画亮环
+        float tip = smoothstep(0.015, 0.0, abs(r - 0.975)) * 0.025;
+        float alpha = (0.045 + smear * 0.34 * (0.5 + 0.5 * r) + tip) * smoothstep(1.0, 0.95, r) * smoothstep(0.04, 0.1, r) + hub * 0.7;
+        vec3 c = mix(vec3(0.012,0.014,0.016), vec3(0.12,0.13,0.15) * uLit, smear * 0.15);
         gl_FragColor = vec4(c, alpha); }`,
   });
   let disc = null;
