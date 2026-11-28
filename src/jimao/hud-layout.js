@@ -72,10 +72,12 @@ export const HUD_LAYOUT_CSS = `
 #ui .t-interact { border-color: #ffb347; color: #ffc977; background: rgba(40, 24, 6, .5); }
 #ui .t-pause { border-radius: 50%; }
 #ui .t-fire2 { display: none; }
-#ui .touch.on .t-fire2 { display: grid; }
+/* 上面把按键改成了 grid 排图标：原来靠 display: none 藏起来的（交互键没东西可交互、围城的治疗 / 路障没货）照样藏 */
+#ui .t-interact:not(.on), #ui .t-btn.off { display: none; }
 #ui .t-nade.multi::after { bottom: -13px; }
 
 @media (orientation: landscape) {
+  #ui .touch.on .t-fire2 { display: grid; }
   ${Object.entries(TOUCH_SLOTS).map(([k, q]) => slotCss(`#ui .t-${k}`, q)).join('\n  ')}
   #ui .t-fire { font-size: 13px; }
   /* 围城里搬东西时的「放下」：原来在右边中段，正压着开镜键——挪到交互键左边那一格 */
@@ -96,12 +98,18 @@ export const HUD_LAYOUT_CSS = `
   .is-touch .h-health { top: auto !important; left: auto !important; right: calc(50% + ${SWAP_SLOT.w / 2 + 12}px) !important; bottom: calc(10px + var(--sab)) !important; text-align: right; }
   .is-touch .h-hp-row { justify-content: flex-end; }
   .is-touch .h-hp-n { font-size: 26px; }
-  .is-touch .jm-stick-home { left: calc(150px + var(--sal)); bottom: calc(96px + var(--sab)); }
+  .is-touch .jm-stick-home { left: calc(170px + var(--sal)); bottom: calc(80px + var(--sab)); }
   .is-touch .jm-stick-home span { display: none; }
   /* 手雷数（电脑上是文字，手机上按键自己标数）；击杀提示挪到右上、暂停键下面 */
   .is-touch .h-feed { top: calc(58px + var(--sat)) !important; right: calc(14px + var(--sar)); }
   .is-touch .h-fl { font-size: 11px; }
-  .is-touch .jm-squad { top: auto !important; bottom: calc(184px + var(--sab)) !important; left: calc(92px + var(--sal)) !important; }
+  /* 队友血条：任务栏下面、左手开火键右边 */
+  .is-touch .jm-squad { top: calc(10px + var(--jm-map, 104px) + 112px + var(--sat)) !important; bottom: auto !important; left: calc(96px + var(--sal)) !important; gap: 3px; }
+  .is-touch .jm-squad .m { grid-template-columns: 44px 60px auto; }
+  /* 无线电字幕、提示条：放在摇杆和右手按键中间那一条里，不压按键 */
+  .is-touch .comms { width: min(320px, 40vw) !important; bottom: calc(66px + var(--sab)) !important; top: auto !important; }
+  .is-touch .comms-t { font-size: 13px !important; }
+  .is-touch .h-msg { bottom: auto !important; top: calc(98px + var(--sat)); max-width: min(360px, 44vw); font-size: 10px; }
 }
 
 /* ===== HUD 信息层级：左上角一列（小地图 → 下一步 → 任务栏），顶部正中指南针，标记不叠 ===== */
@@ -187,7 +195,14 @@ export function createHudLayout(G, ui) {
       }
     }
     const res = declutter(marks);
-    used.forEach((el, i) => { el.classList.toggle('jm-quiet', res[i].quiet); el.classList.toggle('jm-far', res[i].far); });
+    // 贴在屏幕边上的标记别压在左上角那一列（小地图、任务栏）和左手开火键上：压着就往下挪到它们下面
+    const keep = [...ui.querySelectorAll('.jm-map:not(.off), .h-obj.has, .touch.on .t-fire2')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
+    used.forEach((el, i) => {
+      el.classList.toggle('jm-quiet', res[i].quiet); el.classList.toggle('jm-far', res[i].far);
+      let dy = 0; const m = marks[i];
+      if (m.off) for (const r of keep) if (m.x > r.left - 34 && m.x < r.right + 34 && m.y + dy > r.top - 30 && m.y + dy < r.bottom + 30) dy = r.bottom + 34 - m.y;
+      const t = dy ? `0 ${Math.round(dy)}px` : ''; if (el.style.translate !== t) el.style.translate = t;
+    });
   }
   return {
     update() {
