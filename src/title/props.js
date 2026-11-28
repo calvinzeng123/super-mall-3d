@@ -164,7 +164,14 @@ export function glowPoints(group, list) {
 const TEX_DIR = 'assets/textures/scans/';
 /** 读一组扫描贴图（颜色 + 法线），repeat 米一块。base：网站根目录（打包时可换）；max：缩到最长边几像素 */
 export async function loadScan(base, id, loader = new THREE.TextureLoader(), max = 512) {
-  const [map, normalMap] = await Promise.all(['color', 'normal'].map((k) => loader.loadAsync(`${base}${TEX_DIR}${id}/${k}.jpg`).then((t) => shrinkTex(t, max))));
+  // 先按路径读；读不到（单文件版从 file:// 打开时浏览器拦掉相对路径）就用主程序已内嵌的同一张贴图（pbr-data.js 的 SURFACE_ASSETS）
+  const read = (k) => loader.loadAsync(`${base}${TEX_DIR}${id}/${k}.jpg`).catch(async (e) => {
+    const { SURFACE_ASSETS } = await import('../render/pbr-data.js');
+    const url = SURFACE_ASSETS.find((a) => a.id === id)?.maps?.[k];
+    if (!url) throw e;
+    return loader.loadAsync(url);
+  });
+  const [map, normalMap] = await Promise.all(['color', 'normal'].map((k) => read(k).then((t) => shrinkTex(t, max))));
   map.colorSpace = THREE.SRGBColorSpace;
   for (const t of [map, normalMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; }
   return { map, normalMap };

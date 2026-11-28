@@ -77,7 +77,9 @@ const skyModule = `export const SKY_ASSETS = ${JSON.stringify({
 // 开场资源内嵌成 data: 地址（单文件版不受加载预算约束）
 const dataURL = async (url, mime) => `data:${mime};base64,${(await readFile(url.replace(/^\.\//, ''))).toString('base64')}`;
 const titleModule = `export const TITLE_TOWERS = ${JSON.stringify(titleAssets.towers)};\n`
-  + `export const TITLE_ZOMBIE_TEX = ${JSON.stringify(await Promise.all(titleAssets.zombies.map(async (e) => ({ ...e, url: await dataURL(e.url, 'image/jpeg') }))))};\n`
+  // 单文件版只内嵌低清一档丧尸贴图，高清档复用同一批（省约 2 MB，守住单文件 95 MB 的上限）；在线版仍是两档分开的文件
+  + `const ZLO = ${JSON.stringify(await Promise.all(titleAssets.zombies.filter((e) => e.set === 'lo').map(async (e) => ({ ...e, url: await dataURL(e.url, 'image/jpeg') }))))};\n`
+  + `export const TITLE_ZOMBIE_TEX = [...ZLO, ...ZLO.map((e) => ({ ...e, set: 'hi' }))];\n`
   + `export const TITLE_PEOPLE = ${JSON.stringify(await Promise.all(titleAssets.people.map(async (m) => ({ ...m, url: await dataURL(m.url, 'model/gltf-binary') }))))};\n`
   + `export const TITLE_FONTS = ${JSON.stringify(Object.fromEntries(await Promise.all(Object.entries(titleAssets.fonts).map(async ([k, u]) => [k, await dataURL(u, 'font/woff2')]))))};\n`
   + `export const TITLE_FONT_FAMILIES = ${JSON.stringify(titleAssets.families)};\n`;
