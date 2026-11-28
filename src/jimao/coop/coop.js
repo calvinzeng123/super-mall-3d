@@ -604,7 +604,7 @@ export function createCoop(G, { squad, zombies, siege, director, ui = null, para
   };
   // 网址带 ?room=CODE：打开大厅、直接加入
   if (params.room && lobby) setTimeout(() => lobby.autoJoin(params.room), 1500); // 等加载画面后面那几帧（预热着色器、传贴图）过去再连
-  // 封面「联机（三人）」入口带 ?mp=1（见 src/cover-options.js 的 MP_ENTRY）：没带房间码时进来就把大厅打开
+  // 首页主菜单「联机 · 三人」入口带 ?mp=1（见 src/title/route.js 的 ENTRIES）：没带房间码时进来就把大厅打开
   // mp=1 或者别的不是地址的值都算「打开大厅」；?mp=ws(s)://… 只是指定连哪台服务器，不自动打开
   else if (params.mp && !/^(wss?|https?):\/\//i.test(String(params.mp).trim()) && lobby) setTimeout(() => lobby.open(), 1500);
   return api;

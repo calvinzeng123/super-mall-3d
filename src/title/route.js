@@ -102,6 +102,16 @@ export function returnCleanup(search = '') {
   return s ? `?${s}` : '';
 }
 
+/**
+ * 从游戏回主菜单（漫游的「返回主菜单」、小游戏外壳、FPS 结算页）：sessionStorage 记返回标记（回来不播开场），
+ * 擦掉启动参数后整页换地址。擦完地址没变（只剩 hash 一样）时 location.replace 只会跳锚点、不重载，改成 reload。
+ */
+export function returnToTitle(win = globalThis.window) {
+  try { win.sessionStorage?.setItem(RETURNING_KEY, '1'); } catch { /* 无痕模式：回来照常播短版 */ }
+  const l = win.location, s = returnCleanup(l.search);
+  if (s === l.search) l.reload(); else l.replace(`${l.pathname}${s}${l.hash}`);
+}
+
 /** 选了某个入口后的地址栏参数：先擦掉上一局的启动参数，再并上入口的（入口的值优先） */
 export function entrySearch(search = '', entry = null) {
   const p = new URLSearchParams(returnCleanup(search));

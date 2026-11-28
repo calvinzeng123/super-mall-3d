@@ -6,8 +6,17 @@
 //   · 压暗（.wc-scrim）只压左边和底边给菜单字垫底，画面中间、右边的场景不压（用户反馈过「整个画面黑黑的一片」）；
 //   · 二级菜单 / 设置贴在菜单右边，左边一道红线，底是往右淡出的渐变，不是带框的卡片；
 //   · 底边一行不带框、低对比；进入关卡是底边一根细线 + 一句话；
+//   · 进度条（.wc-pre）：黑底、底边一根细线 + 一句话，盖在画布和菜单上面，读完淡出；首页容器（.wc-boot）黑底，兜底主视觉 / 进游戏时定格的那一帧当它的背景图；
 //   · 出场：show() 加 .shown；跳过加 .instant（没有过渡）；setPhase() 加 .manual 按时间逐帧给（截图、导出视频）。
 export const TITLE_CSS = `
+.wc-boot { position: fixed; inset: 0; z-index: 40; overflow: hidden; background: #000 center / cover no-repeat; }
+.wc-boot .wc-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.wc-pre { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 5.2vw calc(6vh + env(safe-area-inset-bottom, 0px));
+  background: #000; transition: opacity 0.6s ease; }
+.wc-pre.done { opacity: 0; pointer-events: none; }
+.wc-pre-t { margin-bottom: 12px; font-size: 12px; letter-spacing: 0.3em; color: rgba(236,232,223,0.58); }
+.wc-pre-bar { position: relative; height: 1px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.wc-pre-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 0%); background: #d8261c; box-shadow: 0 0 8px #d8261c; transition: width 0.3s ease; }
 .wc-title { --wc-red: #d8261c; --wc-redhot: #ff3b2a; --wc-ink: #ece8df; --wc-dim: rgba(236,232,223,0.62); --wc-logo: 0; --wc-menu: 0;
   position: absolute; inset: 0; pointer-events: none; color: var(--wc-ink); user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
   font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Zen Hei', sans-serif; }

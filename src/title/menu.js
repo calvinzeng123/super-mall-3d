@@ -3,7 +3,7 @@
 // show() 之前不接键盘（开场还在播，按键归「跳过」管）；选了一个能进游戏的入口就锁住，免得连按进两次，showError() 解锁。
 // DOM 全用 createElement 搭（不用 innerHTML），node 里用一个很小的假 DOM 就能测。
 import { ENTRIES } from './route.js';
-import { COVER_TIERS } from '../cover-options.js';
+import { COVER_TIERS } from './tiers.js';
 import { injectTitleCss } from './title.css.js';
 
 /** 打包时写进去的版本（提交短哈希 + 时间），本机直接跑是 dev */
@@ -21,7 +21,7 @@ const INTRO_OPTS = Object.freeze([
  * opts：logo（prepareLogo 画好的画布，或兜底的 <img>）、preselect（深链预选的入口 id）、tier（当前画质档）、
  *   onSelect(entry)、onTier(tier)、onReplay()、intro / onIntro(pref)（设置里的开场偏好）、stars（{ drone: '2/9' }）、
  *   doc / win（注入用；默认 root 所在的 document 和 window）。
- * 返回 { show, setPhase, setLoading, hideLoading, showError, setServer, dispose, el }。
+ * 返回 { show, hide, setPhase, setLoading, hideLoading, showError, setServer, dispose, el }。
  */
 export function mountMenu(root, opts = {}) {
   const { logo = null, preselect = null, onSelect = () => {}, onTier = () => {}, onReplay = () => {}, onIntro = () => {}, stars = {} } = opts;
@@ -166,6 +166,12 @@ export function mountMenu(root, opts = {}) {
       wrap.classList.remove('manual');
       wrap.classList.toggle('instant', !!instant);
       wrap.classList.add('shown');
+    },
+    /** 收起 Logo 和菜单（重看开场时；之后再 show()） */
+    hide() {
+      shown = false; level = 'top';
+      wrap.classList.remove('shown', 'instant', 'manual');
+      render();
     },
     /** 按时间逐帧给出场进度（截图、导出视频；0..1）。菜单完全出来后才接键盘 */
     setPhase(logoP, menuP) {
