@@ -917,6 +917,15 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     ui() { const a = at(version); return { t, version, shot: lastShot, logo: clamp((t - a.logo) / 1.2), menu: clamp((t - a.menu) / 0.8) }; },
     stats() { return { frameMs: +frameMs.toFixed(2), gpuMB: gpuMB(), gpu: gpuParts(), tier: tierId, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, logicMs: +logicMs.toFixed(2), submitMs: +submitMs.toFixed(2) }; },
     resize: onResize,
+    /**
+     * 拍下当前这一帧（data URL）。渲染器没开 preserveDrawingBuffer，帧画完一交给屏幕缓冲区就清了，
+     * 所以在同一个任务里先重画一帧再 toDataURL；已经释放了返回 null。
+     */
+    snapshot(type = 'image/jpeg', quality = 0.82) {
+      if (disposed) return null;
+      render();
+      return renderer.domElement.toDataURL(type, quality);
+    },
     /** 彻底释放：停循环、几何 / 材质 / 贴图 / 渲染目标全 dispose、丢掉 GL 上下文 */
     dispose() {
       if (disposed) return; disposed = true; stop(); removeEventListener('resize', onResize);

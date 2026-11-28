@@ -40,7 +40,8 @@ export function radialTex(stops, S = 128) {
 let SOFT_TEX = null, GRIME_TEX = null;
 // 光斑：高斯样的衰减一直收到 0（边上不留一圈方形的底）
 export const softTex = () => (SOFT_TEX ||= radialTex([[0, 'rgba(255,255,255,1)'], [0.12, 'rgba(255,255,255,0.62)'], [0.3, 'rgba(255,255,255,0.22)'], [0.55, 'rgba(255,255,255,0.05)'], [0.8, 'rgba(255,255,255,0.008)'], [1, 'rgba(255,255,255,0)']]));
-export function resetShared() { SOFT_TEX = null; GRIME_TEX = null; }
+/** 释放开场时调：模块里缓存的共用贴图一起 dispose（脏污贴图只挂在 onBeforeCompile 的 uniforms 上，遍历场景找不到它） */
+export function resetShared() { SOFT_TEX?.dispose(); GRIME_TEX?.dispose(); SOFT_TEX = null; GRIME_TEX = null; }
 
 /**
  * 脏污 / 磨损贴图（可平铺）：r = 大块污渍（低频噪声），g = 细划痕和掉漆点，b = 面板缝（网格线 + 铆钉）。

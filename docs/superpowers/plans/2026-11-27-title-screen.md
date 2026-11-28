@@ -129,7 +129,7 @@
 
 **Interfaces:**
 - Consumes: Task 2 `createTitleScene/TitleScene`、Task 3 `mountMenu/introVersion/deepLink/returnCleanup/prepareLogo/probeServer/ENTRIES`。
-- Produces: `bootTitle({canvas, root, storage, search, startRuntime}) -> Promise<void>`；`disposeTitle()` 后 `renderer.getContext().isContextLost()===true`。
+- Produces: `bootTitle({canvas, root, storage, session, search, startRuntime, createTitleScene}) -> Promise<{scene, menu, fallback, version}>`（实施时改的：原定 `Promise<void>`，改成返回句柄，给调试、截图、导出视频用 `h.scene.setT(…)`；`createTitleScene` 由 main.js 注入，测试换成假的）；`disposeTitle() -> boolean`（选了模式时 bootTitle 自己调；先用 `scene.snapshot()` 定格最后一帧当背景，再释放），之后 `renderer.info.memory` 归零、`renderer.getContext().isContextLost()===true`（`tests/title-dispose.test.js` 在无头 Chromium 里用真场景验）。
 - Pages 版：菜单出现后，若 `!navigator.connection?.saveData`，对 runtime 入口 chunk 和 jimao chunk 发 `<link rel="prefetch">`（URL 来自 esbuild metafile，build-netlify 写进 shell 的一个 `<script type="application/json" id="prefetch">`）。
 
 - [ ] **Step 1: 写失败测试** `tests/title-boot.test.js`（注入假 `createTitleScene` 与假 `startRuntime`）：
@@ -138,6 +138,9 @@
   - 播放中调用 `skip()` 后立即触发 `menu` 事件；
   - `?room=AB12CD` → 不创建场景，直接 `startRuntime('jimao')`；
   - `prepareLogo` reject → 用静态 Logo 图，不报错。
+  - 定格帧走 `scene.snapshot()`（同一任务里先画再拍；渲染器没开 preserveDrawingBuffer，点击时直接读画布是黑图），拍不到用 fallback 图；
+  - 预下载：菜单出来以后才按 `<script id=prefetch>` 的清单加 `<link rel=prefetch>`，省流量模式不加；
+  - `disposeTitle()` 后真场景 `renderer.info.memory` 归零、上下文丢失（`tests/title-dispose.test.js`，无头 Chromium）。
 - [ ] **Step 2: 跑测试确认失败。**
 - [ ] **Step 3: 实现 `boot.js` 并改 `main.js`**；进度条：黑底、底边细线、文案轮换（「正在封锁云澜……」等 3–4 句）；进度 = 资源下载 + 场景构建 + 预编译预热；全部完成才 `play`。
 - [ ] **Step 4: 改名与删旧封面**；`grep -rn "云澜汇" index.html src/shell.html assets/icons build.mjs scripts/build-netlify.mjs` 只剩园区内部用途（户型文件名等）。

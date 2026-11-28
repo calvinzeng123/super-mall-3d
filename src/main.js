@@ -20,7 +20,7 @@ let runtime = null;
 window.__title = bootTitle({
   canvas, root, search: location.search,
   storage: storageOf('localStorage'), session: storageOf('sessionStorage'),
-  createScene: createTitleScene,
+  createTitleScene,
   async startRuntime(mode, onProgress) {
     try {
       runtime = await import('./runtime.js');

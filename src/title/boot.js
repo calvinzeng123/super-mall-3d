@@ -24,12 +24,13 @@ const tryDo = (fn) => { try { return fn(); } catch { return undefined; } };
 /**
  * 挂首页。canvas：开场画布（放在 root 里）；root：首页容器（盖在游戏 #app 上面）；storage / session：localStorage / sessionStorage（可为 null）；
  * search：打开时的地址栏参数；startRuntime(mode, onProgress)：进游戏（main.js 里动态 import runtime.js）。
- * 注入（测试用）：createScene(canvas, opts)、prepareLogo()、probe()、win、doc、reducedMotion、fallback、prefetch、base。
- * 返回（Promise）：{ scene, menu, fallback, version }；邀请链接直进联机时 scene / menu 为 null。
+ * 注入（测试用）：createTitleScene(canvas, opts)、prepareLogo()、probe()、win、doc、reducedMotion、fallback、prefetch、base。
+ * 返回（Promise）：句柄 { scene, menu, fallback, version }（调试、截图、导出视频用）；邀请链接直进联机时 scene / menu 为 null。
+ * 进游戏前的释放走 disposeTitle()（见下）。
  */
 export async function bootTitle({
   canvas, root, storage = null, session = null, search = '', startRuntime,
-  createScene, prepareLogo = null, probe = probeServer, base = './',
+  createTitleScene, prepareLogo = null, probe = probeServer, base = './',
   win = globalThis.window, doc = root?.ownerDocument || globalThis.document,
   reducedMotion = tryDo(() => win.matchMedia('(prefers-reduced-motion: reduce)').matches) || false,
   fallback = TITLE_FALLBACK, prefetch = true,
@@ -84,7 +85,7 @@ export async function bootTitle({
   }).then((x) => { logoP = 1; report(); return x; });
   let scene = null, failed = false;
   try {
-    scene = await createScene(canvas, { tier, base, onProgress: (label, p) => { sceneP = p; report(); } });
+    scene = await createTitleScene(canvas, { tier, base, onProgress: (label, p) => { sceneP = p; report(); } });
   } catch (e) {
     console.warn('[首页] 开场场景建不起来，改用静态主视觉', e);
     failed = true;
@@ -142,14 +143,7 @@ export async function bootTitle({
     entering = true;
     menu.setLoading('进入关卡', 0);
     setSearch(entrySearch(curSearch(), entry));
-    if (scene) {
-      const still = freezeFrame(canvas);
-      shell.style.backgroundImage = `url("${still || assetURL(base, fallback.scene)}")`;
-      shell.classList.add('wc-still');
-      try { scene.dispose(); } catch (e) { console.warn('[首页] 释放开场场景出错', e); }
-      scene = null;
-      if (canvas) canvas.style.display = 'none';
-    }
+    release();
     try {
       await startRuntime(entry.mode, (label, p) => menu.setLoading(label, p));
       menu.dispose(); disarmSkip(); win.removeEventListener('click', onClickCapture, true);
@@ -162,6 +156,20 @@ export async function bootTitle({
     }
   }
 
+  // ---- 释放开场：先定格最后一帧当背景（免得释放后闪一下黑），再把场景、GL 上下文全丢掉
+  function release() {
+    if (!scene) return false;
+    const still = freezeFrame(scene);
+    shell.style.backgroundImage = `url("${still || assetURL(base, fallback.scene)}")`;
+    shell.classList.add('wc-still');
+    try { scene.dispose(); } catch (e) { console.warn('[首页] 释放开场场景出错', e); }
+    scene = null;
+    if (canvas) canvas.style.display = 'none';
+    if (active === release) active = null;
+    return true;
+  }
+  active = release;
+
   // ---- 后台预下载游戏脚本（Pages 版打包时写进页面的 <script type="application/json" id="prefetch">）
   function startPrefetch() {
     if (!prefetch || prefetched) return; prefetched = true;
@@ -173,9 +181,23 @@ export async function bootTitle({
   return { get scene() { return scene; }, menu, fallback: failed, version };
 }
 
-/** 当前这一帧拍成图（进游戏时当背景，免得释放场景后闪一下黑）；拍不到返回 null */
-function freezeFrame(canvas) {
-  try { const u = canvas?.toDataURL?.('image/jpeg', 0.82); return typeof u === 'string' && u.length > 2000 ? u : null; } catch { return null; }
+/** 正在挂着的首页的释放函数（同一时间只有一个首页） */
+let active = null;
+
+/**
+ * 释放当前的开场场景：定格最后一帧当背景、停循环、几何 / 材质 / 贴图 / 渲染目标全 dispose、丢掉 GL 上下文
+ * （之后 renderer.getContext().isContextLost() 为真，游戏用自己的上下文）。选了模式时 bootTitle 自己会调；
+ * 释放了返回 true，没有可释放的（兜底主视觉、已经释放过）返回 false。
+ */
+export function disposeTitle() { return active ? active() : false; }
+
+/**
+ * 当前这一帧拍成图（进游戏时当背景）；拍不到返回 null。
+ * 不能直接读画布：渲染器没开 preserveDrawingBuffer，只在 requestAnimationFrame 里画，点击时缓冲区早清了，
+ * toDataURL 拍出来是一张黑图——由场景在同一个任务里先画一帧再拍（scene.snapshot）。
+ */
+function freezeFrame(scene) {
+  try { const u = scene?.snapshot?.('image/jpeg', 0.82); return typeof u === 'string' && u.length > 2000 ? u : null; } catch { return null; }
 }
 
 /** 场景建到一半失败时，画布上可能已经有一个 GL 上下文：丢掉它（同一时间只留游戏那一个） */

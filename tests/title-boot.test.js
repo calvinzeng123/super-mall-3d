@@ -8,7 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { bootTitle } from '../src/title/boot.js';
+import { bootTitle, disposeTitle } from '../src/title/boot.js';
 import { returnToTitle, RETURNING_KEY, INTRO_SEEN_KEY } from '../src/title/route.js';
 import { Target, fakeDoc } from './fake-dom.js';
 
@@ -24,7 +24,7 @@ function fakeWin(search = '') {
 }
 
 /** 假开场场景：记下调用顺序；skip / play('none') 同步发出 logo、menu 事件（和真场景一样） */
-function fakeScene(log) {
+function fakeScene(log, snap = 'data:image/jpeg;base64,' + 'A'.repeat(4000)) {
   const ls = { logo: [], menu: [], end: [] };
   const emit = (e) => ls[e].forEach((f) => f());
   return {
@@ -34,28 +34,35 @@ function fakeScene(log) {
     skip() { log.push('skip'); emit('logo'); emit('menu'); },
     finish() { emit('logo'); emit('menu'); },
     ui() { return { t: 0 }; },
+    /** 真场景：同一个任务里先画一帧再 toDataURL（preserveDrawingBuffer 关着，隔一个任务缓冲区就清了） */
+    snapshot() { log.push('snapshot'); return snap; },
     dispose() { log.push('dispose'); },
   };
 }
 
-function setup({ search = '', scene = 'ok', logo = 'ok', storage = store(), session = store(), reducedMotion = false } = {}) {
+function setup({ search = '', scene = 'ok', logo = 'ok', storage = store(), session = store(), reducedMotion = false, prefetch = false, prefetchList = null, saveData = false, snap } = {}) {
   const doc = fakeDoc(), win = fakeWin(search), root = doc.createElement('div'), canvas = doc.createElement('canvas');
+  win.navigator = { connection: { saveData } };
+  if (prefetchList) { const j = doc.createElement('script'); j.setAttribute('id', 'prefetch'); j.type = 'application/json'; j.textContent = JSON.stringify(prefetchList); doc.head.append(j); }
+  // 画布自己 toDataURL：真浏览器里点击时缓冲区早清了，拍出来是一张黑图——编排不许走这条路
+  canvas.toDataURL = () => { log.push('canvas.toDataURL'); return 'data:image/jpeg;base64,' + '0'.repeat(9000); };
   doc.body.append(root); root.append(canvas);
   const log = [], picks = [];
   let sc = null;
-  const createScene = async (c, opts) => {
+  const createTitleScene = async (c, opts) => {
     log.push('create');
     opts.onProgress?.('读取模型', 0.5);
     if (scene === 'fail') throw new Error('WebGL 不可用');
-    sc = fakeScene(log); return sc;
+    sc = fakeScene(log, snap); return sc;
   };
   const prepareLogo = async () => { if (logo === 'fail') throw new Error('字体读取失败'); const c = doc.createElement('canvas'); c.dataset.ready = '1'; return c; };
   const startRuntime = async (mode, onProgress) => { log.push(`start:${mode}`); picks.push({ mode, search: win.location.search }); onProgress('读取地图', 0.5); };
-  const done = bootTitle({ canvas, root, storage, session, search, startRuntime, createScene, prepareLogo, win, doc, reducedMotion,
-    probe: async () => true, fallback: { scene: 'fallback.jpg', logo: 'logo.png' }, prefetch: false });
+  const done = bootTitle({ canvas, root, storage, session, search, startRuntime, createTitleScene, prepareLogo, win, doc, reducedMotion,
+    probe: async () => true, fallback: { scene: 'fallback.jpg', logo: 'logo.png' }, prefetch });
   const item = (id) => root.find((e) => e.dataset.id === id);
+  const links = () => doc.head.children.filter((e) => e.tagName === 'LINK' && e.rel === 'prefetch').map((e) => e.href);
   const shown = () => !!root.find((e) => e.classList.contains('wc-title') && e.classList.contains('shown'));
-  return { doc, win, root, canvas, log, picks, done, item, shown, scene: () => sc, storage, session };
+  return { doc, win, root, canvas, log, picks, done, item, shown, links, scene: () => sc, storage, session };
 }
 
 test('场景建不起来：菜单照样挂上，背景是兜底主视觉；选「零点突围」进游戏，地址里带 siege=0&autostart=1', async () => {
@@ -137,7 +144,7 @@ test('从游戏返回：不播开场、直接菜单，返回标记用过就擦�
 test('进游戏出错：菜单显示一行红字；再点任一模式整页刷新重试', async () => {
   const doc = fakeDoc(), win = fakeWin(''), root = doc.createElement('div'), canvas = doc.createElement('canvas'); root.append(canvas); doc.body.append(root);
   await bootTitle({ canvas, root, storage: store(), session: store({ [RETURNING_KEY]: '1' }), search: '', win, doc, prefetch: false, probe: async () => false,
-    createScene: async () => fakeScene([]), prepareLogo: async () => doc.createElement('canvas'), fallback: { scene: 'f.jpg', logo: 'l.png' },
+    createTitleScene: async () => fakeScene([]), prepareLogo: async () => doc.createElement('canvas'), fallback: { scene: 'f.jpg', logo: 'l.png' },
     startRuntime: async () => { throw new Error('网络断了'); } });
   root.find((e) => e.dataset.id === 'zero').dispatch('click');
   await tick(); await tick();
@@ -145,6 +152,59 @@ test('进游戏出错：菜单显示一行红字；再点任一模式整页刷�
   assert.ok(err.classList.contains('on')); assert.match(err.textContent, /网络断了/);
   root.find((e) => e.dataset.id === 'zero').dispatch('click');
   assert.equal(win.location.reloads, 1);
+});
+
+test('定格最后一帧：进游戏时的背景是场景自己拍的那一帧（scene.snapshot），不直接读画布', async () => {
+  const s = setup();
+  await s.done; s.scene().finish();
+  const bg = s.root.find((e) => e.classList.contains('wc-boot')); // 进去以后首页容器会被拿掉，先拿住
+  s.item('siege').dispatch('click');
+  await tick(); await tick();
+  assert.ok(!s.log.includes('canvas.toDataURL'), '不在点击时直接 toDataURL（缓冲区已清，拍到黑图）');
+  assert.ok(s.log.indexOf('snapshot') >= 0 && s.log.indexOf('snapshot') < s.log.indexOf('dispose'), '先拍、再释放');
+  assert.match(bg.style.backgroundImage, /data:image\/jpeg;base64,AAAA/);
+});
+
+test('定格拍不到（snapshot 返回空 / 太小）：背景换兜底主视觉', async () => {
+  const s = setup({ snap: null });
+  await s.done; s.scene().finish();
+  const bg = s.root.find((e) => e.classList.contains('wc-boot')); // 进去以后首页容器会被拿掉，先拿住
+  s.item('siege').dispatch('click');
+  await tick(); await tick();
+  assert.match(bg.style.backgroundImage, /fallback\.jpg/);
+});
+
+test('disposeTitle()：释放当前开场场景、藏起画布，可以重复调；之后进游戏不再二次释放', async () => {
+  const s = setup();
+  await s.done; s.scene().finish();
+  assert.equal(disposeTitle(), true);
+  assert.equal(s.log.filter((x) => x === 'dispose').length, 1);
+  assert.equal(s.canvas.style.display, 'none');
+  assert.equal(disposeTitle(), false, '已经释放过：什么都不做');
+  s.item('siege').dispatch('click');
+  await tick(); await tick();
+  assert.equal(s.log.filter((x) => x === 'dispose').length, 1);
+  assert.deepEqual(s.picks.map((p) => p.mode), ['jimao']);
+});
+
+test('预下载：菜单出来以后才按 <script id=prefetch> 的清单加 <link rel=prefetch>；省流量模式不加', async () => {
+  const list = ['assets/runtime-AB12.js', 'assets/jimao-CD34.js'];
+  const s = setup({ prefetch: true, prefetchList: list });
+  await s.done;
+  assert.deepEqual(s.links(), [], '开场还在播：先不抢带宽');
+  s.scene().finish();
+  assert.deepEqual(s.links(), list);
+  const l = s.doc.head.children.find((e) => e.tagName === 'LINK');
+  assert.equal(l.as, 'script');
+  s.scene().finish();
+  assert.equal(s.links().length, 2, '只加一次');
+  const d = setup({ prefetch: true, prefetchList: list, saveData: true });
+  await d.done; d.scene().finish();
+  assert.ok(d.shown());
+  assert.deepEqual(d.links(), [], '省流量模式：不预下载');
+  const n = setup({ prefetch: true });
+  await n.done; n.scene().finish();
+  assert.deepEqual(n.links(), [], '没有清单（本地开发版）：什么都不加');
 });
 
 test('返回主菜单：写返回标记、擦掉启动参数；地址没变就整页刷新', () => {
@@ -170,6 +230,7 @@ test('接线：main.js 走 bootTitle；游戏内「返回」改用 returnToTitle
 test('改名《围城》：标签页标题、manifest、主屏标题、theme-color 都换了', () => {
   const shell = readFileSync('src/shell.html', 'utf8');
   assert.match(shell, /<title>围城/);
+  for (const f of ['src/shell.html', 'index.html']) assert.ok(!/aria-label="[^"]*云澜/.test(readFileSync(f, 'utf8')), `${f}：页面级标签不再用旧站名（「云澜」只留 Logo 印章和园区名）`);
   const mf = JSON.parse(readFileSync('assets/icons/manifest.webmanifest', 'utf8'));
   assert.equal(mf.short_name, '围城'); assert.match(mf.name, /^围城/);
   assert.ok(!/云澜汇/.test(mf.name));
