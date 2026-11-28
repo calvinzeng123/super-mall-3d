@@ -10,7 +10,7 @@ import { pointInPoly } from '../src/layout/geom.js';
 import { storeStyle, doorGaps } from '../src/layout/frontage.js';
 import { createMapPhysics } from '../src/jimao/physics.js';
 import { stairRuns } from '../src/jimao/stairs.js';
-import { createSiege, siegePlan as siegePlanFn } from '../src/jimao/siege.js';
+import { createSiege, siegePlan as siegePlanFn, GATE_OPEN, GATE_DONE } from '../src/jimao/siege.js';
 import { addZombies, ZOMBIE } from '../src/jimao/zombie.js';
 import { BARRIER, barrierWall, barrierLook, mouthSegment, wallKey, releaseBarrierWalls } from '../src/jimao/siege-barriers.js';
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
@@ -178,3 +178,39 @@ for (const seed of [1, 2, 3, 4, 5]) {
 }
 /** 从扶梯口的交互点朝坡道顶端走的方向 */
 function dirTo(sl) { return [-sl.F.c, -sl.F.s]; }
+
+// 楼里那几道关（杂物、着火、电动栅门、反锁的防火门）：以前是摆在楼梯上的模型，人踏上楼梯被拽回来，队友、丧尸照走、子弹照穿。
+// 现在梯段上登记一处停点：关着谁都过不去（从楼上往下也一样），杂物、栅门、防火门挡子弹；被堵的每个楼梯间都摆着那一件；动画走完才放开
+for (const seed of [1, 2, 3]) {
+  test(`第 ${seed} 局：楼里的关卡真挡着——两个楼梯间都堵着、上下都过不去、挡子弹；解开的动画走完才过得去，过得去时屏幕上说一声`, () => {
+    const { siege, plan, cut, run, msgs, physics } = world(seed);
+    const climb = (r, from = 'a') => {
+      const up = from === 'a', p = up ? r.a : r.b, d = up ? r.da : { x: -r.db.x, z: -r.db.z };
+      let s = { floor: up ? r.from : r.to, x: p.x, z: p.z, y: nav.floors.get(up ? r.from : r.to).y, slope: null };
+      for (let i = 0; i < 60; i++) s = step(nav, s, d.x * 0.08, d.z * 0.08, 1 / 30);
+      return s;
+    };
+    const through = (s, r) => !s.slope ? s.floor !== r.from : false; // 走过了停点：上到了休息平台
+    for (const g of plan.gates) {
+      assert.equal(g.bars.length, g.runs.length, `${g.floor}：被堵的每段楼梯都摆着东西`);
+      assert.ok(g.bars.every((b) => b.gate && b.gate.open === false), '停点登记了、关着');
+      const need = g.stage - siege.state.stage; if (need > 0) { cut(need); run(0.5 + need / 15); }
+      assert.equal(siege.state.stage, g.stage);
+      for (const id of g.runs) {
+        const r = runs.find((q) => q.id === id), s = climb(r);
+        assert.equal(through(s, r), false, `${g.type} · ${id}：关着上不去`);
+        if (g.type !== 'fire') { const eye = new THREE.Vector3(r.a.x, nav.floors.get(r.from).y + 1.3, r.a.z), hit = physics.raycast(eye, new THREE.Vector3(r.da.x, 0.35, r.da.z).normalize(), 4); assert.ok(hit && hit.dist < 2.2, `${g.type}：关着挡子弹`); }
+      }
+      // 从楼上往下走：也过不去（丧尸、队友走路是同一套）
+      const r0 = runs.find((q) => q.id === g.core), sl = nav.slopeById.get(g.bars[0].slope), stop = sl.stops.find((q) => q.gate === g.bars[0].gate);
+      let s = { floor: r0.from, x: 0, z: 0, y: 0, slope: { id: sl.id, u: Math.min(sl.len, stop.u + 0.9), v: 0 } };
+      for (let i = 0; i < 40; i++) s = step(nav, s, -sl.F.c * 0.08, -sl.F.s * 0.08, 1 / 30);
+      assert.ok(s.slope && s.slope.u > stop.u, '从上面往下也过不去');
+      cut(1); run(0.2);
+      for (const id of g.runs) assert.equal(through(climb(runs.find((q) => q.id === id)), runs.find((q) => q.id === id)), false, `${g.type}：动画还没走完，照样挡着`);
+      run(GATE_OPEN[g.type] + 0.3);
+      for (const id of g.runs) { const r = runs.find((q) => q.id === id); assert.ok(through(climb(r), r), `${g.type} · ${id}：解开了，上得去`); }
+      assert.ok(msgs.includes('R:' + GATE_DONE[g.type]), `解开了屏幕上说「${GATE_DONE[g.type]}」`);
+    }
+  });
+}

@@ -796,6 +796,19 @@ const atSlope = (s, sl, u, v) => {
 };
 
 /**
+ * 坡道上的门禁停点（sl.stops = [{ u, gate }]，丧尸围城登记：楼梯口堵着的杂物、落下的栅门、关着的防火门、着火的那一段）：
+ * gate.open 为假时，人（身子半径 NAV.r）过不去 u 那一处，两头来都一样；从 u0 走到 u，返回能走到的 u。没有停点的坡道不受影响
+ */
+function stopU(sl, u0, u) {
+  for (const p of sl.stops) {
+    if (p.gate.open) continue;
+    if (u0 <= p.u) { const lo = p.u - NAV.r; if (u > lo) u = Math.max(Math.min(u0, u), lo); }
+    else { const hi = p.u + NAV.r; if (u < hi) u = Math.min(Math.max(u0, u), hi); }
+  }
+  return u;
+}
+
+/**
  * 解算一步移动：s = { floor, x, z, y, slope }，(dx, dz) 为水平位移，dt 用于扶梯皮带。
  * 楼面状态：墙（扫掠 + 滑动）→ 传送边 → 坡道入口 → 可站立；不行就只走 x 或只走 z。
  */
@@ -812,6 +825,7 @@ export function step(nav, s, dx, dz, dt = 0) {
       const G = nav.floors.get(p.a === F.id ? p.b : p.a);
       if (G && clearAt(nav, G, x, z)) return { floor: G.id, x, z, y: G.y, slope: null };
     }
+    let stopped = false;
     for (const sl of F.slopes) {
       const [u0] = toL(sl.F, s.x, s.z), [u1, v1] = toL(sl.F, x, z);
       const lim = sl.hw - NAV.r;
@@ -822,9 +836,13 @@ export function step(nav, s, dx, dz, dt = 0) {
       // endpoint band; entering the middle from another floor stays forbidden.
       const capture = NAV.r + .08;
       if ((sl.low === F.id && u0 <= capture) || (sl.high === F.id && u0 >= sl.len - capture)) {
-        return atSlope({ ...s, floor: F.id }, sl, u1, v1);
+        // 门禁停点挡着（停点离梯段口太近、一步都踏不上去）：不上坡道，留在楼面上
+        const u2 = sl.stops ? stopU(sl, u0, u1) : u1;
+        if (u2 < 0 || u2 > sl.len) { stopped = true; break; }
+        return atSlope({ ...s, floor: F.id }, sl, u2, v1);
       }
     }
+    if (stopped) continue;
     if (clearAt(nav, F, x, z)) return { floor: F.id, x, z, y: F.y, slope: null };
   }
   return { ...s, y: F.y, slope: null };
@@ -835,6 +853,7 @@ function stepSlope(nav, s, dx, dz, dt) {
   const du = dx * sl.F.c + dz * sl.F.s, dv = -dx * sl.F.s + dz * sl.F.c;
   const lim = sl.hw - NAV.r;
   let u = s.slope.u + du + sl.belt * 0.5 * dt;
+  if (sl.stops) u = stopU(sl, s.slope.u, u);
   const v = Math.max(-lim, Math.min(lim, s.slope.v + dv));
   if (u < 0 || u > sl.len) {
     const G = nav.floors.get(u < 0 ? sl.low : sl.high);

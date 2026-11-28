@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { NAV } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
+import { clearPathfindingCache, forgetPathfindingFloor } from '../fps/pathfinding.js';
 import { slatTexture, DEFENSE } from './siege-defense.js';
 import { propMats } from './siege-props.js';
 
@@ -63,8 +64,22 @@ export function barrierWall(nav, floor, seg) {
   pool.set(key, rec = { gate, floor });
   return gate;
 }
+/**
+ * 坡道（楼梯段）上的一处门禁停点：楼里那几道关（杂物、栅门、防火门、着火）挡在梯段上，停点登记在坡道上（nav.js 的 sl.stops），
+ * 关着的时候人、队友、丧尸都过不去那一处（两头都一样）。按坡道和位置缓存，换一局重用。返回门禁状态 gate（gate.open = true 不挡）
+ */
+export function slopeStop(nav, slopeId, u) {
+  const sl = nav.slopeById?.get(slopeId); if (!sl) return null;
+  let pool = POOL.get(nav); if (!pool) POOL.set(nav, pool = new Map());
+  const key = `${slopeId}|${Math.round(u * 100)}`; let rec = pool.get(key);
+  if (rec) return rec.gate;
+  const gate = { open: true, barrier: true, id: key };
+  (sl.stops ||= []).push({ u, gate });
+  pool.set(key, rec = { gate, slope: slopeId });
+  return gate;
+}
 /** 这张导航网格上所有卷帘墙都放开（换一局抽关卡之前：寻路、量路程都按没有卷帘的地图算，主机和客户端抽到的一样） */
-export function releaseBarrierWalls(nav) { for (const r of POOL.get(nav)?.values() || []) r.gate.open = true; }
+export function releaseBarrierWalls(nav) { let n = 0; for (const r of POOL.get(nav)?.values() || []) if (!r.gate.open) { r.gate.open = true; n++; } if (n) clearPathfindingCache(nav); } // 路线指引（findPath）按格子记着「这两格之间过不过得去」：墙变了要忘掉
 
 // ---- 建模 ----
 const _v = new THREE.Vector3();
@@ -89,7 +104,7 @@ export function createBarriers(G, { nav, scene, B = BARRIER } = {}) {
   const box = (parent, mat, sx, sy, sz, x, y, z) => { const m = new THREE.Mesh(unit, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); parent.add(m); return m; };
   const floorsTouched = new Set();
   /** 墙放开 / 挡上以后：路线指引、队友、丧尸的寻路格子按这一层重算（以前算的「这两格之间过不过得去」不对了） */
-  const replan = (floor) => { G?.physics?.pathfinder?.forget?.(floor); };
+  const replan = (floor) => { G?.physics?.pathfinder?.forget?.(floor); forgetPathfindingFloor(nav, floor); };
 
   function add(spec) {
     const len = Math.hypot(spec.x1 - spec.x0, spec.z1 - spec.z0); if (len < 0.3) return null;
@@ -176,6 +191,8 @@ export function createBarriers(G, { nav, scene, B = BARRIER } = {}) {
 /** 一串关着、不会再开的卷帘段（锁着的店、范围边上的门口和扶梯口）：只登记碰撞（样子还是 buildSeals 那一整块）。返回门禁状态 [gate] */
 export function solidSeals(nav, segs) {
   const out = [];
-  for (const s of segs) { const g = barrierWall(nav, s.floor, s); if (g) { g.open = false; out.push(g); } }
+  const floors = new Set();
+  for (const s of segs) { const g = barrierWall(nav, s.floor, s); if (g) { if (g.open) floors.add(s.floor); g.open = false; out.push(g); } }
+  for (const f of floors) forgetPathfindingFloor(nav, f);
   return out;
 }

@@ -2183,7 +2183,7 @@ test('消防斧：开局店门对面（栏杆边）立着消火栓箱，正面�
     const bike = m.plan.stages[at('crowbar')].site;
     assert.ok(Math.hypot(A.wall.x - bike.x, A.wall.z - bike.z) > Math.hypot(door.x - bike.x, door.z - bike.z), '挂在不去撬棍的那一边');
   }
-  assert.ok(as && clear(nav, as) && findPath(nav, ds, as), '从门口走得到');
+  { const bar = siege.doors.get('exit'); bar.snap(true); assert.ok(as && clear(nav, as) && findPath(nav, ds, as), '卷帘开了，从门口走得到'); bar.snap(false); assert.equal(findPath(nav, ds, as), null, '卷帘落着：走不出去（路线指引不按卷帘开着的时候记的格子算）'); }
   const drop = supplies.drops.find((d) => d.kind === 'axe'); assert.ok(drop, '斧子挂在箱子里');
   assert.ok(Math.hypot(drop.pos.x - A.x, drop.pos.z - A.z) < 1e-6 && drop.model.position.y > 0.8, '人站在箱子跟前捡，斧子挂在箱子里（离地一米上下）');
   // 卷帘没开：站到箱子跟前（直接挪过去）也捡不到——卷帘落着
