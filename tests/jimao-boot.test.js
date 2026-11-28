@@ -43,5 +43,7 @@ test('runtime.js 记下「正在进入」就挂上守卫，main.js 出错的分�
   const rt = readFileSync('src/runtime.js', 'utf8'), main = readFileSync('src/main.js', 'utf8');
   assert.match(rt, /const boot=markBootStart\(mode\);[^]*?bootGuard=armBootGuard\(mode\);[^]*?const tier=savedTier/, '在建场景之前');
   assert.match(rt, /export function bootFailed\(\)\{bootGuard\?\.fail\(\);\}/);
-  assert.match(main, /catch\(error\) \{[^]*?runtime\?\.bootFailed\?\.\(\)[^]*?showError/);
+  // 2026-11-28 首页换成《围城》：main.js 的 startRuntime 包一层，出错先擦掉再抛给 title/boot.js，那边显示红字、再点刷新
+  assert.match(main, /catch\(error\) \{[^]*?runtime\?\.bootFailed\?\.\(\)[^]*?throw error/);
+  assert.match(readFileSync('src/title/boot.js', 'utf8'), /catch \(error\) \{[^]*?broken = true[^]*?menu\.showError/);
 });

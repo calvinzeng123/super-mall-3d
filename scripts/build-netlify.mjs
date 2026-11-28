@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { FPS_MODEL_ASSETS } from '../src/fps/model-data.js';
 import { geometryLicenses } from './geometry-licenses.mjs';
-import { COVER_SOURCE, COVER_MIME, FPS_COVER_SOURCE } from '../src/cover-data.js';
+import { TITLE_FALLBACK } from '../src/title/fallback-data.js';
 import { packProps } from './props/pack.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -60,8 +60,9 @@ for (const residence of residences) {
 const fpsAssets = await Promise.all(FPS_MODEL_ASSETS.map(async a=>({...a,
   url:await emitAsset(a.id==='rifle'?'smg45':a.id==='pistol'?'deagle':'fps-hands','glb',await readFile(a.url.replace(/^\.\//,'')),'fps-model'),
 })));
-const coverURL = await emitAsset('cover',COVER_MIME.split('/')[1],await readFile(COVER_SOURCE),'cover');
-const fpsCoverURL = await emitAsset('cover-fps','jpg',await readFile(FPS_COVER_SOURCE),'cover'); // 封面枪战框的背景
+// 首页兜底素材（静态主视觉、静态 Logo）：只在开场场景建不起来 / 毛笔 Logo 画不出来时才读
+const titleFallback = { scene: await emitAsset('title-fallback', 'jpg', await readFile(TITLE_FALLBACK.scene.replace(/^\.\//, '')), 'title-fallback'),
+  logo: await emitAsset('title-logo', 'png', await readFile(TITLE_FALLBACK.logo.replace(/^\.\//, '')), 'title-fallback') };
 // 贴图小模型：打成一个文件，开场下载一次；各模型按偏移量取用。
 const props = await packProps();
 const propPackURL = await emitAsset('props', 'bin', props.bytes, 'prop-pack');
@@ -70,15 +71,22 @@ const propPackURL = await emitAsset('props', 'bin', props.bytes, 'prop-pack');
 const skyAssets = { radiance: await emitAsset('sky-radiance', 'hdr', await readFile('assets/sky/day-radiance.hdr'), 'sky'),
   photo: await emitAsset('sky', 'jpg', await readFile('assets/sky/day-sky.jpg'), 'sky') };
 
+// 开场资源：丧尸贴图、去掉原贴图的行人模型、字体各出一个带哈希的文件（进度条阶段按需读），楼型直接内联在模块里
+const { TITLE_TOWERS, TITLE_ZOMBIE_TEX, TITLE_PEOPLE, TITLE_FONTS, TITLE_FONT_FAMILIES } = await import(`../src/title/title-data.js?${Date.now()}`);
+const titleZombies = await Promise.all(TITLE_ZOMBIE_TEX.map(async (e) => ({ ...e, url: await emitAsset(e.id, 'jpg', await readFile(e.url.replace(/^\.\//, '')), 'title-texture') })));
+const titlePeople = await Promise.all(TITLE_PEOPLE.map(async (m) => ({ ...m, url: await emitAsset(`title-person-${m.id}`, 'glb', await readFile(m.url.replace(/^\.\//, '')), 'title-model') })));
+const titleFonts = Object.fromEntries(await Promise.all(Object.entries(TITLE_FONTS).map(async ([k, u]) => [k, await emitAsset(`title-${k}`, 'woff2', await readFile(u.replace(/^\.\//, '')), 'title-font')])));
 const replacements = new Map([
   ['people-data.js', `export const PEOPLE_ASSETS = ${JSON.stringify(people)};`],
   ['pbr-data.js', `export const SURFACE_ASSETS = ${JSON.stringify(surfaces)};`],
   ['suite-data.js', `export const SUITE_MODEL_URL = ${JSON.stringify(suiteURL)};`],
   ['residential-data.js', `export const RESIDENTIAL_ASSETS = ${JSON.stringify(residences)};`],
   ['model-data.js', `export const FPS_MODEL_ASSETS = ${JSON.stringify(fpsAssets)};`],
-  ['cover-data.js', `export const COVER_URL = ${JSON.stringify(coverURL)};\nexport const FPS_COVER_URL = ${JSON.stringify(fpsCoverURL)};`],
+  ['fallback-data.js', `export const TITLE_FALLBACK = ${JSON.stringify(titleFallback)};`],
   ['prop-data.js', `export const PROP_ASSETS = ${JSON.stringify(props.assets)};\nexport const PROP_PACK = ${JSON.stringify({ url: propPackURL })};`],
   ['sky-data.js', `export const SKY_ASSETS = ${JSON.stringify(skyAssets)};`],
+  ['title-data.js', `export const TITLE_TOWERS = ${JSON.stringify(TITLE_TOWERS)};\nexport const TITLE_ZOMBIE_TEX = ${JSON.stringify(titleZombies)};\nexport const TITLE_PEOPLE = ${JSON.stringify(titlePeople)};\n`
+    + `export const TITLE_FONTS = ${JSON.stringify(titleFonts)};\nexport const TITLE_FONT_FAMILIES = ${JSON.stringify(TITLE_FONT_FAMILIES)};`],
 ]);
 const bundled = await build({
   entryPoints: ['src/main.js'], bundle: true, splitting:true, format: 'esm', minify: true,
@@ -87,7 +95,7 @@ const bundled = await build({
   // 诊断面板里显示的版本号（构建时间 + 提交），用来确认手机上跑的是不是新版本
   define: { __JM_BUILD__: JSON.stringify(buildId()) },
   plugins: [{ name: 'local-runtime-assets', setup(builder) {
-    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people|model|cover|prop|sky)-data\.js$/ }, args => ({
+    builder.onLoad({ filter: /[\\/](?:pbr|suite|residential|people|model|fallback|prop|sky|title)-data\.js$/ }, args => ({
       contents: replacements.get(path.basename(args.path)), loader: 'js',
     }));
   } }],
@@ -101,14 +109,29 @@ for(const file of bundled.outputFiles){
   if(isEntry)script=`./${relative}`;
 }
 if(!script)throw new Error('Missing launcher entry');
+// 首页菜单出来以后后台预下载的游戏脚本：runtime.js、jimao/run.js 两个动态块，连同它们静态引用、首页自己没读的块
+// （只进 HTTP 缓存、不解析；省流量模式下不做，见 src/title/boot.js）
+const prefetch=(()=>{
+  const outs=bundled.metafile.outputs, keyOf=(entry)=>Object.keys(outs).find((k)=>outs[k].entryPoint===entry);
+  const closure=(start)=>{const seen=new Set(),todo=[start];while(todo.length){const k=todo.pop();if(!k||seen.has(k)||!outs[k])continue;seen.add(k);for(const i of outs[k].imports||[])if(i.kind==='import-statement')todo.push(i.path);}return seen;};
+  const home=closure(keyOf('src/main.js')),want=new Set();
+  for(const entry of ['src/runtime.js','src/jimao/run.js']){const k=keyOf(entry);if(!k)throw new Error(`预下载：找不到 ${entry} 的块`);for(const x of closure(k))if(!home.has(x))want.add(x);}
+  return [...want].map((k)=>`./${path.relative(output,path.resolve(root,k)).split(path.sep).join('/')}`);
+})();
 const credits = await readFile('assets/models/fps/CREDITS.txt','utf8');
 const escaped = credits.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-const creditsPage='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>云澜汇素材署名</title><style>body{max-width:760px;margin:40px auto;padding:0 22px;background:#101d28;color:#e2eaf0;font:15px/1.8 system-ui}pre{white-space:pre-wrap}a{color:#edc188}</style><h1>云澜汇 · 素材署名</h1><p><a href="./">返回封面</a></p><pre>'+escaped+'</pre><p>园区地面、墙面、外立面的 PBR 贴图来自 Poly Haven 和 ambientCG（均为 CC0），逐项出处见仓库的 assets/textures/manifest.json 和 assets/textures/scans/manifest.json；家具、绿植、摆件等小模型来自 Poly Haven（CC0），逐项出处见 assets/models/props/manifest.json。「HDR 光影」用的天空图也来自 Poly Haven（Kloofendal 48d Partly Cloudy，Greg Zaal、Jarod Guest，CC0），出处见 assets/sky/manifest.json。贴图行人来自 Microsoft Rocketbox（MIT）。用户提供的套房模型由用户授权在本项目使用，不属于 CC0。</p></html>';
+const creditsPage='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>围城 · 素材署名</title><style>body{max-width:760px;margin:40px auto;padding:0 22px;background:#101d28;color:#e2eaf0;font:15px/1.8 system-ui}pre{white-space:pre-wrap}a{color:#edc188}</style><h1>围城 · 素材署名</h1><p><a href="./">返回主菜单</a></p><pre>'+escaped+'</pre><p>园区地面、墙面、外立面的 PBR 贴图来自 Poly Haven 和 ambientCG（均为 CC0），逐项出处见仓库的 assets/textures/manifest.json 和 assets/textures/scans/manifest.json；家具、绿植、摆件等小模型来自 Poly Haven（CC0），逐项出处见 assets/models/props/manifest.json。「HDR 光影」用的天空图也来自 Poly Haven（Kloofendal 48d Partly Cloudy，Greg Zaal、Jarod Guest，CC0），出处见 assets/sky/manifest.json。贴图行人来自 Microsoft Rocketbox（MIT）。用户提供的套房模型由用户授权在本项目使用，不属于 CC0。首页 Logo 和菜单的字体是马善政毛笔楷书（Ma Shan Zheng）和 Oswald，均为 SIL OFL 1.1，许可见 assets/fonts/。</p></html>';
 await writeFile(path.join(output,'credits.html'),creditsPage);
 files.push({path:'credits.html',bytes:Buffer.byteLength(creditsPage),sha256:sha256(creditsPage),kind:'credits'});
 await mkdir(path.join(output,'assets/models/fps'),{recursive:true});
 for(const name of ['CREDITS.txt','UPSTREAM-SMG-LICENSE.md','UPSTREAM-DESERT-EAGLE-LICENSE.md','UPSTREAM-MIT-LICENSE.txt','sources.json']){
   const bytes=await readFile(`assets/models/fps/${name}`),relative=`assets/models/fps/${name}`;
+  await writeFile(path.join(output,relative),bytes);files.push({path:relative,bytes:bytes.length,sha256:sha256(bytes),kind:'license'});
+}
+// 开场字体（SIL OFL 1.1）的许可随字体一起发布
+await mkdir(path.join(output,'assets/fonts'),{recursive:true});
+for(const name of ['OFL-MaShanZheng.txt','OFL-Oswald.txt','SOURCES.txt']){
+  const bytes=await readFile(`assets/fonts/${name}`),relative=`assets/fonts/${name}`;
   await writeFile(path.join(output,relative),bytes);files.push({path:relative,bytes:bytes.length,sha256:sha256(bytes),kind:'license'});
 }
 const license = await readFile('node_modules/three/LICENSE', 'utf8');
@@ -120,7 +143,7 @@ const shell = (await readFile('src/shell.html', 'utf8'))
   .replace(/<link[^>]*https:\/\/fonts\.[^>]+>\s*/g, '')
   .replace(/<script type="importmap">[\s\S]*?<\/script>/, '');
 if (!shell.includes('<!--APP-->')) throw new Error('src/shell.html 缺少 <!--APP--> 占位');
-const body = shell.replace('<!--APP-->', () => `<!-- Three.js license\n${license}\n-->\n<!-- Microsoft Rocketbox avatar license\n${peopleLicense}\n-->\n<script type="module" src="${script}"></script>`);
+const body = shell.replace('<!--APP-->', () => `<!-- Three.js license\n${license}\n-->\n<!-- Microsoft Rocketbox avatar license\n${peopleLicense}\n-->\n<script type="application/json" id="prefetch">${JSON.stringify(prefetch)}</script>\n<script type="module" src="${script}"></script>`);
 // 添加到主屏幕：iOS 独立应用 + 透明状态栏全屏打开；安卓用 manifest（display: fullscreen）和图标
 for (const name of ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest']) {
   await mkdir(path.join(output, 'icons'), { recursive: true });
@@ -130,13 +153,14 @@ for (const name of ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'man
 const html = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n' +
   '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
   '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n' +
-  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="云澜汇">\n' +
-  '<meta name="theme-color" content="#0b1218">\n' +
+  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="围城">\n' +
+  '<meta name="theme-color" content="#070809">\n' +
   '<link rel="manifest" href="./manifest.webmanifest">\n<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">\n' +
   '</head>\n<body>\n' + body + '\n</body>\n</html>\n';
 await writeFile(path.join(output, 'index.html'), html);
 files.push({ path: 'index.html', bytes: Buffer.byteLength(html), sha256: sha256(html), kind: 'document' });
 await writeFile(path.join(output, 'asset-manifest.json'), JSON.stringify({ version: 1, files }, null, 2) + '\n');
+console.log(`预下载（菜单出来以后）：${prefetch.length} 个脚本块，${(prefetch.reduce((s,u)=>s+(files.find((f)=>`./${f.path}`===u)?.bytes||0),0)/1024/1024).toFixed(2)} MiB`);
 console.log(`dist/netlify: ${files.length + 1} files · ${(files.reduce((sum, file) => sum + file.bytes, 0) / 1024 / 1024).toFixed(2)} MiB · lazy launcher ${script}`);
 
 function buildId() {

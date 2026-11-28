@@ -111,7 +111,7 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
         <div data-panel="menu">
           <div class="fps-menu-intro"><div class="fps-eyebrow">OPERATION / PAUSED</div><h2>行动暂停</h2><p>搜索商场终端，获取酒店情报。<br>在车库接应车与屋顶直升机之间选择。<br>点击冲刺开关后推动摇杆，跳跃独立操作。</p></div>
           <div class="fps-menu-actions"><button class="fps-primary" data-action="resume">继续行动</button><button data-action="settings">操作设置</button><button data-action="editor">调整按键</button><button data-action="firemode" class="fps-firemode">SMG：全自动 ⇄ 两连发</button></div>
-          <div class="fps-menu-bottom"><button data-action="restart">重新行动</button><button data-action="exit">返回封面</button></div>
+          <div class="fps-menu-bottom"><button data-action="restart">重新行动</button><button data-action="exit">返回主菜单</button></div>
           <form class="fps-order-form"><label for="fpsOrderInput">给队友下达指令</label><div class="fps-order-row"><input id="fpsOrderInput" autocomplete="off" maxlength="120" placeholder="例如：守住这里"><button type="submit">发送</button></div><div class="fps-order-status">支持跟随、守位与掩护指令</div><button class="fps-credits" type="button" data-action="credits" aria-label="素材署名与许可">素材署名 · DJMaesen / ELIZION</button></form>
         </div>
         <div data-panel="settings" hidden><div class="fps-panel-heading"><h2>操作设置</h2><button data-action="menu">返回</button></div><div class="fps-settings-grid">
@@ -128,7 +128,7 @@ export function createFPSHUD({ onAction = () => {}, onMove = () => {}, onLook, o
           <article><h3>人物与环境</h3><a href="https://github.com/microsoft/Microsoft-Rocketbox" target="_blank" rel="noopener">Microsoft Rocketbox · MIT</a><p>原人物网格与贴图经图集整理、移动端压缩和程序步态适配。</p><a href="https://polyhaven.com/license" target="_blank" rel="noopener">Poly Haven 材质 · CC0</a><p>使用本地保存的 PBR 材质并调整贴图编码与映射。用户提供的酒店套房模型保留原作者权益。</p></article>
           <p>上述枪械与手臂资源保留 CC BY 4.0 许可，与本项目软件代码许可分开。</p><a class="fps-online-credits" href="./credits.html" target="_blank" rel="noopener" hidden>查看完整在线署名</a>
         </div></div>
-        <div data-panel="result" hidden><div class="fps-result-layout"><div><div class="fps-eyebrow fps-result-eyebrow">OPERATION COMPLETE</div><h2 class="fps-result-title">撤离成功</h2><p class="fps-result-subtitle"></p></div><div class="fps-result-stats"></div><div class="fps-result-actions"><button class="fps-primary" data-action="restart">再来一局</button><button data-action="exit">返回封面</button></div></div></div>
+        <div data-panel="result" hidden><div class="fps-result-layout"><div><div class="fps-eyebrow fps-result-eyebrow">OPERATION COMPLETE</div><h2 class="fps-result-title">撤离成功</h2><p class="fps-result-subtitle"></p></div><div class="fps-result-stats"></div><div class="fps-result-actions"><button class="fps-primary" data-action="restart">再来一局</button><button data-action="exit">返回主菜单</button></div></div></div>
       </section>
     </div>`;
   document.head.append(style); document.body.append(root);

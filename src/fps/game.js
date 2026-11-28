@@ -9,6 +9,7 @@ import { createRun, WEAPONS, tickRun, fireWeapon, reloadWeapon, switchWeapon,
 import { createMobility, tickMobility, jump } from './mobility.js';
 import { enemyType, perceiveEnemy, enemyShotChance, damageEnemy } from './enemy-tactics.js';
 import { createElevatorRide, sampleElevatorRide } from '../layout/elevator-ride.js';
+import { returnToTitle } from '../title/route.js';
 import { createFPSHUD } from './hud.js';
 import { createViewmodel } from './viewmodel.js';
 import { createCombatWorld } from './world.js';
@@ -116,7 +117,7 @@ export async function createFPSGame(app,{onProgress=()=>{}}={}) {
  }
  function act(action,payload={}){
    audio.unlock();
-   if(action==='exit'){location.href=location.pathname;return;}
+   if(action==='exit'){returnToTitle(window);return;}
    if(action==='restart'){reset();return;}
    if(action==='pause'){pause(payload.paused??!run.paused);return;}
    if(action==='lift'){startLift(payload.id,payload.floor);return;}

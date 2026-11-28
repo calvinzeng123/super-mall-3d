@@ -1,0 +1,7 @@
+开场（src/title/）用的字体原文件，打包时 scripts/title/bake.mjs 按用到的字子集化成 woff2（assets/title/fonts/）。
+
+MaShanZheng-Regular.ttf  Ma Shan Zheng（马善政毛笔楷书），Copyright 2018 The Ma Shan Zheng Project Authors
+  来源 https://github.com/google/fonts/tree/main/ofl/mashanzheng  许可 SIL Open Font License 1.1（OFL-MaShanZheng.txt）
+Oswald-SemiBold.ttf      Oswald，Copyright 2016 The Oswald Project Authors
+  来源 https://github.com/google/fonts/tree/main/ofl/oswald（可变字体 Oswald[wght].ttf，用 fonttools varLib.instancer 取 wght=600 实例）
+  许可 SIL Open Font License 1.1（OFL-Oswald.txt）

@@ -86,8 +86,8 @@ test('改名：游戏里不再出现「几猫」，标题是「零点突围 ZERO
   assert.ok(!code.includes(escapeLikeEsbuild('几猫')));
   assert.ok(code.includes(escapeLikeEsbuild('零点突围<span class="m-subtitle">ZERO HOUR</span>')));
   for (const [, to] of REBRAND) assert.ok(code.includes(escapeLikeEsbuild(to)), to);
-  // 2026-11-26 封面改成多方案：入口文字在 cover-options.js 的 FPS_ENTRIES 里，各方案的 FPS 框共用
-  assert.match(readFileSync('src/cover-options.js', 'utf8'), /id: 'zero', mode: 'jimao', query: 'siege=0', title: '零点突围 · ZERO HOUR'/);
+  // 2026-11-28 首页换成《围城》主菜单：入口文字在 src/title/route.js 的 ENTRIES 里
+  assert.match(readFileSync('src/title/route.js', 'utf8'), /id: 'zero', label: '零点突围', en: 'ZERO HOUR', mode: 'jimao', query: 'siege=0&autostart=1'/);
 });
 
 test('补丁：每一条都打上了；关卡流程和敌人参数导出来了', async () => {

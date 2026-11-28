@@ -7,13 +7,14 @@
 //   游戏自己改动的全局状态（相机、夜景、漫游模式）在 dispose() 里还原。
 //
 // 两种挂法：
-//   · 独立的小游戏模式（runtime 'arcade'，裁过的地图）：一进来就是游戏列表，「自由逛逛 / 返回封面」。
+//   · 独立的小游戏模式（runtime 'arcade'，裁过的地图）：一进来就是游戏列表，「自由逛逛 / 返回主菜单」。
 //   · 嵌在园区导览里（embedded: true，runtime 'tour'）：平时不出现；工具栏 / 手机底栏的「小游戏」、
 //     地图上各游戏的标记点开列表，选一关就地开始，玩完「回到导览」回到原来的园区画面。
 import { GAMES, gameById, gameSpot } from './registry.js';
 import { loadProgress, saveProgress, recordResult, levelRecord, gameStars, totalStars, isLevelUnlocked, MAX_STARS } from './progress.js';
 import { createInput } from './input.js';
 import { mulberry32, seedOf } from './rng.js';
+import { returnToTitle } from '../title/route.js';
 
 const CSS = `
 .ac-root{--ac-amber:#e8b876;--ac-ink:#edf4f8;--ac-dim:#a9bac6;position:fixed;inset:0;z-index:60;pointer-events:none;color:var(--ac-ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.45}
@@ -132,7 +133,7 @@ export function attachArcade(app, ui, { storage, embedded = false, focus = null 
       : `<div class="ac-hub-in"><header><h1>云澜小游戏</h1><span class="ac-total">${totalStars(progress, playable)} / ${max} ★</span></header>
       <p class="ac-sub">一张地图，几个小游戏。地图是一期商场、酒店、公寓、住宅楼和地铁站。</p>
       <div class="ac-cards">${cards}</div>
-      <footer><button data-hub="free">自由逛逛</button><button data-hub="cover">返回封面</button></footer></div>`;
+      <footer><button data-hub="free">自由逛逛</button><button data-hub="cover">返回主菜单</button></footer></div>`;
     if (focusId) requestAnimationFrame(() => hub.querySelector(`[data-card="${focusId}"]`)?.scrollIntoView?.({ block: 'nearest' }));
   }
 
@@ -226,7 +227,7 @@ export function attachArcade(app, ui, { storage, embedded = false, focus = null 
     if (!b) return;
     if (b.dataset.game) await start(b.dataset.game, b.dataset.level);
     else if (b.dataset.hub === 'free') await free();
-    else if (b.dataset.hub === 'cover') location.reload();
+    else if (b.dataset.hub === 'cover') returnToTitle(window); // 回首页主菜单：不播开场、擦掉 play= 等启动参数
     else if (b === open) { if (app.explore?.active) app.exitExplore(); showHub(); }
     else if (b.dataset.pin) showHub(b.dataset.pin);
     else if (b.dataset.dlg === 'tour') await free();

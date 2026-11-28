@@ -40,13 +40,10 @@ test('闸机 64 条通道：长边栏杆上 8 组，从栏杆外能穿过闸机�
   assert.ok(!reach([-46, 23], [-46, 17]), '南侧栏杆不该能穿过去');
 });
 
-test('封面去掉竞技 FPS 入口，保留园区和零点突围；小游戏嵌进园区导览（2026-11-26）', async () => {
-  const { renderCover } = await import('../src/launcher.js');
-  const { COVER_OPTIONS } = await import('../src/cover-options.js');
-  for (const { id } of COVER_OPTIONS) {
-    const html = renderCover(id);
-    assert.ok(!/data-mode="fps"/.test(html), `${id}：封面不该再有竞技 FPS 按钮`);
-    for (const m of ['tour', 'jimao']) assert.ok(html.includes(`data-mode="${m}"`), `${id}：封面缺 ${m}`);
-    assert.ok(!html.includes('data-mode="arcade"'), `${id}：小游戏在园区导览里，不再单列`);
-  }
+test('首页主菜单没有竞技 FPS 入口，保留园区和零点突围；小游戏收进「更多玩法」、进的是园区导览（2026-11-28）', async () => {
+  const { ENTRIES } = await import('../src/title/route.js');
+  const modes = ENTRIES.flatMap((e) => [e, ...(e.children || [])]).map((e) => e.mode).filter(Boolean);
+  assert.ok(!modes.includes('fps'), '主菜单不该再有竞技 FPS');
+  for (const m of ['tour', 'jimao']) assert.ok(modes.includes(m), `主菜单缺 ${m}`);
+  assert.ok(!modes.includes('arcade'), '小游戏在园区导览里，不再单列');
 });

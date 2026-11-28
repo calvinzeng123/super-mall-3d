@@ -2,6 +2,7 @@ import { buildPlayableLayout, markSiegeRoofs } from './layout/playable.js';
 import { createApp } from './render/app.js';
 import { configureMemory, markBootStart, armBootGuard, BOOT } from './render/device.js';
 import { QUALITY_STORAGE_KEY } from './render/quality.js';
+import { returnToTitle } from './title/route.js';
 
 /** 这个模式上次存的画质档位：漫游 / 小游戏读我们自己的设置，零点突围读原游戏的设置（低 / 中 / 高 / 极致）。没存过是 'auto' */
 export function savedTier(mode,storage=globalThis.localStorage){
@@ -54,8 +55,9 @@ export async function startRuntime(mode,onProgress=()=>{}) {
     const {attachArcade}=await import('./arcade/shell.js');
     if(mode==='arcade')window.__arcade=attachArcade(app,ui);
     else{attachTour(app,ui);window.__arcade=attachArcade(app,ui,{embedded:true,focus:new URLSearchParams(location.search).get('play')});}
-    const back=document.createElement('button');back.id='modeBack';back.textContent='返回封面';
-    back.className='mode-back';back.onclick=()=>location.reload();document.body.append(back);
+    // 「返回主菜单」：记返回标记（回来不播开场）、擦掉启动参数（刷新不会又被送回这个模式），整页换地址回首页
+    const back=document.createElement('button');back.id='modeBack';back.textContent='返回主菜单';
+    back.className='mode-back';back.onclick=()=>returnToTitle(window);document.body.append(back);
   }
   document.getElementById('loading').hidden=true;
   settleBoot(mode,boot,window.__memory.profile,{guard:bootGuard});
