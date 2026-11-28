@@ -179,7 +179,8 @@ test('没有画布（测试环境）：不做贴图、材质是纯色的、磨�
   // 整把枪
   const camera = new THREE.PerspectiveCamera(), gl = createLauncher({}, { camera, layer: 3 });
   let meshes = 0, tris = 0; gl.root.traverse((o) => { assert.equal(o.layers.mask, 1 << 3, '都在枪那一层'); if (o.isMesh) { meshes++; tris += o.geometry.attributes.position.count / 3; } });
-  assert.ok(meshes <= 12, `绘制次数 ${meshes}`); assert.ok(tris < 8800, `三角形 ${tris}`);
+  // 13：换弹时新榴弹的弹头（只在拿在手里、往药室里推的时候显示，平时不画）
+  assert.ok(meshes <= 13, `绘制次数 ${meshes}`); assert.ok(tris < 8800, `三角形 ${tris}`);
   assert.equal(gl.parts.tube.position.y, LAUNCHER_VIEW.hinge[1]); assert.equal(gl.parts.shell.parent, gl.parts.tube); assert.equal(gl.parts.shell.visible, false); assert.ok(gl.parts.body.children.length >= 4);
   const mz = gl.muzzleWorld(); assert.ok(Math.abs(mz.z - LAUNCHER_VIEW.muzzle[2]) < 1e-9);
   assert.doesNotThrow(() => gl.dispose()); assert.equal(gl.root.parent, null);

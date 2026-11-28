@@ -27,19 +27,25 @@ export const RIFLE_VIEW = Object.freeze({
   name: 'M4A1 突击步枪', scale: 1 / 2.36,
   rear: Object.freeze([-0.0019, 0.18, 0.163]), front: Object.freeze([-0.0018, 0.1985, -0.8135]), eyeZ: 0.075,
   muzzle: Object.freeze([-0.002, 0.0493, -1.27]), eject: Object.freeze([0.05, 0.04, -0.1]), trigger: Object.freeze([-0.002, -0.1, 0.053]),
-  arms: Object.freeze({ p: Object.freeze([0, 0, 0]), r: Object.freeze([0, 0, 0]) }),
+  arms: Object.freeze({ p: Object.freeze([0, 0, 0]), r: Object.freeze([0, 0, 0]) }), armScale: 0.76,
+  // 腰射时整把枪再往前、往右下送一点（开镜时归零：开镜对准线不受影响）——原来枪托顶在镜头跟前，护木和左手占了半个屏幕
+  hipShift: Object.freeze([0, 0, -0.05]),
   boltTravel: 0.07, dustCover: 1.9,
   // 表面：原贴图是中灰的钢（金属度 1），在商场灯下像没上漆的铁——颜色乘 tint 压成深灰黑的阳极氧化色。
   // （试过叠一层平铺的颗粒法线：这个模型的 UV 是小零件占大块，照门这种小件上颗粒大得像海绵，去掉了）
   tint: 0.62,
   // 准星尖上的荧光点（模型坐标、半径）：停电的时候开镜也找得到准星
   dot: Object.freeze({ at: Object.freeze([-0.0018, 0.1965, -0.8128]), r: 0.0021, color: 0xb6ff7a }),
-  // 换弹时原游戏把枪往左滚 0.8 弧度、抬高 0.1 米（照它那把短枪调的）；这把弹匣长，弹匣拔出来会落到画面下沿以外——回正一点（reloadRoll）、再抬高一点（reloadLift，米）
-  reloadRoll: 0.15, reloadLift: Object.freeze([0, 0.045, 0]),
+  // 换弹时原游戏把枪往左滚 0.8 弧度、枪口抬 0.5 弧度、整枪抬高 0.1 米（照它那把短枪调的）：这把有长枪托，照搬的话枪托和两只手套全挤到镜头跟前。
+  // 回正一点（reloadRoll），整枪往前送、往下放（reloadLift，米），枪口压一点、枪托往右甩出画面（reloadTurn）——换弹时整把枪和弹匣井都在画面里
+  reloadRoll: 0.15, reloadLift: Object.freeze([0, -0.07, -0.16]),
+  // reloadTurn：换弹时再加的转角（x 枪口压低、y 枪口往右回、z 滚转，弧度，乘换弹权重）——原游戏把枪往左甩 0.62 弧度是照它那把短枪调的，
+  // 这把有长枪托，甩过去枪托和右手就扫到镜头跟前，占满半个屏幕
+  reloadTurn: Object.freeze([-0.28, 0.3, 0.25]),
   // 后照门的孔：模型上孔半径只有 0.003（实物 2.5 毫米，开镜时一个针眼，看不见准星）——加载时把孔扩到 hole 倍，孔外的圈留到 ring 为止不动（「鬼环」照门）
   aperture: Object.freeze({ mesh: 'RearIronSightGeometry_Sight_2', inner: 0.0031, ring: 0.0075, hole: 1.8 }),
-  // 左手的定位点（模型坐标）：guard 护木中段偏下（掌心托着的地方）、mag 弹匣中段、catch 机匣左侧弹匣井上方的空仓挂机释放钮
-  anchors: Object.freeze({ guard: Object.freeze([0, 0.035, -0.7]), mag: Object.freeze([0, -0.2, -0.15]), catch: Object.freeze([-0.04, -0.03, -0.05]) }),
+  // 左手的定位点（模型坐标）：guard 护木后段（靠近机匣，掌心在护木下面托着——不再盖住护木前段和准星座）、mag 弹匣中段、catch 机匣左侧弹匣井上方的空仓挂机释放钮
+  anchors: Object.freeze({ guard: Object.freeze([0, 0, -0.62]), mag: Object.freeze([0, -0.2, -0.15]), catch: Object.freeze([-0.04, -0.03, -0.05]) }),
   // SMG 换弹动画里左手手指的姿势取哪一帧（秒）：hold 托护木（最后一帧）、grab 抓弹匣、pinch 捏拉机柄
   fingers: Object.freeze({ hold: 2.667, grab: 0.42, pinch: 2.04 }),
 });
@@ -53,7 +59,7 @@ export const RIFLE_VIEW = Object.freeze({
  * 打空了不去拉拉机柄：拉机柄在机匣尾巴上、正贴着眼前，手伸过去会挡住大半个画面——按空仓挂机钮（M4 真实的打空换弹也是这么做的）。
  */
 export const HAND_KEYS = Object.freeze({
-  guard: Object.freeze({ at: 'guard', p: [0, -0.028, 0.01], r: [0, 0, 0], fingers: 'hold' }),
+  guard: Object.freeze({ at: 'guard', p: [0, -0.055, 0], r: [0, 0, 0], fingers: 'hold' }),
   near: Object.freeze({ at: 'mag', p: [-0.03, -0.08, -0.03], r: [1.4, 0.8, -0.2], fingers: 'grab' }),
   mag: Object.freeze({ at: 'mag', p: [0, -0.045, 0], r: [1.57, 0.8, -0.2], fingers: 'hold' }),
   pouch: Object.freeze({ at: 'mag', p: [-0.12, -0.32, 0.1], r: [1.3, 0.6, -0.5], fingers: 'hold' }),
@@ -231,8 +237,11 @@ export function createRifleView(rifle, { layer = 0, V = RIFLE_VIEW, KEYS = HAND_
       // 冲锋枪模型枪口朝 +z：转半圈；扳机对到新枪的扳机上，再按 arms 微调
       const turn = new THREE.Quaternion().setFromEuler(new THREE.Euler(V.arms.r[0], Math.PI + V.arms.r[1], V.arms.r[2]));
       const tg = toGun(V.trigger);
-      arms.quaternion.copy(turn);
-      arms.position.copy(tg).sub((trig || new THREE.Vector3()).applyQuaternion(turn)).add(v1.set(...V.arms.p));
+      // armScale：手臂整体缩一点（以扳机为中心缩，右手还扣在扳机上）——冲锋枪那双手套是按它自己那把短枪配的，
+      // 托在这把长枪上、又离镜头这么近，手掌比护木还宽、把枪口一带都挡住（用户：「手太大了，只要体现那个枪就好」）
+      const as = V.armScale ?? 1;
+      arms.quaternion.copy(turn); arms.scale.setScalar(as);
+      arms.position.copy(tg).sub((trig || new THREE.Vector3()).multiplyScalar(as).applyQuaternion(turn)).add(v1.set(...V.arms.p));
       rig.add(arms);
       arms.updateMatrixWorld(true);
       if (bones.L_arm && bones.L_elbow && bones.L_wrist) {
@@ -309,7 +318,9 @@ export function createRifleView(rifle, { layer = 0, V = RIFLE_VIEW, KEYS = HAND_
 
   function update(dt, info = {}) {
     if (!ready) return;
-    const rw = k.reloadW || 0; rig.rotation.set(0, 0, V.reloadRoll * rw); rig.position.set(V.reloadLift[0] * rw, V.reloadLift[1] * rw, V.reloadLift[2] * rw);
+    const rw = k.reloadW || 0, hip = 1 - Math.max(0, Math.min(1, info.ads || 0)), hs = V.hipShift || [0, 0, 0];
+    const rt = V.reloadTurn || [0, 0, 0];
+    rig.rotation.set(rt[0] * rw, rt[1] * rw, V.reloadRoll * rw + rt[2] * rw); rig.position.set(V.reloadLift[0] * rw + hs[0] * hip, V.reloadLift[1] * rw + hs[1] * hip, V.reloadLift[2] * rw + hs[2] * hip);
     // ---- 左手：换弹时间轴，或者托护木；切枪时撤开 ----
     const rl = k.reload, empty = !!rl?.empty, t = rl ? rl.t : 0;
     const keys = empty ? R.empty : R.tactical, at = rl ? keyAt(keys, t) : { a: 'guard', b: 'guard', k: 0 };

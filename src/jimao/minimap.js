@@ -143,6 +143,9 @@ export function createMinimap(G, { nav, layout, ui = null, guide = null, hidden 
       const sweep = ((G.time?.t || 0) % 1.6) / 1.6;
       ctx.strokeStyle = `rgba(255, 179, 71, ${0.55 * (1 - sweep)})`; ctx.lineWidth = 1.5 * px; ctx.beginPath(); ctx.arc(half, half, sweep * half, 0, Math.PI * 2); ctx.stroke();
     }
+    // 视野扇形（朝上，人看的方向）：一眼看出地图是跟着视角转的
+    { const g = ctx.createRadialGradient(half, half, 0, half, half, half * 0.85); g.addColorStop(0, 'rgba(255, 236, 200, 0.28)'); g.addColorStop(1, 'rgba(255, 236, 200, 0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(half, half); ctx.arc(half, half, half * 0.85, -Math.PI / 2 - 0.62, -Math.PI / 2 + 0.62); ctx.closePath(); ctx.fill(); }
     ctx.restore();
     // 目标：在范围里画菱形，出了范围贴在圆边上；在别的楼层带 ▲▼
     const tg = guide?.target;
@@ -157,6 +160,11 @@ export function createMinimap(G, { nav, layout, ui = null, guide = null, hidden 
     // 人（朝上的箭头）、圆边、北
     ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(half, half - 6 * px); ctx.lineTo(half + 4.5 * px, half + 5 * px); ctx.lineTo(half, half + 2.5 * px); ctx.lineTo(half - 4.5 * px, half + 5 * px); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = 'rgba(232, 228, 218, 0.55)'; ctx.lineWidth = 1.5 * px; ctx.beginPath(); ctx.arc(half, half, half - px, 0, Math.PI * 2); ctx.stroke();
+    // 圆边上每 45° 一道刻度（跟着方位转），正上方一个小三角 = 现在朝的方向
+    ctx.strokeStyle = 'rgba(232, 228, 218, 0.45)'; ctx.lineWidth = px; ctx.beginPath();
+    for (let i = 0; i < 8; i++) { const [u, v] = toMap(Math.sin(i * Math.PI / 4), -Math.cos(i * Math.PI / 4), yaw), r0 = half - px * (i % 2 ? 4 : 6), r1 = half - px; ctx.moveTo(half + u * r0, half - v * r0); ctx.lineTo(half + u * r1, half - v * r1); }
+    ctx.stroke();
+    ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.moveTo(half - 4 * px, 0); ctx.lineTo(half + 4 * px, 0); ctx.lineTo(half, 5 * px); ctx.closePath(); ctx.fill();
     const [nu, nv] = toMap(0, -1, yaw); // 北 = −z
     ctx.fillStyle = 'rgba(232, 228, 218, 0.9)'; ctx.font = `600 ${9 * px}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('北', half + nu * (half - 9 * px), half - nv * (half - 9 * px));
