@@ -60,8 +60,8 @@ const LEFT_HAND = { x: 0, y: 0.035, z: -0.014, yaw: 0.15 };
  * 手枪换弹时左手的两个姿势（相对平时托枪的左手位置 leftBase，手枪自己的坐标，米 / 弧度）：
  *   mag：手心托在弹匣底下（弹匣插到底时），之后沿弹匣井方向跟着弹匣走；rack：翻到套筒后部上方捏住锯齿（打空时拉套筒）
  */
-export const PISTOL_HANDS = Object.freeze({ mag: Object.freeze({ p: Object.freeze([0.004, -0.07, 0.022]), r: Object.freeze([0.35, 0, 0]) }),
-  rack: Object.freeze({ p: Object.freeze([0.012, 0.07, 0.07]), r: Object.freeze([-0.2, 0, -1.4]) }) });
+export const PISTOL_HANDS = Object.freeze({ mag: Object.freeze({ p: Object.freeze([0.035, -0.06, 0.03]), r: Object.freeze([0.6, 0, 0.4]) }),
+  rack: Object.freeze({ p: Object.freeze([0, 0.05, 0.08]), r: Object.freeze([0, 0.3, -0.6]) }) });
 /** 弹匣长（米）：手搭的方块枪 */
 const MAG_LEN = Object.freeze({ box: 0.1 });
 /** 右手肘在枪模型里大概的位置（小臂从握把往后、往右下伸到这里） */
@@ -662,8 +662,8 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     const calm = (1 - 0.7 * P.ads) * (1 - P.sprint), bt = S.time, mx = (G.input?.move?.x || 0) * (1 - P.ads);
     P.lean = damp(P.lean, mx, 8, dt);
     pistolRoot.position.lerpVectors(hip, ads, P.ads);
-    pistolRoot.position.x += bobX + P.swayX * 0.5 - P.lean * 0.004 + Math.sin(bt * 0.85 + 1) * 0.0011 * calm;
-    pistolRoot.position.y += bobY - P.swayY * 0.4 - 0.05 * P.sprint - 0.045 * tilt + HOLD.rise * P.flip + Math.sin(bt * 1.7) * 0.0015 * calm;
+    pistolRoot.position.x += bobX + P.swayX * 0.5 - P.lean * 0.004 + Math.sin(bt * 0.85 + 1) * 0.0011 * calm - 0.035 * tilt;
+    pistolRoot.position.y += bobY - P.swayY * 0.4 - 0.05 * P.sprint + 0.04 * tilt + HOLD.rise * P.flip + Math.sin(bt * 1.7) * 0.0015 * calm;
     pistolRoot.position.z += HOLD.back * P.kick + 0.04 * P.sprint;
     e1.set(HOLD.flip * P.flip + 0.5 * P.sprint + 0.26 * tilt - P.swayY * 0.6 + Math.sin(bt * 1.7 + 0.8) * 0.0032 * calm,
       P.swayX * 0.9 + 0.25 * P.sprint + HOLD.yaw * oneHand - 0.12 * P.twist + Math.sin(bt * 0.6) * 0.002 * calm,
@@ -677,7 +677,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
     if (pLeft) {
       const axis = magAxisLocal(v1), len = skin ? PISTOL_SKIN.magDrop * PISTOL_SKIN.scale : MAG_LEN.box;
       if (pose) {
-        const H = PISTOL_HANDS.mag, Rk = PISTOL_HANDS.rack, rk = pose.rack || 0;
+        const PH = G.tune?.pistolHands || PISTOL_HANDS, H = PH.mag, Rk = PH.rack, rk = pose.rack || 0; // G.tune：预览台调参用
         // 托弹匣：手心在弹匣底下，跟着弹匣（handTravel）一起走
         v2.set(...H.p).addScaledVector(axis, -len * pose.handTravel).add(leftBase);
         v3.set(...Rk.p).add(leftBase); v3.z += 0.026 * Math.max(0, (pose.slide || 0) - 1) / 0.12; // 拉套筒：手跟着往后走

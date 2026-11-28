@@ -133,7 +133,7 @@ export function createLauncher(G, { camera, layer = 0, cloneHand = null, V = LAU
       for (let n = Math.max(1, Math.ceil(dt * 240)), h = dt / n, i = 0; i < n; i++) { S.kickV += (-S.kick * 300 - S.kickV * 24) * h; S.kick += S.kickV * h; }
       S.spread = W.spreadHip + (W.spreadAds - W.spreadHip) * S.ads;
       // 枪管撅开、露出弹底；左手离开护木去塞弹
-      const open = pose?.open || 0, hand = pose?.hand || 0, H = LAUNCHER_HANDS;
+      const open = pose?.open || 0, hand = pose?.hand || 0, H = G.tune?.launcherHands || LAUNCHER_HANDS; // G.tune：预览台调参用
       tube.rotation.x = -V.open * open; tube.updateMatrix();
       // 打空的弹壳：撅开时被抽壳钩顶出来、往后翻着掉出画面；之后同一个网格当新的一发：先在左手里（从腰间拿上来），送到药室口后面，再沿枪膛推进去
       const ej = pose && !pose.roundShown && !pose.loaded ? pose.eject : 0, fresh = !!pose?.roundShown;
