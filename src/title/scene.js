@@ -11,6 +11,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createRideVehicle } from '../jimao/ride-vehicles.js';
 import { buildTwinHmg } from '../jimao/twin-hmg.js';
 import { buildParts, RIG } from '../jimao/soldier.js';
@@ -22,20 +23,20 @@ import { TITLE_ZOMBIE_TEX, TITLE_PEOPLE, TITLE_FONTS, TITLE_FONT_FAMILIES } from
 import { TIMELINE, LOGO_AT, MENU_AT, TITLE_START, sampleShot, sceneTime } from './timeline.js';
 import {
   R0, EMP, STR, clamp, sm, lerp, V, rng, softTex, glowSprite, resetShared, loadScan,
-  buildSky, buildCity, buildApartment, buildSandbagWall, buildRain, buildSplashes, buildSparks, buildSmokePlumes, buildDebris, upgradeHeli, buildDownwash, facadeTex,
+  buildSky, buildCity, buildApartment, buildSandbagWall, buildRain, buildSplashes, buildSparks, buildSmokePlumes, buildDebris, upgradeHeli, buildDownwash, facadeTex, grime, boxM, shrinkTex,
 } from './props.js';
 
 // ---------------------------------------------------------------- 画质档
 /**
- * 每档：渲染分辨率上限（dpr）、Bloom 分辨率（bloom，相对画面）、丧尸数（街上 horde / 楼顶 roofZ）、雨丝数、溅水数、
+ * 每档：渲染分辨率上限（dpr；maxMP：画面最多几百万像素，大显示器也不超，显存跟着封顶）、Bloom 分辨率（bloom，相对画面）、丧尸数（街上 horde / 楼顶 roofZ）、雨丝数、溅水数、
  * 景深、湿地面倒影、阴影（贴图边长，0 = 关）、丧尸贴图档（zset）、外围填充楼数。
  * 设计稿：horde 镜头 ≥ 60 只（low 档 30）。
  */
 export const TITLE_TIERS = Object.freeze({
-  low: Object.freeze({ dpr: 1, bloom: 0.35, horde: 30, roofZ: 16, rain: 5000, splash: 400, dof: false, reflect: false, shadow: 0, zset: 'lo', fillers: 90 }),
-  balanced: Object.freeze({ dpr: 1.25, bloom: 0.5, horde: 60, roofZ: 24, rain: 9000, splash: 900, dof: true, reflect: false, shadow: 1024, zset: 'lo', fillers: 130 }),
-  high: Object.freeze({ dpr: 1.6, bloom: 0.5, horde: 72, roofZ: 30, rain: 14000, splash: 1400, dof: true, reflect: true, shadow: 2048, zset: 'hi', fillers: 160 }),
-  ultra: Object.freeze({ dpr: 2, bloom: 0.5, horde: 90, roofZ: 36, rain: 20000, splash: 2000, dof: true, reflect: true, shadow: 2048, zset: 'hi', fillers: 200 }),
+  low: Object.freeze({ dpr: 1, maxMP: 1.0, bloom: 0.35, horde: 30, roofZ: 16, rain: 5000, splash: 400, dof: false, reflect: false, shadow: 0, zset: 'lo', fillers: 90 }),
+  balanced: Object.freeze({ dpr: 1.25, maxMP: 1.6, bloom: 0.5, horde: 60, roofZ: 24, rain: 9000, splash: 900, dof: true, reflect: false, shadow: 1024, zset: 'lo', fillers: 130 }),
+  high: Object.freeze({ dpr: 1.5, maxMP: 1.6, bloom: 0.4, horde: 72, roofZ: 30, rain: 14000, splash: 1400, dof: true, reflect: true, shadow: 1024, zset: 'lo', fillers: 160 }),
+  ultra: Object.freeze({ dpr: 2, maxMP: 3.7, bloom: 0.5, horde: 90, roofZ: 36, rain: 20000, splash: 2000, dof: true, reflect: true, shadow: 2048, zset: 'hi', fillers: 200 }),
 });
 
 /** 'auto' 按设备定档：手机 / 平板（粗指针）内存 ≥ 6 GB 用均衡，否则流畅；电脑用精细。纯函数 */
@@ -192,15 +193,17 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
   step('正在封锁云澜', 0.02);
 
   // ---- 渲染器
+  const REFL = 0.4; // 湿地面倒影的分辨率（相对画面；水面被雨点扰动，用不着全清）
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer, powerPreference: 'high-performance', stencil: false });
   const size = () => [Math.max(1, canvas.clientWidth || innerWidth), Math.max(1, canvas.clientHeight || innerHeight)];
-  const DPR = Math.min(globalThis.devicePixelRatio || 1, dpr ?? Q.dpr);
+  const DPR = (() => { const [w, h] = size(); return Math.min(globalThis.devicePixelRatio || 1, dpr ?? Q.dpr, dpr ? Infinity : Math.max(0.5, Math.sqrt((Q.maxMP * 1e6) / (w * h)))); })();
   renderer.setPixelRatio(DPR);
   { const [w, h] = size(); renderer.setSize(w, h, false); }
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.shadowMap.enabled = Q.shadow > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
-  const FOG = new THREE.Color(0x1c2530);
+  // 雾色和天空地平线的光雾是同一个颜色（线性值），远处的楼、地面融进天里，不留一道硬的地平线
+  const FOG = new THREE.Color().setRGB(0.06, 0.08, 0.112, THREE.LinearSRGBColorSpace);
   scene.fog = new THREE.FogExp2(FOG, 0.006);
   const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 4000);
   scene.add(camera);
@@ -215,7 +218,7 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
   { const sk = buildSky(envScene); sk.uniforms.uLift.value = 1.2;
-    for (const [x, y, z, c, s] of [[-300, 260, -500, 0x9fb4d8, 220], [600, 30, 300, 0xff8a40, 300], [-500, 20, 500, 0xff7030, 260], [0, -200, 0, 0x2a2622, 900]]) {
+    for (const [x, y, z, c, s] of [[-300, 260, -500, 0x9fb4d8, 220], [600, 30, 300, 0x8a5a40, 300], [-500, 20, 500, 0x6a4a3a, 260], [0, -200, 0, 0x2a2622, 900]]) {
       const m = new THREE.Mesh(new THREE.SphereGeometry(s, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(0.6) })); m.position.set(x, y, z); envScene.add(m);
     } }
   const envRT = pmrem.fromScene(envScene, 0.02, 1, 4000);
@@ -230,8 +233,8 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
   const loader = new THREE.TextureLoader();
   let loaded = 0; const tick = (label) => { loaded++; step(label, 0.08 + (loaded / 5) * 0.42); };
   const [concrete, formed, kit, m4gltf] = await Promise.all([
-    loadScan(base, 'garage_concrete', loader).then((s) => { tick('读取贴图'); return s; }),
-    loadScan(base, 'formed_concrete', loader).then((s) => { tick('读取贴图'); return s; }),
+    loadScan(base, 'garage_concrete', loader, tierId === 'ultra' ? 1024 : 512).then((s) => { tick('读取贴图'); return s; }),
+    loadScan(base, 'formed_concrete', loader, tierId === 'ultra' ? 1024 : 512).then((s) => { tick('读取贴图'); return s; }),
     loadZombieKit({ prebaked: TITLE_ZOMBIE_TEX.map((e) => ({ ...e, url: assetURL(base, e.url) })), set: Q.zset, people: TITLE_PEOPLE.map((e) => ({ ...e, url: assetURL(base, e.url) })) }).then((k) => { tick('唤醒尸群'); return k; }).catch((e) => { console.warn('[开场] 丧尸没读到，先不放', e); tick('唤醒尸群'); return null; }),
     new GLTFLoader().loadAsync(`${base}assets/models/fps/m4a1-mobile.glb`).then((g) => { tick('读取模型'); return g; }).catch((e) => { console.warn('[开场] M4A1 没读到', e); tick('读取模型'); return null; }),
     loadTitleFonts(base).then(() => tick('读取字体')).catch((e) => { console.warn('[开场] 字体没读到', e); tick('读取字体'); }),
@@ -249,7 +252,13 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
 
   // 机枪阵地：沙袋墙 + 双联重机枪 + 枪口火光 + 曳光弹 + 信号弹 + 弹药箱
   const bags = buildSandbagWall({ radius: 2.35 }); bags.position.set(EMP.x, R0, EMP.z); roof.add(bags);
-  const hmg = buildTwinHmg(null, { base: 1.15 });
+  // 重机枪的材质：游戏里由材质库给（程序化 PBR）；开场不引入材质库，给一份同名的小材质表：同样的底色 + 三向投影的磨损、划痕、雨水
+  const HMG_LOOK = { gunmetal: [0x3a3d40, 0.85, 0.36], anodized_black: [0x1a1b1d, 0.6, 0.42], polymer_black: [0x1d1e1f, 0.05, 0.75], steel_worn: [0x8a8f93, 0.85, 0.4], brass: [0xc9a04a, 0.9, 0.3], hull_paint: [0x4c5836, 0.25, 0.62] };
+  const hmgMats = { get: (name) => { const L = HMG_LOOK[name]; if (!L) return null;
+    return grime(new THREE.MeshStandardMaterial({ color: L[0], metalness: L[1], roughness: L[2], envMapIntensity: 1.7 }), { scale: 5, amt: name === 'hull_paint' ? 0.6 : 0.4, edge: name === 'hull_paint' ? 0.45 : 0.3, rough: 0.3, wet: 0.5 }); } };
+  const hmg = buildTwinHmg({ mats: hmgMats }, { base: 1.15 });
+  // 开场里不要防盾的两翼：远看是两块印着「12.7」的平板，把枪身挡成一个方盒子；拿掉以后机匣、粗枪管、弹药箱的剪影出来了
+  for (const c of hmg.pitchG.children) if (c.isGroup && Math.abs(Math.abs(c.position.x) - 0.5) < 0.01 && Math.abs(c.position.z - 0.5) < 0.01) c.visible = false;
   hmg.root.position.set(EMP.x, R0 + 1.2, EMP.z); hmg.root.rotation.y = Math.PI; hmg.pitchG.rotation.x = 0.05;
   hmg.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; if (o.material?.envMapIntensity != null) o.material.envMapIntensity = 1.6; } });
   roof.add(hmg.root);
@@ -271,8 +280,8 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
   const muzzleLight = new THREE.PointLight(0xffa040, 0, 22, 1.6); roof.add(muzzleLight);
   const tracerMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.7, 0.6), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false });
   const tracers = Array.from({ length: 10 }, () => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 3.5, 4, 1, true), tracerMat); m.rotation.x = Math.PI / 2; const p = new THREE.Group(); p.add(m); roof.add(p); return p; });
-  // 枪身的轮廓光：从后面打一盏冷光，连射间隙也看得清枪的形状
-  const gunRim = new THREE.SpotLight(0xbcd2ff, 0, 14, 0.5, 0.6, 1.2); gunRim.position.set(EMP.x + 2.5, R0 + 3.5, EMP.z - 4.5); gunRim.target.position.set(EMP.x, R0 + 1.2, EMP.z); roof.add(gunRim); roof.add(gunRim.target);
+  // 枪身的补光：从机位这一侧的斜上方打一盏冷光（镜头看到的是枪的后面和侧面），连射间隙也看得清枪的形状，防盾背面不再是一块黑
+  const gunRim = new THREE.SpotLight(0xbcd2ff, 0, 14, 0.5, 0.6, 1.2); gunRim.position.set(EMP.x + 1.8, R0 + 3.6, EMP.z + 3.4); gunRim.target.position.set(EMP.x, R0 + 1.2, EMP.z); roof.add(gunRim); roof.add(gunRim.target);
   for (const [x, z] of [[EMP.x - 4.8, EMP.z + 3.6], [EMP.x + 3.6, EMP.z - 0.8], [EMP.x + 1, EMP.z - 6.5]]) {
     const f = litFlare(); f.position.set(x, R0, z); f.scale.setScalar(1.4); roof.add(f);
     f.traverse((o) => { if (o.material?.uniforms?.uTime) fireMats.push(o.material); });
@@ -280,11 +289,18 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     const l = new THREE.PointLight(0xff2a14, 2.2, 18, 1.4); l.position.set(x + 0.6, R0 + 0.6, z + 0.1); roof.add(l); flareLights.push(l);
     const gl = glowSprite(0xff3018, 0.9); gl.position.set(x + 0.6, R0 + 0.5, z + 0.14); roof.add(gl);
   }
-  const crateMat = new THREE.MeshStandardMaterial({ color: 0x55603f, roughness: 0.7, metalness: 0.1 });
-  for (const [x, z, ry] of [[EMP.x + 2.2, EMP.z + 2.4, 0.3], [EMP.x + 2.9, EMP.z + 3.1, -0.2], [EMP.x - 2.8, EMP.z + 2.8, 0.1]]) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.45, 0.5), crateMat); m.position.set(x, R0 + 0.225, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; roof.add(m);
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.04, 0.52), new THREE.MeshStandardMaterial({ color: 0x3e4630, roughness: 0.6 })); lid.position.set(x, R0 + 0.47, z); lid.rotation.y = ry; roof.add(lid);
-  }
+  // 弹药箱：箱体（压出加强筋的边）、盖子、两头的提手、喷的白字，堆在沙袋旁边
+  { const crateMat = grime(new THREE.MeshStandardMaterial({ color: 0x55603f, roughness: 0.62, metalness: 0.25, envMapIntensity: 1.3 }), { scale: 3, amt: 0.6, edge: 0.45, panel: 0.2, rough: 0.3, wet: 0.5 });
+    const parts = [];
+    const put = (g, x, y, z, ry) => { g.rotateY(ry); g.translate(x, y, z); for (const n of Object.keys(g.attributes)) if (n !== 'position' && n !== 'normal') g.deleteAttribute(n); parts.push(g.index ? g.toNonIndexed() : g); };
+    for (const [x, z, ry, y0] of [[EMP.x + 2.2, EMP.z + 2.4, 0.3, 0], [EMP.x + 2.9, EMP.z + 3.1, -0.2, 0], [EMP.x + 2.4, EMP.z + 2.6, 0.15, 0.47], [EMP.x - 2.8, EMP.z + 2.8, 0.1, 0]]) {
+      const c = Math.cos(ry), sn = Math.sin(ry), L = (lx, lz) => [x + lx * c + lz * sn, z - lx * sn + lz * c];
+      put(new THREE.BoxGeometry(0.86, 0.4, 0.46), x, R0 + y0 + 0.2, z, ry);
+      put(new THREE.BoxGeometry(0.9, 0.06, 0.5), x, R0 + y0 + 0.43, z, ry);
+      for (const lx of [-0.3, 0, 0.3]) { const [px, pz] = L(lx, 0); put(new THREE.BoxGeometry(0.04, 0.42, 0.49), px, R0 + y0 + 0.21, pz, ry); }
+      for (const s2 of [-1, 1]) { const [px, pz] = L(s2 * 0.45, 0); const h = new THREE.TorusGeometry(0.06, 0.012, 5, 10, Math.PI); h.rotateY(Math.PI / 2); put(h, px, R0 + y0 + 0.3, pz, ry); }
+    }
+    const crates = new THREE.Mesh(mergeGeometries(parts), crateMat); parts.forEach((g) => g.dispose()); crates.castShadow = crates.receiveShadow = true; roof.add(crates); }
   step('布置楼顶', 0.58);
 
   // ---- 三名队员（游戏里的人形和外观）+ M4A1
@@ -312,7 +328,8 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     return { root, spine, aim, head, s, base: { spine: spine.rotation.x, head: head.rotation.x } };
   });
   if (m4gltf) {
-    const m4 = m4gltf.scene; m4.traverse((o) => { if (o.isMesh) { o.castShadow = true; for (const m of [o.material].flat()) { if (m.emissive) m.emissiveIntensity = 0; m.envMapIntensity = 1.5; } } });
+    // M4A1 在画面里只有几十像素长：贴图缩到 512（1024 的三张要 16 MB 显存）
+    const m4 = m4gltf.scene; m4.traverse((o) => { if (o.isMesh) { o.castShadow = true; for (const m of [o.material].flat()) { if (m.emissive) m.emissiveIntensity = 0; m.envMapIntensity = 1.5; if (tierId !== 'ultra') for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']) if (m[k]) shrinkTex(m[k], 512); } } });
     const box = new THREE.Box3().setFromObject(m4), sz = box.getSize(V()), len = Math.max(sz.x, sz.y, sz.z);
     m4.scale.setScalar(0.9 / len); squad[1].aim.add(m4);
   }
@@ -326,10 +343,12 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
   const downwash = buildDownwash(scene, Q.rain > 6000 ? 700 : 350);
   const beam = {};
   { const housing = new THREE.Group(); housing.position.set(0, 0.35, 2.1); heli.body.add(housing); beam.housing = housing;
-    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.18, 20), new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 6, 5.5) })); lens.position.z = 0.01; housing.add(lens);
+    // 灯头只略超 Bloom 门槛：太亮的点被 Bloom 的截断高斯糊成一块方形的白斑；外面的圆光晕交给下面的 glow 精灵
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.18, 24), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.9, 1.9, 1.75) })); lens.position.z = 0.01; housing.add(lens);
     const nav = (c, x, y, z) => { const s = glowSprite(c, 0.7); s.position.set(x, y, z); heli.body.add(s); return s; };
     beam.navR = nav(0xff2010, -1.15, 1.2, 0.6); beam.navG = nav(0x20ff60, 1.15, 1.2, 0.6); beam.strobe = nav(0xffffff, 0, 2.9, -5.5);
-    const sp = new THREE.SpotLight(0xeaf2ff, 0, 0, 0.14, 0.6, 0); if (Q.shadow) { sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.camera.near = 2; sp.shadow.camera.far = 260; sp.shadow.bias = -0.0004; }
+    // 探照灯不投影（再来一张阴影图等于把整个场景多画一遍）；地上的影子由月光那一张给
+    const sp = new THREE.SpotLight(0xeaf2ff, 0, 0, 0.14, 0.6, 0);
     scene.add(sp); scene.add(sp.target); beam.spot = sp;
     const g = new THREE.CylinderGeometry(0.004, Math.tan(0.14) + 0.004, 1, 48, 24, true); g.translate(0, -0.5, 0);
     beam.mat = new THREE.ShaderMaterial({
@@ -381,14 +400,18 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), sg); ground.rotation.x = -Math.PI / 2; ground.position.set(0, 0.02, 20); ground.receiveShadow = true; street.add(ground);
     if (Q.reflect) {
       const [w, h] = size();
-      const refl = new Reflector(new THREE.PlaneGeometry(120, 120), { textureWidth: Math.round(w * DPR * 0.5), textureHeight: Math.round(h * DPR * 0.5), clipBias: 0.003, shader: WET_REFLECT, multisample: 0 });
+      const refl = new Reflector(new THREE.PlaneGeometry(120, 120), { textureWidth: Math.round(w * DPR * REFL), textureHeight: Math.round(h * DPR * REFL), clipBias: 0.003, shader: WET_REFLECT, multisample: 0 });
       refl.material.transparent = true; refl.material.depthWrite = false; refl.material.uniforms.tMask.value = pudMask; refl.material.uniforms.uStr.value = 0.6;
       refl.rotation.x = -Math.PI / 2; refl.position.set(0, 0.04, 20); refl.visible = false; refl.renderOrder = 1; street.add(refl); streetFx.refl = refl;
+      // 倒影只照商场门口这条街：画倒影那一遍把楼顶和远景楼群藏起来（看不到，白白多一倍绘制调用）
+      const rb = refl.onBeforeRender;
+      refl.onBeforeRender = function (...args) { const cv = city.visible, rv = roof.visible; city.visible = roof.visible = false; rb.apply(this, args); city.visible = cv; roof.visible = rv; };
     }
     // 商场正立面：幕墙贴图 + 一大块被砸开、里面亮着应急灯的入口
     const ft = facadeTex(57, 'mall', 512);
-    for (const t of [ft.map, ft.emissiveMap, ft.roughnessMap]) { t.repeat.set(4, 1.6); t.needsUpdate = true; }
-    const facade = new THREE.Mesh(new THREE.PlaneGeometry(124, 30), new THREE.MeshStandardMaterial({ map: ft.map, emissiveMap: ft.emissiveMap, emissive: 0xffffff, emissiveIntensity: 0.55, roughnessMap: ft.roughnessMap, metalness: 0.3, envMapIntensity: 1.4 }));
+    ft.emissiveMap.dispose(); // 商场停电：幕墙后面没有亮灯（之前随机亮的一格像一块悬空的橙色牌子），不要自发光图
+    for (const t of [ft.map, ft.roughnessMap]) { t.repeat.set(4, 1.6); t.needsUpdate = true; }
+    const facade = new THREE.Mesh(new THREE.PlaneGeometry(124, 30), new THREE.MeshStandardMaterial({ map: ft.map, roughnessMap: ft.roughnessMap, metalness: 0.3, envMapIntensity: 1.4 }));
     facade.position.set(0, 15, 40); facade.rotation.y = Math.PI; street.add(facade);
     const mass = new THREE.Mesh(new THREE.BoxGeometry(124, 30, 60), new THREE.MeshStandardMaterial({ color: 0x2a2e32, roughness: 0.9 })); mass.position.set(0, 15, 70.2); street.add(mass);
     const canopy = new THREE.Mesh(new THREE.BoxGeometry(30, 0.6, 3), new THREE.MeshStandardMaterial({ color: 0x3a3f44, roughness: 0.5, metalness: 0.6 })); canopy.position.set(0, 6.2, 37); canopy.castShadow = true; street.add(canopy);
@@ -396,32 +419,50 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     const mulMat = new THREE.MeshStandardMaterial({ color: 0x1c1f22, metalness: 0.7, roughness: 0.4 });
     for (let i = -5; i <= 5; i++) { const mul = new THREE.Mesh(new THREE.BoxGeometry(0.18, 5.8, 0.3), mulMat); mul.position.set(i * 2.2, 2.9, 39.7); mul.rotation.z = i === 2 ? 0.25 : i === -3 ? -0.18 : 0; street.add(mul); }
     const doorLight = new THREE.SpotLight(0x9dffd8, 9, 80, 0.7, 0.9, 1.0); doorLight.position.set(0, 4.5, 42); doorLight.target.position.set(0, 0, 4); street.add(doorLight); street.add(doorLight.target);
-    if (Q.shadow) { doorLight.castShadow = true; doorLight.shadow.mapSize.set(1024, 1024); doorLight.shadow.camera.near = 1; doorLight.shadow.camera.far = 80; }
     // 招牌「云澜」：霓虹管坏了一半，闪
     const sc = document.createElement('canvas'); sc.width = 1024; sc.height = 256; const sx = sc.getContext('2d');
     sx.fillStyle = '#000'; sx.fillRect(0, 0, 1024, 256);
     sx.font = `170px "${TITLE_FONT_FAMILIES.brush}", serif`; sx.textBaseline = 'middle';
     let gx = 90; for (const [ch, on] of [['云', 1], ['澜', 1]]) { sx.shadowColor = 'rgba(255,60,40,0.9)'; sx.shadowBlur = on ? 26 : 0; sx.fillStyle = on ? 'rgb(255,80,60)' : 'rgb(50,14,12)'; sx.fillText(ch, gx, 130); gx += 190; }
-    sx.font = `64px "${TITLE_FONT_FAMILIES.latin}", sans-serif`; sx.shadowBlur = 0; sx.fillStyle = 'rgb(70,26,20)'; sx.fillText('YUNLAN MALL', 560, 132);
+    // 英文一行：霓虹管，第二个 L 坏了（暗着）
+    sx.font = `64px "${TITLE_FONT_FAMILIES.latin}", sans-serif`; let ex = 560;
+    for (const [i, ch] of [...'YUNLAN MALL'].entries()) { const dead = i === 10; sx.shadowColor = 'rgba(255,90,60,0.9)'; sx.shadowBlur = dead ? 0 : 16; sx.fillStyle = dead ? 'rgb(60,20,16)' : 'rgb(255,135,105)'; sx.fillText(ch, ex, 132); ex += sx.measureText(ch).width + 2; }
     const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace;
     streetFx.sign = new THREE.MeshBasicMaterial({ map: st, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(1.8, 1.8, 1.8) });
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(36, 9), streetFx.sign); sign.position.set(0, 9.2, 39.5); sign.rotation.y = Math.PI; street.add(sign);
-    // 翻倒的车：车身、车顶、车轮（圆角），着火
-    const carM = new THREE.MeshStandardMaterial({ color: 0x3a3e42, roughness: 0.35, metalness: 0.7, envMapIntensity: 1.5 }), tyre = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9 });
-    const carShape = (grp, flip) => {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.75, 4.4, 2, 2, 4), carM); b.position.y = flip ? -0.7 : 0.75; grp.add(b);
-      const t = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 2.3), carM); t.position.set(0, flip ? -1.35 : 1.42, -0.2); grp.add(t);
-      const gl = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.45, 2.1), new THREE.MeshStandardMaterial({ color: 0x0c1014, roughness: 0.05, metalness: 0.9, envMapIntensity: 2 })); gl.position.set(0, flip ? -1.35 : 1.45, -0.2); grp.add(gl);
-      for (const [x, z] of [[-0.95, 1.4], [0.95, 1.4], [-0.95, -1.4], [0.95, -1.4]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.25, 18), tyre); w.rotation.z = Math.PI / 2; w.position.set(x, flip ? -0.25 : 0.36, z); grp.add(w); }
+    // 车：侧面轮廓挤出来（引擎盖、风挡斜面、车顶、行李箱，轮拱是圆的）、玻璃车厢、轮胎 + 轮毂；翻倒烧着的那辆漆面烧黑
+    const carM = grime(new THREE.MeshStandardMaterial({ color: 0x3a3e42, roughness: 0.32, metalness: 0.7, envMapIntensity: 1.5 }), { scale: 1.2, amt: 0.45, edge: 0.2, rough: 0.25, wet: 0.5 });
+    const burnt = grime(new THREE.MeshStandardMaterial({ color: 0x2a2522, roughness: 0.75, metalness: 0.4, envMapIntensity: 0.8 }), { scale: 1.5, amt: 1, edge: 0.5, rough: 0.4 });
+    const carGlass = new THREE.MeshStandardMaterial({ color: 0x0c1014, roughness: 0.05, metalness: 0.9, envMapIntensity: 2 });
+    const tyre = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9 }), rim = new THREE.MeshStandardMaterial({ color: 0x8a8e92, roughness: 0.35, metalness: 0.9 });
+    const extr = (pts, width, bevel = 0.06) => { const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+      const g = new THREE.ExtrudeGeometry(sh, { depth: width - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 10 });
+      g.rotateY(-Math.PI / 2); g.translate(width / 2 - bevel, 0, 0); return g; };
+    const bodyShape = () => { const sh = new THREE.Shape(); sh.moveTo(-2.2, 0.32);
+      sh.lineTo(-1.82, 0.32); sh.absarc(-1.38, 0.36, 0.44, Math.PI, 0, true); sh.lineTo(0.98, 0.32); sh.absarc(1.42, 0.36, 0.44, Math.PI, 0, true);
+      sh.lineTo(2.18, 0.32); sh.lineTo(2.28, 0.55); sh.lineTo(2.22, 0.78); sh.lineTo(1.25, 0.9); sh.lineTo(-1.65, 0.97); sh.lineTo(-2.2, 0.9); sh.lineTo(-2.3, 0.62); sh.lineTo(-2.2, 0.32);
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 1.72, bevelEnabled: true, bevelThickness: 0.09, bevelSize: 0.08, bevelSegments: 2, curveSegments: 10 });
+      g.rotateY(-Math.PI / 2); g.translate(0.86, 0, 0); return g; };
+    const carShape = (grp, flip, mat = carM) => {
+      const inner = new THREE.Group(); if (flip) inner.rotation.z = Math.PI; grp.add(inner);
+      inner.add(new THREE.Mesh(bodyShape(), mat));
+      inner.add(new THREE.Mesh(extr([[-1.6, 0.92], [1.08, 0.9], [0.32, 1.38], [-1.18, 1.41], [-1.75, 0.98]], 1.56, 0.04), carGlass));
+      inner.add(new THREE.Mesh(extr([[-1.22, 1.38], [0.36, 1.36], [0.3, 1.45], [-1.16, 1.47]], 1.62, 0.03), mat));
+      const wg = [], rg = [];
+      for (const [x, z] of [[-0.86, 1.42], [0.86, 1.42], [-0.86, -1.38], [0.86, -1.38]]) {
+        const w = new THREE.CylinderGeometry(0.36, 0.36, 0.26, 20); w.rotateZ(Math.PI / 2); w.translate(x, 0.36, z); wg.push(w);
+        const r2 = new THREE.CylinderGeometry(0.22, 0.22, 0.27, 12); r2.rotateZ(Math.PI / 2); r2.translate(x * 1.01, 0.36, z); rg.push(r2);
+      }
+      inner.add(new THREE.Mesh(mergeGeometries(wg), tyre)); inner.add(new THREE.Mesh(mergeGeometries(rg), rim)); wg.concat(rg).forEach((g) => g.dispose());
       grp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     };
-    const car = new THREE.Group(); car.position.set(9, 0, 22); car.rotation.set(0, 0.7, 2.6); carShape(car, true); street.add(car);
+    const car = new THREE.Group(); car.position.set(9, 0, 22); car.rotation.set(0, 0.7, 2.6); carShape(car, true, burnt); street.add(car);
     const fire = new THREE.Group(); fire.position.set(9, 0.6, 22); fire.scale.setScalar(2.6); buildFire(fire); street.add(fire);
     fire.traverse((o) => { if (o.material?.uniforms?.uTime) fireMats.push(o.material); });
     const fl = new THREE.PointLight(0xff7a2a, 9, 45, 1.4); fl.position.set(9, 2.5, 22); street.add(fl); flareLights.push(fl);
     const pc = new THREE.Group(); pc.position.set(-6, 0, 13); pc.rotation.y = -0.7; carShape(pc, false); street.add(pc);
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.25), new THREE.MeshStandardMaterial({ color: 0x222 })); bar.position.set(0, 1.78, -0.2); pc.add(bar);
-    const barR = glowSprite(0xff1508, 1.4), barB = glowSprite(0x1530ff, 1.4); barR.position.set(-0.4, 1.9, -0.2); barB.position.set(0.4, 1.9, -0.2); pc.add(barR); pc.add(barB);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.25), new THREE.MeshStandardMaterial({ color: 0x222 })); bar.position.set(0, 1.53, -0.4); pc.add(bar);
+    const barR = glowSprite(0xff1508, 1.4), barB = glowSprite(0x1530ff, 1.4); barR.position.set(-0.4, 1.62, -0.4); barB.position.set(0.4, 1.62, -0.4); pc.add(barR); pc.add(barB);
     const bs = new THREE.SpotLight(0xff1a0a, 14, 60, 0.5, 0.6, 1.0); bs.position.set(0, 2, 0); pc.add(bs); pc.add(bs.target);
     const pl = new THREE.PointLight(0xff1a0a, 4, 25, 1.2); pl.position.set(0, 2.2, 0); pc.add(pl);
     Object.assign(streetFx, { barR, barB, spot: bs, pl, pc });
@@ -431,7 +472,9 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     const barrierMat = new THREE.MeshStandardMaterial({ color: 0x8c8a82, roughness: 0.8 });
     for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 0.5), barrierMat); b.position.set(-14 + i * 2.3, 0.4, 6 + (i % 2) * 0.4); b.rotation.y = (i - 2) * 0.12; b.castShadow = b.receiveShadow = true; street.add(b); }
     const fogM = new THREE.MeshBasicMaterial({ map: softTex(), color: new THREE.Color(0.12, 0.16, 0.18), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false });
-    const fr = rng(19); for (let i = 0; i < 16; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(30, 6), fogM); f.position.set((fr() - 0.5) * 50, 1.2 + fr(), 40 - i * 4); street.add(f); }
+    // 贴地的雾片：16 片合成一个网格（一次绘制）
+    { const fr = rng(19), list = []; for (let i = 0; i < 16; i++) { const g = new THREE.PlaneGeometry(30, 6); g.translate((fr() - 0.5) * 50, 1.2 + fr(), 40 - i * 4); list.push(g); }
+      const f = new THREE.Mesh(mergeGeometries(list), fogM); list.forEach((g) => g.dispose()); f.frustumCulled = false; street.add(f); }
     streetFx.debris = buildDebris(street, 36);
   }
   step('召集尸群', 0.66);
@@ -496,7 +539,8 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     G.uAspect.value = w / h; G.uRes.value.set(w * DPR, h * DPR);
     rain.uniforms.uRes.value.set(w * DPR, h * DPR); rain.uniforms.uMinPx.value = 1.1 * DPR;
     splash.uniforms.uRes.value = h * DPR; sparks.uniforms.uRes.value = h * DPR; downwash.uniforms.uRes.value = h * DPR;
-    if (streetFx.refl) streetFx.refl.getRenderTarget().setSize(Math.round(w * DPR * 0.5), Math.round(h * DPR * 0.5));
+    cityFx.lampU.uRes.value = h * DPR; cityFx.glowU.uRes.value = h * DPR;
+    if (streetFx.refl) streetFx.refl.getRenderTarget().setSize(Math.round(w * DPR * REFL), Math.round(h * DPR * REFL));
   };
   setSizes(w0, h0);
   step('编排镜头', 0.7);
@@ -526,8 +570,9 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     const toCam = tmp2.copy(camera.position).sub(o), dc = toCam.length(); toCam.normalize();
     const k = Math.pow(Math.max(0, dir.dot(toCam)), 28) * intensity, lensP = o.clone().addScaledVector(toCam, 0.4), bs = dc * 0.02;
     beam.glow.position.copy(lensP); beam.streak.position.copy(lensP);
-    beam.glow.scale.setScalar(bs * (0.5 + 9 * k)); beam.glow.material.color.setScalar(0.25 + 2.2 * k);
-    beam.streak.scale.set(bs * (3 + 70 * k), bs * (0.2 + 2.5 * k), 1); beam.streak.material.color.setScalar(0.15 + 1.6 * k);
+    // 正对镜头时的光晕收着：只比灯头大一圈，不把整架直升机糊成一个白盘
+    beam.glow.scale.setScalar(bs * (0.7 + 3.6 * k)); beam.glow.material.color.setScalar(0.45 + 1.2 * k);
+    beam.streak.scale.set(bs * (3 + 40 * k), bs * (0.15 + 1.2 * k), 1); beam.streak.material.color.setScalar(0.1 + 0.8 * k);
     beam.strobe.visible = (T * 1.3) % 1 < 0.08;
     rain.uniforms.uBeamO.value.copy(o); rain.uniforms.uBeamD.value.copy(dir); rain.uniforms.uBeamI.value = intensity;
     downwash.uniforms.uC.value.copy(pos); downwash.uniforms.uY.value = groundY; downwash.uniforms.uT.value = T;
@@ -553,7 +598,7 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
   // 每帧的「默认值」：各镜头只改自己要的
   const reset = () => {
     G.uBars.value = 1; G.uFade.value = 0; G.uWhite.value = 0; G.uRed.value = 0; G.uExp.value = 1; G.uLift.value = 1; G.uDrops.value = 0; G.uVig.value = 1;
-    scene.fog.density = 0.006; scene.fog.color.copy(FOG);
+    scene.fog.density = 0.006; scene.fog.color.copy(FOG); renderer.shadowMap.autoUpdate = true;
     rain.uniforms.uAmt.value = 1; rain.uniforms.uBox.value = 40; rain.uniforms.uPt.value.set(0, -999, 0); rain.uniforms.uAmb.value = 0.45;
     splash.points.visible = false; sparks.points.visible = false; sparks.uniforms.uOn.value = 0;
     downwash.uniforms.uAmt.value = 0;
@@ -575,9 +620,8 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     fireStep(fireMats, T);
     reset();
     poseZombies(T, T >= TITLE_START);
-    for (const [i, s] of cityFx.beacons.entries()) s.visible = Math.sin(T * 2.2 + i * 1.7) > -0.3;
     for (const [i, s] of apt.beacons.entries()) s.visible = Math.sin(T * 2.6 + i) > -0.2;
-    for (const [i, s] of cityFx.fires.entries()) s.material.opacity = 0.75 + 0.25 * Math.sin(T * (5 + (i % 3)) + i);
+    cityFx.glowU.uT.value = T;
     for (const [i, l] of flareLights.entries()) l.intensity = (i < 3 ? 2.2 : 9) * (0.82 + 0.18 * Math.sin(T * 13 + i * 2.1) * Math.sin(T * 7.3 + i));
     { const a = T * 9, red = Math.sin(a) > 0; streetFx.barR.material.opacity = 0.5 + 0.5 * Math.max(0, Math.sin(a)); streetFx.barB.material.opacity = 0.5 + 0.5 * Math.max(0, -Math.sin(a));
       streetFx.spot.target.position.set(Math.sin(a) * 10, 0, Math.cos(a) * 10); streetFx.spot.color.setHex(red ? 0xff1a0a : 0x1a2aff); streetFx.pl.color.copy(streetFx.spot.color); }
@@ -590,10 +634,11 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
       // 高空俯冲：穿过雨幕，压向停电的城市；公寓楼在画面中间，楼顶一道探照灯
       const e = sm(0, 1, u);
       look(V(lerp(-200, -150, e), lerp(150, 112, e), lerp(215, 165, e)), V(lerp(20, 12, e), lerp(98, 86, e), lerp(-10, -6, e)), 34, 0.02 * Math.sin(T * 0.4) - 0.025, 0.25, T);
-      setHeli(V(lerp(-40, -30, u), R0 + 42, lerp(40, 30, u)), -2.3 + u * 0.3, 0.18, 0.06, V(lerp(-6, 4, u) + Math.sin(T * 0.9) * 3, R0, lerp(4, 14, u)), T, 3.0);
-      scene.fog.density = 0.0032; rain.uniforms.uBox.value = 60; rain.uniforms.uAmb.value = 0.6;
+      setHeli(V(lerp(-40, -30, u), R0 + 42, lerp(40, 30, u)), -2.3 + u * 0.3, 0.18, 0.06, V(lerp(-6, 4, u) + Math.sin(T * 0.9) * 3, R0, lerp(4, 14, u)), T, 1.9);
+      beam.spot.intensity *= 0.5; // 楼顶上的尸群只被光柱擦到，不是一把白点
+      scene.fog.density = 0.0019; rain.uniforms.uBox.value = 60; rain.uniforms.uAmb.value = 0.6;
       lightning = Math.max(0, 1 - Math.abs(T - 2.2) * 6) + Math.max(0, 1 - Math.abs(T - 2.6) * 10) * 0.7;
-      G.uExp.value = 1.95; bloom.threshold = 0.85; bloom.strength = 0.75;
+      G.uExp.value = 1.45; bloom.threshold = 0.85; bloom.strength = 0.75;
     } else if (name === 'horde') {
       // 商场门口贴地低机位：尸潮从亮着应急灯的破门里涌向镜头，红蓝警灯、烧着的车、湿地面倒影
       const e = sm(0, 1, u);
@@ -602,20 +647,23 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
       scene.fog.density = 0.011; rain.uniforms.uPt.value.copy(streetFx.pc.getWorldPosition(V())).setY(2); rain.uniforms.uBox.value = 26;
       splash.points.visible = true; splash.uniforms.uY.value = 0; splash.uniforms.uBox.value = 16; splash.uniforms.uCam.value.copy(camera.position);
       if (streetFx.refl) streetFx.refl.visible = true;
+      renderer.shadowMap.autoUpdate = false; // 月光阴影图只罩着公寓楼顶，这一镜用不上，不重画
       G.uRed.value = 0.08; G.uExp.value = Q.reflect ? 1.0 : 1.3; G.uDrops.value = 0.2; // 没有倒影的档地面暗一截，曝光补回来
     } else if (name === 'roof') {
       // 楼顶死守：从机枪手肩后看出去，双联重机枪对着尸群打；前景沙袋虚掉，尸群被直升机探照灯逆光照出轮廓
       const e = sm(0, 1, u), Gn = GUNNER;
+      // 机枪手右肩后方：枪在左前景（防盾拿掉了，看到的是粗枪管、制退器的侧后剪影 + 枪口火光），尸群在画面中间
       const from = Gn.p.clone().addScaledVector(Gn.back, lerp(1.9, 1.6, e)).addScaledVector(Gn.right, lerp(1.5, 1.3, e)).setY(R0 + lerp(1.75, 1.65, e));
       const to = Gn.p.clone().addScaledVector(Gn.f, 14).addScaledVector(Gn.right, -1.2).setY(R0 + 1.1);
       look(from, to, 34, -0.03, 0.035, T);
       const tg = Gn.p.clone().addScaledVector(Gn.f, 19).setY(R0), hp = Gn.p.clone().addScaledVector(Gn.f, 42).addScaledVector(Gn.right, 6).setY(R0 + 14);
       setHeli(hp, Math.atan2(tg.x - hp.x, tg.z - hp.z), 0.3, 0.05, tg.add(V(Math.sin(T * 0.8) * 1.5, 0, 0)), T, 1.6);
       fireHmg(T, true); sparks.points.visible = true;
-      gunRim.intensity = 30;
+      gunRim.intensity = 14;
       scene.fog.density = 0.01; rain.uniforms.uBox.value = 18;
       splash.points.visible = true; splash.uniforms.uY.value = R0; splash.uniforms.uBox.value = 12; splash.uniforms.uCam.value.copy(camera.position);
-      dof.enabled = Q.dof; dof.uniforms.uFocus.value = lerp(9, 11, e); dof.uniforms.uAperture.value = 9; dof.uniforms.uMaxR.value = 7 * DPR;
+      // 对焦在尸群上，前景的枪和沙袋虚一点（仍看得出形状），镜头里慢慢往远处推一点焦
+      dof.enabled = Q.dof; dof.uniforms.uFocus.value = lerp(9, 11, e); dof.uniforms.uAperture.value = 4; dof.uniforms.uMaxR.value = 5 * DPR;
       // 枪口火光：bloom 门槛抬高、强度压低，只留一圈光晕
       bloom.threshold = 1.1; bloom.strength = 0.45; bloom.radius = 0.4;
       G.uExp.value = 1.0; G.uDrops.value = 0.35;
@@ -625,9 +673,9 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
       look(V(12.5, R0 + 0.95, 27.5), V(24, R0 + lerp(3, 6.5, e), 32), 36, -0.03, 0.03, T);
       const rise = sm(0, 0.75, u);
       const hp = V(24.5, R0 + lerp(-1.5, 5.5, rise), 34);
-      const into = sm(0.5, 0.82, u);
+      const into = sm(0.68, 0.9, u); // 光柱最后一秒多才扫进镜头（前面看得清直升机的侧影），接白闪
       const tgt = V(lerp(16, camera.position.x, into), lerp(R0 - 12, camera.position.y, into), lerp(26, camera.position.z, into)).add(V(0, 0.6 * into, -1.2 * into));
-      setHeli(hp, -Math.PI / 2 - 0.55, -0.05 + 0.12 * (1 - e), 0.12, tgt, T, 1.6);
+      setHeli(hp, -Math.PI / 2 - 1.05, -0.05 + 0.12 * (1 - e), 0.14, tgt, T, 1.6); // 侧着 3/4：机头、短翼、尾梁的剪影都在
       downwash.uniforms.uAmt.value = 1;
       scene.fog.density = 0.008; rain.uniforms.uBox.value = 22;
       splash.points.visible = true; splash.uniforms.uY.value = R0; splash.uniforms.uBox.value = 12; splash.uniforms.uCam.value.copy(camera.position);
@@ -643,16 +691,19 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
       look(from, to, P ? 50 : 40, 0, 0.02, T);
       const hp = P ? V(EMP.x - 2 + Math.sin(k * 0.3) * 0.8, R0 + 9.5, EMP.z + 20) : V(EMP.x - 4 + Math.sin(k * 0.3) * 0.8, R0 + 10.5 + Math.sin(k * 0.5) * 0.3, EMP.z + 19);
       setHeli(hp, Math.PI + 0.35, 0.2, 0.06, V(EMP.x - 0.5 + Math.sin(k * 0.35) * 1.5, R0, EMP.z + 6.5 + Math.cos(k * 0.27)), T, 1.5);
-      downwash.uniforms.uAmt.value = 0.6;
+      downwash.uniforms.uAmt.value = 0.18;
       fireHmg(T, false); sparks.points.visible = false;
-      gunRim.intensity = 18;
+      gunRim.intensity = 10;
       scene.fog.density = 0.01; rain.uniforms.uBox.value = 26;
       splash.points.visible = true; splash.uniforms.uY.value = R0; splash.uniforms.uBox.value = 12; splash.uniforms.uCam.value.copy(camera.position);
       G.uExp.value = 1.05; G.uDrops.value = 0.15;
+      // 景深：对焦在三个人身上，前景沙袋、机枪虚掉一点，背后的城市和直升机略软
+      dof.enabled = Q.dof; dof.uniforms.uFocus.value = P ? 9 : 7; dof.uniforms.uAperture.value = 2.4; dof.uniforms.uMaxR.value = 5 * DPR;
     }
     rain.uniforms.uCam.value.copy(camera.position);
     if (streetFx.refl) streetFx.refl.material.uniforms.uT.value = T;
     sky.uniforms.uFlash.value = lightning;
+    cityFx.lampU.uFog.value = cityFx.glowU.uFog.value = scene.fog.density;
     moon.intensity += lightning * 6; hemi.intensity += lightning * 1.5;
   };
 
@@ -692,18 +743,23 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
   addEventListener('resize', onResize);
 
   // 显存估计：贴图（含 mipmap）+ 几何 + 渲染目标
-  const gpuMB = () => {
-    let bytes = 0; const seen = new Set();
-    const tex = (x) => { if (!x || seen.has(x)) return; seen.add(x); const im = x.image; const w = im?.width || 0, h = im?.height || 0; bytes += w * h * 4 * (x.generateMipmaps !== false ? 1.33 : 1); };
+  const MB = (b) => +(b / 1048576).toFixed(1);
+  const gpuParts = () => {
+    let tx = 0, geo = 0; const seen = new Set();
+    const tex = (x) => { if (!x || seen.has(x.source)) return; seen.add(x.source); const im = x.image; const w = im?.width || 0, h = im?.height || 0; tx += w * h * 4 * (x.generateMipmaps !== false ? 1.33 : 1); };
     scene.traverse((o) => {
-      if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); for (const a of Object.values(o.geometry.attributes)) bytes += a.array?.byteLength || 0; }
+      if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); for (const a of Object.values(o.geometry.attributes)) geo += a.array?.byteLength || 0; geo += o.geometry.index?.array?.byteLength || 0; }
       for (const m of [o.material].flat()) { if (!m) continue; for (const v of Object.values(m)) if (v?.isTexture) tex(v); if (m.uniforms) for (const u of Object.values(m.uniforms)) if (u.value?.isTexture) tex(u.value); }
     });
     const px = renderer.domElement.width * renderer.domElement.height;
-    bytes += px * 8 * 2 + px * 4 + px * 8 * Q.bloom * 1.5; // 两张半精度 + 深度 + bloom 链
-    if (Q.shadow) bytes += Q.shadow * Q.shadow * 4 * 2;
-    return +(bytes / 1048576).toFixed(1);
+    let rts = px * 8 * 2 + px * 4 * 2 + px * Q.bloom * Q.bloom * 8 * 3.7; // 两张半精度 + 两张深度 + Bloom（亮部一张 + 5 级 × 横竖两张，逐级减半）
+    if (streetFx.refl) rts += px * REFL * REFL * 8; // 湿地面倒影（颜色 + 深度）
+    rts += envRT.width * envRT.height * 8; // 环境反射（PMREM，一张 768×1024 半精度图集）
+    if (Q.shadow) rts += Q.shadow * Q.shadow * 4 * 2;
+    return { textures: MB(tx), geometry: MB(geo), targets: MB(rts), total: MB(tx + geo + rts) };
   };
+  /** 显存估计：贴图（含 mipmap）+ 几何 + 渲染目标（后期链、倒影、阴影、环境反射） */
+  const gpuMB = () => gpuParts().total;
   step('就绪', 1);
 
   return {
@@ -730,7 +786,7 @@ export async function createTitleScene(canvas, { tier = 'auto', onProgress = () 
     on(evt, fn) { listeners[evt]?.push(fn); return () => { const l = listeners[evt]; const i = l ? l.indexOf(fn) : -1; if (i >= 0) l.splice(i, 1); }; },
     /** 现在的进度：t、哪个镜头、Logo / 菜单出现到几成（0..1，界面按这个做渐变） */
     ui() { const a = at(version); return { t, version, shot: lastShot, logo: clamp((t - a.logo) / 1.2), menu: clamp((t - a.menu) / 0.8) }; },
-    stats() { return { frameMs: +frameMs.toFixed(2), gpuMB: gpuMB(), tier: tierId, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }; },
+    stats() { return { frameMs: +frameMs.toFixed(2), gpuMB: gpuMB(), gpu: gpuParts(), tier: tierId, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }; },
     resize: onResize,
     /** 彻底释放：停循环、几何 / 材质 / 贴图 / 渲染目标全 dispose、丢掉 GL 上下文 */
     dispose() {
