@@ -1269,7 +1269,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       if (snap || !first) return;
       const pos = b.getWorldPosition(new THREE.Vector3()).setY(at.y + 1.2), me = G.player?.pos;
       if (me && me.distanceTo(pos) < 40) G.audio?.play?.(g.type === 'fuse' ? 'land' : g.type === 'fire' ? 'shell_bounce' : 'reload_bolt', { pos, gain: 0.85, pitch: g.type === 'fuse' ? 0.55 : 0.7 });
-      G.hud?.radio?.(GATE_DONE[g.type], 2.6);
+      say(GATE_DONE[g.type], 2.8); // 马上在屏幕中间说（无线电那一行要排队，前面一长段没念完就晚好几秒）
     };
     if (g.type === 'fuse') b.userData.onTick = (dt) => { // 栅门往上卷的那一会儿，从楼梯口哗啦啦响
       const me = G.player?.pos; if (!me || !b.userData.clearT || b.userData.isOpen() || b.userData.snapped) return;
@@ -2318,7 +2318,7 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
     const st = S.plan.stages[i];
     if (st.kind === 'pistol') { G.weapon?.unlock?.('pistol'); say('拿到手枪', 2.6); }
     // 分阶段的卷帘：这一步做完，对应的那一道卷上去（卷到顶才让人过）；开了在屏幕上说一声
-    for (const q of steps) if (q.until === st.id) q.bars.forEach((b, i) => b.open(i ? null : () => G.hud?.radio?.(b.kind === 'fire' ? '防火卷帘升起来了——扶梯口通了。' : '卷帘已打开。', 2.6)));
+    for (const q of steps) if (q.until === st.id) q.bars.forEach((b, i) => b.open(i ? null : () => say(b.kind === 'fire' ? '防火卷帘升起来了——扶梯口通了。' : '卷帘已打开。', 2.8))); // 卷到顶那一刻马上在屏幕中间说（不排在无线电后面）
     if (st.kind === 'shutter') { // 门外拍门的那几只进来了
       // 门外拍门的：站在大门外头那一段（门脸那一面、门洞两边几米内）真站得住的地方——影城大门外只有一条窄走道，再往外是中庭的洞口，以前按门脸往外 2.5 米摆，摆进洞里掉到一层去了
       const sh = S.plan.mall.shop, f = sh.fronts[0];

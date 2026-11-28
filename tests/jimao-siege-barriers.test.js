@@ -210,7 +210,7 @@ for (const seed of [1, 2, 3]) {
       for (const id of g.runs) assert.equal(through(climb(runs.find((q) => q.id === id)), runs.find((q) => q.id === id)), false, `${g.type}：动画还没走完，照样挡着`);
       run(GATE_OPEN[g.type] + 0.3);
       for (const id of g.runs) { const r = runs.find((q) => q.id === id); assert.ok(through(climb(r), r), `${g.type} · ${id}：解开了，上得去`); }
-      assert.ok(msgs.includes('R:' + GATE_DONE[g.type]), `解开了屏幕上说「${GATE_DONE[g.type]}」`);
+      assert.ok(msgs.includes(GATE_DONE[g.type]), `解开了屏幕上说「${GATE_DONE[g.type]}」`);
     }
   });
 }
