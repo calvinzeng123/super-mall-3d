@@ -14,7 +14,7 @@ import { createSiege, siegePlan as siegePlanFn, GATE_OPEN, GATE_DONE } from '../
 import { addZombies, ZOMBIE } from '../src/jimao/zombie.js';
 import { BARRIER, barrierWall, barrierLook, mouthSegment, wallKey, releaseBarrierWalls } from '../src/jimao/siege-barriers.js';
 import { FPS_MISSION } from '../src/fps/mission-layout.js';
-import { cinemaPlan, CINEMA } from '../src/layout/cinema.js';
+import { cinemaPlan, cinemaFrame } from '../src/layout/cinema.js';
 import { toW } from '../src/layout/geom.js';
 import { findPath } from '../src/fps/pathfinding.js';
 
@@ -54,6 +54,8 @@ function walk(floor, x, z, dx, dz, dist = 2.6) {
   for (let i = 0; i < n; i++) s = step(nav, s, (dx / l) * 0.08, (dz / l) * 0.08, 1 / 30);
   return s;
 }
+/** 影厅的过道（cinema.js）：一段两头都在这层的坡道，走上去不算出了店 */
+const aisle = (s) => { const sl = nav.slopeById.get(s.slope.id); return !!sl && sl.low === sl.high; };
 /** 一家店的每段墙都扫一遍：从店里离墙 1 米的地方往外走。返回走出去了的那些点（{ edge, x, z }：墙上的位置） */
 function sweepShop(floor, poly) {
   const out = [], n = poly.length, cx = poly.reduce((a, p) => a + p[0], 0) / n, cz = poly.reduce((a, p) => a + p[1], 0) / n;
@@ -62,7 +64,7 @@ function sweepShop(floor, poly) {
     let nx = -(b[1] - a[1]) / len, nz = (b[0] - a[0]) / len; if ((cx - (a[0] + b[0]) / 2) * nx + (cz - (a[1] + b[1]) / 2) * nz < 0) { nx = -nx; nz = -nz; }
     for (let t = 0.35; t < len - 0.35; t += 0.25) {
       const px = a[0] + (b[0] - a[0]) * t / len, pz = a[1] + (b[1] - a[1]) * t / len, s = walk(floor, px + nx, pz + nz, -nx, -nz);
-      if (s && (s.floor !== floor || s.slope || !pointInPoly([s.x, s.z], poly))) out.push({ edge: i, x: px, z: pz });
+      if (s && (s.floor !== floor || (s.slope && !aisle(s)) || !pointInPoly([s.x, s.z], poly))) out.push({ edge: i, x: px, z: pz });
     }
   }
   return out;
@@ -101,28 +103,26 @@ test('卷帘墙：关着挡路、挡子弹；开着不挡；同一段墙按位�
   assert.equal(ms.floor, 'P1-3F'); assert.ok(Math.abs(Math.hypot(ms.x1 - ms.x0, ms.z1 - ms.z0) - 2 * (sl.hw + BARRIER.mouth.side)) < 1e-6);
 });
 
-test('影城的放映厅：厅墙不挡门脸、留出大堂；厅墙、座椅、卖品台进了导航（看到的墙就是挡人的墙），厅只从门洞进出；开局点、手摇柄、卷帘开关之间都走得通', () => {
-  const lv = lvOf('P1-3F'), u = lv.units.find((q) => q.brand?.name === '云澜影城'), C = cinemaPlan(u), F = nav.floors.get(lv.id);
-  assert.ok(C.halls.length >= 1 && C.walls.length >= 4 && C.rows.length > 4 && C.counter, '有厅、有墙、有座椅、有卖品台');
-  // 厅墙离每一面门脸都至少一条大堂宽（以前厅墙就贴在门脸里面 0.4 米，门洞被墙堵着）
+test('影城（cinema.js）：厅墙、隔墙不挡门脸上的门洞；墙、柜台、长椅、看台进了导航；每个厅从门洞走得到开局点；开局点 → 手摇柄 → 卷帘开关走得通', () => {
+  const lv = lvOf('P1-3F'), u = lv.units.find((q) => q.brand?.name === '云澜影城'), C = cinemaPlan(u);
+  assert.ok(C.halls.length >= 1 && C.walls.length >= 8 && C.low.length > 8 && C.solids.length > 10 && C.foyer.ticket && C.foyer.concession, '有厅、有墙、有座椅、有柜台');
+  // 墙离门脸上真开着的门洞至少一米（以前厅墙就贴在门脸里面 0.4 米，门洞被墙堵着）
   const segD2 = (x, z, q) => { const dx = q.x1 - q.x0, dz = q.z1 - q.z0, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - q.x0) * dx + (z - q.z0) * dz) / l2)); return Math.hypot(x - q.x0 - dx * t, z - q.z0 - dz * t); };
-  for (const w of C.walls) for (const f of u.fronts) for (const k of [0, 0.5, 1]) assert.ok(segD2(w.x0 + (w.x1 - w.x0) * k, w.z0 + (w.z1 - w.z0) * k, f) >= CINEMA.lobby - 0.05, '厅墙不贴门脸');
-  // 导航里有这些墙：每段厅墙的中点两侧 0.2 米之间走不过去
+  const gaps = [];
+  for (const f of u.fronts) { const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0), ux = (f.x1 - f.x0) / len, uz = (f.z1 - f.z0) / len; for (const [a, b] of doorGaps(storeStyle(lv, u), len)) gaps.push({ x0: f.x0 + ux * a, z0: f.z0 + uz * a, x1: f.x0 + ux * b, z1: f.z0 + uz * b }); }
+  for (const w of [...C.walls, ...C.solids.map((o) => ({ x0: o.rect.x0, z0: o.rect.z0, x1: o.rect.x1, z1: o.rect.z1 }))]) for (const g of gaps) for (const k of [0, 0.25, 0.5, 0.75, 1]) assert.ok(segD2(w.x0 + (w.x1 - w.x0) * k, w.z0 + (w.z1 - w.z0) * k, g) >= 1.0, '墙、柜台不挡门洞');
+  // 导航里有这些墙：每段厅墙的中点两侧走不过去
   for (const w of C.walls) {
     const [ax, az] = toW(u.frame, w.x0, w.z0), [bx, bz] = toW(u.frame, w.x1, w.z1), mx = (ax + bx) / 2, mz = (az + bz) / 2, l = Math.hypot(bx - ax, bz - az); if (l < 1.2) continue;
-    const nx = -(bz - az) / l, nz = (bx - ax) / l, s = walk(lv.id, mx + nx * 0.6, mz + nz * 0.6, -nx, -nz, 1.2);
-    if (s) assert.ok((s.x - mx) * nx + (s.z - mz) * nz > 0, '厅墙挡人');
+    const nx = -(bz - az) / l, nz = (bx - ax) / l;
+    for (const s0 of [1, -1]) { const s = walk(lv.id, mx + s0 * nx * 0.6, mz + s0 * nz * 0.6, -s0 * nx, -s0 * nz, 1.2); if (s && !s.slope) assert.ok(((s.x - mx) * nx + (s.z - mz) * nz) * s0 > 0, '厅墙挡人'); }
   }
-  assert.ok(F.walls.some((w) => w.top > 0.6 && w.top < 3), '座椅是矮墙（站着能从上面开枪）');
-  // 每个厅：从厅里走得到大堂（门洞真开着）
-  const seq0 = (s) => { let v = s; return () => ((v = (v * 16807) % 2147483647) / 2147483647); };
+  // 每个厅：从银幕前那块地走得到开局点（门洞真开着）
   const plan = siegePlanOf(1), M = plan.mall, st = (q) => ({ floor: lv.id, x: q.x, z: q.z, y: lv.elev, slope: null });
   for (const h of C.halls) {
-    const back = h.screen + h.sign * ((h.along === 'z' ? h.z1 - h.z0 : h.x1 - h.x0) - 0.8), mid = h.along === 'z' ? (h.x0 + h.x1) / 2 : (h.z0 + h.z1) / 2;
-    const [x, z] = h.along === 'z' ? toW(u.frame, mid, back) : toW(u.frame, back, mid);
+    const K = cinemaFrame(C.frame), [x, z] = toW(u.frame, ...K.at((h.a0 + h.a1) / 2, h.b1 - 1.6));
     assert.ok(findPath(nav, st({ x, z }), st(M.start)), '厅里走得到开局点（从门洞出来）');
   }
-  void seq0;
   assert.ok(findPath(nav, st(M.start), st(plan.stages[0].site)) && findPath(nav, st(plan.stages[0].site), st(plan.stages[1].site)), '开局点 → 手摇柄 → 卷帘开关走得通');
 });
 

@@ -184,6 +184,7 @@ export function connectorsFor(nav) {
     }
   }
   for (const sl of nav.slopes) {
+    if (sl.low === sl.high) continue; // 影厅过道（cinema.js）：两头同一层、顶端是死胡同，不是换层的连接
     let found = false;
     for (const d of [.5, .7, .9]) {
       if (found) continue;

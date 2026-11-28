@@ -28,7 +28,7 @@ export function verticalsOn(nav, floorId) {
   const F = nav.floors.get(floorId), out = [];
   if (!F) return out;
   for (const sl of F.slopes || []) {
-    if (sl.kind === 'protected-stair') continue; // 消防楼梯太多（每栋塔楼每层一部），画出来全是三角
+    if (sl.kind === 'protected-stair' || sl.low === sl.high) continue; // 消防楼梯太多（每栋塔楼每层一部），画出来全是三角；影厅过道不换层
     const low = sl.low === floorId, [x, z] = toW(sl.F, low ? 0 : sl.len, 0);
     out.push({ kind: 'slope', type: sl.kind, up: low, x, z, to: low ? sl.high : sl.low });
   }

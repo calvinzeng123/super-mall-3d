@@ -10,6 +10,7 @@ import { landAt, clear } from '../layout/nav.js';
 import { toW } from '../layout/geom.js';
 import { storeStyle, doorGaps } from '../layout/frontage.js';
 import { findPath } from '../fps/pathfinding.js';
+import { cinemaPlan } from '../layout/cinema.js';
 
 /**
  * shop：各步在哪家店（按店名找；找不到 / 站不住就退到同层别的店，见 pick）；
@@ -194,6 +195,15 @@ export function openSteps(nav, lv, u, door, P = MALL.spread) {
   return { spawn: at(best.spawn), crank: at(best.crank) };
 }
 
+/** 影城平面（cinema.js）里的出生点、服务台跟前那一点：都站得住才算。返回 { spawn, crank } 或 null */
+export function cinemaSteps(nav, lv, u) {
+  const P = cinemaPlan(u), at = (q) => { if (!q) return null; const [x, z] = toW(u.frame, q[0], q[1]), s = landAt(nav, x, z, lv.elev + 0.6); return s && s.floor === lv.id && !s.slope && clear(nav, s) ? { floor: lv.id, x, y: lv.elev, z } : null; };
+  const spawn = at(P.spots.spawn), crank = at(P.spots.duty);
+  return spawn && crank ? { spawn, crank } : null;
+}
+/** a → b 按寻路走的路程在 open–cap 米之间 */
+function legOk(nav, a, b, P) { const d = walk(nav, a, b); return d >= P.open && d <= P.cap + 3; }
+
 /**
  * 商场段的每一步。返回 { stages, start, shop（开局那家店：{ id, name, poly, fronts }）, lockers（三个柜子：[{ x, y, z, n, right }]）, down3, down2（两处扶梯口的坡道 id），
  *   rescue（被困的店：{ name, inside, exit（撬开以后小许先走到的门外一点）, front, unit }）, axe（店门外的消火栓箱：见 cabinetSpot） }。
@@ -214,9 +224,11 @@ export function mallStages(layout, nav, rng = Math.random, M = MALL) {
   const fronts = doorF ? [doorF, ...fronts0.filter((f) => f !== doorF)] : fronts0;
   // 卷帘的开关：大门里侧门洞旁边墙上的控制盒，人站在盒子跟前摇。门洞两边都试，出生点 → 手摇柄 → 开关两段都要够长
   let exitSw = null, steps0 = null;
+  // 影城：出生点在第一个厅银幕前的平地上、手摇柄在候场区服务台跟前（cinema.js 的 spots）——两段路都要在 open–cap 米之间
+  const cine = u.brand?.cat === 'cinema' ? cinemaSteps(nav, lv3, u) : null;
   for (const side of [-1, 1]) {
     const sw = doorF && switchBeside(nav, lv3, u, doorF, { x: door.x + side * (doorF.x1 - doorF.x0) * 10, z: door.z + side * (doorF.z1 - doorF.z0) * 10 }, M.panel);
-    const o = sw && openSteps(nav, lv3, u, sw.site, M.spread);
+    const o = sw && (cine && legOk(nav, cine.spawn, cine.crank, M.spread) && legOk(nav, cine.crank, sw.site, M.spread) ? cine : openSteps(nav, lv3, u, sw.site, M.spread));
     if (o) { exitSw = sw; steps0 = o; break; }
   }
   const { spawn: spawnAt, crank } = steps0 || openSteps(nav, lv3, u, door, M.spread) || { spawn: home, crank: home };

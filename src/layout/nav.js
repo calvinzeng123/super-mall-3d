@@ -163,6 +163,7 @@ export function buildNav(layout, options = {}) {
   // copies that level's own walls and obstacles instead of rebuilding them (levels with duplex
   // mezzanines always build, since their upper surfaces are separate floors).
   const navPlans = new Map();
+  const cinemaAisles = []; // 影厅过道：坡道要等下面 slope() 定义好再登记
   const partition = (F, Fr, p) => {
     const [x0, z0] = p.a, [x1, z1] = p.b;
     const len = Math.hypot(x1 - x0, z1 - z0);
@@ -208,12 +209,18 @@ export function buildNav(layout, options = {}) {
         }
       }
       for (const s of subtractOpenings(mergeSegments(unionOutline(u.rects)), openings)) wallL(F, u.frame, s);
-      // 影城的放映厅：厅墙（扣掉门洞）、一排排座椅（矮墙：挡人，站着能从上面开枪）、卖品台——和 interiors.js 画的是同一份（cinema.js）
+      // 影城（cinema.js，和 interiors.js 画的是同一份）：厅墙、隔墙、柱子是整面墙；柜台、长椅、栏杆、看台每一级、每排椅背是有顶高的实心东西
+      // （走路照样挡，子弹只挡到顶高）；过道台阶底下从地面上进不去，过道本身是一段坡道（下面「坡道」那一节登记）
       if (u.brand?.cat === 'cinema' && !u.residence) {
         const C = cinemaPlan(u);
         for (const w of C.walls) wallL(F, u.frame, w);
-        for (const w of C.rows) { const n = F.walls.length; wallL(F, u.frame, w); if (F.walls.length > n) F.walls[n].top = w.top; }
-        if (C.counter) obstacle(F, u.frame, C.counter);
+        for (const w of C.low) { const n = F.walls.length; wallL(F, u.frame, w); for (let i = n; i < F.walls.length; i++) F.walls[i].top = w.top; }
+        for (const o of C.solids) {
+          const n = F.walls.length; obstacle(F, u.frame, o.rect);
+          if (o.top != null) { for (let i = n; i < F.walls.length; i++) F.walls[i].top = o.top; F.obstacles.at(-1).top = o.top; }
+        }
+        for (const r of C.under) { const o = piece(lrectPoly(u.frame, r)); o.top = 0.02; F.obstacles.push(o); }
+        C.aisles.forEach((a, i) => cinemaAisles.push({ id: `${u.id}-aisle-${i}`, floor: lv.id, y: lv.elev, F: u.frame, a }));
       }
       for (const p of u.residence?.partitions || []) partition(F, u.frame, p);
       for (const o of u.residence?.obstacles || []) obstacle(F, u.frame, o.rect);
@@ -314,6 +321,11 @@ export function buildNav(layout, options = {}) {
     const len = Math.hypot(tx - bx, tz - bz);
     return slope({ id, kind, F: frame(bx, bz, Math.atan2(tz - bz, tx - bx) * DEG), len, hw, y0: by, y1: ty, low, high, belt });
   };
+  // 影厅过道：两头都在这一层（kind 'aisle'），底端在银幕前的平地上，顶端顶着后墙——走到头是死胡同，原路下来
+  for (const c of cinemaAisles) {
+    const [bx, bz] = toW(c.F, ...c.a.bottom), [tx, tz] = toW(c.F, ...c.a.top);
+    lane(c.id, 'aisle', bx, bz, c.y + c.a.y0, tx, tz, c.y + c.a.y1, c.a.hw, c.floor, c.floor, 0);
+  }
   // 扶梯：每条梯道一段；下层占地封闭，只留梯道下端入口
   const escalators = [...layout.escalators];
   if (br) {
@@ -904,7 +916,7 @@ export function landAt(nav, x, z, yMax) {
   }
   return result;
 }
-const STAIR_KINDS = ['interior-stair', 'exterior-stair', 'protected-stair'];
+const STAIR_KINDS = ['interior-stair', 'exterior-stair', 'protected-stair', 'aisle'];
 // landAt 的索引：楼面按高度从高到低排（稳定排序，同高的先后不变），每层带一个包围盒；楼梯单独列出来。
 // 以前每次都把所有楼面过一遍、每层做一次「站不站得住」——子弹、敌人落点、掉落物每帧要问很多次。
 const landIndex = new WeakMap();
@@ -1094,7 +1106,7 @@ function levelSpawn(nav, layout, levelId, prefer = null) {
 export function floorLabel(nav, layout, s) {
   if (s.slope) {
     const sl = nav.slopeById.get(s.slope.id);
-    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道', 'interior-stair': '套内复式楼梯', 'exterior-stair': '街区楼梯', 'protected-stair': '消防楼梯' }[sl && sl.kind] || '';
+    return { escalator: '扶梯', exit: '地铁出入口楼梯', ramp: '坡道', 'interior-stair': '套内复式楼梯', 'exterior-stair': '街区楼梯', 'protected-stair': '消防楼梯', aisle: '影厅台阶' }[sl && sl.kind] || '';
   }
   const F = nav.floors.get(s.floor);
   if (!F) return '';
