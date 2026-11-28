@@ -48,7 +48,7 @@ export const SQUAD = Object.freeze({
         blood: Object.freeze([]) }) }), // 血迹的格子（12 个）已经被两个队友占满了：小许身上不加
   ]),
   // 主角（单人时的你）：只在联机时作为别人眼里的人形出现——你扮演阿哲 / 林医生时主角是别人（或者主机走了以后由电脑接手）。不在 members 里（单人永远用不到）
-  lead: Object.freeze({ id: 'lead', name: '主角', role: '特勤队员', hp: 100, side: 1, back: 1.7, trait: 'lead', lead: true,
+  lead: Object.freeze({ id: 'lead', name: '主角', role: '特勤队员', hp: 100, side: 1, back: 1.7, trait: 'lead', lead: true, weapon: 'rifle',
     gun: Object.freeze({ name: '步枪', interval: 0.13, burst: [3, 5], rest: [0.45, 0.9], damage: 15, hit: 0.84, falloff: 0.01, head: 0.15, range: 26 }),
     // 黑灰作训服 + 橄榄色板甲背心、深色头盔、战术手套；和两名队友一眼分得开
     look: Object.freeze({ face: 'zhe', skin: 0xb88a6c, lip: 0x8f5a4b, hair: 0x15110e, iris: 0x22160e, shirt: 0x2a2d2b, pants: 0x2b2e2a, vest: 0x4a5137, strap: 0x3a3f2c, pouch: 0x3f4530, helmet: 0x30342e, mask: 0x202224, glove: 0x1c1c1b, boot: 0x1a1918, pad: 0x2f342a,

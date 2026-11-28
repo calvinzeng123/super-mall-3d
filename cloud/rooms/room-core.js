@@ -5,12 +5,14 @@
 //   客户端 → 服务器：{ t: 'start', ... }（主机开局）、{ t: 's', k?, ... }（主机的快照，k = 完整帧）、
 //                     主机发的其余 t（规则消息：over / votes / boardAll ……）：带 to: 'all' / 座位号 的照发；
 //                     不是主机的人只能发 ROOM.peer 里那几种（操作、投票、请登机、回血），只发给主机。服务器补上 f（谁发的）。
+//                     谁都能发的：name（改昵称）、meta（大厅里的「准备」和自己量的延迟，服务器洗过记在名单上广播）、ping。
+//   一下子的动作（扔手雷、挥刀）和开枪都在操作 i 里（ev / sh），只到主机；主机核对后随快照 s 转给大家——客户端发不了快照，冒充不了别人扔的手雷。
 //   服务器 → 客户端：welcome / peer / host / full / taken / nope / err / pong / need——这些谁也不能冒充（客户端发来的直接丢掉）。
 // conn：{ send(text), close(code, reason), save(meta)（存到连接上，休眠醒来还在） }。
 
 export const ROOM = Object.freeze({
   max: 3,
-  code: /^[A-Z2-9]{4,6}$/, // 房间码：4–6 位，去掉了容易看错的 0 / O / 1 / I
+  code: /^[0-9]{4}$/, // 房间码：4 位数字（手机上弹数字键盘好输；一万个，猜码靠 worker.js 的限流挡）
   name: 16, // 昵称最多几个字
   // 限流：每条连接一个令牌桶（每秒补 rate 个、最多攒 burst 个），超了这条丢掉；丢得太多（drop 条）断开
   rate: 45, burst: 90, drop: 400,
@@ -20,6 +22,8 @@ export const ROOM = Object.freeze({
   peer: Object.freeze(['i', 'vote', 'boardReq', 'heal']),
   // 只有服务器能发的：谁发来的都丢掉（不然别人能冒充「换主机」「有人进来了」）
   server: Object.freeze(['welcome', 'peer', 'host', 'full', 'taken', 'nope', 'slow', 'err', 'pong', 'need']),
+  // 大厅名单上的延迟（毫秒，客户端自己量了报上来）最多记多少；只有延迟变了的时候，同一个人隔多久才广播一次（准备 / 取消准备马上广播）
+  pingMax: 9999, metaEvery: 3000,
 });
 
 const ROLES = ['主角', '阿哲', '林医生'];
@@ -37,7 +41,7 @@ export function createRoomCore({ code = '', now = () => Date.now(), persist = ()
   const S = { code, host: -1, started: false, start: null, key: null, keyAt: 0, created: now() };
   const meta = new WeakMap(); // conn → { seat, name, id, host, bucket, last, drops }
 
-  const players = () => seats.map((c, seat) => (c ? { seat, name: meta.get(c).name, id: meta.get(c).id, host: seat === S.host, role: roleName(seat) } : null)).filter(Boolean);
+  const players = () => seats.map((c, seat) => { if (!c) return null; const m = meta.get(c); return { seat, name: m.name, id: m.id, host: seat === S.host, role: roleName(seat), ready: !!m.ready, ping: m.ping ?? null }; }).filter(Boolean);
   const send = (c, msg) => { try { c.send(typeof msg === 'string' ? msg : JSON.stringify(msg)); } catch { /* 断了的连接：等 close 事件收拾 */ } };
   const all = (msg, except = null) => { const text = JSON.stringify(msg); for (const c of seats) if (c && c !== except) send(c, text); };
   const save = (c) => { const m = meta.get(c); try { c.save?.({ code: S.code, seat: m.seat, name: m.name, id: m.id, host: m.seat === S.host, started: S.started, start: S.start }); } catch { /* 存不了不影响 */ } };
@@ -90,13 +94,22 @@ export function createRoomCore({ code = '', now = () => Date.now(), persist = ()
     if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.t !== 'string') return;
     if (P.server.includes(msg.t)) return; // 冒充服务器的
     // 不是主机：只认那几种操作，只发给主机（不许广播、不许点名发给别人）
-    if (!isHost && msg.t !== 'ping' && msg.t !== 'name' && !P.peer.includes(msg.t)) return;
+    if (!isHost && msg.t !== 'ping' && msg.t !== 'name' && msg.t !== 'meta' && !P.peer.includes(msg.t)) return;
     switch (msg.t) {
       case 'ping': send(c, { t: 'pong', c: msg.c ?? 0, s: now() }); return;
       case 'name': { m.name = clean(msg.name); save(c); all({ t: 'peer', ev: 'name', seat: m.seat, name: m.name, players: players(), host: S.host }); return; }
+      case 'meta': { // 大厅：准备 / 取消准备（马上广播）、自己量的延迟（变了才记，同一个人隔 metaEvery 毫秒才广播一次）
+        const ready = typeof msg.ready === 'boolean' ? msg.ready : m.ready, pingIn = Number(msg.ping);
+        const ping = Number.isFinite(pingIn) && pingIn >= 0 ? Math.min(P.pingMax, Math.round(pingIn)) : m.ping;
+        const readyChanged = !!ready !== !!m.ready, pingChanged = ping !== m.ping;
+        m.ready = !!ready; m.ping = ping ?? null;
+        if (readyChanged || (pingChanged && (m.metaAt == null || now() - m.metaAt >= P.metaEvery))) { m.metaAt = now(); all({ t: 'peer', ev: 'meta', seat: m.seat, name: m.name, players: players(), host: S.host }); }
+        return;
+      }
       case 'start': { // 只有主机能开局：开局信息记下来（种子、哪栋楼……原样转给后来的人）
         if (!isHost) return;
         S.started = true; S.start = msg; S.key = null; persist('start', msg); saveAll();
+        for (const o of seats) if (o) meta.get(o).ready = false; // 开打了：大厅里的「准备」清掉（下一局再点）
         all({ t: 'start', ...msg, f: m.seat }, c); return;
       }
       case 'end': { if (!isHost) return; S.started = false; S.start = null; S.key = null; persist('start', null); saveAll(); all({ t: 'end', f: m.seat }, c); return; }

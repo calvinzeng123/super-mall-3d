@@ -111,8 +111,9 @@ const AT = Object.freeze({ pelvis: [0, HIP_Y, 0], torso: [0, HIP_Y + 0.1, 0], he
  *   shirtSurf / pantsSurf / vestSurf / gloveSurf / bootSurf（表面种类，见 rig-skin.js SURF）、tape（反光条颜色）、
  *   sleeve：'short'（短袖露小臂）、pads：false（不戴护膝护肘）、who（在材质里的编号）、grime（脏的程度）、blood（几处血迹，骨架坐标）。
  * 队友穿的是贴身的薄背心（离衬衫一厘多，V 领、袖窿、前襟拉链、包边），劫持者是硬板的防弹插板背心（本来就是方的）。
+ * opts.held（联机人形、队友用）：另外搭几副不带枪的手臂和几把单独的武器（见 HELD_POSES），squad.js 按手里拿的换着显示。
  */
-function buildParts(look) {
+function buildParts(look, opts = {}) {
   const L = look, human = !!L.face, S = SURF, zhe = L.face === 'zhe', lin = L.face === 'lin';
   // 薄片（缝线、反光条、名牌、卡扣）圆角只要一圈，省三角形
   const rbox = (w, h, d, x, y, z, c, r = 0.04, rx = 0) => rboxAt(w, h, d, x, y, z, c, r, rx, Math.min(w, h, d) < 0.04 ? 1 : 2);
@@ -335,8 +336,7 @@ function buildParts(look) {
   };
   // 肩：小一圈的三角肌（压扁的椭球，顺着上臂往下斜），不再是比头还宽的大球
   const delt = (x) => { const g = new THREE.SphereGeometry(1, 14, 10); g.scale(0.056, 0.06, 0.06); g.rotateZ(x < 0 ? 0.35 : -0.35); g.translate(x, -0.012, 0); return colored(g, shirt); };
-  const aimParts = [
-    arm(rs, re, rh), arm(ls, le, lh), delt(-0.19), delt(0.19),
+  const rifleGun = () => [
     rbox(0.055, 0.1, 0.32, -0.1, -0.1, 0.29, gun, 0.012), // 机匣
     rbox(0.06, 0.075, 0.22, -0.1, -0.085, 0.47, gun2, 0.015), // 护木
     rbox(0.012, 0.012, 0.32, -0.1, -0.043, 0.32, gun, 0.003), // 顶上导轨
@@ -348,7 +348,74 @@ function buildParts(look) {
     rbox(0.04, 0.05, 0.09, -0.1, -0.02, 0.3, gun, 0.01), // 瞄具
     limb(v(-0.1, -0.135, 0.4), v(-0.1, -0.135, 0.52), 0.012, 0.012, belt, 5), // 枪带
   ];
+  const aimParts = [arm(rs, re, rh), arm(ls, le, lh), delt(-0.19), delt(0.19), rifleGun()];
   const aim = wear(mergeRig(aimParts), AT.aim);
+
+  // ---- 联机人形：几副手臂（不带枪）+ 几把武器，都在 aim 的坐标里（肩线中点为原点，+Z 朝前，右手在 -X）----
+  // 刀 / 斧子那只右手单独一组（knifeR，原点在右肩：挥刀时整条胳膊绕肩转），轴心见 HELD_POSES.pivot
+  let held = null;
+  if (opts.held) {
+    const steel = P(0xa4a8ac, S.METAL), dark = P(0x2a2b2d, S.POLYMER), wood = P(0x5a3a22, S.LEATHER), olive = P(0x3d4532, S.POLYMER), tan = P(0x6b5a3c, S.POLYMER);
+    /** 一根方条：从 a 到 b，截面 w × h（h 那一边尽量朝上） */
+    const bar = (a, b, w, h, c) => {
+      const d = b.clone().sub(a), len = d.length(), f = d.normalize(); let sx = new THREE.Vector3().crossVectors(Y, f);
+      if (sx.lengthSq() < 1e-6) sx.set(1, 0, 0); sx.normalize(); const up = new THREE.Vector3().crossVectors(f, sx);
+      const g = new THREE.BoxGeometry(w, h, len); g.applyMatrix4(new THREE.Matrix4().makeBasis(sx, up, f)); g.translate((a.x + b.x) / 2 + 0, (a.y + b.y) / 2, (a.z + b.z) / 2);
+      return colored(g, c);
+    };
+    const PZ = HELD_POSES.pivot, piv = v(PZ[0], PZ[1], PZ[2]), atR = [AT.aim[0] + PZ[0], AT.aim[1] + PZ[1], AT.aim[2] + PZ[2]];
+    const J = (q) => v(q[0], q[1], q[2]);
+    const armsOf = (q, side = 'both') => [side !== 'left' ? arm(J(q.r[0]), J(q.r[1]), J(q.r[2])) : [], side !== 'right' ? arm(J(q.l[0]), J(q.l[1]), J(q.l[2])) : [], side !== 'left' ? delt(-0.19) : [], side !== 'right' ? delt(0.19) : []];
+    const toPivot = (list) => list.flat(Infinity).map((g) => g.translate(-piv.x, -piv.y, -piv.z));
+    const K = HELD_POSES.knife, kh = J(K.r[2]), kf = kh.clone().sub(J(K.r[1])).normalize();
+    const A = HELD_POSES.axe, ah = J(A.r[2]), af = ah.clone().sub(J(A.r[1])).normalize();
+    const kup = new THREE.Vector3().crossVectors(kf, new THREE.Vector3().crossVectors(Y, kf).normalize()).normalize();
+    const aup = new THREE.Vector3().crossVectors(af, new THREE.Vector3().crossVectors(Y, af).normalize()).normalize();
+    const at = (o, f, k) => o.clone().addScaledVector(f, k);
+    held = {
+      arms: {
+        rifle: wear(mergeRig(armsOf(HELD_POSES.rifle)), AT.aim),
+        pistol: wear(mergeRig(armsOf(HELD_POSES.pistol)), AT.aim),
+        none: wear(mergeRig(armsOf(HELD_POSES.none)), AT.aim),
+        knifeL: wear(mergeRig(armsOf(K, 'left')), AT.aim),
+        knifeR: wear(mergeRig(toPivot(armsOf(K, 'right'))), atR),
+        axeR: wear(mergeRig(toPivot(armsOf(A, 'right'))), atR),
+      },
+      guns: {
+        rifle: wear(mergeRig(rifleGun()), AT.aim),
+        // 冲锋枪：短机匣、长直弹匣、折叠托（细铁条）、短枪管
+        smg: wear(mergeRig([
+          rbox(0.05, 0.085, 0.25, -0.1, -0.095, 0.33, gun, 0.012), rbox(0.04, 0.05, 0.1, -0.1, -0.085, 0.5, gun2, 0.012),
+          limb(v(-0.1, -0.08, 0.55), v(-0.1, -0.08, 0.66), 0.012, 0.012, gun, 8), rbox(0.03, 0.17, 0.038, -0.1, -0.22, 0.36, gun, 0.008, 0.08),
+          rbox(0.036, 0.085, 0.045, -0.1, -0.175, 0.22, gun2, 0.01, -0.3), bar(v(-0.1, -0.08, 0.2), v(-0.1, -0.1, 0.02), 0.012, 0.012, gun), bar(v(-0.1, -0.1, 0.02), v(-0.1, -0.16, 0.02), 0.012, 0.04, gun),
+          rbox(0.02, 0.03, 0.05, -0.1, -0.04, 0.32, gun, 0.006),
+        ]), AT.aim),
+        // 榴弹枪：粗短的发射管 + 前握把 + 肩托
+        launcher: wear(mergeRig([
+          limb(v(-0.1, -0.07, 0.16), v(-0.1, -0.07, 0.62), 0.036, 0.036, olive, 12), limb(v(-0.1, -0.07, 0.6), v(-0.1, -0.07, 0.64), 0.04, 0.04, gun, 12),
+          rbox(0.06, 0.1, 0.16, -0.1, -0.1, 0.14, gun, 0.014), rbox(0.04, 0.09, 0.05, -0.1, -0.185, 0.2, gun2, 0.01, -0.3),
+          rbox(0.035, 0.08, 0.04, -0.1, -0.15, 0.42, gun2, 0.01), rbox(0.05, 0.09, 0.14, -0.1, -0.1, 0.02, tan, 0.016), rbox(0.025, 0.045, 0.06, -0.1, -0.005, 0.32, gun, 0.006),
+        ]), AT.aim),
+        // 手枪：套筒、枪身、握把（双手握在胸前）
+        pistol: wear(mergeRig([
+          rbox(0.03, 0.034, 0.19, -0.045, -0.085, 0.475, gun, 0.006), rbox(0.028, 0.022, 0.15, -0.045, -0.108, 0.47, gun2, 0.006),
+          rbox(0.03, 0.09, 0.042, -0.045, -0.148, 0.405, gun2, 0.01, -0.28), rbox(0.006, 0.012, 0.012, -0.045, -0.062, 0.56, gun, 0.002),
+        ]), AT.aim),
+        // 刀：握在右手里，刃顺着小臂往前（刀柄、护手、刀刃）
+        knife: wear(mergeRig(toPivot([
+          bar(at(kh, kf, -0.05), at(kh, kf, 0.05), 0.024, 0.03, dark), bar(at(kh, kf, 0.05), at(kh, kf, 0.065), 0.03, 0.06, gun),
+          bar(at(kh, kf, 0.065), at(kh, kf, 0.24), 0.006, 0.034, steel),
+        ])), atR),
+        // 斧子：长柄（握在后半截）、斧头横在前端
+        axe: wear(mergeRig(toPivot([
+          bar(at(ah, af, -0.12), at(ah, af, 0.42), 0.028, 0.034, wood),
+          bar(at(ah, af, 0.36).addScaledVector(aup, -0.03), at(ah, af, 0.36).addScaledVector(aup, 0.13), 0.02, 0.1, steel),
+          bar(at(ah, af, 0.33).addScaledVector(aup, -0.05), at(ah, af, 0.33).addScaledVector(aup, -0.015), 0.024, 0.05, gun),
+        ])), atR),
+      },
+      muzzle: HELD_POSES.muzzle, pivot: PZ, knifeUp: [kup.x, kup.y, kup.z],
+    };
+  }
 
   // ---- 腿 ----
   const pocket = P(lin ? L.pants : L.pouch, lin ? (L.pantsSurf ?? S.CLOTH) : S.CORDURA);
@@ -377,8 +444,22 @@ function buildParts(look) {
     rbox(0.07, 0.05, 0.1, 0, -SHIN + 0.025, 0.1, P(dk(L.boot, 0.7), L.bootSurf ?? S.LEATHER), 0.012), // 鞋带那一条
     rbox(0.12, 0.022, 0.28, 0, -SHIN - 0.085, 0.04, sole, 0.008), // 鞋底
   ]), AT.shin);
-  return { pelvis, torso, head, visor, aim, thigh, shin };
+  return held ? { pelvis, torso, head, visor, aim, thigh, shin, held } : { pelvis, torso, head, visor, aim, thigh, shin };
 }
+/**
+ * 联机人形按手里拿的换的几副手臂（aim 的坐标：肩线中点为原点，+Z 朝前，右手在 -X）：r / l = [肩, 肘, 手]。
+ * rifle：两手端枪（冲锋枪、榴弹枪也这么端）；pistol：两手往前伸、握在胸前；knife：右手握刀在前下方、左手护在胸前；axe：右手提斧在身侧；
+ * none：两手垂着（没拿东西的小许）。pivot：刀 / 斧子那条右胳膊绕着转的点（右肩）；muzzle：每把枪的枪口
+ */
+export const HELD_POSES = Object.freeze({
+  rifle: Object.freeze({ r: [[-0.2, 0, 0], [-0.245, -0.215, 0.1], [-0.1, -0.155, 0.26]], l: [[0.2, 0, 0], [0.17, -0.2, 0.24], [-0.07, -0.12, 0.42]] }),
+  pistol: Object.freeze({ r: [[-0.2, 0, 0], [-0.17, -0.16, 0.22], [-0.05, -0.125, 0.42]], l: [[0.2, 0, 0], [0.13, -0.18, 0.21], [-0.015, -0.14, 0.405]] }),
+  knife: Object.freeze({ r: [[-0.2, 0, 0], [-0.27, -0.25, 0.05], [-0.2, -0.3, 0.29]], l: [[0.2, 0, 0], [0.25, -0.22, 0.1], [0.12, -0.17, 0.3]] }),
+  axe: Object.freeze({ r: [[-0.2, 0, 0], [-0.26, -0.27, 0.04], [-0.22, -0.4, 0.22]], l: [[0.2, 0, 0], [0.25, -0.22, 0.1], [0.12, -0.17, 0.3]] }),
+  none: Object.freeze({ r: [[-0.2, 0, 0], [-0.25, -0.27, -0.01], [-0.24, -0.53, 0.04]], l: [[0.2, 0, 0], [0.25, -0.27, -0.01], [0.24, -0.53, 0.04]] }),
+  pivot: Object.freeze([-0.2, 0, 0]),
+  muzzle: Object.freeze({ rifle: Object.freeze([-0.1, -0.08, 0.78]), smg: Object.freeze([-0.1, -0.08, 0.66]), launcher: Object.freeze([-0.1, -0.07, 0.65]), pistol: Object.freeze([-0.045, -0.085, 0.575]) }),
+});
 const smooth01 = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
 // 队友没有护目镜：visor 给一个空的几何体（接口不变）
 const LENS_STUB = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));

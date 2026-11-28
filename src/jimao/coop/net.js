@@ -10,7 +10,6 @@ export const COOP_SERVER = Object.freeze({
   timeout: 6000, // 连多久没连上算失败（毫秒）
   ping: 5000, // 多久发一次心跳（毫秒；服务器直接回 pong，不叫醒房间）
 });
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** 用哪个服务器：返回 ws(s):// 开头的地址，没有就是 null（还没上线） */
 export function serverUrl({ params = {}, loc = globalThis.location, storage = null } = {}) {
@@ -22,10 +21,18 @@ export function serverUrl({ params = {}, loc = globalThis.location, storage = nu
   if (loc && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(loc.hostname)) return COOP_SERVER.dev;
   return fix(COOP_SERVER.url);
 }
-/** 房间码：新建的是六位（32^6 种，不好猜；去掉了 0 / O / 1 / I）；输入时 4–6 位都认（以前的四位码）。规整用户输入的（小写、空格、全角都认） */
-export const CODE_LEN = 6;
-export function randomCode(rng = Math.random, n = CODE_LEN) { let s = ''; for (let i = 0; i < n; i++) s += CODE_CHARS[Math.floor(rng() * CODE_CHARS.length)]; return s; }
-export function normCode(s) { const c = String(s || '').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-HJ-NP-Z2-9]{4,6}$/.test(c) ? c : null; }
+/**
+ * 房间码：4 位数字（手机上弹数字键盘，念给朋友也好记）。一万个码：撞上有人的房间时服务器回 taken，大厅换一个再建（avoid：最近撞过的不再抽）；
+ * 猜码靠服务器按 IP 限流（cloud/rooms/worker.js 的 JOIN_LIMIT）。规整用户输入的（空格、全角数字都认）
+ */
+export const CODE_LEN = 4;
+export function randomCode(rng = Math.random, avoid = null) {
+  for (let k = 0; k < 20; k++) { const c = String(Math.floor(rng() * 10 ** CODE_LEN)).padStart(CODE_LEN, '0'); if (!avoid?.has?.(c)) return c; }
+  return String(Math.floor(rng() * 10 ** CODE_LEN)).padStart(CODE_LEN, '0');
+}
+export function normCode(s) { const c = String(s ?? '').normalize('NFKC').replace(/[^0-9]/g, ''); return /^[0-9]{4}$/.test(c) ? c : null; }
+/** 本机随机 id（服务器用来认「同一台机器又连上来了」）：字母数字 */
+export function randomId(rng = Math.random, n = 10) { const A = 'abcdefghijkmnpqrstuvwxyz23456789'; let s = ''; for (let i = 0; i < n; i++) s += A[Math.floor(rng() * A.length)]; return s; }
 
 /**
  * 连进一个房间。want：'create' / 'join'。返回 { on(type, fn), send(obj), close(), stats, ready }。
@@ -33,7 +40,7 @@ export function normCode(s) { const c = String(s || '').normalize('NFKC').toUppe
  * why：'offline'（服务器连不上）/ 'full' / 'taken'（房间码被用了）/ 'nope'（没有这个房间）/ 'slow'（猜错房间码太多次，过一分钟再试）/ 'closed'
  */
 export function createRoomClient({ url, code, name = '', id = '', want = 'join', WS = globalThis.WebSocket, P = COOP_SERVER } = {}) {
-  const handlers = {}, stats = { sent: 0, recv: 0, bytesOut: 0, bytesIn: 0, byType: {}, since: Date.now() };
+  const handlers = {}, stats = { sent: 0, recv: 0, bytesOut: 0, bytesIn: 0, byType: {}, since: Date.now(), rtt: null };
   const emit = (t, e) => { for (const f of handlers[t] || []) { try { f(e); } catch (err) { console.error('[联机]', t, err); } } };
   let ws = null, opened = false, welcomed = false, done = false, pingT = null, failT = null, why = null;
   const fail = (w) => { if (done) return; done = true; clearInterval(failT); clearInterval(pingT); emit('fail', { why: w }); try { ws?.close(); } catch { /* */ } };
@@ -47,14 +54,24 @@ export function createRoomClient({ url, code, name = '', id = '', want = 'join',
     // 不会因为卡住期间计时到了、连上的消息还排在后面，就把其实已经连上的连接当成连不上（中途加入时刚加载完最容易这样）。连上了只是欢迎消息还没到就接着等
     let ticks = 0;
     failT = setInterval(() => { if (opened || welcomed) { clearInterval(failT); return; } if (++ticks >= P.timeout / 1000) fail('offline'); }, 1000);
-    ws.onopen = () => { opened = true; pingT = setInterval(() => { try { ws.send('ping'); } catch { /* */ } }, P.ping); };
+    // 心跳：平时发文本 ping（运行时直接回，不叫醒房间）；隔一次发一条带时间的 JSON ping，量来回延迟（大厅名单上的「延迟」），量到了报给服务器（meta）
+    let beat = 0, told = null, toldAt = 0;
+    const measure = () => { try { ws.send(JSON.stringify({ t: 'ping', c: Date.now() })); } catch { /* */ } };
+    ws.onopen = () => { opened = true; setTimeout(measure, 300); pingT = setInterval(() => { try { if (++beat % 2) ws.send('ping'); else measure(); } catch { /* */ } }, P.ping); };
+    const onPong = (msg) => {
+      if (!Number.isFinite(msg.c)) return;
+      const rtt = Math.max(0, Date.now() - msg.c); stats.rtt = stats.rtt === null ? rtt : Math.round(stats.rtt * 0.6 + rtt * 0.4);
+      if (welcomed && (told === null || Math.abs(stats.rtt - told) >= 15 || Date.now() - toldAt > 30000)) { told = stats.rtt; toldAt = Date.now(); try { ws.send(JSON.stringify({ t: 'meta', ping: stats.rtt })); } catch { /* */ } }
+      emit('rtt', stats.rtt);
+    };
     ws.onmessage = (ev) => {
       const text = typeof ev.data === 'string' ? ev.data : ''; if (!text || text === 'pong') return;
       stats.recv++; stats.bytesIn += text.length;
       let msg; try { msg = JSON.parse(text); } catch { return; }
       (stats.byType[msg.t] ||= { n: 0, bytes: 0, dir: 'in' }); stats.byType[msg.t].n++; stats.byType[msg.t].bytes += text.length;
       if (msg.t === 'full' || msg.t === 'taken' || msg.t === 'nope' || msg.t === 'slow') { why = msg.t; return; }
-      if (msg.t === 'welcome') { welcomed = true; clearInterval(failT); emit('welcome', msg); return; }
+      if (msg.t === 'welcome') { welcomed = true; clearInterval(failT); emit('welcome', msg); if (stats.rtt !== null) onPong({ c: Date.now() - stats.rtt }); return; }
+      if (msg.t === 'pong') { onPong(msg); return; }
       emit('msg', msg);
     };
     ws.onerror = () => { if (!opened) fail('offline'); };
