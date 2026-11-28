@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { RELOAD_FEEL, createReloadFeel, feelFor } from '../src/jimao/reload-feel.js';
 import { reloadPose, PISTOL_RELOAD } from '../src/jimao/arsenal.js';
 import { breakPose, BREAK } from '../src/jimao/launcher.js';
-import { TOUCH_SLOTS, SWAP_SLOT, BUTTON_ICONS, ICONS, HUD_LAYOUT_CSS, declutter } from '../src/jimao/hud-layout.js';
+import { TOUCH_SLOTS, SWAP_SLOT, BUTTON_ICONS, ICONS, HUD_LAYOUT_CSS, TYPE, HUD_COLORS, MARKERS, markerRole, planMarkers, compassX, COMPASS_PX, RADIO_HOLD, createHudLayout } from '../src/jimao/hud-layout.js';
 import { LAYOUT_ITEMS } from '../src/jimao/layout-editor.js';
 
 function events() { const map = new Map(); return { on(n, f) { if (!map.has(n)) map.set(n, []); map.get(n).push(f); return () => map.set(n, map.get(n).filter((g) => g !== f)); }, emit(n, e) { for (const f of map.get(n) || []) f(e); } }; }
@@ -83,8 +83,82 @@ test('手机按键排布：都 ≥ 48 像素、在 844 × 390 的横屏里、两
   assert.match(HUD_LAYOUT_CSS, /@media \(orientation: landscape\)/, '竖屏不动原来的排布');
 });
 
-test('目标标记不叠：挤在一起的只有最近那枚带名字和距离，远的变淡', () => {
-  const r = declutter([{ x: 100, y: 100, d: 40 }, { x: 120, y: 110, d: 20 }, { x: 400, y: 100, d: 120 }]);
-  assert.deepEqual(r.map((q) => q.quiet), [true, false, false]);
-  assert.deepEqual(r.map((q) => q.far), [false, false, true]);
+test('目标标记：只有当前目标（最近的目标类）上指南针、写名字和距离；弹药箱 15 米内才露图标、不写字；最多 3 枚；准星附近的淡掉', () => {
+  const W = 844, H = 390, view = { w: W, h: H };
+  assert.equal(markerRole('supply'), 'pickup'); assert.equal(markerRole('hunt'), 'enemy'); assert.equal(markerRole('enemy'), 'enemy');
+  for (const k of ['relay', 'extract', 'bomb', 'item']) assert.equal(markerRole(k), 'objective');
+  // 截图里那一屏：一个目标在准星上，三个弹药箱（18 / 42 / 43 米），一个贴在屏幕边上的弹药箱
+  const marks = [
+    { role: 'objective', d: 21, x: 424, y: 190 },
+    { role: 'pickup', d: 18, x: 180, y: 360 },
+    { role: 'pickup', d: 43, x: 560, y: 180 },
+    { role: 'pickup', d: 42, x: 620, y: 60 },
+    { role: 'pickup', d: 9, x: 12, y: 200, off: true },
+  ];
+  const r = planMarkers(marks, view);
+  assert.deepEqual(r.map((q) => q.compass), [true, false, false, false, false], '指南针上只有当前目标');
+  assert.equal(r[0].world, 'label'); assert.ok(r[0].aim, '在准星上：淡掉');
+  assert.deepEqual(r.slice(1).map((q) => q.world), ['hide', 'hide', 'hide', 'hide'], '远的弹药箱、屏幕外的弹药箱都不画');
+  // 近的弹药箱只画图标
+  const near = planMarkers([{ role: 'objective', d: 60, x: 700, y: 120 }, { role: 'pickup', d: 12, x: 300, y: 250 }], view);
+  assert.deepEqual(near.map((q) => q.world), ['label', 'icon']);
+  // 名额：最多 3 枚（不算淡掉的）；目标优先，其次敌人，再其次补给
+  const many = [{ role: 'pickup', d: 3.5, x: 100, y: 100 }, { role: 'pickup', d: 5, x: 200, y: 100 }, { role: 'enemy', d: 20, x: 300, y: 300 }, { role: 'enemy', d: 25, x: 700, y: 300 }, { role: 'objective', d: 80, x: 600, y: 80 }];
+  const m = planMarkers(many, view), shown = m.filter((q) => q.world !== 'hide' && !q.aim);
+  assert.ok(shown.length <= MARKERS.max, `${shown.length} 枚`);
+  assert.equal(m[4].world, 'label'); assert.equal(m[2].world, 'icon'); assert.equal(m[3].world, 'icon'); assert.equal(m[0].world, 'hide');
+  // 贴边的当前目标照样画（带箭头）；走到跟前（near）不画
+  const off = planMarkers([{ role: 'objective', d: 50, x: 830, y: 195, off: true }], view); assert.equal(off[0].world, 'label'); assert.ok(!off[0].aim);
+  assert.equal(planMarkers([{ role: 'objective', d: 2, x: 500, y: 100, near: true }], view)[0].world, 'hide');
+  // 没有目标类（歼灭）：最近的敌人当当前目标
+  const hunt = planMarkers([{ role: 'enemy', d: 70, x: 100, y: 100 }, { role: 'enemy', d: 30, x: 700, y: 100 }], view);
+  assert.deepEqual(hunt.map((q) => q.compass), [false, true]);
+  // 准星区以外不淡
+  for (const q of planMarkers([{ role: 'objective', d: 30, x: W / 2 + MARKERS.aim * H + 2, y: H / 2 }], view)) assert.ok(!q.aim);
+});
+
+test('指南针上的队友小圆点：方位和原游戏的刻度带一致，出了刻度带不画', () => {
+  assert.equal(compassX(0, -10, 0, 280), 0, '正前方在正中');
+  assert.equal(compassX(10, -10, 0, 420), 45 * COMPASS_PX, '右前 45 度');
+  assert.equal(compassX(10, -10, 0, 280), null, '窄的刻度带（手机）放不下 45 度');
+  assert.equal(compassX(-10, -10, 0, 420), -45 * COMPASS_PX);
+  assert.equal(compassX(0, 10, 0, 280), null, '身后');
+  assert.equal(compassX(10, 0, -Math.PI / 2, 280), 0, '转向东（原游戏 yaw 向右为负）');
+});
+
+test('HUD 排版：字号只用 TYPE 那几档、颜色只用 HUD_COLORS；指南针 / 标记 / 字幕 / 弹药不折行；摇杆圈只在按着时出现', () => {
+  const css = HUD_LAYOUT_CSS, body = css.replace(/#ui \{ --jm-t-[^}]*\}/, '');
+  for (const [k, v] of Object.entries(TYPE)) assert.ok(css.includes(`--jm-t-${k}: ${v}px`), k);
+  assert.ok(Object.values(TYPE).every((v, i, a) => i === 0 || v > a[i - 1]), '字号从小到大');
+  assert.doesNotMatch(body, /font-size:\s*\d/, '字号都走 var(--jm-t-*)');
+  assert.doesNotMatch(body, /font:\s*\d+\s+\d+px/, 'font 简写里的字号也走 var(--jm-t-*)');
+  for (const k of Object.keys(HUD_COLORS)) assert.ok(css.includes(`--jm-c-${k}:`), k);
+  for (const sel of ['.h-cm {', '.h-wm b {', '.h-wm span {', '.comms {', '.comms-t {', '.h-msg {', '.h-cue {']) {
+    const at = css.indexOf(`\n${sel}`), rule = css.slice(at, css.indexOf('}', at));
+    assert.ok(at >= 0 && /white-space: nowrap/.test(rule), `${sel} 不折行`);
+  }
+  assert.match(css, /\.comms-t \{[^}]*text-overflow: ellipsis/, '字幕太长截断');
+  assert.match(css, /\.comms\.jm-fade \{ opacity: 0/, '字幕会淡掉');
+  assert.match(css, /#ui\.jm-radio \.h-msg \{ translate: 0 -\d+px/, '提示条不和字幕叠');
+  assert.match(css, /\.h-cm\.jm-hide \{ display: none/, '指南针上不画别的标记');
+  assert.match(css, /#ui:not\(\.jm-stick-fixed\):not\(\.jm-editing\) \.jm-stick-home \{ display: none/, '跟随拇指的摇杆不按时不画圈');
+  assert.match(css, /\.is-touch \.h-pips \{ display: none/, '手机上弹药块不画子弹格');
+  assert.match(css, /\.h-cue\.urgent \{[^}]*animation: none/, '弹药耗尽是一枚不闪的小签');
+});
+
+test('无线电字幕：一句话打完、停 RADIO_HOLD 秒（游戏时间）就淡掉；字幕在的时候提示条让到上面一行；换一句又亮', () => {
+  const cls = () => { const s = new Set(); return { contains: (c) => s.has(c), toggle: (c, on) => { if (on ?? !s.has(c)) s.add(c); else s.delete(c); }, add: (c) => s.add(c), remove: (c) => s.delete(c) }; };
+  const t = { textContent: '' }, comms = { classList: cls(), querySelector: () => t }, ui = { classList: cls(), querySelector: (q) => (q === '.comms' ? comms : null), querySelectorAll: () => [] };
+  const keep = { document: globalThis.document, MutationObserver: globalThis.MutationObserver, innerWidth: globalThis.innerWidth, innerHeight: globalThis.innerHeight };
+  Object.assign(globalThis, { document: {}, MutationObserver: class { observe() {} disconnect() {} }, innerWidth: 844, innerHeight: 390 });
+  try {
+    const L = createHudLayout({ input: {} }, ui), step = (s) => { for (let k = 0; k < Math.round(s * 60); k++) L.update(1 / 60); };
+    comms.classList.add('on'); t.textContent = '弹药不多了'; step(0.5);
+    assert.ok(ui.classList.contains('jm-radio') && !comms.classList.contains('jm-fade'), '字幕在：提示条让开');
+    step(RADIO_HOLD + 0.2);
+    assert.ok(comms.classList.contains('jm-fade') && !ui.classList.contains('jm-radio'), '停够了就淡掉，提示条回原位');
+    t.textContent = '下一句'; step(0.1);
+    assert.ok(!comms.classList.contains('jm-fade'), '换一句又亮');
+    L.dispose();
+  } finally { Object.assign(globalThis, keep); }
 });

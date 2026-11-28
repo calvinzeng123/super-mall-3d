@@ -452,7 +452,7 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
       // 坐在载具上（含登机、返航的过场）：界面换成只有开火键和机枪状态条
       { const riding = !!director.riding; if (riding !== ridingUi) { ridingUi = riding; ui.classList.toggle('jm-riding', riding); } }
       run('audio', dt); run('hud', dt);
-      try { hudLayout.update(); } catch (e) { fail('hudlayout', e, '界面排布出错'); }
+      try { hudLayout.update(dt); } catch (e) { fail('hudlayout', e, '界面排布出错'); }
       try { cover.tick(); } catch (e) { fail('cover', e, '封面出错'); }
       lightPool.update(dt);
       syncVisibility();
