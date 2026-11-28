@@ -1387,8 +1387,8 @@ export function createSiege(G, { layout, nav, scene, ui = null, zombies, directo
       if (z.hunt && (dy > R.storeys || d > R.far)) { const k = d + dy * 2; if (k < z._best - 2) { z._best = k; z._slowT = 0; } else slow = (z._slowT += R.every) > R.slow; }
       else { z._best = Infinity; z._slowT = 0; }
       // 爬楼摆的、那一层还没打过：不收走，换到那一层别处看不见的地方站好（reseat）；以前直接收掉，北区好几层的那一群人还没到就没了，楼梯口也不拦
-      // 人跟前（15 米内）、隔着楼梯井看得见的不收（以前楼梯顶上卡着的几只当着面没了）
-      if (((z.noPath || 0) >= R.noPath || slow) && Math.hypot(d, dy) >= SIEGE.cull.near && !G.physics.lineOfSight?.(_eye.set(p.x, p.y + 1.5, p.z), _head.set(z.pos.x, z.pos.y + 1.5, z.pos.z)) && !G.physics.sightAcross?.(_eye, _head)) { const y = z.pos.y, moved = !!z.seed && reseat(z); logRecycle(z, slow ? 'slow' : 'noPath', moved, y); if (!moved) z._deactivate(); }
+      // 楼上 15 米内（楼梯顶上挤着往下追的）、隔着楼梯井看得见的不收（以前楼梯顶上卡着的几只当着面没了）
+      if (((z.noPath || 0) >= R.noPath || slow) && !(z.pos.y - p.y > 2 && Math.hypot(d, dy) < SIEGE.cull.near) && !G.physics.lineOfSight?.(_eye.set(p.x, p.y + 1.5, p.z), _head.set(z.pos.x, z.pos.y + 1.5, z.pos.z)) && !G.physics.sightAcross?.(_eye, _head)) { const y = z.pos.y, moved = !!z.seed && reseat(z); logRecycle(z, slow ? 'slow' : 'noPath', moved, y); if (!moved) z._deactivate(); }
     }
   }
 
