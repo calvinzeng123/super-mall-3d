@@ -1,6 +1,7 @@
 // 店内陈设：按业态生成（服饰、珠宝、美妆、数码、餐饮、档口、小吃、亲子、书店、影城、电玩、超市、家居）。
 import { NORMAL } from '../../layout/geom.js';
 import { glassDoors } from '../../layout/frontage.js';
+import { cinemaPlan, CINEMA } from '../../layout/cinema.js';
 import { rng } from '../textures.js';
 import { tableSet, roundTable } from './props.js';
 import { homeShowroom } from './prop-sets.js';
@@ -536,11 +537,13 @@ function furnish(L, atlas, lv, u, rand) {
       break;
     }
     case 'cinema': {
-      // 大堂：售票、卖品、海报灯箱；后部为 4 个影厅
-      P('satin', mid - 4, 4.5, y0 + 0.55, 7, 1.0, 1.1, '#3a1d28');
-      P('glow', mid - 4, 4.4, y0 + 1.15, 6.8, 0.9, 0.03, '#f5c518');
-      for (let k = 0; k < 6; k++) P('glow', u0 + 2 + k * 3.2, 0.6, y0 + 2.4, 1.6, 0.05, 2.4, NEON[k % NEON.length]);
-      hallsCinema(B, F, u, y0, H, rand);
+      // 大堂：卖品台、海报灯箱；里头是放映厅（厅墙、门洞、座椅、卖品台和导航是同一份：layout/cinema.js）
+      const plan = cinemaPlan(u);
+      // 海报灯箱贴着第一面门脸往里一点：门洞前面不摆（以前正挡在门里头，像一堵发光的墙）
+      const gapW = glassDoors(style, Math.hypot(F.f.x1 - F.f.x0, F.f.z1 - F.f.z0));
+      const free = (a) => !gapW.width || gapW.at.every((c) => Math.abs(a - c) > gapW.width / 2 + 1.0);
+      for (let k = 0; k < 6; k++) { const a = u0 + 2 + k * 3.2; if (a < u1 - 1 && free(a)) P('glow', a, 0.6, y0 + 2.4, 1.6, 0.05, 2.4, NEON[k % NEON.length]); }
+      hallsCinema(B, plan, y0, H);
       break;
     }
     case 'arcade': {
@@ -695,36 +698,37 @@ function playground(P, B, F, u0, u1, D, y0, rand) {
 }
 
 /** 影城后部：4 个影厅（暗色地面、红色座椅、发光银幕） */
-function hallsCinema(B, F, u, y0, H, rand) {
-  for (const r of u.rects) {
-    const w = r.x1 - r.x0, d = r.z1 - r.z0;
-    const horizontal = w >= d;
-    const n = 2;
-    for (let i = 0; i < n; i++) {
-      const hall = horizontal
-        ? { x0: r.x0 + (i * w) / n + 0.4, x1: r.x0 + ((i + 1) * w) / n - 0.4, z0: r.z0 + 0.4, z1: r.z0 + d * 0.62 }
-        : { x0: r.x0 + 0.4, x1: r.x1 - 0.4, z0: r.z0 + (i * d) / n * 0.62 + 0.4, z1: r.z0 + ((i + 1) * d) / n * 0.62 - 0.4 };
-      const hw = hall.x1 - hall.x0, hd = hall.z1 - hall.z0;
-      const cx = (hall.x0 + hall.x1) / 2, cz = (hall.z0 + hall.z1) / 2;
-      B.get('matte').box(cx, y0 + 0.02, cz, hw, 0.03, hd, '#20141a');
-      for (const [x, z, sx, sz] of [[hall.x0, cz, 0.2, hd], [hall.x1, cz, 0.2, hd], [cx, hall.z0, hw, 0.2], [cx, hall.z1, hw, 0.2]]) {
-        B.get('matte').box(x, y0 + (H - 0.3) / 2, z, sx, H - 0.3, sz, '#3a2a30');
-      }
-      const along = hw >= hd;
-      // 银幕在远端
-      if (along) B.get('glow').box(hall.x0 + 0.25, y0 + 2.4, cz, 0.05, 2.6, hd * 0.75, '#f4f6ff');
-      else B.get('glow').box(cx, y0 + 2.4, hall.z0 + 0.25, hw * 0.75, 2.6, 0.05, '#f4f6ff');
-      const rows = Math.floor(((along ? hw : hd) - 3) / 1.1);
-      for (let k = 0; k < rows; k++) {
-        const o = 2.4 + k * 1.1;
-        const step = k * 0.18;
-        if (along) B.get('matte').box(hall.x0 + o, y0 + 0.35 + step, cz, 0.6, 0.7, hd - 1.6, '#b3263b');
-        else B.get('matte').box(cx, y0 + 0.35 + step, hall.z0 + o, hw - 1.6, 0.7, 0.6, '#b3263b');
-      }
+function hallsCinema(B, plan, y0, H) {
+  const C = CINEMA, h = H - 0.3, M = B.get('matte');
+  for (const hall of plan.halls) {
+    const cx = (hall.x0 + hall.x1) / 2, cz = (hall.z0 + hall.z1) / 2, hw = hall.x1 - hall.x0, hd = hall.z1 - hall.z0, z = hall.along === 'z';
+    M.box(cx, y0 + 0.02, cz, hw, 0.03, hd, '#20141a');
+    // 银幕：贴在银幕那头的墙上，朝厅里
+    const sc = hall.screen + hall.sign * 0.2;
+    if (z) B.get('glow').box(cx, y0 + 2.4, sc, hw * 0.75, 2.6, 0.05, '#f4f6ff'); else B.get('glow').box(sc, y0 + 2.4, cz, 0.05, 2.6, hd * 0.75, '#f4f6ff');
+    // 门洞：门头一道深色过梁 + 门洞上方一块绿色「出口」灯（从大堂、从厅里都看得出门在哪）
+    for (const d of hall.doors) {
+      const c = (d.c0 + d.c1) / 2, w = d.c1 - d.c0;
+      const [px, pz] = d.side === 'W' ? [hall.x0, c] : d.side === 'E' ? [hall.x1, c] : d.side === 'N' ? [c, hall.z0] : d.side === 'S' ? [c, hall.z1] : z ? [c, hall.sign > 0 ? hall.z1 : hall.z0] : [hall.sign > 0 ? hall.x1 : hall.x0, c];
+      const alongX = d.side === 'N' || d.side === 'S' || (d.side === 'back' && z);
+      M.box(px, y0 + 2.2 + (h - 2.2) / 2, pz, alongX ? w : 0.22, h - 2.2, alongX ? 0.22 : w, '#3a2a30');
+      B.get('glow').box(px, y0 + 2.42, pz, alongX ? 0.5 : 0.26, 0.16, alongX ? 0.26 : 0.5, '#3dff8a');
     }
   }
-  void F;
-  void rand;
+  // 厅墙（扣掉门洞）
+  for (const w of plan.walls) {
+    const len = Math.hypot(w.x1 - w.x0, w.z1 - w.z0); if (len < 0.05) continue;
+    const alongX = Math.abs(w.z1 - w.z0) < 1e-6;
+    M.box((w.x0 + w.x1) / 2, y0 + h / 2, (w.z0 + w.z1) / 2, alongX ? len + 0.2 : 0.2, h, alongX ? 0.2 : len + 0.2, '#3a2a30');
+  }
+  // 座椅：一排一排往后升高
+  for (const r of plan.rows) {
+    const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0), alongX = Math.abs(r.z1 - r.z0) < 1e-6;
+    M.box((r.x0 + r.x1) / 2, y0 + r.top / 2, (r.z0 + r.z1) / 2, alongX ? len : C.seat.d, r.top, alongX ? C.seat.d : len, '#b3263b');
+  }
+  // 卖品台
+  const q = plan.counter;
+  if (q) { B.get('satin').box((q.x0 + q.x1) / 2, y0 + C.counter.h / 2, (q.z0 + q.z1) / 2, q.x1 - q.x0, C.counter.h, q.z1 - q.z0, '#3a1d28'); B.get('glow').box((q.x0 + q.x1) / 2, y0 + C.counter.h + 0.02, (q.z0 + q.z1) / 2, q.x1 - q.x0 - 0.2, 0.03, q.z1 - q.z0 - 0.1, '#f5c518'); }
 }
 
 /** 超市：收银台、货架、生鲜岛、冷柜 */

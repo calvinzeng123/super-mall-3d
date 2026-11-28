@@ -245,3 +245,8 @@ export function findPath(nav, start, target, options = {}) {
 }
 
 export function clearPathfindingCache(nav) { caches.delete(nav); }
+/** 只忘掉某一层的格子（这一层的墙变了：卷帘开 / 关）：下次寻路这一层按现在的墙重算 */
+export function forgetPathfindingFloor(nav, floor) {
+  const all = caches.get(nav)?.grids; if (!all) return;
+  for (const k of [...all.keys()]) if (k.startsWith(`${floor}/`)) all.delete(k);
+}

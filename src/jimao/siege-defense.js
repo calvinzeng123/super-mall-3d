@@ -1,6 +1,7 @@
 // 丧尸围城：封门和路障。
 // 封门：能走的范围（商场那几层 + 这一局的那栋楼）往外的每一个门口、每一部上下的扶梯 / 楼梯口，落一道卷帘门——
-//   原来走出范围只是被「退回原地」，看不出为什么过不去。卷帘只是看的，拦人还是靠 siege.js 的范围检查（inArea）。
+//   原来走出范围只是被「退回原地」，看不出为什么过不去。这里只管样子（一整块网格）；碰撞是 siege-barriers.js 登记的真墙
+//  （人、队友、丧尸、子弹都挡），会开的那几道（开局店面、救人那家、两处扶梯口）也在 siege-barriers.js 里单独建、会动。
 // 路障：人自己摆的沙袋墙。拿到步枪、每过一个安全点各发几个；按 B（手机上有个按钮）摆在面前。
 //   丧尸走到跟前会被挡回去、踉跄一下，每挡一次路障掉一点「耐久」，掉光了塌掉；巨尸一巴掌拍碎。挡不住人和子弹（人本来就要从后面往外打）。
 import * as THREE from 'three';
@@ -30,14 +31,14 @@ export function sealSegments(nav, inside, S = DEFENSE.seal) {
   for (const p of nav.portals || []) {
     const a = inside(p.a), b = inside(p.b);
     if (a === b || !p.seg) continue;
-    out.push({ x0: p.seg.x0, z0: p.seg.z0, x1: p.seg.x1, z1: p.seg.z1, y: yOf(a ? p.a : p.b), h: S.height, kind: 'door' });
+    out.push({ x0: p.seg.x0, z0: p.seg.z0, x1: p.seg.x1, z1: p.seg.z1, y: yOf(a ? p.a : p.b), h: S.height, kind: 'door', floor: a ? p.a : p.b, other: a ? p.b : p.a });
   }
   for (const s of nav.slopes || []) {
     const lo = inside(s.low), hi = inside(s.high);
     if (lo === hi) continue;
     // 封在范围里的那一头：往坡道里缩半米（不压在楼面的走道上）
     const u = lo ? 0.5 : s.len - 0.5, [x0, z0] = toW(s.F, u, -s.hw), [x1, z1] = toW(s.F, u, s.hw);
-    out.push({ x0, z0, x1, z1, y: (lo ? s.y0 : s.y1) + (lo ? 1 : -1) * Math.abs(s.y1 - s.y0) * (0.5 / s.len), h: S.slopeHeight, kind: 'slope' });
+    out.push({ x0, z0, x1, z1, y: (lo ? s.y0 : s.y1) + (lo ? 1 : -1) * Math.abs(s.y1 - s.y0) * (0.5 / s.len), h: S.slopeHeight, kind: 'slope', slope: s.id, top: !lo, floor: lo ? s.low : s.high });
   }
   return out;
 }
