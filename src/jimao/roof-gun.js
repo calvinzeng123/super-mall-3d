@@ -489,7 +489,7 @@ export function createRoofGun(G, { scene, nav, siege, director = null, camera, u
     get active() { return !!cur; }, get current() { return cur; }, get list() { return list(); }, get tower() { return on; }, get blend() { return k; },
     /** 架着枪时队友站哪（squad.js 问）：阿哲、林医生各一处（台子边上、沙袋墙里面）；别的（小许）、没架着枪返回 null */
     matePost(id) { if (!cur) return null; const i = MATES.indexOf(id); return i >= 0 ? cur.geo.posts[i] || null : null; },
-    markers() { if (!sig || cur) return []; return list().map((e) => ({ id: `mg-${e.id}`, short: '机枪', label: e.name, pos: e.geo.seat.clone().setY(e.geo.y + R.deck.h + 1.1), kind: 'supply' })); },
+    markers() { if (!sig || cur) return []; return list().map((e) => ({ id: `mg-${e.id}`, short: '机枪', label: e.name, pos: e.geo.seat.clone().setY(e.geo.y + R.deck.h + 1.1), kind: 'supply', role: 'objective' })); },
     reset() { if (cur) dismount(); k = 0; said = false; sig = ''; G.weaponHold = false; ui?.classList?.remove('jm-mg'); for (const L of towers.values()) for (const e of L) e.gun.reset(); sync(); },
     dispose() {
       if (cur) dismount(); for (const L of towers.values()) for (const e of [...L].reverse()) { place(e, false); e.gun.dispose(); e.deck.dispose(); e.fort.dispose(); }

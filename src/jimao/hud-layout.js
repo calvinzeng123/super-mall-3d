@@ -7,6 +7,19 @@
 //   右下：大开火键；它右边一列：开镜、跳、蹲（从上到下）；开火键左上：换弹，正上方：手雷，左下：近战；交互键有东西可互动时出现在准星右下方；
 //   围城的治疗 / 路障在换弹、近战再往左一列。底部正中：切枪（显示下一把的名字），右边是弹药数，左边是血量。右上：暂停。
 // 竖屏不动按键位置（原来的排布），只换图标。电脑上没有按键，HUD 排布同样整理（小地图下面是任务栏，标记不叠在一起）。
+//
+// 信息要安静（用户：地图、标记看着还是乱）：
+//   顶部指南针只有刻度、当前目标那一枚（一行，不折行）和队友小圆点；弹药箱这类东西不上指南针。
+//   世界里的标记：只有当前目标写名字和距离；弹药箱 15 米以内才露一个小图标、不写字；准星附近的标记淡掉；同时最多 3 枚。
+//   无线电字幕：一行、过长截断，在切枪条上面，几秒后淡掉；提示条不和它叠。弹药块收紧，「弹药不足」是一枚小签。
+//   摇杆圈只在按着的时候出现（跟随拇指；固定摇杆才常显）。队友血条收在小地图右边（手机）/ 任务栏下面（电脑）。
+//   字号只用 TYPE 里那几档，颜色只用 HUD_COLORS 里那几种。
+
+/** HUD 的字号档（px）：这个文件里的字号都从这里取（CSS 里写 var(--jm-t-*)） */
+export const TYPE = Object.freeze({ xs: 10, s: 11, m: 13, l: 15, xl: 26, xxl: 44 });
+/** HUD 的颜色：目标（琥珀）、补给（绿）、敌人（红）、队友（浅绿）、正文、次要文字、底板 */
+export const HUD_COLORS = Object.freeze({ obj: '#ffb347', pick: '#7dffb0', enemy: '#ff5a4a', mate: '#9fe0a8', text: '#ece8de', dim: 'rgba(236, 232, 222, .62)', plate: 'rgba(10, 13, 15, .58)' });
+const tokens = () => `#ui { ${Object.entries(TYPE).map(([k, v]) => `--jm-t-${k}: ${v}px;`).join(' ')} ${Object.entries(HUD_COLORS).map(([k, v]) => `--jm-c-${k}: ${v};`).join(' ')} }`;
 
 /** 按键图标：24 × 24 的线稿，跟着按键的文字颜色 */
 export const ICONS = Object.freeze({
@@ -60,7 +73,7 @@ export const HUD_LAYOUT_CSS = `
 #ui .t-btn.has-ic > span { display: none; }
 #ui .t-btn.has-ic.lbl { grid-template-rows: 1fr auto; padding: 6px 0 5px; }
 #ui .t-btn.has-ic.lbl .t-ic { width: 22px; height: 22px; align-self: end; }
-#ui .t-btn.has-ic.lbl > span { display: block; font: 600 10px/1 var(--f-label); letter-spacing: .08em; margin: 3px 0 0; white-space: nowrap; }
+#ui .t-btn.has-ic.lbl > span { display: block; font: 600 var(--jm-t-xs)/1 var(--f-label); letter-spacing: .08em; margin: 3px 0 0; white-space: nowrap; }
 #ui .t-btn.active { background: rgba(255, 179, 71, .34); border-color: #ffb347; color: #ffd08a; transform: scale(.94); }
 #ui .t-fire, #ui .t-fire2 { border-width: 2px; border-color: rgba(255, 196, 120, .75); color: #ffd9a0; background: rgba(40, 22, 8, .32); }
 #ui .t-fire .t-ic { width: 42%; height: 42%; }
@@ -79,7 +92,7 @@ export const HUD_LAYOUT_CSS = `
 @media (orientation: landscape) {
   #ui .touch.on .t-fire2 { display: grid; }
   ${Object.entries(TOUCH_SLOTS).map(([k, q]) => slotCss(`#ui .t-${k}`, q)).join('\n  ')}
-  #ui .t-fire { font-size: 13px; }
+  #ui .t-fire { font-size: var(--jm-t-m); }
   /* 围城里搬东西时的「放下」：原来在右边中段，正压着开镜键——挪到交互键左边那一格 */
   .is-touch .jm-drop { right: calc(366px + var(--sar)) !important; top: auto !important; bottom: calc(230px + var(--sab)) !important; width: 60px !important; height: 60px !important; }
   #ui .t-pause { width: 40px; height: 40px; right: calc(12px + var(--sar)); top: calc(10px + var(--sat)); }
@@ -87,71 +100,157 @@ export const HUD_LAYOUT_CSS = `
   #ui .t-swap { width: ${SWAP_SLOT.w}px; height: ${SWAP_SLOT.h}px; left: calc(50% - ${SWAP_SLOT.w / 2}px); right: auto; bottom: calc(${SWAP_SLOT.b}px + var(--sab)); top: auto; border-radius: 22px;
     grid-template-columns: auto auto; grid-template-rows: none; gap: 6px; justify-content: center; padding: 0 12px; border-color: rgba(159, 196, 232, .65); color: #d8e9f8; }
   #ui .t-swap.has-ic.lbl .t-ic { width: 20px; height: 20px; align-self: center; }
-  #ui .t-swap.has-ic.lbl > span { font-size: 13px; margin: 0; }
-  /* 弹药：切枪键右边；血量：切枪键左边（受伤时才亮） */
-  .is-touch #ui .h-ammo, #ui.is-touch .h-ammo, .is-touch .h-ammo { top: auto !important; right: auto !important; left: calc(50% + ${SWAP_SLOT.w / 2 + 12}px) !important; bottom: calc(6px + var(--sab)) !important; text-align: left; }
-  .is-touch .h-ammo-row { justify-content: flex-start; }
-  .is-touch .h-ammo-n { font-size: 34px !important; }
-  .is-touch .h-pips { justify-content: flex-start; margin: 4px 0 3px !important; }
-  .is-touch .h-cue { position: absolute; bottom: 100%; left: 0; white-space: nowrap; }
-  .is-touch .h-wname { font-size: 10px; }
+  #ui .t-swap.has-ic.lbl > span { font-size: var(--jm-t-m); margin: 0; }
+  /* 弹药：切枪键右边，一行「弹匣 / 备弹」+ 枪名，不画子弹格；「弹药不足 / 耗尽」是数字右边的一枚小签。血量：切枪键左边（受伤时才亮） */
+  .is-touch #ui .h-ammo, #ui.is-touch .h-ammo, .is-touch .h-ammo { top: auto !important; right: auto !important; left: calc(50% + ${SWAP_SLOT.w / 2 + 12}px) !important; bottom: calc(8px + var(--sab)) !important; text-align: left; }
+  .is-touch .h-ammo-row { justify-content: flex-start; gap: 5px; }
+  .is-touch .h-ammo-n { font-size: var(--jm-t-xl) !important; }
+  .is-touch .h-ammo-r { font-size: var(--jm-t-s); padding-bottom: 2px; }
+  .is-touch .h-pips { display: none !important; }
+  .is-touch .h-cue { left: calc(100% + 8px); right: auto; bottom: auto; top: 2px; }
+  .is-touch .h-wname { font-size: var(--jm-t-xs); letter-spacing: .1em; margin-top: 4px; }
   .is-touch .h-health { top: auto !important; left: auto !important; right: calc(50% + ${SWAP_SLOT.w / 2 + 12}px) !important; bottom: calc(10px + var(--sab)) !important; text-align: right; }
   .is-touch .h-hp-row { justify-content: flex-end; }
-  .is-touch .h-hp-n { font-size: 26px; }
+  .is-touch .h-hp-n { font-size: var(--jm-t-xl); }
   .is-touch .jm-stick-home { left: calc(170px + var(--sal)); bottom: calc(80px + var(--sab)); }
   .is-touch .jm-stick-home span { display: none; }
-  /* 手雷数（电脑上是文字，手机上按键自己标数）；击杀提示挪到右上、暂停键下面 */
+  /* 击杀提示挪到右上、暂停键下面 */
   .is-touch .h-feed { top: calc(58px + var(--sat)) !important; right: calc(14px + var(--sar)); }
-  .is-touch .h-fl { font-size: 11px; }
-  /* 队友血条：任务栏下面、左手开火键右边 */
-  .is-touch .jm-squad { top: calc(10px + var(--jm-map, 104px) + 112px + var(--sat)) !important; bottom: auto !important; left: calc(96px + var(--sal)) !important; gap: 3px; }
-  .is-touch .jm-squad .m { grid-template-columns: 44px 60px auto; }
-  /* 无线电字幕、提示条：放在摇杆和右手按键中间那一条里，不压按键 */
-  .is-touch .comms { width: min(320px, 40vw) !important; bottom: calc(66px + var(--sab)) !important; top: auto !important; }
-  .is-touch .comms-t { font-size: 13px !important; }
-  .is-touch .h-msg { bottom: auto !important; top: calc(98px + var(--sat)); max-width: min(360px, 44vw); font-size: 10px; }
+  .is-touch .h-fl { font-size: var(--jm-t-s); }
+  /* 队友：小地图右边，名字 + 一根细血条，一人一行 */
+  .is-touch .jm-squad { top: calc(16px + var(--sat)) !important; bottom: auto !important; left: calc(var(--gl) + var(--jm-map, 104px) + 12px) !important; }
+  /* 无线电字幕、提示条：切枪条正上方那一行 */
+  .is-touch .comms { max-width: min(440px, 52vw); bottom: calc(${SWAP_SLOT.b + SWAP_SLOT.h + 10}px + var(--sab)) !important; }
+  .is-touch .h-msg { top: auto !important; bottom: calc(${SWAP_SLOT.b + SWAP_SLOT.h + 10}px + var(--sab)) !important; max-width: min(420px, 50vw); }
 }
 
-/* ===== HUD 信息层级：左上角一列（小地图 → 下一步 → 任务栏），顶部正中指南针，标记不叠 ===== */
+/* ===== HUD 信息层级：左上角一列（小地图 → 下一步 → 任务栏），顶部正中指南针 ===== */
+${tokens()}
 .h-obj { left: var(--gl) !important; top: calc(14px + var(--jm-map, 148px) + 44px + var(--sat)) !important; max-width: min(300px, 34vw) !important; padding: 6px 10px 7px 10px !important;
-  background: linear-gradient(90deg, rgba(10, 13, 15, .62), rgba(10, 13, 15, .18)); border-left: 2px solid var(--signal); }
-.h-obj .h-k { font-size: 10px; letter-spacing: .2em; }
-.h-obj-t { font: 600 16px/1.2 var(--f-label) !important; margin: 4px 0 6px !important; min-height: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  background: linear-gradient(90deg, rgba(10, 13, 15, .62), rgba(10, 13, 15, .18)); border-left: 2px solid var(--jm-c-obj); }
+.h-obj .h-k { font-size: var(--jm-t-xs); letter-spacing: .2em; }
+.h-obj-t { font: 600 var(--jm-t-l)/1.25 var(--f-label) !important; margin: 4px 0 6px !important; min-height: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-relays.none { display: none !important; }
-.h-relays { font-size: 10px; }
-.jm-map-hint { margin-top: 14px !important; max-width: min(300px, 34vw) !important; overflow: hidden; text-overflow: ellipsis; }
-.jm-map-floor { font-size: 10px !important; }
-/* 世界里的目标标记：菱形 + 名字 + 距离排成一枚小牌；看不见（身后、屏幕外）时贴在屏幕边上、带一个指向它的箭头 */
-.h-wm b { top: -26px !important; font-size: 11px !important; text-shadow: 0 1px 3px rgba(0, 0, 0, .85); }
-.h-wm span { top: 10px !important; font: 600 10px/1 var(--f-mono) !important; padding: 2px 4px; background: rgba(10, 13, 15, .55); border-radius: 3px; left: -24px !important; width: 48px !important; }
-.h-wm.jm-stack-1 b, .h-wm.jm-stack-1 span { translate: 0 var(--jm-dy, 0px); }
-.h-wm.jm-quiet b { display: none; }
-.h-wm.jm-quiet span { display: none; }
-.h-wm.jm-far { opacity: .55; }
-.h-wm .jm-arr { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; display: none; transform: rotate(var(--jm-a, 0deg)) translateY(-15px); }
-.h-wm .jm-arr::before { content: ''; position: absolute; left: 3px; top: 0; border: 4px solid transparent; border-bottom: 7px solid currentColor; border-top: 0; }
-.h-wm.offscreen .jm-arr { display: block; }
+.h-relays { font-size: var(--jm-t-xs); }
+.jm-map-hint { margin-top: 14px !important; max-width: min(300px, 34vw) !important; overflow: hidden; text-overflow: ellipsis; font-size: var(--jm-t-m) !important; }
+.jm-map-floor { font-size: var(--jm-t-xs) !important; }
 .is-touch .h-obj { top: calc(10px + var(--jm-map, 104px) + 40px + var(--sat)) !important; max-width: min(250px, 30vw) !important; }
-.is-touch .h-obj-t { font-size: 14px !important; }
-.is-touch .jm-map-hint { margin-top: 10px !important; font-size: 11px !important; }
+.is-touch .h-obj-t { font-size: var(--jm-t-m) !important; }
+.is-touch .jm-map-hint { margin-top: 10px !important; font-size: var(--jm-t-s) !important; }
 .is-touch .h-compass { width: min(280px, 36vw) !important; }
 @media (orientation: portrait) {
   .is-touch .h-obj { max-width: 52vw !important; }
 }
+
+/* 指南针：刻度 + 当前目标（菱形下面一行「名字 距离」，不折行）+ 队友小圆点；别的标记不上指南针 */
+.h-cm { left: 0 !important; width: 0 !important; display: grid !important; grid-template-columns: auto auto; justify-content: center; column-gap: 3px; white-space: nowrap; color: var(--jm-c-obj); }
+.h-cm i { grid-column: 1 / -1; justify-self: center; width: 7px !important; height: 7px !important; margin: 0 0 3px !important; }
+.h-cm b { font: 700 var(--jm-t-s)/1 var(--f-label) !important; margin: 0 !important; }
+.h-cm span { font: 500 var(--jm-t-xs)/1.1 var(--f-mono) !important; color: var(--jm-c-text); }
+.h-cm b:empty { display: none; }
+.h-cm.jm-hide { display: none !important; }
+.h-cmarks .jm-mate { position: absolute; left: -3px; top: -9px; width: 6px; height: 6px; border-radius: 50%; background: var(--jm-c-mate); box-shadow: 0 0 0 1px rgba(0, 0, 0, .45); will-change: transform; }
+.h-cmarks .jm-mate.down { background: var(--jm-c-enemy); }
+
+/* 世界里的标记：当前目标 = 菱形 + 上面名字、下面距离；其余只有一枚小图标（补给是绿色小方块、敌人是红点），不写字 */
+.h-wm { color: var(--jm-c-obj); transition: opacity .2s; }
+.h-wm.dim { opacity: .78; }
+.h-wm b { top: -24px !important; font: 700 var(--jm-t-s)/1 var(--f-label) !important; text-shadow: 0 1px 3px rgba(0, 0, 0, .85); white-space: nowrap; }
+.h-wm span { top: 10px !important; left: -24px !important; width: 48px !important; font: 500 var(--jm-t-xs)/1.3 var(--f-mono) !important; color: var(--jm-c-text); white-space: nowrap; text-shadow: 0 1px 3px rgba(0, 0, 0, .9); }
+.h-wm.jm-hide { display: none !important; }
+.h-wm.jm-icon b, .h-wm.jm-icon span { display: none !important; }
+.h-wm.jm-icon { opacity: .7; }
+.h-wm.jm-icon i { left: -4px !important; top: -4px !important; width: 8px !important; height: 8px !important; }
+.h-wm.supply { color: var(--jm-c-pick); }
+.h-wm.supply.jm-icon i { transform: none; border-radius: 2px; }
+.h-wm.enemy, .h-wm.hunt { color: var(--jm-c-enemy); }
+.h-wm.enemy.jm-icon i, .h-wm.hunt.jm-icon i { transform: none; border-radius: 50%; left: -3px !important; top: -3px !important; width: 6px !important; height: 6px !important; }
+.h-wm.jm-aim, .h-wm.jm-aim.offscreen { opacity: 0 !important; }
+.h-wm.jm-far { opacity: .6; }
+.h-wm .jm-arr { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; display: none; transform: rotate(var(--jm-a, 0deg)) translateY(-15px); }
+.h-wm .jm-arr::before { content: ''; position: absolute; left: 3px; top: 0; border: 4px solid transparent; border-bottom: 7px solid currentColor; border-top: 0; }
+.h-wm.offscreen .jm-arr { display: block; }
+
+/* 无线电字幕：一行（「指挥中心」小字 + 正文，长了截断），几秒后淡掉；提示条和它在同一处，字幕在的时候提示条让到上面一行 */
+.comms { display: flex !important; align-items: baseline; gap: 8px; white-space: nowrap; top: auto !important; bottom: calc(96px + var(--sab)) !important; width: max-content !important; max-width: min(620px, 56vw); padding: 0 10px; border-radius: 3px; background: var(--jm-c-plate); transition: opacity .5s; }
+.comms-who { display: inline !important; flex: none; margin: 0 !important; font: 600 var(--jm-t-xs)/1 var(--f-label) !important; letter-spacing: .14em !important; color: var(--jm-c-obj); }
+.comms-t { display: block !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 var(--jm-t-m)/1.7 var(--f-label) !important; padding: 0 !important; background: none !important; }
+.comms.jm-fade { opacity: 0 !important; }
+.h-msg { top: auto !important; bottom: calc(96px + var(--sab)); max-width: min(620px, 56vw); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 500 var(--jm-t-s)/1.4 var(--f-label) !important; letter-spacing: .04em !important; text-transform: none !important;
+  padding: 3px 10px !important; border-radius: 3px; background: var(--jm-c-plate) !important; transition: opacity .3s, translate .2s; }
+#ui.jm-radio .h-msg { translate: 0 -28px; }
+
+/* 弹药：数字收小；「弹药不足 / 换弹 / 耗尽」是一枚小签（不闪） */
+.h-ammo-n { font-size: var(--jm-t-xxl) !important; }
+.h-ammo-r { font-size: var(--jm-t-m); }
+.h-pips { margin: 6px 0 5px !important; }
+.h-pips i { height: 8px !important; }
+.h-wname { font-size: var(--jm-t-xs) !important; }
+.h-cue { position: absolute; right: 0; bottom: 100%; margin: 0 0 6px !important; height: auto !important; padding: 2px 6px; border: 1px solid currentColor; border-radius: 3px; background: rgba(255, 179, 71, .14);
+  font: 700 var(--jm-t-xs)/1.2 var(--f-label) !important; letter-spacing: .1em !important; white-space: nowrap; }
+.h-cue.urgent { color: var(--jm-c-enemy) !important; background: rgba(255, 90, 74, .16); animation: none !important; }
+
+/* 队友（电脑）：任务栏下面，名字 + 细血条 */
+.jm-squad { left: var(--gl) !important; bottom: auto !important; top: calc(14px + var(--jm-map, 148px) + 44px + 96px + var(--sat)); gap: 3px !important; font-size: var(--jm-t-xs) !important; }
+.jm-squad .m { grid-template-columns: 40px 56px auto !important; gap: 6px !important; }
+.jm-squad .m i { height: 3px !important; }
+.jm-squad .m i b { background: var(--jm-c-mate); }
+
+/* 跟随拇指的摇杆：不按的时候什么都不画（固定摇杆、布局编辑时照常显示那个圈） */
+#ui:not(.jm-stick-fixed):not(.jm-editing) .jm-stick-home { display: none; }
 `;
 
-/** 两枚标记在屏幕上挨得太近（像素）：远的那枚只留菱形，近的照常 */
-export const DECLUTTER = Object.freeze({ dx: 64, dy: 40, far: 90 });
-/** 屏幕上的一组标记（{ x, y, d, off }，d 是米数）→ 每枚的处理：{ quiet, far }。近的优先显示文字，和已显示的挤在一起的只留菱形。纯函数 */
-export function declutter(marks, D = DECLUTTER) {
-  const order = marks.map((m, i) => i).sort((a, b) => (marks[a].d ?? 1e9) - (marks[b].d ?? 1e9)), shown = [], out = marks.map(() => ({ quiet: false, far: false }));
-  for (const i of order) {
-    const m = marks[i];
-    out[i].far = (m.d ?? 0) > D.far;
-    if (shown.some((s) => Math.abs(s.x - m.x) < D.dx && Math.abs(s.y - m.y) < D.dy)) out[i].quiet = true; else shown.push(m);
+/**
+ * 世界标记的取舍：max 同时最多几枚；pickupNear 补给（弹药箱）几米以内才露图标；enemyNear 敌人几米以内露红点；
+ * aim 准星附近（屏幕短边的这个比例为半径）的标记淡掉；rank 抢名额的先后（目标 → 敌人 → 补给）。
+ */
+export const MARKERS = Object.freeze({ max: 3, pickupNear: 15, enemyNear: 40, aim: 0.13, rank: Object.freeze({ objective: 0, enemy: 1, pickup: 2 }) });
+/** 标记的 kind（原游戏 + 我们的 extraMarkers）→ 角色：supply 是补给，enemy / hunt 是敌人，别的都算目标 */
+export function markerRole(kind) { return kind === 'supply' ? 'pickup' : kind === 'enemy' || kind === 'hunt' ? 'enemy' : 'objective'; }
+
+/**
+ * 一组标记（{ role, d 米, x, y 屏幕像素, off 贴在屏幕边上, near 走到跟前了 }）→ 每枚怎么画：
+ *   { primary 当前目标, compass 上不上指南针, world: 'label' | 'icon' | 'hide', aim 在准星附近（淡掉） }。
+ * 当前目标 = 最近的目标类标记（没有目标类时取最近的敌人）：指南针只放它，世界里只有它写名字和距离、贴边时带箭头。
+ * 其余只在屏幕里、够近时画一枚小图标；准星附近的淡掉、不占名额；总数不超过 max。纯函数
+ */
+export function planMarkers(marks, { w, h }, M = MARKERS) {
+  let primary = -1;
+  for (const want of ['objective', 'enemy']) {
+    marks.forEach((m, i) => { if (m.role === want && (primary < 0 || m.d < marks[primary].d)) primary = i; });
+    if (primary >= 0) break;
+  }
+  const out = marks.map((m, i) => ({ primary: i === primary, compass: i === primary, world: 'hide', aim: false }));
+  const cand = [];
+  marks.forEach((m, i) => {
+    if (m.near) return;
+    if (i !== primary && (m.off || (m.role === 'pickup' && m.d > M.pickupNear) || (m.role === 'enemy' && m.d > M.enemyNear))) return;
+    cand.push(i);
+  });
+  cand.sort((a, b) => (b === primary) - (a === primary) || M.rank[marks[a].role] - M.rank[marks[b].role] || marks[a].d - marks[b].d);
+  const r = M.aim * Math.min(w, h);
+  let n = 0;
+  for (const i of cand) {
+    const m = marks[i], aim = !m.off && Math.hypot(m.x - w / 2, m.y - h / 2) < r;
+    if (!aim && n >= M.max) continue;
+    out[i].world = i === primary ? 'label' : 'icon'; out[i].aim = aim;
+    if (!aim) n++;
   }
   return out;
 }
+
+/** 原游戏指南针一度几像素（它的 tx） */
+export const COMPASS_PX = 4;
+/** 指南针上的横坐标（相对正中，像素）：从你到 (dx, dz) 的方位，你朝 yaw；出了这条刻度带（宽 width）返回 null */
+export function compassX(dx, dz, yaw, width) {
+  const head = ((-yaw * 180 / Math.PI) % 360 + 360) % 360;
+  let a = Math.atan2(dx, -dz) * 180 / Math.PI - head; a = ((a + 540) % 360 + 360) % 360 - 180;
+  const x = a * COMPASS_PX;
+  return Math.abs(x) > width / 2 - 14 ? null : Math.round(x);
+}
+
+/** 无线电一句话打完以后留几秒就淡掉 */
+export const RADIO_HOLD = 3.5;
 
 /**
  * G、ui（#ui）。返回 { update(), dispose() }：每帧调（HUD 更新之后）——给新出现的按键画图标、补左手开火键、整理目标标记、没有分步时藏掉「0/0」。
@@ -181,37 +280,77 @@ export function createHudLayout(G, ui) {
   // 「目标 0/0」：这一局的任务没有分步（坚守、歼灭……）时整行藏掉
   const relays = () => { const r = ui.querySelector('.h-relays'), b = r?.querySelector('b'); if (r && b) r.classList.toggle('none', /^0\/0$/.test(b.textContent.trim())); };
   const pos = (el) => { const m = /translate3d\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px/.exec(el.style.transform || ''); return m ? [+m[1], +m[2]] : null; };
+  // 标记的角色（目标 / 补给 / 敌人）：setMarkers 收到的每一项可以自己带 role（楼顶机枪是绿色的 supply，但那一段它就是目标），没带按 kind 算
+  const hud = G.hud, setMarkers0 = hud?.setMarkers;
+  if (setMarkers0) hud.setMarkers = function (list) {
+    const r = setMarkers0.call(this, list);
+    const cms = ui.querySelectorAll('.h-cmarks .h-cm'), wms = ui.querySelectorAll('.h-marks .h-wm');
+    (list || []).forEach((q, i) => { const role = q.role || markerRole(q.kind || 'relay'); if (cms[i]) cms[i].dataset.role = role; if (wms[i]) wms[i].dataset.role = role; });
+    return r;
+  };
+  const roleOf = (el) => el.dataset.role || markerRole([...el.classList].find((c) => c !== 'h-wm' && c !== 'h-cm' && !c.startsWith('jm-') && !['offscreen', 'near', 'dim', 'edge'].includes(c)));
   function markers() {
-    const els = [...ui.querySelectorAll('.h-wm')], marks = [], used = [];
+    const wms = [...ui.querySelectorAll('.h-marks .h-wm')], cms = [...ui.querySelectorAll('.h-cmarks .h-cm')], marks = [];
     const W = innerWidth, H = innerHeight;
-    for (const el of els) {
-      const p = pos(el); if (!p || el.classList.contains('near') || getComputedStyle(el).display === 'none') continue;
-      const d = parseFloat(el.querySelector('span')?.textContent) || 0, off = el.classList.contains('offscreen');
-      marks.push({ x: p[0], y: p[1], d, off }); used.push(el);
-      if (off) {
-        if (!el.querySelector('.jm-arr')) el.insertAdjacentHTML('beforeend', '<u class="jm-arr"></u>');
-        const a = Math.atan2(p[1] - H / 2, p[0] - W / 2) * 180 / Math.PI + 90;
-        el.style.setProperty('--jm-a', `${a.toFixed(0)}deg`);
-      }
+    for (const el of wms) {
+      const p = pos(el) || [-1e4, -1e4];
+      marks.push({ role: roleOf(el), x: p[0], y: p[1], d: parseFloat(el.querySelector('span')?.textContent) || 0, off: el.classList.contains('offscreen'), near: el.classList.contains('near') });
     }
-    const res = declutter(marks);
-    // 贴在屏幕边上的标记别压在左上角那一列（小地图、任务栏）和左手开火键上：压着就往下挪到它们下面
-    const keep = [...ui.querySelectorAll('.jm-map:not(.off), .h-obj.has, .touch.on .t-fire2')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
-    used.forEach((el, i) => {
-      el.classList.toggle('jm-quiet', res[i].quiet); el.classList.toggle('jm-far', res[i].far);
-      let dy = 0; const m = marks[i];
-      if (m.off) for (const r of keep) if (m.x > r.left - 34 && m.x < r.right + 34 && m.y + dy > r.top - 30 && m.y + dy < r.bottom + 30) dy = r.bottom + 34 - m.y;
+    const res = planMarkers(marks, { w: W, h: H });
+    // 贴在屏幕边上的目标别压在左上角那一列（小地图、队友、任务栏）和左手开火键上：压着就往下挪到它们下面
+    const keep = [...ui.querySelectorAll('.jm-map:not(.off), .jm-squad:not(.off), .h-obj.has, .touch.on .t-fire2')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
+    wms.forEach((el, i) => {
+      const m = marks[i], q = res[i];
+      el.classList.toggle('jm-hide', q.world === 'hide'); el.classList.toggle('jm-icon', q.world === 'icon'); el.classList.toggle('jm-aim', q.aim);
+      el.classList.toggle('jm-far', q.world === 'label' && m.d > 90);
+      if (cms[i]) cms[i].classList.toggle('jm-hide', !q.compass);
+      let dy = 0;
+      if (q.world === 'label' && m.off) {
+        if (!el.querySelector('.jm-arr')) el.insertAdjacentHTML('beforeend', '<u class="jm-arr"></u>');
+        el.style.setProperty('--jm-a', `${(Math.atan2(m.y - H / 2, m.x - W / 2) * 180 / Math.PI + 90).toFixed(0)}deg`);
+        for (const r of keep) if (m.x > r.left - 34 && m.x < r.right + 34 && m.y + dy > r.top - 30 && m.y + dy < r.bottom + 30) dy = r.bottom + 34 - m.y;
+      }
       const t = dy ? `0 ${Math.round(dy)}px` : ''; if (el.style.translate !== t) el.style.translate = t;
     });
   }
+  // 指南针上的队友小圆点
+  const dots = new Map();
+  function mates() {
+    const host = ui.querySelector('.h-cmarks'), sq = G.squad, p = G.player?.pos;
+    const list = host && p && sq?.everyone && sq.spawned ? sq.everyone.filter((m) => sq.isOn?.(m) && m.pos && Math.hypot(m.pos.x - p.x, m.pos.z - p.z) > 1) : [];
+    const width = ui.querySelector('.h-compass')?.clientWidth || 280, seen = new Set();
+    for (const m of list) {
+      const x = compassX(m.pos.x - p.x, m.pos.z - p.z, G.player.yaw || 0, width);
+      if (x === null) continue;
+      let el = dots.get(m.id);
+      if (!el) { el = document.createElement('i'); el.className = 'jm-mate'; dots.set(m.id, el); }
+      if (el.parentNode !== host) host.appendChild(el);
+      const t = `translate3d(${x}px,0,0)`; if (el.style.transform !== t) el.style.transform = t;
+      el.classList.toggle('down', !!m.down); seen.add(m.id);
+    }
+    for (const [id, el] of dots) if (!seen.has(id)) el.remove();
+  }
+  // 无线电：一句话打完、停 RADIO_HOLD 秒就淡掉；字幕在的时候提示条让到上面一行
+  let radioText = '', radioT = 0;
+  function radio(dt) {
+    const c = ui.querySelector('.comms'), t = c?.querySelector('.comms-t'); if (!c || !t) return;
+    const on = c.classList.contains('on');
+    if (t.textContent !== radioText) { radioText = t.textContent; radioT = 0; } else radioT += dt;
+    const fade = on && radioT > RADIO_HOLD;
+    if (c.classList.contains('jm-fade') !== fade) c.classList.toggle('jm-fade', fade);
+    const busy = on && !fade && !!radioText;
+    if (ui.classList.contains('jm-radio') !== busy) ui.classList.toggle('jm-radio', busy);
+  }
   return {
-    update() {
+    /** dt：这一帧的秒数（游戏时间，暂停时不走） */
+    update(dt = 1 / 60) {
       if (G.input?.touch && !fire2) buildFire2();
       frame++;
       if (frame % 6 === 0) relays();
-      if (frame % 3 === 0) markers();
+      if (frame % 3 === 0) { markers(); mates(); }
+      radio(Math.min(0.1, Math.max(0, dt || 0)));
     },
     get fire2() { return fire2; },
-    dispose() { watcher.disconnect(); fire2?.remove(); },
+    dispose() { watcher.disconnect(); fire2?.remove(); for (const el of dots.values()) el.remove(); if (setMarkers0) hud.setMarkers = setMarkers0; },
   };
 }
