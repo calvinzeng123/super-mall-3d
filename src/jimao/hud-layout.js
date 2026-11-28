@@ -42,7 +42,7 @@ export const TOUCH_SLOTS = Object.freeze({
   reload: Object.freeze({ r: 200, b: 168, s: 54 }),
   nade: Object.freeze({ r: 116, b: 194, s: 54 }),
   melee: Object.freeze({ r: 200, b: 92, s: 54 }),
-  interact: Object.freeze({ r: 204, b: 238, s: 62 }),
+  interact: Object.freeze({ r: 290, b: 230, s: 62 }),
   heal: Object.freeze({ r: 274, b: 168, s: 52 }),
   wall: Object.freeze({ r: 274, b: 92, s: 52 }),
   fire2: Object.freeze({ l: 20, b: 112, s: 58 }),
@@ -78,6 +78,8 @@ export const HUD_LAYOUT_CSS = `
 @media (orientation: landscape) {
   ${Object.entries(TOUCH_SLOTS).map(([k, q]) => slotCss(`#ui .t-${k}`, q)).join('\n  ')}
   #ui .t-fire { font-size: 13px; }
+  /* 围城里搬东西时的「放下」：原来在右边中段，正压着开镜键——挪到交互键左边那一格 */
+  .is-touch .jm-drop { right: calc(366px + var(--sar)) !important; top: auto !important; bottom: calc(230px + var(--sab)) !important; width: 60px !important; height: 60px !important; }
   #ui .t-pause { width: 40px; height: 40px; right: calc(12px + var(--sar)); top: calc(10px + var(--sat)); }
   /* 切枪：底部正中的一条（图标 + 下一把的名字） */
   #ui .t-swap { width: ${SWAP_SLOT.w}px; height: ${SWAP_SLOT.h}px; left: calc(50% - ${SWAP_SLOT.w / 2}px); right: auto; bottom: calc(${SWAP_SLOT.b}px + var(--sab)); top: auto; border-radius: 22px;

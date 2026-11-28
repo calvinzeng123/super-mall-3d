@@ -804,7 +804,7 @@ export function createArsenal(G, { camera, layer = 0, ui = null }) {
       // 新步枪的零件和左手（rifle-view.js）：放下步枪时左手先松开，掏出来时左手最后托上护木
       if (rifleView && S.cur === 'rifle') {
         const rk = S.phase === 'lower' ? clamp01(S.t / (S.quick ? SWAP.lower * 0.6 : SWAP.lower)) : S.phase === 'draw' ? clamp01(S.t / (S.plain ? DRAW.quick : DRAW.rifle)) : 1;
-        rifleView.update(dt, { phase: S.phase, k: rk });
+        rifleView.update(dt, { phase: S.phase, k: rk, ads: rifle?.ads || 0 });
       }
       // 步枪拍弹匣底座那一下（原游戏 1.5 秒弹一下，不发事件）：补一个 tap
       { const rl = S.cur === 'rifle' ? rifle?.anim?.reload : null, t = rl ? rl.t : -1;

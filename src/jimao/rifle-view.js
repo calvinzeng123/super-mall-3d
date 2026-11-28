@@ -28,6 +28,8 @@ export const RIFLE_VIEW = Object.freeze({
   rear: Object.freeze([-0.0019, 0.18, 0.163]), front: Object.freeze([-0.0018, 0.1985, -0.8135]), eyeZ: 0.075,
   muzzle: Object.freeze([-0.002, 0.0493, -1.27]), eject: Object.freeze([0.05, 0.04, -0.1]), trigger: Object.freeze([-0.002, -0.1, 0.053]),
   arms: Object.freeze({ p: Object.freeze([0, 0, 0]), r: Object.freeze([0, 0, 0]) }), armScale: 0.84,
+  // 腰射时整把枪再往前、往右下送一点（开镜时归零：开镜对准线不受影响）——原来枪托顶在镜头跟前，护木和左手占了半个屏幕
+  hipShift: Object.freeze([0, 0, 0]),
   boltTravel: 0.07, dustCover: 1.9,
   // 表面：原贴图是中灰的钢（金属度 1），在商场灯下像没上漆的铁——颜色乘 tint 压成深灰黑的阳极氧化色。
   // （试过叠一层平铺的颗粒法线：这个模型的 UV 是小零件占大块，照门这种小件上颗粒大得像海绵，去掉了）
@@ -312,7 +314,8 @@ export function createRifleView(rifle, { layer = 0, V = RIFLE_VIEW, KEYS = HAND_
 
   function update(dt, info = {}) {
     if (!ready) return;
-    const rw = k.reloadW || 0; rig.rotation.set(0, 0, V.reloadRoll * rw); rig.position.set(V.reloadLift[0] * rw, V.reloadLift[1] * rw, V.reloadLift[2] * rw);
+    const rw = k.reloadW || 0, hip = 1 - Math.max(0, Math.min(1, info.ads || 0)), hs = V.hipShift || [0, 0, 0];
+    rig.rotation.set(0, 0, V.reloadRoll * rw); rig.position.set(V.reloadLift[0] * rw + hs[0] * hip, V.reloadLift[1] * rw + hs[1] * hip, V.reloadLift[2] * rw + hs[2] * hip);
     // ---- 左手：换弹时间轴，或者托护木；切枪时撤开 ----
     const rl = k.reload, empty = !!rl?.empty, t = rl ? rl.t : 0;
     const keys = empty ? R.empty : R.tactical, at = rl ? keyAt(keys, t) : { a: 'guard', b: 'guard', k: 0 };
