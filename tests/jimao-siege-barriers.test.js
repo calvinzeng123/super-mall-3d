@@ -214,3 +214,21 @@ for (const seed of [1, 2, 3]) {
     }
   });
 }
+
+// 联机：卷帘开没开跟着主机的步数走（客户端 siege.follow，步数照主机的 relays），按住摇的进度跟着主机的快照（followOut → followState 的 hk）。
+// 两边各有一份卷帘（各自的模型、开度、灯）；导航网格是同一张，所以这里只看客户端自己那份卷帘的开度和状态
+test('联机：主机按住摇，客户端的帘片跟着抬；主机摇开了，客户端的卷帘也卷上去、到顶才算开，屏幕上说「卷帘已打开」', () => {
+  const host = world(2), cl = world(2), at = host.plan.stageOf;
+  cl.siege.follow = true;
+  const sync = () => { cl.G.game.run.relays.forEach((r, i) => { r.cut = host.G.game.run.relays[i].cut; }); cl.siege.followState(host.siege.followOut()); };
+  const both = (secs) => { for (let t = 0; t < secs - 1e-9; t += 0.1) { host.run(0.1); sync(); cl.run(0.1); } };
+  const hb = host.siege.doors.get('exit'), cb = cl.siege.doors.get('exit');
+  assert.ok(cb && cb.state === 'closed' && cb !== hb, '客户端自己有一道大门卷帘，落着');
+  host.cut(1); both(0.3); assert.equal(cl.siege.state.stage, at('exit'), '客户端跟到「摇卷帘」这一步');
+  host.G.game.run.relays[at('exit')].t = 0.6; both(1.2);
+  assert.ok(cb.k > 0.35 && cb.state === 'closed', `主机按住摇：客户端的帘片抬到 ${cb.k.toFixed(2)}、还算关着`);
+  host.G.game.run.relays[at('exit')].t = 0; host.cut(1); both(0.3);
+  assert.equal(cb.state, 'opening', '主机摇开：客户端的卷帘往上卷');
+  both(BARRIER.rise + 0.4);
+  assert.equal(cb.state, 'open'); assert.ok(cl.msgs.some((t) => /卷帘已打开/.test(t)), '客户端屏幕上也说「卷帘已打开」');
+});
