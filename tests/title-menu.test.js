@@ -136,6 +136,31 @@ test('菜单：预选项（深链）一出来就选中；「更多」预选时�
   assert.deepEqual(c.focused(), ['siege']);
 });
 
+test('菜单：开场中跳过 / 选模式 → show({instant:true}) 直接停在 Logo + 菜单，马上接键盘', () => {
+  const s = setup();
+  s.menu.show({ instant: true });
+  assert.ok(s.menu.el.classList.contains('instant') && s.menu.el.classList.contains('shown'), '直接到最终状态，不走过渡');
+  assert.ok(!s.menu.el.classList.contains('manual'));
+  assert.deepEqual(s.focused(), ['siege']);
+  key(s.win, 'ArrowDown'); key(s.win, 'Enter');
+  assert.equal(s.picks.length, 1); assert.equal(s.picks[0].id, 'coop', '不用等过渡，第一下按键就算数');
+  // 先逐帧出场再改成 instant：manual 被去掉
+  const t = setup();
+  t.menu.setPhase(0.5, 0); t.menu.show({ instant: true });
+  assert.ok(!t.menu.el.classList.contains('manual') && t.menu.el.classList.contains('shown'));
+});
+
+test('菜单：setPhase 逐帧出场时，菜单没完全出来不接键盘，到 (1,1) 才接', () => {
+  const s = setup();
+  s.menu.setPhase(1, 0.6);
+  assert.ok(s.menu.el.classList.contains('manual'));
+  key(s.win, 'Enter');
+  assert.equal(s.picks.length, 0, '菜单还在浮出');
+  s.menu.setPhase(1, 1);
+  key(s.win, 'Enter');
+  assert.equal(s.picks.length, 1); assert.equal(s.picks[0].id, 'siege');
+});
+
 test('设置：画质左右切换回调 onTier，开场偏好回调 onIntro，「重看开场」回调 onReplay；Esc 返回', () => {
   const s = setup();
   s.menu.show();

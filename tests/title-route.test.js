@@ -21,6 +21,8 @@ test('开场版本：首访完整版，看过一次短版，设置里能指定�
   assert.equal(introVersion({ search: '', storage: store({ [INTRO_PREF_KEY]: 'full' }), reducedMotion: true }), 'none', '减少动态效果优先');
   assert.equal(introVersion({ search: '', storage: store(), session: store({ [RETURNING_KEY]: '1' }), reducedMotion: false }), 'none', '从游戏返回');
   assert.equal(introVersion({ search: '', storage: store({ [RETURNING_KEY]: '1' }), reducedMotion: false }), 'none', '只给一个 storage 时也认');
+  assert.equal(introVersion({ search: '', storage: store({ [RETURNING_KEY]: '1' }), session: store(), reducedMotion: false }), 'full',
+    '给了 sessionStorage 就只认它：localStorage 里误留的返回标记不会把开场永远关掉');
   assert.equal(introVersion({ search: '', storage: null, reducedMotion: false }), 'full', '存不了（无痕）当首访');
   const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
   assert.equal(introVersion({ search: '', storage: broken, reducedMotion: false }), 'full');
@@ -92,6 +94,10 @@ test('联机服务器探测：wss 换 https 加 /health，ok 算在线，出错 
   assert.equal(await probeServer('wss://rooms.example.dev', 4000, async (u) => { seen.push(u); return { ok: true }; }), true);
   assert.deepEqual(seen, ['https://rooms.example.dev/health']);
   assert.equal(await probeServer('wss://x.dev', 4000, async () => ({ ok: false })), false);
+  const modes = [];
+  assert.equal(await probeServer('wss://x.dev', 4000, async (_u, o) => { modes.push(o.mode); return { ok: false, type: 'opaque', status: 0 }; }), true,
+    '跨域且服务器不回 CORS 头：no-cors 拿到不透明响应也算在线（连不上会直接抛错）');
+  assert.deepEqual(modes, ['no-cors']);
   assert.equal(await probeServer('wss://x.dev', 4000, async () => { throw new Error('offline'); }), false);
   const t0 = Date.now();
   assert.equal(await probeServer('wss://x.dev', 30, (u, { signal }) => new Promise((_, rej) => signal.addEventListener('abort', () => rej(new Error('abort'))))), false);

@@ -48,11 +48,11 @@ const read = (s, k) => { try { return s?.getItem?.(k) ?? null; } catch { return 
 /**
  * 这次开场播哪一版：减少动态效果 → none；从游戏返回（sessionStorage 的 RETURNING_KEY）→ none；
  * ?intro=full|short|none（调试）；设置里指定的；看过一次 → short；否则 full。
- * session 不给时也在 storage 里找返回标记。
+ * 返回标记只在 session 里找；session 不给（null）时才退到 storage 里找。
  */
 export function introVersion({ search = '', storage = null, session = null, reducedMotion = false } = {}) {
   if (reducedMotion) return 'none';
-  if (read(session, RETURNING_KEY) || read(storage, RETURNING_KEY)) return 'none';
+  if (read(session ?? storage, RETURNING_KEY)) return 'none';
   const q = new URLSearchParams(search).get('intro');
   if (q === 'full' || q === 'short' || q === 'none') return q;
   const pref = read(storage, INTRO_PREF_KEY);
@@ -127,7 +127,11 @@ export function healthUrl(url = COOP_SERVER.url) {
   return `${u.replace(/^ws(s?):\/\//i, 'http$1://')}/health`;
 }
 
-/** 探测联机服务器在不在线：GET /health 返回 ok 算在线；出错、超时（默认 4 秒）算离线。不会 reject */
+/**
+ * 探测联机服务器在不在线：GET /health 有响应算在线；连不上（fetch 抛错）、超时（默认 4 秒）算离线。不会 reject。
+ * 用 no-cors：页面（pages.dev）和服务器（workers.dev）跨域，已部署的 /health 不回 CORS 头，cors 模式下浏览器会拦掉响应、
+ * 永远显示离线；no-cors 拿到的是不透明响应（type opaque、status 0），读不到内容，但能拿到就说明服务器在线。
+ */
 export async function probeServer(url = COOP_SERVER.url, timeoutMs = 4000, fetchImpl = globalThis.fetch) {
   const target = healthUrl(url);
   if (!target || typeof fetchImpl !== 'function') return false;
@@ -135,7 +139,7 @@ export async function probeServer(url = COOP_SERVER.url, timeoutMs = 4000, fetch
   let timer = 0;
   const timeout = new Promise((r) => { timer = setTimeout(() => { ctl?.abort(); r(false); }, timeoutMs); });
   try {
-    const req = Promise.resolve().then(() => fetchImpl(target, { signal: ctl?.signal, cache: 'no-store', mode: 'cors' })).then((res) => !!res?.ok, () => false);
+    const req = Promise.resolve().then(() => fetchImpl(target, { signal: ctl?.signal, cache: 'no-store', mode: 'no-cors' })).then((res) => !!res && (res.ok || res.type === 'opaque'), () => false);
     return await Promise.race([req, timeout]);
   } finally { clearTimeout(timer); }
 }
