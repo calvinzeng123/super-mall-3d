@@ -270,6 +270,11 @@ export async function createJimaoGame(app, { onProgress = () => {} } = {}) {
   const siege = zombies ? createSiege(G, { layout: ctx.layout, nav, scene, ui, zombies, director, runs: stairs.runs, flow: J.GAME_FLOW, storage: safeStorage(), tower: params.tower || null, supplies }) : null;
   if (siege && params.siege !== undefined) siege.enabled = params.siege !== '0';
   if (siege && (params.room || params.mp === '1')) siege.enabled = true; // 联机只在丧尸围城里：带房间码 / 封面联机入口进来时不管 siege 参数
+  // 首页主菜单选了模式直接开局（autostart）：游戏里的模式存档也切到所选的（没建丧尸围城时上面的 siege.enabled 写不到，这里补上）
+  if (params.autostart && params.siege !== undefined) {
+    const on = params.siege !== '0' || !!params.room || params.mp === '1';
+    try { safeStorage()?.setItem('jimao-siege', on ? '1' : '0'); } catch { /* 存不了就不存 */ }
+  }
   // 撤离楼顶上只画给看的机房、屋顶花园（markSiegeRoofs 登记的 ctx.siegeRoofProps）：开着丧尸围城时藏起来，零点突围照旧
   const siegeRoofProps = () => { for (const g of ctx.siegeRoofProps || []) g.visible = !siege?.enabled; };
   siegeRoofProps();
